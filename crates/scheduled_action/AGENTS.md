@@ -132,11 +132,15 @@ each run.
   already required, at most ten) those it needs that aren't connected; a
   check never fails for them. The draft holds both (`apps`,
   `missing_apps`), sorted again against the listed apps so a required one
-  is always connected, and neither when it has no Ask AI step. A missing
-  app no routine can require even once connected (one overlaid with its
-  vendor's own MCP server, which connects outside the counted grants) is
-  dropped (`DraftApps::requirable`), so the review asks the person to
-  connect only apps that make the routine saveable. A step draft
+  is always connected, and neither when it has no Ask AI step. The
+  required apps that aren't connected join the missing ones unbounded, so
+  the drafter bounds the list again (`service::missing_apps`) before it
+  asks which of them a routine of the owner's can require once connected
+  (`DraftApps::requirable`). The harness drops an app overlaid with its
+  vendor's own MCP server, which connects outside the counted grants,
+  unless the owner is on Macro Connect alone and Connect serves it. The
+  review then asks the person to connect only apps that make the routine
+  saveable; when that can't be read, the draft names none. A step draft
   holds no apps. The `routine.draft` span records the drafter (`found` or
   `session`), names found, left and not looked up, the session id,
   checks, items created, the session's tool calls and turns, status
@@ -402,7 +406,8 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `TargetValidation` checks on save and `RoutineSessions::prepare` checks
   again on every run, then adds them to an agent limited to selected apps.
   The harness counts the grants connector dispatch would use: enabled rows,
-  and for an owner on Macro Connect alone only their Connect grants. An update that omits the key is rejected
+  a Connect grant only where Macro Connect is configured, and for an owner
+  on Connect alone only their Connect grants. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
 - An agent target is any agent the owner may run: built in, their own, or
   one on a self-hosted runtime. `TargetValidation` authorizes it on save

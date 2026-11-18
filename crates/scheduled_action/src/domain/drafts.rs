@@ -47,6 +47,7 @@ use super::ports::{
     DraftApps, DraftHandBacks, NoSessionCreations, RoutineCode, RoutineDraftService,
     SessionCreations,
 };
+use super::service::missing_apps;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
@@ -685,26 +686,30 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
                 failed_with(request.failed(), created)
             }
         };
-        Ok(Some(self.requirable_apps(draft).await))
+        Ok(Some(self.requirable_apps(owner, draft).await))
     }
 
-    /// `draft` naming only the missing apps a routine can require once
-    /// connected: a Connect for any other would leave it unsaveable. Kept
-    /// as named when that can't be read.
-    async fn requirable_apps(&self, mut draft: Draft) -> Draft {
+    /// `draft` naming only the missing apps a routine of `owner`'s can
+    /// require once connected: a Connect for any other would leave it
+    /// unsaveable. The required apps that aren't connected joined the named
+    /// ones unbounded, so the list is bounded again (app-shaped, each once,
+    /// at most ten) before any is looked up. When that can't be read, the
+    /// draft names none rather than one it can't vouch for.
+    async fn requirable_apps(&self, owner: &MacroUserIdStr<'static>, mut draft: Draft) -> Draft {
         let Draft::Routine(routine) = &mut draft else {
             return draft;
         };
-        if let Some(apps) = &self.apps
-            && !routine.missing_apps.is_empty()
-        {
-            match apps.requirable(routine.missing_apps.clone()).await {
-                Ok(requirable) => routine.missing_apps = requirable,
+        let missing = missing_apps(std::mem::take(&mut routine.missing_apps), &routine.apps);
+        routine.missing_apps = match &self.apps {
+            Some(apps) if !missing.is_empty() => match apps.requirable(owner, missing).await {
+                Ok(requirable) => requirable,
                 Err(error) => {
                     tracing::warn!(error = ?error, "could not tell which apps a routine can require");
+                    Vec::new()
                 }
-            }
-        }
+            },
+            _ => missing,
+        };
         tracing::Span::current().record("routine.draft.missing_apps", routine.missing_apps.len());
         draft
     }

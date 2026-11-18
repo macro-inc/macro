@@ -825,7 +825,11 @@ impl DraftApps for Connected {
             .ok_or_else(|| anyhow::anyhow!("connections unreadable"))
     }
 
-    async fn requirable(&self, apps: Vec<AgentMcpServer>) -> Result<Vec<AgentMcpServer>> {
+    async fn requirable(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        apps: Vec<AgentMcpServer>,
+    ) -> Result<Vec<AgentMcpServer>> {
         Ok(apps
             .into_iter()
             .filter(|app| app.app_slug != NATIVE_APP)
@@ -920,6 +924,84 @@ async fn a_routine_draft_names_only_missing_apps_a_routine_can_require() {
 
     assert!(drafted.apps.is_empty());
     assert_eq!(drafted.missing_apps, [app("notion", "Notion")]);
+}
+
+/// Apps a routine's owner connected (none), recording which ones the
+/// drafter asked about, or failing to tell.
+#[derive(Default)]
+struct Vetting {
+    asked: std::sync::Mutex<Vec<AgentMcpServer>>,
+    fails: bool,
+}
+
+#[async_trait::async_trait]
+impl DraftApps for Vetting {
+    async fn connected(&self, _owner: &MacroUserIdStr<'static>) -> Result<Vec<AgentMcpServer>> {
+        Ok(Vec::new())
+    }
+
+    async fn requirable(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        apps: Vec<AgentMcpServer>,
+    ) -> Result<Vec<AgentMcpServer>> {
+        self.asked.lock().unwrap().extend(apps.iter().cloned());
+        if self.fails {
+            anyhow::bail!("overlays unreadable");
+        }
+        Ok(apps)
+    }
+}
+
+/// The apps a check requires aren't capped, and those not connected join
+/// the missing ones: the drafter asks about ten app-shaped ones at most,
+/// each once, however many the check required.
+#[tokio::test]
+async fn a_routine_draft_asks_about_at_most_ten_missing_apps() {
+    let mut required: Vec<Value> = (0..12)
+        .map(|n| json!({ "app_slug": format!("app_{n}"), "server_name": format!("App {n}") }))
+        .collect();
+    required.insert(
+        1,
+        json!({ "app_slug": "Not an app!", "server_name": "Nope" }),
+    );
+    required.insert(2, json!({ "app_slug": "app_0", "server_name": "App 0" }));
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| vec![plain(asks_ai_with(Value::Array(required.clone())))]),
+    ));
+    let vetting = Arc::new(Vetting::default());
+    let drafts = drafts(&rows, &sessions).with_apps(Arc::clone(&vetting) as Arc<dyn DraftApps>);
+
+    let drafted = drafted_routine(draft(&drafts, routine("file each bug everywhere")).await);
+
+    let first_ten: Vec<AgentMcpServer> = (0..10)
+        .map(|n| app(&format!("app_{n}"), &format!("App {n}")))
+        .collect();
+    assert_eq!(*vetting.asked.lock().unwrap(), first_ten);
+    assert_eq!(drafted.missing_apps, first_ten);
+}
+
+/// When the drafter can't tell which missing apps a routine can require, it
+/// names none rather than offer to connect one that can't make the routine
+/// saveable.
+#[tokio::test]
+async fn a_routine_draft_names_no_missing_app_it_cannot_vouch_for() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(&rows, Box::new(|_| vec![plain(asks_ai_with(json!([])))]));
+    sessions.missing_apps = vec![app("notion", "Notion")];
+    let sessions = Arc::new(sessions);
+    let vetting = Arc::new(Vetting {
+        fails: true,
+        ..Vetting::default()
+    });
+    let drafts = drafts(&rows, &sessions).with_apps(Arc::clone(&vetting) as Arc<dyn DraftApps>);
+
+    let drafted = drafted_routine(draft(&drafts, routine("file each bug in Notion")).await);
+
+    assert_eq!(*vetting.asked.lock().unwrap(), [app("notion", "Notion")]);
+    assert!(drafted.missing_apps.is_empty());
 }
 
 /// With nothing connected the prompt says so, and every app is missing.

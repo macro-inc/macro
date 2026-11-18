@@ -475,7 +475,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
     search: search_service_client::SearchServiceClient,
-    connect_only: Option<pipedream_mcp::domain::ports::ConnectRollout>,
+    routine_connect: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
@@ -757,7 +757,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_apps(Arc::new(
             crate::routine_sessions::PipedreamConnectedApps::new(
                 pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
-                connect_only.clone(),
+                routine_connect.clone(),
             ),
         ))
         .with_finding(DraftFinding {
@@ -823,7 +823,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             )),
             apps: crate::routine_sessions::PipedreamConnectedApps::new(
                 pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
-                connect_only,
+                routine_connect,
             ),
         }),
         suggestion_code,

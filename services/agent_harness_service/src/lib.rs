@@ -180,6 +180,7 @@ use model_providers::{
 };
 use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
+use pipedream_mcp::outbound::connect::ConnectAdapter;
 use pipedream_mcp::outbound::dispatch::ConnectorBackends;
 use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
@@ -551,13 +552,21 @@ pub async fn run() -> anyhow::Result<()> {
         config.posthog_host.value(),
         config.environment,
     )?;
-    // Who is on Connect alone, as the backends below decide it: routines
-    // count only the grants these backends use.
-    let connect_only = connect.as_ref().and(connect_rollout.clone());
-    let mut connectors = ConnectorBackends::new(Arc::new(pipedream), connect);
-    if let Some(rollout) = connect_rollout {
-        connectors = connectors.with_rollout(rollout);
-    }
+    let pipedream = Arc::new(pipedream);
+    let backends = |connect: Option<Arc<ConnectAdapter>>| {
+        let backends = ConnectorBackends::new(Arc::clone(&pipedream), connect);
+        match &connect_rollout {
+            Some(rollout) => backends.with_rollout(Arc::clone(rollout)),
+            None => backends,
+        }
+    };
+    // Routines count the grants these same backends dispatch, so they ask
+    // them who is on Connect alone and which apps Connect serves; `None`
+    // where Connect isn't configured.
+    let routine_connect = connect
+        .clone()
+        .map(|connect| Arc::new(backends(Some(connect))));
+    let connectors = backends(connect);
 
     // Session egress reaches only public addresses, except on a local stack
     // whose MCP and preview services sit on the compose network.
@@ -797,7 +806,7 @@ pub async fn run() -> anyhow::Result<()> {
             config.document_storage_service_auth_key.clone(),
             macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
         ),
-        connect_only.clone(),
+        routine_connect.clone(),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();
@@ -1917,7 +1926,7 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         routine_sessions::PipedreamConnectedApps::new(
             PgConnectionRepo::new(pool.clone()),
-            connect_only.clone(),
+            routine_connect.clone(),
         ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
@@ -1944,7 +1953,7 @@ pub async fn run() -> anyhow::Result<()> {
             (*harness).clone(),
             routine_sessions::PipedreamConnectedApps::new(
                 PgConnectionRepo::new(pool.clone()),
-                connect_only.clone(),
+                routine_connect.clone(),
             ),
         ),
         session_repo.clone(),

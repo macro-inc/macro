@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pipedream_mcp::domain::models::ConnectorOverlay;
+use pipedream_mcp::domain::models::{ConnectApp, ConnectorOverlay};
 
 use super::*;
 
@@ -88,49 +88,97 @@ fn store() -> Store {
     }
 }
 
-fn connect_only(on: bool) -> ConnectRollout {
-    Arc::new(move |_| Box::pin(async move { on }))
+/// Macro Connect, configured: whether the owner is on it alone, and the
+/// apps it serves.
+struct Connect {
+    only: bool,
+    serves: Vec<&'static str>,
 }
 
-/// Enabled grants count, from either backend, unless the owner is on
-/// Macro Connect alone: dispatch refuses their Pipedream grants, so those
-/// never count.
-#[tokio::test]
-async fn an_owner_on_connect_alone_has_only_their_connect_grants_connected() {
-    let everyone = PipedreamConnectedApps::new(store(), None);
-    let rollout_off = PipedreamConnectedApps::new(store(), Some(connect_only(false)));
-    let rollout_on = PipedreamConnectedApps::new(store(), Some(connect_only(true)));
+impl MacroConnect for Connect {
+    async fn connect_only(&self, _user_id: &MacroUserIdStr<'static>) -> bool {
+        self.only
+    }
 
-    for apps in [&everyone, &rollout_off] {
-        assert_eq!(
-            apps.connected_app_slugs(&owner()).await.unwrap(),
-            ["linear", "notion"]
-        );
+    async fn app_for_slug(&self, app_slug: &str) -> anyhow::Result<Option<ConnectApp>> {
+        Ok(self.serves.contains(&app_slug).then(|| ConnectApp {
+            app_id: format!("app_{app_slug}"),
+            app_slug: app_slug.to_owned(),
+            name: app_slug.to_owned(),
+        }))
+    }
+
+    async fn create_connect_session(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _app: &ConnectApp,
+    ) -> anyhow::Result<String> {
+        unreachable!("counting connections starts no session")
+    }
+
+    async fn is_connected(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _app_id: &str,
+    ) -> anyhow::Result<bool> {
+        unreachable!("counting connections reads the stored grants")
+    }
+
+    async fn delete_connection(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _app_id: &str,
+    ) -> anyhow::Result<()> {
+        unreachable!("counting connections never deletes")
+    }
+}
+
+fn connect(only: bool, serves: &[&'static str]) -> Option<Arc<Connect>> {
+    Some(Arc::new(Connect {
+        only,
+        serves: serves.to_vec(),
+    }))
+}
+
+/// Enabled grants count, from either backend, as dispatch uses them: a
+/// Pipedream grant unless the owner is on Macro Connect alone, and a Connect
+/// grant only where Connect is configured.
+#[tokio::test]
+async fn only_grants_dispatch_would_use_are_connected() {
+    let without_connect = PipedreamConnectedApps::new(store(), None::<Arc<Connect>>);
+    let beside_pipedream = PipedreamConnectedApps::new(store(), connect(false, &[]));
+    let connect_alone = PipedreamConnectedApps::new(store(), connect(true, &[]));
+
+    for (apps, connected) in [
+        (&without_connect, vec!["linear"]),
+        (&beside_pipedream, vec!["linear", "notion"]),
+        (&connect_alone, vec!["notion"]),
+    ] {
+        assert_eq!(apps.connected_app_slugs(&owner()).await.unwrap(), connected);
         assert_eq!(
             apps.connected(&owner()).await.unwrap(),
-            [app("linear"), app("notion")]
+            connected.iter().map(|slug| app(slug)).collect::<Vec<_>>()
         );
     }
-    assert_eq!(
-        rollout_on.connected_app_slugs(&owner()).await.unwrap(),
-        ["notion"]
-    );
-    assert_eq!(
-        rollout_on.connected(&owner()).await.unwrap(),
-        [app("notion")]
-    );
 }
 
-/// An overlaid app is connected to Macro's own MCP server, never to a
-/// grant a routine counts, so a routine can't require it.
+/// An overlaid app connects to its vendor's own MCP server, never to a
+/// grant a routine counts, so a routine can't require it. An owner on
+/// Connect alone never sees the overlay of an app Connect serves: they
+/// connect it through Connect, which a routine counts.
 #[tokio::test]
-async fn an_overlaid_app_is_not_one_a_routine_can_require() {
-    let apps = PipedreamConnectedApps::new(store(), None);
+async fn an_overlaid_app_is_requirable_only_where_connect_serves_it_alone() {
+    let asked = || vec![app("sentry"), app("asana"), app("linear")];
+    let without_connect = PipedreamConnectedApps::new(store(), None::<Arc<Connect>>);
+    let beside_pipedream = PipedreamConnectedApps::new(store(), connect(false, &["sentry"]));
+    let unserved = PipedreamConnectedApps::new(store(), connect(true, &[]));
+    let served = PipedreamConnectedApps::new(store(), connect(true, &["sentry"]));
 
-    assert_eq!(
-        apps.requirable(vec![app("sentry"), app("asana"), app("linear")])
-            .await
-            .unwrap(),
-        [app("asana"), app("linear")]
-    );
+    for apps in [&without_connect, &beside_pipedream, &unserved] {
+        assert_eq!(
+            apps.requirable(&owner(), asked()).await.unwrap(),
+            [app("asana"), app("linear")]
+        );
+    }
+    assert_eq!(served.requirable(&owner(), asked()).await.unwrap(), asked());
 }

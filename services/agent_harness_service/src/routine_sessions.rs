@@ -14,18 +14,19 @@ use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use pipedream_mcp::domain::models::{ConnectionProvider, PipedreamConnection};
-use pipedream_mcp::domain::ports::{ConnectRollout, ConnectionStore, ConnectorOverlays};
+use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays, MacroConnect};
 use scheduled_action::domain::ports::DraftApps;
+use tracing::Instrument as _;
 
 use crate::external_session_requests::BrokerExternalSessionRequests;
 
 /// Reuse live harness/session instances and the existing external-request adapter.
-pub fn router<Bots, Harness, Sessions, Broker, Repo, Connections, Auth>(
+pub fn router<Bots, Harness, Sessions, Broker, Repo, Connections, Connect, Auth>(
     bots: Bots,
     harness: Harness,
     sessions: Sessions,
     external_requests: BrokerExternalSessionRequests<Broker, Repo>,
-    apps: PipedreamConnectedApps<Connections>,
+    apps: PipedreamConnectedApps<Connections, Connect>,
     authorization: MacroAuthorizationState<Auth>,
 ) -> Router
 where
@@ -35,6 +36,7 @@ where
     Broker: MacroEventBroker,
     Repo: AgentSessionRepo,
     Connections: ConnectionStore,
+    Connect: MacroConnect,
     Auth: MacroAuthorizationService,
 {
     let service = RoutineSessionsService::new(
@@ -49,23 +51,43 @@ where
 }
 
 /// A user's Pipedream connections, counted as connected the way connector
-/// dispatch counts them: enabled rows, and only Macro Connect grants for a
-/// user on Connect alone, whose Pipedream grants dispatch refuses.
-pub struct PipedreamConnectedApps<Connections> {
+/// dispatch (`ConnectorBackends`) counts them: enabled rows; a Macro Connect
+/// grant only where Connect is configured; and a Pipedream grant only for a
+/// user not on Connect alone, whose Pipedream grants dispatch refuses.
+pub struct PipedreamConnectedApps<Connections, Connect> {
     connections: Connections,
-    /// Whether a user is on Macro Connect alone; `None` where Macro Connect
-    /// isn't configured or no rollout puts anyone on it.
-    connect_only: Option<ConnectRollout>,
+    /// The connector backends dispatch uses, where Macro Connect is
+    /// configured: who is on Connect alone, and which apps it serves.
+    connect: Option<Arc<Connect>>,
 }
 
-impl<Connections: ConnectionStore> PipedreamConnectedApps<Connections> {
-    /// Count `connections`, putting the users `connect_only` answers `true`
-    /// for on their Macro Connect grants alone.
-    pub fn new(connections: Connections, connect_only: Option<ConnectRollout>) -> Self {
+impl<Connections, Connect> PipedreamConnectedApps<Connections, Connect>
+where
+    Connections: ConnectionStore,
+    Connect: MacroConnect,
+{
+    /// Count `connections` as `connect`, the connector backends, dispatches
+    /// them; `None` where Macro Connect isn't configured.
+    pub fn new(connections: Connections, connect: Option<Arc<Connect>>) -> Self {
         Self {
             connections,
-            connect_only,
+            connect,
         }
+    }
+
+    /// Whether `user` is on Macro Connect alone. The rollout can wait on
+    /// PostHog when its answer isn't cached, so the wait has its own span.
+    async fn connect_only(&self, user: &MacroUserIdStr<'static>) -> bool {
+        let Some(connect) = &self.connect else {
+            return false;
+        };
+        let span = tracing::info_span!(
+            "pipedream.connect_only",
+            pipedream.connect_only = tracing::field::Empty
+        );
+        let connect_only = connect.connect_only(user).instrument(span.clone()).await;
+        span.record("pipedream.connect_only", connect_only);
+        connect_only
     }
 
     /// `user`'s connections a session can use.
@@ -73,10 +95,8 @@ impl<Connections: ConnectionStore> PipedreamConnectedApps<Connections> {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> anyhow::Result<Vec<PipedreamConnection>> {
-        let connect_only = match &self.connect_only {
-            Some(rollout) => rollout(user.clone()).await,
-            None => false,
-        };
+        let connect_configured = self.connect.is_some();
+        let connect_only = self.connect_only(user).await;
         Ok(self
             .connections
             .list(user)
@@ -85,13 +105,20 @@ impl<Connections: ConnectionStore> PipedreamConnectedApps<Connections> {
             .into_iter()
             .filter(|connection| {
                 connection.enabled
-                    && (!connect_only || connection.provider == ConnectionProvider::Connect)
+                    && match connection.provider {
+                        ConnectionProvider::Connect => connect_configured,
+                        ConnectionProvider::Pipedream => !connect_only,
+                    }
             })
             .collect())
     }
 }
 
-impl<Connections: ConnectionStore> ConnectedApps for PipedreamConnectedApps<Connections> {
+impl<Connections, Connect> ConnectedApps for PipedreamConnectedApps<Connections, Connect>
+where
+    Connections: ConnectionStore,
+    Connect: MacroConnect,
+{
     async fn connected_app_slugs(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -107,9 +134,10 @@ impl<Connections: ConnectionStore> ConnectedApps for PipedreamConnectedApps<Conn
 
 /// The same connections, as the apps a routine's draft may require.
 #[async_trait::async_trait]
-impl<Connections> DraftApps for PipedreamConnectedApps<Connections>
+impl<Connections, Connect> DraftApps for PipedreamConnectedApps<Connections, Connect>
 where
     Connections: ConnectionStore + ConnectorOverlays,
+    Connect: MacroConnect,
 {
     async fn connected(
         &self,
@@ -126,12 +154,27 @@ where
             .collect())
     }
 
-    /// An overlaid app connects to its own MCP server, never to a row these
-    /// connections count, so a routine can't require it.
-    async fn requirable(&self, apps: Vec<AgentMcpServer>) -> anyhow::Result<Vec<AgentMcpServer>> {
+    /// An overlaid app connects to its vendor's own MCP server, never to a
+    /// grant these connections count, so a routine can't require it. Except
+    /// where Macro Connect serves it to an owner on Connect alone: they never
+    /// see its overlay, and connecting it writes a Connect grant.
+    async fn requirable(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        apps: Vec<AgentMcpServer>,
+    ) -> anyhow::Result<Vec<AgentMcpServer>> {
+        let connect_only = self.connect_only(owner).await;
+        let served_by = self.connect.as_ref().filter(|_| connect_only);
         let mut requirable = Vec::with_capacity(apps.len());
         for app in apps {
-            if self.connections.overlay(&app.app_slug).await?.is_none() {
+            let kept = match self.connections.overlay(&app.app_slug).await? {
+                None => true,
+                Some(_) => match served_by {
+                    Some(connect) => connect.app_for_slug(&app.app_slug).await?.is_some(),
+                    None => false,
+                },
+            };
+            if kept {
                 requirable.push(app);
             }
         }
