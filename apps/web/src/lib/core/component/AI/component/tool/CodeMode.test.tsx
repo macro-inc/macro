@@ -45,6 +45,11 @@ it('reads a workspace run with a response as a finished step', () => {
   expect(screen.getByText('Finished a step')).toBeTruthy();
 });
 
+it('reads a workspace run whose program failed as a failed step', () => {
+  renderRun({ response: { status: 'timed_out', error: 'Out of time' } });
+  expect(screen.getByText('A step failed')).toBeTruthy();
+});
+
 it('reads a stopped workspace run as a finished step', () => {
   renderRun({ ending: { kind: 'stopped' } });
   expect(screen.getByText('Finished a step')).toBeTruthy();

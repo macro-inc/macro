@@ -75,9 +75,12 @@ pub(super) fn rows(
     {
         return None;
     }
-    let activity = operations(detail).filter(|activity| !activity.is_empty());
+    let receipt = receipt(detail);
+    let activity = receipt
+        .and_then(operations)
+        .filter(|activity| !activity.is_empty());
     let Some(activity) = activity else {
-        return Some(vec![workspace_row(id, status, closed)]);
+        return Some(vec![workspace_row(id, status, receipt, closed)]);
     };
     Some(
         activity
@@ -99,19 +102,40 @@ pub(super) fn rows(
     )
 }
 
-fn operations(detail: &ToolDetail) -> Option<Vec<Operation>> {
-    let output = match detail {
+/// The execution receipt a finished call returned.
+fn receipt(detail: &ToolDetail) -> Option<&serde_json::Value> {
+    match detail {
         ToolDetail::Macro { output, .. } => output.as_ref(),
         ToolDetail::Other { result, .. } => result.as_ref(),
         _ => None,
-    }?;
-    serde_json::from_value(output.get("activity")?.clone()).ok()
+    }
+}
+
+fn operations(receipt: &serde_json::Value) -> Option<Vec<Operation>> {
+    serde_json::from_value(receipt.get("activity")?.clone()).ok()
+}
+
+/// A program that threw or ran out of time still returns its receipt, so
+/// the call completes; only the receipt says the program failed.
+fn program_failed(receipt: Option<&serde_json::Value>) -> bool {
+    matches!(
+        receipt
+            .and_then(|receipt| receipt.get("status"))
+            .and_then(serde_json::Value::as_str),
+        Some("failed" | "timed_out")
+    )
 }
 
 /// A code execution with no workspace steps to show yet, or none at all.
 /// Nothing names what it does, so the row only says how far it got.
-fn workspace_row(id: &str, status: ToolStatus, closed: bool) -> ActivityRow {
+fn workspace_row(
+    id: &str,
+    status: ToolStatus,
+    receipt: Option<&serde_json::Value>,
+    closed: bool,
+) -> ActivityRow {
     let (label, status) = match status {
+        ToolStatus::Completed if program_failed(receipt) => (FAILED, ActivityStatus::Failed),
         ToolStatus::Pending | ToolStatus::Running if closed => {
             (FINISHED, ActivityStatus::Interrupted)
         }

@@ -3,7 +3,7 @@ import { BaseTool } from './BaseTool';
 import { createToolRenderer, useToolError } from './ToolRenderer';
 
 // People never see that the agent works in code: its lookups render nothing,
-// and an execution reads as work in the workspace, without its program or result.
+// and an execution says only how far it got, without its program or result.
 // These cover the chat host's RenderTool; agent sessions skip lookups in
 // ToolCallPart (`isCodeModeSupportCall`) and render code runs in CodeExecutionPart.
 
@@ -22,10 +22,17 @@ export const executeCodeHandler = createToolRenderer({
   name: 'ExecuteCode',
   render: (ctx) => {
     // Nothing names what the run does, so the row says only how far it got.
-    // A failed or stopped run has no response but has still ended.
+    // A failed or stopped call has no response but has still ended; a
+    // program that threw or timed out returns a receipt that says so.
     const label = () => {
       const error = useToolError();
-      if (error?.kind === 'failed') return 'A step failed';
+      const status = ctx.response?.status;
+      if (
+        error?.kind === 'failed' ||
+        status === 'failed' ||
+        status === 'timed_out'
+      )
+        return 'A step failed';
       if (ctx.response !== undefined || error) return 'Finished a step';
       return 'Working on it';
     };

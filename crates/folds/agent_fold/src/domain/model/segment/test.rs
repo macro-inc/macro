@@ -277,6 +277,42 @@ fn a_code_run_with_no_steps_says_only_how_far_it_got() {
 }
 
 #[test]
+fn a_program_that_failed_reads_as_a_failed_step_though_its_call_completed() {
+    let code = |detail: ToolDetail| MessagePart::ToolUse {
+        id: ToolUseId("code-5".into()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status: ToolStatus::Completed,
+        detail,
+    };
+    let row = |detail: ToolDetail| {
+        let row = segments(&[code(detail)], true)[0].rows[0].clone();
+        (row.label, row.status)
+    };
+    let failed = ("A step failed".to_owned(), ActivityStatus::Failed);
+    assert_eq!(
+        row(ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: Some(serde_json::json!({"status": "failed", "activity": []})),
+            error: None,
+        }),
+        failed
+    );
+    assert_eq!(
+        row(ToolDetail::Other {
+            kind: "other".into(),
+            input: None,
+            result: Some(serde_json::json!({"status": "timed_out"})),
+            output: None,
+            error: None,
+        }),
+        failed
+    );
+}
+
+#[test]
 fn an_unfinished_passage_is_the_one_open_segment() {
     let parts = [text("Looking into it")];
     assert_eq!(
