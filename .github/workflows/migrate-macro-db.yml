@@ -20,6 +20,9 @@ jobs:
         with:
           sparse-checkout: |
             .github/
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
       - name: Run migrations
         uses: ./.github/actions/migrate-cloud-storage-db
         with:

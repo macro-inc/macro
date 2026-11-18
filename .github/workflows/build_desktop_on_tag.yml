@@ -81,6 +81,9 @@ jobs:
         with:
           ref: ${{ needs.resolve-ref.outputs.ref }}
           persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
       - name: Mount /nix cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
         with:
@@ -214,6 +217,9 @@ jobs:
         with:
           ref: ${{ needs.resolve-ref.outputs.ref }}
           persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
       - name: Assert arm64 runner
         run: |
           set -euo pipefail
@@ -906,6 +912,9 @@ jobs:
         with:
           ref: ${{ needs.resolve-ref.outputs.ref }}
           persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
       - name: Setup Nix
         uses: ./.github/actions/setup-nix
       - id: metadata

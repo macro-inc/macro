@@ -63,6 +63,18 @@ pub fn setup_namespace_buildx() -> Step<Use> {
     NamespacelabsNscloudSetupBuildxAction::new("Set up Namespace Docker builder").step()
 }
 
+/// Has git give up on a checkout's fetch once it moves under 10 kB/s for a
+/// minute, so `actions/checkout` retries it (three attempts) instead of waiting
+/// for the job timeout. Fetches that usually take seconds have sat for 5 to 13
+/// minutes. GitHub sends nothing while it builds the pack; whole shallow and
+/// blobless full-history fetches take about 6 to 12 s, so a minute leaves room.
+/// The generated `ActionsCheckout` passes every checkout step through it
+/// (`STEP_FINISHERS` in `src/actions.rs`).
+pub fn abort_stalled_fetch(step: Step<Use>) -> Step<Use> {
+    step.add_env(("GIT_HTTP_LOW_SPEED_LIMIT", "10000"))
+        .add_env(("GIT_HTTP_LOW_SPEED_TIME", "60"))
+}
+
 /// `actions/checkout`, pinned. `full_history` fetches the full history, which
 /// the path-filter diff in `path-check` needs. `persist_credentials` controls
 /// whether checkout leaves the token in git config for later steps.

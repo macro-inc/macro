@@ -14,6 +14,9 @@ runs:
         sparse-checkout: |
           .github/
           crates/macro_db_client
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - id: get-db-url
       name: Get database URL from Secrets Manager
       run: |

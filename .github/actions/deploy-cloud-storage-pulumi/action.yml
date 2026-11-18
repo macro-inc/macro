@@ -71,6 +71,9 @@ runs:
     - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # zizmor: ignore[artipacked] Pulumi programs and builds run after the checkout
       with:
         lfs: ${{ inputs.use-lfs }}
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Download prebuilt service binaries
       if: inputs.prebuilt-binaries-artifact != ''
       uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0

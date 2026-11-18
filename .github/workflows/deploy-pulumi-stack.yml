@@ -32,6 +32,9 @@ jobs:
         with:
           persist-credentials: 'false'
           sparse-checkout: .github/
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
       - id: check
         name: Check artifact config
         run: |
@@ -64,6 +67,9 @@ jobs:
         with:
           persist-credentials: 'false'
           sparse-checkout: .github/
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
       - name: Check migrations
         uses: ./.github/actions/check-macro-db-migrations
         with:
@@ -79,6 +85,9 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
       - name: Mount /nix cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
         with:

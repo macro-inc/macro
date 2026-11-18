@@ -198,6 +198,10 @@ pub fn render_bindings() -> Result<String> {
             title: format!("`{}` {}", locked.action, locked.version),
             runs: format!("`{}@{}`", locked.action, locked.commit),
             uses_code: format!(".uses({owner:?}, {repo_path:?}, {:?})", locked.commit),
+            finisher: STEP_FINISHERS
+                .iter()
+                .find(|(action, _)| *action == locked.action)
+                .map(|(_, finisher)| *finisher),
         };
         render_action(&mut out, &binding, &spec)?;
     }
@@ -222,6 +226,7 @@ pub fn render_bindings() -> Result<String> {
             ),
             runs: format!("`./.github/actions/{}`", local.directory),
             uses_code: format!(".uses_local(\".github/actions/{}\")", local.directory),
+            finisher: None,
         };
         render_action(&mut out, &binding, &spec)?;
     }
@@ -396,6 +401,14 @@ fn render_call(
     Ok(())
 }
 
+/// Actions whose every step passes through a function before it reaches a
+/// job: `(owner/repo, path of a fn(Step<Use>) -> Step<Use>)`. The generated
+/// `step()` and `From` impl both call it, so no caller can leave it out.
+const STEP_FINISHERS: &[(&str, &str)] = &[(
+    "actions/checkout",
+    "crate::workflows::steps::abort_stalled_fetch",
+)];
+
 /// What a generated type calls its action and how its step points at it.
 struct Binding {
     type_name: String,
@@ -405,6 +418,9 @@ struct Binding {
     runs: String,
     /// The `Step` method that sets `uses:`.
     uses_code: String,
+    /// The function every step of this action passes through, from
+    /// [`STEP_FINISHERS`].
+    finisher: Option<&'static str>,
 }
 
 fn render_action(out: &mut String, binding: &Binding, spec: &Value) -> Result<()> {
@@ -530,7 +546,10 @@ fn render_action(out: &mut String, binding: &Binding, spec: &Value) -> Result<()
     writeln!(out)?;
     writeln!(out, "    /// The step, to set its id, condition or env.")?;
     writeln!(out, "    pub fn step(self) -> Step<Use> {{")?;
-    writeln!(out, "        self.0")?;
+    match binding.finisher {
+        Some(finisher) => writeln!(out, "        {finisher}(self.0)")?,
+        None => writeln!(out, "        self.0")?,
+    }
     writeln!(out, "    }}")?;
     if !inputs.is_empty() {
         writeln!(out)?;
@@ -548,7 +567,7 @@ fn render_action(out: &mut String, binding: &Binding, spec: &Value) -> Result<()
     writeln!(out)?;
     writeln!(out, "impl From<{type_name}> for Step<Use> {{")?;
     writeln!(out, "    fn from(action: {type_name}) -> Self {{")?;
-    writeln!(out, "        action.0")?;
+    writeln!(out, "        action.step()")?;
     writeln!(out, "    }}")?;
     writeln!(out, "}}")?;
     Ok(())

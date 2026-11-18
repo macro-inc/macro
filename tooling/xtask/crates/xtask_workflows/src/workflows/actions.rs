@@ -75,7 +75,7 @@ impl ActionsCacheRestore {
 
 impl From<ActionsCacheRestore> for Step<Use> {
     fn from(action: ActionsCacheRestore) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -116,7 +116,7 @@ impl ActionsCacheSave {
 
 impl From<ActionsCacheSave> for Step<Use> {
     fn from(action: ActionsCacheSave) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -284,7 +284,7 @@ impl ActionsCheckout {
 
     /// The step, to set its id, condition or env.
     pub fn step(self) -> Step<Use> {
-        self.0
+        crate::workflows::steps::abort_stalled_fetch(self.0)
     }
 
     fn with(self, name: &str, value: impl ToString) -> Self {
@@ -294,7 +294,7 @@ impl ActionsCheckout {
 
 impl From<ActionsCheckout> for Step<Use> {
     fn from(action: ActionsCheckout) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -372,7 +372,7 @@ impl ActionsDownloadArtifact {
 
 impl From<ActionsDownloadArtifact> for Step<Use> {
     fn from(action: ActionsDownloadArtifact) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -457,7 +457,7 @@ impl ActionsGithubScript {
 
 impl From<ActionsGithubScript> for Step<Use> {
     fn from(action: ActionsGithubScript) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -560,7 +560,7 @@ impl ActionsSetupNode {
 
 impl From<ActionsSetupNode> for Step<Use> {
     fn from(action: ActionsSetupNode) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -655,7 +655,7 @@ impl ActionsUploadArtifact {
 
 impl From<ActionsUploadArtifact> for Step<Use> {
     fn from(action: ActionsUploadArtifact) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -865,7 +865,7 @@ impl AwsActionsConfigureAwsCredentials {
 
 impl From<AwsActionsConfigureAwsCredentials> for Step<Use> {
     fn from(action: AwsActionsConfigureAwsCredentials) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -938,7 +938,7 @@ impl DenolandSetupDeno {
 
 impl From<DenolandSetupDeno> for Step<Use> {
     fn from(action: DenolandSetupDeno) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -1100,7 +1100,7 @@ impl DockerSetupBuildxAction {
 
 impl From<DockerSetupBuildxAction> for Step<Use> {
     fn from(action: DockerSetupBuildxAction) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -1193,7 +1193,7 @@ impl DornyPathsFilter {
 
 impl From<DornyPathsFilter> for Step<Use> {
     fn from(action: DornyPathsFilter) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -1409,7 +1409,7 @@ impl GoogleGithubActionsAuth {
 
 impl From<GoogleGithubActionsAuth> for Step<Use> {
     fn from(action: GoogleGithubActionsAuth) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -1442,7 +1442,7 @@ impl GrafanaGrafanaGithubActionsGhaOtelExport {
 
 impl From<GrafanaGrafanaGithubActionsGhaOtelExport> for Step<Use> {
     fn from(action: GrafanaGrafanaGithubActionsGhaOtelExport) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -1513,7 +1513,7 @@ impl NamespacelabsNscloudCacheAction {
 
 impl From<NamespacelabsNscloudCacheAction> for Step<Use> {
     fn from(action: NamespacelabsNscloudCacheAction) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -1575,7 +1575,7 @@ impl NamespacelabsNscloudSetupBuildxAction {
 
 impl From<NamespacelabsNscloudSetupBuildxAction> for Step<Use> {
     fn from(action: NamespacelabsNscloudSetupBuildxAction) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -1678,7 +1678,7 @@ impl OvenShSetupBun {
 
 impl From<OvenShSetupBun> for Step<Use> {
     fn from(action: OvenShSetupBun) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -1935,7 +1935,7 @@ impl PulumiActions {
 
 impl From<PulumiActions> for Step<Use> {
     fn from(action: PulumiActions) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -2054,7 +2054,7 @@ impl R0adkllUploadGooglePlay {
 
 impl From<R0adkllUploadGooglePlay> for Step<Use> {
     fn from(action: R0adkllUploadGooglePlay) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -2124,7 +2124,7 @@ impl RunsOnCacheRestore {
 
 impl From<RunsOnCacheRestore> for Step<Use> {
     fn from(action: RunsOnCacheRestore) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -2165,7 +2165,7 @@ impl RunsOnCacheSave {
 
 impl From<RunsOnCacheSave> for Step<Use> {
     fn from(action: RunsOnCacheSave) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -2313,7 +2313,7 @@ impl SoftpropsActionGhRelease {
 
 impl From<SoftpropsActionGhRelease> for Step<Use> {
     fn from(action: SoftpropsActionGhRelease) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -2452,7 +2452,7 @@ impl SwatinemRustCache {
 
 impl From<SwatinemRustCache> for Step<Use> {
     fn from(action: SwatinemRustCache) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -2486,7 +2486,7 @@ impl TechnoteSpaceAssignAuthor {
 
 impl From<TechnoteSpaceAssignAuthor> for Step<Use> {
     fn from(action: TechnoteSpaceAssignAuthor) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3131,7 +3131,7 @@ impl TjActionsChangedFiles {
 
 impl From<TjActionsChangedFiles> for Step<Use> {
     fn from(action: TjActionsChangedFiles) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3159,7 +3159,7 @@ impl LocalCheckMacroDbMigrations {
 
 impl From<LocalCheckMacroDbMigrations> for Step<Use> {
     fn from(action: LocalCheckMacroDbMigrations) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3269,7 +3269,7 @@ impl LocalDeployCloudStoragePulumi {
 
 impl From<LocalDeployCloudStoragePulumi> for Step<Use> {
     fn from(action: LocalDeployCloudStoragePulumi) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3302,7 +3302,7 @@ impl LocalGetProjectName {
 
 impl From<LocalGetProjectName> for Step<Use> {
     fn from(action: LocalGetProjectName) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3330,7 +3330,7 @@ impl LocalMigrateCloudStorageDb {
 
 impl From<LocalMigrateCloudStorageDb> for Step<Use> {
     fn from(action: LocalMigrateCloudStorageDb) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3412,7 +3412,7 @@ impl LocalPreviewCloudStoragePulumi {
 
 impl From<LocalPreviewCloudStoragePulumi> for Step<Use> {
     fn from(action: LocalPreviewCloudStoragePulumi) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3474,7 +3474,7 @@ impl LocalSetupNix {
 
 impl From<LocalSetupNix> for Step<Use> {
     fn from(action: LocalSetupNix) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3508,7 +3508,7 @@ impl LocalSetupNixDevShell {
 
 impl From<LocalSetupNixDevShell> for Step<Use> {
     fn from(action: LocalSetupNixDevShell) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3542,7 +3542,7 @@ impl LocalSetupReqsWeb {
 
 impl From<LocalSetupReqsWeb> for Step<Use> {
     fn from(action: LocalSetupReqsWeb) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3583,7 +3583,7 @@ impl LocalSetupRust {
 
 impl From<LocalSetupRust> for Step<Use> {
     fn from(action: LocalSetupRust) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3617,7 +3617,7 @@ impl LocalSetupSccache {
 
 impl From<LocalSetupSccache> for Step<Use> {
     fn from(action: LocalSetupSccache) -> Self {
-        action.0
+        action.step()
     }
 }
 
@@ -3640,7 +3640,7 @@ impl LocalTeardownNix {
 
 impl From<LocalTeardownNix> for Step<Use> {
     fn from(action: LocalTeardownNix) -> Self {
-        action.0
+        action.step()
     }
 }
 
