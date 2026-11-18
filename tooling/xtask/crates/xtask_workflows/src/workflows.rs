@@ -857,9 +857,7 @@ mod checkout_tests {
     /// [`super::steps::abort_stalled_fetch`].
     #[test]
     fn every_checkout_gives_up_on_a_stalled_fetch() {
-        let expected = super::steps::abort_stalled_fetch(
-            gh_workflow::Step::new("x").uses("actions", "checkout", "x"),
-        );
+        let expected = super::actions::ActionsCheckout::new("x").step();
         let expected = serde_yaml::to_value(&expected).expect("step serializes")["env"].clone();
 
         let mut checked = Vec::new();
@@ -874,7 +872,7 @@ mod checkout_tests {
                 ));
             }
         }
-        // Composite actions are hand-written and run inside generated jobs.
+        // Composite actions run inside generated jobs; read them as written.
         let actions = xtask_paths::repo_root().join(".github/actions");
         for entry in std::fs::read_dir(&actions).expect("composite actions") {
             let path = entry.expect("action dir").path().join("action.yml");
