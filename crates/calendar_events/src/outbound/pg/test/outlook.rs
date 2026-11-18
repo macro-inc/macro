@@ -295,10 +295,10 @@ async fn outlook_projection_uses_existing_reads_and_mutation_authorization(pool:
         CalendarSyncStatus::Ready
     );
     let change = repo
-        .claim_projection(Uuid::now_v7())
+        .claim_projections(Uuid::now_v7(), 1)
         .await
         .unwrap()
-        .unwrap();
+        .remove(0);
     assert_eq!(change.event_id, id);
 }
 
@@ -476,10 +476,10 @@ async fn calendar_opt_out_purges_and_fences_without_disconnecting_mail(pool: PgP
             .unwrap()
     );
     let change = repo
-        .claim_projection(Uuid::now_v7())
+        .claim_projections(Uuid::now_v7(), 1)
         .await
         .unwrap()
-        .unwrap();
+        .remove(0);
     assert_eq!(change.event_id, id);
     assert!(matches!(
         change.event,
@@ -493,10 +493,10 @@ async fn publication_ack_preserves_a_concurrent_projection_revision(pool: PgPool
     let lease = calendar(&repo).await;
     let id = store(&repo, &lease, "changing").await;
     let old = repo
-        .claim_projection(Uuid::now_v7())
+        .claim_projections(Uuid::now_v7(), 1)
         .await
         .unwrap()
-        .unwrap();
+        .remove(0);
     sqlx::query!(
         "UPDATE calendar_events SET title='New title' WHERE id=$1",
         id
@@ -506,18 +506,41 @@ async fn publication_ack_preserves_a_concurrent_projection_revision(pool: PgPool
     .unwrap();
     repo.complete_projection(&old).await.unwrap();
     let new = repo
-        .claim_projection(Uuid::now_v7())
+        .claim_projections(Uuid::now_v7(), 1)
         .await
         .unwrap()
-        .unwrap();
+        .remove(0);
     assert!(new.revision > old.revision);
     assert_eq!(new.event_id, id);
     repo.complete_projection(&new).await.unwrap();
     assert!(
-        repo.claim_projection(Uuid::now_v7())
+        repo.claim_projections(Uuid::now_v7(), 1)
             .await
             .unwrap()
-            .is_none()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_batch_claims_up_to_its_limit_under_one_lease(pool: PgPool) {
+    let (repo, _, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    store(&repo, &lease, "first").await;
+    store(&repo, &lease, "second").await;
+    store(&repo, &lease, "third").await;
+    let batch = repo.claim_projections(Uuid::now_v7(), 2).await.unwrap();
+    assert_eq!(batch.len(), 2);
+    assert_eq!(batch[0].lease_id, batch[1].lease_id, "one lease");
+    let rest = repo.claim_projections(Uuid::now_v7(), 2).await.unwrap();
+    assert_eq!(rest.len(), 1, "a leased change is not claimed twice");
+    for lease in batch.iter().chain(&rest) {
+        repo.complete_projection(lease).await.unwrap();
+    }
+    assert!(
+        repo.claim_projections(Uuid::now_v7(), 100)
+            .await
+            .unwrap()
+            .is_empty()
     );
 }
 
@@ -540,10 +563,145 @@ async fn projection_claims_take_due_changes_in_order_and_skip_backed_off_ones(po
     .await
     .unwrap();
     let mut claimed = Vec::new();
-    while let Some(lease) = repo.claim_projection(Uuid::now_v7()).await.unwrap() {
+    while let Some(lease) = repo
+        .claim_projections(Uuid::now_v7(), 1)
+        .await
+        .unwrap()
+        .pop()
+    {
         claimed.push(lease.event_id);
     }
     assert_eq!(claimed, [first, second]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn publications_name_only_changes_that_touch_an_out_of_office_event(pool: PgPool) {
+    let (repo, _, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    let id = store(&repo, &lease, "changing").await;
+    let publish = async || {
+        let lease = repo
+            .claim_projections(Uuid::now_v7(), 1)
+            .await
+            .unwrap()
+            .remove(0);
+        repo.complete_projection(&lease).await.unwrap();
+        assert!(
+            repo.claim_projections(Uuid::now_v7(), 1)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        lease.team_ooo_changed
+    };
+    assert!(!publish().await, "a meeting's import");
+
+    sqlx::query!(
+        "UPDATE calendar_events SET event_type='out_of_office' WHERE id=$1",
+        id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(publish().await, "it becomes out of office");
+
+    sqlx::query!("UPDATE calendar_events SET title='Away' WHERE id=$1", id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(publish().await, "a change while it is out of office");
+
+    sqlx::query!(
+        "UPDATE calendar_events SET event_type='default' WHERE id=$1",
+        id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("UPDATE calendar_events SET title='Back' WHERE id=$1", id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        publish().await,
+        "a waiting revision keeps the hint of every change it carries"
+    );
+
+    sqlx::query!("UPDATE calendar_events SET title='Meeting' WHERE id=$1", id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(!publish().await, "a meeting's change");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn discovery_reports_calendar_changes_as_google_does(pool: PgPool) {
+    let (repo, _, _) = mailbox(&pool).await;
+    let discover = async |calendars: Vec<OutlookCalendar>| {
+        // The discovery is due again before any calendar's own round.
+        sqlx::query!(
+            "UPDATE calendar_outlook_work SET next_run_at=CASE WHEN calendar_id IS NULL THEN now()-interval '1 minute' ELSE now()+interval '1 hour' END"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let discovery = claim(&repo).await.unwrap();
+        assert!(discovery.target.is_none());
+        repo.commit_outlook_calendars(&discovery, calendars)
+            .await
+            .unwrap()
+    };
+    assert_eq!(
+        discover(vec![
+            discovered_calendar("primary"),
+            discovered_calendar("secondary")
+        ])
+        .await,
+        OutlookCalendarsChange {
+            changed: true,
+            team_ooo_changed: true
+        },
+        "new calendars"
+    );
+    assert_eq!(
+        discover(vec![
+            discovered_calendar("primary"),
+            discovered_calendar("secondary")
+        ])
+        .await,
+        OutlookCalendarsChange::default(),
+        "the same calendars"
+    );
+
+    let mut without_teams = discovered_calendar("secondary");
+    without_teams.online_meeting_providers = vec![];
+    assert_eq!(
+        discover(vec![discovered_calendar("primary"), without_teams]).await,
+        OutlookCalendarsChange {
+            changed: true,
+            team_ooo_changed: false
+        },
+        "a calendar that can no longer add Teams meetings"
+    );
+
+    let mut renamed = discovered_calendar("secondary");
+    renamed.calendar.name = "Renamed".into();
+    assert_eq!(
+        discover(vec![discovered_calendar("primary"), renamed]).await,
+        OutlookCalendarsChange {
+            changed: true,
+            team_ooo_changed: true
+        },
+        "a renamed calendar"
+    );
+    assert_eq!(
+        discover(vec![discovered_calendar("primary")]).await,
+        OutlookCalendarsChange {
+            changed: true,
+            team_ooo_changed: false
+        },
+        "a removed calendar, whose events each announce their own retirement"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

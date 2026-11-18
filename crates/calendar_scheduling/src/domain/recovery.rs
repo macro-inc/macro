@@ -11,6 +11,7 @@ impl CalendarOperation {
             attempt: 0,
             retry_at: Utc::now() + Duration::minutes(5),
             kind,
+            abandoned_at: None,
         }
     }
 }
@@ -23,9 +24,6 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         };
         let id = record.booking.id;
         let attempt = record.operation.as_ref().map_or(0, |op| op.attempt);
-        if attempt >= 3 {
-            tracing::error!(booking_id = %id, attempt, "scheduling recovery requires operator attention");
-        }
         let result = self.finish_operation(record).await?;
         if matches!(
             result.booking.status,
@@ -70,6 +68,15 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         };
         if let Err(error) = result {
             record.booking.status = BookingStatus::Failed;
+            // A failure that may still clear is retried until the meeting
+            // starts: an event in the past is not worth creating or moving.
+            if matches!(error, Error::CalendarRejected) || record.booking.starts_at <= Utc::now() {
+                if let Some(op) = &mut record.operation {
+                    op.abandoned_at = Some(Utc::now());
+                }
+                tracing::error!(booking_id = %record.booking.id, attempt = operation.attempt, error = ?error, "scheduling operation abandoned; booking left failed");
+                return self.persist_completion(record).await;
+            }
             // Keep both reservations after an uncertain move. Never expose an occupied slot.
             let minutes = 5_i64 * 2_i64.pow(operation.attempt.min(4));
             if let Some(op) = &mut record.operation {

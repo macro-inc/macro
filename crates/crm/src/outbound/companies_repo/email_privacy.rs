@@ -660,6 +660,7 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
                 backfill_user = true;
             }
         }
+        Self::invalidate_email_previews(&mut tx, team).await?;
         if backfill_user || backfill_team {
             Self::schedule_contribution_history(&mut tx, team, (!backfill_team).then_some(user))
                 .await?;

@@ -1147,12 +1147,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     );
     // A retired host degrades this list to local items; later lists skip it.
     const projectionHost = options ? cacheHost() : undefined;
+    const readsCache = () =>
+      options?.enabled?.() !== false && options?.readsCache?.() !== false;
     const [cacheRevision, setCacheRevision] = createSignal(0);
     createEffect(() => {
       if (!projectionHost || cacheHost() !== projectionHost) return;
-      // A disabled list searches afresh when enabled, so it has no use for
-      // change notifications; in a busy workspace they arrive constantly.
-      if (options?.enabled?.() === false) return;
+      // A list that stops reading the cache searches afresh when it starts
+      // again, so it has no use for change notifications meanwhile; in a busy
+      // workspace they arrive constantly.
+      if (!readsCache()) return;
       onCleanup(
         subscribeToVisibleCacheChanges(
           projectionHost,
@@ -1177,8 +1180,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             revision: () => cacheRevision() + manualRefreshRevision(),
             searchTerm: options.searchTerm,
             // An empty bucket list means "all" to the cache, not "none".
-            enabled: () =>
-              projectedBuckets().length > 0 && options.enabled?.() !== false,
+            enabled: () => projectedBuckets().length > 0 && readsCache(),
             existingItems: localItems,
             filterPreviousItems: filterQuickAccessItems,
             sourceAttributes: () => {

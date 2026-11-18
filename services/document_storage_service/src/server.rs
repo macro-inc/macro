@@ -449,6 +449,9 @@ async fn run_server() -> anyhow::Result<()> {
     )
     .with_thread_exclusion_gate(Arc::new(
         crm::outbound::thread_exclusions::FlaggedThreadExclusions(flags.clone()),
+    ))
+    .with_selective_email_gate(Arc::new(
+        crm::outbound::email_policy::FlaggedSelectiveEmail(flags.clone()),
     ));
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(

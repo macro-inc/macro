@@ -4,6 +4,9 @@ pub mod call_link;
 /// Postgres implementation of the companies repository
 #[cfg(feature = "outbound")]
 pub mod companies_repo;
+/// Remote rollout gate for selective contribution authoring.
+#[cfg(feature = "outbound")]
+pub mod email_policy;
 /// Postgres implementation of the message store's CRM parent reader
 #[cfg(feature = "lookup")]
 pub mod lookup;

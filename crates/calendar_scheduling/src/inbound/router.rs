@@ -226,6 +226,7 @@ impl IntoResponse for ApiError {
             Error::Conflict => StatusCode::CONFLICT,
             Error::Invalid(_) => StatusCode::BAD_REQUEST,
             Error::CalendarUnavailable | Error::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+            Error::CalendarRejected => StatusCode::UNPROCESSABLE_ENTITY,
         };
         let mut response = (
             status,

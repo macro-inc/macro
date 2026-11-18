@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH claimed AS MATERIALIZED (\n                 SELECT team_id,user_id FROM crm_email_policy_previews\n                 WHERE request_hash IS NOT NULL AND status IN ('pending','running') AND run_after<=now()\n                 ORDER BY run_after,team_id,user_id FOR UPDATE SKIP LOCKED LIMIT 1\n               )\n               UPDATE crm_email_policy_previews p SET status='running',context_id=$1,\n                   run_after=now()+interval '6 minutes',counts='{}',scanned_threads=0,after_thread_id=NULL,as_of=NULL\n               FROM claimed c WHERE p.team_id=c.team_id AND p.user_id=c.user_id\n               RETURNING p.team_id,p.user_id,p.link_id,p.preview_id,p.context_id,p.definition,p.status,p.counts,\n                   p.created_at,p.expires_at,p.as_of,p.scanned_threads,p.observed_token,p.observed_fingerprint,p.request_hash,p.traceparent",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "preview_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "definition",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "counts",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "as_of",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "scanned_threads",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "observed_token",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
+        "name": "observed_fingerprint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "request_hash",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 15,
+        "name": "traceparent",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "fb92f90212374e6b5c20c7f60a8d1a110a4878873d781ac160506f953c383ac7"
+}
