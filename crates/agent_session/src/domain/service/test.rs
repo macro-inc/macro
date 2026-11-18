@@ -2,7 +2,7 @@ use super::*;
 use crate::PROTOCOL_VERSION;
 use crate::domain::model::{
     DEFAULT_AGENT_SESSION_NAME, LeaseView, Message, ReplicaAddress, SessionBot, SessionSource,
-    SessionVisibility,
+    SessionStatus, SessionVisibility,
 };
 use crate::domain::ports::NoOpRealtime;
 use crate::domain::ports::{NoOpTurnObserver, NoopLifecyclePublisher};
@@ -2029,9 +2029,12 @@ async fn shared_transport_copies_durable_initialization_before_load() {
     let repo = InMemoryAgentSessionRepo::new();
     let first = AgentSessionId::new();
     let second = AgentSessionId::new();
-    for id in [first, second] {
-        repo.insert_session(test_agent_session(id));
-    }
+    repo.insert_session(test_agent_session(first));
+    // A session closed by idle teardown, reattached when its runtime redials.
+    repo.insert_session(AgentSession {
+        status: SessionStatus::Event(SystemEvent::Disconnected),
+        ..test_agent_session(second)
+    });
     let (handshake, _) = watch::channel(HandshakeStatus::Pending);
     let (send, mut received) = mpsc::channel(8);
     let (_inbound, inbound) = mpsc::channel(8);
@@ -2142,6 +2145,12 @@ async fn shared_transport_copies_durable_initialization_before_load() {
         serde_json::to_value(&history[1].entry.content).unwrap(),
         serde_json::to_value(Message::ToServer(init_response)).unwrap()
     );
+    // Opening logged the connection's readiness for this session too, so its
+    // credentials work again: egress and the internal MCP refuse a session
+    // whose row still says it disconnected.
+    let reopened = AgentSessionRepo::get(&repo, second).await.unwrap();
+    assert_eq!(reopened.status, SessionStatus::Event(SystemEvent::AcpReady));
+    crate::domain::credentials::open_session(reopened).expect("the reattached session is open");
 }
 
 #[tokio::test]
