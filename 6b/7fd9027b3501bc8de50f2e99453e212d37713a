@@ -1,0 +1,25 @@
+crates/agent_permission_registry/registry.json
+  s_6966afebcdde0a::t_aa93d4c04b7919 54-56,88,92,96
+packages/sdk-ocaml/generated/agent_harness.mli
+  s_6966afebcdde0a::t_6dec527b35e954 1516-1708,3478-3499,3971-4147,4936-4945,4992-4998,5008-5049
+  s_6966afebcdde0a::t_f6c9df2986ad11 5050
+packages/sdk-ocaml/generated/agent_harness.ml
+  s_6966afebcdde0a::t_6dec527b35e954 2666-3043,6053-6088,6852-7151,9129-9159,9282-9303,9327-9458
+  s_6966afebcdde0a::t_0c2f4d300a95de 9459
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6b7fd9027b3501bc8de50f2e99453e212d37713a",
+  "prompts": {},
+  "sessions": {
+    "s_6966afebcdde0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13694447-aca1-404a-8fbf-c900186fe6c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
