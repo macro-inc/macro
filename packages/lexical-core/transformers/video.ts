@@ -95,7 +95,8 @@ function $onlyVideo(paragraph: ParagraphNode): LexicalNode | null {
         !$isLineBreakNode(child) &&
         !($isTextNode(child) && child.getTextContent().trim() === '')
     );
-  return content.length === 1 && $isVideoNode(content[0]) ? content[0] : null;
+  const [only] = content;
+  return content.length === 1 && only && $isVideoNode(only) ? only : null;
 }
 
 // Internal transformer — always uses <m-video> for unambiguous round-tripping.
@@ -107,7 +108,7 @@ export const I_VIDEO: ElementTransformer = {
     // Import appends the video to its line's paragraph, and element
     // transformers see only that paragraph.
     const node = $isParagraphNode(block) ? $onlyVideo(block) : block;
-    if (!$isVideoNode(node)) return null;
+    if (!node || !$isVideoNode(node)) return null;
     if (node.getSrcType() === 'local') return null;
     if (!node.getUrl()) return null;
 
