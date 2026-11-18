@@ -1,0 +1,37 @@
+services/agent_harness_service/src/code_mode/permissions/test.rs
+  s_a79cb5c5d752a9::t_c0c4775a3e644c 552-611
+packages/sdk/tests/agent-sessions.test.ts
+  s_a79cb5c5d752a9::t_5c7f72960401e0 675,688
+crates/agent_egress/src/domain/approval.rs
+  s_a79cb5c5d752a9::t_2bdc3f61d7f3d6 615-620,626
+  s_a79cb5c5d752a9::t_bbad2c13914933 627,632-634,998-1001,1004-1005,1017-1022
+crates/agent_egress/src/domain/model/test.rs
+  s_a79cb5c5d752a9::t_bbad2c13914933 27
+  s_a79cb5c5d752a9::t_202da2a17bd57a 28-31
+services/agent_harness_service/src/code_mode/permissions.rs
+  s_a79cb5c5d752a9::t_84e932ccbe44ca 163-172,194-197
+crates/agent_egress/src/domain/model.rs
+  s_a79cb5c5d752a9::t_bbad2c13914933 593-595,598
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_a79cb5c5d752a9::t_84e932ccbe44ca 269-272
+  s_a79cb5c5d752a9::t_2bdc3f61d7f3d6 196-197,199-200,263-268,273
+crates/agent_egress/src/domain/approval/test.rs
+  s_a79cb5c5d752a9::t_c0c4775a3e644c 1099-1130
+  s_a79cb5c5d752a9::t_6039351bb62076 1131-1136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c8e391b2f4e6bcc54361def38d479d5432f6f2c5",
+  "prompts": {},
+  "sessions": {
+    "s_a79cb5c5d752a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8bf8f92a-181b-4d3a-aaa6-3d5c01f60534",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
