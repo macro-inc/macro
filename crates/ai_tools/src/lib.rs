@@ -342,29 +342,26 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 ///
 /// - `ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`: they stage the
 ///   plan an import review presents.
-/// - `SearchTools` / `LoadTools`, which also load the session's connected
-///   MCP tools.
 ///
+/// Connected apps' tools are reached from `ExecuteCode` through
+/// `macro.connectedApps`, so nothing is deferred and there is no
+/// `SearchTools` or `LoadTools`.
 /// `SelfKnowledge`'s about page is code mode's `about_macro` guide.
 pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     let toolset = AsyncToolCollection::new()
         .add_tool::<import::inbound::toolset::ImportFromNotion, ToolImportToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromLinear, ToolImportToolContext>()
-        .add_tool::<import::inbound::toolset::ImportFromJira, ToolImportToolContext>()
-        .add_tool::<SearchTools, ToolServiceContext>()
-        .add_tool::<LoadTools, ToolServiceContext>();
-    let deferred = deferred_tools(&toolset, EAGER_TOOLS);
+        .add_tool::<import::inbound::toolset::ImportFromJira, ToolImportToolContext>();
     use agent_code_mode::domain::{GuideHost, inline_guides};
     let tools_prompt = prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
     let guides = inline_guides(GuideHost::Code);
-    let deferred_section = deferred_section(&deferred);
     // Turns that route SDK entities bring their selected entities' guidance
     // in themselves.
     ToolSetWithPrompt {
         toolset: Arc::new(toolset),
-        prompt: Box::new(format!("{tools_prompt}{guides}{deferred_section}")),
-        routed_prompt: Box::new(format!("{tools_prompt}{deferred_section}")),
-        deferred,
+        prompt: Box::new(format!("{tools_prompt}{guides}")),
+        routed_prompt: Box::new(tools_prompt),
+        deferred: Arc::from([]),
     }
 }
 

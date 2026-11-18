@@ -87,7 +87,6 @@ fn reduced_definitions_keep_user_input() {
     }
     for name in ["ContentSearch", "NameSearch", "ListEntities", "ReadChat"] {
         assert!(!tools.tool_names.contains(name));
-        assert!(!tools.deferred.iter().any(|tool| tool.name == name));
     }
 }
 

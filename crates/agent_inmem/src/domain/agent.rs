@@ -149,8 +149,8 @@ pub struct AgentState {
     /// there were none.
     pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
     /// In-flight `connect_mcp` from `session/new` / `session/resume`. The
-    /// handshake does not join it; the first turn does, so SearchTools still
-    /// sees the catalog.
+    /// handshake does not join it; the first turn does, so its code tools are
+    /// there.
     pub mcp_connect: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// The servers the last `session/new` / `session/resume` handed over,
     /// redialed by a turn whose tools lack the code-mode ones.
@@ -167,8 +167,8 @@ impl AgentState {
     /// Dial the servers a session request carried and keep their tools for
     /// every turn until another `session/resume` hands over a new list.
     /// Started at `session/new`/`session/resume` so the handshake is not held
-    /// by `tools/list`; the first turn joins the same work so SearchTools
-    /// still has the catalog.
+    /// by `tools/list`; the first turn joins the same work so its code tools
+    /// are there.
     async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
         let servers = dialable_servers(servers);
         let requested = servers.len();

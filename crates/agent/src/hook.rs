@@ -159,7 +159,16 @@ pub struct BridgeInputs {
     /// Report tool calls while the model is still writing them (see
     /// [`StreamPart::ToolCallStarted`]).
     pub stream_tool_calls: bool,
+    /// What the retry feedback for a call to a tool that exists nowhere tells
+    /// the model to do instead; [`SEARCH_TOOLS_HINT`] unless the host has
+    /// another way to its connected apps.
+    pub unknown_tool_hint: Arc<str>,
 }
+
+/// The default [`BridgeInputs::unknown_tool_hint`], for hosts whose model
+/// finds connected apps' tools with `SearchTools`.
+pub const SEARCH_TOOLS_HINT: &str =
+    "Use `SearchTools` to find the right tool, or continue without it.";
 
 /// A call announced from its first argument delta and not yet finished.
 struct StartedCall {
@@ -211,6 +220,8 @@ pub struct StreamBridge {
     register_loaded: RegisterFn,
     /// Records which result loaded which tools.
     tool_loads: ToolLoads,
+    /// See [`BridgeInputs::unknown_tool_hint`].
+    unknown_tool_hint: Arc<str>,
     /// The session's full searchable catalog. Read by
     /// [`Self::on_invalid_tool_call`] to recover calls to tools the model
     /// discovered but never loaded.
@@ -259,6 +270,7 @@ impl StreamBridge {
             user_tool_finisher,
             stream_tool_calls,
             result_limit,
+            unknown_tool_hint,
         } = inputs;
         let (tx, rx) = mpsc::unbounded_channel();
         (
@@ -273,6 +285,7 @@ impl StreamBridge {
                 user_tool_finisher,
                 streamed: stream_tool_calls.then(Arc::default),
                 result_limit,
+                unknown_tool_hint,
                 cancel,
                 provider_ids: Arc::default(),
             },
@@ -326,7 +339,8 @@ impl StreamBridge {
     /// never loaded — load it now and ask the model to retry; the next request
     /// is rebuilt from the live tool server, so the retried call is valid. For
     /// names that exist nowhere, the retry feedback points the model at
-    /// `SearchTools` instead of failing the stream on a hallucinated name,
+    /// the host's [`BridgeInputs::unknown_tool_hint`] (`SearchTools` by
+    /// default) instead of failing the stream on a hallucinated name,
     /// until [`MAX_UNKNOWN_TOOL_CALL_RETRIES`] is spent.
     pub(crate) async fn handle_invalid_tool_call(
         &self,
@@ -365,8 +379,8 @@ impl StreamBridge {
                 }
                 Some(InvalidToolCallAction::retry(format!(
                     "Unknown tool `{tool_name}`: no tool with that name exists in this session \
-                     or its connected integrations. Use `SearchTools` to find the \
-                     right tool, or continue without it."
+                     or its connected integrations. {}",
+                    self.unknown_tool_hint
                 )))
             }
         }

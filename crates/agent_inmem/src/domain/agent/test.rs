@@ -2009,8 +2009,8 @@ async fn session_new_does_not_wait_for_mcp_connect() {
     abort.abort();
 }
 
-/// The first prompt joins the in-flight connect so SearchTools still sees
-/// the catalog, even though `session/new` did not wait.
+/// The first prompt joins the in-flight connect so its code tools are there,
+/// even though `session/new` did not wait.
 #[tokio::test]
 async fn first_prompt_waits_for_background_mcp_connect() {
     let (connector, mut started, release) = hold_connector();
