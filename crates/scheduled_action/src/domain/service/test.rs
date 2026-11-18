@@ -44,6 +44,8 @@ const FOREIGN_USER: &str = "macro|other@macro.com";
 pub(crate) struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
     activities: Mutex<Vec<activity::Activity>>,
+    /// Routines whose owner chose their appearance.
+    owner_chosen: Mutex<Vec<Uuid>>,
     records: Mutex<Vec<ActionExecutionRecord>>,
     /// Runs in progress, as claims would show them.
     running: Mutex<Vec<RunningRun>>,
@@ -152,6 +154,14 @@ impl ScheduledActionRepo for FakeRepo {
             .iter_mut()
             .find(|action| action.id == Some(change.id))
             .ok_or_else(|| anyhow::anyhow!("scheduled action not found"))?;
+        let mut owner_chosen = self.owner_chosen.lock().unwrap();
+        let chosen = owner_chosen.contains(&change.id);
+        if chosen && change.chooser == AppearanceChooser::Agent {
+            return Ok(None);
+        }
+        if !chosen && change.chooser == AppearanceChooser::Owner {
+            owner_chosen.push(change.id);
+        }
         let Some(activity) = change.activity(&action.appearance) else {
             return Ok(None);
         };
@@ -466,6 +476,7 @@ pub(crate) fn configuration(events: bool) -> ActionConfiguration {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         description: String::new(),
+        appearance: None,
     }
 }
 
@@ -479,6 +490,7 @@ fn update(config: ActionConfiguration) -> ActionConfigurationUpdate {
         enabled: Some(config.enabled),
         run_visibility: Some(config.run_visibility),
         description: Some(config.description),
+        appearance: config.appearance,
     }
 }
 

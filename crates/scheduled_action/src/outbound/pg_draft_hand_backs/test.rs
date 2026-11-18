@@ -24,6 +24,7 @@ fn check(name: &str) -> RoutineCheck {
             enabled: true,
             run_visibility: Default::default(),
             description: String::new(),
+            appearance: None,
         },
     }
 }

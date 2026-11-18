@@ -173,6 +173,7 @@ where
                     enabled: parent.enabled,
                     run_visibility: child.run_visibility,
                     description: child.description.clone(),
+                    appearance: None,
                 };
                 let child_id = child.id;
                 match self.replace_one(child, input, true).await {

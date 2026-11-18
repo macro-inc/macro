@@ -15,6 +15,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use crate::domain::appearance::AppearanceChooser;
 use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
@@ -451,28 +452,51 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         &self,
         change: crate::domain::appearance::ChangeAppearance,
     ) -> Result<Option<EntityAppearance>> {
+        let owners = change.chooser == AppearanceChooser::Owner;
         let mut tx = self.pool.begin().await?;
-        let previous = sqlx::query_scalar!(
-            "SELECT appearance FROM scheduled_action WHERE id = $1 FOR UPDATE",
+        let stored = sqlx::query!(
+            r#"
+            SELECT appearance, appearance_chosen_by_owner
+            FROM scheduled_action
+            WHERE id = $1
+            FOR UPDATE
+            "#,
             change.id,
         )
         .fetch_optional(&mut *tx)
         .await?
         .ok_or(ActionPolicyError::NotFound)?;
-        let previous: EntityAppearance = previous
+        // An agent's pick never replaces the owner's choice.
+        if stored.appearance_chosen_by_owner && !owners {
+            return Ok(None);
+        }
+        let previous: EntityAppearance = stored
+            .appearance
             .map(serde_json::from_value)
             .transpose()?
             .unwrap_or_default();
-        let Some(activity) = change.activity(&previous) else {
+        let activity = change.activity(&previous);
+        // The owner choosing the look it already has still makes it theirs.
+        if activity.is_none() && (stored.appearance_chosen_by_owner || !owners) {
             return Ok(None);
-        };
+        }
         sqlx::query!(
-            "UPDATE scheduled_action SET appearance = $2 WHERE id = $1",
+            r#"
+            UPDATE scheduled_action
+            SET appearance = $2,
+                appearance_chosen_by_owner = appearance_chosen_by_owner OR $3
+            WHERE id = $1
+            "#,
             change.id,
             serde_json::to_value(&change.appearance)?,
+            owners,
         )
         .execute(&mut *tx)
         .await?;
+        let Some(activity) = activity else {
+            tx.commit().await?;
+            return Ok(None);
+        };
         activity::outbound::pg_activity_repo::insert_activities(&mut *tx, &[activity]).await?;
         tx.commit().await?;
         Ok(Some(previous))

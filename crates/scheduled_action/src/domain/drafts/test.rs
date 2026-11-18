@@ -386,6 +386,7 @@ pub(super) fn configuration(name: &str, trigger: Value, steps: Value) -> ActionC
         enabled: true,
         run_visibility: Default::default(),
         description: String::new(),
+        appearance: None,
     }
 }
 

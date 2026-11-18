@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::appearance::ChangeAppearance;
+use crate::domain::appearance::{AppearanceChooser, ChangeAppearance};
 use activity::domain::ports::{ActivityReads, EntityActivityReads};
 use activity::{Action, Actor, Attribution, RecordedAction};
 use model_entity::{AppearanceColor, EntityAppearance};
@@ -25,6 +25,7 @@ async fn appearance_and_history_commit_without_changing_scheduling(pool: PgPool)
     let change = ChangeAppearance {
         id,
         appearance: appearance.clone(),
+        chooser: AppearanceChooser::Owner,
         attribution: Attribution::direct(Actor::new_from_user(user(USER_A))),
         event_id: macro_uuid::generate_uuid_v7(),
         occurred_at: Utc::now(),
@@ -34,6 +35,7 @@ async fn appearance_and_history_commit_without_changing_scheduling(pool: PgPool)
         repo.set_appearance(ChangeAppearance {
             id,
             appearance: appearance.clone(),
+            chooser: AppearanceChooser::Owner,
             attribution: Attribution::direct(Actor::new_from_user(user(USER_A))),
             event_id: macro_uuid::generate_uuid_v7(),
             occurred_at: Utc::now(),
@@ -110,6 +112,7 @@ async fn history_failure_rolls_back_the_appearance(pool: PgPool) {
                 icon: None,
                 color: Some(AppearanceColor::Blue)
             },
+            chooser: AppearanceChooser::Owner,
             attribution: Attribution::direct(Actor::new_from_user(user(USER_A))),
             event_id: macro_uuid::generate_uuid_v7(),
             occurred_at: Utc::now(),
@@ -120,4 +123,124 @@ async fn history_failure_rolls_back_the_appearance(pool: PgPool) {
     let stored = repo.get_action(&id).await.unwrap().unwrap();
     assert_eq!(stored.appearance, created.appearance);
     assert_eq!(stored.updated_at, created.updated_at);
+}
+
+fn change(id: Uuid, appearance: EntityAppearance, chooser: AppearanceChooser) -> ChangeAppearance {
+    ChangeAppearance {
+        id,
+        appearance,
+        chooser,
+        attribution: Attribution::direct(Actor::new_from_user(user(USER_A))),
+        event_id: macro_uuid::generate_uuid_v7(),
+        occurred_at: Utc::now(),
+    }
+}
+
+fn colored(color: AppearanceColor) -> EntityAppearance {
+    EntityAppearance {
+        icon: None,
+        color: Some(color),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn agent_picks_until_the_owner_chooses(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool.clone());
+    let created = repo
+        .create_action(sample_action(user_owner(USER_A), "routine"))
+        .await
+        .unwrap();
+    let id = created.id.unwrap();
+
+    let first = colored(AppearanceColor::Blue);
+    assert!(
+        repo.set_appearance(change(id, first.clone(), AppearanceChooser::Agent))
+            .await
+            .unwrap()
+            .is_some()
+    );
+    let second = colored(AppearanceColor::Green);
+    assert!(
+        repo.set_appearance(change(id, second.clone(), AppearanceChooser::Agent))
+            .await
+            .unwrap()
+            .is_some(),
+        "an agent may pick again while the owner has not chosen"
+    );
+    assert_eq!(
+        repo.get_action(&id).await.unwrap().unwrap().appearance,
+        second
+    );
+
+    let chosen = colored(AppearanceColor::Red);
+    assert!(
+        repo.set_appearance(change(id, chosen.clone(), AppearanceChooser::Owner))
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        repo.set_appearance(change(id, first, AppearanceChooser::Agent))
+            .await
+            .unwrap()
+            .is_none(),
+        "an agent never replaces the owner's choice"
+    );
+    assert_eq!(
+        repo.get_action(&id).await.unwrap().unwrap().appearance,
+        chosen
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn choosing_the_current_look_still_keeps_it(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool.clone());
+    let created = repo
+        .create_action(sample_action(user_owner(USER_A), "routine"))
+        .await
+        .unwrap();
+    let id = created.id.unwrap();
+
+    // The owner picks "no icon", which the routine already has: nothing to
+    // record, but an agent may no longer give it one.
+    assert!(
+        repo.set_appearance(change(
+            id,
+            EntityAppearance::default(),
+            AppearanceChooser::Owner
+        ))
+        .await
+        .unwrap()
+        .is_none()
+    );
+    assert!(
+        repo.set_appearance(change(
+            id,
+            colored(AppearanceColor::Blue),
+            AppearanceChooser::Agent
+        ))
+        .await
+        .unwrap()
+        .is_none()
+    );
+    assert_eq!(
+        repo.get_action(&id).await.unwrap().unwrap().appearance,
+        EntityAppearance::default()
+    );
+    let history = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool);
+    assert!(
+        history
+            .entity_feed(
+                model_entity::EntityType::ScheduledAction,
+                &id.to_string(),
+                None,
+                NonZeroU32::new(10).unwrap(),
+            )
+            .await
+            .unwrap()
+            .records
+            .is_empty()
+    );
 }

@@ -331,6 +331,13 @@ each run.
   loads the routine only for its owner (`granted_action`). Without a grant
   they answer 401; with a grant but not the owner, 404.
 - Appearance writes atomically record history through the activity adapter without changing configuration revisions, scheduling state, or content timestamps; routine deletion removes that history in the same transaction.
+  An agent picks a routine's look through `appearance` on create, update
+  and check (`ActionConfiguration`, `ActionConfigurationUpdate`; validated by
+  `appearance::check_pick`, which names Macro's icons when it refuses one). An
+  update applies a pick after saving the configuration, and only when the
+  caller acts for the owner. `PUT /appearance` is the owner's choice and sets
+  `scheduled_action.appearance_chosen_by_owner`, even for no icon; an agent's
+  pick (`AppearanceChooser::Agent`) never replaces it.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
@@ -411,7 +418,10 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   and an `Option` in `ActionConfigurationUpdate` that keeps the stored value
   (both reject unknown fields, and older clients omit it), plus every query in
   `pg_scheduled_action_repo.rs` and the event-run claim in `pg_event_run_repo.rs`,
-  which builds its own `ScheduledAction`.
+  which builds its own `ScheduledAction`. `appearance` is the exception: an
+  agent's pick, written through `ScheduledActionRepo::set_appearance`, not a
+  stored configuration field. It is serialized only when set, because a
+  replica built before it rejects the key in a kept check or draft.
 - A `once` trigger (stored as `trigger_type = 'once'`, or inside `multiple`)
   runs a single time at `at`, kept to whole seconds. A past `at` is due as soon
   as it is saved, unless the stored routine already consumed it (its

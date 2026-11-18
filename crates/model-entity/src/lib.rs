@@ -17,7 +17,7 @@ mod external_chat;
 pub use external_chat::{ExternalChatKind, ExternalChatProvider};
 
 mod appearance;
-pub use appearance::{AppearanceColor, AppearanceIcon, EntityAppearance};
+pub use appearance::{AppearanceColor, AppearanceIcon, EntityAppearance, macro_icon_names};
 
 /// The type of an entity in Macro
 #[derive(

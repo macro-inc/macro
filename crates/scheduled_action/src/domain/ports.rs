@@ -73,7 +73,10 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action: ScheduledAction,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
-    /// Atomically replace presentation and record the actual change in entity history.
+    /// Atomically replace presentation and record the actual change in entity
+    /// history. An agent's pick is skipped once the owner has chosen the
+    /// appearance; the owner's choice marks it chosen even when unchanged.
+    /// The previous appearance when it changed.
     fn set_appearance(
         &self,
         change: ChangeAppearance,
