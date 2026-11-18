@@ -140,7 +140,7 @@ export function PrDetailBody(props: PrDetailBodyProps) {
         entity={{ type: 'foreign_entity', id: props.foreignEntityId }}
       />
       <Scroll class="flex-1 min-h-0">
-        <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
+        <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
           <Show
             when={props.data}
             fallback={
@@ -190,7 +190,7 @@ export function PrDetailContent(props: PrDetailBodyProps) {
       <Suspense
         fallback={
           <Scroll class="size-full min-h-0">
-            <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
+            <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
               <PrDetailSkeleton />
             </div>
           </Scroll>
