@@ -766,3 +766,52 @@ async fn a_refused_sharing_change_is_answered_as_a_refusal() {
         }
     }
 }
+
+/// Normal member-authorized agent sessions retain direct contribution writes;
+/// only credentials carrying a restricted scope are refused at the route gate.
+#[tokio::test]
+async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+    };
+    let app = axum::Router::new()
+        .route(
+            "/dss/v1/crm/email-privacy/policy",
+            axum::routing::put(|| async { StatusCode::OK }),
+        )
+        .layer(axum::middleware::from_fn_with_state(state, propagate));
+    for scope in [None, Some("no_send"), Some("dry_run"), Some("generation")] {
+        let bearer = mint(
+            Some(Uuid::from_u128(1)),
+            Some(Uuid::from_u128(3)),
+            None,
+            scope,
+        );
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/dss/v1/crm/email-privacy/policy")
+                    .header("authorization", format!("Bearer {bearer}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            if scope.is_none() {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            "{scope:?}",
+        );
+    }
+}

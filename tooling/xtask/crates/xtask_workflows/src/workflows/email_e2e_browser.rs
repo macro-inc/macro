@@ -129,6 +129,7 @@ fn suite() -> Job {
         .add_service("kafka", email_e2e::kafka_service())
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -159,6 +160,7 @@ fn suite() -> Job {
         ))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// What the shards recorded, as one run: the coverage check of the email UI
@@ -174,6 +176,7 @@ fn coverage() -> Job {
         .runs_on(runners::Runner::Small.with_cache_tag(vars::CI_CACHE_TAG))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(download_recorded())
@@ -186,6 +189,7 @@ fn coverage() -> Job {
                 .if_condition(!cancelled()),
         )
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// Every shard's recorded results, laid over each other: the reports have a

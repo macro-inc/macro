@@ -135,6 +135,7 @@ fn path_check() -> Job {
             PATH_CHECK.outputs.doppler_candidates.name(),
             FILTER.outputs.doppler_candidates.read(),
         )
+        .add_output("query_data", "${{ steps.filter.outputs.query_data }}")
         .add_output(
             PATH_CHECK.outputs.graphql_schema.name(),
             FILTER.outputs.graphql_schema.read(),
@@ -167,14 +168,22 @@ fn path_check() -> Job {
         .add_step(compute_nextest_filter())
 }
 
+/// Why a job that keeps its cargo `target` rebuilds every workspace crate
+/// anyway (`CARGO_TARGET_REBUILD_ALL`, `scripts/cargo_target_reuse.ts`): sqlx
+/// reads `.sqlx` data without telling cargo, so a kept unit can outlive the
+/// data its queries need when the pull request removes it.
+const REBUILD_ALL_REASON: &str = "${{ needs.path-check.outputs.query_data == 'true' && 'the pull request changes query data' || '' }}";
+
 /// fmt + unused dependencies + clippy.
 fn check() -> Job {
     steps::gated_job(&PATH_CHECK.outputs.should_run)
         .timeout_minutes(20u32)
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
+        .add_env(("CARGO_TARGET_REBUILD_ALL", REBUILD_ALL_REASON))
         .map(with_check_env)
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -184,6 +193,7 @@ fn check() -> Job {
         .add_step(cargo_clippy())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// The env the clippy-side jobs share, so their sccache keys stay identical.
@@ -212,12 +222,14 @@ fn doppler_config() -> Job {
                 .and(PATH_CHECK.outputs.doppler_candidates.read().is_set()),
         )
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
+        .add_env(("CARGO_TARGET_REBUILD_ALL", REBUILD_ALL_REASON))
         .map(with_check_env)
         .add_step(steps::checkout_action(false, false).fetch_depth(2))
         // Before the dev shell: its LD_LIBRARY_PATH points the runner's
         // git-remote-https at Nix's glibc, which aborts `git fetch`.
         .add_step(compute_changed_files())
         .add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -226,6 +238,7 @@ fn doppler_config() -> Job {
         .add_step(validate_doppler_configs())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// Fails when `static_assets/schema.graphql` drops or narrows something
@@ -265,6 +278,7 @@ fn test() -> Job {
                 .and(PATH_CHECK.outputs.skip_tests.read().is_unset()),
         )
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
+        .add_env(("CARGO_TARGET_REBUILD_ALL", REBUILD_ALL_REASON))
         .add_env(("RUST_PACKAGES", PATH_CHECK.outputs.rust_packages.read()))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("REDIS_URI", "redis://127.0.0.1:6379"))
@@ -276,6 +290,7 @@ fn test() -> Job {
         .add_service("redis", redis_service())
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -288,6 +303,7 @@ fn test() -> Job {
         .add_step(test_execution_runtime())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// The env the jobs that compile for `test` share, so their sccache keys stay
@@ -308,11 +324,13 @@ fn build_service_bins() -> Job {
         .timeout_minutes(20u32)
         .cond(build_service_bins_condition())
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
+        .add_env(("CARGO_TARGET_REBUILD_ALL", REBUILD_ALL_REASON))
         .add_env(("RUST_PACKAGES", PATH_CHECK.outputs.rust_packages.read()))
         .map(with_test_compile_env)
         .add_env(("SQLX_OFFLINE", "true"))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -322,6 +340,7 @@ fn build_service_bins() -> Job {
         )
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 fn build_service_bins_condition() -> Expr<Bool> {
@@ -417,6 +436,8 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - 'static_assets/schema.graphql'
                   - 'tooling/xtask/crates/xtask_graphql_schema_compat/**'
                   - .github/workflows/code_check_cloud_storage.yml
+                query_data:
+                  - '**/.sqlx/**'
             "#},
     )
     .step()
@@ -531,11 +552,29 @@ pub(crate) fn configure_postgres() -> Step<Run> {
 }
 
 /// Set up test env files and databases. The pre-migrated template1 spares each
-/// `#[sqlx::test]` database from replaying every migration.
+/// `#[sqlx::test]` database from replaying every migration. Between them,
+/// [`DATE_LIVE_QUERY_CRATES`].
 fn prepare_tests() -> Step<Run> {
-    Step::new("prepare tests")
-        .run("just setup_test_envs && just initialize_dbs && just setup_test_template")
+    Step::new("prepare tests").run(format!(
+        "just setup_test_envs\n{DATE_LIVE_QUERY_CRATES}\njust initialize_dbs\njust setup_test_template"
+    ))
 }
+
+/// A crate whose `.env` gives sqlx the test database checks its queries
+/// against that schema when it compiles, which cargo doesn't track: a kept unit
+/// was checked against the schema of whichever run built it, or against `.sqlx`
+/// data when an offline job did. Dating these crates' files now rebuilds them,
+/// and their dependents, against this run's migrations. The reuse record keeps
+/// its times, so other jobs still reuse what this job builds.
+const DATE_LIVE_QUERY_CRATES: &str = r#"dated=0
+for env in $(find crates services -name .env -not -path '*/node_modules/*'); do
+  if grep -q '^DATABASE_URL=' "$env"; then
+    git ls-files -z -- "$(dirname "$env")" | xargs -0 -r touch -c -h
+    dated=$((dated + 1))
+  fi
+done
+echo "Rebuilding the $dated crates that check queries against the test database"
+[ "$dated" -gt 0 ]"#;
 
 /// Run the test suite (no AWS credentials; sccache uses Namespace's remote cache).
 fn run_tests() -> Step<Run> {

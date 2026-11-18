@@ -10,6 +10,7 @@ self-hosted-runner:
     - namespace-profile-linux-mid;overrides.cache-tag=observability-image
     - namespace-profile-linux-mid;overrides.cache-tag=sync-service-deploy
     - namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    - namespace-profile-linux-mid;overrides.cache-tag=web-codegen
     - namespace-profile-linux-rust-ci
     - namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     - namespace-profile-linux-small

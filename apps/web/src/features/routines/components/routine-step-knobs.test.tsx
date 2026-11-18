@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type Knob, withKnobValue } from '../core/knobs';
-import { StepSentence } from './routine-step-knobs';
+import { KnobSettings, StepSentence } from './routine-step-knobs';
 
 afterEach(cleanup);
 
@@ -111,5 +111,48 @@ describe('a step’s sentence', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Notify me: on' }));
     expect(current()[3]).toMatchObject({ value: false });
     expect(screen.getByRole('button', { name: 'Notify me: off' })).toBeTruthy();
+  });
+});
+
+describe('a knob with no value', () => {
+  const empty: Knob = {
+    type: 'text',
+    name: 'project',
+    label: 'Project',
+    value: '',
+  };
+
+  it('shows its label in the sentence, as a value to set', async () => {
+    const [current, setCurrent] = createSignal<Knob[]>([empty]);
+    render(() => (
+      <StepSentence
+        sentence="Make a ticket in {project} for each message."
+        knobs={current()}
+        onKnob={(name, value) =>
+          setCurrent(withKnobValue(current(), name, value))
+        }
+      />
+    ));
+    expect(screen.getByText(/Make a ticket/).textContent).toBe(
+      'Make a ticket in Project for each message.'
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Project: not set. Set it' })
+    );
+    const field = await screen.findByRole('textbox', { name: 'Project' });
+    fireEvent.input(field, { target: { value: 'Bugs' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(current()[0]).toMatchObject({ value: 'Bugs' });
+    expect(
+      screen.getByRole('button', { name: 'Project: Bugs. Change it' })
+    ).toBeTruthy();
+  });
+
+  it('reads as not set in the settings list', () => {
+    render(() => <KnobSettings knobs={[empty]} onKnob={() => {}} />);
+    expect(
+      screen.getByRole('button', { name: 'Project: not set. Set it' })
+        .textContent
+    ).toBe('Not set');
   });
 });

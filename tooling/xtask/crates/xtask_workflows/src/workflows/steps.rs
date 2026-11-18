@@ -406,6 +406,40 @@ pub fn mount_web_check_cache_volume(with_rust: bool) -> Step<Use> {
     })
 }
 
+/// [`mount_web_check_cache_volume`] with Rust, plus cargo's `target` directory.
+/// Only for a job on its own cache tag ([`vars::WEB_CODEGEN_CACHE_TAG`]), followed
+/// by [`reuse_cargo_target`] before anything builds.
+pub fn mount_web_codegen_cache_volume() -> Step<Use> {
+    let paths = [
+        vars::BUN_CACHE_VOLUME_DIR.to_string(),
+        vars::node_modules_volume_dir(),
+        "/home/runner/.cargo/registry".to_string(),
+        "/home/runner/.cargo/git".to_string(),
+        vars::CARGO_TARGET_VOLUME_DIR.to_string(),
+    ];
+    nscloud_cache_action("Mount Namespace cache volume", |cache| {
+        cache.cache("nix").path(paths.join("\n"))
+    })
+}
+
+/// Date the checkout's files by when their contents first appeared, so cargo
+/// rebuilds only the workspace crates whose sources differ from the builds the
+/// kept `target` directory holds (`scripts/cargo_target_reuse.ts`).
+pub fn reuse_cargo_target() -> Step<Run> {
+    Step::new("Reuse the kept cargo target")
+        .run(node_script(include_str!("scripts/cargo_target_reuse.ts")))
+}
+
+/// The last step of every job that runs [`reuse_cargo_target`]: marks every unit
+/// the job built as described by the record, so a job that later builds into
+/// the same `target` without dating its checkout is caught.
+pub fn seal_cargo_target() -> Step<Run> {
+    Step::new("Seal the kept cargo target").run(node_script_calling(
+        include_str!("scripts/cargo_target_reuse.ts"),
+        "seal",
+    ))
+}
+
 /// [`mount_web_check_cache_volume`] plus Vitest's module cache, so the web `Test`
 /// job reuses transforms from earlier runs instead of redoing them all.
 pub fn mount_web_test_cache_volume() -> Step<Use> {
@@ -476,8 +510,13 @@ pub fn start_sccache_server() -> Step<Run> {
 /// itself, so the step needs no checkout, build or dependency. The script
 /// exports `main`.
 pub fn node_script(source: &str) -> String {
+    node_script_calling(source, "main")
+}
+
+/// [`node_script`], calling another exported function.
+pub fn node_script_calling(source: &str, function: &str) -> String {
     format!(
-        "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n{source}\nawait main();\nNODE_SCRIPT\n"
+        "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n{source}\nawait {function}();\nNODE_SCRIPT\n"
     )
 }
 
@@ -707,6 +746,20 @@ pub fn upload_release_artifacts(path: RuntimePath<'_>) -> Step<Use> {
         .fail_on_unmatched_files(true)
         .step()
         .if_condition(ARTIFACT_METADATA.outputs.tag.read().starts_with("v"))
+}
+
+/// After a blobless checkout (`filter: blob:none`):
+/// - older git marks the repository with `extensions.partialclone`, which
+///   Nix's libgit2 refuses to open; `remote.origin.promisor` alone still lets
+///   git fetch missing blobs on demand;
+/// - `git diff` finds renames by reading the merge base's blobs, and `biome
+///   --changed` ignores its exit status, so a failed fetch there would check
+///   no files. Without rename detection, `--name-only` lists the same paths
+///   and reads no blob.
+pub fn prepare_blobless_checkout() -> Step<Run> {
+    Step::new("Prepare the blobless checkout").run(
+        "if git config extensions.partialclone >/dev/null; then git config --unset extensions.partialclone; fi\ngit config diff.renames false\n",
+    )
 }
 
 /// Teardown Nix (always runs).

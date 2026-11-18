@@ -72,6 +72,7 @@ fn tier() -> Job {
         .add_env(("EMAIL_E2E_BROWSER_WORKERS", "4"))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -91,6 +92,7 @@ fn tier() -> Job {
         .add_step(upload("email-e2e-full-stack-traces", TRACES))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// Start the stack and run the tests tagged for it.

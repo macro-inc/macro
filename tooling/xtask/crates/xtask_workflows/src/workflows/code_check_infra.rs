@@ -42,6 +42,7 @@ fn biome_check() -> Job {
         .name("Biome Check")
         .runs_on(infra_runner())
         .add_step(checkout(true))
+        .add_step(steps::prepare_blobless_checkout())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
@@ -64,8 +65,9 @@ fn check() -> Job {
 
 fn checkout(full_history: bool) -> Step<Use> {
     let checkout = ActionsCheckout::new("Checkout Repo");
+    // `biome --changed` needs the merge base, not old blobs.
     let checkout = if full_history {
-        checkout.fetch_depth(0)
+        checkout.fetch_depth(0).filter("blob:none")
     } else {
         checkout
     };

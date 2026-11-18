@@ -155,3 +155,58 @@ fn gate_script_scenarios() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// What a PR check reads from history is commits, trees and a few blobs, which
+/// git fetches on demand; fetching every blob of the full history took about
+/// 40 s per job.
+#[test]
+fn full_history_checkouts_fetch_no_blobs_up_front() {
+    for call in CALLS {
+        let workflow = called(call);
+        for (id, job) in workflow["jobs"].as_mapping().expect("jobs") {
+            let id = id.as_str().unwrap_or_default();
+            for step in job["steps"].as_sequence().into_iter().flatten() {
+                let with = &step["with"];
+                let full = with["fetch-depth"].as_str() == Some("0")
+                    || with["fetch-depth"].as_u64() == Some(0);
+                assert!(
+                    !full || with["filter"].as_str() == Some("blob:none"),
+                    "{} job {id} fetches every blob of the full history",
+                    uses(call)
+                );
+            }
+        }
+    }
+}
+
+/// A blobless full-history checkout is prepared right after it: Nix can't open
+/// a repository marked as a partial clone, and `biome --changed` must not need
+/// old blobs.
+#[test]
+fn blobless_history_is_prepared() {
+    for call in CALLS {
+        let workflow = called(call);
+        for (id, job) in workflow["jobs"].as_mapping().expect("jobs") {
+            let id = id.as_str().unwrap_or_default();
+            let steps: Vec<_> = job["steps"].as_sequence().into_iter().flatten().collect();
+            for (index, step) in steps.iter().enumerate() {
+                let with = &step["with"];
+                let full = with["fetch-depth"].as_str() == Some("0")
+                    || with["fetch-depth"].as_u64() == Some(0);
+                if !full || with["filter"].as_str().is_none() {
+                    continue;
+                }
+                let run = steps
+                    .get(index + 1)
+                    .and_then(|next| next["run"].as_str())
+                    .unwrap_or_default();
+                assert!(
+                    run.contains("git config --unset extensions.partialclone")
+                        && run.contains("git config diff.renames false"),
+                    "{} job {id} doesn't prepare its blobless checkout",
+                    uses(call)
+                );
+            }
+        }
+    }
+}

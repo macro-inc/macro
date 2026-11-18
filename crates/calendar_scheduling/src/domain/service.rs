@@ -843,7 +843,15 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             return Ok(record.booking);
         }
         let expected = record.booking.status;
-        if expected == BookingStatus::Processing || expected == BookingStatus::Failed {
+        // Recovery owns a failed booking until it abandons the operation; after
+        // that, cancelling is the only way to release its reservations.
+        let abandoned = record
+            .operation
+            .as_ref()
+            .is_some_and(|operation| operation.abandoned_at.is_some());
+        if expected == BookingStatus::Processing
+            || (expected == BookingStatus::Failed && !abandoned)
+        {
             return Err(Error::Conflict);
         }
         record.booking.status = BookingStatus::Processing;

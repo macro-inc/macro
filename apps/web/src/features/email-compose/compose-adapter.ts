@@ -32,7 +32,6 @@ import {
   transferEmailDraft,
   useDeleteDraftMutation,
 } from '@queries/email/draft';
-import { markThreadDraftSaved } from '@queries/email/draft-cache';
 import { subscribeToDraftLifecycleChanges } from '@queries/email/draft-lifecycle-events';
 import {
   assertEmailDraftQueueAvailable,
@@ -103,7 +102,10 @@ import {
 } from './queries/draft-lifecycle';
 import { createEmailInboxSource } from './queries/inbox-source';
 import { queuedDraftSaveArgs } from './queries/queued-draft';
-import { watchEmailSendProgress } from './queries/send-progress';
+import {
+  watchEmailSendProgress,
+  watchSentThread,
+} from './queries/send-progress';
 import {
   restoreDraftBodyAfterUndo,
   runQueuedUndoSend,
@@ -428,14 +430,12 @@ export function createEmailComposeContext(): EmailComposeContext {
         try {
           const threadId = result.threadId;
           if (threadId) {
-            markThreadDraftSaved(threadId);
             fireAndForget(
               refreshEmailLists(threadId, !!completingThread),
               'email-compose'
             );
           }
           if (previousThreadId && previousThreadId !== threadId) {
-            markThreadDraftSaved(previousThreadId);
             invalidateSoupEntity(previousThreadId);
             void refetchSoupEntity(previousThreadId, 'emailThread').catch(
               reportError
@@ -467,7 +467,6 @@ export function createEmailComposeContext(): EmailComposeContext {
         });
         try {
           publishDraftLifecycleChange(input.draftId, inboxId);
-          if (input.threadId) markThreadDraftSaved(input.threadId);
         } catch (error) {
           reportError(error);
         }
@@ -548,6 +547,7 @@ export function createEmailComposeContext(): EmailComposeContext {
                 emailSendLocked(intent)
             )),
       watchSend: watchEmailSendProgress,
+      watchSentThread,
       async sendMessage({ inboxId, ...input }) {
         if (
           !inboxSource
