@@ -473,3 +473,77 @@ async fn finishing_setup_follows_the_team_admin_role_not_the_buyer() {
         assert_eq!(response.status(), expected, "{role:?}");
     }
 }
+
+/// Any team member reads the team's computers' usage: the latest reading in
+/// words the web shows, and the day's points.
+#[tokio::test]
+async fn usage_answers_a_member_with_each_computers_latest_reading_and_day() {
+    let repo = crate::domain::fakes::FakeRepo::default();
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
+    repo.computers.lock().unwrap().insert(
+        id,
+        crate::domain::service::test::computer(
+            id,
+            crate::domain::lifecycle::Phase::Running,
+            crate::domain::lifecycle::Billing::Active {
+                subscription_item: crate::domain::service::test::item("si_1"),
+            },
+        ),
+    );
+    // A 4-vCPU computer that used one CPU for the minute up to 20 s ago.
+    let now = crate::domain::fakes::now();
+    repo.usage.lock().unwrap().insert(
+        id,
+        vec![
+            crate::domain::usage::StoredSample {
+                sampled_at: now - chrono::Duration::seconds(80),
+                cpu_usage_microseconds: 0,
+                memory_bytes: 1_000_000_000,
+            },
+            crate::domain::usage::StoredSample {
+                sampled_at: now - chrono::Duration::seconds(20),
+                cpu_usage_microseconds: 60_000_000,
+                memory_bytes: 2_000_000_000,
+            },
+        ],
+    );
+    let service = Arc::new(crate::domain::service::ComputerService::new(
+        repo,
+        crate::domain::service::test::FakeBilling::default(),
+        crate::domain::fakes::FixedClock,
+        crate::domain::ports::StaticFleetAttachment(
+            crate::domain::models::FleetAttachment::Detached,
+        ),
+    ));
+    let router: Router = team_router(ComputerRouterState {
+        service,
+        entity_access_service: Arc::new(TeamAccess(TeamRole::Member)),
+        authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/team/computers/usage")
+                .header("authorization", "Bearer test-user")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 65536)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let latest = serde_json::json!({ "cpuPercent": 25.0, "memoryBytes": 2_000_000_000_u64 });
+    assert_eq!(body[0]["computerId"], id.to_string());
+    assert_eq!(body[0]["latest"], latest);
+    assert_eq!(body[0]["points"].as_array().unwrap().len(), 96);
+    assert_eq!(body[0]["points"][95], latest);
+    assert_eq!(body[0]["points"][94], serde_json::Value::Null);
+}

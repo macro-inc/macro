@@ -31,6 +31,9 @@ pub use overcommit::{
     HostMemory, OvercommitRepo,
 };
 
+mod usage;
+pub use usage::UsageHistory;
+
 /// Supplies advisory fleet operator presence at the caller's time.
 pub trait FleetAttachmentSource: Send + Sync + 'static {
     /// Adapter failure type.
