@@ -97,9 +97,10 @@ pub struct StreamEventsQuery {
 /// without it the stream is exactly what it was before resuming existed, so
 /// a browser `EventSource` or SDK listener reconnecting never replays.
 #[derive(Debug, serde::Deserialize)]
-struct ResumeQuery {
+pub struct ResumeQuery {
+    /// Replay the retained events after `Last-Event-ID` first.
     #[serde(default)]
-    resume: bool,
+    pub resume: bool,
 }
 
 /// Parse the query's filters into the typed filter model.
