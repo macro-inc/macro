@@ -17,6 +17,12 @@ pub(super) enum EmailIndexAction {
         message_id: Uuid,
         owner: String,
     },
+    /// Index a sent message under its thread and drop the copies it left
+    /// under threads the send moved it from.
+    UpsertSentMessage {
+        message_id: Uuid,
+        owner: String,
+    },
     RemoveMessage {
         message_id: Uuid,
     },
@@ -122,7 +128,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             event_type: "email.message_draft_synced",
         },
         EmailTopicEvent::MessageSent(metadata) => EmailEventDescription {
-            action: EmailIndexAction::UpsertMessage {
+            action: EmailIndexAction::UpsertSentMessage {
                 message_id: metadata.message_id,
                 owner: metadata.owner.to_string(),
             },
@@ -226,6 +232,9 @@ async fn process_email_index_action(
     match action {
         EmailIndexAction::UpsertMessage { message_id, owner } => {
             upsert::process_upsert_message(opensearch_client, db, message_id, &owner).await
+        }
+        EmailIndexAction::UpsertSentMessage { message_id, owner } => {
+            upsert::process_upsert_sent_message(opensearch_client, db, message_id, &owner).await
         }
         EmailIndexAction::RemoveMessage { message_id } => {
             remove::process_remove_message(opensearch_client, message_id, None).await

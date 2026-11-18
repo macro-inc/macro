@@ -220,6 +220,52 @@ async fn delete_by_message_ids(
     parse_deleted_by_query(&body)
 }
 
+/// Deletes `message_id`'s documents under every thread but `thread_id`: the
+/// copies a message leaves behind when it moves to another thread. No refresh
+/// is forced; a stale copy leaves search at the next scheduled refresh. A copy
+/// another write changes mid-query is skipped and counted, not retried: that
+/// write's own event handles it.
+pub async fn delete_email_message_outside_thread(
+    client: &opensearch::OpenSearch,
+    message_id: &str,
+    thread_id: &str,
+    index_override: Option<&str>,
+) -> Result<DeletedByQuery> {
+    const OPERATION: OpensearchOperation = OpensearchOperation::DeleteEmailMessageOutsideThread;
+    let index = resolve_destination(index_override);
+    let response = client
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
+        .body(outside_thread_query(message_id, thread_id))
+        .conflicts(opensearch::params::Conflicts::Proceed)
+        .send()
+        .await
+        .map_err(|err| OpensearchClientError::request_failed(OPERATION, &err))?;
+    let status_code = response.status_code();
+    let body = response
+        .text()
+        .await
+        .map_err(|err| OpensearchClientError::deserialization_failed(OPERATION, &err))?;
+    if !status_code.is_success() {
+        tracing::error!(status_code = ?status_code, body = ?body, "error deleting a moved message's old copies");
+        return Err(OpensearchClientError::Unknown {
+            details: body,
+            operation: OPERATION,
+        });
+    }
+    parse_deleted_by_query(&body)
+}
+
+pub(crate) fn outside_thread_query(message_id: &str, thread_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "query": {
+            "bool": {
+                "filter": [{ "term": { "message_id": message_id } }],
+                "must_not": [{ "term": { "entity_id": thread_id } }]
+            }
+        }
+    })
+}
+
 /// Reads a delete-by-query response; per-document failures other than the
 /// version conflicts `conflicts=proceed` counts fail the call.
 pub(crate) fn parse_deleted_by_query(body: &str) -> Result<DeletedByQuery> {

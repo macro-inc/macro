@@ -390,7 +390,7 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
                 sent_at: Utc::now(),
             }),
             EmailEventDescription {
-                action: EmailIndexAction::UpsertMessage {
+                action: EmailIndexAction::UpsertSentMessage {
                     message_id: MESSAGE_ID,
                     owner: owner.clone(),
                 },

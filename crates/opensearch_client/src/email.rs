@@ -93,6 +93,34 @@ impl OpensearchClient {
         Ok(())
     }
 
+    /// Deletes `message_id`'s documents under every thread but `thread_id`,
+    /// the copies it left behind when it moved to another thread.
+    #[tracing::instrument(
+        skip(self),
+        fields(deleted = tracing::field::Empty, version_conflicts = tracing::field::Empty),
+        err
+    )]
+    pub async fn delete_email_message_outside_thread(
+        &self,
+        message_id: &str,
+        thread_id: &str,
+        index_override: Option<&str>,
+    ) -> Result<()> {
+        let deleted = resend_on_lost_connection(|| {
+            delete::email::delete_email_message_outside_thread(
+                &self.inner,
+                message_id,
+                thread_id,
+                index_override,
+            )
+        })
+        .await?;
+        let span = tracing::Span::current();
+        span.record("deleted", deleted.deleted);
+        span.record("version_conflicts", deleted.version_conflicts);
+        Ok(())
+    }
+
     /// Deletes all email messages with the specified link_id
     pub async fn delete_email_messages_by_link_id(&self, link_id: &str) -> Result<()> {
         resend_on_lost_connection(|| delete::email::delete_email_by_link_id(&self.inner, link_id))

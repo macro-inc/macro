@@ -44,18 +44,49 @@ pub async fn process_upsert_message(
     message_id: Uuid,
     owner: &str,
 ) -> anyhow::Result<()> {
-    let message_info =
-        email_db_client::messages::get_parsed_search::get_parsed_search_message_by_id(
-            db,
-            &message_id,
-        )
-        .await
-        .context("failed to get message info")?;
-
-    let Some(mut message_info) = message_info else {
+    let Some(message_info) = load_search_message(db, message_id).await? else {
         return Ok(());
     };
+    index_message(opensearch_client, db, message_info, owner).await
+}
 
+/// Indexes a sent message under its current thread, then deletes the copies it
+/// left under other threads. Completing a send can move a message, as when a
+/// draft joins the provider's existing conversation or was sent from another
+/// inbox, and nothing else removes its document under the old thread. The
+/// new copy is written first, so the message never drops out of search.
+pub async fn process_upsert_sent_message(
+    opensearch_client: &OpensearchClient,
+    db: &PgPool,
+    message_id: Uuid,
+    owner: &str,
+) -> anyhow::Result<()> {
+    let Some(message_info) = load_search_message(db, message_id).await? else {
+        return Ok(());
+    };
+    let thread_id = message_info.thread_db_id;
+    index_message(opensearch_client, db, message_info, owner).await?;
+    opensearch_client
+        .delete_email_message_outside_thread(&message_id.to_string(), &thread_id.to_string(), None)
+        .await?;
+    Ok(())
+}
+
+async fn load_search_message(
+    db: &PgPool,
+    message_id: Uuid,
+) -> anyhow::Result<Option<ParsedSearchMessage>> {
+    email_db_client::messages::get_parsed_search::get_parsed_search_message_by_id(db, &message_id)
+        .await
+        .context("failed to get message info")
+}
+
+async fn index_message(
+    opensearch_client: &OpensearchClient,
+    db: &PgPool,
+    mut message_info: ParsedSearchMessage,
+    owner: &str,
+) -> anyhow::Result<()> {
     // don't insert spam or trash messages
     if message_info.labels.iter().any(|label| {
         label.provider_id == system_labels::SPAM || label.provider_id == system_labels::TRASH
