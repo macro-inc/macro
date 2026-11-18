@@ -877,6 +877,7 @@ not to account-wide paired machine count; a user can pair several computers.
 
 ### General
 
+- Keep context, title, More, and action-sheet ordering on the shared [menu convention](../../.agents/rules/web/menu-order.md); classify before rendering so desktop and touch do not drift.
 - Keep contact removal and restoration beside Copy contact link in both record
   headers; keep company actions on Overview. Reuse the hidden mutations and
   confirm company contact/email-sync effects.

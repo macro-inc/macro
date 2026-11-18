@@ -74,6 +74,15 @@ Inline calendar-invitation text actions remove the transparent border to keep al
 
 ## More menus
 
+Context, title, and More action menus use this order, omitting empty sections:
+**Open → Most used → Copy → Modify → Share and export → State → Info → Delete**.
+Copy variants stay together; Rename, appearance, Duplicate, Move, tags, and property
+edits stay together. Details and History follow state changes; destructive actions
+are isolated last and use danger styling. Desktop groups have the existing menu
+separators. Phone action sheets use separated rounded sections without hairlines.
+Both render the same entity-owned ordered list, retaining platform and permission
+gates. View choices and personalized navigation lists keep their own order.
+
 Top-level action rows use one appropriate shared interface icon, including Mute
 and Change icon. Match each action across header, context, preview, and mobile
 menus using the [canonical action icons](../../apps/web/src/components/icon/system/README.md#menu-action-icons);
