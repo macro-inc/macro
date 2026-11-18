@@ -266,6 +266,43 @@ test('untyped unknown rule and mutation options fail before any network request'
   expect(calls).toBe(0);
 });
 
+test('an unknown untyped rule kind is rejected before sending a sharing request', async () => {
+  let calls = 0;
+  const macro = client(() => {
+    calls++;
+    return Response.json(outcome);
+  });
+  const rules = JSON.parse(
+    '{"schemaVersion":1,"include":[{"kind":"future_rule"}]}',
+  );
+  await expect(
+    macro.crm.emailPrivacy.replaceRules(rules, {
+      ifPolicy: token,
+      idempotencyKey,
+    }),
+  ).rejects.toMatchObject({
+    name: 'MacroError',
+    message: 'Unknown email inclusion rule kind.',
+  });
+  expect(calls).toBe(0);
+});
+
+test('an unknown server rule kind is rejected without fetching target content', async () => {
+  const requests: string[] = [];
+  const macro = client((request) => {
+    requests.push(`${request.method} ${new URL(request.url).pathname}`);
+    return Response.json({
+      ...policy,
+      rules: { schema_version: 1, include: [{ kind: 'future_rule' }] },
+    });
+  });
+  await expect(macro.crm.emailPrivacy.get()).rejects.toMatchObject({
+    name: 'MacroError',
+    message: 'Unknown email inclusion rule kind.',
+  });
+  expect(requests).toEqual(['GET /crm/email-privacy/policy']);
+});
+
 test('preview replacement carries the exact prior slot and preserves partial counts', async () => {
   const requests: { method: string; path: string; body?: unknown }[] = [];
   const macro = client(async (request) => {

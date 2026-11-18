@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import type {
   EmailInclusionRule,
   EmailRuleSet,
@@ -45,42 +46,48 @@ export function emailRulesBody(rules: CrmEmailRuleSet): EmailRuleSet {
 
   return {
     schema_version: rules.schemaVersion,
-    include: rules.include.map((rule): EmailInclusionRule => {
-      switch (rule.kind) {
-        case 'thread':
-          rejectUnknownOptions('thread rule', rule, {
-            kind: true,
-            thread: true,
-          });
-          return { kind: rule.kind, thread_id: rule.thread.id };
-        case 'contact':
-          rejectUnknownOptions('contact rule', rule, {
-            kind: true,
-            contact: true,
-          });
-          return { kind: rule.kind, contact_id: rule.contact.id };
-        case 'company':
-          rejectUnknownOptions('company rule', rule, {
-            kind: true,
-            company: true,
-          });
-          return { kind: rule.kind, company_id: rule.company.id };
-        case 'address':
-          rejectUnknownOptions('address rule', rule, {
-            kind: true,
-            address: true,
-          });
-          return { kind: rule.kind, address: rule.address };
-        case 'domain':
-          rejectUnknownOptions('domain rule', rule, {
-            kind: true,
-            domain: true,
-          });
-          return { kind: rule.kind, domain: rule.domain };
-        default:
-          throw new MacroError('Unknown email inclusion rule kind.');
-      }
-    }),
+    include: rules.include.map(
+      (rule): EmailInclusionRule =>
+        match(rule)
+          .with({ kind: 'thread' }, (rule) => {
+            rejectUnknownOptions('thread rule', rule, {
+              kind: true,
+              thread: true,
+            });
+            return { kind: rule.kind, thread_id: rule.thread.id };
+          })
+          .with({ kind: 'contact' }, (rule) => {
+            rejectUnknownOptions('contact rule', rule, {
+              kind: true,
+              contact: true,
+            });
+            return { kind: rule.kind, contact_id: rule.contact.id };
+          })
+          .with({ kind: 'company' }, (rule) => {
+            rejectUnknownOptions('company rule', rule, {
+              kind: true,
+              company: true,
+            });
+            return { kind: rule.kind, company_id: rule.company.id };
+          })
+          .with({ kind: 'address' }, (rule) => {
+            rejectUnknownOptions('address rule', rule, {
+              kind: true,
+              address: true,
+            });
+            return { kind: rule.kind, address: rule.address };
+          })
+          .with({ kind: 'domain' }, (rule) => {
+            rejectUnknownOptions('domain rule', rule, {
+              kind: true,
+              domain: true,
+            });
+            return { kind: rule.kind, domain: rule.domain };
+          })
+          .exhaustive(() => {
+            throw new MacroError('Unknown email inclusion rule kind.');
+          }),
+    ),
   };
 }
 
@@ -91,29 +98,25 @@ export function emailRules(
 ): CrmEmailRuleSet {
   return {
     schemaVersion: rules.schema_version,
-    include: rules.include.map((rule): CrmEmailRule => {
-      switch (rule.kind) {
-        case 'thread':
-          return {
+    include: rules.include.map(
+      (rule): CrmEmailRule =>
+        match(rule)
+          .with({ kind: 'thread' }, (rule) => ({
             kind: rule.kind,
             thread: EmailThread.byId(client, rule.thread_id),
-          };
-        case 'contact':
-          return {
+          }))
+          .with({ kind: 'contact' }, (rule) => ({
             kind: rule.kind,
             contact: Contact.byId(client, rule.contact_id),
-          };
-        case 'company':
-          return {
+          }))
+          .with({ kind: 'company' }, (rule) => ({
             kind: rule.kind,
             company: Company.byId(client, rule.company_id),
-          };
-        case 'address':
-        case 'domain':
-          return rule;
-        default:
-          throw new MacroError('Unknown email inclusion rule kind.');
-      }
-    }),
+          }))
+          .with({ kind: 'address' }, { kind: 'domain' }, (rule) => rule)
+          .exhaustive(() => {
+            throw new MacroError('Unknown email inclusion rule kind.');
+          }),
+    ),
   };
 }
