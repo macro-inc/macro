@@ -165,6 +165,8 @@ export default {
   sharedWithTeam: '{{name}}, shared with team',
   viewActions: 'Actions for {{name}}',
   savedViewWithStatus: '{{name}}, {{status}}',
+  editView: 'Edit',
+  deleteView: 'Delete view',
   moveUp: 'Move up',
   moveDown: 'Move down',
   searchProjects: 'Search projects...',

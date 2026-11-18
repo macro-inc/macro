@@ -48,12 +48,12 @@ export function SavedViewMenuItems(props: {
         <Show when={props.owned}>
           <Item disabled={props.disabled} onSelect={props.onEdit}>
             <PencilIcon class="size-4" />
-            {props.editLabel ?? 'Edit'}
+            {props.editLabel ?? t('viewMenus.editView')}
           </Item>
         </Show>
         <Item disabled={props.disabled} onSelect={props.onDuplicate}>
           <CopyIcon class="size-4" />
-          Duplicate
+          {t('viewMenus.duplicate')}
         </Item>
         <Show when={props.onCopyLink}>
           {(onCopyLink) => (
@@ -65,7 +65,7 @@ export function SavedViewMenuItems(props: {
                   disabled={props.disabled}
                   onCopy={onCopyLink()}
                 >
-                  Copy link
+                  {t('entityActions.copyLinkCommand')}
                 </Dropdown.CopyItem>
               }
             >
@@ -76,7 +76,7 @@ export function SavedViewMenuItems(props: {
                 disabled={props.disabled}
                 onClick={onCopyLink()}
               >
-                Copy link
+                {t('entityActions.copyLinkCommand')}
               </CopyButton>
             </Show>
           )}
@@ -110,7 +110,7 @@ export function SavedViewMenuItems(props: {
             onSelect={props.onDelete}
           >
             <TrashIcon class="size-4" />
-            {props.deleteLabel ?? 'Delete view'}
+            {props.deleteLabel ?? t('viewMenus.deleteView')}
           </Item>
         </Group>
       </Show>
