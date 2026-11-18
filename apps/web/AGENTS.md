@@ -1816,7 +1816,10 @@ you, other people, then agents with Macro first. @ menus pass `mention: true`, w
 Macro above everyone and keeps it first while its name starts with the query. While
 searching, rank with `NAME_MATCH_RANKING`; an agent needs the typed words, not scattered
 letters, and never ranks above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
-don't boost bots in a menu's search score.
+don't boost bots in a menu's search score. Until the contact directory lists people for the
+term, a directory-backed @ menu lists only the rows that lead every person (Macro) and keeps
+the held agents' People rows as loading rows (`heldRows`); phones list nothing below them
+yet. The hold ends at `UNANSWERED_SEARCH_LIMIT_MS`, when Cmd+K stops saying "Searching…".
 
 ### Tag picker selection and creation
 
