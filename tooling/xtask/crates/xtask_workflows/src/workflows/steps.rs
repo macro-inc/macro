@@ -388,12 +388,18 @@ pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
 }
 
 /// [`mount_web_cache_volume`] for PR check jobs, which also keep the
-/// workspace's [`vars::NODE_MODULES_VOLUME_DIR`] on the volume, so their
+/// workspace's [`vars::node_modules_volume_dir`] on the volume, so their
 /// `bun install` finds the tree in place. Never for deploy jobs.
 pub fn mount_web_check_cache_volume(with_rust: bool) -> Step<Use> {
-    let mut paths = vec![vars::BUN_CACHE_VOLUME_DIR, vars::NODE_MODULES_VOLUME_DIR];
+    let mut paths = vec![
+        vars::BUN_CACHE_VOLUME_DIR.to_string(),
+        vars::node_modules_volume_dir(),
+    ];
     if with_rust {
-        paths.extend(["/home/runner/.cargo/registry", "/home/runner/.cargo/git"]);
+        paths.extend([
+            "/home/runner/.cargo/registry".to_string(),
+            "/home/runner/.cargo/git".to_string(),
+        ]);
     }
     nscloud_cache_action("Mount Namespace cache volume", |cache| {
         cache.cache("nix").path(paths.join("\n"))
@@ -407,7 +413,7 @@ pub fn mount_web_test_cache_volume() -> Step<Use> {
         cache.cache("nix").path(format!(
             "{}\n{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}\n{}",
             vars::BUN_CACHE_VOLUME_DIR,
-            vars::NODE_MODULES_VOLUME_DIR,
+            vars::node_modules_volume_dir(),
             xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
             vars::VITEST_MODULE_CACHE_VOLUME_DIR,
             vars::WASM_PKG_CACHE_DIR,
@@ -416,23 +422,26 @@ pub fn mount_web_test_cache_volume() -> Step<Use> {
 }
 
 /// [`mount_web_cache_volume`] for the PR jobs that compile the browser wasm
-/// packages (`just build-*`). `node_modules` adds [`vars::NODE_MODULES_VOLUME_DIR`]
+/// packages (`just build-*`). `node_modules` adds [`vars::node_modules_volume_dir`]
 /// for a job that holds no deploy credentials. Cargo registry/git feed wasm-pack; `.wasm-pack`
 /// is the downloaded `wasm-opt` the same way [`mount_wasm_cache_volume`] keeps
 /// the worker build warm; [`vars::WASM_PKG_CACHE_DIR`] holds the unchanged
 /// packages it reuses. Deploy builds keep theirs in an Actions cache instead
 /// (`build_web_app`) and mount none of these, since PR jobs write this volume.
 pub fn mount_web_build_check_cache_volume(node_modules: bool) -> Step<Use> {
-    let mut paths = vec![vars::BUN_CACHE_VOLUME_DIR];
+    let mut paths = vec![vars::BUN_CACHE_VOLUME_DIR.to_string()];
     if node_modules {
-        paths.push(vars::NODE_MODULES_VOLUME_DIR);
+        paths.push(vars::node_modules_volume_dir());
     }
-    paths.extend([
-        "/home/runner/.cargo/registry",
-        "/home/runner/.cargo/git",
-        xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
-        vars::WASM_PKG_CACHE_DIR,
-    ]);
+    paths.extend(
+        [
+            "/home/runner/.cargo/registry",
+            "/home/runner/.cargo/git",
+            xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
+            vars::WASM_PKG_CACHE_DIR,
+        ]
+        .map(str::to_string),
+    );
     nscloud_cache_action("Mount Namespace cache volume", |cache| {
         cache.cache("nix").path(paths.join("\n"))
     })

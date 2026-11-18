@@ -86,7 +86,7 @@ fn only_pr_checks_mount_the_node_modules_volume() {
             let id = id.as_str().unwrap_or_default();
             let mounts = serde_yaml::to_string(job)
                 .expect("job serializes")
-                .contains(vars::NODE_MODULES_VOLUME_DIR);
+                .contains(&vars::node_modules_volume_dir());
             let allowed = workflow.file_name == "web-app-check-main.yml" && id != "build";
             assert!(
                 !mounts || allowed,

@@ -25,8 +25,7 @@ on:
       - flake.lock
       - .github/workflows/email_e2e_browser.yml
   schedule:
-    # cron is UTC: 21:00 UTC is 4pm EST and 5pm EDT.
-    - cron: 0 21 * * *
+    - cron: 0 21 * * * # cron is UTC: 21:00 UTC is 4pm EST and 5pm EDT.
   workflow_dispatch:
     inputs:
       known_bugs:

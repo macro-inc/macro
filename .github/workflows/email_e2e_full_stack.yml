@@ -10,8 +10,7 @@ env:
   RUSTFLAGS: -C link-arg=-fuse-ld=lld
 on:
   schedule:
-    # cron is UTC: 21:00 UTC is 4pm EST and 5pm EDT.
-    - cron: 0 21 * * *
+    - cron: 0 21 * * * # cron is UTC: 21:00 UTC is 4pm EST and 5pm EDT.
   workflow_dispatch: {}
 jobs:
   email-e2e-full-stack:

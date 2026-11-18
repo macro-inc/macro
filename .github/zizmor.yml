@@ -55,6 +55,9 @@ rules:
       - deploy_on_push.yml # calls the deploy workflows
       - deploy_sync_service.yml # deploys a worker
       - deploy_web_app.yml # deploys the web app
+      - email_e2e.yml # builds and runs the email end-to-end suite
+      - email_e2e_browser.yml # builds and runs the email browser suite
+      - email_e2e_full_stack.yml # runs the email suite against the local stack
       - deploy_website.yml # deploys the website
       - migrate-macro-db.yml # runs migrations
       - pr-ci.yml # calls every check workflow; callees inherit its token

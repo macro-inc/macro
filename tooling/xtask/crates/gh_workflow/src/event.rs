@@ -799,14 +799,45 @@ impl RepositoryDispatch {
 #[setters(strip_option, into)]
 pub struct Schedule {
     pub cron: String,
+    /// A note rendered as a comment on the `cron` line, not as a key.
+    #[serde(
+        rename = "\u{0}comments",
+        default,
+        skip_deserializing,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_cron_comment"
+    )]
+    #[setters(skip)]
+    pub comment: Option<String>,
 }
 
 impl Schedule {
     pub fn new(cron: impl ToString) -> Self {
         Self {
             cron: cron.to_string(),
+            comment: None,
         }
     }
+
+    /// Note `text` on the `cron` line, such as the local time it means.
+    pub fn comment(mut self, text: impl ToString) -> Self {
+        self.comment = Some(text.to_string());
+        self
+    }
+}
+
+fn serialize_cron_comment<S: serde::Serializer>(
+    comment: &Option<String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let comments: Vec<crate::yaml::LineComment> = comment
+        .iter()
+        .map(|text| crate::yaml::LineComment {
+            key: "cron",
+            text: text.clone(),
+        })
+        .collect();
+    comments.serialize(serializer)
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, Setters, PartialEq, Eq)]

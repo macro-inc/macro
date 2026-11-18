@@ -143,3 +143,13 @@ fn zizmor_ignores_render_on_the_line_zizmor_reports() {
          echo done\n"
     );
 }
+
+#[test]
+fn a_schedule_comment_renders_on_its_cron_line() {
+    let schedules = vec![crate::Schedule::new("0 21 * * *").comment("21:00 UTC is 4pm EST")];
+
+    assert_eq!(
+        to_string(&schedules).unwrap(),
+        "- cron: 0 21 * * * # 21:00 UTC is 4pm EST\n"
+    );
+}
