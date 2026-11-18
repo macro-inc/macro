@@ -16,9 +16,7 @@ export function beginQueryAuthorizationReset() {
   };
 }
 
-// An enqueue admitted before retirement must settle before copied responses are
-// removed. Later enqueues retain command variables but carry no stale snapshot.
-const optimisticWrites = new Set<Promise<void>>();
+// Later enqueues retain command variables but carry no stale snapshot.
 export async function runOptimisticCacheWrite<T>(
   snapshotEpoch: number | undefined,
   write: (acceptSnapshot: boolean) => Promise<T>
@@ -26,18 +24,5 @@ export async function runOptimisticCacheWrite<T>(
   const state = crmSnapshotAuthorization();
   const accepted =
     !state.paused && (snapshotEpoch ?? state.epoch) === state.epoch;
-  let settle!: () => void;
-  const pending = new Promise<void>((resolve) => {
-    settle = resolve;
-  });
-  optimisticWrites.add(pending);
-  try {
-    return await write(accepted);
-  } finally {
-    optimisticWrites.delete(pending);
-    settle();
-  }
-}
-export async function settleOptimisticCacheWrites(): Promise<void> {
-  await Promise.all([...optimisticWrites]);
+  return write(accepted);
 }

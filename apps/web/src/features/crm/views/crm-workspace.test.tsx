@@ -14,7 +14,7 @@ const fixture = vi.hoisted(() => ({
   workspace: undefined as unknown,
   canAccess: (): boolean => true,
   accessState: undefined as
-    | (() => 'pending' | 'allowed' | 'denied')
+    | (() => 'pending' | 'allowed' | 'denied' | 'error')
     | undefined,
   listsEnabled: true,
   touch: true,
@@ -235,6 +235,7 @@ vi.mock('../context/crm-context', () => ({
     canAccess: () => fixture.canAccess(),
     accessState: () =>
       fixture.accessState?.() ?? (fixture.canAccess() ? 'allowed' : 'denied'),
+    retryAccess: async () => {},
     listsEnabled: () => () => fixture.listsEnabled,
     createNavigation: () => ({ openWithSplit: fixture.openWithSplit }),
     createPipelines: () => ({

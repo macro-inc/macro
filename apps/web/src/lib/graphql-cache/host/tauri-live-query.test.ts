@@ -142,7 +142,7 @@ describe('native retained view transport', () => {
     }
   });
 
-  it('retains a CRM registration through successful unchanged permission proofs', async () => {
+  it('retains a CRM registration while reusing the ready durable permission proof', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     const fetchProof = vi.fn(async () => 'none');
     const controller = createCrmAccessAuthority({
@@ -160,7 +160,7 @@ describe('native retained view transport', () => {
       };
       await expect(host.entityFilter(next)).resolves.toEqual(update);
       await expect(host.entityFilter(next)).resolves.toEqual(update);
-      expect(fetchProof).toHaveBeenCalledTimes(3);
+      expect(fetchProof).not.toHaveBeenCalled();
       expect(
         invoke.mock.calls
           .map(([command]) => command)

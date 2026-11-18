@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { sleep } from '@core/util/sleep';
 import {
   type CacheAuthority,
   type CacheAuthorityHost,
@@ -7,7 +8,7 @@ import {
 import { Telemetry } from '@macro-inc/observability';
 import { createSignal } from 'solid-js';
 
-export type CrmAccessState = 'pending' | 'allowed' | 'denied';
+export type CrmAccessState = 'pending' | 'allowed' | 'denied' | 'error';
 
 export type CrmRequestAuthority = Readonly<{
   owner: CacheAuthorityHost;
@@ -66,7 +67,7 @@ function memoryAuthority(account?: string): CacheAuthorityHost {
 
 /** Fresh primary proofs are ordered by the shared cache owner's generation. */
 export function createCrmAccessAuthority(options: {
-  fetchProof: () => Promise<string>;
+  fetchProof: (timeoutMs: number) => Promise<string>;
   retire: () => Promise<void>;
   verified?: () => void;
   bindAccount?: (
@@ -245,6 +246,7 @@ export function createCrmAccessAuthority(options: {
   function refresh(): Promise<CrmRequestAuthority> {
     if (pending?.session === session && pending.owner === owner)
       return pending.promise;
+    if (state() === 'error') setState('pending');
     const capturedSession = session;
     const capturedOwner = owner;
     const entry = {
@@ -257,32 +259,53 @@ export function createCrmAccessAuthority(options: {
       { sampling: 'perf' },
       async (span) => {
         // A concurrent owner change can overtake preparation or win the proof
-        // CAS, or the network can fail transiently. Retry once without relabelling
-        // old data or replacing the last proven UI state.
+        // CAS, or the network can fail transiently. Retry once with a shorter
+        // deadline without replacing the last proven UI state.
         for (let attempt = 0; ; attempt++) {
+          let networkFailure = false;
           try {
             const captured = await span.span('crm.access.prepare', async () =>
               prepare()
             );
-            const policy = await span.span('crm.access.proof', async () =>
-              options.fetchProof()
-            );
+            const policy = await span.span('crm.access.proof', async () => {
+              try {
+                return await options.fetchProof(attempt === 0 ? 15_000 : 3_000);
+              } catch (error) {
+                networkFailure = error instanceof TypeError;
+                throw error;
+              }
+            });
             span.setAttr('crm.access.attempt', attempt + 1);
             return await span.run(() => accept(captured, policy));
           } catch (error) {
             if (
               retirementFailed ||
+              (!networkFailure &&
+                !(error instanceof StaleCacheAuthorityError)) ||
               attempt === 1 ||
               capturedSession !== session ||
               capturedOwner !== owner
             )
               throw error;
+            if (networkFailure) await sleep(250);
+            if (capturedSession !== session || capturedOwner !== owner)
+              throw error;
           }
         }
       }
-    ).finally(() => {
-      if (pending === entry) pending = undefined;
-    });
+    )
+      .catch((error: unknown) => {
+        if (
+          capturedSession === session &&
+          capturedOwner === owner &&
+          state() === 'pending'
+        )
+          setState('error');
+        throw error;
+      })
+      .finally(() => {
+        if (pending === entry) pending = undefined;
+      });
     pending = entry;
     return entry.promise;
   }
@@ -366,7 +389,7 @@ export function createCrmAccessAuthority(options: {
   };
 }
 
-let fetchProof = async (): Promise<string> => {
+let fetchProof: (timeoutMs: number) => Promise<string> = async () => {
   throw new Error('CRM permission proof is unavailable');
 };
 let retire = async () => {};
@@ -377,7 +400,7 @@ let bindAccount: (
   account: string
 ) => Promise<void> = async () => {};
 export const crmAccessAuthority = createCrmAccessAuthority({
-  fetchProof: () => fetchProof(),
+  fetchProof: (timeoutMs) => fetchProof(timeoutMs),
   retire: () => retire(),
   verified: () => verified(),
   bindAccount: (...args) => bindAccount(...args),
@@ -385,7 +408,7 @@ export const crmAccessAuthority = createCrmAccessAuthority({
 export const crmAccessAllowed = crmAccessAuthority.allowed;
 export const crmAccessState = crmAccessAuthority.state;
 export function configureCrmAccessAuthority(options: {
-  fetchProof: () => Promise<string>;
+  fetchProof: (timeoutMs: number) => Promise<string>;
   retire: () => Promise<void>;
   verified?: () => void;
   bindAccount?: (

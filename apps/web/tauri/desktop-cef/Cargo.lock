@@ -7856,6 +7856,7 @@ dependencies = [
  "serde_json",
  "soup-filter-projection",
  "thiserror 2.0.21",
+ "tracing",
  "uuid",
 ]
 

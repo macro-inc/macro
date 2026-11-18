@@ -90,7 +90,12 @@ function Fixture() {
             fallback={
               <Show
                 when={authority.allowed()}
-                fallback={<CrmAccessFallback state={authority.state()} />}
+                fallback={
+                  <CrmAccessFallback
+                    state={authority.state()}
+                    onRetry={refresh}
+                  />
+                }
               >
                 <div class="p-6">
                   <h1 class="text-xl font-semibold">Company records</h1>

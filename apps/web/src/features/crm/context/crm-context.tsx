@@ -68,7 +68,8 @@ import type {
 export type CrmContext = {
   /** Current session authority; individual pipeline grants are checked separately. */
   canAccess: Accessor<boolean>;
-  accessState: Accessor<'pending' | 'allowed' | 'denied'>;
+  accessState: Accessor<'pending' | 'allowed' | 'denied' | 'error'>;
+  retryAccess(): Promise<unknown>;
   /** Owner-scoped email reference, available independently of CRM viewing access. */
   EmailThreadMention: Component<{
     threadId: string;

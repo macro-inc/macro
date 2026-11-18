@@ -18,6 +18,7 @@ const unused = (): never => {
 const context: CrmContext = {
   canAccess: () => true,
   accessState: () => 'allowed',
+  retryAccess: async () => {},
   EmailThreadMention: unused,
   createEmailPrivacy: unused,
   createPipelines: unused,

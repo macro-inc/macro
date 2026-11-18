@@ -1,6 +1,6 @@
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
 import { useSyncLoginCookie } from '@app/routes/use-sync-login-cookie';
 import { disableBrowserTursoCache } from '@core/constant/featureFlags';
@@ -412,7 +412,7 @@ const api = {
     account: crmAccessAuthority.account(),
     allowed: crmAccessAuthority.allowed(),
     owner: getGraphqlCacheHost()?.authority?.snapshot(),
-    authorization: queryAuthorization(),
+    authorization: crmSnapshotAuthorization(),
   }),
   dispose,
 };

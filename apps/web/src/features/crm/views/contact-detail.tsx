@@ -49,7 +49,12 @@ export function Contact(props: ContactProps) {
     >
       <Show
         when={context.canAccess()}
-        fallback={<CrmAccessFallback state={context.accessState()} />}
+        fallback={
+          <CrmAccessFallback
+            state={context.accessState()}
+            onRetry={context.retryAccess}
+          />
+        }
       >
         <ContactContent {...props} />
       </Show>

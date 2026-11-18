@@ -34,6 +34,7 @@ import { patchTeamCrmSettings } from '@service-auth/crm';
 import { storageServiceClient } from '@service-storage/client';
 import {
   crmAccessAllowed,
+  crmAccessAuthority,
   crmAccessState,
 } from '@service-storage/crm-access-authority';
 import { crmEmailPrivacyClient } from '@service-storage/crm-email-privacy';
@@ -218,6 +219,7 @@ export function createAppCrmContext(): CrmContext {
   return {
     canAccess: crmAccessAllowed,
     accessState: crmAccessState,
+    retryAccess: crmAccessAuthority.refresh,
     createEmailPrivacy: () => {
       const team = useCurrentTeamQuery();
       return createEmailPrivacySource(

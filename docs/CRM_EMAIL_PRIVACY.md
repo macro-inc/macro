@@ -71,8 +71,11 @@ pre-request generation even when that fresh read changes authority, so a late
 response cannot be relabeled and admitted after retirement. Protected local reads,
 email/agent responses, and subscription frames reuse a verified proof for the
 current account and owner generation. Only stale authority or explicit signals
-trigger another primary proof; transient failures preserve the last proven state
-and retry once. Initial CRM routes show loading until proof establishes access.
+trigger another primary proof; transient failures preserve the last proven state.
+Network failures back off once before a short second attempt; stale generations
+retry once, while terminal errors do not retry automatically. Initial CRM routes
+show loading, then the existing retry state if proof fails. Manual retry and
+reconnect both restart verification without reporting a denial.
 Email and Soup snapshots remain persisted for allowed members and are retired on
 a proven denial or account replacement. The first native or wasm proof preserves
 legacy offline snapshots when it is allowed or team-less; regrants also preserve
@@ -121,7 +124,10 @@ login cannot receive an earlier login's write outcome.
 
 Subscription frames reserve their order before permission lookups and retain
 their arrival generation through queued writes and deletions. An authority-only
-change retries an initial cache read instead of leaving it pending. Visible
+change retries an initial cache read instead of leaving it pending. Protected
+queries rejected while the first proof completes recover from current cached
+data or a fresh network request, without replaying the rejected response or
+replacing their mounted observer. Visible
 retirement closes admission immediately and waits for all overlapping cleanup
 work to settle before reopening; a replaced owner's delayed reply cannot retire
 the current owner. Function-style team-view edits obtain a network-only settings
@@ -137,7 +143,11 @@ cache fallback for the new bundle. New native binaries preserve the legacy cache
 contract for older bundles that omit the whole `authority` argument; supplied
 claims with missing or stale generations still fail closed. This reverse
 compatibility supports native upgrades and web rollbacks, but does not add
-retirement to an older bundle. Keep preference changes disabled until the client rollout is
+retirement to an older bundle. Queue inspection sanitizes copied optimistic data
+for every caller, so an older bundle with legacy queued `SaveEmailDraft` entries
+may lose that optimistic display/recovery data after rollback. Authored command
+variables remain; current bundles also use the preserved legacy recovery metadata.
+Keep preference changes disabled until the client rollout is
 complete, including already-open older builds. The server API cannot erase
 content already downloaded by an older client.
 

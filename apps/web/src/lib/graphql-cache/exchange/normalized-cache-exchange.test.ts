@@ -529,8 +529,8 @@ function installAuthority(host: CacheHost) {
   Object.defineProperty(host, 'authority', { value: authority });
   return {
     authority,
-    change() {
-      state = { ...state, generation: crypto.randomUUID() };
+    change(ready = true) {
+      state = { ...state, generation: crypto.randomUUID(), ready };
       for (const listener of listeners) listener(state);
     },
   };
@@ -1500,6 +1500,157 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded).toHaveLength(0);
     }
   );
+
+  it('reissues a protected in-flight network read after the first ready proof changes its generation', async () => {
+    const { change, authority } = installAuthority(host);
+    const write = vi.spyOn(host, 'writeQuery');
+    const { ops, network, forwarded, results, client } =
+      controlledQueryHarness(host);
+    ops.next(makeOp(47, 'network-only'));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+    change();
+    const response = new Response('{}');
+    rememberResponseAuthority(response, 'old-generation', async () => {
+      throw new StaleCacheAuthorityError();
+    });
+    network.next(
+      queryResult(
+        makeOperation('query', forwarded[0]!, {
+          ...forwarded[0]!.context,
+          cacheAuthorityResponse: { response },
+        }),
+        { from: 'old-response' }
+      )
+    );
+    await vi.waitFor(() => expect(results).toHaveLength(1));
+    expect(results[0]?.data).toBeUndefined();
+    expect(host.writes).toHaveLength(0);
+    expect(client.reexecuteOperation).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
+    expect(forwarded[1]?.context.cacheAuthorityGeneration).toBe(
+      authority.snapshot().generation
+    );
+    network.next(queryResult(forwarded[1]!, { from: 'current-response' }));
+    await vi.waitFor(() =>
+      expect(results.at(-1)?.data).toEqual({ from: 'current-response' })
+    );
+    await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
+    expect(write.mock.calls[0]?.[0]).toMatchObject({
+      authorityGeneration: authority.snapshot().generation,
+      data: { from: 'current-response' },
+    });
+  });
+
+  it.each([false, true])(
+    'dispatches authority recovery through a real urql client with cached data: %s',
+    async (cached) => {
+      const { change } = installAuthority(host);
+      const first = Promise.withResolvers<Response>();
+      const fresh = { soup: { nextCursor: null } };
+      const fetch = vi.fn(async () => Response.json({ data: fresh }));
+      fetch.mockImplementationOnce(() => first.promise);
+      const client = createClient({
+        url: 'http://test/graphql',
+        fetch,
+        exchanges: [
+          cacheAuthorityExchange,
+          normalizedCacheExchange(host),
+          fetchExchange,
+        ],
+      });
+      const results: OperationResult[] = [];
+      const subscription = client
+        .query(
+          QUERY,
+          { input: { limit: 2 } },
+          { requestPolicy: 'network-only' }
+        )
+        .subscribe((result) => results.push(result));
+      try {
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+        if (cached) host.scriptRead({ kind: 'hit', data: fresh });
+        change();
+        const response = Response.json({
+          data: { soup: { nextCursor: 'old' } },
+        });
+        rememberResponseAuthority(response, 'old-generation', async () => {
+          throw new StaleCacheAuthorityError();
+        });
+        first.resolve(response);
+        await vi.waitFor(() => expect(results.at(-1)?.data).toEqual(fresh));
+        expect(fetch).toHaveBeenCalledTimes(cached ? 1 : 2);
+        await vi.waitFor(() =>
+          expect(host.writes).toHaveLength(cached ? 0 : 1)
+        );
+        expect(
+          host.writes.every(
+            ({ data }) => JSON.stringify(data) === JSON.stringify(fresh)
+          )
+        ).toBe(true);
+      } finally {
+        subscription.unsubscribe();
+      }
+    }
+  );
+
+  it('recovers from current cached data after rejecting an older authority response', async () => {
+    const { change } = installAuthority(host);
+    const { ops, network, forwarded, results } = controlledQueryHarness(host);
+    ops.next(makeOp(47, 'network-only'));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+    host.scriptRead({ kind: 'hit', data: { from: 'current-cache' } });
+    change();
+    const response = new Response('{}');
+    rememberResponseAuthority(response, 'old-generation', async () => {
+      throw new StaleCacheAuthorityError();
+    });
+    network.next(
+      queryResult(
+        makeOperation('query', forwarded[0]!, {
+          ...forwarded[0]!.context,
+          cacheAuthorityResponse: { response },
+        }),
+        { from: 'old-response' }
+      )
+    );
+    await vi.waitFor(() =>
+      expect(results.at(-1)?.data).toEqual({ from: 'current-cache' })
+    );
+    expect(forwarded).toHaveLength(1);
+    expect(host.writes).toHaveLength(0);
+  });
+
+  it('restarts a protected query when proof becomes ready after its rejected response finished', async () => {
+    const { change } = installAuthority(host);
+    change(false);
+    const { ops, network, forwarded, results } = controlledQueryHarness(host);
+    ops.next(makeOp(47, 'network-only'));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+    const response = new Response('{}');
+    rememberResponseAuthority(response, 'old-generation', async () => {
+      throw new StaleCacheAuthorityError();
+    });
+    network.next(
+      queryResult(
+        makeOperation('query', forwarded[0]!, {
+          ...forwarded[0]!.context,
+          cacheAuthorityResponse: { response },
+        }),
+        { from: 'old-response' }
+      )
+    );
+    await vi.waitFor(() => expect(results).toHaveLength(1));
+    const metadata = normalizedCacheResultMetadata(results[0]!);
+    expect(metadata?.source).toBe('live-network');
+    if (metadata?.source === 'live-network') await metadata.persistence;
+    expect(forwarded).toHaveLength(1);
+    change();
+    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
+    network.next(queryResult(forwarded[1]!, { from: 'current-response' }));
+    await vi.waitFor(() =>
+      expect(results.at(-1)?.data).toEqual({ from: 'current-response' })
+    );
+  });
 
   it('serializes cache effects across separate subscription emissions', async () => {
     const operation = makeSubscriptionOp(24);

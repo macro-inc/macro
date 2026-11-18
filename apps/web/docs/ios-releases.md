@@ -191,8 +191,11 @@ permission commands. A supplied claim with a missing or stale generation fails
 closed. Older bundles omit the whole argument; the new native plugin preserves
 the deployed cache contract for those calls, including reads, watches and writes.
 The native plugin regression exercises the old bundle's argument shape. This
-keeps an older production bundle functional on a newer binary during rollback;
-the minimum native build only protects the reverse combination. Older bundles
+preserves the older production bundle's command contract on a newer binary during
+rollback, with one known limitation: queue inspection removes copied optimistic
+data from legacy queued `SaveEmailDraft` entries for every caller. Authored
+command variables remain, but an older bundle may lose its optimistic draft
+display or recovery data. The minimum native build only protects the reverse combination. Older bundles
 do not acquire CRM cache retirement by upgrading native code alone. Keep CRM
 access changes disabled until all access consumers are upgraded, as described
 in [CRM email privacy](../../../docs/CRM_EMAIL_PRIVACY.md#member-access).

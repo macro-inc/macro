@@ -1,5 +1,32 @@
 import { expect, test } from '@playwright/test';
 
+test('a failed first proof shows the existing retry state and recovers locally', async ({
+  page,
+}) => {
+  let available = false;
+  await page.route('**/fixture-authority', (route) =>
+    route.fulfill({
+      status: available ? 200 : 503,
+      headers: available
+        ? {
+            'x-macro-crm-access':
+              '00000000-0000-7000-8000-000000000001:allowed',
+          }
+        : {},
+      body: '{}',
+    })
+  );
+  await page.goto('/');
+  await expect(
+    page.getByRole('button', { name: 'Try again', exact: true })
+  ).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Loading…' })).toHaveCount(0);
+  await expect(page.getByText("You don't have access to CRM")).toHaveCount(0);
+  available = true;
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.getByText('Private record content')).toBeVisible();
+});
+
 test('revokes open tabs, retains an individual pipeline, denies record navigation and restores access', async ({
   context,
   page,

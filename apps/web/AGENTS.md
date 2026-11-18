@@ -51,7 +51,8 @@ independent resources such as document creates and `/crm/member-access` skip it.
 Treat the memoized response header only as a retirement
 hint: changed or missing hints require fresh JSON proof, and never relabel an
 in-flight response with the resulting generation.
-Keep initial access pending and retain the last proven state across transient proof failures with one bounded retry; show denial and tear down CRM dialogs only after a proven denial.
+Keep initial access pending until proof succeeds or bounded retries fail; then show the existing retry state and retry on reconnect. Retry only stale generations or network failures, with one short second attempt, and retain the last proven state across transient failures; show denial and tear down CRM dialogs only after a proven denial.
+Recover protected queries rejected during initial proof with a fresh cache read and an internal network fallback on a miss; clear the old response witness and preserve the mounted observer.
 Persist email and Soup snapshots for allowed members, verify the reusable proof before restoration, and retire protected snapshots on proven denial or account replacement.
 Gate the admin member-access switch with the remote `enable-crm-member-access-changes` flag used by the server; never gate denial enforcement on that rollout flag.
 Keep personal Soup mail, Work Feed, bookmark metadata and independently scoped database-view reads available offline without CRM proof; inspect resolver contracts and arguments rather than broad fragment type names.

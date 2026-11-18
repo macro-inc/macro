@@ -13,14 +13,16 @@ import { graphqlSoupSubscriptionExchange } from './crm-subscription-exchange';
 afterEach(() => {
   crmAccessAuthority.setSession(undefined);
   beginQueryAuthorizationReset()();
+  vi.useRealTimers();
 });
 
 it('starts a mounted stream after a later proof recovers from an initial outage', async () => {
+  vi.useFakeTimers();
   let resume = () => {};
   const fetchProof = vi
     .fn<() => Promise<string>>()
-    .mockRejectedValueOnce(new Error('offline'))
-    .mockRejectedValueOnce(new Error('offline'))
+    .mockRejectedValueOnce(new TypeError('offline'))
+    .mockRejectedValueOnce(new TypeError('offline'))
     .mockResolvedValue('none');
   configureCrmAccessAuthority({
     fetchProof,
@@ -51,8 +53,8 @@ it('starts a mounted stream after a later proof recovers from an initial outage'
     )
     .subscribe((result) => values.push(result.data));
   try {
-    await vi.waitFor(() => expect(fetchProof).toHaveBeenCalledTimes(2));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.advanceTimersByTimeAsync(250);
+    expect(fetchProof).toHaveBeenCalledTimes(2);
     expect(sinks).toHaveLength(0);
     await crmAccessAuthority.refresh();
     await vi.waitFor(() => expect(sinks).toHaveLength(1));

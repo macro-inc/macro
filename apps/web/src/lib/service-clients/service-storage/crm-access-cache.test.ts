@@ -14,6 +14,7 @@ import {
   queuedSettlementRequest,
   responseAuthorityGeneration,
 } from '@graphql-cache/response-authority';
+import { onlineManager } from '@tanstack/solid-query';
 import { createClient, gql } from '@urql/core';
 import type { Client as GraphqlWsClient } from 'graphql-ws';
 import { err, ok } from 'neverthrow';
@@ -124,9 +125,42 @@ beforeEach(() => {
 afterEach(() => {
   crmAccessAuthority.setSession(undefined);
   installCrmCacheHost(undefined);
+  onlineManager.setOnline(true);
 });
 
 describe('CRM HTTP response admission', () => {
+  it('rejects a null proof as a terminal error without a network retry', async () => {
+    owner('viewer');
+    crmAccessAuthority.setSession('viewer');
+    mocks.proof.mockResolvedValue(ok(null));
+    await expect(crmAccessAuthority.refresh()).rejects.toThrow(
+      'Unable to verify CRM access'
+    );
+    expect(mocks.proof).toHaveBeenCalledTimes(1);
+    expect(crmAccessAuthority.state()).toBe('error');
+  });
+
+  it('retries a failed initial proof when the online manager reconnects', async () => {
+    onlineManager.setOnline(false);
+    owner('viewer');
+    crmAccessAuthority.setSession('viewer');
+    mocks.proof.mockResolvedValue(
+      err([{ code: 'SERVER_ERROR', message: 'Unavailable' }])
+    );
+    await expect(crmAccessAuthority.refresh()).rejects.toThrow(
+      'Unable to verify CRM access'
+    );
+    expect(crmAccessAuthority.state()).toBe('error');
+    const recovered = Promise.withResolvers<void>();
+    const stop = crmAccessAuthority.onVerified(() => recovered.resolve());
+    mocks.proof.mockResolvedValue(proof(true));
+    onlineManager.setOnline(true);
+    await recovered.promise;
+    stop();
+    expect(crmAccessAuthority.state()).toBe('allowed');
+    expect(mocks.proof).toHaveBeenCalledTimes(2);
+  });
+
   it('bounds proof requests across an email session and preserves offline cache reads', async () => {
     const current = await verifiedViewer();
     const counts: Record<string, number> = { login: 1 };
@@ -233,7 +267,9 @@ describe('CRM HTTP response admission', () => {
         }
       );
       mocks.proof.mockResolvedValue(
-        state === 'revoked' ? proof(false) : err(new Error('offline'))
+        state === 'revoked'
+          ? proof(false)
+          : err([{ code: 'SERVER_ERROR', message: 'Unavailable' }])
       );
       const data = { data: { setEntityProperty: { id: 'property-1' } } };
       const response = await observe(Response.json(data));
@@ -296,7 +332,9 @@ describe('CRM HTTP response admission', () => {
       'http://localhost/dss/documents',
       request
     );
-    mocks.proof.mockResolvedValue(err(new Error('offline')));
+    mocks.proof.mockResolvedValue(
+      err([{ code: 'SERVER_ERROR', message: 'Unavailable' }])
+    );
     const response = await observe(
       Response.json(
         { id: 'document-1', uploadUrl: 'http://localhost/upload' },
@@ -322,7 +360,9 @@ describe('CRM HTTP response admission', () => {
         { method: 'POST' }
       );
       mocks.proof.mockResolvedValue(
-        state === 'revoked' ? proof(false) : err(new Error('offline'))
+        state === 'revoked'
+          ? proof(false)
+          : err([{ code: 'SERVER_ERROR', message: 'Unavailable' }])
       );
       const response = await observe(
         Response.json(
@@ -348,7 +388,9 @@ describe('CRM HTTP response admission', () => {
       'http://localhost/dss/crm/contacts',
       { method: 'POST' }
     );
-    mocks.proof.mockResolvedValue(err(new Error('offline')));
+    mocks.proof.mockResolvedValue(
+      err([{ code: 'SERVER_ERROR', message: 'Unavailable' }])
+    );
     const response = await observe(
       Response.json({ message: 'Already exists' }, { status: 409 })
     );
@@ -491,7 +533,9 @@ describe('CRM HTTP response admission', () => {
 
   it('retains the last verified proof after a transient failure when the hint is unchanged', async () => {
     await verifiedViewer();
-    mocks.proof.mockResolvedValue(err(new Error('offline')));
+    mocks.proof.mockResolvedValue(
+      err([{ code: 'SERVER_ERROR', message: 'Unavailable' }])
+    );
     await expect(crmAccessAuthority.refresh()).rejects.toThrow(
       'Unable to verify CRM access'
     );
@@ -594,7 +638,9 @@ describe('CRM HTTP response admission', () => {
       'http://localhost/dss/graphql',
       queuedSettlementRequest({ method: 'POST' })
     );
-    mocks.proof.mockResolvedValue(err(new Error('offline')));
+    mocks.proof.mockResolvedValue(
+      err([{ code: 'SERVER_ERROR', message: 'Unavailable' }])
+    );
     const response = await observe(
       new Response('{"data":{"id":"canonical","name":"copied content"}}')
     );
@@ -615,7 +661,9 @@ describe('CRM HTTP response admission', () => {
       'http://localhost/dss/graphql',
       { method: 'POST' }
     );
-    mocks.proof.mockResolvedValue(err(new Error('offline')));
+    mocks.proof.mockResolvedValue(
+      err([{ code: 'SERVER_ERROR', message: 'Unavailable' }])
+    );
     await expect(
       observe(new Response('{"data":{"id":"canonical"}}'))
     ).rejects.toThrow('Unable to verify CRM access');

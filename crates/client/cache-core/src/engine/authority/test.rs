@@ -592,6 +592,41 @@ fn an_account_witness_cannot_be_confused_with_the_physical_cache_profile() {
 }
 
 #[test]
+fn binding_an_account_preserves_unfinished_retirement() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let initial = engine.current_authority("profile").await.unwrap();
+        let interrupted = engine
+            .begin_authority_transition("profile", initial.generation, "team:denied".into(), true)
+            .await
+            .unwrap();
+        assert!(!interrupted.ready);
+        engine.bind_identity("viewer").await.unwrap();
+        let mut reopened = Engine::new(engine.into_storage());
+        let bound = reopened.current_authority("profile").await.unwrap();
+        assert_eq!(bound.account.as_deref(), Some("viewer"));
+        assert_ne!(bound.generation, interrupted.generation);
+        assert_eq!(bound.policy.as_deref(), Some("team:denied"));
+        assert!(!bound.ready);
+        let resumed = reopened
+            .begin_authority_transition("profile", bound.generation, "team:allowed".into(), false)
+            .await
+            .unwrap();
+        assert!(!resumed.ready);
+        assert!(
+            reopened
+                .check_authority_generation(Some(resumed.generation), true)
+                .await
+                .is_err()
+        );
+        reopened
+            .complete_authority_transition(resumed)
+            .await
+            .unwrap();
+    });
+}
+
+#[test]
 fn permission_transport_matches_the_generated_contract() {
     let expected: serde_json::Value = serde_json::from_str(include_str!("schema.json")).unwrap();
     assert_eq!(transport_schemas(), expected);

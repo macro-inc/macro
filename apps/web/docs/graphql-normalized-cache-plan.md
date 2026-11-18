@@ -914,7 +914,13 @@ HTTP decoding, subscription reconnects, writes and final observer delivery.
 Protected local reads reuse a verified proof for the current account and cache
 generation, including offline. Stale authority or an explicit permission signal
 requires a fresh primary proof; transient failures preserve the last proven UI
-state and receive a bounded retry. Initial allowed/team-less proofs preserve
+state. Network failures and stale generations retry once; network retries wait
+250 ms, and the second proof has a 3-second deadline instead of 15 seconds.
+Terminal failures and timeouts do not retry. Without a previous proof, exhausted
+verification shows the existing error state with manual retry and retries on
+reconnect. Protected queries rejected during initialization read current cached
+data or dispatch a fresh request on a miss, clearing the rejected response
+witness without replacing the mounted observer. Initial allowed/team-less proofs preserve
 legacy offline data. Proven denial or loss of the prior team scope retires it;
 an unchanged ready policy remains a metadata check.
 

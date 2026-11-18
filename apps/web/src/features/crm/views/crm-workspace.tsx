@@ -202,6 +202,7 @@ export function CrmWorkspaceView(props: {
     PipelineEditor,
     canAccess,
     accessState,
+    retryAccess,
     copyPipelineLink,
   } = useCrmContext();
   const view = useCrmWorkspace();
@@ -546,7 +547,10 @@ export function CrmWorkspaceView(props: {
                         <CrmNavigationControls />
                       </ViewShell.Header>
                     </Show>
-                    <CrmAccessFallback state={accessState()} />
+                    <CrmAccessFallback
+                      state={accessState()}
+                      onRetry={retryAccess}
+                    />
                   </>
                 }
               >
@@ -735,7 +739,10 @@ export function CrmWorkspaceView(props: {
                     {mobileHeader()}
                   </Show>
                 </ViewShell.Header>
-                <CrmAccessFallback state={accessState()} />
+                <CrmAccessFallback
+                  state={accessState()}
+                  onRetry={retryAccess}
+                />
               </>
             }
           >

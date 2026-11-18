@@ -796,9 +796,12 @@ A failed save keeps the previous state and can be retried; members do not see th
 An independently shared item can remain open after revocation, but its CRM record
 breadcrumbs and task-creation preset disappear. Previews, including email mentions,
 withhold retired snapshots until permission verification completes. A CRM deep
-link shows a loading skeleton while its first proof is pending. Only a proven
-denial shows the access-denied screen or closes CRM dialogs; a transient proof
-failure retains the last proven state and retries once.
+link shows a loading skeleton while its first proof is pending, then the existing
+retry state if verification fails. **Try again** or reconnecting retries the proof.
+Only a proven denial shows the access-denied screen or closes CRM dialogs; a
+transient proof failure retains the last proven state. Network failures back off
+once before a second attempt with a shorter timeout; stale generations retry
+once, while terminal proof errors do not retry automatically.
 `GET /crm/member-access` reports current access even
 when record routes return access denied. Clients holding CRM caches may request
 the storage retirement hint with `x-macro-crm-access-signal: 1`; its three-second

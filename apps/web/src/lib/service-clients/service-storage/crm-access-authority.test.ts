@@ -6,10 +6,11 @@ import {
   createAuthorityObserver,
   StaleCacheAuthorityError,
 } from '@graphql-cache/authority';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCrmAccessAuthority } from './crm-access-authority';
 
 const team = '00000000-0000-4000-8000-000000000001';
+afterEach(() => vi.useRealTimers());
 function sharedOwner(account: string | null = 'viewer') {
   let state: CacheAuthority = {
     identity: 'anonymous-profile',
@@ -263,7 +264,64 @@ describe('CRM authority across cache clients', () => {
 });
 
 // Boot and transient network errors must not impersonate a proven denial.
+it('ends a failed first proof in a retryable error state instead of loading forever', async () => {
+  const fetchProof = vi.fn<() => Promise<string>>(async () => {
+    throw new Error('proof unavailable');
+  });
+  const { authority, retire } = client(sharedOwner().port(), fetchProof);
+  await expect(authority.refresh()).rejects.toThrow('proof unavailable');
+  expect(authority.state()).toBe('error');
+  expect(authority.allowed()).toBe(false);
+  expect(retire).not.toHaveBeenCalled();
+  fetchProof.mockResolvedValue(`${team}:allowed`);
+  const retry = authority.refresh();
+  expect(authority.state()).toBe('pending');
+  await retry;
+  expect(authority.state()).toBe('allowed');
+});
+
+it.each([
+  new Error('invalid proof'),
+  new DOMException('proof timed out', 'TimeoutError'),
+])('does not retry a terminal proof error: %s', async (error) => {
+  const fetchProof = vi.fn(async () => {
+    throw error;
+  });
+  const { authority } = client(sharedOwner().port(), fetchProof);
+  await expect(authority.refresh()).rejects.toBe(error);
+  expect(fetchProof).toHaveBeenCalledTimes(1);
+});
+
+it('backs off once after a network failure and bounds the second proof timeout', async () => {
+  vi.useFakeTimers();
+  const fetchProof = vi.fn(async () => `${team}:allowed`);
+  fetchProof.mockRejectedValueOnce(new TypeError('offline'));
+  const { authority } = client(sharedOwner().port(), fetchProof);
+  const refresh = authority.refresh();
+  await vi.advanceTimersByTimeAsync(249);
+  expect(fetchProof).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1);
+  await refresh;
+  expect(fetchProof.mock.calls).toEqual([[15_000], [3_000]]);
+  expect(authority.state()).toBe('allowed');
+});
+
+it('shows the retry state after the bounded initial network retry fails', async () => {
+  vi.useFakeTimers();
+  const fetchProof = vi.fn(async () => {
+    throw new TypeError('offline');
+  });
+  const { authority } = client(sharedOwner().port(), fetchProof);
+  const failed = expect(authority.refresh()).rejects.toThrow('offline');
+  await vi.advanceTimersByTimeAsync(250);
+  await failed;
+  expect(authority.state()).toBe('error');
+  await vi.runAllTimersAsync();
+  expect(fetchProof).toHaveBeenCalledTimes(2);
+});
+
 it('keeps boot pending and preserves the last proof across a bounded transient retry', async () => {
+  vi.useFakeTimers();
   const proof = Promise.withResolvers<string>();
   const fetchProof = vi.fn(() => proof.promise);
   const { authority, retire } = client(sharedOwner().port(), fetchProof);
@@ -274,8 +332,10 @@ it('keeps boot pending and preserves the last proof across a bounded transient r
   await boot;
   expect(authority.state()).toBe('allowed');
   expect(retire).not.toHaveBeenCalled();
-  fetchProof.mockRejectedValue(new Error('offline'));
-  await expect(authority.refresh()).rejects.toThrow('offline');
+  fetchProof.mockRejectedValue(new TypeError('offline'));
+  const failedRefresh = expect(authority.refresh()).rejects.toThrow('offline');
+  await vi.advanceTimersByTimeAsync(250);
+  await failedRefresh;
   expect(fetchProof).toHaveBeenCalledTimes(3);
   expect(authority.state()).toBe('allowed');
   expect(retire).not.toHaveBeenCalled();
@@ -285,8 +345,12 @@ it('keeps boot pending and preserves the last proof across a bounded transient r
   await authority.refresh();
   expect(authority.state()).toBe('denied');
   expect(retire).toHaveBeenCalledTimes(1);
-  fetchProof.mockRejectedValue(new Error('offline'));
-  await expect(authority.refresh()).rejects.toThrow('offline');
+  fetchProof.mockRejectedValue(new TypeError('offline'));
+  const failedDeniedRefresh = expect(authority.refresh()).rejects.toThrow(
+    'offline'
+  );
+  await vi.advanceTimersByTimeAsync(250);
+  await failedDeniedRefresh;
   expect(authority.state()).toBe('denied');
 });
 

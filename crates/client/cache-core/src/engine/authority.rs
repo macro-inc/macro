@@ -154,6 +154,7 @@ impl<S: Storage> Engine<S> {
             return Err(EngineError::StaleAuthority);
         }
         let account = self.current_identity().await?;
+        let mut unfinished_policy = None;
         if let Some(authority) = self.stored_authority().await? {
             if authority.identity != identity {
                 return Err(EngineError::StaleAuthority);
@@ -161,12 +162,15 @@ impl<S: Storage> Engine<S> {
             if authority.account == account {
                 return Ok(authority);
             }
+            if !authority.ready {
+                unfinished_policy = authority.policy;
+            }
         }
         let authority = CacheAuthority {
             identity: identity.to_owned(),
             account,
             generation: Uuid::now_v7(),
-            policy: None,
+            policy: unfinished_policy,
             ready: false,
         };
         self.store_authority(&authority).await?;

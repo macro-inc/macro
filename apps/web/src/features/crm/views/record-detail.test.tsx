@@ -37,6 +37,7 @@ vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     canAccess: () => taskContext.canAccess(),
     accessState: () => (taskContext.canAccess() ? 'allowed' : 'denied'),
+    retryAccess: async () => {},
     createNavigation: () => ({ openWithSplit: vi.fn() }),
     listsEnabled: () => () => false,
     isTeamAdmin: () => () => false,

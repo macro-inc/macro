@@ -54,7 +54,12 @@ export function Company(props: CompanyProps) {
     >
       <Show
         when={context.canAccess()}
-        fallback={<CrmAccessFallback state={context.accessState()} />}
+        fallback={
+          <CrmAccessFallback
+            state={context.accessState()}
+            onRetry={context.retryAccess}
+          />
+        }
       >
         <CompanyContent {...props} />
       </Show>

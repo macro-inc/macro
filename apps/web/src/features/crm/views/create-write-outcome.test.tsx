@@ -64,6 +64,7 @@ vi.mock('../context/crm-context', async () => {
     useCrmContext: () => ({
       canAccess: crmAccessAuthority.allowed,
       accessState: crmAccessAuthority.state,
+      retryAccess: crmAccessAuthority.refresh,
       registerTaskComposerRecord: () => () => {},
     }),
   };

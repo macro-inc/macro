@@ -18,29 +18,40 @@ import { Telemetry } from '@macro-inc/observability';
 import { queryClient, queryPersistence } from '@queries/client';
 import { crmProtectedQueryKey } from '@queries/crm-cache-scope';
 import { authServiceClient } from '@service-auth/client';
+import { onlineManager } from '@tanstack/solid-query';
+import { dssFetch } from './client';
 import {
   configureCrmAccessAuthority,
   crmAccessAuthority,
   isCrmPolicy,
 } from './crm-access-authority';
 import { crmResponseScope } from './crm-response-scope';
+import type { CrmMemberAccessResponse } from './generated/schemas/crmMemberAccessResponse';
 
 let host: CacheHost | undefined;
 let installed = false;
 
-async function fetchProof(): Promise<string> {
+async function fetchProof(timeoutMs: number): Promise<string> {
   const context = Telemetry.captureContext();
-  const { dssFetch } = await import('./client');
+  const signal = AbortSignal.timeout(timeoutMs);
   const result = await context.run(() =>
-    dssFetch<{ team_id: string | null; allowed: boolean }>(
-      '/crm/member-access',
-      { cache: 'no-store', signal: AbortSignal.timeout(15_000) }
-    )
+    dssFetch<CrmMemberAccessResponse>('/crm/member-access', {
+      cache: 'no-store',
+      signal,
+    })
   );
-  if (result.isErr() || typeof result.value.allowed !== 'boolean')
+  if (result.isErr()) {
+    if (
+      !signal.aborted &&
+      result.error.some((error) => error.code === 'NETWORK_ERROR')
+    )
+      throw new TypeError('Unable to verify CRM access');
+    throw new Error('Unable to verify CRM access');
+  }
+  if (result.value == null || typeof result.value.allowed !== 'boolean')
     throw new Error('Unable to verify CRM access');
   const policy =
-    result.value.team_id === null
+    result.value.team_id == null
       ? 'none'
       : `${result.value.team_id}:${result.value.allowed ? 'allowed' : 'denied'}`;
   if (!isCrmPolicy(policy)) throw new Error('Invalid CRM access proof');
@@ -122,6 +133,14 @@ function install() {
           throw error;
       }
     },
+  });
+  onlineManager.subscribe((online) => {
+    if (
+      online &&
+      crmAccessAuthority.account() &&
+      ['pending', 'error'].includes(crmAccessAuthority.state())
+    )
+      fireAndForget(crmAccessAuthority.refresh(), 'crm.access.reconnect');
   });
   registerResponseObserver((input, init) => {
     if (!crmAccessAuthority.account()) return;

@@ -559,6 +559,7 @@ export function normalizedCacheExchange(
       networkRequestsInFlight: number;
       replacementFallback: boolean;
       deferredAffected: boolean;
+      deferredAuthorityRead: boolean;
       completedReplacementFallback: boolean;
       networkRegistrationSatisfied: boolean;
       retainedReplacementFallback?: RetainedReplacementFallback;
@@ -578,6 +579,7 @@ export function normalizedCacheExchange(
           networkRequestsInFlight: 0,
           replacementFallback: false,
           deferredAffected: false,
+          deferredAuthorityRead: false,
           completedReplacementFallback: false,
           networkRegistrationSatisfied: false,
           networkResultVersion: 0,
@@ -948,6 +950,14 @@ export function normalizedCacheExchange(
         state.deferredAffected = false;
         const replacementFallback = state.replacementFallback;
         state.replacementFallback = false;
+        if (state.deferredAuthorityRead) {
+          state.deferredAuthorityRead = false;
+          state.completedReplacementFallback = false;
+          // The old response cannot fill an empty cache after its permission
+          // generation changed. This reread must still allow a network miss.
+          if (!replacementRegistrationSatisfied) recoverAuthorityQuery(key);
+          return;
+        }
         if (deferred) {
           state.completedReplacementFallback = false;
           if (!replacementRegistrationSatisfied) {
@@ -1187,6 +1197,34 @@ export function normalizedCacheExchange(
         if (policy === 'cache-only') return cacheResult(op, undefined, false);
         if (!networkForwarded && !registrationOnly) enqueueQueryForward(op);
         return undefined;
+      }
+
+      function recoverAuthorityQuery(key: number): void {
+        const op = activeOps.get(key);
+        if (!op) return;
+        // urql still considers the rejected request dispatched while its
+        // result drains. Read current storage here and use the exchange's
+        // forwarding queue on a miss, without replaying that stale result.
+        trackAffectedRead(
+          readThenRoute(
+            makeOperation('query', op, {
+              ...op.context,
+              cacheAuthorityGeneration: host.authority?.snapshot()?.generation,
+              cacheAuthorizationEpoch: crmSnapshotAuthorization().epoch,
+              cacheAuthorityResponse: undefined,
+              requestPolicy:
+                op.context.requestPolicy === 'cache-only'
+                  ? 'cache-only'
+                  : 'cache-first',
+              [AFFECTED_READ_CONTEXT_KEY]: true,
+              [REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY]: false,
+            })
+          )
+            .then((result) => {
+              if (result) emitAffectedResult(result);
+            })
+            .catch((error) => reportReadError(error, op))
+        );
       }
 
       /** Durably queues optimism before allowing the ordered runner to send. */
@@ -1929,7 +1967,7 @@ export function normalizedCacheExchange(
 
       if (!host.disabled) {
         mutationQueue.start();
-        host.authority?.onChanged(() => {
+        host.authority?.onChanged((authority) => {
           cacheGeneration += 1;
           liveQueries.clear();
           documentReader.clear();
@@ -1937,6 +1975,24 @@ export function normalizedCacheExchange(
             if (state.retainedReplacementFallback)
               state.retainedReplacementFallback.invalidated = true;
             state.retainedReplacementFallback = undefined;
+          }
+          if (!authority.ready) return;
+          for (const [key, operation] of activeOps) {
+            const state = queryStates.get(key);
+            if (
+              state &&
+              queryNeedsCrmProof(
+                queryText(operation),
+                operation.variables as Record<string, unknown>,
+                operationName(operation)
+              )
+            ) {
+              if (state.networkBoundQueries > 0) {
+                state.deferredAuthorityRead = true;
+              } else {
+                recoverAuthorityQuery(key);
+              }
+            }
           }
         });
         // Includes BFCache restoration, even with no active query keys. The

@@ -84,14 +84,14 @@ type CrmRecordDetailProps = {
 };
 
 export function CrmRecordDetail(props: CrmRecordDetailProps) {
-  const { canAccess, accessState } = useCrmContext();
+  const { canAccess, accessState, retryAccess } = useCrmContext();
   return (
     <Show
       when={canAccess()}
       fallback={
         <>
           {props.deniedHeader}
-          <CrmAccessFallback state={accessState()} />
+          <CrmAccessFallback state={accessState()} onRetry={retryAccess} />
         </>
       }
     >
