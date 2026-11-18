@@ -387,8 +387,11 @@ pub(crate) fn sqs_service() -> Container {
         .ports(vec![Port::Name("9324:9324".to_string())])
 }
 
-/// A single-node Kafka, the version the local stack runs. The services only
-/// publish to it.
+/// A single-node Kafka, the version the local stack runs. Its
+/// `__consumer_offsets` has one partition, not 50: the broker creates that
+/// topic when the first consumer group asks for it and serves no topic
+/// created after until its partitions exist, which for 50 took a runner 15
+/// to 18 seconds.
 pub(crate) fn kafka_service() -> Container {
     Container::default()
         .image("apache/kafka:3.9.1")
@@ -408,6 +411,7 @@ pub(crate) fn kafka_service() -> Container {
                 )
                 .add("KAFKA_INTER_BROKER_LISTENER_NAME", "PLAINTEXT")
                 .add("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
+                .add("KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS", "1")
                 .add("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
                 .add("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
                 .add("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "true"),
