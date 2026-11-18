@@ -1,0 +1,9 @@
+
+ RUN  v5.1.0 <repo>/apps/web
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  17:26:27
+   Duration  3.14s (import 63%, transform 25%, environment 9%, tests 2%)
+
