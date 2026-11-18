@@ -195,7 +195,7 @@ where
         }
 
         let requester_id = request_context.user_id.to_string();
-        let mutations = service_context.mutations_for(&request_context);
+        let mutations = service_context.mutations_for(&request_context, None);
         let out_of_office = match self.event_type {
             CalendarEventTypeInput::Default => {
                 if self.out_of_office.is_some() {

@@ -255,7 +255,9 @@ fn update_body(
     patch: &CalendarEventPatch,
     scope: &CalendarUpdateScope,
     macro_call: bool,
+    inbox: Option<&str>,
 ) -> serde_json::Value {
+    let _ = inbox;
     let (scope_name, recurrence_id) = match scope {
         CalendarUpdateScope::All => ("all", None),
         CalendarUpdateScope::ThisEvent { recurrence_id } => {
@@ -301,7 +303,9 @@ fn attendees_body(attendees: &[CalendarAttendeeInput]) -> Vec<serde_json::Value>
 fn delete_query(
     calendar_id: Option<Uuid>,
     scope: &CalendarDeletionScope,
+    inbox: Option<&str>,
 ) -> Vec<(&'static str, String)> {
+    let _ = inbox;
     let mut query = match scope {
         CalendarDeletionScope::All => vec![("scope", "all".to_string())],
         CalendarDeletionScope::ThisEvent { recurrence_id } => vec![
@@ -414,7 +418,7 @@ impl CalendarMacroCallService for CalendarServiceMutations {
                     &format!("/events/{event_id}"),
                     requester_id,
                 )
-                .json(&update_body(calendar_id, &patch, &scope, true)),
+                .json(&update_body(calendar_id, &patch, &scope, true, None)),
             )
             .await
             .map_err(|failure| match failure {
@@ -477,7 +481,7 @@ impl CalendarMutationService for CalendarServiceMutations {
                 &format!("/events/{event_id}"),
                 requester_id,
             )
-            .json(&update_body(calendar_id, &patch, &scope, false)),
+            .json(&update_body(calendar_id, &patch, &scope, false, None)),
         )
         .await
     }
@@ -496,7 +500,7 @@ impl CalendarMutationService for CalendarServiceMutations {
                 &format!("/events/{event_id}"),
                 requester_id,
             )
-            .query(&delete_query(calendar_id, &scope)),
+            .query(&delete_query(calendar_id, &scope, None)),
         )
         .await
         .map(|_| ())

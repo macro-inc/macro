@@ -85,13 +85,16 @@ where
 /// writes through, so that service's program guards see the program and not
 /// the host that called. In-process clients have no such guards to reach.
 pub trait ProgramForwarding {
-    /// The client for writes made for `program`.
-    fn for_program(self: &Arc<Self>, program: &ForwardedProgram) -> Arc<Self>;
+    /// The client for writes made for `program`, addressing the copy held
+    /// through `inbox` when the call names one: a program's update or
+    /// delete must name it again downstream, where its copy check reruns.
+    fn for_program(self: &Arc<Self>, program: &ForwardedProgram, inbox: Option<&str>) -> Arc<Self>;
 }
 
 #[cfg(feature = "mutation-client")]
 impl ProgramForwarding for crate::outbound::calendar_service_mutations::CalendarServiceMutations {
-    fn for_program(self: &Arc<Self>, program: &ForwardedProgram) -> Arc<Self> {
+    fn for_program(self: &Arc<Self>, program: &ForwardedProgram, inbox: Option<&str>) -> Arc<Self> {
+        let _ = inbox;
         Arc::new(self.forwarding(program.headers()))
     }
 }
@@ -153,9 +156,10 @@ where
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
-    /// The client for a write `request` makes: it carries the tools' program
-    /// and the user's approval of the call, when they gave one.
-    pub fn mutations_for(&self, request: &RequestContext) -> Arc<M> {
+    /// The client for a write `request` makes: it carries the tools' program,
+    /// the user's approval of the call when they gave one, and the `inbox`
+    /// of the copy the call addresses.
+    pub fn mutations_for(&self, request: &RequestContext, inbox: Option<&str>) -> Arc<M> {
         let program = match request.approval().map(|approval| approval.kind()) {
             None => self.program.clone(),
             Some(ApprovalKind::Reviewed) => {
@@ -163,7 +167,8 @@ where
             }
             Some(ApprovalKind::Quoted) => self.program.clone().approved(ProgramApproval::Quoted),
         };
-        self.mutations.for_program(&program)
+        let _ = inbox;
+        self.mutations.for_program(&program, None)
     }
 }
 
