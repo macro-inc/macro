@@ -1,13 +1,16 @@
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { throwOnErr } from '@core/util/result';
-import { storageServiceClient } from '@service-storage/client';
+import {
+  compileToAst,
+  defineQueryFilters,
+  queryStateFrom,
+} from '@app/features/next-soup/filters/filter-store';
 import {
   keepPreviousData,
   queryOptions,
   useQuery,
 } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import type { SoupItemsQueryArgs } from './items';
+import { fetchGraphqlSoupPage } from './graphql/fetch-page';
+import type { SoupAstItemsQueryArgs } from './items';
 import { soupKeys } from './keys';
 
 // NOTE: we only use this for merging viewedAt into history items.
@@ -21,41 +24,32 @@ const RECENTLY_VIEWED_LIMIT = 50;
 const RECENTLY_VIEWED_STALE_TIME = 5 * 60 * 1000; // 5 minutes
 const RECENTLY_VIEWED_GC_TIME = 10 * 60 * 1000; // 10 minutes
 
-// Built at call time (not module load) so the CRM flag is read after PostHog
-// has hydrated. The flag is stable within a session, so the derived query key
-// is stable too — the hook and `updateRecentlyViewedItem` agree on it.
-function buildRecentlyViewedArgs(): SoupItemsQueryArgs {
-  return {
-    params: { sort_method: 'viewed_at', limit: RECENTLY_VIEWED_LIMIT },
-    body: {
-      ...QUERY_FILTERS_BASE,
-      channel_filters: undefined,
-      chat_filters: undefined,
-      agent_session_filters: { include: true },
-      document_filters: undefined,
-      email_filters: undefined,
-      project_filters: undefined,
-      crm_company_filters: undefined,
-    },
-  };
-}
+/**
+ * Channels, chats, agent sessions, documents, email, folders and CRM
+ * companies, most recently viewed first.
+ */
+export const RECENTLY_VIEWED_ARGS: SoupAstItemsQueryArgs = {
+  params: { sort_method: 'viewed_at', limit: RECENTLY_VIEWED_LIMIT },
+  body: compileToAst(
+    queryStateFrom(
+      defineQueryFilters(
+        { include: { includeAgentSessions: true } },
+        { skipTargets: ['chanf', 'cf', 'df', 'ef', 'pf', 'ccf'] }
+      )
+    )
+  ),
+};
 
 function recentlyViewedQueryKey() {
-  return soupKeys.items(buildRecentlyViewedArgs()).queryKey;
+  return soupKeys.items(RECENTLY_VIEWED_ARGS).queryKey;
 }
 
 async function fetchRecentlyViewed(
-  args: SoupItemsQueryArgs
+  args: SoupAstItemsQueryArgs
 ): Promise<RecentlyViewedItem[]> {
-  const page = await throwOnErr(() =>
-    storageServiceClient.getSoupItems({
-      params: {},
-      body: {
-        ...args.body,
-        ...args.params,
-      },
-    })
-  );
+  const page = await fetchGraphqlSoupPage(args, {
+    requestPolicy: 'network-only',
+  });
   return page.items.flatMap((item): RecentlyViewedItem[] => {
     // Reminders have no `viewedAt` — they are never "viewed", only fired.
     if (
@@ -82,7 +76,7 @@ async function fetchRecentlyViewed(
 }
 
 // Cached callbacks outlive the caller; only the plain request enters here.
-function recentlyViewedQueryOptions(args: SoupItemsQueryArgs) {
+function recentlyViewedQueryOptions(args: SoupAstItemsQueryArgs) {
   return queryOptions({
     queryKey: soupKeys.items(args).queryKey,
     queryFn: () => fetchRecentlyViewed(args),
@@ -93,7 +87,7 @@ function recentlyViewedQueryOptions(args: SoupItemsQueryArgs) {
 }
 
 export function useRecentlyViewedSoupQuery() {
-  return useQuery(() => recentlyViewedQueryOptions(buildRecentlyViewedArgs()));
+  return useQuery(() => recentlyViewedQueryOptions(RECENTLY_VIEWED_ARGS));
 }
 
 export function updateRecentlyViewedItem(itemId: string, viewedAt?: string) {

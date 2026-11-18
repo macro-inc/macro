@@ -66,7 +66,7 @@ vi.mock('@queries/storage/system-skills', () => ({
 }));
 vi.mock('@queries/soup/slash-menu-pull-requests', () => ({
   useSlashMenuPullRequests: () => ({
-    query: { isPending: false, isError: false },
+    query: { isPending: false, error: null },
     pullRequests: () => [
       {
         id: 'pr-42',

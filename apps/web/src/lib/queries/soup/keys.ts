@@ -1,11 +1,12 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
 import type { GroupByField } from './grouped/types';
-import type { SoupAstItemsQueryArgs, SoupItemsQueryArgs } from './items';
+import type { SoupAstItemsQueryArgs } from './items';
 import type { SearchSoupQueryArgs } from './search';
 
 export const soupKeys = createQueryKeys('soup', {
   crmPeople: (teamId: string) => [teamId],
-  items: (args: SoupItemsQueryArgs) => ({
+  /** Lists read outside `astItems` (recently viewed); mutations refresh them. */
+  items: (args: Pick<SoupAstItemsQueryArgs, 'params' | 'body'>) => ({
     queryKey: [args.params, args.body],
   }),
   astItems: (args: SoupAstItemsQueryArgs) => ({

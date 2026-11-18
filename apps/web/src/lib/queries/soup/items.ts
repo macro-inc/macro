@@ -1,4 +1,3 @@
-import { filterSoupItemByRequestBody } from '@app/features/next-soup/filters/query-filters';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import {
@@ -24,7 +23,6 @@ import type { PostSoupRequest } from '@service-storage/generated/schemas/postSou
 import {
   type InfiniteData,
   infiniteQueryOptions,
-  keepPreviousData,
   type StaleTime,
   useInfiniteQuery,
 } from '@tanstack/solid-query';
@@ -51,11 +49,6 @@ export type SoupParams = Params;
 export type SoupBody = Omit<PostSoupRequest, keyof SoupParams>;
 
 export type SoupItemsQueryFilters = EntityFilters;
-
-export type SoupItemsQueryArgs = {
-  params: SoupParams;
-  body: SoupBody;
-};
 
 export type SoupAstParams = Params;
 
@@ -126,54 +119,6 @@ export type SoupAstItemsData = {
   groups: GroupMeta[] | undefined;
   /** Raw API item pool. Only present when query is grouped. */
   itemsById?: SoupAstItemsGroupedPage['items'];
-};
-
-// Cached options outlive the view. Keep its accessors and query proxies out.
-function soupItemsQueryOptions(
-  args: SoupItemsQueryArgs,
-  enabled: boolean | undefined,
-  staleTime: StaleTime | undefined,
-  showSupportedForeignEntities: boolean | undefined
-) {
-  const { params, body } = args;
-  return infiniteQueryOptions({
-    queryKey: soupKeys.items(args).queryKey,
-    queryFn: (ctx) =>
-      throwOnErr(() =>
-        storageServiceClient.getSoupItems({
-          params: { cursor: ctx.pageParam },
-          body: { ...body, ...params },
-        })
-      ),
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.next_cursor,
-    select: (data) =>
-      data.pages.flatMap((page) =>
-        mapSoupPageToEntityList(page, { showSupportedForeignEntities })
-      ),
-    enabled,
-    staleTime,
-    placeholderData: keepPreviousData,
-    meta: {
-      itemFilter: (item: SoupApiItem) =>
-        !body || filterSoupItemByRequestBody(item, body),
-      normalize: true,
-    },
-  });
-}
-
-export const useSoupItemsQuery = (
-  args: Accessor<SoupItemsQueryArgs>,
-  options?: Accessor<SoupItemsQueryOptions>
-) => {
-  return useInfiniteQuery(() =>
-    soupItemsQueryOptions(
-      args(),
-      options?.().enabled,
-      options?.().staleTime,
-      options?.().showSupportedForeignEntities
-    )
-  );
 };
 
 type RestSoupAstItemsMeta = SoupItemsQueryOptions['meta'];

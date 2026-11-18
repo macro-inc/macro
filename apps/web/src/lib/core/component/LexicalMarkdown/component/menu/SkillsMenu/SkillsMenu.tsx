@@ -497,7 +497,7 @@ function SkillsMenuInner(props: SkillsMenuProps) {
                       when={pullRequests().length > 0}
                       fallback={
                         <div class="px-3.5 pb-2 text-xs text-ink-extra-muted">
-                          {pullRequestQuery.isError
+                          {pullRequestQuery.error !== null
                             ? 'Could not load pull requests'
                             : pullRequestQuery.isPending
                               ? 'Loading pull requests…'
