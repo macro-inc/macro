@@ -76,7 +76,7 @@ export const SECTIONS: Record<Section, SectionSpec> = {
  */
 export const MARGINS: Record<Section, Margins> = {
   routines: { score: 11.5, found: 0.47, bad: 0.53 },
-  feed: { score: 17, found: 1, bad: 1 },
+  feed: { score: 11.0, found: 0.84, bad: 0.42 },
 };
 
 const RUNS = join(CACHE, 'runs');

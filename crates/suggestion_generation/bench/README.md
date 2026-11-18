@@ -58,14 +58,18 @@ Each attempt scores **100 × (found − bad) / needs**:
 
 A catalog pick is scored from the answer key and the catalog alone, so the
 same pick scores the same every time: the key places each of the catalog's
-routines once, as meeting needs, as a decoy, `fine` or `misfit`; a pick is
+routines once, as meeting needs, as a decoy, `fine` or `misfit` (nothing
+in the person's mail or workspace for it to work on: an agents digest for
+someone with no agents; a part of the app they haven't used yet is no misfit
+by itself); a pick is
 in the wrong sidebar when its first one isn't among the routine's surfaces,
 and a duplicate when an earlier pick has its key. Only what the session
 wrote for it is the judge's: a reason that invents a fact, and the knobs it
 set (bad or breaking it). A drafted routine and a card are the judge's call
 throughout. Judged twice, the baseline's generations of 2026-11-18 differed in
 routines' *bad* by 0.82 a generation (root mean square), mostly misfit and
-sidebar calls on catalog picks; scored by key, by 0.41.
+sidebar calls on catalog picks; scored by key, by 0.41. Feed cards, all
+the judge's, differed by 0.33 to 0.47 in *bad* and 0.33 in *found*.
 
 So finding everything with nothing wrong is 100, suggesting nothing is 0, and
 noise drives it below 0. A generation the build fails (a server error
@@ -171,37 +175,86 @@ says so: make a new one.
 
 ## Baseline
 
-Main (`c59b249582`) with the bench on top, two runs of each section at the
-default size, on one local stack, 2026-11-18. Each row is 9 attempts; the
-score's range is its 95% bootstrap interval, times are medians.
+Main (`5419b2521f`, the 45-routine catalog) with the bench on top, two runs
+of each section at the default size, on one local stack, 2026-11-18. Each
+row is 27 attempts; the score's range is its 95% interval, times are
+medians.
 
 | Section | Run | Score | Found / needs | Bad | Invented | Suggested | First | End |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `routines` | A | -2.2 (-20.7 to 16.3) | 2.78 / 5.7 | 2.89 | 0.11 | 13.0 | 44 s | 186 s |
-| `routines` | B | -19.3 (-54.4 to 15.9) | 2.78 / 5.7 | 3.89 | 0.22 | 13.4 | 48 s | 146 s |
-| `feed` | A | 76.5 (67.9 to 85.2) | 7.44 / 9 | 0.56 | 0.33 | 11.7 | 166 s | 305 s |
-| `feed` | B | 69.1 (61.7 to 76.5) | 6.56 / 9 | 0.33 | 0.11 | 11.6 | 201 s | 317 s |
+| `routines` | A | 13.0 (0.6 to 25.1) | 3.11 / 5.7 | 2.44 | 0.33 | 20.7 | 64 s | 166 s |
+| `routines` | B | 12.5 (0.9 to 24.1) | 3.11 / 5.7 | 2.48 | 0.19 | 20.9 | 60 s | 199 s |
+| `feed` | A | 76.1 (68.7 to 82.3) | 7.07 / 9.0 | 0.22 | 0.19 | 11.4 | 198 s | 336 s |
+| `feed` | B | 72.8 (69.1 to 76.1) | 6.93 / 9.0 | 0.37 | 0.22 | 11.6 | 180 s | 328 s |
 
-Noise (`MARGINS`): `routines` moved -17.0 between the runs (95% -37.0 to
-3.3), so its margin is 37; `feed` moved -7.4 (95% -17.3 to 2.5), margin 17.
-Routines' swing is almost all in *bad*: every attempt met every need a
-catalog routine can meet and few that need a drafted one, while the number of
-misfit catalog picks varied from run to run, most for the plumber. A routines
-change has to move the score by about 37 points before `compare` calls it;
-its parts (found, bad) show smaller moves first.
+Noise (`MARGINS`), main against main:
+
+| Section | Part | Moved | 95% interval | Standard error | Margin |
+| --- | --- | --- | --- | --- | --- |
+| `routines` | score | -0.5 | -11.5 to 10.5 | 5.4 | 11.5 |
+| `routines` | found | +0.00 | -0.47 to 0.47 | 0.23 | 0.47 |
+| `routines` | bad | +0.04 | -0.45 to 0.53 | 0.24 | 0.53 |
+| `feed` | score | -3.3 | -11.0 to 4.4 | 3.8 | 11.0 |
+| `feed` | found | -0.15 | -0.84 to 0.54 | 0.34 | 0.84 |
+| `feed` | bad | +0.15 | -0.12 to 0.42 | 0.13 | 0.42 |
+
+A change as large as a part's margin comes back as a win about half the
+time, one larger by 0.84 standard errors 80% of the time; main against
+main passes a margin by chance about 2% of the time. So:
+
+| Section | Change per attempt | Part | Called a win |
+| --- | --- | --- | --- |
+| `routines` | one more need met | found | 99% |
+| `routines` | one fewer bad suggestion | bad | 97% |
+| `routines` | either, on the score (17.6 points) | score | 87% |
+| `feed` | one more planted item found | found | 68% |
+| `feed` | one more bad card (the feed makes 0.3 a generation) | bad | 100% |
+| `feed` | either, on the score (11.1 points) | score | 51% |
+
+The feed is the weaker of the two: a generation finds 5 to 9 of its 9
+planted items, so *found* spreads (standard error 0.34) and one more item
+found per attempt is caught about two times in three. Four reps a side
+instead of three would take it to about 80% (an estimate from the standard
+error, not measured), for a third more cost and time.
+
+The earlier bench (3 personas × 3 reps, catalog picks judged) had margins of
+37 (routines) and 17 (feed): seats tripled the attempts, and scoring
+catalog picks by key halved the judge's share of routines' noise.
+
+### 13 → 45 catalog routines
+
+The same scoring on the earlier baseline's 18 generations of main
+`c59b249582`, whose catalog had 13 routines, against the 54 above:
+
+| Part | 13 routines | 45 routines | Change (95%) | Verdict |
+| --- | --- | --- | --- | --- |
+| score | -4.6 | 12.7 | +17.3 (5.1 to 29.6) | better |
+| found | 2.78 | 3.11 | +0.33 (0.02 to 0.65) | noise |
+| bad | 3.06 | 2.46 | -0.59 (-1.29 to 0.11) | noise |
+
+The score is better past its margin; *found* rose and *bad* fell, each short
+of its own test. Per generation the sessions now make 20.8 suggestions (from
+13.2), from 36 or 37 of the 45 routines a run: 3.2 catalog picks that meet
+a need (from 2.3), 1.2 decoys (1.2), 0.6 misfits (0.6), 14.9 fine picks the
+key didn't ask for (5.9), and 0.9 drafted routines (from 3.2). The founder and the
+plumber gained a need each from new catalog routines (promises, meeting
+briefs, customer requests); the sales rep lost one of the two needs only a
+drafted routine meets (found 3.83 to 2.94). Wrong sidebars fell from 0.56 to
+0.19 a generation.
 
 ## Cost and time
 
 From the baseline runs. A generation's cost is its `ai_usage`; the judge
 (Opus 5.5) costs about as much again.
 
-| Section | Generation | Judge | One run (9 attempts) | Wall time of a run |
+| Section | Generation | Judge | One run (27 attempts) | Wall time of a run |
 | --- | --- | --- | --- | --- |
-| `routines` | $0.22 | $0.21 | about $3.90 | about 15 minutes |
-| `feed` | $0.17 | $0.29 | about $4.20 | about 22 minutes |
+| `routines` | $0.21 | $0.24 | about $12 | 31 to 34 minutes |
+| `feed` | $0.18 | $0.28 | about $12 | 26 to 32 minutes |
 
-A comparison is two runs (about $8 and 30 to 45 minutes for one section);
-`all` runs both sections in about 40 minutes. The stand-in and the stack
+A comparison is one run of the change against a stored run of main from the
+same stack: the cost of one run. Run main again when main changes what the
+section runs, or after a day (the model drifts). The stand-in and the stack
 cost nothing beyond the model calls.
 
 ## How it works
@@ -210,6 +263,10 @@ cost nothing beyond the model calls.
   The bench seeds its mail as old as it was then and moves every date in the
   text, weekdays too, by the whole days since (`clock.ts`), so a run on any
   day sees the same week. Month names and quarters stay as written.
+  Documents and tasks are seeded under keys that carry that number of days
+  (`contentKey`): sync-service keeps an id's first text for good, so a
+  re-apply on another day would leave the old dates in them while the judge
+  reads the new ones.
 - **The stand-in.** One Caddy container (`stub.ts`) on the stack's network,
   under the name `stack.env` points at: PostHog's `/flags` answers with the
   section's flags, and email_service's `/internal/recent_messages/{user}`
@@ -232,9 +289,14 @@ cost nothing beyond the model calls.
   mailboxes' drafts (`apply` already replaces the seeded mailbox), and checks
   none are left before it starts. Sessions delete their logs when they end, so the bench copies
   `agent_session_log` while they run (the last lines can be missed).
-- **Parallel personas.** A rep seeds every persona, then runs their
-  generations at once (`--concurrency`, default 3); the feed section indexes
-  the seeded items for search first.
+- **Seats.** A rep seeds every seat of every persona (three at a time), then
+  runs their generations: routines three at once, the feed nine
+  (`--concurrency`). At nine onboarding generations at once, three
+  sessions each, the harness on a busy machine took more than its 30 s to
+  accept sessions' first prompts; the bench marks a generation with such a
+  session (`delivery_unknown`) a bench error. The feed section indexes the
+  seeded items for search first. Judging runs alongside, three grader
+  accounts at a time, each judgement's cost read from its grader's usage.
 
 ## Adding a persona or a section
 
