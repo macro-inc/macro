@@ -187,6 +187,7 @@ also = [
   "http POST /outlook/webhook/{attempt}",
   "kafka macro.email:MessageReceived",
   "provider outlook:messages.get",
+  "provider outlook:messages.list",
   "provider outlook:attachments.list",
   "loop mailbox_sync_worker::run",
 ]
