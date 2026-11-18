@@ -6,13 +6,15 @@ Agent permissions: the one checked-in registry that gives every Macro SDK
 operation (service + operationId, the key the OCaml call analyzer reports) a
 permission group, an action (create, read, update, destroy, send) and a label.
 Rust reads it through this crate; the web app imports the same
-`registry.json` as `@agent-permission-registry`.
+`registry.json` as `@agent-permission-registry` (`apps/web/tsconfig.json`)
+through `apps/web/src/features/agent-permissions/core/registry.ts`.
 
 ## Start here
 
 - `registry.json`: the groups (display order, name, description) and every
   operation, one per line, grouped by service.
-- `src/lib.rs`: `groups`, `group`, `operation`, `operations`.
+- `src/lib.rs`: `groups`, `group`, `operation`, `operations`; the web's
+  `permissionGroups`, `groupOperations`, `permissionOperation`.
 
 ## Recipes
 
