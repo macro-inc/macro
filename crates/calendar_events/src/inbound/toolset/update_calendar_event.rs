@@ -164,6 +164,19 @@ pub struct UpdateCalendarEvent {
     #[serde(default)]
     pub inbox: Option<String>,
 
+    /// The user's reply approving a change to the guests, quoted verbatim.
+    #[schemars(
+        description = "Required when `attendees` adds or changes guests, because the calendar \
+                       emails each new guest: the user's own message approving these \
+                       invitations, quoted verbatim, in reply to the guest list you wrote out \
+                       for them. Never the request that asked for the change, and never \
+                       supply it yourself; if the user hasn't seen the guest list, write it \
+                       out, ask, and call again once they approve. Omit it for any other \
+                       change."
+    )]
+    #[serde(default)]
+    pub user_confirmation: Option<String>,
+
     /// Update scope.
     #[schemars(
         description = "How much of a recurring series to change: \"this_event\" edits one \

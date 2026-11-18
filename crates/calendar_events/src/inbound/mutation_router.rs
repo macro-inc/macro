@@ -520,13 +520,17 @@ fn refuse_program_create(
 const PROGRAM_INVITE_REFUSAL: &str = "An agent's program cannot invite guests to a calendar event without the user's approval: the calendar emails each new guest. Write out who will be invited, ask whether to invite them, and only after the user replies approving it call inviteGuests (or update with attendees) again with their reply quoted in userConfirmation.";
 
 /// Refuse an agent run (see [`is_agent_run`]) that changes an event's guests
-/// without quoting the user's approval. A person in the app and an owner
-/// routine invite as before.
+/// without the user's approval: a quoted `confirmation`, or an `approval` an
+/// internal caller forwarded (`macro_authorization::forwarded_approval`), as
+/// the native tools do. A person in the app and an owner routine invite as
+/// before.
 fn refuse_unconfirmed_program_invite(
     attribution: CredentialAttribution,
     headers: &HeaderMap,
     confirmation: Option<&str>,
+    approval: Option<ProgramApproval>,
 ) -> Result<(), CalendarMutationApiError> {
+    let _ = approval;
     let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
     if is_agent_run(attribution, headers) && !confirmed {
         return Err(CalendarMutationApiError {
@@ -869,6 +873,7 @@ where
             user.authorization.user.attribution(),
             &headers,
             request.user_confirmation.as_deref(),
+            forwarded_approval(user.authorization.caller, &headers),
         )?;
     }
     let scope = update_scope(request.scope, request.recurrence_id)?;
@@ -1078,6 +1083,7 @@ where
         user.authorization.user.attribution(),
         &headers,
         request.user_confirmation.as_deref(),
+        forwarded_approval(user.authorization.caller, &headers),
     )?;
     let scope = match (request.scope, request.recurrence_id) {
         (Some(CalendarUpdateScopeParam::All), _) | (None, None) => CalendarUpdateScope::All,

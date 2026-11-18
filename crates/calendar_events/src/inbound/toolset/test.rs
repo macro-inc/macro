@@ -1113,6 +1113,64 @@ async fn update_refuses_both_a_macro_call_and_a_conference() {
     assert!(mutations.switched_to_macro_call.lock().unwrap().is_empty());
 }
 
+/// An invite from an agent's tools, quoting `quote` when given.
+fn agent_invite(quote: Option<&str>) -> UpdateCalendarEvent {
+    let mut args = serde_json::json!({
+        "eventId": Uuid::from_u128(11),
+        "scope": "all",
+        "attendees": [{"email": "guest@example.com"}],
+    });
+    if let Some(quote) = quote {
+        args["userConfirmation"] = serde_json::json!(quote);
+    }
+    serde_json::from_value(args).unwrap()
+}
+
+/// An invite quoting the user's reply carries that quote as its approval,
+/// which calendar_service's invite rule accepts.
+#[tokio::test]
+async fn an_agents_invite_carries_the_quoted_reply() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let context = ServiceContext(context.0.with_program(agent()));
+    agent_invite(Some("yes, invite them"))
+        .call(context, request_context())
+        .await
+        .unwrap();
+    assert_eq!(mutations.updated.lock().unwrap().len(), 1);
+    assert_eq!(
+        *mutations.forwarded.lock().unwrap(),
+        vec![agent().approved(macro_authorization::ProgramApproval::Quoted)]
+    );
+}
+
+/// Without a quote the invite carries no approval, so calendar_service
+/// refuses it.
+#[tokio::test]
+async fn an_agents_unquoted_invite_carries_no_approval() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let context = ServiceContext(context.0.with_program(agent()));
+    agent_invite(None)
+        .call(context, request_context())
+        .await
+        .unwrap();
+    assert_eq!(*mutations.forwarded.lock().unwrap(), vec![agent()]);
+}
+
+/// A blank quote is the model going through the motions: refused before
+/// anything is written.
+#[tokio::test]
+async fn a_blank_invite_quote_is_refused() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let context = ServiceContext(context.0.with_program(agent()));
+    assert!(
+        agent_invite(Some("  "))
+            .call(context, request_context())
+            .await
+            .is_err()
+    );
+    assert!(mutations.updated.lock().unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn update_converts_input_into_a_domain_patch() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
@@ -1123,6 +1181,7 @@ async fn update_converts_input_into_a_domain_patch() {
         event_id,
         calendar_id: None,
         inbox: None,
+        user_confirmation: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: Some("Renamed".to_string()),
@@ -1167,6 +1226,7 @@ async fn update_maps_out_of_office_settings_into_the_patch() {
         event_id,
         calendar_id: None,
         inbox: None,
+        user_confirmation: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: None,
@@ -1208,6 +1268,7 @@ async fn update_passes_the_selected_occurrence_scope() {
         event_id,
         calendar_id: None,
         inbox: None,
+        user_confirmation: None,
         scope: UpdateScopeInput::ThisEvent,
         recurrence_id: Some("2026-08-18T20:00:00+00:00".to_string()),
         title: None,
@@ -1247,6 +1308,7 @@ async fn scoped_update_requires_a_recurrence_id() {
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
+        user_confirmation: None,
         scope: UpdateScopeInput::ThisEvent,
         recurrence_id: None,
         title: Some("Renamed".to_string()),
@@ -1278,6 +1340,7 @@ async fn series_update_rejects_a_stray_recurrence_id() {
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
+        user_confirmation: None,
         scope: UpdateScopeInput::All,
         recurrence_id: Some("2026-08-18T20:00:00+00:00".to_string()),
         title: Some("Renamed".to_string()),
@@ -1306,6 +1369,7 @@ async fn update_carries_reminders_into_the_patch() {
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
+        user_confirmation: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: None,
@@ -1354,6 +1418,7 @@ async fn rsvp_alone_answers_without_patching() {
         event_id,
         calendar_id: None,
         inbox: None,
+        user_confirmation: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: None,
@@ -1391,6 +1456,7 @@ async fn rsvp_follows_the_occurrence_scope_of_the_call() {
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
+        user_confirmation: None,
         scope: UpdateScopeInput::ThisEvent,
         recurrence_id: Some("2026-08-18T20:00:00+00:00".to_string()),
         title: None,
@@ -1429,6 +1495,7 @@ async fn update_answers_after_applying_the_patch() {
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
+        user_confirmation: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: None,
@@ -1461,6 +1528,7 @@ async fn update_without_a_change_or_an_rsvp_is_rejected() {
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
+        user_confirmation: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: None,
@@ -2131,6 +2199,7 @@ async fn update_result_names_the_copy_it_changed() {
         event_id: Uuid::from_u128(7),
         calendar_id: None,
         inbox: None,
+        user_confirmation: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: Some("Renamed".to_string()),
