@@ -11,7 +11,7 @@ use opensearch_client::{
 use rootcause::Report;
 use std::sync::Arc;
 
-use crate::domain::agent_session_index::AgentSessionSearchIndex;
+use crate::domain::agent_session_index::{AgentSessionSearchIndex, ProjectionWrites};
 
 pub struct OpenSearchAgentSessionIndex(pub Arc<OpensearchClient>);
 
@@ -20,7 +20,7 @@ impl AgentSessionSearchIndex for OpenSearchAgentSessionIndex {
         &self,
         snapshot: SearchSnapshot,
         index_override: Option<&str>,
-    ) -> Result<(), Report> {
+    ) -> Result<ProjectionWrites, Report> {
         let metadata = snapshot.metadata;
         let args = ReconcileAgentSessionArgs {
             agent_session_id: metadata.id.to_string(),
@@ -35,9 +35,6 @@ impl AgentSessionSearchIndex for OpenSearchAgentSessionIndex {
             updated_at_millis: opensearch_client::date_format::EpochMillis::new(
                 metadata.updated_at.timestamp_millis(),
             )?,
-            // The session lease serializes writers; every reconciliation gets
-            // its own generation to remove obsolete children after a refold.
-            projection_generation: macro_uuid::Uuid::now_v7().to_string(),
             messages: snapshot
                 .messages
                 .into_iter()
@@ -55,10 +52,16 @@ impl AgentSessionSearchIndex for OpenSearchAgentSessionIndex {
                 })
                 .collect(),
         };
-        Ok(self
+        let writes = self
             .0
             .reconcile_agent_session(&args, index_override)
-            .await?)
+            .await?;
+        Ok(ProjectionWrites {
+            parent_written: writes.parent_written,
+            messages_written: writes.messages_written,
+            messages_unchanged: writes.messages_unchanged,
+            messages_deleted: writes.messages_deleted,
+        })
     }
 
     async fn delete(&self, id: AgentSessionId, index_override: Option<&str>) -> Result<(), Report> {

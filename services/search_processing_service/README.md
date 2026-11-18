@@ -35,14 +35,23 @@ ACP log through the owning agent-session/fold services, and an event that arrive
 while a reconcile for its session is still queued is covered by that reconcile
 (see the Kafka delivery contract). It never indexes the
 event's excerpt as a substitute for the transcript. Completed turns, questions,
-renames, and deletions therefore converge on current persisted state.
+renames, and deletions therefore converge on current persisted state. Three
+kinds change nothing search reads and are committed without a handoff, before
+they could take a session's reread claim: `settled`, `mentioned`, and
+`command_rejected` (`changes_search_projection`).
 
 Live events and backfills hold the same per-session PostgreSQL advisory lease
 through the OpenSearch write. Lease connections have their own pool so waiting
-workers cannot exhaust the pool used to load snapshots. Each reconcile writes
-the parent and both authors' folded messages, refreshes them, then removes
-documents from older projection generations. Missing sessions delete their
-entire projection, even when triggered by an older event.
+workers cannot exhaust the pool used to load snapshots. The parent keeps a
+record of a content hash per message child (`indexed_messages`, in `_source`
+only), read back in real time on each reconcile. A reconcile writes only the
+children whose hash changed, deletes recorded children the session no longer
+has by id, sweeps any child no record names with a delete-by-query, and writes
+the parent last, only when it changed. Nothing waits for a refresh; writes are
+searchable after the index's next scheduled refresh. Missing sessions delete
+their entire projection, even when triggered by an older event. The reconcile
+span records the trigger (lifecycle kind or `backfill`) and the parent and
+messages it wrote, left unchanged, and deleted.
 
 Provision and verify the `agent_sessions` index and alias manually before
 deploying this consumer; deployment does not create indices. Normal parent and

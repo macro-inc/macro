@@ -47,6 +47,9 @@ OpenSearch, and exposes backfill HTTP routes for each.
   every topic. `coalescible_reread_key` skips agent-session events while a
   reread for that session is queued; only add an event kind there if handling
   it rereads the entity's whole current state.
+- `changes_search_index` commits events that change nothing indexed before
+  any reread claim; an event filtered later, in a worker, would hold the claim
+  and absorb a later event that does change something.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those.
 - Run `POST /internal/backfill/email-attachment-status` on an environment only

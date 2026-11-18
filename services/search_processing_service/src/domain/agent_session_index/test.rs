@@ -57,14 +57,18 @@ impl SearchSnapshotService for Source {
     }
 }
 impl AgentSessionSearchIndex for Index {
-    async fn reconcile(&self, snapshot: SearchSnapshot, _: Option<&str>) -> Result<(), Report> {
+    async fn reconcile(
+        &self,
+        snapshot: SearchSnapshot,
+        _: Option<&str>,
+    ) -> Result<ProjectionWrites, Report> {
         assert!(self.0.locked.load(Ordering::SeqCst));
         self.0
             .writes
             .lock()
             .unwrap()
             .push(Some(snapshot.metadata.id));
-        Ok(())
+        Ok(ProjectionWrites::default())
     }
     async fn delete(&self, _: AgentSessionId, _: Option<&str>) -> Result<(), Report> {
         assert!(self.0.locked.load(Ordering::SeqCst));
@@ -79,9 +83,15 @@ async fn delayed_event_removes_deleted_session_and_holds_lease_through_index_wri
     let service = AgentSessionIndexService::new(Source(state.clone()), Index(state.clone()));
     let id = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
     state.exists.store(true, Ordering::SeqCst);
-    service.reconcile(id, None).await.unwrap();
+    service
+        .reconcile(id, None, ReconcileTrigger::Backfill)
+        .await
+        .unwrap();
     state.exists.store(false, Ordering::SeqCst);
-    service.reconcile(id, None).await.unwrap();
+    service
+        .reconcile(id, None, ReconcileTrigger::Backfill)
+        .await
+        .unwrap();
     assert_eq!(
         *state.writes.lock().unwrap(),
         vec![Some(id.as_uuid()), None]

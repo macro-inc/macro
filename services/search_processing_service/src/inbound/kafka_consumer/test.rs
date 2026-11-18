@@ -149,24 +149,36 @@ fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEve
 }
 
 fn received_agent_session_event(session: Uuid, offset: i64) -> ReceivedEvent {
+    use ::agent_session::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
+
+    received_lifecycle_event(session, offset, |identity| {
+        AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata { identity })
+    })
+}
+
+fn received_lifecycle_event(
+    session: Uuid,
+    offset: i64,
+    event: impl FnOnce(
+        ::agent_session::domain::events::SessionIdentity,
+    ) -> ::agent_session::domain::events::AgentSessionLifecycleEvent,
+) -> ReceivedEvent {
     use ::agent_session::domain::{
-        events::{AgentSessionLifecycleEvent, SessionIdentity, SessionRenamedMetadata},
+        events::SessionIdentity,
         model::{AgentSessionId, SessionSource},
     };
     use macro_event_topics::MacroAgentSessionLifecycleTopic;
 
     let id = AgentSessionId::new_from_uuid(session);
-    let event = AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata {
-        identity: SessionIdentity {
-            session_id: id,
-            session_name: "Indexed session".into(),
-            bot_id: serde_json::from_value(serde_json::json!(Uuid::from_u128(2))).unwrap(),
-            bot_name: "Agent".into(),
-            owner_id: user_id(),
-            origin: None,
-            audience: vec![],
-            source: SessionSource::User,
-        },
+    let event = event(SessionIdentity {
+        session_id: id,
+        session_name: "Indexed session".into(),
+        bot_id: serde_json::from_value(serde_json::json!(Uuid::from_u128(2))).unwrap(),
+        bot_name: "Agent".into(),
+        owner_id: user_id(),
+        origin: None,
+        audience: vec![],
+        source: SessionSource::User,
     });
     let message = encoded_message(
         MacroAgentSessionLifecycleTopic::TOPIC_STR,
@@ -2552,6 +2564,52 @@ async fn distinct_sessions_and_non_reread_events_each_hand_off() {
         offsets.push(event.offset);
     }
     assert_eq!(offsets, [1, 2, 3, 4]);
+}
+
+#[tokio::test]
+async fn a_settled_session_never_holds_the_reread_its_next_turn_needs() {
+    use ::agent_session::domain::{
+        events::{AgentSessionLifecycleEvent, SessionSettledMetadata, TurnEndedMetadata},
+        model::TurnId,
+    };
+
+    let (pool, mut receivers) = test_pool(1, 4);
+
+    // `settled` changes nothing indexed. Had it taken the session's reread
+    // claim, the `turn_ended` behind it would be coalesced into a reread that
+    // is then skipped, and the reply would never be indexed.
+    let settled = received_lifecycle_event(AGENT_SESSION_ID, 1, |identity| {
+        AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
+            identity,
+            last_turn: None,
+        })
+    });
+    let turn_ended = received_lifecycle_event(AGENT_SESSION_ID, 2, |identity| {
+        AgentSessionLifecycleEvent::TurnEnded(TurnEndedMetadata {
+            identity,
+            turn: TurnId(4),
+            action_id: serde_json::from_value(serde_json::json!(Uuid::from_u128(3))).unwrap(),
+            actor: None,
+            announcement_message_id: None,
+            stop_reason: "end_turn".into(),
+            queued_remaining: 0,
+        })
+    });
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(settled)).await,
+        HandoffOutcome::NoIndexChange
+    ));
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(turn_ended)).await,
+        HandoffOutcome::HandedOff
+    ));
+    drop(pool);
+
+    let mut offsets = Vec::new();
+    while let Some(event) = receivers[0].recv().await {
+        offsets.push(event.offset);
+    }
+    assert_eq!(offsets, [2]);
 }
 
 #[tokio::test]

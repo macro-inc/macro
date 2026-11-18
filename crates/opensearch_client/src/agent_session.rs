@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::{
     OpensearchClient, Result, delete,
     error::{OpensearchClientError, OpensearchOperation},
@@ -6,8 +8,58 @@ use crate::{
 };
 
 pub use upsert::agent_session::{
-    AgentSessionMessageAuthor, AgentSessionMessageDocument, ReconcileAgentSessionArgs,
+    AgentSessionMessageAuthor, AgentSessionMessageDocument, AgentSessionReconcileWrites,
+    ReconcileAgentSessionArgs,
 };
+
+/// Child id to content hash of each message child a parent's session holds.
+pub(crate) type IndexedMessages = BTreeMap<String, String>;
+
+/// A session's parent document as the index holds it.
+pub(crate) struct StoredParent(serde_json::Value);
+
+impl StoredParent {
+    pub(crate) fn source(&self) -> &serde_json::Value {
+        &self.0
+    }
+
+    /// The parent's record of its children; parents written before records
+    /// were kept have none.
+    pub(crate) fn indexed_messages(&self) -> Option<IndexedMessages> {
+        serde_json::from_value(self.0.get("indexed_messages")?.clone()).ok()
+    }
+}
+
+/// Read a session's parent in real time, so it reflects the last write even
+/// before a refresh. A missing parent, or a missing index, reads as `None`;
+/// the writes that follow report a missing alias.
+pub(crate) async fn stored_parent(
+    client: &opensearch::OpenSearch,
+    index: &str,
+    agent_session_id: &str,
+) -> Result<Option<StoredParent>> {
+    let operation = OpensearchOperation::ReadAgentSessionParent;
+    let response = client
+        .get(opensearch::GetParts::IndexId(index, agent_session_id))
+        .routing(agent_session_id)
+        .send()
+        .await
+        .map_err(|error| OpensearchClientError::request_failed(operation, &error))?;
+    if response.status_code() == opensearch::http::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    if !response.status_code().is_success() {
+        return response_error(response, operation).await.map(|()| None);
+    }
+    let mut body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|error| OpensearchClientError::deserialization_failed(operation, &error))?;
+    Ok(match body.get_mut("_source") {
+        Some(source) => Some(StoredParent(source.take())),
+        None => None,
+    })
+}
 
 /// Report a failed status with its body as sent; a gateway error page is not JSON.
 pub(crate) async fn response_error(
@@ -64,14 +116,14 @@ fn delete_failed(body: &serde_json::Value) -> bool {
 mod test;
 
 impl OpensearchClient {
-    /// Replace the searchable projection of one agent session with an
-    /// authoritative folded snapshot.
+    /// Bring the searchable projection of one agent session in line with an
+    /// authoritative folded snapshot, writing only what changed.
     #[tracing::instrument(skip(self, args), err)]
     pub async fn reconcile_agent_session(
         &self,
         args: &ReconcileAgentSessionArgs,
         index_override: Option<&str>,
-    ) -> Result<()> {
+    ) -> Result<AgentSessionReconcileWrites> {
         resend_on_lost_connection(|| {
             upsert::agent_session::reconcile_agent_session(&self.inner, args, index_override)
         })

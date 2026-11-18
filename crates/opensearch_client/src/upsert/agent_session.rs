@@ -1,10 +1,11 @@
 use models_opensearch::SearchIndex;
 use opensearch::BulkParts;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 use crate::{
     Result,
-    agent_session::response_error,
+    agent_session::{IndexedMessages, response_error, stored_parent},
     date_format::EpochMillis,
     error::{OpensearchClientError, OpensearchOperation},
 };
@@ -14,6 +15,9 @@ mod test;
 
 const PARENT_RELATION: &str = "agent_session";
 const CHILD_RELATION: &str = "message";
+/// Hex digits of a message's SHA-256 kept in the parent's record: enough to
+/// tell two versions of one message apart without bloating the parent.
+const CONTENT_HASH_HEX_DIGITS: usize = 16;
 
 /// The two author sides of a folded conversation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, strum::Display)]
@@ -58,17 +62,26 @@ pub struct ReconcileAgentSessionArgs {
     pub created_at_millis: EpochMillis,
     /// Latest persisted session metadata time.
     pub updated_at_millis: EpochMillis,
-    /// Opaque identity of this complete projection. Every document written by
-    /// one reconcile carries it so obsolete children can be pruned.
-    pub projection_generation: String,
     /// Every currently folded message, oldest first.
     pub messages: Vec<AgentSessionMessageDocument>,
+}
+
+/// What one reconcile changed in the index.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AgentSessionReconcileWrites {
+    /// The parent document was rewritten.
+    pub parent_written: bool,
+    /// Message children written because they were new or changed.
+    pub messages_written: usize,
+    /// Message children left alone because the index already held them.
+    pub messages_unchanged: usize,
+    /// Message children removed because the session no longer has them.
+    pub messages_deleted: usize,
 }
 
 #[derive(Serialize)]
 struct ParentDocument<'a> {
     agent_session_id: &'a str,
-    projection_generation: &'a str,
     name: &'a str,
     owner_id: &'a str,
     bot_id: &'a str,
@@ -77,12 +90,14 @@ struct ParentDocument<'a> {
     created_at_millis: EpochMillis,
     updated_at_millis: EpochMillis,
     agent_session_relation: &'static str,
+    /// Child id to content hash of every message this parent's children hold.
+    /// Kept in `_source` only: the mapping is not dynamic, so it is never indexed.
+    indexed_messages: &'a IndexedMessages,
 }
 
 #[derive(Serialize)]
 struct ChildDocument<'a> {
     agent_session_id: &'a str,
-    projection_generation: &'a str,
     message_turn: u32,
     author: AgentSessionMessageAuthor,
     author_user_id: Option<&'a str>,
@@ -96,6 +111,18 @@ struct ChildRelation<'a> {
     parent: &'a str,
 }
 
+/// The index writes that bring the stored children in line with a snapshot.
+#[derive(Debug, Default)]
+struct ReconcilePlan {
+    /// Child id and serialized document of each new or changed message.
+    write: Vec<(String, String)>,
+    /// Ids of recorded children the snapshot no longer has.
+    delete: Vec<String>,
+    unchanged: usize,
+    /// The record the parent holds once the writes succeed.
+    record: IndexedMessages,
+}
+
 fn resolve_destination(index_override: Option<&str>) -> &str {
     index_override.unwrap_or(SearchIndex::AgentSessions.as_ref())
 }
@@ -104,10 +131,12 @@ fn child_id(agent_session_id: &str, message: &AgentSessionMessageDocument) -> St
     format!("{agent_session_id}:{}:{}", message.turn, message.author)
 }
 
-fn parent_document(args: &ReconcileAgentSessionArgs) -> ParentDocument<'_> {
+fn parent_document<'a>(
+    args: &'a ReconcileAgentSessionArgs,
+    record: &'a IndexedMessages,
+) -> ParentDocument<'a> {
     ParentDocument {
         agent_session_id: &args.agent_session_id,
-        projection_generation: &args.projection_generation,
         name: &args.name,
         owner_id: &args.owner_id,
         bot_id: &args.bot_id,
@@ -116,6 +145,7 @@ fn parent_document(args: &ReconcileAgentSessionArgs) -> ParentDocument<'_> {
         created_at_millis: args.created_at_millis,
         updated_at_millis: args.updated_at_millis,
         agent_session_relation: PARENT_RELATION,
+        indexed_messages: record,
     }
 }
 
@@ -125,7 +155,6 @@ fn child_document<'a>(
 ) -> ChildDocument<'a> {
     ChildDocument {
         agent_session_id: &args.agent_session_id,
-        projection_generation: &args.projection_generation,
         message_turn: message.turn,
         author: message.author,
         author_user_id: message.author_user_id.as_deref(),
@@ -135,6 +164,15 @@ fn child_document<'a>(
             parent: &args.agent_session_id,
         },
     }
+}
+
+fn content_hash(document: &str) -> String {
+    let digest = Sha256::digest(document.as_bytes());
+    digest
+        .iter()
+        .take(CONTENT_HASH_HEX_DIGITS / 2)
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 fn serialization_error(
@@ -147,105 +185,129 @@ fn serialization_error(
     }
 }
 
-/// Write the current parent and children, then remove documents from older
-/// projections. Callers serialize reconciles by session id.
-pub(crate) async fn reconcile_agent_session(
-    client: &opensearch::OpenSearch,
+/// Compares the snapshot's messages with the parent's record of what the
+/// index holds. With no record, every message is written.
+fn plan(
     args: &ReconcileAgentSessionArgs,
-    index_override: Option<&str>,
-) -> Result<()> {
-    let index = resolve_destination(index_override);
-    let routing = args.agent_session_id.as_str();
+    previous: Option<&IndexedMessages>,
+) -> Result<ReconcilePlan> {
+    let mut plan = ReconcilePlan::default();
+    for message in &args.messages {
+        let id = child_id(&args.agent_session_id, message);
+        let document = serde_json::to_string(&child_document(args, message)).map_err(|error| {
+            serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error)
+        })?;
+        let hash = content_hash(&document);
 
-    let parent = client
-        .index(opensearch::IndexParts::IndexId(
-            index,
-            &args.agent_session_id,
-        ))
-        .routing(routing)
-        // Normal writes must never auto-create an index under the alias name.
-        // Backfills may explicitly target a pre-provisioned physical index.
-        .require_alias(index_override.is_none())
-        .body(parent_document(args))
-        .refresh(opensearch::params::Refresh::WaitFor)
+        if previous.and_then(|record| record.get(&id)) == Some(&hash) {
+            plan.unchanged += 1;
+        } else {
+            plan.write.push((id.clone(), document));
+        }
+        plan.record.insert(id, hash);
+    }
+
+    if let Some(previous) = previous {
+        plan.delete = previous
+            .keys()
+            .filter(|id| !plan.record.contains_key(*id))
+            .cloned()
+            .collect();
+    }
+    Ok(plan)
+}
+
+async fn write_children(
+    client: &opensearch::OpenSearch,
+    index: &str,
+    routing: &str,
+    plan: &ReconcilePlan,
+    require_alias: bool,
+) -> Result<()> {
+    let mut body = Vec::with_capacity(plan.write.len() * 2 + plan.delete.len());
+    for (id, document) in &plan.write {
+        body.push(
+            serde_json::to_string(&serde_json::json!({
+                "index": { "_id": id, "routing": routing }
+            }))
+            .map_err(|error| {
+                serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error)
+            })?,
+        );
+        body.push(document.clone());
+    }
+    for id in &plan.delete {
+        body.push(
+            serde_json::to_string(&serde_json::json!({
+                "delete": { "_id": id, "routing": routing }
+            }))
+            .map_err(|error| {
+                serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error)
+            })?,
+        );
+    }
+
+    let response = client
+        .bulk(BulkParts::Index(index))
+        .require_alias(require_alias)
+        .body(body)
         .send()
         .await
         .map_err(|error| {
             OpensearchClientError::request_failed(
-                OpensearchOperation::ReconcileAgentSessionParent,
-                &error,
-            )
-        })?;
-    response_error(parent, OpensearchOperation::ReconcileAgentSessionParent).await?;
-
-    if !args.messages.is_empty() {
-        let mut body = Vec::with_capacity(args.messages.len() * 2);
-        for message in &args.messages {
-            body.push(
-                serde_json::to_string(&serde_json::json!({
-                    "index": {
-                        "_id": child_id(&args.agent_session_id, message),
-                        "routing": routing,
-                    }
-                }))
-                .map_err(|error| {
-                    serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error)
-                })?,
-            );
-            body.push(
-                serde_json::to_string(&child_document(args, message)).map_err(|error| {
-                    serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error)
-                })?,
-            );
-        }
-
-        let response = client
-            .bulk(BulkParts::Index(index))
-            .require_alias(index_override.is_none())
-            .body(body)
-            .refresh(opensearch::params::Refresh::WaitFor)
-            .send()
-            .await
-            .map_err(|error| {
-                OpensearchClientError::request_failed(
-                    OpensearchOperation::ReconcileAgentSessionBulk,
-                    &error,
-                )
-            })?;
-        if !response.status_code().is_success() {
-            return response_error(response, OpensearchOperation::ReconcileAgentSessionBulk).await;
-        }
-        let response_body: serde_json::Value = response.json().await.map_err(|error| {
-            OpensearchClientError::deserialization_failed(
                 OpensearchOperation::ReconcileAgentSessionBulk,
                 &error,
             )
         })?;
-        if response_body["errors"].as_bool() == Some(true) {
-            tracing::error!(body=?response_body, "agent-session bulk reconcile had failed items");
-            return Err(OpensearchClientError::Unknown {
-                details: response_body.to_string(),
-                operation: OpensearchOperation::ReconcileAgentSessionBulk,
-            });
-        }
+    if !response.status_code().is_success() {
+        return response_error(response, OpensearchOperation::ReconcileAgentSessionBulk).await;
     }
+    let response_body: serde_json::Value = response.json().await.map_err(|error| {
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::ReconcileAgentSessionBulk,
+            &error,
+        )
+    })?;
+    if response_body["errors"].as_bool() == Some(true) {
+        tracing::error!(body=?response_body, "agent-session bulk reconcile had failed items");
+        return Err(OpensearchClientError::Unknown {
+            details: response_body.to_string(),
+            operation: OpensearchOperation::ReconcileAgentSessionBulk,
+        });
+    }
+    Ok(())
+}
 
+/// Removes children neither the record nor this reconcile accounts for:
+/// children written before parents kept records (older projections of
+/// renumbered turns among them), and any a failed reconcile wrote without
+/// recording. Delete-by-query only sees refreshed documents, so this skips the
+/// ids this reconcile just wrote or deleted, which it may still see in their
+/// old state; a leftover younger than a refresh goes on the next reconcile.
+/// When nothing matches, which is the normal case, it neither writes nor
+/// refreshes.
+async fn prune_unrecorded_children(
+    client: &opensearch::OpenSearch,
+    index: &str,
+    args: &ReconcileAgentSessionArgs,
+    plan: &ReconcilePlan,
+) -> Result<()> {
+    let mut keep: Vec<&str> = plan.record.keys().map(String::as_str).collect();
+    keep.extend(plan.delete.iter().map(String::as_str));
+    keep.push(&args.agent_session_id);
     let prune_query = serde_json::json!({
         "query": {
             "bool": {
                 "filter": [{ "term": { "agent_session_id": &args.agent_session_id } }],
-                "must_not": [{
-                    "term": { "projection_generation": &args.projection_generation }
-                }]
+                "must_not": [{ "ids": { "values": keep } }]
             }
         }
     });
-    let routing_values = [routing];
+    let routing_values = [args.agent_session_id.as_str()];
     let response = client
         .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .routing(&routing_values)
         .body(prune_query)
-        .refresh(true)
         .send()
         .await
         .map_err(|error| {
@@ -259,4 +321,64 @@ pub(crate) async fn reconcile_agent_session(
         OpensearchOperation::ReconcileAgentSessionPrune,
     )
     .await
+}
+
+/// Write the messages that changed since the parent's record, remove the ones
+/// the session no longer has, then record the result on the parent. Callers
+/// serialize reconciles by session id.
+///
+/// Nothing waits for a refresh: no caller reads the index back, and every
+/// write and delete names its document by id, which needs no refresh to apply.
+/// The parent is written last, so its record only names children that were
+/// written; after a failure the next reconcile rewrites the difference.
+pub(crate) async fn reconcile_agent_session(
+    client: &opensearch::OpenSearch,
+    args: &ReconcileAgentSessionArgs,
+    index_override: Option<&str>,
+) -> Result<AgentSessionReconcileWrites> {
+    let index = resolve_destination(index_override);
+    let routing = args.agent_session_id.as_str();
+    // Normal writes must never auto-create an index under the alias name.
+    // Backfills may explicitly target a pre-provisioned physical index.
+    let require_alias = index_override.is_none();
+
+    let stored = stored_parent(client, index, routing).await?;
+    let previous = stored.as_ref().and_then(|parent| parent.indexed_messages());
+    let plan = plan(args, previous.as_ref())?;
+
+    if !plan.write.is_empty() || !plan.delete.is_empty() {
+        write_children(client, index, routing, &plan, require_alias).await?;
+    }
+    prune_unrecorded_children(client, index, args, &plan).await?;
+
+    let parent = serde_json::to_value(parent_document(args, &plan.record)).map_err(|error| {
+        serialization_error(OpensearchOperation::ReconcileAgentSessionParent, error)
+    })?;
+    let parent_written = stored.as_ref().map(|stored| stored.source()) != Some(&parent);
+    if parent_written {
+        let response = client
+            .index(opensearch::IndexParts::IndexId(
+                index,
+                &args.agent_session_id,
+            ))
+            .routing(routing)
+            .require_alias(require_alias)
+            .body(parent)
+            .send()
+            .await
+            .map_err(|error| {
+                OpensearchClientError::request_failed(
+                    OpensearchOperation::ReconcileAgentSessionParent,
+                    &error,
+                )
+            })?;
+        response_error(response, OpensearchOperation::ReconcileAgentSessionParent).await?;
+    }
+
+    Ok(AgentSessionReconcileWrites {
+        parent_written,
+        messages_written: plan.write.len(),
+        messages_unchanged: plan.unchanged,
+        messages_deleted: plan.delete.len(),
+    })
 }
