@@ -44,7 +44,7 @@ fn name_and_type(filename: &str, mime_type: &str) -> (String, String) {
 }
 
 #[test]
-fn a_known_extension_on_the_filename_decides_the_file_type() {
+fn a_known_extension_decides_the_file_type_for_a_generic_or_matching_mime_type() {
     let wrong: Vec<_> = [
         ("notes.txt", "text/plain", ("notes", "txt")),
         (
@@ -56,6 +56,8 @@ fn a_known_extension_on_the_filename_decides_the_file_type() {
         ("photos.zip", "application/octet-stream", ("photos", "zip")),
         ("REPORT.PDF", "application/octet-stream", ("REPORT", "pdf")),
         ("IMG_0001.HEIC", "image/heif", ("IMG_0001", "heic")),
+        ("minutes.doc", "application/msword", ("minutes", "doc")),
+        ("page.html", "text/html", ("page", "html")),
     ]
     .into_iter()
     .filter_map(|(filename, mime_type, (name, file_type))| {
@@ -66,6 +68,14 @@ fn a_known_extension_on_the_filename_decides_the_file_type() {
     .collect();
 
     assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+#[test]
+fn a_specific_mime_type_naming_another_format_decides_the_file_type() {
+    assert_eq!(
+        name_and_type("report.xlsx", "application/pdf"),
+        ("report".to_string(), "pdf".to_string())
+    );
 }
 
 #[test]
