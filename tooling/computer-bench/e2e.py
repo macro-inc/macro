@@ -23,8 +23,9 @@ With --agent it invites an agent teammate instead (see agent_run). Against a
 deployed environment, pass the service URLs instead of --stack (--auth-url
 and --storage-url with --agent, --auth-url and --harness-url without);
 --host-cmd and Tempo are optional with --agent (spans are skipped without
---stack unless --tempo-url is given). Its t_*_created fields are the server's
-clock, not this machine's.
+--stack unless --tempo-url is given; the span window is this machine's clock,
+so a skewed server can drop spans at its edges). Its t_*_created fields are
+the server's clock, not this machine's.
 """
 
 import argparse
@@ -286,14 +287,20 @@ def spans_once(tempo: str, names: tuple[str, ...], start: float, end: float) -> 
 
 def messages_from(page, sender: str, after: float) -> list[dict]:
     """Messages by `sender` created after `after`, roots and thread previews alike."""
+    return [message for message in channel_messages(page) if message["sender"] == sender and message["created"] > after]
+
+
+def channel_messages(page) -> list[dict]:
+    """Every message in a timeline page, with its created_at in epoch seconds (server clock)."""
     found = []
 
     def walk(value) -> None:
         if isinstance(value, dict):
-            if value.get("sender_id") == sender and value.get("content") and value.get("created_at"):
+            if value.get("sender_id") and value.get("content") and value.get("created_at"):
                 created = datetime.datetime.fromisoformat(value["created_at"].replace("Z", "+00:00")).timestamp()
-                if created > after:
-                    found.append({"created": created, "content": value["content"], "id": value.get("id")})
+                found.append(
+                    {"created": created, "content": value["content"], "id": value.get("id"), "sender": value["sender_id"]}
+                )
             for item in value.values():
                 walk(item)
         elif isinstance(value, list):
@@ -354,7 +361,6 @@ def agent_run(args, auth: "Api", storage: "Api", run: int) -> dict:
             if greetings:
                 record["t_greeting_seen"] = time.time()
                 record["t_greeting_created"] = greetings[0]["created"]
-                greeting_ids = {message["id"] for message in greetings}
                 break
             time.sleep(POLL)
         if "t_greeting_seen" not in record:
@@ -367,18 +373,25 @@ def agent_run(args, auth: "Api", storage: "Api", run: int) -> dict:
         )
         while time.time() < deadline:
             _, page = storage.call("GET", timeline)
-            # Server time and ids, not this machine's clock, which may be skewed.
-            replies = [
+            # After our prompt by server time, not this machine's clock, which may be skewed.
+            prompts = [
                 message
-                for message in messages_from(page, agent_id, record["t_greeting_created"])
-                if message["id"] not in greeting_ids
+                for message in channel_messages(page)
+                if message["sender"] != agent_id and message["content"] == args.prompt
             ]
+            if not prompts:
+                time.sleep(POLL)
+                continue
+            record["t_prompt_created"] = prompts[0]["created"]
+            replies = messages_from(page, agent_id, prompts[0]["created"])
             if replies:
                 record["t_reply"] = time.time()
                 record["t_reply_created"] = replies[0]["created"]
                 record["reply"] = replies[0]["content"][:200]
                 break
             time.sleep(POLL)
+        if "t_prompt_created" not in record:
+            raise RuntimeError("our prompt never showed up in the DM timeline")
         if "t_reply" not in record:
             raise RuntimeError("no reply in the DM")
     except Exception as error:  # recorded; the agent is still removed
@@ -441,7 +454,7 @@ def main():
     args = parser.parse_args()
     if not args.host_cmd and not args.agent:
         parser.error("--host-cmd is required without --agent")
-    if args.tempo_url is None:
+    if not args.tempo_url:
         args.tempo_url = "http://localhost:3200" if args.stack else "none"
     if args.tempo_url == "none" and not args.agent:
         parser.error("a computer run needs Tempo: pass --tempo-url")
@@ -483,7 +496,11 @@ def main():
             record["clock_offset"] = clock_offset() if args.host_cmd else None
             file.write(json.dumps(record) + "\n")
             file.flush()
-            summary = {k: round(v - record["t_buy"], 2) for k, v in record.items() if k.startswith("t_")}
+            summary = {
+                k: round(v - record["t_buy"], 2)
+                for k, v in record.items()
+                if k.startswith("t_") and not k.endswith("_created")
+            }
             print(run, record.get("error", "ok"), summary, flush=True)
             time.sleep(args.gap)
 
