@@ -304,7 +304,8 @@ export function createTallySource(
 
 /**
  * How many distinct people the channels a form was posted in hold, for "n% of
- * invited": `null` when it was posted nowhere, undefined while reading.
+ * invited": `null` when it was posted nowhere, undefined while reading or when
+ * a channel could not be read.
  * Sharing is owner-only, so other editors read nothing.
  */
 export function createInvitedSource(
@@ -331,7 +332,7 @@ export function createInvitedSource(
     value: () => {
       if (!permissions.isSuccess) return undefined;
       if (channelIds().length === 0) return null;
-      if (channels.pendingIds().size) return undefined;
+      if (channels.pendingIds().size || channels.error()) return undefined;
       // A channel the owner can no longer read counts no one.
       const people = new Set(
         channels.channels().flatMap((channel) => channel.participantIds ?? [])

@@ -2,7 +2,11 @@ import { ThrownResultError } from '@core/util/result';
 import type { FormsError } from '@service-storage/forms';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createFormDetailSource, createTallySource } from './form-sources';
+import {
+  createFormDetailSource,
+  createInvitedSource,
+  createTallySource,
+} from './form-sources';
 
 const sync = vi.hoisted(() => ({
   formFollowed: [] as (() => string | undefined)[],
@@ -14,8 +18,30 @@ const sync = vi.hoisted(() => ({
   databaseName: (): string => 'Offsite',
   queryError: (): unknown => undefined,
   tallyBuckets: [] as unknown[],
+  sharedChannelIds: [] as string[],
+  channels: [] as { id: string; participantIds: string[] }[],
+  pendingChannelIds: new Set<string>(),
+  channelsError: undefined as unknown,
+}));
+vi.mock('@queries/channel/by-ids', () => ({
+  useCachedChannelsByIds: () => ({
+    channels: () => sync.channels,
+    pendingIds: () => sync.pendingChannelIds,
+    error: () => sync.channelsError,
+  }),
 }));
 vi.mock('@queries/storage/forms', () => ({
+  useFormSharePermissionsQuery: () => ({
+    isSuccess: true,
+    error: null,
+    get data() {
+      return {
+        channelSharePermissions: sync.sharedChannelIds.map((channel_id) => ({
+          channel_id,
+        })),
+      };
+    },
+  }),
   useFormDetailQuery: () => ({
     get isSuccess() {
       return sync.queryError() === undefined;
@@ -103,6 +129,10 @@ beforeEach(() => {
   sync.databasesRead = [];
   sync.formReads = 0;
   sync.queryError = () => undefined;
+  sync.sharedChannelIds = [];
+  sync.channels = [];
+  sync.pendingChannelIds = new Set();
+  sync.channelsError = undefined;
 });
 
 describe('createFormDetailSource', () => {
@@ -237,5 +267,40 @@ describe('createTallySource', () => {
         buckets: [{ kind: 'option', optionId: 'option-1', count: 1 }],
       },
     ]);
+  });
+});
+
+describe('createInvitedSource', () => {
+  const owner = 'macro|owner@example.com';
+  const invited = () =>
+    createInvitedSource(
+      () => 'form-1',
+      () => owner,
+      () => true
+    );
+
+  it('counts the distinct people of the channels the form was posted in, without its owner', () => {
+    sync.sharedChannelIds = ['channel-1', 'channel-2'];
+    sync.channels = [
+      { id: 'channel-1', participantIds: [owner, 'macro|a', 'macro|b'] },
+      { id: 'channel-2', participantIds: [owner, 'macro|b', 'macro|c'] },
+    ];
+    expect(invited().value()).toBe(3);
+  });
+
+  it('has no count when the form was posted nowhere', () => {
+    expect(invited().value()).toBeNull();
+  });
+
+  it('leaves the count unknown while a channel is read or when its read fails', () => {
+    sync.sharedChannelIds = ['channel-1'];
+    sync.pendingChannelIds = new Set(['channel-1']);
+    expect(invited().value()).toBeUndefined();
+
+    sync.pendingChannelIds = new Set();
+    sync.channelsError = new Error('unavailable');
+    const source = invited();
+    expect(source.value()).toBeUndefined();
+    expect(source.failure()).toBeDefined();
   });
 });
