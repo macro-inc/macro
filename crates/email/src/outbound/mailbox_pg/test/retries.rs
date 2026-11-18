@@ -8,7 +8,7 @@ use crate::outbound::mailbox_pg::PgMailboxSync;
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{
     Attention, EmailApiError, GateLimit, MailFolder, MailboxChangePage, MailboxMessage,
-    MailboxState, ProviderId, RateLimitOrigin, StreamPosition, StreamToken,
+    MailboxState, ProviderId, RateLimitOrigin, RoundStart, StreamPosition, StreamToken,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -42,6 +42,7 @@ impl MailboxGateway for Arc<Provider> {
         _: MailboxKey,
         _: &ProviderId,
         _: Option<&StreamToken>,
+        _: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         Ok(self.pages.lock().unwrap().pop_front().unwrap())
     }

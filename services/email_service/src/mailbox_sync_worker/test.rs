@@ -2,7 +2,8 @@ use super::*;
 use email::domain::mailbox::MailboxKey;
 use email::outbound::mailbox_pg::PgMailboxSync;
 use email_api_client::domain::models::{
-    MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition, StreamToken,
+    MailFolder, MailboxChangePage, MailboxMessage, ProviderId, RoundStart, StreamPosition,
+    StreamToken,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -27,6 +28,7 @@ impl MailboxGateway for Provider {
         _: MailboxKey,
         folder: &ProviderId,
         _: Option<&StreamToken>,
+        _: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         self.reads.lock().unwrap().push(folder.as_str().to_owned());
         let position = if folder.as_str() == "importing" {

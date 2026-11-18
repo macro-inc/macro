@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::mailbox::progress::MailboxProgressService;
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{
-    EmailApiError, GateLimit, MailboxMessage, RateLimitOrigin, StreamPosition,
+    EmailApiError, GateLimit, MailboxMessage, RateLimitOrigin, RoundStart, StreamPosition,
 };
 use email_api_client::domain::request_count;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -38,6 +38,7 @@ impl MailboxGateway for Arc<Provider> {
         _: MailboxKey,
         _: &ProviderId,
         _: Option<&StreamToken>,
+        _: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         self.pages.lock().unwrap().pop_front().unwrap()
     }

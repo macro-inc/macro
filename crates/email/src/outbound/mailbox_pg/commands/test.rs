@@ -227,6 +227,7 @@ impl MailboxGateway for UncertainProvider {
         _: MailboxKey,
         _: &ProviderId,
         _: Option<&StreamToken>,
+        _: email_api_client::domain::models::RoundStart,
     ) -> Result<MailboxChangePage, email_api_client::domain::models::EmailApiError> {
         unreachable!()
     }

@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use email_api_client::domain::models::{EmailApiError, RateLimitOrigin, SubmissionOutcome};
+use email_api_client::domain::models::{
+    EmailApiError, RateLimitOrigin, RoundStart, SubmissionOutcome,
+};
 use email_api_client::domain::ports::{
     FolderChangeReader, MailboxActionWriter, MailboxContentReader,
 };
@@ -24,7 +26,7 @@ async fn a_throttled_request_carries_graphs_retry_after() {
     });
 
     let throttled = api
-        .folder_changes(&token, &id("inbox"), None)
+        .folder_changes(&token, &id("inbox"), None, RoundStart::Unordered)
         .await
         .unwrap_err();
 
@@ -38,7 +40,7 @@ async fn a_throttled_request_carries_graphs_retry_after() {
     assert_eq!(retry_after, Some(Duration::from_secs(17)));
     assert!(matches!(origin, RateLimitOrigin::Provider { .. }));
     // The fault applied once, and only to that mailbox.
-    api.folder_changes(&token, &id("inbox"), None)
+    api.folder_changes(&token, &id("inbox"), None, RoundStart::Unordered)
         .await
         .unwrap();
     let recorded = emulator.requests();
@@ -68,10 +70,15 @@ async fn the_mailbox_request_limit_answers_429_until_the_window_moves_on() {
     let access = token(&emulator, ADA);
     let inbox = id("inbox");
     for _ in 0..3 {
-        api.folder_changes(&access, &inbox, None).await.unwrap();
+        api.folder_changes(&access, &inbox, None, RoundStart::Unordered)
+            .await
+            .unwrap();
     }
 
-    let throttled = api.folder_changes(&access, &inbox, None).await.unwrap_err();
+    let throttled = api
+        .folder_changes(&access, &inbox, None, RoundStart::Unordered)
+        .await
+        .unwrap_err();
     let EmailApiError::RateLimited { retry_after, .. } = throttled else {
         panic!("the fourth request in the window is throttled");
     };
@@ -79,7 +86,9 @@ async fn the_mailbox_request_limit_answers_429_until_the_window_moves_on() {
     assert!(wait > Duration::from_secs(590) && wait <= Duration::from_secs(600));
 
     emulator.advance_clock(wait);
-    api.folder_changes(&access, &inbox, None).await.unwrap();
+    api.folder_changes(&access, &inbox, None, RoundStart::Unordered)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -128,7 +137,9 @@ async fn graph_error_statuses_map_to_the_clients_errors() {
             times: Some(1),
             ..Fault::default()
         });
-        api.folder_changes(&access, &inbox, None).await.unwrap_err()
+        api.folder_changes(&access, &inbox, None, RoundStart::Unordered)
+            .await
+            .unwrap_err()
     };
 
     assert!(matches!(

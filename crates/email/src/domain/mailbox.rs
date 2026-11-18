@@ -1,8 +1,8 @@
 //! Durable mailbox enumeration independent from provider-specific notifications.
 
 use email_api_client::domain::models::{
-    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition,
-    StreamToken,
+    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, RoundStart,
+    StreamPosition, StreamToken,
 };
 use progress::{ImportCompleted, ImportTally};
 use std::future::Future;
@@ -296,11 +296,14 @@ pub trait MailboxGateway: Send + Sync + 'static {
         &self,
         mailbox: MailboxKey,
     ) -> impl Future<Output = Result<Vec<MailFolder>, EmailApiError>> + Send;
+    /// One page of a folder's delta round. `start` says what a new round
+    /// (no `position`) lists; a position carries it.
     fn changes(
         &self,
         mailbox: MailboxKey,
         folder: &ProviderId,
         position: Option<&StreamToken>,
+        start: RoundStart,
     ) -> impl Future<Output = Result<MailboxChangePage, EmailApiError>> + Send;
     fn message(
         &self,
@@ -498,7 +501,12 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             async {
                 Ok(self
                     .provider_for(!lease.initial_complete)
-                    .changes(lease.mailbox, &lease.folder, lease.position.as_ref())
+                    .changes(
+                        lease.mailbox,
+                        &lease.folder,
+                        lease.position.as_ref(),
+                        RoundStart::Unordered,
+                    )
                     .await?)
             },
             || self.repo.renew(SyncLease::Stream(lease)),
