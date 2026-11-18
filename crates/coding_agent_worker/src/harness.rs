@@ -385,7 +385,7 @@ fn apply_agent(
 #[cfg(not(unix))]
 fn apply_agent(
     _environment: &std::collections::BTreeMap<String, String>,
-) -> rootcause::Result<crate::agent_env::Staged> {
+) -> rootcause::Result<std::convert::Infallible> {
     Err(rootcause::report!(
         "agent teammates run only on Macro computers"
     ))
