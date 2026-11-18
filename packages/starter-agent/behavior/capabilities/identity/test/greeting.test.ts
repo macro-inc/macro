@@ -104,6 +104,7 @@ const wiring = (hosted: boolean, vault = true) => {
       },
     },
     catalog,
+    name: 'Wren',
     hosted,
     ask: async (_prompt, options) => {
       asks.push(options);
@@ -263,4 +264,10 @@ test('a vault that takes too long is not promised, and its wait is bounded', asy
     })
   ).toBe(false);
   expect(waited).toEqual([2_500]);
+});
+
+test('the greeting introduces the agent by the name its owner gave, and asks only what is missing', async () => {
+  const { greeter } = wiring(true);
+  expect(await greeter.identity()).toContain('Your name is Wren');
+  expect(markdown).toContain('Never ask for a name you were given.');
 });

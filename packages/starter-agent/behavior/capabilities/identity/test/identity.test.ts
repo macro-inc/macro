@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { invoke } from '../../../../test/invoke.ts';
 import { identityModule, readIdentity, writeIdentity } from '../index.ts';
-import { known, unknown } from '../prompt.ts';
+import { givenName, greetingIdentity, known, unknown } from '../prompt.ts';
 
 const now = Temporal.Instant.from('2026-01-05T10:00:00Z');
 const clock = { now: () => now, sleep: async () => {} };
@@ -27,9 +27,26 @@ const fake = () => {
 test('a new agent has no identity, and is told so, with the questions to ask', async () => {
   const context = fake();
   expect(await readIdentity(context)).toBeUndefined();
-  expect(unknown).toContain('Who am I?');
-  expect(unknown).toContain('What is my purpose?');
-  expect(unknown).toContain('writeIdentity');
+  expect(unknown(undefined)).toContain('Who am I?');
+  expect(unknown(undefined)).toContain('What is my purpose?');
+  expect(unknown(undefined)).toContain('writeIdentity');
+});
+
+test('an agent its owner named when they added it is told its name, and never asks for one', () => {
+  const told = unknown('Wren');
+  expect(told).toContain('Your name is Wren');
+  expect(told).toContain('never ask what to call yourself');
+  expect(told).not.toContain('What should I be called?');
+  expect(told).toContain('What is my purpose?');
+  expect(unknown(givenName('  '))).toContain('What should I be called?');
+});
+
+test('the greeting knows the given name when nothing else is written, and the identity when it is', () => {
+  expect(greetingIdentity('Wren', undefined)).toContain('Your name is Wren');
+  expect(
+    greetingIdentity('Wren', 'I am Wren. I keep the release calendar.')
+  ).toBe('I am Wren. I keep the release calendar.');
+  expect(greetingIdentity(undefined, undefined)).toBeUndefined();
 });
 
 test('what it writes is what it reads back, whole, and what every wake is shown', async () => {

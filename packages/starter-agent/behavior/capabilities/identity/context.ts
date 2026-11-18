@@ -37,6 +37,7 @@ import {
 } from './config.ts';
 import { type Needs, owner, readIdentity } from './index.ts';
 import { type GreetingMacro, sdkGreetingMacro } from './macro.ts';
+import { givenName, greetingIdentity } from './prompt.ts';
 
 export type GreeterPorts = {
   readonly context: Needs & {
@@ -45,6 +46,8 @@ export type GreeterPorts = {
     readonly state: Pick<Base['state'], 'memory' | 'run'>;
   };
   readonly catalog: Catalog;
+  /** The name the owner gave the agent (agent.json), if any. */
+  readonly name: string | undefined;
   /** Whether the agent runs on a computer of its own. */
   readonly hosted: boolean;
   readonly ask: Ask;
@@ -89,6 +92,7 @@ const FailuresFile = z.object({
 export const greeterOf = ({
   context,
   catalog,
+  name,
   hosted,
   ask,
   macro,
@@ -145,7 +149,7 @@ export const greeterOf = ({
       send: chat.send,
       startTyping: (channelId) => typing.start(channelId),
     },
-    identity: () => readIdentity(context),
+    identity: async () => greetingIdentity(name, await readIdentity(context)),
     store: {
       greeted: () => context.disk.exists(marker),
       markGreeted: () =>
@@ -244,6 +248,7 @@ export const identityContext = (
       greeterOf({
         context: base,
         catalog,
+        name: givenName(base.config.identity.name),
         hosted,
         ask: sdkAsk({
           query,
