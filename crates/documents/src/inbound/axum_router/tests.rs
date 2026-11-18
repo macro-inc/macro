@@ -1092,7 +1092,6 @@ fn canvas_routes(worker_url: &str) -> super::CanvasRouteDeps {
         ),
         admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
         recorder: Arc::new(ai_usage::NoOpUsageRecorder),
-        artifacts: Arc::new(|_| Box::pin(async { false })),
         images: Arc::new(FakeCanvasImages::default()),
     }
 }
@@ -1648,8 +1647,11 @@ async fn standard_internal_headers_reach_the_document_service() {
     )));
 }
 
+/// Different internal keys under the standard and legacy headers are two
+/// credentials, and which one the request acts with can't be told: refused
+/// before any is authorized.
 #[tokio::test]
-async fn standard_internal_headers_take_precedence_over_legacy_headers() {
+async fn different_keys_under_the_standard_and_legacy_headers_are_refused() {
     let (router, document_service, _access_service, authorization_service) = test_router();
     let request = finish_request(
         internal_create_request()
@@ -1662,25 +1664,9 @@ async fn standard_internal_headers_take_precedence_over_legacy_headers() {
 
     let (status, _body) = send(&router, request).await;
 
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(
-        document_service.create_calls(),
-        [CreateDocumentCall {
-            principal: CreationPrincipal::User(user(STANDARD_INTERNAL_USER_ID)),
-        }]
-    );
-    assert!(document_service.import_calls().is_empty());
-    assert!(!authorization_service.calls().is_empty());
-    assert!(authorization_service.calls().iter().all(|call| matches!(
-        call,
-        AuthorizationCall::Internal {
-            provided_key,
-            claims: InternalIdentityClaims {
-                user_id: Some(user_id),
-                ..
-            },
-        } if provided_key == STANDARD_INTERNAL_KEY && user_id == STANDARD_INTERNAL_USER_ID
-    )));
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(document_service.create_calls().is_empty());
+    assert!(authorization_service.calls().is_empty());
 }
 
 #[tokio::test]

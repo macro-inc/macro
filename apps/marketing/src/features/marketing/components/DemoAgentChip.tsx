@@ -4,16 +4,17 @@ import { Button, Layer } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import './demo-agent-chip.css';
 
-/** Settled MagicChipView from the app, with local session navigation. */
+/** Frozen MagicChipView from the app, with optional local session navigation. */
 export function DemoAgentChip(props: {
   agentSessionId: string;
   requester: string;
   showRequest?: boolean;
   request: string;
   markdown: string;
-  pullRequest: JSX.Element;
-  headerActions: JSX.Element;
-  onOpen: () => void;
+  pullRequest?: JSX.Element;
+  headerActions?: JSX.Element;
+  running?: boolean;
+  onOpen?: () => void;
 }) {
   return (
     <div class="demo-cursor-response">
@@ -27,19 +28,20 @@ export function DemoAgentChip(props: {
         </div>
       </Show>
       <div
-        role="button"
-        tabIndex={0}
-        aria-label="Open agent session"
+        role={props.onOpen ? 'button' : undefined}
+        tabIndex={props.onOpen ? 0 : undefined}
+        aria-label={props.onOpen ? 'Open agent session' : undefined}
         class="my-2 w-full min-w-0 max-w-full text-left"
         data-magic-chip={props.agentSessionId}
         data-magic-chip-preview
         onClick={(event) => {
+          if (!props.onOpen || event.target.closest('button, a')) return;
           event.stopPropagation();
-          if (event.target.closest('button, a')) return;
           props.onOpen();
         }}
         onKeyDown={(event) => {
           if (
+            !props.onOpen ||
             event.target !== event.currentTarget ||
             (event.key !== 'Enter' && event.key !== ' ')
           )
@@ -59,9 +61,16 @@ export function DemoAgentChip(props: {
               class="flex h-6 min-w-0 items-center gap-2"
               data-magic-chip-header
             >
-              <span class="demo-cursor-check" aria-hidden="true">
-                <Check class="size-3" />
-              </span>
+              <Show
+                when={props.running}
+                fallback={
+                  <span class="demo-cursor-check" aria-hidden="true">
+                    <Check class="size-3" />
+                  </span>
+                }
+              >
+                <span class="demo-cursor-running" aria-hidden="true" />
+              </Show>
               <span
                 class="min-w-0 truncate text-xs font-medium"
                 data-magic-chip-agent
@@ -69,23 +78,30 @@ export function DemoAgentChip(props: {
                 Cursor Agent
               </span>
               <span class="demo-cursor-model">Auto</span>
-              <span class="demo-cursor-status">Done</span>
+              <span
+                class="demo-cursor-status"
+                data-running={props.running || undefined}
+              >
+                {props.running ? 'Running' : 'Done'}
+              </span>
               <div class="min-w-0 flex-1" />
               {props.headerActions}
-              <Button
-                variant="outline"
-                size="sm"
-                noTouchResize
-                class="demo-cursor-open"
-                label="Open session"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  props.onOpen();
-                }}
-              >
-                <span class="demo-cursor-open-label">Open session</span>
-                <ArrowUpRight class="size-3" />
-              </Button>
+              <Show when={props.onOpen}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  noTouchResize
+                  class="demo-cursor-open"
+                  label="Open session"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onOpen?.();
+                  }}
+                >
+                  <span class="demo-cursor-open-label">Open session</span>
+                  <ArrowUpRight class="size-3" />
+                </Button>
+              </Show>
             </div>
             <div class="demo-cursor-output" data-magic-chip-output-row>
               <Show

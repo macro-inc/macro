@@ -105,22 +105,21 @@ export class ChannelNamespace {
   }
 
   /**
-   * Search channels by name (case-insensitive substring match over every
-   * channel the user is a member of) or by content (server-side unified search).
+   * Search the user's channels by name (the default) or by content. A name
+   * search matches, case-insensitively, channels whose name or other members'
+   * names contain every word of `query`; the server runs it, one request per
+   * page of matches, newest first. A blank query lists every channel.
    *
    * @readonly
    */
-  async *search(query: string, opts?: SearchOpts): AsyncGenerator<Channel> {
-    if (!opts?.searchOn || opts.searchOn === 'name') {
-      const lower = query.toLowerCase();
-      for await (const record of this.records()) {
-        if (record.name?.toLowerCase().includes(lower)) {
-          yield Channel.byId(this.client, record.id);
-        }
-      }
-    } else {
-      yield* Channel.search(this.client, query, opts);
-    }
+  search(query: string, opts?: SearchOpts): AsyncGenerator<Channel> {
+    // The server refuses a blank query; a blank name matches every channel.
+    if (!query.trim() && (opts?.searchOn ?? 'name') === 'name')
+      return this.list();
+    return Channel.search(this.client, query, {
+      ...opts,
+      searchOn: opts?.searchOn ?? 'name',
+    });
   }
 
   private records(): AsyncGenerator<ApiChannelWithLatest> {

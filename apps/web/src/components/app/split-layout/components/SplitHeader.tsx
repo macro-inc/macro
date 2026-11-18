@@ -13,8 +13,6 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { type BlockName, NonDocumentBlockTypes } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isMobile } from '@core/mobile/isMobile';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
@@ -424,10 +422,9 @@ export function SplitHeader(props: {
           // On mobile the header overlays the panel body as a transparent strip
           // of floating islands; the island utility's px min-size keeps them
           // tappable regardless of the OS text-size setting (inert on desktop).
-          'touch:absolute touch:inset-x-0 touch:top-(--safe-top) touch:z-mobile-nav-bar touch:h-11.25 touch:overflow-visible touch:pointer-events-none',
-          isMobile() &&
-            !isNativeMobilePlatform() &&
-            'touch:top-[calc(var(--safe-top)+6px)]',
+          // Include the list views' top gutter in the measured header height,
+          // so full-frame content reserves it along with the controls.
+          'touch:absolute touch:inset-x-0 touch:top-(--safe-top) touch:z-mobile-nav-bar touch:h-13.25 touch:overflow-visible touch:pointer-events-none',
           isEntityDraggingOver() && 'bg-active'
         )}
         data-split-header
@@ -452,7 +449,7 @@ export function SplitHeader(props: {
           )}
         </Show>
         <div
-          class="absolute inset-0 flex justify-start items-center not-touch:pl-1 touch:px-(--mobile-chrome-gutter) touch:gap-2"
+          class="absolute inset-0 flex justify-start items-center not-touch:pl-1 touch:px-(--mobile-chrome-gutter) touch:gap-2 touch:top-2"
           ref={props.collapseController.setRow}
         >
           <Show

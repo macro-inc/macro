@@ -27,6 +27,7 @@ vi.mock('@core/context/quickAccess', () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'gab@macro.com',
+  useUserId: () => () => 'macro|morgan@macro.com',
 }));
 
 const seamus: IUser = {
@@ -43,6 +44,36 @@ const sean: IUser = {
   id: 'macro|sean@macro.com',
   name: 'Sean Aye',
   email: 'sean@macro.com',
+};
+const viewer: IUser = {
+  id: 'macro|morgan@macro.com',
+  name: 'Morgan Reyes',
+  email: 'morgan@macro.com',
+};
+const macroAgent: IUser = {
+  id: 'bot|00000000-0000-0000-0000-00000000a2a2',
+  name: 'Macro',
+  email: 'Macro',
+};
+const reviewCodex: IUser = {
+  id: 'bot|00000000-0000-0000-0000-000000000101',
+  name: 'Review Desk Codex',
+  email: '@review-desk-codex',
+};
+const releaseCodex: IUser = {
+  id: 'bot|00000000-0000-0000-0000-000000000102',
+  name: 'Release Verifier Codex',
+  email: '@release-verifier-codex',
+};
+const esteban: IUser = {
+  id: 'macro|esteban@macro.com',
+  name: 'Esteban Valdez',
+  email: 'esteban.valdez@macro.com',
+};
+const eve: IUser = {
+  id: 'macro|eve@macro.com',
+  name: 'Eve Hart',
+  email: 'eve@macro.com',
 };
 const userItem = (user: IUser, lastInteraction?: Date): UserItem => ({
   id: user.id,
@@ -82,6 +113,170 @@ it('ranks shared people identically in body and discussion mention searches', ()
       );
       expect(discussion.users()[0].id).toBe(seamus.id);
     }
+    dispose();
+  });
+});
+
+it('lists Macro, then you, then people, then the other agents while browsing', () => {
+  createRoot((dispose) => {
+    const scoped = useUsersMention({
+      searchTerm: () => '',
+      users: () => [reviewCodex, sean, macroAgent, viewer, seamus],
+    });
+    expect(scoped.users().map((item) => item.id)).toEqual([
+      macroAgent.id,
+      viewer.id,
+      seamus.id,
+      sean.id,
+      reviewCodex.id,
+    ]);
+    // Channel composers keep @here on top. Phones pin the first two rows of
+    // the same list above the blended results, as MentionsMenu does.
+    const channel = useUsersMention({
+      searchTerm: () => '',
+      users: () => [reviewCodex, sean, macroAgent, viewer, seamus],
+      isChannelBlock: true,
+    });
+    const pinned = (mention: typeof scoped) =>
+      sortMobileMentions(
+        mention.usersAndGroups(),
+        '',
+        mention.usersAndGroups(),
+        true
+      )
+        .slice(0, 2)
+        .map((item) => item.id);
+    expect(pinned(scoped)).toEqual([macroAgent.id, viewer.id]);
+    expect(pinned(channel)).toEqual(['here', macroAgent.id]);
+
+    mocks.users = () => [
+      { ...userItem(reviewCodex, new Date()), personOrder: 0 },
+      { ...userItem(sean), personOrder: 1 },
+      { ...userItem(seamus), personOrder: 2 },
+      { ...userItem(viewer), personOrder: 3 },
+    ];
+    const directory = useUsersMention({
+      searchTerm: () => '',
+      transformUsers: (users) => [...users, macroAgent],
+    });
+    expect(directory.users().map((item) => item.id)).toEqual([
+      macroAgent.id,
+      viewer.id,
+      sean.id,
+      seamus.id,
+      reviewCodex.id,
+    ]);
+    dispose();
+  });
+});
+
+it('lists an agent only when it holds the typed words, never above a person who matches as well', () => {
+  createRoot((dispose) => {
+    const [searchTerm, setSearchTerm] = createSignal('eve');
+    // Every row holds e…v…e in order; only Eve Hart has the word itself.
+    mocks.users = () => [
+      userItem(esteban, new Date()),
+      userItem(eve, new Date('2026-09-15T12:00:00Z')),
+    ];
+    const scoped = useUsersMention({
+      searchTerm,
+      users: () => [reviewCodex, releaseCodex, esteban, eve],
+    });
+    expect(scoped.users().map((item) => item.data.name)).toEqual([
+      'Eve Hart',
+      'Esteban Valdez',
+    ]);
+    setSearchTerm('codex');
+    expect(scoped.users().map((item) => item.data.name)).toEqual([
+      'Review Desk Codex',
+      'Release Verifier Codex',
+    ]);
+
+    // The directory's window is the server's match for the query.
+    setSearchTerm('eve');
+    mocks.users = () => [
+      { ...userItem(eve), personOrder: 0 },
+      { ...userItem(esteban, new Date()), personOrder: 1 },
+      userItem(reviewCodex, new Date()),
+      userItem(releaseCodex, new Date()),
+    ];
+    const directory = useUsersMention({ searchTerm });
+    expect(directory.users().map((item) => item.data.name)).toEqual([
+      'Eve Hart',
+      'Esteban Valdez',
+    ]);
+    dispose();
+  });
+});
+
+it('puts an agent ahead of only the people it matches better than', () => {
+  createRoot((dispose) => {
+    const reva: IUser = {
+      id: 'macro|reva@example.com',
+      name: 'Reva Lind',
+      email: 'reva@example.com',
+    };
+    const drew: IUser = {
+      id: 'macro|drew@example.com',
+      name: 'Drew Evans',
+      email: 'drevans@example.com',
+    };
+    const scoped = useUsersMention({
+      searchTerm: () => 'rev',
+      users: () => [drew, reviewCodex, reva],
+    });
+    expect(scoped.users().map((item) => item.id)).toEqual([
+      reva.id,
+      reviewCodex.id,
+      drew.id,
+    ]);
+    dispose();
+  });
+});
+
+it('keeps Macro first while its name starts with the query', () => {
+  createRoot((dispose) => {
+    const mackenzie: IUser = {
+      id: 'macro|mackenzie@example.com',
+      name: 'Mackenzie Hale',
+      email: 'mackenzie@example.com',
+    };
+    const mac: IUser = {
+      id: 'macro|mac@macro.com',
+      name: 'Mac Ito',
+      email: 'mac@macro.com',
+    };
+    const [searchTerm, setSearchTerm] = createSignal('');
+    const people = [sean, mackenzie, viewer, mac];
+    const scoped = useUsersMention({
+      searchTerm,
+      users: () => [reviewCodex, ...people, macroAgent],
+    });
+    const peopleOnly = useUsersMention({ searchTerm, users: () => people });
+    mocks.users = () =>
+      people.map((user, index) => ({
+        ...userItem(user),
+        personOrder: index,
+      }));
+    const directory = useUsersMention({
+      searchTerm,
+      transformUsers: (users) => [...users, macroAgent],
+    });
+    const ids = (mention: typeof scoped) =>
+      mention.users().map((item) => item.id);
+
+    // Mac Ito's first name is the query itself, a closer match than Macro's.
+    for (const term of ['m', 'ma', 'mac', 'macr', 'macro']) {
+      setSearchTerm(term);
+      expect(ids(scoped)).toEqual([macroAgent.id, ...ids(peopleOnly)]);
+      expect(ids(directory)[0]).toBe(macroAgent.id);
+    }
+
+    // Letters inside its name are an ordinary match, after the people who
+    // match as well.
+    setSearchTerm('cro');
+    expect(ids(scoped)).toEqual([...ids(peopleOnly), macroAgent.id]);
+    expect(ids(directory).at(-1)).toBe(macroAgent.id);
     dispose();
   });
 });

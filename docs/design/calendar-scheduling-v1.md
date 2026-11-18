@@ -79,15 +79,8 @@ tests do not verify real invitations, OAuth, or Meet creation.
 - Apply `20260918164303_calendar_scheduling.sql`, then `20260918175703_scheduling_recovery.sql`
   before deploying the calendar service. Both are additive; the second adds a nullable retry
   timestamp, partial recovery index, and bounded per-profile request budgets.
-- Leave the production PostHog flag `enable-calendar-scheduling` disabled until the
-  connected-account checks below pass. An absent flag is also off in production.
-  A flag request that gets no answer (blocked, offline, or a PostHog outage) leaves
-  public booking pages available; only an answer of "off" hides them.
-  Scheduling is on by default in dev; set `VITE_ENABLE_CALENDAR_SCHEDULING=false`
-  to test the disabled state locally. The flag gates the Calendar settings tab,
-  calendar booking shortcuts, and public booking/receipt pages before their queries mount.
-  Production rollout targeting must include anonymous visitors so invitees can book and
-  manage bookings. Disabling it also hides existing receipt links.
+- The `enable-calendar-scheduling` rollout flag has been removed; scheduling is on for
+  everyone, including anonymous visitors on public booking and receipt pages.
   This frontend flag does not disable backend routes, recovery, or migrations.
 - Keep the existing `CALENDAR_SYNC_ENABLED` switch enabled for scheduling routes and recovery.
   New configuration cannot turn on manual approval. Automatic provider invitations remain active.

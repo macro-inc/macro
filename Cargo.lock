@@ -212,6 +212,7 @@ dependencies = [
  "genai_telemetry",
  "jsonschema",
  "macro_env_var",
+ "macro_service_urls",
  "macro_user_id",
  "model-entity",
  "non_empty",
@@ -396,7 +397,6 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
- "serde_urlencoded",
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
@@ -4667,8 +4667,12 @@ name = "code_execution"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "axum",
  "code_mode_assets",
  "futures",
+ "macro_tower_layers",
+ "opentelemetry",
+ "reqwest 0.13.4",
  "rootcause",
  "rustix 1.1.6",
  "serde",
@@ -4678,6 +4682,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
  "url",
  "uuid",
  "workspace-hack",
@@ -6850,6 +6855,7 @@ dependencies = [
  "model_owner",
  "models_databases",
  "models_dcs",
+ "models_email",
  "models_pagination",
  "models_permissions",
  "models_properties",
@@ -7584,6 +7590,50 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "email_e2e"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "aws-sdk-sqs",
+ "axum",
+ "base64 0.22.1",
+ "calendar_events",
+ "chrono",
+ "crm",
+ "email",
+ "entity_access",
+ "entity_access_management",
+ "frecency",
+ "gmail_emulator",
+ "hex",
+ "lexical_client",
+ "macro_auth",
+ "macro_authorization",
+ "macro_aws_config",
+ "macro_db_migrator",
+ "macro_event_topics",
+ "macro_user_id",
+ "outlook_emulator",
+ "rdkafka",
+ "redis",
+ "reqwest 0.13.4",
+ "rootcause",
+ "rustix 1.1.6",
+ "rustls",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "sqs_client",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -12452,9 +12502,9 @@ dependencies = [
 
 [[package]]
 name = "loro"
-version = "1.16.2"
+version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e86dea63b66576db244cbc3a40bdb17517263c93f318e2fbe08aca3be1192cb"
+checksum = "410c939fe3bee34b8ed61f7aea93201fb136629f685ffa557039c4d9952f9988"
 dependencies = [
  "enum-as-inner 0.6.1",
  "generic-btree",
@@ -12468,9 +12518,9 @@ dependencies = [
 
 [[package]]
 name = "loro-common"
-version = "1.16.0"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2146b353a56b0a743f8643725cb9f42dfe209665939b59db901ecea732a3ab29"
+checksum = "2bc76e378b98f08fd308eeff42461d60566053076f4884a881d3429a29081e0e"
 dependencies = [
  "arbitrary",
  "enum-as-inner 0.6.1",
@@ -12481,6 +12531,7 @@ dependencies = [
  "serde",
  "serde_columnar",
  "serde_json",
+ "smallvec",
  "thiserror 1.0.69",
 ]
 
@@ -12498,9 +12549,9 @@ dependencies = [
 
 [[package]]
 name = "loro-internal"
-version = "1.16.2"
+version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d5806b65ee68c3ae7891959dd968898860dab74fbf6498b312de9b548dce5ec"
+checksum = "7e533c1688430aa4fcdd933f00861e331c169a4158ee6d27d054e0558892d447"
 dependencies = [
  "append-only-bytes",
  "arref",
@@ -12545,9 +12596,9 @@ dependencies = [
 
 [[package]]
 name = "loro-kv-store"
-version = "1.16.0"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "841e206d3749fd14f23e64985be230dad2b2199da1d381c44c3dd0d2b9583fcc"
+checksum = "3a169f32c2d2d6ffe67d03603b61bd17d8d90b1a7f8c2f2585304f3181be8089"
 dependencies = [
  "bytes",
  "ensure-cov",
@@ -12651,6 +12702,7 @@ dependencies = [
  "remote_env_var",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -13645,6 +13697,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "model_emulator"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "futures",
+ "lazy-regex",
+ "macro_entrypoint",
+ "macro_env",
+ "regex",
+ "reqwest 0.13.4",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "model_file_type"
 version = "0.1.0"
 dependencies = [
@@ -13753,6 +13828,7 @@ dependencies = [
  "chrono",
  "email_utils",
  "macro_user_id",
+ "mailparse",
  "models_pagination",
  "schemars 1.2.1",
  "serde",
@@ -24082,6 +24158,26 @@ dependencies = [
  "serde",
  "serde_json",
  "xtask_graph",
+]
+
+[[package]]
+name = "xtask_email_coverage"
+version = "0.1.0"
+dependencies = [
+ "async-graphql-parser",
+ "clap",
+ "glob",
+ "heck 0.5.0",
+ "lazy-regex",
+ "proc-macro2",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "syn 2.0.117",
+ "tempfile",
+ "toml 0.8.23",
+ "xtask_paths",
 ]
 
 [[package]]

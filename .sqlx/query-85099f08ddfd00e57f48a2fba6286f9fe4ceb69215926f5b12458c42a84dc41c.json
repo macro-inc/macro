@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.link_id FROM crm_email_consent c\n                   JOIN email_links l ON l.id=c.link_id AND l.macro_id=c.user_id AND l.is_primary AND l.deleting_at IS NULL\n                   JOIN team_user tu ON tu.team_id=c.team_id AND tu.user_id=c.user_id\n                   WHERE c.team_id=$1 AND c.link_id=$2 AND c.consent_incarnation IS NOT DISTINCT FROM $4\n                     AND (($4::uuid IS NULL AND c.mode='all' AND c.enabled)\n                          OR (c.policy_version=$5 AND (c.enabled OR c.selected_enabled)))\n                     AND NOT crm_email_domain_blocked($1,c.user_id,split_part($3,'@',2))\n                   FOR SHARE OF c",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "85099f08ddfd00e57f48a2fba6286f9fe4ceb69215926f5b12458c42a84dc41c"
+}
