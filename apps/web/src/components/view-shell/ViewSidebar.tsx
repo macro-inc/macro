@@ -143,8 +143,8 @@ function Header(
 }
 
 /**
- * The search field of a sidebar that is the list it searches (Home, Chat),
- * in its header's search slot. It keeps the list search keys of
+ * The search field of a sidebar that is the list it searches (Home, Chat,
+ * Agents), in its header's search slot. It keeps the list search keys of
  * `ListHeaderSearch`: ArrowDown or Enter moves to the first result, Escape
  * leaves the field with the search, and Escape in the list clears it. An
  * empty field collapses back to the header's search button.
