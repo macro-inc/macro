@@ -517,4 +517,31 @@ describe('team availability', () => {
       { start: '2026-10-07T00:00:00Z', end: '2026-10-08T00:00:00Z' },
     ]);
   });
+
+  test('says team availability is off instead of a bare 404', async () => {
+    const client = {
+      storage: {
+        getTeamAvailability: async () => ({
+          error: {
+            code: 'team_sharing_disabled',
+            message: 'Team availability is turned off for this workspace.',
+          },
+          response: new Response(null, { status: 404 }),
+        }),
+      },
+    } as unknown as MacroClient;
+
+    const read = new CalendarNamespace(client).teamAvailability({
+      start: '2026-10-07T00:00:00Z',
+      end: '2026-10-08T00:00:00Z',
+    });
+
+    await expect(read).rejects.toMatchObject({
+      name: 'MacroApiError',
+      status: 404,
+      message:
+        'Macro API error 404: Team availability is turned off for this workspace.',
+      data: { code: 'team_sharing_disabled' },
+    });
+  });
 });
