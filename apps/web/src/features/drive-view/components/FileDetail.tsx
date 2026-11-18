@@ -169,12 +169,12 @@ export function FileDetailLoadGate<
     load
   );
   usePending('document.resource', () => document.loading);
-  // Counts and records the open once per document, as BlockLoader does for
-  // blocks; access changes and retries reload the same document without
-  // reopening it.
+  // Counts and records the open once per loaded document; access changes and
+  // retries reload the same document without reopening it. A load cut short by
+  // revoked access is ready without a document and is not an open.
   let trackedDocumentId: string | undefined;
   createEffect(() => {
-    if (document.state !== 'ready') return;
+    if (document.state !== 'ready' || document.latest === undefined) return;
     const documentId = props.documentId;
     if (trackedDocumentId === documentId) return;
     trackedDocumentId = documentId;

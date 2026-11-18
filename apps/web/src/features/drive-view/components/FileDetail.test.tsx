@@ -199,7 +199,7 @@ describe('file access errors', () => {
     ]);
   });
 
-  it('records each document opened in the same view once', async () => {
+  it('records a second document opened in the same view', async () => {
     const [documentId, setDocumentId] = createSignal('private-document');
     const container = mount(
       async () => ({ userAccessLevel: 'view' }),
@@ -209,9 +209,7 @@ describe('file access errors', () => {
     await vi.waitFor(() => expect(trackOpen).toHaveBeenCalledTimes(1));
     setDocumentId('next-document');
     await vi.waitFor(() => expect(trackOpen).toHaveBeenCalledTimes(2));
-    await vi.waitFor(() =>
-      expect(container.textContent).toContain('Document content')
-    );
+    expect(container.textContent).toContain('Document content');
 
     expect(trackOpen.mock.calls.map(([id, block]) => [id, block])).toEqual([
       ['private-document', 'md'],
@@ -319,10 +317,12 @@ it('reauthorizes after revocation and a late resource at the same access level',
   });
   await pending.promise;
   await Promise.resolve();
+  expect(trackOpen).not.toHaveBeenCalled();
   notifyAccess?.('view');
   await vi.waitFor(() =>
     expect(container.textContent).toContain('Document content: view')
   );
   expect(load).toHaveBeenCalledTimes(2);
   expect(cleanupSource).toHaveBeenCalledOnce();
+  expect(trackOpen).toHaveBeenCalledOnce();
 });
