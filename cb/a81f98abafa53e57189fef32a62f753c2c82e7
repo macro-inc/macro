@@ -1,0 +1,59 @@
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_505b42fd3d1c70::t_797a53f6634df8 123,186
+crates/code_execution/src/outbound/deno.rs
+  s_505b42fd3d1c70::t_0c7e53ab0cff13 143,247-254
+crates/agent_code_mode/src/inbound/toolset/session/execute_code.md
+  s_505b42fd3d1c70::t_797a53f6634df8 1
+crates/code_execution/src/outbound/deno/test.rs
+  s_505b42fd3d1c70::t_0c7e53ab0cff13 280,283,285-293
+packages/code-mode-sdk/scripts/generate.ts
+  s_505b42fd3d1c70::t_3042d91e49df92 2-3,72-151
+  s_505b42fd3d1c70::t_0a87a830efe1d6 33
+  s_505b42fd3d1c70::t_92abaf625d595e 152
+crates/agent_code_mode/src/inbound/toolset/session/overview.md
+  s_505b42fd3d1c70::t_797a53f6634df8 1
+docs/agent-guide/ai-chat.md
+  s_505b42fd3d1c70::t_797a53f6634df8 1431
+crates/code_execution/AGENTS.md
+  s_505b42fd3d1c70::t_797a53f6634df8 26
+nix-support/node_modules-hashes.json
+  s_505b42fd3d1c70::t_2c916792e5bc34 4
+packages/code-mode-sdk/README.md
+  s_505b42fd3d1c70::t_a7a96fff0ab7ae 65-69
+  s_505b42fd3d1c70::t_797a53f6634df8 3-4,10
+  s_505b42fd3d1c70::t_4bc554ba84ad39 56
+crates/agent_code_mode/src/inbound/toolset/session/discovery.md
+  s_505b42fd3d1c70::t_797a53f6634df8 3
+crates/code_mode_assets/src/lib.rs
+  s_505b42fd3d1c70::t_0c7e53ab0cff13 11-17
+crates/agent_code_mode/src/inbound/toolset/user/execute_code.md
+  s_505b42fd3d1c70::t_797a53f6634df8 1
+crates/code_execution/README.md
+  s_505b42fd3d1c70::t_797a53f6634df8 5
+crates/code_mode_assets/AGENTS.md
+  s_505b42fd3d1c70::t_797a53f6634df8 5-6
+packages/code-mode-sdk/AGENTS.md
+  s_505b42fd3d1c70::t_797a53f6634df8 5
+crates/agent_code_mode/src/inbound/toolset/user/overview.md
+  s_505b42fd3d1c70::t_797a53f6634df8 1
+packages/code-mode-sdk/package.json
+  s_505b42fd3d1c70::t_fffb28ab621c5a 15-16
+bun.lock
+  s_505b42fd3d1c70::t_341d65b6c02f30 243,953-956,3643
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cba81f98abafa53e57189fef32a62f753c2c82e7",
+  "prompts": {},
+  "sessions": {
+    "s_505b42fd3d1c70": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ebbcea0-f38a-4f06-85a1-8650ecdf0c8d",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
