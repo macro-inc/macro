@@ -2,7 +2,12 @@ import { expect, it } from 'vitest';
 import fixtures from '../../../../../../crates/subsequence_match/src/ranking/fixtures.tsv?raw';
 import recipientFixtures from '../../../../../../crates/subsequence_match/src/ranking/recipient-fixtures.tsv?raw';
 import { createFreshSearch, NAME_MATCH_RANKING } from './freshSort';
-import { nameMatchQuality, nameMatchRank } from './name-match-score';
+import {
+  nameMatchQuality,
+  nameMatchRank,
+  normalizeNameText,
+  startsWordsOf,
+} from './name-match-score';
 import { recipientMatchRank } from './recipient-match-rank';
 
 it('matches the native per-row relevance fixtures, including UTF-16 positions', () => {
@@ -44,4 +49,20 @@ it('keeps an existing row score unchanged when a stronger unrelated match enters
   expect(combined?.fuzzyScore).toBe(alone.fuzzyScore);
   expect(combined?.combinedScore).toBe(alone.combinedScore);
   expect(alone.fuzzyScore).toBeLessThan(1);
+});
+
+it('scores text longer than a name as it scores the same words padded short', () => {
+  const padded = `${' '.repeat(5_000)}Sam   Lee${' '.repeat(5_000)}`;
+  const long = `sam lee ${'x'.repeat(300)}`;
+  for (let pass = 0; pass < 2; pass++) {
+    expect(normalizeNameText(padded.trim())).toBe('sam lee');
+    expect(nameMatchRank('Sam Lee', padded)).toBe(2);
+    expect(startsWordsOf('Sam Lee', padded)).toBe(true);
+    expect(normalizeNameText(long)).toBe(long);
+    expect(nameMatchRank(long, long.toUpperCase())).toBe(2);
+    expect(nameMatchQuality('Sam Lee', 'Sam Lee', long, 0.5, 0)).toBe(
+      undefined
+    );
+    expect(startsWordsOf(`${long} more`, long)).toBe(true);
+  }
 });

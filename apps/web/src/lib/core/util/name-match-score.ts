@@ -1,17 +1,27 @@
-/** Longer text (a pasted message, say) is computed each time, never kept. */
+/** Longer text (a pasted message, say) is never kept among the names. */
 const REMEMBERED_TEXT_LENGTH = 200;
 
 /** Remembers a pure string function's answers. Ranking thousands of rows
  * reads the same names on every keystroke; the bounds only cap memory. */
 function rememberText<R>(compute: (value: string) => R) {
   const known = new Map<string, R>();
+  // Long text is a typed query, read once for every row ranked against it:
+  // only the latest is kept.
+  let latestLong: { value: string; result: R } | undefined;
   return (value: string): R => {
-    if (value.length > REMEMBERED_TEXT_LENGTH) return compute(value);
+    if (value.length > REMEMBERED_TEXT_LENGTH) {
+      if (latestLong?.value !== value)
+        latestLong = { value, result: compute(value) };
+      return latestLong.result;
+    }
     const hit = known.get(value);
     if (hit !== undefined) return hit;
-    const result = compute(value);
+    // A copy: text trimmed from a long paste can share the paste's memory,
+    // which a remembered key or its words would keep alive.
+    const text = value.split('').join('');
+    const result = compute(text);
     if (known.size >= 50_000) known.clear();
-    known.set(value, result);
+    known.set(text, result);
     return result;
   };
 }
