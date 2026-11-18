@@ -113,7 +113,10 @@ async fn make_task(c: &mut PgConnection) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
 async fn an_item_insert_and_a_grant_on_it_count_once_in_any_order(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
@@ -136,7 +139,10 @@ async fn an_item_insert_and_a_grant_on_it_count_once_in_any_order(
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
 async fn removing_or_moving_a_grant_while_its_item_is_inserted_leaves_no_row(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
@@ -160,7 +166,10 @@ async fn removing_or_moving_a_grant_while_its_item_is_inserted_leaves_no_row(
     Ok(())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
 async fn saves_subtypes_and_grants_on_one_item_compose_in_any_order(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
@@ -201,7 +210,10 @@ async fn no_wait(c: &mut PgConnection) -> Result<(), sqlx::Error> {
 /// A writer holding an item's row lock used to make a grant statement on that item wait, which
 /// deadlocked writers that touch the grant afterwards: here, a document edit that saves, then
 /// changes the same grant a concurrent share added.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
 async fn a_share_does_not_wait_for_an_edit_holding_the_item(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
@@ -230,7 +242,10 @@ async fn a_share_does_not_wait_for_an_edit_holding_the_item(
 
 /// The reverse order: a revoke holds the grant row, an edit saves the item and then waits for that
 /// grant. The revoke must commit without waiting for the edit.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
 async fn a_revoke_does_not_wait_for_an_edit_that_waits_for_it(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
@@ -265,7 +280,10 @@ async fn a_revoke_does_not_wait_for_an_edit_that_waits_for_it(
 
 /// A bulk update that visits items in one order against a bulk share of the same items: the share
 /// commits while the update still holds its rows.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
 async fn a_bulk_share_does_not_wait_for_a_bulk_update(pool: PgPool) -> Result<(), sqlx::Error> {
     {
         let mut conn = pool.acquire().await?;
@@ -324,7 +342,10 @@ async fn wait_for_lock_waiters(pool: &PgPool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
 async fn large_writes_take_no_advisory_locks(pool: PgPool) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     // 5,000 single-item inserts in one transaction, like a large folder upload.
@@ -364,7 +385,10 @@ async fn large_writes_take_no_advisory_locks(pool: PgPool) -> Result<(), sqlx::E
 /// A deferred constraint check queued after a write must run before the commit takes buckets:
 /// here it waits for a row another transaction holds while that transaction commits a write to the
 /// same item.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
 async fn deferred_checks_run_before_the_commit_takes_buckets(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
@@ -413,7 +437,10 @@ async fn deferred_checks_run_before_the_commit_takes_buckets(
 
 /// A transaction that truncated an input holds it exclusively until it commits; another commit
 /// must wait for that before taking a bucket the truncating transaction needs.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
 async fn a_truncate_and_a_commit_on_its_items_do_not_deadlock(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
@@ -444,7 +471,10 @@ async fn a_truncate_and_a_commit_on_its_items_do_not_deadlock(
 }
 
 /// Two transactions touching the same two items in opposite statement order commit together.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
 async fn commits_on_the_same_items_in_opposite_orders_both_finish(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {

@@ -10,6 +10,11 @@
 -- for every writer: application code, foreign-key cascades, scripts, and fixtures loaded in replica
 -- mode alike. crates/source_items holds the backfill, the audit and the tests.
 --
+-- This migration is inert: it creates the table, its index and the functions, and installs no
+-- trigger, so writes cost what they did before. source_items_install_triggers() turns maintenance
+-- on and source_items_remove_triggers() turns it off again; the enabling migration and its runbook
+-- ship separately, and reads stay off until the table is backfilled and audited.
+--
 -- How, under READ COMMITTED (the triggers refuse other isolation levels, whose older snapshots
 -- could miss a concurrent change):
 --   * Statement triggers only record what changed in a session temporary table. They take no
@@ -390,94 +395,128 @@ BEGIN
     RETURN NULL;
 END $$;
 
-CREATE TRIGGER source_items_grants_inserted AFTER INSERT ON public.entity_access
-    REFERENCING NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_grants_changed();
-CREATE TRIGGER source_items_grants_deleted AFTER DELETE ON public.entity_access
-    REFERENCING OLD TABLE AS old_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_grants_changed();
-CREATE TRIGGER source_items_grants_updated AFTER UPDATE ON public.entity_access
-    REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_grants_changed();
-CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON public.entity_access
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_truncated('entity_access');
+-- Turns maintenance on: installs the triggers on the five inputs, after taking their locks in one
+-- statement so the caller's lock_timeout bounds a single wait rather than one per table. The
+-- triggers fire in replica mode too, so fixtures and scripts that skip foreign-key checks keep the
+-- projection current. Rows of items written before this call stay missing or stale until the
+-- backfill rewrites them.
+CREATE FUNCTION public.source_items_install_triggers() RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+    LOCK TABLE public.entity_access, public.document_sub_type, public."Document", public."Chat",
+        public."Project" IN SHARE ROW EXCLUSIVE MODE;
+    PERFORM public.source_items_remove_triggers();
+    CREATE TRIGGER source_items_grants_inserted AFTER INSERT ON public.entity_access
+        REFERENCING NEW TABLE AS new_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_grants_changed();
+    CREATE TRIGGER source_items_grants_deleted AFTER DELETE ON public.entity_access
+        REFERENCING OLD TABLE AS old_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_grants_changed();
+    CREATE TRIGGER source_items_grants_updated AFTER UPDATE ON public.entity_access
+        REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_grants_changed();
+    CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON public.entity_access
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_truncated('entity_access');
+    CREATE TRIGGER source_items_sub_type_inserted AFTER INSERT ON public.document_sub_type
+        REFERENCING NEW TABLE AS new_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_sub_type_changed();
+    CREATE TRIGGER source_items_sub_type_deleted AFTER DELETE ON public.document_sub_type
+        REFERENCING OLD TABLE AS old_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_sub_type_changed();
+    CREATE TRIGGER source_items_sub_type_updated AFTER UPDATE ON public.document_sub_type
+        REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_sub_type_changed();
+    CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON public.document_sub_type
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_truncated('document_sub_type');
+    CREATE TRIGGER source_items_inserted AFTER INSERT ON public."Document"
+        REFERENCING NEW TABLE AS new_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('document');
+    CREATE TRIGGER source_items_deleted AFTER DELETE ON public."Document"
+        REFERENCING OLD TABLE AS old_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('document');
+    CREATE TRIGGER source_items_updated AFTER UPDATE ON public."Document"
+        FOR EACH ROW
+        WHEN (OLD.id IS DISTINCT FROM NEW.id
+              OR (CASE WHEN OLD."deletedAt" IS NULL THEN OLD."updatedAt" END)
+                 IS DISTINCT FROM (CASE WHEN NEW."deletedAt" IS NULL THEN NEW."updatedAt" END))
+        EXECUTE FUNCTION public.source_items_item_updated('document');
+    CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON public."Document"
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_truncated('document');
+    CREATE TRIGGER source_items_inserted AFTER INSERT ON public."Chat"
+        REFERENCING NEW TABLE AS new_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('chat');
+    CREATE TRIGGER source_items_deleted AFTER DELETE ON public."Chat"
+        REFERENCING OLD TABLE AS old_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('chat');
+    CREATE TRIGGER source_items_updated AFTER UPDATE ON public."Chat"
+        FOR EACH ROW
+        WHEN (OLD.id IS DISTINCT FROM NEW.id
+              OR (CASE WHEN OLD."deletedAt" IS NULL THEN OLD."updatedAt" END)
+                 IS DISTINCT FROM (CASE WHEN NEW."deletedAt" IS NULL THEN NEW."updatedAt" END))
+        EXECUTE FUNCTION public.source_items_item_updated('chat');
+    CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON public."Chat"
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_truncated('chat');
+    CREATE TRIGGER source_items_inserted AFTER INSERT ON public."Project"
+        REFERENCING NEW TABLE AS new_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('project');
+    CREATE TRIGGER source_items_deleted AFTER DELETE ON public."Project"
+        REFERENCING OLD TABLE AS old_rows
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('project');
+    CREATE TRIGGER source_items_updated AFTER UPDATE ON public."Project"
+        FOR EACH ROW
+        WHEN (OLD.id IS DISTINCT FROM NEW.id
+              OR (CASE WHEN OLD."deletedAt" IS NULL THEN OLD."updatedAt" END)
+                 IS DISTINCT FROM (CASE WHEN NEW."deletedAt" IS NULL THEN NEW."updatedAt" END))
+        EXECUTE FUNCTION public.source_items_item_updated('project');
+    CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON public."Project"
+        FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_truncated('project');
+    ALTER TABLE public.entity_access ENABLE ALWAYS TRIGGER source_items_grants_inserted;
+    ALTER TABLE public.entity_access ENABLE ALWAYS TRIGGER source_items_grants_deleted;
+    ALTER TABLE public.entity_access ENABLE ALWAYS TRIGGER source_items_grants_updated;
+    ALTER TABLE public.entity_access ENABLE ALWAYS TRIGGER source_items_truncated;
+    ALTER TABLE public.document_sub_type ENABLE ALWAYS TRIGGER source_items_sub_type_inserted;
+    ALTER TABLE public.document_sub_type ENABLE ALWAYS TRIGGER source_items_sub_type_deleted;
+    ALTER TABLE public.document_sub_type ENABLE ALWAYS TRIGGER source_items_sub_type_updated;
+    ALTER TABLE public.document_sub_type ENABLE ALWAYS TRIGGER source_items_truncated;
+    ALTER TABLE public."Document" ENABLE ALWAYS TRIGGER source_items_inserted;
+    ALTER TABLE public."Document" ENABLE ALWAYS TRIGGER source_items_deleted;
+    ALTER TABLE public."Document" ENABLE ALWAYS TRIGGER source_items_updated;
+    ALTER TABLE public."Document" ENABLE ALWAYS TRIGGER source_items_truncated;
+    ALTER TABLE public."Chat" ENABLE ALWAYS TRIGGER source_items_inserted;
+    ALTER TABLE public."Chat" ENABLE ALWAYS TRIGGER source_items_deleted;
+    ALTER TABLE public."Chat" ENABLE ALWAYS TRIGGER source_items_updated;
+    ALTER TABLE public."Chat" ENABLE ALWAYS TRIGGER source_items_truncated;
+    ALTER TABLE public."Project" ENABLE ALWAYS TRIGGER source_items_inserted;
+    ALTER TABLE public."Project" ENABLE ALWAYS TRIGGER source_items_deleted;
+    ALTER TABLE public."Project" ENABLE ALWAYS TRIGGER source_items_updated;
+    ALTER TABLE public."Project" ENABLE ALWAYS TRIGGER source_items_truncated;
+END $$;
 
-CREATE TRIGGER source_items_sub_type_inserted AFTER INSERT ON public.document_sub_type
-    REFERENCING NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_sub_type_changed();
-CREATE TRIGGER source_items_sub_type_deleted AFTER DELETE ON public.document_sub_type
-    REFERENCING OLD TABLE AS old_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_sub_type_changed();
-CREATE TRIGGER source_items_sub_type_updated AFTER UPDATE ON public.document_sub_type
-    REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_sub_type_changed();
-CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON public.document_sub_type
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_truncated('document_sub_type');
-
-CREATE TRIGGER source_items_inserted AFTER INSERT ON public."Document"
-    REFERENCING NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('document');
-CREATE TRIGGER source_items_deleted AFTER DELETE ON public."Document"
-    REFERENCING OLD TABLE AS old_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('document');
-CREATE TRIGGER source_items_updated AFTER UPDATE ON public."Document"
-    FOR EACH ROW
-    WHEN (OLD.id IS DISTINCT FROM NEW.id
-          OR (CASE WHEN OLD."deletedAt" IS NULL THEN OLD."updatedAt" END)
-             IS DISTINCT FROM (CASE WHEN NEW."deletedAt" IS NULL THEN NEW."updatedAt" END))
-    EXECUTE FUNCTION public.source_items_item_updated('document');
-CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON public."Document"
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_truncated('document');
-
-CREATE TRIGGER source_items_inserted AFTER INSERT ON public."Chat"
-    REFERENCING NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('chat');
-CREATE TRIGGER source_items_deleted AFTER DELETE ON public."Chat"
-    REFERENCING OLD TABLE AS old_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('chat');
-CREATE TRIGGER source_items_updated AFTER UPDATE ON public."Chat"
-    FOR EACH ROW
-    WHEN (OLD.id IS DISTINCT FROM NEW.id
-          OR (CASE WHEN OLD."deletedAt" IS NULL THEN OLD."updatedAt" END)
-             IS DISTINCT FROM (CASE WHEN NEW."deletedAt" IS NULL THEN NEW."updatedAt" END))
-    EXECUTE FUNCTION public.source_items_item_updated('chat');
-CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON public."Chat"
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_truncated('chat');
-
-CREATE TRIGGER source_items_inserted AFTER INSERT ON public."Project"
-    REFERENCING NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('project');
-CREATE TRIGGER source_items_deleted AFTER DELETE ON public."Project"
-    REFERENCING OLD TABLE AS old_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_items_changed('project');
-CREATE TRIGGER source_items_updated AFTER UPDATE ON public."Project"
-    FOR EACH ROW
-    WHEN (OLD.id IS DISTINCT FROM NEW.id
-          OR (CASE WHEN OLD."deletedAt" IS NULL THEN OLD."updatedAt" END)
-             IS DISTINCT FROM (CASE WHEN NEW."deletedAt" IS NULL THEN NEW."updatedAt" END))
-    EXECUTE FUNCTION public.source_items_item_updated('project');
-CREATE TRIGGER source_items_truncated AFTER TRUNCATE ON public."Project"
-    FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_truncated('project');
-
--- Fire in replica mode too, so fixtures and scripts that skip foreign-key checks keep the
--- projection current.
-ALTER TABLE public.entity_access ENABLE ALWAYS TRIGGER source_items_grants_inserted;
-ALTER TABLE public.entity_access ENABLE ALWAYS TRIGGER source_items_grants_deleted;
-ALTER TABLE public.entity_access ENABLE ALWAYS TRIGGER source_items_grants_updated;
-ALTER TABLE public.entity_access ENABLE ALWAYS TRIGGER source_items_truncated;
-ALTER TABLE public.document_sub_type ENABLE ALWAYS TRIGGER source_items_sub_type_inserted;
-ALTER TABLE public.document_sub_type ENABLE ALWAYS TRIGGER source_items_sub_type_deleted;
-ALTER TABLE public.document_sub_type ENABLE ALWAYS TRIGGER source_items_sub_type_updated;
-ALTER TABLE public.document_sub_type ENABLE ALWAYS TRIGGER source_items_truncated;
-ALTER TABLE public."Document" ENABLE ALWAYS TRIGGER source_items_inserted;
-ALTER TABLE public."Document" ENABLE ALWAYS TRIGGER source_items_deleted;
-ALTER TABLE public."Document" ENABLE ALWAYS TRIGGER source_items_updated;
-ALTER TABLE public."Document" ENABLE ALWAYS TRIGGER source_items_truncated;
-ALTER TABLE public."Chat" ENABLE ALWAYS TRIGGER source_items_inserted;
-ALTER TABLE public."Chat" ENABLE ALWAYS TRIGGER source_items_deleted;
-ALTER TABLE public."Chat" ENABLE ALWAYS TRIGGER source_items_updated;
-ALTER TABLE public."Chat" ENABLE ALWAYS TRIGGER source_items_truncated;
-ALTER TABLE public."Project" ENABLE ALWAYS TRIGGER source_items_inserted;
-ALTER TABLE public."Project" ENABLE ALWAYS TRIGGER source_items_deleted;
-ALTER TABLE public."Project" ENABLE ALWAYS TRIGGER source_items_updated;
-ALTER TABLE public."Project" ENABLE ALWAYS TRIGGER source_items_truncated;
+-- Turns maintenance off. The table then drifts from its inputs, so reads must already be off, and
+-- turning maintenance back on needs a backfill and an audit before reads return.
+CREATE FUNCTION public.source_items_remove_triggers() RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+    LOCK TABLE public.entity_access, public.document_sub_type, public."Document", public."Chat",
+        public."Project" IN SHARE ROW EXCLUSIVE MODE;
+    DROP TRIGGER IF EXISTS source_items_grants_inserted ON public.entity_access;
+    DROP TRIGGER IF EXISTS source_items_grants_deleted ON public.entity_access;
+    DROP TRIGGER IF EXISTS source_items_grants_updated ON public.entity_access;
+    DROP TRIGGER IF EXISTS source_items_truncated ON public.entity_access;
+    DROP TRIGGER IF EXISTS source_items_sub_type_inserted ON public.document_sub_type;
+    DROP TRIGGER IF EXISTS source_items_sub_type_deleted ON public.document_sub_type;
+    DROP TRIGGER IF EXISTS source_items_sub_type_updated ON public.document_sub_type;
+    DROP TRIGGER IF EXISTS source_items_truncated ON public.document_sub_type;
+    DROP TRIGGER IF EXISTS source_items_inserted ON public."Document";
+    DROP TRIGGER IF EXISTS source_items_deleted ON public."Document";
+    DROP TRIGGER IF EXISTS source_items_updated ON public."Document";
+    DROP TRIGGER IF EXISTS source_items_truncated ON public."Document";
+    DROP TRIGGER IF EXISTS source_items_inserted ON public."Chat";
+    DROP TRIGGER IF EXISTS source_items_deleted ON public."Chat";
+    DROP TRIGGER IF EXISTS source_items_updated ON public."Chat";
+    DROP TRIGGER IF EXISTS source_items_truncated ON public."Chat";
+    DROP TRIGGER IF EXISTS source_items_inserted ON public."Project";
+    DROP TRIGGER IF EXISTS source_items_deleted ON public."Project";
+    DROP TRIGGER IF EXISTS source_items_updated ON public."Project";
+    DROP TRIGGER IF EXISTS source_items_truncated ON public."Project";
+END $$;

@@ -87,7 +87,10 @@ async fn grant(
     Ok(())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn grants_items_and_subtypes_drive_rows(pool: PgPool) -> Result<(), sqlx::Error> {
     let mut conn = pool.acquire().await?;
     insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
@@ -202,7 +205,10 @@ async fn grants_items_and_subtypes_drive_rows(pool: PgPool) -> Result<(), sqlx::
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn grants_written_before_their_item_count_once(pool: PgPool) -> Result<(), sqlx::Error> {
     // Replica mode skips foreign keys, so fixtures load grants and subtypes before items.
     let mut tx = pool.begin().await?;
@@ -245,7 +251,10 @@ async fn grants_written_before_their_item_count_once(pool: PgPool) -> Result<(),
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn grant_updates_move_rows(pool: PgPool) -> Result<(), sqlx::Error> {
     let mut conn = pool.acquire().await?;
     insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
@@ -290,7 +299,10 @@ async fn grant_updates_move_rows(pool: PgPool) -> Result<(), sqlx::Error> {
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn deletes_and_cascades_remove_rows(pool: PgPool) -> Result<(), sqlx::Error> {
     let mut conn = pool.acquire().await?;
     sqlx::query!(
@@ -357,7 +369,10 @@ async fn deletes_and_cascades_remove_rows(pool: PgPool) -> Result<(), sqlx::Erro
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn id_changes_move_rows(pool: PgPool) -> Result<(), sqlx::Error> {
     let mut conn = pool.acquire().await?;
     insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
@@ -383,7 +398,10 @@ async fn id_changes_move_rows(pool: PgPool) -> Result<(), sqlx::Error> {
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn truncates_clear_rows(pool: PgPool) -> Result<(), sqlx::Error> {
     let mut conn = pool.acquire().await?;
     insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
@@ -420,7 +438,10 @@ async fn truncates_clear_rows(pool: PgPool) -> Result<(), sqlx::Error> {
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn truncates_in_replica_mode_clear_rows(pool: PgPool) -> Result<(), sqlx::Error> {
     for truncate in [
         "TRUNCATE entity_access",
@@ -470,7 +491,10 @@ async fn truncates_in_replica_mode_clear_rows(pool: PgPool) -> Result<(), sqlx::
     Ok(())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn rollback_and_other_isolation_levels_change_nothing(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
@@ -526,7 +550,10 @@ async fn rollback_and_other_isolation_levels_change_nothing(
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn a_grant_change_rewrites_only_its_sources_rows(pool: PgPool) -> Result<(), sqlx::Error> {
     let mut conn = pool.acquire().await?;
     insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
@@ -558,7 +585,10 @@ async fn a_grant_change_rewrites_only_its_sources_rows(pool: PgPool) -> Result<(
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn backfill_repairs_drift_across_batches_and_reruns(pool: PgPool) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"INSERT INTO "Document" (id, name, owner)
@@ -607,7 +637,10 @@ async fn backfill_repairs_drift_across_batches_and_reruns(pool: PgPool) -> Resul
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn immediate_constraints_apply_each_statement(pool: PgPool) -> Result<(), sqlx::Error> {
     let mut conn = pool.acquire().await?;
     insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
@@ -657,7 +690,10 @@ async fn immediate_constraints_apply_each_statement(pool: PgPool) -> Result<(), 
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn one_apply_is_scheduled_per_transaction(pool: PgPool) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     for n in 0..50 {
@@ -685,7 +721,10 @@ async fn one_apply_is_scheduled_per_transaction(pool: PgPool) -> Result<(), sqlx
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn a_callers_search_path_changes_nothing(pool: PgPool) -> Result<(), sqlx::Error> {
     let mut conn = pool.acquire().await?;
     sqlx::query!("SET search_path = pg_catalog")
@@ -713,7 +752,10 @@ async fn a_callers_search_path_changes_nothing(pool: PgPool) -> Result<(), sqlx:
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn discarding_temporary_tables_mid_transaction_fails_safely(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
@@ -740,7 +782,10 @@ async fn discarding_temporary_tables_mid_transaction_fails_safely(
 /// a production-sized table it chose nested loops that re-read every pending item for each one,
 /// and 5,000 grants took a minute to commit. Ruling out hash and merge joins forces nested loops
 /// here, where that rewrite took 215 s to share 15,000 items and this one well under a second.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
 async fn bulk_grant_changes_commit_in_linear_time(pool: PgPool) -> Result<(), sqlx::Error> {
     const ITEMS: i32 = 15_000;
     const BOUND: std::time::Duration = std::time::Duration::from_secs(20);
@@ -809,5 +854,47 @@ async fn nested_loops_only(conn: &mut PgConnection) -> Result<(), sqlx::Error> {
     )
     .fetch_one(conn)
     .await?;
+    Ok(())
+}
+
+/// The migrations leave maintenance off: no trigger on any input, so writes cost what they did.
+/// Installing turns it on, removing turns it off, and either can run again.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn maintenance_is_off_until_installed(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    let installed = async |conn: &mut PgConnection| {
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM pg_trigger
+               WHERE tgname LIKE 'source_items%'
+                 AND tgrelid IN ('entity_access'::regclass, 'document_sub_type'::regclass,
+                     '"Document"'::regclass, '"Chat"'::regclass, '"Project"'::regclass)"#
+        )
+        .fetch_one(conn)
+        .await
+    };
+    assert_eq!(installed(&mut conn).await?, 0);
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+    grant(&mut conn, "document", DOC, OWNER, "user").await?;
+    assert_eq!(rows(&mut conn, DOC).await?, []);
+
+    for _ in 0..2 {
+        sqlx::query!("SELECT source_items_install_triggers()")
+            .execute(&mut *conn)
+            .await?;
+        assert_eq!(installed(&mut conn).await?, 20);
+    }
+    backfill::run(&pool).await?;
+    grant(&mut conn, "document", DOC, MEMBER, "user").await?;
+    assert_eq!(rows(&mut conn, DOC).await?.len(), 2);
+    assert_exact(&pool).await?;
+
+    for _ in 0..2 {
+        sqlx::query!("SELECT source_items_remove_triggers()")
+            .execute(&mut *conn)
+            .await?;
+        assert_eq!(installed(&mut conn).await?, 0);
+    }
+    grant(&mut conn, "document", DOC, TEAM, "team").await?;
+    assert_eq!(rows(&mut conn, DOC).await?.len(), 2);
     Ok(())
 }

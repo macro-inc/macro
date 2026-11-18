@@ -51,7 +51,7 @@ const SORTS: [SimpleSortMethod; 3] = [
 #[sqlx::test(
     fixtures(
         path = "../../../../../../fixtures",
-        scripts("source_items_feed", "source_items_empty")
+        scripts("source_items_triggers", "source_items_feed", "source_items_empty")
     ),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
@@ -617,7 +617,10 @@ fn shapes_reach_every_driver_and_phase() {
 }
 
 #[sqlx::test(
-    fixtures(path = "../../../../../../fixtures", scripts("source_items_feed")),
+    fixtures(
+        path = "../../../../../../fixtures",
+        scripts("source_items_triggers", "source_items_feed")
+    ),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn source_items_pages_like_the_item_tables(pool: PgPool) -> anyhow::Result<()> {
@@ -738,7 +741,10 @@ fn literal_constants_match_their_sql() {
 /// 03:00 (07:00Z), so a session there must read the item tables. sqlx opens every session in
 /// UTC; only an explicit setting moves one.
 #[sqlx::test(
-    fixtures(path = "../../../../../../fixtures", scripts("source_items_feed")),
+    fixtures(
+        path = "../../../../../../fixtures",
+        scripts("source_items_triggers", "source_items_feed")
+    ),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn non_utc_sessions_read_the_item_tables(
@@ -828,7 +834,11 @@ async fn non_utc_sessions_read_the_item_tables(
 #[sqlx::test(
     fixtures(
         path = "../../../../../../fixtures",
-        scripts("source_items_feed", "source_items_feed_changes")
+        scripts(
+            "source_items_triggers",
+            "source_items_feed",
+            "source_items_feed_changes"
+        )
     ),
     migrator = "MACRO_DB_MIGRATIONS"
 )]

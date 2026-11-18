@@ -380,7 +380,10 @@ async fn run(pool: PgPool) -> Result<(), sqlx::Error> {
     assert_exact(&pool).await
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
 async fn random_concurrent_writes_keep_every_snapshot_exact(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {

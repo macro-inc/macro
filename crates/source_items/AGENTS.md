@@ -7,12 +7,16 @@ Backfill, audit and tests for the `source_items` listing projection: one row per
 `entity_access`, `"Document"`, `"Chat"`, `"Project"` and `document_sub_type`
 keep the table current for every writer, including foreign-key cascades and
 replica-mode loads; `entity_access` and the item tables stay authoritative.
+The migrations leave the triggers off: `source_items_install_triggers()` and
+`source_items_remove_triggers()` turn maintenance on and off.
 
 ## Start here
 
 - `crates/macro_db_client/migrations/*_source_items.sql`: the table, its read
-  index and the triggers, which record changes per statement and rewrite rows
-  at commit under per-bucket mutex rows (header comment).
+  index and the trigger functions, which record changes per statement and
+  rewrite rows at commit under per-bucket mutex rows (header comment).
+- `fixtures/triggers.sql`: installs the triggers; every test that writes inputs
+  loads it first.
 - `src/backfill.rs`: fills rows for items that predate the triggers, through
   `source_items_refresh`, which locks buckets and rebuilds the way a commit does.
 - `src/audit.rs`, `src/audit.sql`: counts rows that differ from the inputs, in

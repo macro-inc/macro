@@ -3027,8 +3027,9 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
     let item_tables =
         expanded_dynamic_cursor_soup_hydrated(db, args.clone(), ItemSource::ItemTables).await?;
-    // Fixtures write the item tables and grants directly; the triggers must have kept
-    // the projection exact for every one of them.
+    // The migrations install no maintenance triggers, so rebuild the projection from what the
+    // fixtures wrote; `crates/source_items` tests the triggers that keep it current.
+    source_items::backfill::run(db).await?;
     let mismatches = source_items::audit::run(db).await?;
     assert!(
         mismatches.is_empty(),
