@@ -1,10 +1,10 @@
+import { lazy } from '@core/util/lazy';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import {
   createEffect,
   createSignal,
   For,
   type JSX,
-  lazy,
   onCleanup,
   onMount,
 } from 'solid-js';

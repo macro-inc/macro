@@ -2024,7 +2024,7 @@
           },
           "macroCall": {
             "type": "boolean",
-            "description": "Attach a Macro call when someone books. A join link is created for that\nbooking and written onto the calendar invitation. Mutually exclusive\nwith `googleMeet`. Prefer this for a Macro booking; omit or false when\nthe link should use Google Meet or no video. False is omitted so drafts\nsaved before this field still round-trip unchanged."
+            "description": "Attach a Macro call when someone books. A join link is created for that\nbooking and written onto the calendar invitation. Mutually exclusive\nwith `googleMeet`. Set it when the user wants a Macro call; omit or false when\nthe link should use Google Meet or no video. False is omitted so drafts\nsaved before this field still round-trip unchanged."
           },
           "mode": {
             "$ref": "#/components/schemas/SchedulingMode",

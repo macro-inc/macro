@@ -89,8 +89,8 @@ uses the normal list and filter drawer. The default is open tasks grouped by dat
 Sales Email exposes the normal read/done, attachment, calendar and tag filters. Sales
 Notes has creator/tag filters and Sales Calls has audience/tag filters. Sales Notes' creator chooser
 uses bounded contact pages in the desktop submenu and mobile drawer; Me and
-persisted/unknown selections are independent of the suggestion window. Next
-options replaces the page, and Only affects creators without clearing other
+persisted/unknown selections are independent of the suggestion pages. Further
+pages list below the earlier ones as the end scrolls into view, and Only affects creators without clearing other
 facets or the fixed CRM association. Company owner/team selectors are unchanged.
 Desktop/phone regression: `src/lib/core/internal/browser-test/list-filters.browser.e2e.ts`
 with stand-in data. Sales Email, Sales Notes and Sales Calls support
@@ -689,10 +689,9 @@ company. A selected company with email sync disabled suppresses interaction and
 source updates while preserving the manual record. Both paths require the
 mailbox owner's exact-primary contribution consent and eligible stored history.
 Manual add-email and company link/switch remain available without consent and
-never enable sync or enroll a mailbox. In the contact company picker, Next
-options (or PageDown on desktop) appends later browse or search pages to the
-visible companies. The control shows loading and page failures with retry, and
-disappears at the end of the results. Selecting a company keeps singleton
+never enable sync or enroll a mailbox. In the contact company picker, later browse or
+search pages append to the visible companies as the end scrolls into view (or
+with PageDown on desktop). A failed page shows Retry options and waits for it. Selecting a company keeps singleton
 replacement and the separate Go to action unchanged. Vendor, brand and bulk-sender filters still
 apply. Turning the filter back on stops future
 capture without deleting contacts. The existing admin **Blocked domains**

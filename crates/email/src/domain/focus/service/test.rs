@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
@@ -11,9 +11,13 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::focus::models::{
-    CalendarPart, DueDateInput, FocusCategory, FocusInbox, FocusMail, FocusMessage, FocusThread,
-    SentNote, StoredClassification,
+    CalendarPart, DueDateInput, FocusCategory, FocusInbox, FocusInboxOwner, FocusMail,
+    FocusMessage, FocusThread, SentNote, StoredClassification,
 };
+
+/// The owner of most test threads, and the one inbox they live in.
+const OWNER: &str = "owner@acme.example";
+const INBOX: Uuid = Uuid::from_u128(0xf0c5);
 
 #[derive(Clone, Default)]
 struct FakeStore {
@@ -21,8 +25,12 @@ struct FakeStore {
     saved: Arc<Mutex<Vec<FocusRecord>>>,
     /// Refuse every save, as when a later message's result is already stored.
     refuse_saves: bool,
-    stale: Arc<Mutex<Vec<StaleThread>>>,
-    stale_domains: Arc<Mutex<Vec<String>>>,
+    /// Stale threads and the inbox each is in, newest first.
+    stale: Arc<Mutex<Vec<(Uuid, StaleThread)>>>,
+    /// Inboxes holding Focus.
+    focus_inboxes: Arc<Mutex<Vec<FocusInboxOwner>>>,
+    /// The inbox each stale-thread read was given.
+    stale_reads: Arc<Mutex<Vec<Uuid>>>,
     mail_reads: Arc<Mutex<usize>>,
     /// The cutoff each list read was given.
     waiting_before: Arc<Mutex<Vec<DateTime<Utc>>>>,
@@ -67,13 +75,20 @@ impl FocusStore for FakeStore {
 
     async fn stale_threads(
         &self,
+        link_id: Uuid,
         _since: DateTime<Utc>,
-        domains: &[String],
         after: Option<StaleThread>,
         limit: i64,
     ) -> Result<Vec<StaleThread>, Report> {
-        *self.stale_domains.lock().unwrap() = domains.to_vec();
-        let stale = self.stale.lock().unwrap();
+        self.stale_reads.lock().unwrap().push(link_id);
+        let stale = self
+            .stale
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(link, _)| *link == link_id)
+            .map(|(_, thread)| *thread)
+            .collect::<Vec<_>>();
         let start = after.map_or(0, |after| {
             stale
                 .iter()
@@ -81,11 +96,14 @@ impl FocusStore for FakeStore {
                 .map_or(stale.len(), |index| index + 1)
         });
         Ok(stale
-            .iter()
+            .into_iter()
             .skip(start)
             .take(usize::try_from(limit).unwrap())
-            .copied()
             .collect())
+    }
+
+    async fn inboxes_with_focus(&self) -> Result<Vec<FocusInboxOwner>, Report> {
+        Ok(self.focus_inboxes.lock().unwrap().clone())
     }
 
     async fn focus_thread_ids(
@@ -209,6 +227,53 @@ impl FocusClassifier for FakeClassifier {
     }
 }
 
+/// Who is in the rollout.
+#[derive(Clone, Default)]
+struct FakeEnrollment {
+    enrolled: Arc<Mutex<HashSet<MacroUserIdStr<'static>>>>,
+    /// Fail every check, as when the flag service is down.
+    down: bool,
+    /// Each owner checked, in order.
+    checks: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+}
+
+impl FakeEnrollment {
+    fn enrolling(emails: &[&str]) -> Self {
+        let enrollment = Self::default();
+        for email in emails {
+            enrollment.enroll(email);
+        }
+        enrollment
+    }
+
+    fn enroll(&self, email: &str) {
+        self.enrolled.lock().unwrap().insert(owner(email));
+    }
+
+    fn leave(&self, email: &str) {
+        self.enrolled.lock().unwrap().remove(&owner(email));
+    }
+}
+
+impl FocusEnrollment for FakeEnrollment {
+    async fn is_enrolled(&self, owner: &MacroUserIdStr<'static>) -> Result<bool, Report> {
+        self.checks.lock().unwrap().push(owner.clone());
+        if self.down {
+            return Err(rootcause::report!("the flag service is down"));
+        }
+        Ok(self.enrolled.lock().unwrap().contains(owner))
+    }
+}
+
+/// The owner of the test inbox is in the rollout.
+fn enrolled() -> FakeEnrollment {
+    FakeEnrollment::enrolling(&[OWNER])
+}
+
+fn owner(email: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email(email).unwrap()
+}
+
 /// Focus yes, reply needed, everything else no.
 fn relevant() -> Vec<f32> {
     vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0]
@@ -217,8 +282,8 @@ fn relevant() -> Vec<f32> {
 fn thread(owner_email: &str) -> FocusThread {
     FocusThread {
         thread_id: Uuid::new_v4(),
-        link_id: Uuid::new_v4(),
-        owner: MacroUserIdStr::try_from_email(owner_email).unwrap(),
+        link_id: INBOX,
+        owner: owner(owner_email),
         owner_email: owner_email.to_owned(),
         is_signal: true,
         inbox_visible: true,
@@ -243,27 +308,36 @@ fn thread(owner_email: &str) -> FocusThread {
     }
 }
 
+type TestService = FocusService<
+    FakeStore,
+    FakeProfiles,
+    FakeClassifier,
+    FakeNotifier,
+    FakeDueDates,
+    FakeEnrollment,
+>;
+
 fn service(
     store: &FakeStore,
     classifier: &FakeClassifier,
-    domains: &[&str],
-) -> FocusService<FakeStore, FakeProfiles, FakeClassifier, FakeNotifier, FakeDueDates> {
-    notifying_service(store, classifier, domains, &FakeNotifier::default())
+    enrollment: &FakeEnrollment,
+) -> TestService {
+    notifying_service(store, classifier, enrollment, &FakeNotifier::default())
 }
 
 fn notifying_service(
     store: &FakeStore,
     classifier: &FakeClassifier,
-    domains: &[&str],
+    enrollment: &FakeEnrollment,
     notifier: &FakeNotifier,
-) -> FocusService<FakeStore, FakeProfiles, FakeClassifier, FakeNotifier, FakeDueDates> {
+) -> TestService {
     FocusService::new(
         store.clone(),
         FakeProfiles(Some("Owner runs finance at Acme.".to_owned()), None),
         classifier.clone(),
         notifier.clone(),
         FakeDueDates::answering(DueDateAnswer::Finds(None)),
-        domains.iter().map(|domain| (*domain).to_owned()).collect(),
+        enrollment.clone(),
     )
 }
 
@@ -272,14 +346,14 @@ fn due_date_service(
     classifier: &FakeClassifier,
     due_dates: &FakeDueDates,
     time_zone: Option<&str>,
-) -> FocusService<FakeStore, FakeProfiles, FakeClassifier, FakeNotifier, FakeDueDates> {
+) -> TestService {
     FocusService::new(
         store.clone(),
         FakeProfiles(None, time_zone.map(str::to_owned)),
         classifier.clone(),
         FakeNotifier::default(),
         due_dates.clone(),
-        vec!["acme.example".to_owned()],
+        enrolled(),
     )
 }
 
@@ -293,13 +367,33 @@ fn insert(store: &FakeStore, thread: FocusThread) -> Uuid {
     id
 }
 
-/// Mark `thread_ids` stale, all last active at `latest_at`.
+/// Mark `thread_ids` stale, all last active at `latest_at`, each in its
+/// thread's inbox (the test inbox for a thread that doesn't exist), and list
+/// those inboxes as holding Focus, so the sweep covers them.
 fn set_stale(store: &FakeStore, thread_ids: &[Uuid], latest_at: DateTime<Utc>) {
+    let threads = store.threads.lock().unwrap();
+    let mut focus_inboxes = store.focus_inboxes.lock().unwrap();
     *store.stale.lock().unwrap() = thread_ids
         .iter()
-        .map(|&thread_id| StaleThread {
-            thread_id,
-            latest_at,
+        .map(|&thread_id| {
+            let (link_id, owner_id) = threads
+                .get(&thread_id)
+                .map_or((INBOX, owner(OWNER)), |thread| {
+                    (thread.link_id, thread.owner.clone())
+                });
+            if !focus_inboxes.iter().any(|inbox| inbox.link_id == link_id) {
+                focus_inboxes.push(FocusInboxOwner {
+                    link_id,
+                    owner: owner_id,
+                });
+            }
+            (
+                link_id,
+                StaleThread {
+                    thread_id,
+                    latest_at,
+                },
+            )
         })
         .collect();
 }
@@ -325,8 +419,8 @@ fn stored_at(thread: &FocusThread, rule_version: i16) -> StoredClassification {
 async fn classifies_and_stores_an_enabled_inbox() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let id = insert(&store, thread("owner@acme.example"));
-    let outcome = service(&store, &classifier, &[" ACME.example "])
+    let id = insert(&store, thread(OWNER));
+    let outcome = service(&store, &classifier, &enrolled())
         .classify_thread(id)
         .await
         .unwrap();
@@ -351,38 +445,77 @@ async fn classifies_and_stores_an_enabled_inbox() {
 }
 
 #[tokio::test]
-async fn never_sends_mail_from_inboxes_off_the_allowlist() {
+async fn never_reads_mail_of_an_owner_outside_the_rollout() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
     let id = insert(&store, thread("owner@elsewhere.example"));
-    for domains in [&[][..], &["acme.example"][..]] {
-        let outcome = service(&store, &classifier, domains)
+    for enrollment in [FakeEnrollment::default(), enrolled()] {
+        let outcome = service(&store, &classifier, &enrollment)
             .classify_thread(id)
             .await
             .unwrap();
         assert_eq!(outcome, ClassifyOutcome::NotEnabled);
+        assert_eq!(
+            *enrollment.checks.lock().unwrap(),
+            vec![owner("owner@elsewhere.example")]
+        );
     }
     assert!(classifier.inputs.lock().unwrap().is_empty());
     assert!(store.saved.lock().unwrap().is_empty());
-    // No message content is even read for an inbox off the allowlist.
+    // No message content is even read for an owner outside the rollout.
     assert_eq!(*store.mail_reads.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn an_unknown_rollout_reads_no_mail_and_fails_the_thread() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let id = insert(&store, thread(OWNER));
+    let down = FakeEnrollment {
+        down: true,
+        ..enrolled()
+    };
+    assert!(
+        service(&store, &classifier, &down)
+            .classify_thread(id)
+            .await
+            .is_err()
+    );
+    assert_eq!(*store.mail_reads.lock().unwrap(), 0);
+    assert!(classifier.inputs.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn the_rollout_is_checked_only_for_threads_in_the_inbox() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let mut archived = thread(OWNER);
+    archived.inbox_visible = false;
+    let archived = insert(&store, archived);
+    let enrollment = enrolled();
+    let outcome = service(&store, &classifier, &enrollment)
+        .classify_thread(archived)
+        .await
+        .unwrap();
+    assert_eq!(outcome, ClassifyOutcome::NotSignal);
+    assert!(enrollment.checks.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
 async fn skips_threads_outside_the_signal_inbox_and_up_to_date_ones() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let mut archived = thread("owner@acme.example");
+    let mut archived = thread(OWNER);
     archived.inbox_visible = false;
     let archived = insert(&store, archived);
-    let mut current = thread("owner@acme.example");
+    let mut current = thread(OWNER);
     current.classified = Some(stored_at(&current, FOCUS_RULE_VERSION));
     let current = insert(&store, current);
-    let mut only_sent = thread("owner@acme.example");
+    let mut only_sent = thread(OWNER);
     only_sent.messages[0].is_sent = true;
     let only_sent = insert(&store, only_sent);
 
-    let service = service(&store, &classifier, &["acme.example"]);
+    let service = service(&store, &classifier, &enrolled());
     assert_eq!(
         service.classify_thread(archived).await.unwrap(),
         ClassifyOutcome::NotSignal
@@ -417,8 +550,8 @@ async fn classifier_failures_store_nothing() {
     ] {
         let store = FakeStore::default();
         let classifier = FakeClassifier::answering(answers);
-        let id = insert(&store, thread("owner@acme.example"));
-        let outcome = service(&store, &classifier, &["acme.example"])
+        let id = insert(&store, thread(OWNER));
+        let outcome = service(&store, &classifier, &enrolled())
             .classify_thread(id)
             .await
             .unwrap();
@@ -431,11 +564,11 @@ async fn classifier_failures_store_nothing() {
 async fn sweep_stops_when_the_classifier_is_down() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
-    let first = insert(&store, thread("owner@acme.example"));
-    let second = insert(&store, thread("owner@acme.example"));
+    let first = insert(&store, thread(OWNER));
+    let second = insert(&store, thread(OWNER));
     set_stale(&store, &[first, second], noon());
 
-    let report = service(&store, &classifier, &["acme.example"])
+    let report = service(&store, &classifier, &enrolled())
         .sweep(Duration::days(30), 100)
         .await
         .unwrap();
@@ -443,24 +576,26 @@ async fn sweep_stops_when_the_classifier_is_down() {
     assert_eq!(report.failed, 1);
     assert!(report.stopped_early);
     assert_eq!(classifier.inputs.lock().unwrap().len(), 1);
-    assert_eq!(*store.stale_domains.lock().unwrap(), vec!["acme.example"]);
+    assert_eq!(*store.stale_reads.lock().unwrap(), vec![INBOX]);
 }
 
 #[tokio::test]
 async fn sweep_classifies_every_stale_thread() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let first = insert(&store, thread("owner@acme.example"));
-    let second = insert(&store, thread("owner@acme.example"));
+    let first = insert(&store, thread(OWNER));
+    let second = insert(&store, thread(OWNER));
     set_stale(&store, &[first, second, Uuid::new_v4()], noon());
 
-    let report = service(&store, &classifier, &["acme.example"])
+    let report = service(&store, &classifier, &enrolled())
         .sweep(Duration::days(30), 100)
         .await
         .unwrap();
     assert_eq!(
         report,
         SweepReport {
+            inboxes: 1,
+            inboxes_unknown: 0,
             candidates: 3,
             classified: 2,
             redecided: 0,
@@ -472,20 +607,97 @@ async fn sweep_classifies_every_stale_thread() {
 }
 
 #[tokio::test]
-async fn sweep_does_nothing_without_an_allowlist() {
+async fn sweep_does_nothing_outside_the_rollout() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    set_stale(
-        &store,
-        &[insert(&store, thread("owner@acme.example"))],
-        noon(),
-    );
-    let report = service(&store, &classifier, &[])
+    set_stale(&store, &[insert(&store, thread(OWNER))], noon());
+    let report = service(&store, &classifier, &FakeEnrollment::default())
         .sweep(Duration::days(30), 100)
         .await
         .unwrap();
     assert_eq!(report, SweepReport::default());
+    assert!(store.stale_reads.lock().unwrap().is_empty());
     assert!(classifier.inputs.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn sweep_covers_only_inboxes_whose_owner_is_in_the_rollout() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let ours = insert(&store, thread(OWNER));
+    let mut theirs = thread("other@acme.example");
+    theirs.link_id = Uuid::new_v4();
+    let their_inbox = theirs.link_id;
+    let theirs = insert(&store, theirs);
+    set_stale(&store, &[ours, theirs], noon());
+    assert_eq!(store.focus_inboxes.lock().unwrap().len(), 2);
+
+    let report = service(&store, &classifier, &enrolled())
+        .sweep(Duration::days(30), 100)
+        .await
+        .unwrap();
+    assert_eq!((report.inboxes, report.classified), (1, 1));
+    assert_eq!(*store.stale_reads.lock().unwrap(), vec![INBOX]);
+    assert_eq!(store.saved.lock().unwrap()[0].thread_id, ours);
+    assert!(!store.stale_reads.lock().unwrap().contains(&their_inbox));
+}
+
+#[tokio::test]
+async fn sweep_covers_an_inbox_seen_in_the_rollout_before_it_holds_focus() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Err(FocusClassifierError::Rejected));
+    let enrollment = enrolled();
+    let service = service(&store, &classifier, &enrollment);
+    let first = insert(&store, thread(OWNER));
+    let older = insert(&store, thread(OWNER));
+    // Mail arrives: the inbox joins the sweep though nothing in it is Focus yet.
+    service.classify_thread(first).await.unwrap();
+    store.stale.lock().unwrap().push((
+        INBOX,
+        StaleThread {
+            thread_id: older,
+            latest_at: noon(),
+        },
+    ));
+    assert!(store.focus_inboxes.lock().unwrap().is_empty());
+
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!((report.inboxes, report.failed), (1, 1));
+
+    // The owner leaves the rollout: the next sweep drops the inbox.
+    enrollment.leave(OWNER);
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(report.inboxes, 0);
+    enrollment.enroll(OWNER);
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(report, SweepReport::default());
+}
+
+#[tokio::test]
+async fn sweep_leaves_out_an_inbox_whose_rollout_is_unknown() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let mut noise = thread(OWNER);
+    noise.is_signal = false;
+    let noise = insert(&store, noise);
+    set_stale(&store, &[noise], noon());
+    let enrollment = enrolled();
+    let service = service(&store, &classifier, &enrollment);
+    service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(service.settled().len(), 1);
+
+    let down = FakeEnrollment {
+        down: true,
+        ..enrolled()
+    };
+    let service = FocusService {
+        enrollment: down,
+        ..service
+    };
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!((report.inboxes, report.inboxes_unknown), (0, 1));
+    // It saw no inbox in full, so it forgets none of what it settled.
+    assert_eq!(service.settled().len(), 1);
 }
 
 #[tokio::test]
@@ -495,8 +707,8 @@ async fn reports_up_to_date_when_a_later_result_is_already_stored() {
         ..FakeStore::default()
     };
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let id = insert(&store, thread("owner@acme.example"));
-    let outcome = service(&store, &classifier, &["acme.example"])
+    let id = insert(&store, thread(OWNER));
+    let outcome = service(&store, &classifier, &enrolled())
         .classify_thread(id)
         .await
         .unwrap();
@@ -507,11 +719,11 @@ async fn reports_up_to_date_when_a_later_result_is_already_stored() {
 async fn sweep_leaves_rejected_and_settled_threads_until_new_mail() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Rejected));
-    let rejected = insert(&store, thread("owner@acme.example"));
-    let mut only_sent = thread("owner@acme.example");
+    let rejected = insert(&store, thread(OWNER));
+    let mut only_sent = thread(OWNER);
     only_sent.messages[0].is_sent = true;
     let only_sent = insert(&store, only_sent);
-    let service = service(&store, &classifier, &["acme.example"]);
+    let service = service(&store, &classifier, &enrolled());
 
     set_stale(&store, &[rejected, only_sent], noon());
     let first = service.sweep(Duration::days(30), 100).await.unwrap();
@@ -535,17 +747,17 @@ async fn sweep_leaves_rejected_and_settled_threads_until_new_mail() {
 async fn sweeps_reach_threads_behind_ones_that_never_store_a_result() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let service = service(&store, &classifier, &["acme.example"]);
+    let service = service(&store, &classifier, &enrolled());
     // More non-signal threads than one sweep's limit, newest first, then a thread
     // that is worth classifying.
     let mut stale = (0..5)
         .map(|_| {
-            let mut noise = thread("owner@acme.example");
+            let mut noise = thread(OWNER);
             noise.is_signal = false;
             insert(&store, noise)
         })
         .collect::<Vec<_>>();
-    let older = insert(&store, thread("owner@acme.example"));
+    let older = insert(&store, thread(OWNER));
     stale.push(older);
     set_stale(&store, &stale, noon());
 
@@ -572,11 +784,11 @@ async fn sweeps_reach_threads_behind_ones_that_never_store_a_result() {
 async fn only_a_full_sweep_forgets_what_it_settled() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
-    let service = service(&store, &classifier, &["acme.example"]);
-    let mut noise = thread("owner@acme.example");
+    let service = service(&store, &classifier, &enrolled());
+    let mut noise = thread(OWNER);
     noise.is_signal = false;
     let noise = insert(&store, noise);
-    let down = insert(&store, thread("owner@acme.example"));
+    let down = insert(&store, thread(OWNER));
     set_stale(&store, &[noise], noon());
     service.sweep(Duration::days(30), 100).await.unwrap();
     assert_eq!(*store.mail_reads.lock().unwrap(), 1);
@@ -602,11 +814,11 @@ async fn sweep_stops_when_the_classifier_rejects_everything() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Rejected));
     let threads = (0..MAX_REJECTIONS_IN_A_ROW + 3)
-        .map(|_| insert(&store, thread("owner@acme.example")))
+        .map(|_| insert(&store, thread(OWNER)))
         .collect::<Vec<_>>();
     set_stale(&store, &threads, noon());
 
-    let report = service(&store, &classifier, &["acme.example"])
+    let report = service(&store, &classifier, &enrolled())
         .sweep(Duration::days(30), 100)
         .await
         .unwrap();
@@ -623,11 +835,11 @@ async fn a_stored_classification_tells_the_inbox_readers() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
     let notifier = FakeNotifier::default();
-    let thread = thread("owner@acme.example");
+    let thread = thread(OWNER);
     let (owner, link_id) = (thread.owner.clone(), thread.link_id);
     let thread_id = insert(&store, thread);
 
-    notifying_service(&store, &classifier, &["acme.example"], &notifier)
+    notifying_service(&store, &classifier, &enrolled(), &notifier)
         .classify_thread(thread_id)
         .await
         .unwrap();
@@ -644,9 +856,9 @@ async fn nothing_stored_tells_nobody() {
         refuse_saves: true,
         ..FakeStore::default()
     };
-    let thread_id = insert(&refusing, thread("owner@acme.example"));
+    let thread_id = insert(&refusing, thread(OWNER));
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let outcome = notifying_service(&refusing, &classifier, &["acme.example"], &notifier)
+    let outcome = notifying_service(&refusing, &classifier, &enrolled(), &notifier)
         .classify_thread(thread_id)
         .await
         .unwrap();
@@ -654,9 +866,9 @@ async fn nothing_stored_tells_nobody() {
 
     // The classifier gave no answers.
     let store = FakeStore::default();
-    let thread_id = insert(&store, thread("owner@acme.example"));
+    let thread_id = insert(&store, thread(OWNER));
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
-    let outcome = notifying_service(&store, &classifier, &["acme.example"], &notifier)
+    let outcome = notifying_service(&store, &classifier, &enrolled(), &notifier)
         .classify_thread(thread_id)
         .await
         .unwrap();
@@ -670,12 +882,12 @@ async fn deciding_again_under_a_new_rule_tells_the_inbox_readers() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
     let notifier = FakeNotifier::default();
-    let mut legacy = thread("owner@acme.example");
+    let mut legacy = thread(OWNER);
     legacy.classified = Some(stored_at(&legacy, 0));
     let (owner, link_id) = (legacy.owner.clone(), legacy.link_id);
     let id = insert(&store, legacy);
 
-    let outcome = notifying_service(&store, &classifier, &["acme.example"], &notifier)
+    let outcome = notifying_service(&store, &classifier, &enrolled(), &notifier)
         .classify_thread(id)
         .await
         .unwrap();
@@ -689,9 +901,9 @@ async fn key_mail_outside_the_signal_inbox_tells_the_inbox_readers() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
     let notifier = FakeNotifier::default();
-    let service = notifying_service(&store, &classifier, &["acme.example"], &notifier);
+    let service = notifying_service(&store, &classifier, &enrolled(), &notifier);
 
-    let mut noise = thread("owner@acme.example");
+    let mut noise = thread(OWNER);
     noise.is_signal = false;
     let noise = insert(&store, noise);
     assert_eq!(
@@ -700,7 +912,7 @@ async fn key_mail_outside_the_signal_inbox_tells_the_inbox_readers() {
     );
     assert!(notifier.changed.lock().unwrap().is_empty());
 
-    let mut reschedule = thread("owner@acme.example");
+    let mut reschedule = thread(OWNER);
     reschedule.is_signal = false;
     reschedule.messages[0].calendar_part = Some(CalendarPart::Change {
         until: Utc::now() + Duration::days(2),
@@ -716,11 +928,11 @@ async fn key_mail_outside_the_signal_inbox_tells_the_inbox_readers() {
 async fn an_older_rule_is_decided_again_without_the_classifier() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
-    let mut legacy = thread("owner@acme.example");
+    let mut legacy = thread(OWNER);
     legacy.classified = Some(stored_at(&legacy, 0));
     let id = insert(&store, legacy);
 
-    let outcome = service(&store, &classifier, &["acme.example"])
+    let outcome = service(&store, &classifier, &enrolled())
         .classify_thread(id)
         .await
         .unwrap();
@@ -740,13 +952,13 @@ async fn an_older_rule_is_decided_again_without_the_classifier() {
 async fn sweep_counts_threads_decided_again_apart_from_classified_ones() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let mut legacy = thread("owner@acme.example");
+    let mut legacy = thread(OWNER);
     legacy.classified = Some(stored_at(&legacy, 0));
     let legacy = insert(&store, legacy);
-    let new = insert(&store, thread("owner@acme.example"));
+    let new = insert(&store, thread(OWNER));
     set_stale(&store, &[legacy, new], noon());
 
-    let report = service(&store, &classifier, &["acme.example"])
+    let report = service(&store, &classifier, &enrolled())
         .sweep(Duration::days(30), 100)
         .await
         .unwrap();
@@ -758,14 +970,14 @@ async fn sweep_counts_threads_decided_again_apart_from_classified_ones() {
 async fn answers_that_no_longer_decode_go_back_to_the_classifier() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let mut unreadable = thread("owner@acme.example");
+    let mut unreadable = thread(OWNER);
     unreadable.classified = Some(StoredClassification {
         answers: None,
         ..stored_at(&unreadable, 0)
     });
     let id = insert(&store, unreadable);
 
-    let outcome = service(&store, &classifier, &["acme.example"])
+    let outcome = service(&store, &classifier, &enrolled())
         .classify_thread(id)
         .await
         .unwrap();
@@ -777,14 +989,14 @@ async fn answers_that_no_longer_decode_go_back_to_the_classifier() {
 async fn new_mail_goes_to_the_classifier_even_under_an_older_rule() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let mut stale = thread("owner@acme.example");
+    let mut stale = thread(OWNER);
     stale.classified = Some(StoredClassification {
         message_id: Uuid::new_v4(),
         ..stored_at(&stale, 0)
     });
     let id = insert(&store, stale);
 
-    let outcome = service(&store, &classifier, &["acme.example"])
+    let outcome = service(&store, &classifier, &enrolled())
         .classify_thread(id)
         .await
         .unwrap();
@@ -796,9 +1008,9 @@ async fn new_mail_goes_to_the_classifier_even_under_an_older_rule() {
 async fn outside_the_signal_inbox_only_key_mail_reaches_the_classifier() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let service = service(&store, &classifier, &["acme.example"]);
+    let service = service(&store, &classifier, &enrolled());
 
-    let mut noise = thread("owner@acme.example");
+    let mut noise = thread(OWNER);
     noise.is_signal = false;
     let noise = insert(&store, noise);
     assert_eq!(
@@ -807,7 +1019,7 @@ async fn outside_the_signal_inbox_only_key_mail_reaches_the_classifier() {
     );
     assert!(classifier.inputs.lock().unwrap().is_empty());
 
-    let mut rsvp = thread("owner@acme.example");
+    let mut rsvp = thread(OWNER);
     rsvp.is_signal = false;
     rsvp.messages[0].calendar_part = Some(CalendarPart::Rsvp);
     let rsvp = insert(&store, rsvp);
@@ -818,7 +1030,7 @@ async fn outside_the_signal_inbox_only_key_mail_reaches_the_classifier() {
     assert!(classifier.inputs.lock().unwrap().is_empty());
 
     // Neither is a new invite, or a change to an event that is already over.
-    let mut new_invite = thread("owner@acme.example");
+    let mut new_invite = thread(OWNER);
     new_invite.is_signal = false;
     new_invite.messages[0].calendar_part = Some(CalendarPart::NewInvite {
         until: Utc::now() + Duration::days(2),
@@ -828,7 +1040,7 @@ async fn outside_the_signal_inbox_only_key_mail_reaches_the_classifier() {
         service.classify_thread(new_invite).await.unwrap(),
         ClassifyOutcome::NotSignal
     );
-    let mut over = thread("owner@acme.example");
+    let mut over = thread(OWNER);
     over.is_signal = false;
     over.messages[0].calendar_part = Some(CalendarPart::Change {
         until: Utc::now() - Duration::hours(1),
@@ -841,7 +1053,7 @@ async fn outside_the_signal_inbox_only_key_mail_reaches_the_classifier() {
     assert!(classifier.inputs.lock().unwrap().is_empty());
 
     let until = Utc::now() + Duration::days(2);
-    let mut reschedule = thread("owner@acme.example");
+    let mut reschedule = thread(OWNER);
     reschedule.is_signal = false;
     reschedule.messages[0].calendar_part = Some(CalendarPart::Change { until });
     let reschedule = insert(&store, reschedule);
@@ -851,7 +1063,7 @@ async fn outside_the_signal_inbox_only_key_mail_reaches_the_classifier() {
     };
     assert_eq!(verdict.calendar_hold_until, Some(until));
 
-    let mut contact = thread("owner@acme.example");
+    let mut contact = thread(OWNER);
     contact.is_signal = false;
     contact.sent_notes = vec![SentNote {
         recipient: "ceo@customer.example".to_owned(),
@@ -872,7 +1084,7 @@ async fn a_thread_the_owner_answered_last_is_classified_outside_the_signal_inbox
     // Reads as automated, so only the wait can bring it in.
     let classifier =
         FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
-    let mut waiting = thread("owner@acme.example");
+    let mut waiting = thread(OWNER);
     waiting.is_signal = false;
     let mut reply = waiting.messages[0].clone();
     reply.id = Uuid::new_v4();
@@ -884,7 +1096,7 @@ async fn a_thread_the_owner_answered_last_is_classified_outside_the_signal_inbox
     waiting.messages.push(reply);
     let id = insert(&store, waiting);
 
-    let outcome = service(&store, &classifier, &["acme.example"])
+    let outcome = service(&store, &classifier, &enrolled())
         .classify_thread(id)
         .await
         .unwrap();
@@ -900,10 +1112,10 @@ async fn a_thread_the_owner_answered_last_is_classified_outside_the_signal_inbox
 async fn a_thread_of_only_sent_mail_never_reaches_the_classifier() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let service = service(&store, &classifier, &["acme.example"]);
+    let service = service(&store, &classifier, &enrolled());
 
     // As the projection stores it: never in the inbox, and so not visible.
-    let mut unanswered = thread("owner@acme.example");
+    let mut unanswered = thread(OWNER);
     unanswered.inbox_visible = false;
     unanswered.messages[0].is_sent = true;
     unanswered.messages[0].from_email = Some("owner@acme.example".to_owned());
@@ -962,7 +1174,7 @@ async fn a_focus_thread_stores_the_day_its_mail_says_it_is_due() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
-    let id = insert(&store, thread("owner@acme.example"));
+    let id = insert(&store, thread(OWNER));
 
     let outcome = due_date_service(&store, &classifier, &due_dates, None)
         .classify_thread(id)
@@ -986,7 +1198,7 @@ async fn a_thread_that_cannot_be_in_focus_makes_no_model_call() {
     let classifier =
         FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
-    let id = insert(&store, thread("owner@acme.example"));
+    let id = insert(&store, thread(OWNER));
 
     let outcome = due_date_service(&store, &classifier, &due_dates, None)
         .classify_thread(id)
@@ -1008,7 +1220,7 @@ async fn a_thread_only_awaiting_a_reply_still_gets_a_due_date() {
     let classifier =
         FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
-    let mut waiting = thread("owner@acme.example");
+    let mut waiting = thread(OWNER);
     let mut reply = waiting.messages[0].clone();
     reply.id = Uuid::new_v4();
     reply.at = noon() + Duration::hours(1);
@@ -1036,7 +1248,7 @@ async fn deciding_again_keeps_the_stored_date_and_calls_no_model() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(None));
-    let mut legacy = thread("owner@acme.example");
+    let mut legacy = thread(OWNER);
     legacy.classified = Some(StoredClassification {
         due_on: Some(friday()),
         ..stored_at(&legacy, 0)
@@ -1059,7 +1271,7 @@ async fn new_mail_with_no_deadline_clears_the_stored_date() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(None));
-    let mut stale = thread("owner@acme.example");
+    let mut stale = thread(OWNER);
     stale.classified = Some(StoredClassification {
         message_id: Uuid::new_v4(),
         rule_version: FOCUS_RULE_VERSION,
@@ -1084,7 +1296,7 @@ async fn a_failed_extraction_leaves_the_classification_intact() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Fails);
-    let id = insert(&store, thread("owner@acme.example"));
+    let id = insert(&store, thread(OWNER));
 
     let outcome = due_date_service(&store, &classifier, &due_dates, None)
         .classify_thread(id)
@@ -1105,7 +1317,7 @@ async fn a_hung_extraction_only_costs_the_timeout() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Hangs);
-    let id = insert(&store, thread("owner@acme.example"));
+    let id = insert(&store, thread(OWNER));
     let started = tokio::time::Instant::now();
 
     let outcome = due_date_service(&store, &classifier, &due_dates, None)
@@ -1123,7 +1335,7 @@ async fn a_thread_with_no_words_of_its_own_makes_no_model_call() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
-    let mut quoted = thread("owner@acme.example");
+    let mut quoted = thread(OWNER);
     quoted.messages[0].body = Some("> Please send it by Friday.".to_owned());
     let id = insert(&store, quoted);
 
@@ -1141,7 +1353,7 @@ async fn the_owners_time_zone_sets_the_day_a_message_counts_from() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(None));
-    let mut late_evening = thread("owner@acme.example");
+    let mut late_evening = thread(OWNER);
     late_evening.messages[0].at = Utc.with_ymd_and_hms(2026, 10, 8, 2, 0, 0).unwrap();
     let id = insert(&store, late_evening);
 
@@ -1161,7 +1373,7 @@ async fn an_unknown_time_zone_falls_back_without_failing() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(None));
-    let mut late_evening = thread("owner@acme.example");
+    let mut late_evening = thread(OWNER);
     late_evening.messages[0].at = Utc.with_ymd_and_hms(2026, 10, 8, 2, 0, 0).unwrap();
     let id = insert(&store, late_evening);
 
