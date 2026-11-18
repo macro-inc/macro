@@ -2,7 +2,8 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use teams::domain::model::{
-    ItemChangeSettlement, ItemChangeStatus, PriceInfo, SubscriptionItemView, SubscriptionTerms,
+    ItemChangeSettlement, ItemChangeStatus, PaymentTerms, PriceInfo, ProratedCharge,
+    SubscriptionItemView, SubscriptionTerms,
 };
 
 use super::*;
@@ -36,6 +37,8 @@ struct FakeTeams {
     paid_from_balance: bool,
     /// Subscription and price reads, in order.
     reads: Arc<Mutex<Vec<&'static str>>>,
+    /// The card the subscription charges.
+    card: Option<teams::domain::model::PaymentCard>,
 }
 
 impl FakeTeams {
@@ -53,6 +56,7 @@ impl FakeTeams {
             refunds: Arc::default(),
             paid_from_balance: false,
             reads: Arc::default(),
+            card: None,
         }
     }
 }
@@ -220,6 +224,36 @@ impl TeamSubscriptionItems for FakeTeams {
             currency: "usd".into(),
             trialing: self.trialing,
         })
+    }
+
+    async fn team_payment_terms(
+        &self,
+        team_id: &Uuid,
+    ) -> Result<PaymentTerms, TeamSubscriptionItemsError> {
+        let terms = self.team_subscription_terms(team_id).await?;
+        Ok(PaymentTerms {
+            terms,
+            card: self.card.clone(),
+        })
+    }
+
+    async fn preview_item_prorations(
+        &self,
+        _: &Uuid,
+        prices: &[stripe::PriceId],
+    ) -> Result<Vec<ProratedCharge>, TeamSubscriptionItemsError> {
+        self.reads.lock().unwrap().push("preview");
+        Ok(prices
+            .iter()
+            .map(|price_id| ProratedCharge {
+                price_id: price_id.clone(),
+                // A third of the period is left.
+                amount: match price_id.as_str() {
+                    "price_standard_month" => 667,
+                    other => panic!("unexpected price {other}"),
+                },
+            })
+            .collect())
     }
 
     async fn price(
@@ -597,4 +631,93 @@ async fn refunding_a_team_with_no_subscription_is_typed() {
         .await;
 
     assert!(matches!(refused, Err(BillingError::NoSubscription)));
+}
+
+#[tokio::test]
+async fn purchase_terms_read_the_subscription_once_and_preview_once() {
+    let teams = FakeTeams {
+        card: Some(teams::domain::model::PaymentCard {
+            brand: teams::domain::model::CardBrand::Visa,
+            last4: "4242".into(),
+        }),
+        ..FakeTeams::new(BillingCadence::Month)
+    };
+    let billing = TeamComputerBilling::new(teams.clone(), prices());
+
+    assert_eq!(
+        billing
+            .purchase_terms(
+                Uuid::nil(),
+                &[ComputerSize::Standard],
+                &PurchaseBilling::Stripe
+            )
+            .await
+            .unwrap(),
+        PurchaseTerms {
+            quotes: vec![PurchaseQuote {
+                quote: Quote {
+                    size: ComputerSize::Standard,
+                    price_id: stripe::PriceId::from_str("price_standard_month").unwrap(),
+                    amount: 2000,
+                    currency: "usd".into(),
+                    interval: BillingInterval::Month,
+                },
+                due_today: 667,
+            }],
+            renews_at: DateTime::from_timestamp(1_802_678_400, 0).unwrap(),
+            card: Some(PaymentCard {
+                brand: CardBrand::Visa,
+                last4: "4242".into(),
+            }),
+        }
+    );
+    assert_eq!(
+        *teams.reads.lock().unwrap(),
+        vec!["subscription", "price", "preview"]
+    );
+}
+
+#[tokio::test]
+async fn comped_purchase_terms_preview_nothing_and_charge_nothing_today() {
+    let teams = FakeTeams {
+        trialing: true,
+        ..FakeTeams::new(BillingCadence::Month)
+    };
+    let billing = TeamComputerBilling::new(teams.clone(), prices());
+
+    let terms = billing
+        .purchase_terms(
+            Uuid::nil(),
+            &[ComputerSize::Standard],
+            &PurchaseBilling::Comped {
+                reason: "internal team".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(terms.quotes[0].due_today, 0);
+    assert_eq!(terms.card, None);
+    assert_eq!(*teams.reads.lock().unwrap(), vec!["subscription", "price"]);
+}
+
+#[tokio::test]
+async fn a_trialing_team_paying_by_stripe_gets_no_purchase_terms() {
+    let teams = FakeTeams {
+        trialing: true,
+        ..FakeTeams::new(BillingCadence::Month)
+    };
+    let billing = TeamComputerBilling::new(teams.clone(), prices());
+
+    assert!(matches!(
+        billing
+            .purchase_terms(
+                Uuid::nil(),
+                &[ComputerSize::Standard],
+                &PurchaseBilling::Stripe
+            )
+            .await,
+        Err(BillingError::TeamOnTrial)
+    ));
+    assert_eq!(*teams.reads.lock().unwrap(), vec!["subscription"]);
 }

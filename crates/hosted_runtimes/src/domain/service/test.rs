@@ -20,6 +20,7 @@ use crate::domain::ports::{ChargeStatus, ItemCharge, StaticFleetAttachment};
 mod charging;
 mod comped;
 mod first_start;
+mod purchase_offers;
 mod quarantine;
 mod rollout;
 mod sold_resources;
@@ -71,6 +72,8 @@ pub(crate) struct FakeBilling {
     pub refund_fails: AtomicBool,
     /// The purchase's invoice was never paid, so nothing is refunded.
     pub nothing_to_refund: bool,
+    /// The card purchases are charged to.
+    pub card: Option<crate::domain::models::PaymentCard>,
     pub calls: Mutex<Vec<&'static str>>,
 }
 
@@ -120,6 +123,31 @@ impl Billing for FakeBilling {
     async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
         self.calls.lock().unwrap().push("quote");
         self.quoted(size)
+    }
+
+    async fn purchase_terms(
+        &self,
+        _team_id: Uuid,
+        sizes: &[ComputerSize],
+        billing: &PurchaseBilling,
+    ) -> Result<crate::domain::models::PurchaseTerms, BillingError> {
+        self.calls.lock().unwrap().push("purchase_terms");
+        Ok(crate::domain::models::PurchaseTerms {
+            quotes: sizes
+                .iter()
+                .map(|&size| {
+                    let quote = self.quoted(size)?;
+                    // A third of the period is left.
+                    let due_today = match billing {
+                        PurchaseBilling::Stripe => quote.amount / 3,
+                        PurchaseBilling::Comped { .. } => 0,
+                    };
+                    Ok(crate::domain::models::PurchaseQuote { quote, due_today })
+                })
+                .collect::<Result<_, BillingError>>()?,
+            renews_at: DateTime::from_timestamp(1_802_678_400, 0).unwrap(),
+            card: self.card.clone(),
+        })
     }
 
     async fn purchase_price(
