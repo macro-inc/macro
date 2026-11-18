@@ -1,15 +1,21 @@
 import type { DateValue } from '@core/util/date';
 import type { EntityData } from '@entity';
+import type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
 import { For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
+import { AttachmentChipRow } from './AttachmentChipRow';
 import { AttachmentEntityRow } from './AttachmentEntityRow';
 import { AttachmentSection, LoadMoreButton } from './SectionHeader';
 
-export type AttachmentEntityListRow = {
-  entity: EntityData;
-  timestamp?: DateValue | null;
-  senderId?: string;
-  onClick?: (event: MouseEvent) => void;
-};
+export type AttachmentEntityListRow =
+  | {
+      kind: 'entity';
+      entity: EntityData;
+      timestamp?: DateValue | null;
+      senderId?: string;
+      onClick?: (event: MouseEvent) => void;
+    }
+  | { kind: 'attachment'; attachment: ApiChannelAttachment };
 
 export function AttachmentEntityList(props: {
   rows: AttachmentEntityListRow[];
@@ -33,14 +39,21 @@ export function AttachmentEntityList(props: {
 
         <Show when={hasDocuments()}>
           <For each={props.rows}>
-            {(row) => (
-              <AttachmentEntityRow
-                entity={row.entity}
-                timestamp={row.timestamp}
-                senderId={row.senderId}
-                onClick={row.onClick}
-              />
-            )}
+            {(row) =>
+              match(row)
+                .with({ kind: 'entity' }, (entityRow) => (
+                  <AttachmentEntityRow
+                    entity={entityRow.entity}
+                    timestamp={entityRow.timestamp}
+                    senderId={entityRow.senderId}
+                    onClick={entityRow.onClick}
+                  />
+                ))
+                .with({ kind: 'attachment' }, (attachmentRow) => (
+                  <AttachmentChipRow attachment={attachmentRow.attachment} />
+                ))
+                .exhaustive()
+            }
           </For>
 
           <Show when={props.hasNextPage}>

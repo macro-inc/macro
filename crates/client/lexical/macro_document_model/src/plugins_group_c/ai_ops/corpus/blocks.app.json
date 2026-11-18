@@ -12546,11 +12546,11 @@
         "type": "root",
         "version": 1,
         "$": {
+          "id": "s0000005",
           "documentMetadata": {
             "version": 11,
             "environmentTags": null
-          },
-          "id": "s0000005"
+          }
         }
       }
     }

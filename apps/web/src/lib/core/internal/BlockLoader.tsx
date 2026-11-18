@@ -4,8 +4,6 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFlow, usePending } from '@app/observability/flow';
 import { useIsAuthenticated } from '@core/context/user';
 import type { OwnedBlockHandle } from '@core/orchestrator';
-import { Telemetry } from '@macro-inc/observability';
-import { useQueryClient } from '@queries/client';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { createAsync } from '@solidjs/router';
@@ -35,6 +33,7 @@ import {
 import type { Source, SourcePreload } from '../source';
 import type { ObjectLike } from '../util/result';
 import { loadBlockDataAfterComponentPreload } from './loadBlockData';
+import { trackOpen } from './track-open';
 
 export const blockDataSignal = createBlockSignal<unknown>();
 export const blockLiveTrackingEnabledSignal = createBlockSignal<boolean>();
@@ -220,23 +219,7 @@ Check that the load function does not return a preload source when the intent is
     if (!isNested && data) {
       const tracksOpenHistory = props.definition.openTrackingEnabled !== false;
       if (tracksOpenHistory) {
-        // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider
-        import('./trackBlockOpened')
-          .then(({ track }) => {
-            if (authenticated() !== true) return;
-            track({
-              itemId: props.id,
-              blockName: data.__block,
-              client: useQueryClient,
-            });
-          })
-          .catch((error) =>
-            Telemetry.error(error, {
-              surface: 'track-block-opened',
-              blockName: data.__block,
-            })
-          );
-
+        trackOpen(props.id, data.__block, authenticated);
         analytics.pageView(data.__block);
       }
 

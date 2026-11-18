@@ -45,6 +45,35 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
     }
 }
 
+/// Count previews and validation reveal no new content or sharing; policy
+/// writes can contribute mail and remain outside every scoped credential.
+#[test]
+fn scoped_sessions_inspect_email_rules_without_changing_contribution() {
+    for scope in [
+        SessionScope::Generation,
+        SessionScope::NoSend,
+        SessionScope::DryRun,
+    ] {
+        for prefix in ["", "/dss/v1"] {
+            for (method, path) in [
+                ("GET", "/crm/email-privacy/policy"),
+                ("POST", "/crm/email-privacy/policy/validate"),
+                ("POST", "/crm/email-privacy/policy/preview"),
+            ] {
+                assert!(scope.allows(method, &format!("{prefix}{path}")));
+            }
+            assert!(!scope.allows("PUT", &format!("{prefix}/crm/email-privacy/policy")));
+            assert_eq!(
+                scope.allows(
+                    "DELETE",
+                    &format!("{prefix}/crm/email-privacy/policy/preview/01a1"),
+                ),
+                scope == SessionScope::NoSend,
+            );
+        }
+    }
+}
+
 #[test]
 fn a_template_matches_the_whole_path_under_at_most_one_service_prefix() {
     assert!(matches(

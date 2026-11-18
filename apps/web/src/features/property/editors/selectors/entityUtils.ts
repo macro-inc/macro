@@ -78,7 +78,8 @@ export function useQuickAccessEntities<T extends EntityType>(
   entityType: Accessor<T | T[] | null | undefined>,
   searchTerm: Accessor<string> = () => '',
   enabled: Accessor<boolean> = () => true,
-  excludedPeople?: Accessor<ReadonlySet<string>>
+  excludedPeople?: Accessor<ReadonlySet<string>>,
+  readsCache?: Accessor<boolean>
 ) {
   const quickAccess = useQuickAccess();
 
@@ -112,6 +113,7 @@ export function useQuickAccessEntities<T extends EntityType>(
         enabled,
         peopleMode: 'property',
         excludedPeople,
+        readsCache,
       })
     );
   });

@@ -202,3 +202,40 @@ fn provider_fetched_html_does_not_gain_data_attributes() {
     assert!(!sanitized.contains("data-document-mention"));
     assert!(!sanitized.contains("data-document-id"));
 }
+
+/// Element and attribute names in `html`, as a browser would parse it.
+fn elements_and_attributes(html: &str) -> Vec<String> {
+    scraper::Html::parse_fragment(html)
+        .root_element()
+        .descendants()
+        .skip(1)
+        .filter_map(scraper::ElementRef::wrap)
+        .map(|element| {
+            let attributes: Vec<&str> = element.value().attrs().map(|(name, _)| name).collect();
+            format!("{}[{}]", element.value().name(), attributes.join(","))
+        })
+        .collect()
+}
+
+#[test]
+fn removing_a_css_comment_cannot_close_the_style_element() {
+    let sanitized = sanitize_html_fragment("<style></sty/**/le><b>Bold</b></style><p>hi</p>");
+
+    assert_eq!(elements_and_attributes(&sanitized), ["style[]", "p[]"]);
+}
+
+#[test]
+fn removing_a_css_comment_keeps_the_selector_it_sat_in() {
+    let sanitized = sanitize_html_fragment("<style>div/**/.x{color:red}</style>");
+
+    assert!(sanitized.contains("div.x{color:red;}"), "{sanitized}");
+}
+
+#[test]
+fn removing_a_css_import_cannot_assemble_another_import() {
+    let sanitized = sanitize_html_fragment(
+        r#"<style>@im@import a;port url("https://styles.example/extra.css");</style>"#,
+    );
+
+    assert!(!sanitized.to_ascii_lowercase().contains("@import"));
+}

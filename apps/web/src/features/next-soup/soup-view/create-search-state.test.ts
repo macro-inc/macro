@@ -10,7 +10,7 @@ vi.mock('@app/lib/analytics', () => ({
 }));
 vi.mock('@app/features/soup/search', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/features/soup/search')>()),
-  useSearchContext: () => ({ entityPool: pool, routinePool: () => [] }),
+  useSearchContext: () => ({ entityPool: () => pool, routinePool: () => [] }),
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),

@@ -103,9 +103,11 @@ its sidebar list until the refetch lands, and one meeting's removal reaches ever
 attendee's inbox sync, so a hint on ordinary meetings flashes the whole team's
 calendars. OOO edits (including becoming private or ceasing to be OOO), retiring an
 OOO source, sharing changes, and disconnects require immediate clearing. Missing
-or malformed hints from older servers also clear immediately. Outlook sync still
-sends the hint with every change. The 60-second cache expiry and session-reset
-behavior remain in force.
+or malformed hints from older servers also clear immediately. Outlook follows
+the same rule per event: publishing an Outlook event's change raises the hint
+only when the event was or is OOO, and a calendar discovery raises it only for
+the calendar changes a Google calendar list raises it for. The 60-second cache
+expiry and session-reset behavior remain in force.
 
 Team projections and availability use server-confirmed source copies. An offline
 edit can appear immediately in the editor's own calendar through the mutation

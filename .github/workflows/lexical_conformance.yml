@@ -20,6 +20,9 @@ jobs:
         clean: 'false'
         fetch-depth: '0'
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Clear prior execution evidence
       run: rm -rf packages/lexical-conformance/coverage/results target/lexical-conformance/cases.json
     - name: Mount Namespace cache volume
@@ -83,6 +86,9 @@ jobs:
         clean: 'false'
         fetch-depth: '0'
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Clear prior execution evidence
       run: rm -rf packages/lexical-conformance/coverage/results target/lexical-conformance/cases.json
     - name: Mount Namespace cache volume
@@ -138,6 +144,9 @@ jobs:
         clean: 'false'
         fetch-depth: '0'
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Clear prior execution evidence
       run: rm -rf packages/lexical-conformance/coverage/results target/lexical-conformance/cases.json
     - name: Mount Namespace cache volume

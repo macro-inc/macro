@@ -325,7 +325,9 @@ function useSoupHomeDataSource(
         }))
       : transformEntities(entities);
 
-  const { entityPool } = useSearchContext();
+  const entityPool = useSearchContext().entityPool(() =>
+    Boolean(state.search.trim())
+  );
   const localPool = createMemo(() => {
     if (!state.search.trim()) return [];
     const pool = entityPool();

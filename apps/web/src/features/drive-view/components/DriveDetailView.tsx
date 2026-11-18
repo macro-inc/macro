@@ -183,7 +183,7 @@ function StackEntityDetail(props: {
             );
           }}
           previewHeaderLeading={
-            <Show when={hasBlockHeader(props.entry.data)}>
+            <Show when={hasBlockHeader(props.entry.data) && props.order > 0}>
               <DriveBreadcrumbsOutlet
                 aria-label="File location"
                 class="max-w-[min(40vw,24rem)] overflow-hidden"
@@ -230,14 +230,14 @@ function StackEntityDetail(props: {
 
 export function DriveDetailView() {
   const drive = useOptionalDriveView();
+  const navigationStack = useDriveDetailNavigation();
   const breadcrumbOrderOffset = () =>
-    drive
+    drive && navigationStack.showsLocation()
       ? driveLocationBreadcrumbs(
           drive.state.value().location,
           drive.sidebar.folders()
         ).length
       : 0;
-  const navigationStack = useDriveDetailNavigation();
   const activeHasBlockHeader = () => {
     const target = navigationStack.active()?.data;
     return target !== undefined && hasBlockHeader(target);

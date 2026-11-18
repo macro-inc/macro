@@ -35,6 +35,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   ends their work registrations first
   (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
+  Each call runs in an `internal_mcp.call_tool` span parented from the
+  request's `_meta` trace context, which the in-process agent sends
+  (`mcp_toolset::TraceContext::Propagate`), so `code_mode.execution` and the
+  sandbox's SDK calls join the session's trace.
 - `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
   and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
   on Macro credits (Claude Code on a Macro computer). Both values come from
@@ -122,7 +126,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   and evaluation errors return 403) and an attached fleet (503).
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
-  (a rejected code returns 422 with `code: "invalid_code"`),
+  (a failed sign-in carries a `code` saying how to recover:
+  `invalid_code` 422 and `sign_in_expired` 410 need a new sign-in,
+  `malformed_code` 400 a fresh paste, `computer_unreachable` 503 and
+  `computer_busy` 409 a retry; a timeout is a bare 504),
   `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
   `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
   The sign-in link must be `https://claude.com` or `claude.ai` at exactly

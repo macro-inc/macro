@@ -349,7 +349,7 @@ describe('InviteToTeamDialog agent teammates', () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
       "Ada is being set up. We'll let you know when it's ready."
     );
-    expect(screen.queryByText('Bring your AI to Ada')).toBeNull();
+    expect(screen.queryByText('Connect Ada to your Claude plan')).toBeNull();
     expect(mocks.startSignIn).not.toHaveBeenCalled();
   });
 });

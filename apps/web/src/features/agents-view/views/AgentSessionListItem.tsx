@@ -25,7 +25,10 @@ import {
 type Props = {
   entity: AgentSessionEntity;
   surface: 'home' | 'agents';
+  /** The row button's id, for a list that points at its focused row. */
+  domId?: string;
   active?: boolean;
+  focused?: boolean;
   unread?: boolean;
   mode?: AgentsMode;
   onOpen?: (event: MouseEvent) => void;
@@ -85,11 +88,13 @@ export function AgentSessionListItem(props: Props) {
   return (
     <AgentSessionRow
       id={props.entity.id}
+      domId={props.domId}
       title={props.entity.name || 'Untitled conversation'}
       kind={mode()}
       state={state()}
       failed={failed()}
       active={props.active}
+      focused={props.focused}
       unread={props.unread}
       hideLeading={hideLeading()}
       onOpen={props.onOpen}

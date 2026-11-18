@@ -8,7 +8,7 @@ import { useUsersMention } from './useUsersMention';
 
 const mocks = vi.hoisted(() => ({
   users: (): UserItem[] => [],
-  loading: false,
+  loading: (): boolean => false,
   error: undefined as unknown,
   loadMore: vi.fn<() => Promise<void>>(),
 }));
@@ -18,7 +18,7 @@ vi.mock('@core/context/quickAccess', () => ({
       items: () => (options.enabled?.() === false ? [] : mocks.users()),
       windowKey: () => 'window',
       hasMore: () => true,
-      isLoading: () => mocks.loading,
+      isLoading: () => mocks.loading(),
       error: () => mocks.error,
       isLoadingMore: () => false,
       loadMore: mocks.loadMore,
@@ -89,12 +89,12 @@ const userItem = (user: IUser, lastInteraction?: Date): UserItem => ({
 });
 
 beforeEach(() => {
-  mocks.loading = false;
   mocks.error = undefined;
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-29T12:00:00Z'));
   mocks.loadMore.mockReset();
   mocks.loadMore.mockResolvedValue(undefined);
+  mocks.loading = () => false;
   mocks.users = () => [
     userItem(sean),
     userItem(alias),
@@ -173,6 +173,91 @@ it('lists Macro, then you, then people, then the other agents while browsing', (
     ]);
     dispose();
   });
+});
+
+it('lists only the rows that lead the people until the directory first answers', () => {
+  const [loading, setLoading] = createSignal(true);
+  const [people, setPeople] = createSignal<UserItem[]>([]);
+  const [open, setOpen] = createSignal(true);
+  mocks.loading = loading;
+  mocks.users = people;
+  const [searchTerm, setSearchTerm] = createSignal('');
+  const { directory, macroOnly, scoped, dispose } = createRoot((dispose) => ({
+    directory: useUsersMention({
+      searchTerm,
+      enabled: open,
+      transformUsers: (users) => [...users, reviewCodex, macroAgent],
+    }),
+    macroOnly: useUsersMention({
+      searchTerm,
+      enabled: open,
+      transformUsers: (users) => [...users, macroAgent],
+    }),
+    scoped: useUsersMention({
+      searchTerm,
+      users: () => [reviewCodex, sean, macroAgent],
+    }),
+    dispose,
+  }));
+  const ids = () => directory.users().map((item) => item.id);
+
+  // Codex will follow the people, who have not arrived: it waits rather
+  // than take a row a person is about to take. Macro's People rows wait for
+  // the people whether or not other agents do.
+  expect(ids()).toEqual([macroAgent.id]);
+  expect(directory.holdsRows()).toBe(true);
+  expect(macroOnly.users().map((item) => item.id)).toEqual([macroAgent.id]);
+  expect(macroOnly.holdsRows()).toBe(true);
+  setSearchTerm('rev');
+  expect(ids()).toEqual([]);
+  expect(directory.holdsRows()).toBe(true);
+  expect(macroOnly.holdsRows()).toBe(false);
+  setSearchTerm('mac');
+  expect(ids()).toEqual([macroAgent.id]);
+
+  // A scoped roster is complete as given.
+  setSearchTerm('');
+  expect(scoped.users().map((item) => item.id)).toEqual([
+    macroAgent.id,
+    sean.id,
+    reviewCodex.id,
+  ]);
+  expect(scoped.waitingForPeople()).toBe(false);
+
+  setPeople([
+    { ...userItem(sean), personOrder: 0 },
+    { ...userItem(viewer), personOrder: 1 },
+  ]);
+  expect(ids()).toEqual([macroAgent.id, viewer.id, sean.id, reviewCodex.id]);
+  expect(directory.waitingForPeople()).toBe(false);
+
+  // Once the directory has answered, a term no one matches lists its agents
+  // while the directory reads it.
+  setPeople([]);
+  setSearchTerm('rev');
+  expect(ids()).toEqual([reviewCodex.id]);
+  expect(directory.waitingForPeople()).toBe(false);
+
+  // Reopening waits again, until other menus would stop saying the cache is
+  // searching.
+  setOpen(false);
+  setOpen(true);
+  setSearchTerm('');
+  expect(ids()).toEqual([macroAgent.id]);
+  vi.advanceTimersByTime(11_999);
+  expect(ids()).toEqual([macroAgent.id]);
+  vi.advanceTimersByTime(1);
+  expect(ids()).toEqual([macroAgent.id, reviewCodex.id]);
+  expect(directory.holdsRows()).toBe(false);
+
+  // A directory that answers without anyone ends the wait too.
+  setOpen(false);
+  setOpen(true);
+  expect(directory.waitingForPeople()).toBe(true);
+  setLoading(false);
+  expect(directory.waitingForPeople()).toBe(false);
+  expect(ids()).toEqual([macroAgent.id, reviewCodex.id]);
+  dispose();
 });
 
 it('lists an agent only when it holds the typed words, never above a person who matches as well', () => {
@@ -497,7 +582,7 @@ it('reports actual workspace search state without blocking supplied people', () 
     const workspace = useUsersMention({ searchTerm: () => '' });
     const supplied = useUsersMention({ searchTerm: () => '', users: () => [] });
     const failure = new Error('fixture search failed');
-    mocks.loading = true;
+    mocks.loading = () => true;
     mocks.error = failure;
     expect(workspace.isLoading()).toBe(true);
     expect(workspace.error()).toBe(failure);

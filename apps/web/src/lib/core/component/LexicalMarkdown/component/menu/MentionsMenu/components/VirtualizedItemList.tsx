@@ -3,7 +3,7 @@ import { createEffect, For, on, Show, untrack } from 'solid-js';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
 import { MentionsMenuItem } from './MentionsMenuItem';
 
-const VIRTUAL_ITEM_HEIGHT = 36;
+export const VIRTUAL_ITEM_HEIGHT = 36;
 
 export function VirtualizedItemList(props: {
   items: MentionItem[];

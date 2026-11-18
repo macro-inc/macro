@@ -96,7 +96,13 @@ The settings signature browser suite also exercises real channel/link observers
 and the contact context publisher across account switches with delayed responses
 (`account-sources.browser.e2e.ts`). `queries/contacts/context-source.ts` reuses
 those keyed queries through ownership-tagged selectors; gate missing inputs rather
-than publishing an empty snapshot. `context-publisher.ts` caps pending IDs and
+than publishing an empty snapshot. Its cached-channel overlay rereads the cache only
+for `dm` changes while a contact window is enabled in any tab, and once when one
+opens after changes it missed: channel rows never reach contact facts, and every
+tab ranks from the leader's publication. `createContactDirectoryWindow` holds
+`openContactReader` while enabled, from its first settled page on, so the catch-up
+never races the picker's first rows; `queries/contacts/readers.ts` shares that
+across tabs, and a tab that vanishes stays counted as open. `context-publisher.ts` caps pending IDs and
 write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
 and never writes directory names or membership. `useContactContextPublisher`
 shares Soup's leader, rollout and generation lifecycle; do not add another leader.
@@ -119,7 +125,7 @@ cursors and contact reconciliation use coordinator protocol 17; native menu poli
 lists people the viewer has a direct message with first among matches at a word
 start, however exactly a stranger's name matches; within each group, exact names
 (full, or the first name for a one-term query) come before all-word prefixes, then
-recency and identity. Literal contains matches come last. "Has a direct message" means a
+recency and identity. Literal contains matches follow, then address-only matches (domain or local part). "Has a direct message" means a
 positive interaction time, which context facts take from direct-message channels,
 including group and never-written DMs. Native (desktop, iOS, Android) binaries released
 before policy 6 still answer with policy 5; keep accepting it (`PEOPLE_MIN_POLICY_VERSION`).
@@ -145,7 +151,9 @@ A window key names the page or growing list on screen, never a refresh of it. Re
 virtual focus/scroll only on window replacement, not label updates or refreshes.
 Menus hold the row the user moved to by identity (`createSelectionAnchor`) while
 results arrive; the highlight resets only when the query or category changes.
-The person list keeps its still-matching rows while the next read is pending. Keep explicit participant/team pools scoped and
+The person list keeps its still-matching rows while the next read is pending, so the contact
+window's `loading()` must have no gap between its text settling and its query fetching (a memo
+can still see the disabled query of the unsettled text then). Keep explicit participant/team pools scoped and
 selected IDs/self independent of suggestion pages. Discussion mentions on documents,
 projects and calls delegate to the same bounded directory. In mention configuration,
 `users()` returning undefined selects that directory; [] remains an explicit empty
@@ -313,17 +321,35 @@ switcher triggers, and scrolling list controls have a backend-free regression:
 The same suite's `list-search.browser.e2e.ts` drives the list header's search
 field, and the sidebar's (`?surface=sidebar`), over the real hotkey engine and
 list controller: ArrowDown and Enter move to the first result, and Escape keeps
-the search in the field and clears it from the list after a selection.
+the search in the field and clears it from the list after a selection. In a real
+`ListHeader` (`?surface=header&width=<px>`) the open field narrows, down to its
+96px minimum, before the header's other actions would push its end out of view,
+and keeps its full width when there is room. Inside an `@container/split-header`
+600px or narrower, the toolbar New (`ViewCreateButton`) drops its label, keeping
+its icon, its caret when it opens a menu, its name and its tooltip, as header
+actions do.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
 tasks to an icon and narrowing the open search on phones only; tablet and desktop
-keep the labels. On touch, New task is the project's own floating `+ Task`
-pill, which replaces the Tasks view's (that one creates outside any project), and
-read-only viewers get none. Its backend-free regression renders the real row and
-float host with a stand-in for the task filters (the real phone filter trigger,
-one button on desktop) and for the Tasks view's pill:
+keep the labels. Its icon buttons share one size on phones (the filter trigger is
+`inline`), and on touch Add existing tasks picks in a `PickerSheet`. On touch,
+New task is the project's own floating `+ Task` pill on every project tab,
+which replaces the Tasks view's (that one creates outside any project and stays
+hidden on project routes), and read-only viewers get none. Its backend-free
+regression renders the real row and float host with a stand-in for the task
+filters (the real phone filter trigger, one button on desktop) and for the
+Tasks view's pill:
 `bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
+
+The Reviews list header (the real `ReviewsListHeader`, status tabs, New and
+Search) has a backend-free regression for making room as the pane narrows:
+labelled tabs while everything fits, icon-only tabs and then no scope name only
+when the actions would overflow, each step undone once there is room again, an
+open search taking the tab labels, icon tabs keeping their names, tooltips
+and distinct icons, keyboard focus staying on a status as the tabs switch, and
+list/board switches:
+`bunx playwright test --config src/features/reviews-view/browser-test/playwright.config.ts`.
 
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
 regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
@@ -551,8 +577,9 @@ Discussion link scrolling has a backend-free browser regression:
 Inviting an agent teammate from Team → Members (People | Agent in Invite to
 Team, behind `enable-agent-teammates`): the dialog closing with its notice, a
 refused invite's error in view, its row's Setting up step → Running and failed
-Retry, the ready and failed notifications (Message, Bring your AI for admins
-only, Retry), Bring your AI with Close, its row's Claude sign-in and switch
+Retry, the ready and failed notifications (Message, Connect Claude plan for
+admins only, Retry), Connect Claude plan's one-screen sign-in with its
+expired, rejected and unreachable states, its row's Claude sign-in and switch
 back to credits, the DM status banner, and its removal have a backend-free
 browser regression at desktop 1440 and phone 390 over a scripted auth
 service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It launches Chromium with
@@ -679,15 +706,33 @@ mentions) rank with `NAME_MATCH_RANKING` in `@core/util/freshSort`: names equal
 to the query first, then names starting with it, then other matches, with tight
 matches near the start scoring higher. Each menu's recency weights and type
 boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
-lift a row past a better name match. The one exception: Cmd+K then keeps Macro
-users and DMs ahead of CRM contacts across the people positions, whatever their
-match. Among equally good name matches Cmd+K lists Macro users and DMs before
-other rows. Personal contact rows keep the native window order among equally good
-name matches only, so a recent weaker match never takes a better match's slot.
+lift a row past a better name match. Cmd+K and mobile name search
+(`rankCommandSearchItems`) put relationship first among names with a word
+starting with each typed term (`startsWordsOf`, the native word-prefix rule),
+as people policy 6 does: the viewer's own results and the people they know
+(teammates, a DM row, or a person with an interaction time, which comes only
+from DMs) lead, ordered by match, and people the viewer never messaged, CRM
+contacts included, follow however exactly their name matches. Names that only
+contain the query come last, with strangers after the other rows of each tier.
+Among equally good matches Cmd+K lists teammates, then other people the viewer
+knows, before other rows. Within a run of adjacent people rows in one of those
+groups, Macro users and DMs lead CRM contacts whatever their match; no person
+moves past another result or into a better group to do it. Personal contact
+rows keep the native window order among people in the same group, matching
+equally well and equally close to the viewer, so a recent weaker match never
+takes a better match's slot.
 A row whose letters merely appear in order ranks below every row containing the
 typed words.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when
-local search has text. Measure Quick Access ranking at scale with the
+local search has text. Its cache rows (`SearchProvider`'s `entityPool`) are
+read only while a caller passes a `searching` accessor that is true
+(`readsCache` on the list), because a pool reading the cache rereads it on every
+change and queues behind every other read; its in-memory rows stay listed, so
+the first keystroke does not rebuild them. Quick Access's history and recent
+channel sources follow cache changes promptly only while one of its lists reads
+the cache, and at most once a minute otherwise (`intervalWhileRead`). Never
+read them as a list opens: the read lands after the first paint and reorders
+rows already on screen. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
 Ordinary DM entity matching in Cmd+K and mobile name search treats the first
 name as exact, so it reaches a full-name DM; personal contact windows count an
@@ -720,7 +765,8 @@ ranking and insertion on desktop and phone.
 
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
-It checks draft blank lines across remounts, that a sent message renders its
+It checks draft blank lines across remounts, one shared draft for a channel
+mounted twice (two desktop tabs), that a sent message renders its
 lines with the spacing the draft showed, that the one-line composer centers its
 buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
@@ -932,6 +978,9 @@ margins, which the compact single-row layout measures.
 
 Keep native Pipedream consent in the system browser: the desktop navigation
 plugin redirects external popups and breaks the embedded iframe's return path.
+The native webviews load only the app's own origins; never add an exception
+for a third-party page (WebKit asks the navigation plugin about iframes and
+pages alike, so one would also let that page replace the app).
 `pipedream-connect.html` is a separate Vite entry, served at
 `/app/pipedream-connect.html`, without a Macro browser login. The Connect token
 and one-time state travel only in its URL fragment, which the page removes on
@@ -1248,13 +1297,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   header (`onSearchOpenChange(false)` when the sidebar keeps it open itself).
   A sidebar that leaves the open state to the header would hide a live query,
   so pass `searchOpen` (open while a query is set) and clear the query in
-  `onSearchOpenChange(false)`, as Home and Chat do. Pass `hasResults` when
+  `onSearchOpenChange(false)`, as Home, Chat and Agents do. Pass `hasResults` when
   another list shares the split (Chat's rail beside a conversation's calls):
   the "go to first item" lookup answers for whichever list registered last.
   Its search clears only on an Escape pressed inside the sidebar
   (`[data-view-shell-aside]`, through `ownsEscape`), so the preview or
-  conversation beside it keeps its own Escape. Home and Chat use it; Agents keeps a plain `SearchBar` until its sidebar has
-  a keyboard list. Covered by `ViewSidebar.test.tsx`.
+  conversation beside it keeps its own Escape. Home, Chat and Agents use it;
+  Agents' list keys answer only while focus is in its sidebar, because its
+  session pane shares the split's hotkey scope. Covered by
+  `ViewSidebar.test.tsx` and `AgentsSidebar.test.tsx`.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model, effort and priority tier controls separate: the model selector opens the catalog, and Effort and Priority tier (`ComposerSettingMenu`) show their current value beside the icon and list the runtime's advertised choices; on touch they are icon buttons that open a bottom sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
@@ -1327,7 +1378,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep call layout in desktop `CallMoreMenu`; mirror participant visibility on the shared-screen edge, omit that edge toggle in Grid, and reset visibility when sharing ends. Desktop tile pins take Speaker placement unless Sidebar is selected, without changing saved Layout; keep every participant and share track mounted when moving tiles and clear stale pins when their source disappears. Share the call-owned pin with the desktop mini-player regardless of Layout; unpinning or losing its source restores automatic selection immediately. Phones stay on Auto; reserve phone pinning for long-press, not taps.
 - Keep `CallWaveform` static except for the current call's desktop chat-sidebar row, channel-header duration pill and app-rail item; pass `live` and the matching room identity only there. Live marks follow speech and reduced motion; phones stay static. Preserve AvatarGroup separator rings with inset speaking outlines and keep phone icons for call actions.
 - Keep call full screen scoped to its call root; mount call menus locally and keep tooltips in their owning fullscreen element.
-- Diagnose the GraphQL mutation queue with `graphql.mutation_queue.*` spans and logs keyed by `mutation_queue.item_id`; route queue telemetry through `mutation-queue-telemetry.ts`, which dedupes per item and failure class and turns repeats into the periodic summary. Never add per-attempt `console.*` lines or record variables, draft content, or emails.
+- Diagnose the GraphQL mutation queue with `graphql.mutation_queue.*` spans and logs keyed by `mutation_queue.item_id`; route queue telemetry through `mutation-queue-telemetry.ts`, which dedupes per item and failure class and turns repeats into the periodic summary. Never add per-attempt `console.*` lines or record variables, draft content, or emails. A page that reloads or closes mid-attempt leaves its lease on the queue head; the runner releases it once the holder's Web Lock (`mutation-queue-owner.ts`) shows its page has been hidden or gone. Let the owner lock go on `pagehide` (a held lock can keep a page out of the back/forward cache), claim under a new owner after a restore, send a claim only while the page still holds the owner it was made under, and fence every release by the holder's owner and generation.
 - Keep desktop OAuth consent in the system browser with a `macro://` return:
   `macro:///inbox-link-callback` for Gmail and Outlook inboxes,
   `macro:///github-link-callback` for GitHub (consumed by the navigation
@@ -1346,10 +1397,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Include unsynced email working copies in Drafts and mobile name search even
   before a GraphQL save, and warm sending accounts alongside backfill. Preserve
   inbox, alias, and facet scope.
-- Draft autosaves preserve active email thread messages; evict inactive legacy
-  caches on save and the active cache on thread exit. Revalidate GraphQL thread
-  pages only when a save cannot patch the message list (missing snapshot or a
-  move between inboxes).
+- Draft autosaves patch GraphQL thread pages in place; revalidate them only
+  when a save cannot patch the message list (missing snapshot or a move
+  between inboxes).
 - Keep email card resize motion on its content wrapper so message and inline
   reply transitions preserve the card's focus target and return to natural height.
 - Task composer submissions retain an account/context-scoped local copy until
@@ -1856,9 +1906,12 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 Computer rows show the Claude mode (`Signed in with Claude` on the computer's
 own account, never its email) from `claude-mode` for managers, and the harness list's derived
 `claude_mode` for other members. Sign-in is a dialog
-(`claude-sign-in-flow.tsx`) that starts the sign-in on open, so its Open
-claude.ai control stays a plain `target="_blank"` link; never open it after an
-await. The backend also requires management rights for Claude account changes.
+(`claude-sign-in-flow.tsx`) that starts the sign-in on open. Once the link
+has arrived, Open claude.ai is a plain `target="_blank"` link; never open it
+after an await. Until then it is a button: a browser opens a blank tab within
+the click (`reserveOauthPopup`) and points it at claude.ai when the link
+arrives, while the desktop and phone apps, where that tab would land blank in
+the system browser, open the link once it arrives. The backend also requires management rights for Claude account changes.
 Focused tests: `bun run test src/features/settings/computers`.
 
 Guided purchase (the Buy computer → Configure agent → Bring your AI → Create
@@ -1942,7 +1995,12 @@ you, other people, then agents with Macro first. @ menus pass `mention: true`, w
 Macro above everyone and keeps it first while its name starts with the query. While
 searching, rank with `NAME_MATCH_RANKING`; an agent needs the typed words, not scattered
 letters, and never ranks above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
-don't boost bots in a menu's search score.
+don't boost bots in a menu's search score. Until the contact directory answers for the
+first time after it opens, a directory-backed @ menu lists only the rows that lead every
+person (Macro) and keeps its People preview's rows as loading rows (`holdsRows`); phones list
+nothing below them yet. The hold ends at `UNANSWERED_SEARCH_LIMIT_MS`, when Cmd+K stops
+saying "Searching…". The menu reads a failed people window again once by itself, holding
+the rows meanwhile, and offers Retry only when that read fails too (`peopleFailed`).
 
 ### Tag picker selection and creation
 

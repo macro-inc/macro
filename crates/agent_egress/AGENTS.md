@@ -93,6 +93,18 @@ signs none of these claims. `mint_for_routine` signs the routine whose run the
 token acts for (and optionally an agent; `None` writes as the owner, and a
 scope, `dry_run` for a routine's dry run).
 
+## Telemetry
+
+- Every upstream MCP exchange, sandbox or in-process, is one
+  `connected_app.mcp_exchange` client span (`traced_exchange` in
+  `domain/service/actor.rs`): `server.address`, `app.kind` / `app.key` (the
+  connected-app slug or custom-server key), `mcp.method`,
+  `mcp.request_bytes` / `mcp.response_bytes` (JSON lengths) and `mcp.outcome`
+  (`ok`, `tool_error`, `rate_limited`, `upstream_error`). Never arguments or
+  results. A new upstream session's handshake is its own
+  `connected_app.mcp_connect` child, and a `tools/call`'s pacing is its
+  `mcp.call_budget` child (`wait_ms`, `attempts`, `rate_limited`).
+
 ## Gotchas
 
 - Never let the sandbox see an upstream credential directly; every egress

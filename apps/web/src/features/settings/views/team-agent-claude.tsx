@@ -48,10 +48,10 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
     harness()?.claude_mode === 'own_account' ? harnessId() : undefined
   );
   const signOut = useClaudeSignOutMutation();
-  // Where Bring your AI was opened from, while it is open.
+  // Where Connect Claude plan was opened from, while it is open.
   const [signingIn, setSigningIn] = createSignal<ClaudeSignInEntry>();
 
-  // The agent's ready notification asks for Bring your AI; it opens once
+  // The agent's ready notification asks for Connect Claude plan; it opens once
   // the computer's runtime is listed as connected and the viewer's own.
   createEffect(() => {
     const request = agentClaudeRequest();
@@ -66,7 +66,7 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
     const confirmed = await confirmDialog({
       title: t('teamAgents.useCreditsTitle', { name }),
       body: t('teamAgents.useCreditsBody', { name }),
-      confirmLabel: t('teamAgents.useCredits'),
+      confirmLabel: t('computers.claudeSwitchToCredits'),
     });
     if (!confirmed) return;
     try {

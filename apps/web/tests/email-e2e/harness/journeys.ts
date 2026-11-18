@@ -68,11 +68,19 @@ export type ReadMessage = {
   attachments: string[];
 };
 
+/**
+ * The addresses of an address header. A display name can look like an
+ * address itself (`"bob@example.com" <bob@example.com>`), so quoted names are
+ * skipped and the address in angle brackets is read when there is one.
+ */
 function addresses(value: string | undefined): string[] {
   if (!value) return [];
-  return [...value.matchAll(/[\w.+-]+@[\w.-]+/g)].map((match) =>
-    match[0].toLowerCase()
-  );
+  return [
+    ...value.matchAll(/"(?:[^"\\]|\\.)*"|<([^>]+)>|([\w.+-]+@[\w.-]+)/g),
+  ].flatMap((match) => {
+    const address = match[1] ?? match[2];
+    return address ? [address.trim().toLowerCase()] : [];
+  });
 }
 
 function attachmentNames(raw: string): string[] {

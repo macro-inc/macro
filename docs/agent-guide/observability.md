@@ -514,7 +514,14 @@ Phases you will see:
   waited on after typing.
   `search.engine_restarted` is true when the cache engine was replaced while
   the search was pending, which is a search issued in the restart window after
-  returning to the tab.
+  returning to the tab. A failed search names its cause in
+  `search.failure_kind` (the cache's rejection code such as
+  `owner-handoff-blocked` or `owner-epoch-lost`, otherwise the cache error
+  class such as `timeout`, the host's 10 s read timeout) and the step that
+  gave up in `search.failure_phase` (`search_page` or `materialize`).
+  `search.buckets` names the list: `channel,dm,chat,document,note,project,task`
+  is the Soup local search pool behind the Home, Drive, Tasks, Soup view and
+  universal input searches, not Command-K.
   Only query lengths and counts are recorded. `email.drafts.discover` is
   event-driven local draft discovery, coalescing same-microtask notifications.
 - Preloading: block intent records `block.preload` with parallel
