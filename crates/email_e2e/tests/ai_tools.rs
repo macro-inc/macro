@@ -236,3 +236,74 @@ async fn gmail_agent_archive_reaches_the_provider() -> Result<(), Report> {
 async fn outlook_agent_archive_reaches_the_provider() -> Result<(), Report> {
     agent_archive_reaches_the_provider(Provider::Outlook).await
 }
+
+/// The agent reporting a thread as spam (adding `SPAM`) files it under the
+/// provider's junk and takes it out of the inbox, as the Report spam button
+/// does; taking `SPAM` off brings it back to the inbox. When this fails the
+/// reported thread stays in the inbox, or the rescued one stays out of it.
+async fn agent_reports_spam_and_takes_it_back(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let (ada, _primary, second, _correspondent, thread) =
+        second_inbox_with_mail(&stack, provider).await?;
+    let tools = stack.email_tools()?;
+    let junk = match provider {
+        Provider::Gmail => "SPAM",
+        Provider::Outlook => "Junk Email",
+    };
+    let in_junk = |labels: &[String]| labels.iter().any(|label| label == junk);
+    let spam = async |add: bool| -> Result<(), Report> {
+        let done = tools
+            .call(
+                &ada,
+                "UpdateThreadLabels",
+                &json!({ "thread_id": thread["db_id"], "label": "SPAM", "add": add }),
+            )
+            .await?
+            .map_err(refused)?;
+        assert_eq!(done["failedCount"], 0, "{done}");
+        Ok(())
+    };
+    let listed = async |view: &str| -> Result<bool, Report> {
+        Ok(second
+            .previews(view)
+            .await?
+            .iter()
+            .any(|preview| preview["name"] == "Contract draft"))
+    };
+
+    spam(true).await?;
+    second
+        .wait_for_provider_message("the reported message in junk", |message| {
+            message.subject == "Contract draft" && in_junk(&message.labels) && !message.in_inbox
+        })
+        .await?;
+    second.wait_for_preview("spam", "Contract draft").await?;
+    assert!(
+        !listed("inbox").await?,
+        "the reported thread is still in the inbox"
+    );
+
+    spam(false).await?;
+    second
+        .wait_for_provider_message("the message back in the inbox", |message| {
+            message.subject == "Contract draft" && !in_junk(&message.labels) && message.in_inbox
+        })
+        .await?;
+    second.wait_for_preview("inbox", "Contract draft").await?;
+    assert!(
+        !listed("spam").await?,
+        "the thread taken out of spam is still under Spam"
+    );
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_agent_reports_spam_and_takes_it_back() -> Result<(), Report> {
+    agent_reports_spam_and_takes_it_back(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_agent_reports_spam_and_takes_it_back() -> Result<(), Report> {
+    agent_reports_spam_and_takes_it_back(Provider::Outlook).await
+}
