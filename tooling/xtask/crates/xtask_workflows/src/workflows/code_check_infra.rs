@@ -45,6 +45,7 @@ fn biome_check() -> Job {
         .name("Biome Check")
         .runs_on(infra_runner())
         .add_step(checkout(true))
+        .add_step(steps::prepare_blobless_checkout())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
@@ -66,13 +67,16 @@ fn check() -> Job {
 }
 
 fn checkout(full_history: bool) -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .when(full_history, |step| step.add_with(("fetch-depth", 0)))
+    steps::abort_stalled_fetch(Step::new("Checkout Repo").uses(
+        "actions",
+        "checkout",
+        "df4cb1c069e1874edd31b4311f1884172cec0e10",
+    )) // v6
+    // `biome --changed` needs the merge base, not old blobs.
+    .when(full_history, |step| {
+        step.add_with(("fetch-depth", 0))
+            .add_with(("filter", "blob:none"))
+    })
 }
 
 fn run_biome() -> Step<Run> {

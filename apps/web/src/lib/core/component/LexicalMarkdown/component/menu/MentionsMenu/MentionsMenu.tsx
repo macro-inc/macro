@@ -314,6 +314,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         enabled: () =>
           props.menu.isOpen() &&
           (!props.sources || props.sources.includes('emails')),
+        recentWhenShort: () =>
+          props.sources?.length === 1 && props.sources[0] === 'emails',
       });
 
   // A WhatsApp chat mentioned in a channel is shared with its members; only

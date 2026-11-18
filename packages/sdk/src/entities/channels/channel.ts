@@ -13,7 +13,7 @@ import type {
   MessageTimelineQuery,
 } from '../../../generated/storage/types.gen';
 import { type RichMessage, toBody } from '../../mentions';
-import { paginate, unwrap } from '../../utils';
+import { iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentConversation } from '../agent-sessions/conversation';
 import { Bot } from '../bots/bot';
@@ -327,28 +327,35 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   }
 
   /**
-   * Root messages in this channel, most recent first, auto-paginated.
+   * Root messages in this channel, most recent first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
-  messages(opts?: { pageSize?: number }): AsyncGenerator<Message> {
-    return this.timeline({ limit: opts?.pageSize });
+  messages(opts?: {
+    pageSize?: number;
+    maxItems?: number;
+  }): AsyncGenerator<Message> {
+    return iterate('channel.messages', opts, { pageSize: true }, () =>
+      this.timeline({ limit: opts?.pageSize }),
+    );
   }
 
   /**
    * Root messages created or replied to at or after `after`, most recent
-   * first, auto-paginated. Use it to catch up after a disconnect.
+   * first, auto-paginated; `maxItems` caps the total. Use it to catch up after a disconnect.
    *
    * @readonly
    */
   messagesAfter(
     after: Date | string,
-    opts?: { pageSize?: number },
+    opts?: { pageSize?: number; maxItems?: number },
   ): AsyncGenerator<Message> {
-    return this.timeline({
-      activity_after: after instanceof Date ? after.toISOString() : after,
-      limit: opts?.pageSize,
-    });
+    return iterate('channel.messagesAfter', opts, { pageSize: true }, () =>
+      this.timeline({
+        activity_after: after instanceof Date ? after.toISOString() : after,
+        limit: opts?.pageSize,
+      }),
+    );
   }
 
   private timeline(
@@ -638,13 +645,26 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   }
 
   /**
-   * The attachments posted in this channel, auto-paginated.
+   * The attachments posted in this channel, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
   attachments(opts?: {
     pageSize?: number;
     /** Filter by type: `static` for images/videos, `dss` for documents. */
+    type?: string;
+    maxItems?: number;
+  }): AsyncGenerator<ChannelAttachment> {
+    return iterate(
+      'channel.attachments',
+      opts,
+      { pageSize: true, type: true },
+      () => this.attachmentPages(opts),
+    );
+  }
+
+  private attachmentPages(opts?: {
+    pageSize?: number;
     type?: string;
   }): AsyncGenerator<ChannelAttachment> {
     return paginate(async (cursor) => {
@@ -676,7 +696,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return { ...super.toJSON(), url: this.webUrl() };
   }
 
-  /** Search channels by content, most relevant first, auto-paginated. */
+  /** Search channels by content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     type: 'channel',
     filters: onlyType('channel'),

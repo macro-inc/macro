@@ -16,6 +16,9 @@ pub mod reader;
 pub enum NameStage {
     /// Empty query, ordered by current published recency.
     Browse,
+    /// No name tier matched, but every query term occurs in the address: a
+    /// domain, or a local part unlike the name.
+    Address,
     /// Literal per-term containment in a name, never arbitrary gaps.
     Contains,
     /// Every query word prefixes a name word.
@@ -74,14 +77,29 @@ impl NameSearch {
                 .starts_with(prefix)
                 .then_some(NameStage::EmailPrefix),
             Self::Name(query) => {
+                let name_stage =
+                    query
+                        .classify_normalized(normalized_name)
+                        .map(|tier| match tier {
+                            NameMatch::Browse => NameStage::Browse,
+                            NameMatch::Contains => NameStage::Contains,
+                            NameMatch::WordPrefix => NameStage::WordPrefix,
+                            NameMatch::Exact => NameStage::ExactName,
+                        });
+                if name_stage.is_some() {
+                    return name_stage;
+                }
+
+                // People also look someone up by part of their address: a
+                // local part that differs from their name, or a domain. That
+                // ranks below every name match. Storage mirrors this with a
+                // LIKE over the `email_lower` fact.
+                let email = user.email_str();
                 query
-                    .classify_normalized(normalized_name)
-                    .map(|tier| match tier {
-                        NameMatch::Browse => NameStage::Browse,
-                        NameMatch::Contains => NameStage::Contains,
-                        NameMatch::WordPrefix => NameStage::WordPrefix,
-                        NameMatch::Exact => NameStage::ExactName,
-                    })
+                    .normalized()
+                    .split_whitespace()
+                    .all(|term| email.contains(term))
+                    .then_some(NameStage::Address)
             }
         }
     }
