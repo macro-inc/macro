@@ -173,60 +173,69 @@ it('lists Macro, then you, then people, then the other agents while browsing', (
 });
 
 it('lists only the rows that lead the people until the directory lists them', () => {
-  createRoot((dispose) => {
-    const [loading, setLoading] = createSignal(true);
-    const [people, setPeople] = createSignal<UserItem[]>([]);
-    mocks.loading = loading;
-    mocks.users = people;
-    const [searchTerm, setSearchTerm] = createSignal('');
-    const directory = useUsersMention({
+  const [loading, setLoading] = createSignal(true);
+  const [people, setPeople] = createSignal<UserItem[]>([]);
+  mocks.loading = loading;
+  mocks.users = people;
+  const [searchTerm, setSearchTerm] = createSignal('');
+  const { directory, scoped, dispose } = createRoot((dispose) => ({
+    directory: useUsersMention({
       searchTerm,
       transformUsers: (users) => [...users, reviewCodex, macroAgent],
-    });
-    const ids = () => directory.users().map((item) => item.id);
-
-    // Codex will follow the people, who have not arrived: it waits rather
-    // than take a row a person is about to take.
-    expect(ids()).toEqual([macroAgent.id]);
-    expect(directory.heldRows()).toBe(1);
-    expect(directory.waitingForPeople()).toBe(true);
-    setSearchTerm('rev');
-    expect(ids()).toEqual([]);
-    expect(directory.heldRows()).toBe(1);
-    setSearchTerm('mac');
-    expect(ids()).toEqual([macroAgent.id]);
-    expect(directory.heldRows()).toBe(0);
-
-    setSearchTerm('');
-    setPeople([
-      { ...userItem(sean), personOrder: 0 },
-      { ...userItem(viewer), personOrder: 1 },
-    ]);
-    expect(ids()).toEqual([macroAgent.id, viewer.id, sean.id, reviewCodex.id]);
-    expect(directory.heldRows()).toBe(0);
-    expect(directory.waitingForPeople()).toBe(false);
-
-    // A search that matches no one lists its agents once it has answered.
-    setPeople([]);
-    setLoading(false);
-    setSearchTerm('rev');
-    expect(ids()).toEqual([reviewCodex.id]);
-    expect(directory.heldRows()).toBe(0);
-
-    // A scoped roster is complete as given.
-    setLoading(true);
-    const scoped = useUsersMention({
-      searchTerm: () => '',
+    }),
+    scoped: useUsersMention({
+      searchTerm,
       users: () => [reviewCodex, sean, macroAgent],
-    });
-    expect(scoped.users().map((item) => item.id)).toEqual([
-      macroAgent.id,
-      sean.id,
-      reviewCodex.id,
-    ]);
-    expect(scoped.heldRows()).toBe(0);
-    dispose();
-  });
+    }),
+    dispose,
+  }));
+  const ids = () => directory.users().map((item) => item.id);
+
+  // Codex will follow the people, who have not arrived: it waits rather
+  // than take a row a person is about to take.
+  expect(ids()).toEqual([macroAgent.id]);
+  expect(directory.heldRows()).toBe(1);
+  expect(directory.waitingForPeople()).toBe(true);
+  setSearchTerm('rev');
+  expect(ids()).toEqual([]);
+  expect(directory.heldRows()).toBe(1);
+  setSearchTerm('mac');
+  expect(ids()).toEqual([macroAgent.id]);
+  expect(directory.heldRows()).toBe(0);
+
+  // A scoped roster is complete as given.
+  setSearchTerm('');
+  expect(scoped.users().map((item) => item.id)).toEqual([
+    macroAgent.id,
+    sean.id,
+    reviewCodex.id,
+  ]);
+  expect(scoped.heldRows()).toBe(0);
+
+  setPeople([
+    { ...userItem(sean), personOrder: 0 },
+    { ...userItem(viewer), personOrder: 1 },
+  ]);
+  expect(ids()).toEqual([macroAgent.id, viewer.id, sean.id, reviewCodex.id]);
+  expect(directory.heldRows()).toBe(0);
+  expect(directory.waitingForPeople()).toBe(false);
+
+  // A search that matches no one lists its agents once it has answered.
+  setPeople([]);
+  setLoading(false);
+  setSearchTerm('rev');
+  expect(ids()).toEqual([reviewCodex.id]);
+
+  // A directory stuck behind other reads stops keeping the agents back.
+  setLoading(true);
+  setSearchTerm('');
+  expect(ids()).toEqual([macroAgent.id]);
+  vi.advanceTimersByTime(11_999);
+  expect(ids()).toEqual([macroAgent.id]);
+  vi.advanceTimersByTime(1);
+  expect(ids()).toEqual([macroAgent.id, reviewCodex.id]);
+  expect(directory.heldRows()).toBe(0);
+  dispose();
 });
 
 it('lists an agent only when it holds the typed words, never above a person who matches as well', () => {

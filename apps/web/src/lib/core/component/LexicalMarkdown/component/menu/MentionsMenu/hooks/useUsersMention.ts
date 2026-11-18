@@ -1,4 +1,5 @@
 import { type UserItem, useQuickAccess } from '@core/context/quickAccess';
+import { UNANSWERED_SEARCH_LIMIT_MS } from '@core/context/quickAccess/projected-list';
 import { useEmail, useUserId } from '@core/context/user';
 import type { IUser } from '@core/user';
 import {
@@ -8,6 +9,7 @@ import {
   placeAgentsAfterPeople,
   rankAgentsAfterPeople,
 } from '@core/user/people-before-agents';
+import { deferredGate } from '@core/util/debounce';
 import {
   createFreshSearch,
   FreshSearchPresets,
@@ -135,11 +137,14 @@ export function useUsersMention(
   };
 
   // Until the directory lists its first people for this term, it is not yet
-  // known where the agents go among them.
-  const waitingForPeople = () =>
+  // known where the agents go among them. The wait ends when other menus stop
+  // saying the cache is still searching, and the agents are listed after all.
+  const loadingPeople = () =>
     usesDirectory() &&
     workspace.isLoading() &&
     !usersList().some((item) => !isBotMentionUser(item));
+  const waitedTooLong = deferredGate(loadingPeople, UNANSWERED_SEARCH_LIMIT_MS);
+  const waitingForPeople = () => loadingPeople() && !waitedTooLong();
 
   // Macro leads, then people come before the other agents and bots, as in
   // assignee menus. The directory's personal window keeps its own order among
