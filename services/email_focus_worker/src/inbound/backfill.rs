@@ -16,7 +16,7 @@
 //! filled reads only its few stale threads.
 
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     future::Future,
     pin::Pin,
     sync::Arc,
@@ -32,6 +32,8 @@ use rootcause::Report;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+
+use crate::metrics::{FocusMetrics, Metric};
 
 #[cfg(test)]
 mod test;
@@ -83,6 +85,10 @@ impl Pass {
 struct Waiting {
     inbox: FocusInboxOwner,
     found: Instant,
+    /// Found after the worker's first look, so its owner joined while the
+    /// worker ran: only these time how long a new inbox takes to fill. The
+    /// first look finds every enrolled inbox again after each restart.
+    new: bool,
 }
 
 /// The inboxes found, waiting, being filled and filled.
@@ -96,6 +102,11 @@ struct Backfills {
     running: HashSet<Uuid>,
     /// Inboxes filled since the worker started.
     filled: HashSet<Uuid>,
+    /// Inboxes whose pass stopped or failed, with when they were found and
+    /// whether they were new, so their fill is timed from the first find.
+    dropped: HashMap<Uuid, (Instant, bool)>,
+    /// Whether a look has found the enrolled inboxes since the worker started.
+    looked: bool,
     /// Whether the classifier said stop: nothing new starts until the next look.
     paused: bool,
 }
@@ -105,6 +116,7 @@ impl Backfills {
     fn found(&mut self, enrolled: Vec<FocusInboxOwner>, now: Instant) {
         let ids: HashSet<_> = enrolled.iter().map(|inbox| inbox.link_id).collect();
         self.filled.retain(|link_id| ids.contains(link_id));
+        self.dropped.retain(|link_id, _| ids.contains(link_id));
         self.first
             .retain(|waiting| ids.contains(&waiting.inbox.link_id));
         self.rest
@@ -118,9 +130,14 @@ impl Backfills {
                     .chain(&self.rest)
                     .any(|waiting| waiting.inbox.link_id == inbox.link_id);
             if !known {
-                self.first.push_back(Waiting { inbox, found: now });
+                let (found, new) = self
+                    .dropped
+                    .remove(&inbox.link_id)
+                    .unwrap_or((now, self.looked));
+                self.first.push_back(Waiting { inbox, found, new });
             }
         }
+        self.looked = true;
         self.paused = false;
     }
 
@@ -138,7 +155,8 @@ impl Backfills {
     }
 
     /// Record how a pass ended. A first pass done queues the rest; a pass the
-    /// classifier stopped is dropped, so the next look queues the inbox again.
+    /// classifier stopped or that failed is dropped, so the next look queues
+    /// the inbox again.
     fn done(&mut self, waiting: Waiting, pass: Pass, completed: bool, stop: bool) {
         self.running.remove(&waiting.inbox.link_id);
         match (pass, completed) {
@@ -146,7 +164,10 @@ impl Backfills {
             (Pass::Rest, true) => {
                 self.filled.insert(waiting.inbox.link_id);
             }
-            (_, false) => {}
+            (_, false) => {
+                self.dropped
+                    .insert(waiting.inbox.link_id, (waiting.found, waiting.new));
+            }
         }
         if stop {
             self.paused = true;
@@ -168,6 +189,7 @@ type Running = FuturesUnordered<Pin<Box<dyn Future<Output = Finished> + Send>>>;
 pub async fn run_backfills<S, P, C, N, D, E>(
     service: Arc<FocusService<S, P, C, N, D, E>>,
     window_days: u16,
+    metrics: FocusMetrics,
     shutdown: CancellationToken,
 ) -> Result<(), Report>
 where
@@ -189,7 +211,7 @@ where
             biased;
             () = shutdown.cancelled() => return Ok(()),
             Some(finished) = running.next(), if !running.is_empty() => {
-                finish(&mut backfills, finished);
+                finish(&mut backfills, finished, &metrics);
             }
             _ = ticker.tick() => {
                 // Backfills go on while the look runs.
@@ -201,12 +223,15 @@ where
                         () = shutdown.cancelled() => return Ok(()),
                         enrolled = &mut look => break enrolled,
                         Some(finished) = running.next(), if !running.is_empty() => {
-                            finish(&mut backfills, finished);
+                            finish(&mut backfills, finished, &metrics);
                         }
                     }
                 };
                 match enrolled {
-                    Ok(enrolled) => backfills.found(enrolled.enrolled, Instant::now()),
+                    Ok(enrolled) => {
+                        count_look(&metrics, enrolled.enrolled.len(), enrolled.unknown);
+                        backfills.found(enrolled.enrolled, Instant::now());
+                    }
                     Err(error) => tracing::error!(error = ?error, "focus enrollment look failed"),
                 }
             }
@@ -238,8 +263,20 @@ where
     }
 }
 
+/// Record what a look found.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "inbox counts are far below 2^52"
+)]
+fn count_look(metrics: &FocusMetrics, enrolled: usize, unknown: usize) {
+    metrics.observe(Metric::EnrolledInboxes, enrolled as f64);
+    if unknown > 0 {
+        metrics.add(Metric::EnrollmentUnknown, unknown as f64);
+    }
+}
+
 /// Log how a pass went and record it.
-fn finish(backfills: &mut Backfills, finished: Finished) {
+fn finish(backfills: &mut Backfills, finished: Finished, metrics: &FocusMetrics) {
     let Finished {
         waiting,
         pass,
@@ -267,9 +304,20 @@ fn finish(backfills: &mut Backfills, finished: Finished) {
                 since_found_secs = since_found,
                 "focus backfill pass finished"
             );
+            // Timed only once the whole inbox went through: an inbox that
+            // reads as not enrolled, or a pass with failed threads, is not
+            // filled.
+            if waiting.new && report.inboxes == 1 && report.failed == 0 && !report.stopped_early {
+                let filled = match pass {
+                    Pass::First => Metric::BackfillTopFilledSeconds,
+                    Pass::Rest => Metric::BackfillFilledSeconds,
+                };
+                metrics.observe(filled, since_found);
+            }
             (!report.stopped_early, report.stopped_early)
         }
         Err(error) => {
+            metrics.add(Metric::BackfillPassFailures, 1.0);
             tracing::error!(error = ?error, %link_id, pass = pass.name(), "focus backfill pass failed");
             (false, false)
         }

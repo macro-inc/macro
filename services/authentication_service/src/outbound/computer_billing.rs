@@ -4,7 +4,7 @@
 use chrono::{DateTime, Utc};
 use hosted_runtimes::domain::{
     ids::ComputerId,
-    lifecycle::SubscriptionItemId,
+    lifecycle::{PurchaseRefund, SubscriptionItemId},
     models::{BillingInterval, Quote, SubscriptionItem},
     ports::{Billing, BillingError, ChargeStatus, ComputerRepo, ItemCharge},
     service::{Clock, ComputerService, SubscriptionObserved},
@@ -13,7 +13,7 @@ use hosted_runtimes::domain::{
 use teams::domain::{
     model::{
         BillingCadence, CustomerError, ItemChangeStatus, ItemProration, ItemQuantityChange,
-        ItemRemoval,
+        ItemRemoval, SubscriptionTerms,
     },
     subscription_items::{TeamSubscriptionItems, TeamSubscriptionItemsError},
 };
@@ -37,12 +37,14 @@ impl<Teams: TeamSubscriptionItems> TeamComputerBilling<Teams> {
         Self { teams, prices }
     }
 
-    async fn interval(&self, team_id: Uuid) -> Result<BillingInterval, BillingError> {
-        let terms = self
-            .teams
+    async fn terms(&self, team_id: Uuid) -> Result<SubscriptionTerms, BillingError> {
+        self.teams
             .team_subscription_terms(&team_id)
             .await
-            .map_err(billing_error)?;
+            .map_err(billing_error)
+    }
+
+    fn interval(terms: &SubscriptionTerms) -> Result<BillingInterval, BillingError> {
         match terms.interval {
             BillingCadence::Month => Ok(BillingInterval::Month),
             BillingCadence::Year => Ok(BillingInterval::Year),
@@ -52,15 +54,13 @@ impl<Teams: TeamSubscriptionItems> TeamComputerBilling<Teams> {
         }
     }
 
-    async fn computer_price(
+    /// The size's price at the subscription's interval.
+    fn computer_price(
         &self,
-        team_id: Uuid,
         size: ComputerSize,
+        terms: &SubscriptionTerms,
     ) -> Result<(stripe::PriceId, BillingInterval), BillingError> {
-        if self.prices.is_empty() {
-            return Err(BillingError::NotAvailable);
-        }
-        let interval = self.interval(team_id).await?;
+        let interval = Self::interval(terms)?;
         let price_id = self
             .prices
             .price_id(size, interval)
@@ -76,7 +76,10 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
 
     #[tracing::instrument(skip(self), err)]
     async fn quote(&self, team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
-        let (price_id, interval) = self.computer_price(team_id, size).await?;
+        if self.prices.is_empty() {
+            return Err(BillingError::NotAvailable);
+        }
+        let (price_id, interval) = self.computer_price(size, &self.terms(team_id).await?)?;
         let price = self.teams.price(&price_id).await.map_err(billing_error)?;
         Ok(Quote {
             size,
@@ -85,6 +88,22 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
             currency: price.currency,
             interval,
         })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn purchase_price(
+        &self,
+        team_id: Uuid,
+        size: ComputerSize,
+    ) -> Result<stripe::PriceId, BillingError> {
+        if self.prices.is_empty() {
+            return Err(BillingError::NotAvailable);
+        }
+        let terms = self.terms(team_id).await?;
+        if terms.trialing {
+            return Err(BillingError::TeamOnTrial);
+        }
+        Ok(self.computer_price(size, &terms)?.0)
     }
 
     #[tracing::instrument(skip(self, extra_items), fields(extra_items = extra_items.len()), err)]
@@ -221,6 +240,24 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
                 Ok(())
             }
         }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn refund_computer_purchase(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+        idempotency_key: &str,
+    ) -> Result<Option<PurchaseRefund>, BillingError> {
+        let credit = self
+            .teams
+            .refund_computer_purchase(&team_id, computer_id, idempotency_key)
+            .await
+            .map_err(billing_error)?;
+        Ok(credit.map(|credit| PurchaseRefund {
+            credit_note: credit.credit_note,
+            refund: credit.refund,
+        }))
     }
 
     #[tracing::instrument(skip(self), err)]
