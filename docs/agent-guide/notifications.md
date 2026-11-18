@@ -119,24 +119,25 @@ large clear that is still at work says **so far; still clearing**, then
 announces its final count. Undo works while the clear is still at work and
 stops it. Undo, of a clear or of any Mark done, brings each notification back
 as it was: unread ones stay unread, and anything the reader changed since the
-clear is left alone. With every kind hidden by the filters, a clear takes
-nothing.
+clear is left alone.
 
 **Filter notifications** (funnel, or `f`) offers **Type** checkboxes that start
-checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
-Calendar, Access requests, and Agents. Unchecking a type hides its rows (Mentions
-covers both channel and comment mentions, Replies both channel and comment
-threads). A row that is two kinds shows while either is checked, once: a thread
-whose reply mentions you is under Mentions and Replies, a top-level message that
-mentions you and has replies likewise, an entity's comments that mention you
-under Mentions and Comments, and a pull request or agent session that mentions
-you under Mentions and Pull requests or Agents. Clearing either kind takes such
-a row whole. The trigger counts hidden types, and **Reset filters** shows them all
-again without changing All or Unread. Choices persist per user across reloads.
-Hiding every type shows **Every kind of notification is hidden** with Reset
-filters; types that hide every row show **No notifications match these filters**. The gear beside
-the filter opens **Settings → Notifications**, which decides what is delivered
-at all (including push and email).
+unchecked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
+Calendar, Access requests, and Agents. Nothing selected shows every kind;
+selecting kinds narrows the feed to those kinds, and unchecking the last one
+restores everything. Mentions covers both channel and comment mentions, Replies
+both channel and comment threads. A row that is two kinds shows when either is
+selected, once: a thread whose reply mentions you is under Mentions and Replies,
+a top-level message that mentions you and has replies likewise, an entity's
+comments that mention you under Mentions and Comments, and a pull request or
+agent session that mentions you under Mentions and Pull requests or Agents.
+Clearing either kind takes such a row whole. The trigger counts selected kinds;
+**Reset filters** (or **Clear** in the touch drawer) empties the selection without
+changing All or Unread. Choices persist per user across reloads. Old saved hidden
+kinds convert to the kinds that remained visible; an old empty hidden list becomes
+no selection. Selections without matching rows show **No notifications match
+these filters**. The gear beside the filter opens **Settings → Notifications**,
+which decides what is delivered at all (including push and email).
 
 On touch devices the dock's bell (**Notifications**) opens this view with the
 flag on, as the list alone under the floating controls Home, Email, Tasks and Drive
