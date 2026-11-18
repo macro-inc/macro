@@ -68,6 +68,13 @@ const emailViewOrderRequest = {
     variables: { input: { kind: 'email', ids: ['second-view', 'first-view'] } },
   }),
 };
+const threadTagEditRequest = {
+  method: 'POST',
+  body: JSON.stringify({
+    query:
+      'mutation { updateEntityPropertyOptions(input:{entityType:THREAD,entityId:"thread",properties:[]}) { id } }',
+  }),
+};
 const proof = (allowed: boolean) => ok({ team_id: TEAM, allowed });
 const responseWithHint = (allowed: boolean) =>
   Response.json(
@@ -284,6 +291,9 @@ describe('CRM HTTP response admission', () => {
         [emailReminder, { method: 'PUT' }],
         ['http://localhost/dss/reminders/email/collection', {}],
         ['http://localhost/dss/graphql', emailViewOrderRequest],
+        ['http://localhost/dss/graphql', threadTagEditRequest],
+        ['http://localhost/dss/history/project/folder', { method: 'POST' }],
+        ['http://localhost/dss/history/thread/thread', { method: 'DELETE' }],
         [
           'http://localhost/dss/items/soup/ast',
           { method: 'POST', body: JSON.stringify(personalFolder) },
@@ -323,6 +333,9 @@ describe('CRM HTTP response admission', () => {
         [emailReminder, { method: 'PUT' }],
         ['http://localhost/dss/reminders/email/collection', {}],
         ['http://localhost/dss/graphql', emailViewOrderRequest],
+        ['http://localhost/dss/graphql', threadTagEditRequest],
+        ['http://localhost/dss/history/project/folder', { method: 'POST' }],
+        ['http://localhost/dss/history/thread/thread', { method: 'DELETE' }],
         [
           'http://localhost/dss/items/soup/ast',
           { method: 'POST', body: JSON.stringify(personalFolder) },

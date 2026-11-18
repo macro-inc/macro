@@ -15,6 +15,10 @@ export function isEmailReminderPath(path: string): boolean {
   return !!match && (match[1] === 'collection' || isUuid(match[1]));
 }
 
+export function isHistoryItemPath(path: string): boolean {
+  return /^\/history\/[^/]+\/[^/]+$/.test(path);
+}
+
 // These resources have their own grants and do not return CRM record content.
 const independentResources = new Set([
   'account-managers',
@@ -113,6 +117,14 @@ export function crmResponseScope(
     init.method ?? (input instanceof Request ? input.method : 'GET')
   ).toUpperCase();
   if (service === 'agent') return read;
+  // History commands acknowledge only the caller's tracking write. History
+  // reads can expand shared entities and retain their CRM content gate.
+  if (
+    service === 'storage' &&
+    isHistoryItemPath(path) &&
+    (method === 'POST' || method === 'DELETE')
+  )
+    return { protected: false, write: true };
   if (
     service === 'storage' &&
     isEmailReminderPath(path) &&

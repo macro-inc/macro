@@ -115,6 +115,10 @@ Soup remain protected.
 Folder moves are independent for supported non-CRM entity kinds: their effects
 contain only the moved entity and its folders, and the email domain requires
 Owner access before moving a thread or returning its updated snapshot.
+History-item POST/DELETE commands return only success acknowledgements and do
+not wait for CRM proof, including the history write awaited by folder creation.
+Their response and body completion retain the login fence; history reads stay
+protected because they can return shared entity content.
 Saved-view reordering is independent for non-CRM kinds because the server returns
 the same definitions it authorized and filtered by the requested kind before
 writing positions. Create/update, missing or non-string kinds and unscoped
@@ -144,14 +148,15 @@ or generation, and repeated positive reads reuse them. Mail lists select ownersh
 in batches of at most 500 IDs; up to 1,024 idle positive ID/alias witnesses are retained.
 Active chunks hold their witnesses until content and fallback flag reads settle,
 so concurrent lists cannot evict another reader's ownership evidence.
-Property assignments and option-delta mutations for the exact owned thread reuse
-that live witness: their responses contain only the target's assignments,
+Exact root THREAD property assignments and option-delta mutations require Edit
+access, beyond the Comment access CRM can grant. They remain independent when an
+ownership witness expires: their responses contain only the target's assignments,
 definitions and values, with references represented by identifiers rather than
-nested CRM records. Shared threads and raw property-record reads remain protected,
-and retirement ignores these temporary witnesses.
+nested CRM records. Raw property-record reads and other entity targets remain
+protected, and retirement still removes these copied snapshots.
 Bulk property edits retain one authoring epoch across every item, so later items
 cannot revive copied inputs or grouped-page recipes after retirement.
-A missing witness never permits content. Ordinary Soup database rows require an
+A missing witness never permits a thread-by-ID read. Ordinary Soup database rows require an
 independently authorized database entity; CRM pipelines use distinct contracts.
 Opaque GraphQL Soup continuation cursors inherit scope only from an independently scoped,
 owner-tagged cached parent. Witnesses retain the exact query, selected operation

@@ -455,9 +455,9 @@ function compiledScope(query: string, operationName?: string): CompiledScope {
       )
         return (variables, allowWitnesses = true) => {
           const input = object(args(variables).input);
-          // Both resolvers return only the requested entity's assignments.
-          // A live ownership witness admits that mailbox's properties, but
-          // cannot exempt shared threads or survive snapshot retirement.
+          // Both resolvers require Edit, beyond CRM's Comment thread grant,
+          // and return assignments without expanded CRM entities. Retirement
+          // still removes these copied snapshots, regardless of their grant.
           return (
             !unrelatedEntityTypes.has(String(input.entityType)) &&
             !(
@@ -465,7 +465,8 @@ function compiledScope(query: string, operationName?: string): CompiledScope {
               path.length === 0 &&
               allowWitnesses &&
               input.entityType === 'THREAD' &&
-              hasOwnedEmailWitness(input.entityId)
+              typeof input.entityId === 'string' &&
+              input.entityId.length > 0
             )
           );
         };

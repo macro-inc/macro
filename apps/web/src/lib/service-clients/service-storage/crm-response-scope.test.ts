@@ -19,6 +19,13 @@ describe('CRM response content scope', () => {
       false,
     ],
     ['/messages/channel/channel-1', 'POST', false, true],
+    ['/history/project/folder-1', 'POST', false, true],
+    ['/history/thread/thread-1', 'POST', false, true],
+    ['/history/crm_company/company-1', 'DELETE', false, true],
+    ['/history', 'GET', true, false],
+    ['/history/project/folder-1', 'GET', true, false],
+    ['/history/project/folder-1', 'PATCH', true, true],
+    ['/history/project/folder-1/details', 'POST', true, false],
     ['/reminders/email/collection', 'GET', false, false],
     [
       '/reminders/email/00000000-0000-4000-8000-000000000001',

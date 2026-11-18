@@ -4012,13 +4012,16 @@ describe('normalizedCacheExchange', () => {
     );
 
     it.each([false, true])(
-      'keeps owned-thread tag links without CRM proof only for the authoring epoch (retired=%s)',
+      'keeps editable-thread tag links after an ownership witness expires only for the authoring epoch (retired=%s)',
       async (retired) => {
         installAuthority(host, { ready: false });
         const authorizationEpoch = crmSnapshotAuthorization().epoch;
         if (retired) beginQueryAuthorizationReset()();
-        // Reacquiring ownership must not give an old copied recipe a new epoch.
-        rememberOwnedEmail('owned-tag-edit', () => true);
+        // A first authority proof can expire the witness between loading the
+        // thread and editing its tags. That must not discard its parent link.
+        let current = true;
+        rememberOwnedEmail('owned-tag-edit', () => current);
+        current = false;
         const variables = {
           input: {
             entityType: 'THREAD' as const,

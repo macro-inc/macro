@@ -126,11 +126,11 @@ describe('CRM cache admission classification', () => {
       } satisfies UpdateEntityPropertyOptionsMutationVariables,
     },
   ])(
-    'admits $name only while its exact thread ownership witness is current',
+    'admits independently editable thread assignments from $name without an ownership witness',
     ({ document, variables }) => {
       const query = print(document);
       const request = { query, variables };
-      expect(queryNeedsCrmProof(query, variables)).toBe(true);
+      expect(queryNeedsCrmProof(query, variables)).toBe(false);
       let account = 'owner';
       let session = 1;
       let generation = 'first-generation';
@@ -155,9 +155,9 @@ describe('CRM cache admission classification', () => {
         })
       ).toBe(true);
       for (const input of [
-        { ...variables.input, entityId: 'foreign-thread' },
         { ...variables.input, entityType: 'COMPANY' },
         { ...variables.input, entityType: 'EMAIL_THREAD' },
+        { ...variables.input, entityId: '' },
         { entityType: 'THREAD' },
       ])
         expect(queryNeedsCrmProof(query, { input })).toBe(true);
@@ -181,27 +181,30 @@ describe('CRM cache admission classification', () => {
         if (invalidation === 'session') session = 2;
         expect(
           requestNeedsCrmProof('graphql_cache_commit_optimistic_write', request)
-        ).toBe(true);
+        ).toBe(false);
       }
     }
   );
   it.each(['setEntityProperty', 'updateEntityPropertyOptions'])(
-    'checks every aliased %s target even beside an owned thread',
+    'checks every aliased %s target even beside an independently editable thread',
     (field) => {
       const owned = `owned-${field}-thread`;
-      rememberOwnedEmail(owned, () => true);
       const personal = `personal: ${field}(input:{entityType:THREAD, entityId:"${owned}"}) { id }`;
       expect(queryNeedsCrmProof(`mutation { ${personal} }`)).toBe(false);
       expect(
         queryNeedsCrmProof(
           `mutation { ${personal} shared: ${field}(input:{entityType:THREAD, entityId:"shared-thread"}) { id } }`
         )
-      ).toBe(true);
+      ).toBe(false);
       expect(
         queryNeedsCrmProof(
           `mutation { ${personal} crm: ${field}(input:{entityType:COMPANY, entityId:"${owned}"}) { id } }`
         )
       ).toBe(true);
+      expect(queryNeedsCrmProof(`query { ${personal} }`)).toBe(true);
+      expect(queryNeedsCrmProof(`mutation { nested { ${personal} } }`)).toBe(
+        true
+      );
     }
   );
   it('continues checking siblings of personal resolver fields', () => {

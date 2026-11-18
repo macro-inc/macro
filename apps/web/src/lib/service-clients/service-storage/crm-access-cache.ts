@@ -27,7 +27,11 @@ import {
   crmAccessAuthority,
   isCrmPolicy,
 } from './crm-access-authority';
-import { crmResponseScope, isEmailReminderPath } from './crm-response-scope';
+import {
+  crmResponseScope,
+  isEmailReminderPath,
+  isHistoryItemPath,
+} from './crm-response-scope';
 import type { CrmMemberAccessResponse } from './generated/schemas/crmMemberAccessResponse';
 
 let host: CacheHost | undefined;
@@ -240,7 +244,8 @@ function install() {
           !queuedMutation &&
           !path.endsWith('/graphql') &&
           path !== '/items/soup/ast' &&
-          !isEmailReminderPath(path)
+          !isEmailReminderPath(path) &&
+          !isHistoryItemPath(path)
         )
           return;
         assertSession();

@@ -2,6 +2,12 @@ import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { deliverToSpam, syncedInView, trashFolder } from './harness/journeys';
 import { focusRow, rowIds } from './harness/list';
+import {
+  createTag,
+  followup,
+  pendingFollowups,
+  threadTagIds,
+} from './harness/organise';
 import { anInbox, PROVIDERS } from './harness/providers';
 import { notice } from './harness/send';
 import { deliverAll, folderOf, held, rowMenu } from './harness/ways-organise';
@@ -111,6 +117,86 @@ for (const provider of PROVIDERS) {
           })
           .toMatchObject({ favorites: [] });
         confirmed('F-074');
+      });
+
+      // Owned-thread property mutations must publish their parent links before
+      // the picker is reopened, even when there is no CRM access proof.
+      test('adds and removes a thread tag without CRM access', async ({
+        page,
+        mailbox,
+      }) => {
+        const ids = await deliverAll(mailbox, ['Agenda', 'Kept']);
+        const tag = await createTag(mailbox, 'urgent');
+        await mailbox.open();
+        const row = page.locator(
+          `[data-soup-entity] [data-entity-id="${ids.Agenda}"]`
+        );
+        const chip = row.getByRole('button', {
+          name: 'Change or select tag urgent',
+        });
+        await focusRow(page, ids.Agenda);
+        await page.keyboard.press('t');
+        did('AL-073');
+        await page.getByRole('option', { name: /^urgent/ }).click();
+        await page.keyboard.press('Escape');
+        await expect(chip).toBeVisible();
+        await expect
+          .poll(() => threadTagIds(mailbox, ids.Agenda))
+          .toEqual([tag.optionId]);
+        await focusRow(page, ids.Agenda);
+        await page.keyboard.press('t');
+        await page.getByRole('option', { name: /^urgent/ }).click();
+        await page.keyboard.press('Escape');
+        await expect(chip).toBeHidden();
+        await expect(row).toBeVisible();
+        await expect.poll(() => threadTagIds(mailbox, ids.Agenda)).toEqual([]);
+        expect(await threadTagIds(mailbox, ids.Kept)).toEqual([]);
+        saw('STL-982');
+        confirmed('F-084');
+      });
+
+      // Reminder detail and collection requests belong to this mailbox. A
+      // pending or unavailable proof must not disable scheduling or removal.
+      test('sets and removes a reminder without CRM access', async ({
+        page,
+        mailbox,
+      }) => {
+        const ids = await deliverAll(mailbox, ['Agenda', 'Kept']);
+        await mailbox.open();
+        await focusRow(page, ids.Agenda);
+        await page.keyboard.press('h');
+        did('AL-071');
+        const when = page.getByRole('combobox', { name: 'Remind me when' });
+        await when.fill('tomorrow 9am');
+        await expect(
+          page.getByRole('option', { name: /^tomorrow 9am/ })
+        ).toBeEnabled();
+        await when.press('Enter');
+        did('AL-621');
+        await expect(when).toBeHidden();
+        await expect
+          .poll(() => followup(mailbox, ids.Agenda))
+          .toMatchObject({ state: 'pending', condition: 'if_no_reply' });
+        await expect.poll(() => rowIds(page)).not.toContain(ids.Agenda);
+        confirmed('F-090');
+        await page
+          .getByRole('navigation', { name: 'Email tabs' })
+          .getByRole('button', { name: 'Reminders' })
+          .click();
+        did('AL-002', 'F-092');
+        await expect.poll(() => rowIds(page)).toEqual([ids.Agenda]);
+        await page
+          .locator(`[data-soup-entity] [data-entity-id="${ids.Agenda}"]`)
+          .getByRole('button', { name: /^Returning: / })
+          .click();
+        await page.getByRole('button', { name: 'Remove reminder' }).click();
+        did('AL-188');
+        await expect.poll(() => rowIds(page)).toEqual([]);
+        await expect
+          .poll(async () => (await followup(mailbox, ids.Agenda))?.state)
+          .toBe('removed');
+        expect(await pendingFollowups(mailbox)).toEqual([]);
+        confirmed('F-091');
       });
 
       // Provider labels and the mounted list must agree before any CRM proof.

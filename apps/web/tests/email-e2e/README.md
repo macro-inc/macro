@@ -32,6 +32,8 @@ On a shared host, run builds and suites under `ionice -c3 nice -n10` with
 Compare bundles sequentially, keep stack data on disk, and cap service logs at
 info level with bounded rotation. For long comparisons, `--trace=off` avoids
 recording every asset for every page; rerun failures with tracing enabled.
+Point `TMPDIR` through a short symlink when its on-disk path is long; Chromium's
+profile sockets must fit the Unix socket path limit.
 
 ## How it works
 
