@@ -152,13 +152,12 @@ export function useEmailSearchMention(
     return emailSearch(items, term).map(({ item }) => item);
   };
 
-  const emails = createLazyMemo(
-    (): EntityItem[] =>
-      match(source())
-        .with('quickAccess', () => cachedThreads())
-        .with('recentThreads', () => matchingTerm(recentThreads()))
-        .with('search', () => matchingTerm(remoteEmailList()))
-        .exhaustive()
+  const emails = createLazyMemo((): EntityItem[] =>
+    match(source())
+      .with('quickAccess', () => cachedThreads())
+      .with('recentThreads', () => matchingTerm(recentThreads()))
+      .with('search', () => matchingTerm(remoteEmailList()))
+      .exhaustive()
   );
 
   return {
