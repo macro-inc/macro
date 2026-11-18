@@ -23,7 +23,11 @@ local stack, without Microsoft accounts.
   reported `@removed`. As measured against Graph, a page holds as many
   entries as the request's `Prefer: odata.maxpagesize` asks for (10 without
   it), the round ends on the first short page, and `$top` caps the whole
-  round. A token from before `expire_delta_tokens`, or older
+  round. The first request may also ask for `$orderby=receivedDateTime desc`
+  (every round of the chain then lists newest first) and a `$filter` of
+  `receivedDateTime ge` or `gt` a time (every round reports only the changes
+  and removals of mail it admits); the tokens carry them, as they carry
+  `$select` and `$top`. A token from before `expire_delta_tokens`, or older
   than the mailbox's `delta_token_lifetime_days`, answers 410
   `SyncStateNotFound`.
 - `POST /subscriptions` posts a validation token to the notification URL and
