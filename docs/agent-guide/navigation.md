@@ -869,8 +869,9 @@ must resolve to an email address, and a connected inbox is required. A successfu
 save closes the menu and opens the saved draft when available; a
 failed save preserves the input. **Send email** (or **Cmd/Ctrl+Enter**) saves the
 email as a draft and sends that draft; a successful send closes the menu and
-opens the sent thread. Each submission saves under one client-minted draft id
-until it succeeds, so retrying a failed save or send reuses the same draft.
+opens the sent thread. While the menu stays open on a failed save or send, a
+retry saves the same draft rather than a second one; choosing another inbox
+first starts a new draft.
 Search mode embeds Global Search's editor, Type/In/From filter chips, and
 result rows with highlighted message snippets. Extraction first selects the search
 type, then uses its schema: Channels has In/From; Tasks has status, priority,
