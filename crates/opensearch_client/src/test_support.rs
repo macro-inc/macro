@@ -6,44 +6,30 @@ pub(crate) fn serve_once(
     status: &'static str,
     body: &'static str,
 ) -> (String, std::thread::JoinHandle<(String, String)>) {
-    let (url, server) = serve_in_order(vec![(status, body)]);
-    let server = std::thread::spawn(move || server.join().unwrap().remove(0));
-    (url, server)
-}
-
-/// Answer one request per `(status, body)`, in order, each on its own
-/// connection, returning every request line and body as received.
-pub(crate) fn serve_in_order(
-    responses: Vec<(&'static str, &'static str)>,
-) -> (String, std::thread::JoinHandle<Vec<(String, String)>>) {
     use std::io::{BufRead, Read, Write};
 
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
     let server = std::thread::spawn(move || {
-        let mut requests = Vec::new();
-        for (status, body) in responses {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut reader = std::io::BufReader::new(&mut stream);
-            let mut request_line = String::new();
-            reader.read_line(&mut request_line).unwrap();
-            let mut content_length = 0;
-            loop {
-                let mut line = String::new();
-                reader.read_line(&mut line).unwrap();
-                if line == "\r\n" {
-                    break;
-                }
-                if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
-                    content_length = value.trim().parse::<usize>().unwrap();
-                }
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = std::io::BufReader::new(&mut stream);
+        let mut request_line = String::new();
+        reader.read_line(&mut request_line).unwrap();
+        let mut content_length = 0;
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            if line == "\r\n" {
+                break;
             }
-            let mut request_body = vec![0; content_length];
-            reader.read_exact(&mut request_body).unwrap();
-            write!(stream, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
-            requests.push((request_line, String::from_utf8(request_body).unwrap()));
+            if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                content_length = value.trim().parse::<usize>().unwrap();
+            }
         }
-        requests
+        let mut request_body = vec![0; content_length];
+        reader.read_exact(&mut request_body).unwrap();
+        write!(stream, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+        (request_line, String::from_utf8(request_body).unwrap())
     });
     (url, server)
 }
@@ -57,8 +43,10 @@ pub(crate) enum Reply {
 }
 
 /// Answer one request per entry of `replies`, in order, returning each
-/// request's line and its `x-opaque-id` header when it had one.
-pub(crate) fn serve_script(replies: Vec<Reply>) -> (String, std::thread::JoinHandle<Vec<String>>) {
+/// request's line, with its `x-opaque-id` header when it had one, and its body.
+pub(crate) fn serve_script(
+    replies: Vec<Reply>,
+) -> (String, std::thread::JoinHandle<Vec<(String, String)>>) {
     use std::io::{BufRead, Read, Write};
 
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -88,7 +76,7 @@ pub(crate) fn serve_script(replies: Vec<Reply>) -> (String, std::thread::JoinHan
             }
             let mut body = vec![0; content_length];
             reader.read_exact(&mut body).unwrap();
-            seen.push(request);
+            seen.push((request, String::from_utf8(body).unwrap()));
             match reply {
                 Reply::Respond(status, body) => {
                     write!(stream, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();

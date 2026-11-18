@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_support::{Reply, serve_script};
 
 #[test]
 fn resolves_default_email_destination() {
@@ -249,9 +250,9 @@ fn chunk_counts_add_up() {
 
 #[tokio::test]
 async fn a_message_delete_goes_by_id_then_sweeps_other_threads_without_forcing_a_refresh() {
-    let (url, server) = crate::test_support::serve_in_order(vec![
-        ("200 OK", r#"{"result":"deleted"}"#),
-        (
+    let (url, server) = serve_script(vec![
+        Reply::Respond("200 OK", r#"{"result":"deleted"}"#),
+        Reply::Respond(
             "200 OK",
             r#"{"deleted":1,"version_conflicts":0,"failures":[]}"#,
         ),
@@ -282,9 +283,9 @@ async fn a_message_delete_goes_by_id_then_sweeps_other_threads_without_forcing_a
 
 #[tokio::test]
 async fn a_message_never_indexed_under_its_thread_is_still_swept_elsewhere() {
-    let (url, server) = crate::test_support::serve_in_order(vec![
-        ("404 Not Found", r#"{"result":"not_found"}"#),
-        (
+    let (url, server) = serve_script(vec![
+        Reply::Respond("404 Not Found", r#"{"result":"not_found"}"#),
+        Reply::Respond(
             "200 OK",
             r#"{"deleted":0,"version_conflicts":0,"failures":[]}"#,
         ),
@@ -301,12 +302,12 @@ async fn a_message_never_indexed_under_its_thread_is_still_swept_elsewhere() {
 
 #[tokio::test]
 async fn a_conflicted_page_delete_refreshes_before_it_fails() {
-    let (url, server) = crate::test_support::serve_in_order(vec![
-        (
+    let (url, server) = serve_script(vec![
+        Reply::Respond(
             "200 OK",
             r#"{"deleted":0,"version_conflicts":1,"failures":[]}"#,
         ),
-        (
+        Reply::Respond(
             "200 OK",
             r#"{"_shards":{"total":1,"successful":1,"failed":0}}"#,
         ),
@@ -320,7 +321,7 @@ async fn a_conflicted_page_delete_refreshes_before_it_fails() {
 
     assert!(result.is_err(), "the caller rereads the thread");
     assert!(
-        requests[1].0.ends_with("/emails/_refresh HTTP/1.1\r\n"),
+        requests[1].0.ends_with("/emails/_refresh HTTP/1.1"),
         "{}",
         requests[1].0
     );
@@ -675,7 +676,6 @@ const RUNNING_FOR_INBOX: &str = r#"{"tasks":[{"node":"n1","id":9,"parent_task_id
 
 #[tokio::test]
 async fn an_inbox_with_a_running_delete_adopts_it_without_starting_another() {
-    use crate::test_support::{Reply, serve_script};
     let (url, server) = serve_script(vec![Reply::Respond("200 OK", RUNNING_FOR_INBOX)]);
     let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
 
@@ -694,13 +694,12 @@ async fn an_inbox_with_a_running_delete_adopts_it_without_starting_another() {
         "group_by=none",
         "timeout=10s",
     ] {
-        assert!(requests[0].contains(part), "{part} in {}", requests[0]);
+        assert!(requests[0].0.contains(part), "{part} in {}", requests[0].0);
     }
 }
 
 #[tokio::test]
 async fn an_inbox_without_a_running_delete_starts_one_tagged_with_its_opaque_id() {
-    use crate::test_support::{Reply, serve_script};
     let (url, server) = serve_script(vec![
         Reply::Respond("200 OK", r#"{"tasks":[]}"#),
         Reply::Respond("200 OK", r#"{"task":"n1:5"}"#),
@@ -715,20 +714,21 @@ async fn an_inbox_without_a_running_delete_starts_one_tagged_with_its_opaque_id(
     assert_eq!(task.as_str(), "n1:5");
     let requests = server.join().unwrap();
     assert!(
-        requests[1].starts_with("POST /emails/_delete_by_query?"),
+        requests[1].0.starts_with("POST /emails/_delete_by_query?"),
         "{}",
-        requests[1]
+        requests[1].0
     );
     assert!(
-        requests[1].ends_with(" x-opaque-id=email-link-delete:inbox"),
-        "{}",
         requests[1]
+            .0
+            .ends_with(" x-opaque-id=email-link-delete:inbox"),
+        "{}",
+        requests[1].0
     );
 }
 
 #[tokio::test]
 async fn a_start_lost_in_flight_is_adopted_from_a_second_listing() {
-    use crate::test_support::{Reply, serve_script};
     let (url, server) = serve_script(vec![
         Reply::Respond("200 OK", r#"{"tasks":[]}"#),
         Reply::Close,
