@@ -131,6 +131,16 @@ pub fn extract_sfs_urls(html: &str) -> Vec<String> {
     re.find_iter(html).map(|m| m.as_str().to_string()).collect()
 }
 
+/// Puts `source_url` back where `sfs_url` is in `html`. The mapping stores the
+/// decoded attribute value, so it is escaped again for the attribute it goes
+/// into: written as is, a `"` in it would end the attribute.
+pub fn restore_source_url(html: &str, sfs_url: &str, source_url: &str) -> String {
+    html.replace(
+        sfs_url,
+        &html_escape::encode_double_quoted_attribute(source_url),
+    )
+}
+
 /// Mapping row from email_sfs_mappings.
 #[derive(FromRow)]
 pub struct SfsMapping {
@@ -192,3 +202,6 @@ pub async fn bulk_update_message_html(
     })
     .await
 }
+
+#[cfg(test)]
+mod test;
