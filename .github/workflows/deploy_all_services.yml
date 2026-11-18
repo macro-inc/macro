@@ -87,7 +87,7 @@ jobs:
     - name: Warm shared release deps
       run: |-
         set -euo pipefail
-        nix build --max-jobs 1 --print-build-logs ".#deployCargoArtifacts"
+        nix build --max-jobs auto --print-build-logs ".#deployCargoArtifacts" ".#code-mode-assets"
         echo "Shared release deps realised into /nix/store; committed on job exit."
       shell: bash
     - name: Push to nix cache
@@ -106,7 +106,7 @@ jobs:
         rm -f "$key"
       shell: bash
       env:
-        TARGETS: .#deployCargoArtifacts
+        TARGETS: .#deployCargoArtifacts .#code-mode-assets
         NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
         NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
