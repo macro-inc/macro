@@ -325,7 +325,9 @@ export function BookingDetailsDialog(props: {
           >
             <p class="text-sm text-ink-muted">
               {bookingAbandoned(props.booking)
-                ? 'This booking couldn’t be added to your calendar, so it isn’t confirmed. Cancel it to free the time.'
+                ? manageable()
+                  ? 'This booking couldn’t be added to your calendar, so it isn’t confirmed. Cancel it to free the time.'
+                  : 'This booking couldn’t be added to the host’s calendar, so it isn’t confirmed. A host can cancel it to free the time.'
                 : props.booking.status === 'failed'
                   ? 'Calendar synchronization failed. This booking is not confirmed. Contact support before creating a replacement to avoid duplicate calendar events.'
                   : 'This booking is still being synchronized with the calendar. It will appear in Upcoming once it is confirmed.'}

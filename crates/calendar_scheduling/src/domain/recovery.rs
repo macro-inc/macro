@@ -156,13 +156,17 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                     return Ok(current);
                 }
                 record.booking.status = BookingStatus::Processing;
+                record.booking.abandoned_at = None;
                 Ok(record)
             }
             Error::Unavailable => {
                 // The reservation and intent predate the provider call. Keep its private receipt
                 // available even when the completion write is uncertain; recovery owns convergence.
                 tracing::error!(booking_id = %record.booking.id, "scheduling completion persistence unavailable; intent retained");
+                // The stored row is still processing; an unsaved abandonment
+                // must not reach the receipt.
                 record.booking.status = BookingStatus::Processing;
+                record.booking.abandoned_at = None;
                 Ok(record)
             }
             error => Err(error),

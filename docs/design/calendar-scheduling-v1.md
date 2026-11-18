@@ -110,7 +110,9 @@ start time has passed, since an event in the past is not worth creating or movin
 abandoned. The booking stays failed, its due timestamp is cleared, and it is never claimed again. Completed claims
 clear their due timestamp. An abandoned booking keeps its reservations; recovery never interprets
 lost permission as a successful deletion. The booking's `abandonedAt` tells the booker and host
-views it is no longer retrying, so both offer Cancel. Cancelling it, which a failed booking
+views it is no longer retrying, so both offer Cancel. A booking abandoned by a release that recorded
+the time only on its operation gets it when it is read, and a create abandoned on its first attempt
+before its start reads back unsent. Cancelling it, which a failed booking
 otherwise refuses while recovery owns it, releases them once the calendar accepts the
 cancellation, except for a create refused on its first attempt: that never reached the calendar,
 so the cancellation releases them without a calendar change. A refused cancellation leaves the

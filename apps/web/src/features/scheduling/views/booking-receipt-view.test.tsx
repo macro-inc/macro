@@ -33,11 +33,11 @@ function receipt(overrides: Partial<Booking> = {}): BookingReceipt {
   };
 }
 
-function renderReceipt(afterCancel: BookingReceipt) {
+function renderReceipt(afterCancel: BookingReceipt, returned?: Booking) {
   const [current, setCurrent] = createSignal(receipt());
   const cancel = vi.fn(async () => {
     setCurrent(afterCancel);
-    return afterCancel.booking;
+    return returned ?? afterCancel.booking;
   });
   render(() => (
     <BookingReceiptView
@@ -83,4 +83,13 @@ it('says so when the host’s calendar refuses the cancellation', async () => {
   expect(screen.getByRole('alert').textContent).toBe(
     'The cancellation didn’t reach your host’s calendar. Please try again later.'
   );
+});
+
+it('drops the refusal once the receipt shows the booking cancelled', async () => {
+  renderReceipt(receipt({ status: 'cancelled' }), receipt().booking);
+  await confirmCancel();
+  expect(
+    screen.getByRole('heading', { name: 'Booking cancelled' })
+  ).toBeTruthy();
+  expect(screen.queryByRole('alert')).toBeNull();
 });

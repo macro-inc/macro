@@ -27,6 +27,24 @@ fn db_error(error: sqlx::Error) -> Error {
 fn decode<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> Result<T, Error> {
     serde_json::from_value(value).map_err(|_| Error::Unavailable)
 }
+/// Decode a stored booking. Bookings abandoned before the booking carried its
+/// own abandon time hold it only on their operation: give the booking that
+/// time, and mark a create abandoned on its first attempt before its start as
+/// unsent, since before the start recovery abandons only on a refusal.
+fn decode_record(value: serde_json::Value) -> Result<BookingRecord, Error> {
+    let mut record: BookingRecord = decode(value)?;
+    if record.booking.status == BookingStatus::Failed
+        && record.booking.abandoned_at.is_none()
+        && let Some(operation) = &mut record.operation
+        && let Some(abandoned_at) = operation.abandoned_at
+    {
+        record.booking.abandoned_at = Some(abandoned_at);
+        operation.unsent = matches!(operation.kind, CalendarOperationKind::Create)
+            && operation.attempt == 0
+            && abandoned_at < record.booking.starts_at;
+    }
+    Ok(record)
+}
 fn encode<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, Error> {
     serde_json::to_value(value).map_err(|_| Error::Unavailable)
 }
@@ -63,7 +81,7 @@ impl Repository for PostgresRepository {
         let Some(row) = row else {
             return Ok(None);
         };
-        let mut record: BookingRecord = decode(row)?;
+        let mut record = decode_record(row)?;
         let operation = record.operation.as_mut().ok_or(Error::Unavailable)?;
         operation.attempt = operation.attempt.saturating_add(1);
         record.revision = record.revision.saturating_add(1);
@@ -112,7 +130,7 @@ impl Repository for PostgresRepository {
                 "Too many bookings in this date range. Choose a shorter date range.".into(),
             ));
         }
-        records.into_iter().map(decode).collect()
+        records.into_iter().map(decode_record).collect()
     }
     async fn host_booking_counts(
         &self,
@@ -171,7 +189,7 @@ impl Repository for PostgresRepository {
         .await
         .map_err(db_error)?
         {
-            let existing: BookingRecord = decode(existing)?;
+            let existing = decode_record(existing)?;
             if existing.profile_id == record.profile_id
                 && existing.booking.email == record.booking.email
                 && existing.booking.starts_at == record.booking.starts_at
@@ -202,7 +220,7 @@ impl Repository for PostgresRepository {
             .fetch_optional(&self.pool)
             .await
             .map_err(db_error)?
-            .map(decode)
+            .map(decode_record)
             .transpose()
     }
     async fn booking_request(&self, request: Uuid) -> Result<Option<BookingRecord>, Error> {
@@ -213,7 +231,7 @@ impl Repository for PostgresRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(db_error)?
-        .map(decode)
+        .map(decode_record)
         .transpose()
     }
     async fn move_booking(

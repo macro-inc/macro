@@ -201,7 +201,7 @@ export function BookingReceiptView(props: {
                   onCancel={() => setRescheduling(false)}
                 />
               </Show>
-              <Show when={error()}>
+              <Show when={error() && r().booking.status !== 'cancelled'}>
                 <p role="alert" class="mt-4 text-sm text-failure">
                   {error()}
                 </p>
