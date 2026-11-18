@@ -142,6 +142,7 @@ export function draftFromRoutine(
   const base = {
     ...createEmptyDraft(defaultModel),
     created: routine.created,
+    ...(routine.appearance ? { appearance: routine.appearance } : {}),
     name: routine.name,
     triggers: (routine.trigger && parseRoutineTriggers(routine.trigger)) ?? [],
     enabled: true,
