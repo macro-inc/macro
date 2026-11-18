@@ -5,9 +5,15 @@ import type {
   SearchDocumentWire,
 } from '@graphql-cache/index';
 import {
+  type CacheResponseErrorCode,
+  isCacheResponseErrorCode,
   isOwnerEpochLostError,
   isOwnerHandoffBlockedError,
 } from '@graphql-cache/protocol';
+import {
+  type CacheErrorCode,
+  classifyCacheError,
+} from '@graphql-cache/telemetry';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -62,6 +68,21 @@ type Request = {
   superseded: AbortController;
   giveUpTimer?: ReturnType<typeof setTimeout>;
 };
+
+/** A bounded name for why a search failed; its message never leaves. The
+ * cache's own rejection code wins over the message, which for an owner
+ * change says "timeout" without being the read timeout. */
+function searchFailureKind(
+  error: unknown
+): CacheResponseErrorCode | CacheErrorCode {
+  if (
+    error instanceof Error &&
+    'errorCode' in error &&
+    isCacheResponseErrorCode(error.errorCode)
+  )
+    return error.errorCode;
+  return classifyCacheError(error);
+}
 
 function isRefusedFirstAnswer(request: Request, error: unknown): boolean {
   // Either way the cache was changing owner and a replacement engine follows.
@@ -186,6 +207,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     let cursor = append ? request.cursor : undefined;
     let pages = append ? request.pages : 0;
     const replacementsAtStart = engineReplacements;
+    let phase: 'search_page' | 'materialize' = 'search_page';
     const span = Telemetry.span('quick_access.search');
     span.setAttr('search.buckets', request.buckets.join(','));
     span.setAttr('search.query_length', request.query.length);
@@ -198,6 +220,7 @@ export function createProjectedList<T extends { id: string }>(options: {
         span.setAttr(key, value);
       }
       do {
+        phase = 'search_page';
         const page = await span.span(
           'quick_access.search_page',
           async (span) => {
@@ -218,6 +241,7 @@ export function createProjectedList<T extends { id: string }>(options: {
           }
         );
         if (current !== request) return;
+        phase = 'materialize';
         const materialized = await span.span(
           'quick_access.materialize',
           async (span) => {
@@ -256,6 +280,8 @@ export function createProjectedList<T extends { id: string }>(options: {
     } catch (error) {
       if (current !== request) return;
       span.error('Quick Access cache search failed');
+      span.setAttr('search.failure_kind', searchFailureKind(error));
+      span.setAttr('search.failure_phase', phase);
       request.awaitingEngine = isRefusedFirstAnswer(request, error);
       setError(error);
       // Rows and their continuation are a committed window. A failed replay
