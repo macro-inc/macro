@@ -15,7 +15,7 @@ per part, each from its own random stream) and draws the recipe
 ## Start here
 
 - `src/index.ts`: the whole public API and the stored type.
-- `src/parts.ts`: every option of every part.
+- `src/parts.ts`: every option of every part; colours also feed `FACE_PARTS[].swatches`.
 - `tests/golden.test.ts`: what must never change.
 
 ## Scope
@@ -38,6 +38,8 @@ Run from `packages/agent-faces`:
 
 - `bun test`
 - `bun run type-check` and `bun run lint` (need `bun install` at the root)
+
+CI runs the type check and the tests in Web App / Typecheck.
 
 ## Gotchas
 
