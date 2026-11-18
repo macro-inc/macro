@@ -1,3 +1,5 @@
+import ClockIcon from '@icon/system/regular/clock.svg';
+import FileTextIcon from '@icon/system/regular/file-text.svg';
 import { queryClient } from '@queries/client';
 import type {
   ActionConfiguration,
@@ -944,6 +946,27 @@ describe('routine composer execution selection', () => {
     expect(loadRoutineComposerDraft()?.triggers).toMatchObject([
       { kind: 'event', events: ['document.created'] },
     ]);
+  });
+
+  it('shows the first trigger’s icon in the header and the top bar', async () => {
+    await mount();
+    /** The glyph the page's header draws for the routine, and the top bar's. */
+    const icons = () => {
+      const header = screen.getByLabelText('Routine name').closest('header');
+      const crumb = within(screen.getByLabelText('Routine location'))
+        .getByText('New routine')
+        .closest('div');
+      return [
+        header?.querySelector('svg')?.outerHTML,
+        crumb?.querySelector('svg')?.outerHTML,
+      ];
+    };
+    const drawn = (Icon: typeof ClockIcon) =>
+      render(() => <Icon class="size-full" />).container.innerHTML;
+    expect(icons()).toEqual([drawn(ClockIcon), drawn(ClockIcon)]);
+    inputPrompt();
+    await addDocumentEvent();
+    expect(icons()).toEqual([drawn(FileTextIcon), drawn(FileTextIcon)]);
   });
 });
 

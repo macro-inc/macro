@@ -131,7 +131,8 @@ export function RoutineDetailView(props: {
   onCopyPrompt(prompt: string): Promise<void | boolean>;
   onShare?(): void;
   appearanceMenu?: JSX.Element;
-  identityIcon?: JSX.Element;
+  /** Makes the top bar's routine icon a control, e.g. to change it. */
+  identityIcon?: (icon: JSX.Element) => JSX.Element;
   /** Opens an agent conversation about this routine. */
   onCompose?(): void;
   onOpenTemplate?(templateId: string): void;
@@ -196,6 +197,7 @@ export function RoutineDetailView(props: {
     >
       {(routine) => (
         <RoutineEditor
+          appearance={routine().appearance}
           identityIcon={props.identityIcon}
           {...routineSections({
             draft: state,

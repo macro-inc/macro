@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import FileTextIcon from '@icon/system/regular/file-text.svg';
 import type {
   CodeUpgrade,
   RoutineTask,
@@ -18,7 +19,10 @@ import { Routine } from './routine-detail';
 import type { HistoryRecord } from './views/routine-history';
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled: mocks.flags().includes(flag.key),
+    loading: false,
+  }),
 }));
 
 vi.mock('@app/lib/split-router', () => ({
@@ -64,6 +68,7 @@ const mocks = vi.hoisted(() => ({
   changeTarget: (_target: RoutineTarget): void => {},
   rename: (_value: string): void => {},
   duplicate: (): void => {},
+  flags: (): string[] => [],
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
@@ -167,9 +172,6 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
       </>
     );
   },
-}));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('./routine-ai-composer', () => ({
   RoutineAiComposer: () => null,
@@ -372,6 +374,7 @@ beforeEach(() => {
   mocks.chatMetadata = () => ({ chat: { name: 'Run transcript' } });
   mocks.agentMetadata = () => ({ name: 'Agent transcript' });
   mocks.codeUpgrades = () => [];
+  mocks.flags = () => [];
   mocks.history = () => [
     {
       id: 'run-id',
@@ -1126,5 +1129,60 @@ describe('routine code that needs an update', () => {
     mocks.codeUpgrades = () => [upgrade()];
     render(() => <Routine />);
     expect(screen.queryByText('Paused: its code needs an update')).toBeNull();
+  });
+});
+
+describe('routine icon', () => {
+  const satellite = {
+    icon: { kind: 'emoji', value: '🛰️' },
+    color: 'teal',
+  } satisfies ScheduledAction['appearance'];
+
+  /** The glyph the page's header draws for the routine, and the top bar's. */
+  function icons() {
+    const header = screen.getByLabelText('Routine name').closest('header');
+    const crumb = within(screen.getByLabelText('Routine location'))
+      .getByText('Summary')
+      .closest('div');
+    const page = header?.querySelector('svg, .emoji');
+    const top = crumb?.querySelector('svg, .emoji');
+    if (!page || !top) throw new Error('A routine icon is missing');
+    return { page, top };
+  }
+
+  /** The colour a glyph is drawn in. */
+  function tint(glyph: Element) {
+    return glyph.closest<HTMLElement>('[data-slot="routine-icon"]')?.style
+      .color;
+  }
+
+  it('shows its trigger’s icon in the header and the top bar when none is chosen', () => {
+    setSchedules([events]);
+    render(() => <Routine />);
+    const { page, top } = icons();
+    const { container } = render(() => <FileTextIcon class="size-full" />);
+    const fileText = container.innerHTML;
+    expect(page.outerHTML).toBe(fileText);
+    expect(top.outerHTML).toBe(fileText);
+  });
+
+  it('shows the chosen icon in its colour in the header and the top bar', () => {
+    setSchedules([{ ...cron, appearance: satellite }]);
+    render(() => <Routine />);
+    for (const glyph of Object.values(icons())) {
+      expect(glyph.textContent).toBe('🛰️');
+      expect(tint(glyph)).toBe('rgb(18, 165, 148)');
+    }
+  });
+
+  it('draws the same icon on the owner’s Change icon button', () => {
+    mocks.flags = () => ['enable-entity-appearance'];
+    setSchedules([{ ...cron, appearance: satellite }]);
+    render(() => <Routine />);
+    const { page, top } = icons();
+    expect(
+      screen.getByRole('button', { name: 'Change icon' }).contains(top)
+    ).toBe(true);
+    expect(top.outerHTML).toBe(page.outerHTML);
   });
 });
