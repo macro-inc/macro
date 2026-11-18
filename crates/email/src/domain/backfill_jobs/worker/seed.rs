@@ -62,9 +62,10 @@ where
 
         let recipient = match MacroUserIdStr::try_from_email(&email) {
             Ok(id) => id,
-            // A single malformed address shouldn't fail the whole message.
-            Err(e) => {
-                tracing::warn!(error = ?e, "Skipping invalid recipient email for contact seed");
+            // A single malformed address shouldn't fail the whole message. The
+            // parse error quotes its input, an address, so it stays out of the log.
+            Err(_) => {
+                tracing::warn!("Skipping invalid recipient email for contact seed");
                 continue;
             }
         };
