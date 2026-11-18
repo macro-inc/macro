@@ -473,6 +473,7 @@ pub(crate) fn crm_error_description(err: &CrmError) -> String {
             "CRM contact not found for the caller's team".to_string()
         }
         CrmError::InvalidRequest(msg) => msg.clone(),
+        CrmError::BlocksConnectedMailbox(reason) => reason.to_string(),
         CrmError::CrmDisabledForTeam => "CRM is turned off for the caller's team".to_string(),
         CrmError::CompanyAlreadyExistsForTeam => {
             "the team already tracks a company with that domain".to_string()

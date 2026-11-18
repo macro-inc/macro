@@ -20,7 +20,7 @@ pub enum NameStage {
     Contains,
     /// Every query word prefixes a name word.
     WordPrefix,
-    /// Exact normalized full name.
+    /// Exact normalized full name, or a one-term query equal to the first name.
     ExactName,
     /// An incomplete typed address prefixes the actual email.
     EmailPrefix,
@@ -107,6 +107,15 @@ impl RecentKey {
     /// Exact BLOB bytes used by the existing fact index.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
+    }
+    /// The timestamp a stored key encodes; None when the bytes are too short.
+    pub fn timestamp(key: &[u8]) -> Option<i64> {
+        let mut time: [u8; 8] = key.get(..8)?.try_into().ok()?;
+        for byte in &mut time {
+            *byte = !*byte;
+        }
+        time[0] ^= 0x80;
+        Some(i64::from_be_bytes(time))
     }
     /// Sparse context overrides are partitioned by publication epoch. Old
     /// epochs remain harmless while the default rank supplies untouched users.

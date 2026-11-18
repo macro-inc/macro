@@ -39,5 +39,7 @@ pub use ports::{
 };
 pub use questions::{FOCUS_QUESTIONS, FocusQuestion};
 pub use rule::{FOCUS_RULE_VERSION, decide};
-pub use service::{ClassifyOutcome, FocusQueries, FocusService, SweepReport};
+pub use service::{
+    ClassifyOutcome, DueDates, EnrolledInboxes, FocusQueries, FocusService, SweepReport,
+};
 pub use signals::RECENT_CONTACT_DAYS;

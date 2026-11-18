@@ -2,15 +2,16 @@
 //!
 //! Every email event on the platform passes through here, so the consumer
 //! hands each thread to the Focus service, which drops inboxes whose owner is
-//! outside the Focus rollout after a single-row read and a cached flag check.
+//! outside the Focus rollout after a single-row read and a flag check evaluated in memory.
 //! Up to [`MAX_CONCURRENT_CLASSIFICATIONS`] threads run side by side, so a slow
 //! classifier call delays only its own thread; with every slot taken the
 //! consumer stops reading until one frees.
 //!
 //! An event's offset is committed when it is handed off, in the order received,
 //! not when its classification ends. So an event is never replayed, and one in
-//! flight when the worker dies is lost like any failed classification. The sweep
-//! that runs when the worker starts picks those up, newest first.
+//! flight when the worker dies is lost like any failed classification. The
+//! backfill and the sweep that run when the worker starts pick those up, newest
+//! first.
 
 use std::{future::Future, sync::Arc};
 

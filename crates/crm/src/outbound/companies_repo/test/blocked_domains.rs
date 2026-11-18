@@ -12,7 +12,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-const OWNER: &str = "macro|owner@example.com";
+const OWNER: &str = "macro|owner@example.net";
 
 /// A consumer provider, so email sync would admit it if it weren't
 /// blocked. No reserved example domain is one.
@@ -27,7 +27,7 @@ async fn blocking_preserves_records_and_stops_consented_sync(pool: PgPool) -> an
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, OWNER).await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let link_id = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    let link_id = insert_email_link(&pool, OWNER, "owner@example.net").await?;
     consent_to_mailbox(&pool, team_id, link_id).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
@@ -68,7 +68,7 @@ async fn blocking_preserves_records_and_stops_consented_sync(pool: PgPool) -> an
             .populate_contact(
                 &team_id,
                 &link_id,
-                "owner@example.com",
+                "owner@example.net",
                 &email,
                 None,
                 Utc::now(),

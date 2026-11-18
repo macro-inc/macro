@@ -3,8 +3,8 @@
 //! Events can be lost, a classification can fail, initial sync emits no
 //! events, and a thread can become signal without one. The sweep covers all
 //! of these. It covers the inboxes whose owner is in the Focus rollout: those
-//! holding Focus, and those whose mail since the worker started showed their
-//! owner in it, so an inbox whose owner joins fills from its next mail on. The
+//! holding Focus, and those the backfill's looks or mail since the worker
+//! started found in it, leaving an inbox being backfilled to the backfill. The
 //! first sweep runs at startup and decides rows from an older rule again, from
 //! their stored answers. Overlapping sweeps (during a deploy) are harmless: a stored
 //! result for a thread's latest message is never sent to the classifier again.
