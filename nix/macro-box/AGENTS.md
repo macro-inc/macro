@@ -348,6 +348,10 @@ existing credentials: no new pairing and no Claude login.
   A fourth VM enrolls from a file against `files/test-fake-macro.py` on
   loopback while `network-online.target` never comes: the claim and macrod's
   runtime connection still go through, and neither unit is ordered after it.
+- The agent runtime (`packages/muppet` and the starter agent's packages)
+  reaches agents only in a new image; a harness deploy changes only the
+  seeded starter agent. Release the two together
+  (`docs/runbooks/firecracker-computers-rollout.md`).
 - After `packages/starter-agent/bun.lock` changes, update `outputHash` in
   `_agent-runtime.nix` from the fetch derivation's reported `got:` hash.
 - To upgrade computer-use-linux, change `version` in
