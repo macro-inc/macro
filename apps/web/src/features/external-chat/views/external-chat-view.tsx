@@ -167,9 +167,19 @@ export function ExternalChatView(props: {
   // at the bottom stays there whenever the timeline's content changes size,
   // or its viewport does (on touch the scroller pads the floating composer,
   // which grows with the draft).
-  const grown = new ResizeObserver(() => {
-    if (alive && scroller && following)
+  const grown = new ResizeObserver((entries) => {
+    if (!alive || !scroller) return;
+    if (following) {
       scroller.scrollTop = scroller.scrollHeight;
+      return;
+    }
+    // A reader scrolled up stays put, but history landing above later keeps
+    // their distance from the bottom, which a viewport change moves without
+    // a scroll event. Rows growing above are not counted: they are what that
+    // distance holds the view through.
+    if (entries.some((entry) => entry.target === scroller))
+      fromBottom =
+        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
   });
   onCleanup(() => grown.disconnect());
   const [scrollerElement, setScrollerElement] = createSignal<HTMLDivElement>();
