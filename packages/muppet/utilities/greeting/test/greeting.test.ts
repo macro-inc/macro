@@ -443,3 +443,17 @@ test('an owner who wrote first means the warmed model is dropped, never asked', 
   expect(fake.events).not.toContain('model asked');
   expect(fake.typing).toEqual(['start dm-1', 'stop dm-1']);
 });
+
+test('a DM that already has messages is done even when the facts fail to load', async () => {
+  const fake = fakeGreeter({ answers: [hello], messages: () => 1 });
+  const greeter: Greeter = {
+    ...fake.greeter,
+    prompt: async () => {
+      throw new Error('the prompt file is gone');
+    },
+  };
+  expect(await greet(greeter)).toEqual({ kind: 'conversation_started' });
+  expect(fake.marked()).toBe(true);
+  expect(fake.failed()).toEqual({ paid: 0, unpaid: 0 });
+  expect(fake.slept).toEqual([]);
+});

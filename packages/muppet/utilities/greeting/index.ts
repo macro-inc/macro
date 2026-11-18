@@ -264,15 +264,16 @@ const attempt = async (
       factsLane(),
     ]);
     if (dmSettled.status === 'rejected') throw dmSettled.reason;
-    if (factsSettled.status === 'rejected') throw factsSettled.reason;
     const { dm, written } = dmSettled.value;
-    const [prompt, ownerName, identity, have] = factsSettled.value;
     const standDown = async (): Promise<Greeted> => {
       span.set('agent.greeting.outcome', 'conversation_started');
       await greeter.markGreeted();
       return { kind: 'conversation_started' };
     };
+    // A conversation that has started needs no facts: it is done either way.
     if (written) return await standDown();
+    if (factsSettled.status === 'rejected') throw factsSettled.reason;
+    const [prompt, ownerName, identity, have] = factsSettled.value;
     span.set('agent.greeting.have', have.join(','));
     span.set('agent.greeting.identity_known', identity !== undefined);
     span.set('agent.greeting.owner_named', ownerName !== undefined);
