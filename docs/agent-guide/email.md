@@ -1066,8 +1066,9 @@ edit once more, unless send, discard, or a reset already cancelled it; if that
 write also fails, a brief warning shows after the composer closes. A later
 failure shows a new warning.
 Retry preserves the original draft handle. An already-sent rejection drops the
-local copy rather than recreating the sent message. The REST compose path keeps
-its existing behavior.
+local copy rather than recreating the sent message; an open composer keeps only
+the text the sent message lacks, as a new draft (see below). The REST compose
+path keeps its existing behavior.
 
 Native draft recovery requires a full app update containing queue inspection and
 durable mutation metadata support. An older app receiving an OTA bundle opens
@@ -1369,8 +1370,15 @@ Further typing saves locally without retrying the rejected write. Verify that
 pending attachment bytes survive reopening and that a reply stays in its
 conversation.
 An already-sent rejection after reconnect follows the same path as an immediate
-already-sent response: announce that the email or reply was sent, clear the local
-composer, and cancel pending autosave. It must never offer Retry for that draft.
+already-sent response: cancel pending autosave, announce that the email or reply
+was sent, then keep any text the sent message lacks as a new draft (saying it
+was not sent), or else leave the sent draft. Edits made meanwhile count toward
+that text; autosave, Send and the From switch wait until the composer has
+settled it, and it must never offer Retry for that draft. A discard pressed
+before it settles takes precedence: no notice and no kept draft, even when its
+delete fails, because the draft was sent either way. A composer that closes
+first shows nothing and keeps nothing: the text the sent message lacks is lost,
+a known gap, since the queue drops the refused working copy.
 Verify this in standalone and reply composers, including a queued edit awaiting
 its debounce and a failure racing the first identity read. A settlement for a
 previous or different draft must not clear the current editor.
