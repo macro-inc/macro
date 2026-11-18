@@ -60,6 +60,9 @@ const FOCUS_SKIPPED: &str = "focus skipped";
 /// the Debug name of `ClassifyOutcome::NotEnabled` in `email_focus_worker`,
 /// so renaming that variant makes the wait for it time out.
 const FOCUS_NOT_ENABLED: &str = "NotEnabled";
+/// What `pubsub_workers` logs when its read of the Outlook import live pass
+/// flag turns the switch on; it starts off.
+const LIVE_IMPORT_PASS_ON: &str = "outlook import live pass switched";
 /// The setting that names the Kafka brokers.
 const KAFKA_BROKERS: &str = "KAFKA_BROKERS";
 /// Where that service answers GraphQL.
@@ -134,7 +137,8 @@ pub struct StackOptions {
     pub focus: bool,
     /// Turns the Outlook import live pass on: the email services read
     /// `enable-outlook-import-live-pass` from the Macro services stand-in,
-    /// which answers it on. Off by default, as in production.
+    /// which answers it on, and the stack starts once the workers have read
+    /// it. Off by default, as in production.
     pub outlook_import_live_pass: bool,
 }
 
@@ -353,7 +357,27 @@ impl Stack {
             .await?;
             stack.calendar = Some(calendar);
         }
+        if options.outlook_import_live_pass {
+            stack.wait_for_live_import_pass().await?;
+        }
         Ok(stack)
+    }
+
+    /// Waits until `pubsub_workers` has read the Outlook import live pass
+    /// flag on. The switch starts off, and a folder whose first import page
+    /// commits before that read imports without a live pass.
+    async fn wait_for_live_import_pass(&self) -> Result<(), Report> {
+        eventually(
+            "the workers to read the Outlook import live pass flag on",
+            STARTUP_TIMEOUT,
+            async || {
+                Ok(self
+                    .workers_log()
+                    .contains(LIVE_IMPORT_PASS_ON)
+                    .then_some(()))
+            },
+        )
+        .await
     }
 
     /// Starts `document_storage_service` on the scenario's database, Redis
