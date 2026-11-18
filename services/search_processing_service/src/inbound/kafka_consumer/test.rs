@@ -755,6 +755,7 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
             ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
                 channel_id: CHANNEL_ID,
                 actor: sender.clone(),
+                participant_user_ids: Vec::new(),
             }),
             ChannelEventDescription {
                 action: ChannelIndexAction::RemoveChannel {
@@ -1757,6 +1758,7 @@ fn channel_envelope_decodes_round_trip() {
     let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
         channel_id: CHANNEL_ID,
         actor: channel_sender(),
+        participant_user_ids: Vec::new(),
     });
     let message = encoded_message(
         MacroChannelsTopic::TOPIC_STR,
@@ -2172,6 +2174,7 @@ async fn unsupported_channel_schema_message_is_commit_safe() {
     let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
         channel_id: CHANNEL_ID,
         actor: channel_sender(),
+        participant_user_ids: Vec::new(),
     });
     let message = encoded_message(
         MacroChannelsTopic::TOPIC_STR,
@@ -2477,6 +2480,7 @@ async fn hint_arriving_mid_reread_queues_the_next_reread() {
     let worker = tokio::spawn(drain_worker_events(
         receiver,
         pending_rereads,
+        mpsc::unbounded_channel().0,
         move |received| {
             let started_sender = started_sender.clone();
             let resume = Arc::clone(&worker_resume);
@@ -2987,4 +2991,164 @@ async fn record_span_covers_processing_and_fails_with_a_dropped_event() {
         Some(EMAIL_THREAD_ID.to_string())
     );
     assert!(attribute(processing, "record_age_ms").is_some());
+}
+
+fn email_position(offset: i64) -> RecordPosition {
+    RecordPosition {
+        topic: "macro.email",
+        partition: 0,
+        offset,
+    }
+}
+
+fn any_partition(_: &str, _: i32) -> bool {
+    true
+}
+
+#[test]
+fn a_record_keeps_one_ledger_key_from_receipt_to_completion() {
+    let received = received_agent_session_event(AGENT_SESSION_ID, 3);
+    let email = received_thread_backfilled_event(Uuid::from_u128(1), 4);
+
+    assert_eq!(
+        subscribed_topic(macro_event_topics::MacroAgentSessionLifecycleTopic::TOPIC_STR),
+        Some(received.topic)
+    );
+    assert_eq!(
+        subscribed_topic(MacroEmailTopic::TOPIC_STR),
+        Some(email.topic)
+    );
+    assert_eq!(subscribed_topic("macro.unknown"), None);
+}
+
+#[test]
+fn a_handed_off_record_stays_queued_and_a_skipped_one_finishes() {
+    let mut ledger = OffsetLedger::default();
+    for offset in 1..=4 {
+        ledger.received(email_position(offset));
+    }
+
+    track_handoff::<EventBrokerError>(&mut ledger, email_position(1), &HandoffOutcome::HandedOff);
+    track_handoff::<EventBrokerError>(&mut ledger, email_position(2), &HandoffOutcome::Coalesced);
+    track_handoff(
+        &mut ledger,
+        email_position(3),
+        &HandoffOutcome::MalformedRecord(EventBrokerError::MissingMessageKey),
+    );
+    track_handoff::<EventBrokerError>(
+        &mut ledger,
+        email_position(4),
+        &HandoffOutcome::WorkerClosed,
+    );
+    ledger.received(email_position(5));
+    track_handoff::<EventBrokerError>(
+        &mut ledger,
+        email_position(5),
+        &HandoffOutcome::NoIndexChange,
+    );
+
+    assert_eq!(ledger.queued(), [email_position(1), email_position(4)]);
+}
+
+#[tokio::test]
+async fn a_worker_reports_a_record_as_started_then_done() {
+    let (sender, receiver) = mpsc::channel(4);
+    let (report_sender, mut reports) = mpsc::unbounded_channel();
+    let (release, released) = tokio::sync::oneshot::channel::<()>();
+    let released = Arc::new(std::sync::Mutex::new(Some(released)));
+    let worker = tokio::spawn(drain_worker_events(
+        receiver,
+        Arc::default(),
+        report_sender,
+        move |_received| {
+            let released = released.lock().unwrap().take();
+            async move {
+                if let Some(released) = released {
+                    let _ = released.await;
+                }
+            }
+        },
+    ));
+
+    let event = received_thread_backfilled_event(Uuid::from_u128(1), 7);
+    let position = event.position();
+    sender.send(event).await.unwrap();
+    assert_eq!(reports.recv().await, Some(WorkerReport::Started(position)));
+    assert!(reports.try_recv().is_err(), "still processing");
+
+    release.send(()).unwrap();
+    assert_eq!(reports.recv().await, Some(WorkerReport::Done(position)));
+    drop(sender);
+    worker.await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_stop_rewinds_to_queued_records_and_not_to_one_a_worker_was_stuck_on() {
+    let mut ledger = OffsetLedger::default();
+    for offset in [10, 11, 12] {
+        ledger.received(email_position(offset));
+    }
+    let (report_sender, mut reports) = mpsc::unbounded_channel();
+    let (aborted_sender, aborted) = tokio::sync::oneshot::channel::<()>();
+    let stuck = tokio::spawn(async move {
+        let _ = report_sender.send(WorkerReport::Started(email_position(10)));
+        let _held = (aborted_sender, report_sender);
+        std::future::pending::<()>().await;
+    });
+
+    let started = tokio::time::Instant::now();
+    let drained = drain_workers(
+        vec![stuck],
+        &mut reports,
+        &mut ledger,
+        Some(SHUTDOWN_DRAIN_DEADLINE),
+    )
+    .await;
+
+    assert_eq!(started.elapsed(), SHUTDOWN_DRAIN_DEADLINE);
+    assert_eq!(drained.aborted, 1);
+    assert!(drained.panic.is_none());
+    assert!(aborted.await.is_err(), "the stuck worker was aborted");
+    assert_eq!(ledger.started_unfinished(), [email_position(10)]);
+    assert_eq!(
+        ledger.rewind_points(any_partition),
+        [email_position(11)],
+        "11 and 12 were still queued"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn after_an_error_the_drain_waits_for_the_workers_without_a_deadline() {
+    let mut ledger = OffsetLedger::default();
+    ledger.received(email_position(3));
+    let (report_sender, mut reports) = mpsc::unbounded_channel();
+    let worker = tokio::spawn(async move {
+        tokio::time::sleep(SHUTDOWN_DRAIN_DEADLINE * 4).await;
+        let _ = report_sender.send(WorkerReport::Done(email_position(3)));
+    });
+
+    let started = tokio::time::Instant::now();
+    let drained = drain_workers(vec![worker], &mut reports, &mut ledger, None).await;
+
+    assert_eq!(drained.aborted, 0);
+    assert_eq!(started.elapsed(), SHUTDOWN_DRAIN_DEADLINE * 4);
+    assert!(ledger.queued().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_worker_that_panicked_before_the_stop_is_reported() {
+    let (_report_sender, mut reports) = mpsc::unbounded_channel();
+    let panicked = tokio::spawn(async { panic!("worker failed") });
+    let hangs = tokio::spawn(std::future::pending::<()>());
+
+    let drained = drain_workers(
+        vec![panicked, hangs],
+        &mut reports,
+        &mut OffsetLedger::default(),
+        Some(SHUTDOWN_DRAIN_DEADLINE),
+    )
+    .await;
+
+    assert!(drained.panic.is_some_and(|error| error.is_panic()));
+    assert_eq!(drained.aborted, 1);
 }

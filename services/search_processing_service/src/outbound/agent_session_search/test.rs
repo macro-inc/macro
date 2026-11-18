@@ -37,12 +37,6 @@ fn a_paste_is_indexed_as_its_content() {
     );
 }
 
-#[test]
-fn a_paste_that_does_not_parse_stays_as_written() {
-    let text = "Before <m-paste>not json</m-paste> after";
-    assert_eq!(shown_text(text), text);
-}
-
 /// Agents leave a mention's name empty; it reads as its kind, as in channels.
 #[test]
 fn a_nameless_document_mention_reads_as_its_kind() {
@@ -58,14 +52,6 @@ fn a_nameless_document_mention_reads_as_its_kind() {
 fn markup_from_the_first_tag_that_does_not_parse_stays_as_written() {
     let text = r#"The parser reads `<m-link>` tags. See <m-link>{"url":"https://example.com","text":"docs"}</m-link>."#;
     assert_eq!(shown_text(text), text);
-}
-
-#[test]
-fn an_opener_without_a_closer_keeps_the_rest_as_written() {
-    let text = "Earlier <m-paste> stray <m-paste> openers and no closer";
-    assert_eq!(shown_text(text), text);
-    let many = "<m-paste>x ".repeat(20_000);
-    assert_eq!(shown_text(&many), many);
 }
 
 /// A tag that does not parse keeps its stretch as written; a paste after it

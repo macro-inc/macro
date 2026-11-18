@@ -128,7 +128,9 @@ tab. Nothing exists on the server, so the DM is in neither person's list until
 the first message creates it and the view becomes the real conversation. Check
 that leaving without sending creates nothing, that the other person's list gains
 the DM only after the send, and that reloading a `pending-dm-` URL opens the
-Chat list on desktop and closes the pane on touch.
+Chat list on desktop and closes the pane on touch. Agent teammates are the
+exception: they write first, so their DM is created when it opens (see Agent
+teammates in [settings.md](settings.md#agent-teammates)).
 
 A person's first message in a new DM or group chat notifies its registered
 members as every later message does (an unread dot on the row, the Chat badge,

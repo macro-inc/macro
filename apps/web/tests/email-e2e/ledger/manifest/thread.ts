@@ -1299,6 +1299,17 @@ export const thread = {
       trigger: 'invitation message with the calendar off',
       source: [INVITATION, CARD],
     },
+    {
+      id: 'STL-522',
+      surface: 'SL-40',
+      fn: ['F-156'],
+      state: '"Adding shared events requires a writable Google calendar."',
+      trigger: 'open a shared event with Outlook as the only calendar',
+      source: ['src/features/calendar-view/components/AddToCalendarButton.tsx'],
+      providers: ['outlook'],
+      flag: 'enable-calendar-add-shared-event',
+      needs: 'the calendar service',
+    },
     // SL-43
     {
       id: 'STL-080',
