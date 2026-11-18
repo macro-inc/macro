@@ -230,20 +230,6 @@ export const list = {
       note: 'the other tabs are chosen in the touch sidebar sheet (AL-002)',
     },
     {
-      id: 'AL-005',
-      surface: 'SL-01',
-      fn: ['F-029', 'F-030'],
-      action: 'go to tab by letter',
-      trigger:
-        'hotkey g then i (Signal), o (Noise), s (Favorites), t (Sent), d (Drafts), e (Archived), a (All)',
-      source: ['src/features/email-view/use-email-view-hotkeys.ts'],
-      registered: [
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: the key derive.ts prints
-        'src/features/email-view/use-email-view-hotkeys.ts#Go to ${label}',
-      ],
-      viewports: ['desktop'],
-    },
-    {
       id: 'AL-006',
       surface: 'SL-17',
       fn: ['F-029', 'F-030'],
@@ -294,8 +280,8 @@ export const list = {
       id: 'AL-400',
       surface: 'SL-01',
       fn: ['F-029'],
-      action: 'open the Email view from anywhere in the app',
-      trigger: 'app sidebar go-to hotkey for Email (key e)',
+      action: 'open the Email view on Signal from anywhere in the app',
+      trigger: 'app sidebar go-to hotkey for Email (g then e)',
       source: [
         'src/components/app/app-sidebar/sidebar.tsx',
         'src/components/app/sidebar-next/nav-items.ts',
@@ -342,6 +328,17 @@ export const list = {
       ],
       viewports: ['phone'],
       note: "the way on touch to every tab outside the Inbox and to saved views; it took the place of the phone's saved-view pill (AL-121, removed with its picker)",
+    },
+    {
+      id: 'AL-912',
+      surface: 'SL-01',
+      fn: ['F-030'],
+      action: 'open the Sent tab from anywhere in the app',
+      trigger: 'app sidebar go-to hotkey for Sent (g then s)',
+      source: ['src/components/app/app-sidebar/sidebar.tsx'],
+      registered: ['sidebar.goTo.sent'],
+      viewports: ['desktop'],
+      note: "took the place of Email's own go-to letters (AL-005, removed): g and a letter now means the same in every view",
     },
     {
       id: 'AL-011',

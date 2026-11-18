@@ -145,7 +145,6 @@ AL-001	the sidebar's Inbox item does not reopen the Inbox tab that was last open
 AL-002	A press on a desktop sidebar tab returns before setTab in EmailSidebar.tsx, so the sidebar's Favorites (and other tabs) no longer switch the list. Run on touch as well: the sidebar sheet lists the same `Tab` rows, and with setTab skipped the sheet still closes but All leaves Noise open, so the header never names All.
 AL-003	The header's Inbox view tabs (Signal / Noise) ignore a change instead of calling setTab in EmailHeader.tsx.
 AL-004	The touch header's Inbox pills (the PillTabs onChange in email-view.tsx) return before setTab, so a tap on Noise leaves Signal open.
-AL-005	pressing g and a letter opens no tab
 AL-006	the number keys do not switch tabs
 AL-007	pressing Tab or Shift+Tab does not move between the Inbox tabs
 AL-008	pressing Escape does not go back to the Signal tab

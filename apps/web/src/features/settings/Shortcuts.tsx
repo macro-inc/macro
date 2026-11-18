@@ -907,7 +907,7 @@ const shortcutSections: ShortcutSection[] = [
         keys: ['g'],
         codes: ['KeyG'],
         description:
-          'Go to a view: then h Home, a Agents, e Email (Signal), s Sent, f Files, d Documents, t Tasks, r Calendar, c Channels, o Customers',
+          'Go to a view: then h Home, i Notifications (Home without them), a Agents, e Email (Signal), s Sent, f Files, d Documents, t Tasks, r Calendar, c Channels, o Customers',
       },
       {
         keys: ['?'],

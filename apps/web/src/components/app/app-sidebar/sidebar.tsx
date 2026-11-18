@@ -7,14 +7,8 @@ import {
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
-import {
-  DEFAULT_EMAIL_TAB,
-  type EmailTab,
-} from '@app/features/email-view/constants';
-import {
-  emailTabSearch,
-  emailTabSearchCodec,
-} from '@app/features/email-view/email-route';
+import { DEFAULT_EMAIL_TAB } from '@app/features/email-view/constants';
+import { emailTabSearchUpdate } from '@app/features/email-view/email-route';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
@@ -85,10 +79,6 @@ export interface SidebarItem {
   standaloneHotkey?: boolean;
 }
 
-const emailTab = (tab: EmailTab): OpenWithSplitOptions['search'] => ({
-  [emailTabSearch.namespace]: emailTabSearchCodec.serialize({ tab }),
-});
-
 /**
  * Home answers `g i` too, unless the Notifications link is on the rail: two
  * links on one key run only the first, so `i` belongs to Notifications then.
@@ -135,7 +125,7 @@ const SIDEBAR_LINKS = [
       return t('nav.email');
     },
     href: LIST_VIEW_PATHS.mail,
-    search: emailTab(DEFAULT_EMAIL_TAB),
+    search: emailTabSearchUpdate(DEFAULT_EMAIL_TAB),
     icon: getIconConfig('email').icon,
     hotkey: 'e',
     hotkeyToken: TOKENS.sidebar.goTo.mail,
@@ -146,7 +136,7 @@ const SIDEBAR_LINKS = [
       return t('viewMenus.sent');
     },
     href: LIST_VIEW_PATHS.mail,
-    search: emailTab('sent'),
+    search: emailTabSearchUpdate('sent'),
     icon: PaperPlaneTiltIcon,
     hotkey: 's',
     hotkeyToken: TOKENS.sidebar.goTo.sent,
