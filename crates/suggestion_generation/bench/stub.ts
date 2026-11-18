@@ -11,7 +11,7 @@
 //   mail from Gmail or Outlook, which seeded mail never reaches. Every other
 //   request, and a person with no file, goes to the real email_service.
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -71,7 +71,7 @@ export function startStub(instance: string) {
   const dir = stubDir(instance);
   mkdirSync(join(dir, 'inbox'), { recursive: true });
   writeFileSync(join(dir, 'Caddyfile'), CADDYFILE);
-  writeFlags(instance, {});
+  if (!existsSync(join(dir, 'flags.json'))) writeFlags(instance, {});
   const name = container(instance);
   const running = docker(['ps', '-q', '--filter', `name=^${name}$`]);
   if (running) {
