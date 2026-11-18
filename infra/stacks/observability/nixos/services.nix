@@ -18,6 +18,7 @@ in
     ./dashboards.nix
     ./ci-dashboard.nix
     ./local-dashboard.nix
+    ./gitai-dashboard.nix
     ./database-dashboard.nix
     ./database-queries-dashboard.nix
     ./prod-alerts-dashboard.nix
