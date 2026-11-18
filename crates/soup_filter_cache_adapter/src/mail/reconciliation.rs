@@ -221,7 +221,7 @@ async fn contradicted_writes<S: PredicateIndexStorage>(
         .map_err(ProjectionError::Storage)?;
     // Most queued writes are on rows whose stored facts already leave the
     // window; read the queue only when one does not.
-    let candidates: Vec<_> = protected
+    let stored_in_window: Vec<_> = protected
         .iter()
         .zip(stored)
         .filter_map(|((key, shadow), state)| match state {
@@ -231,7 +231,7 @@ async fn contradicted_writes<S: PredicateIndexStorage>(
             _ => None,
         })
         .collect();
-    if candidates.is_empty() {
+    if stored_in_window.is_empty() {
         return Ok(HashSet::new());
     }
     let queue = storage
@@ -248,7 +248,7 @@ async fn contradicted_writes<S: PredicateIndexStorage>(
     else {
         return Ok(HashSet::new());
     };
-    Ok(candidates
+    Ok(stored_in_window
         .into_iter()
         .filter(|(key, shadow, stored)| {
             every_prefix_in_window(bounded, key, stored, shadow, &sources)
@@ -258,8 +258,8 @@ async fn contradicted_writes<S: PredicateIndexStorage>(
 }
 
 /// Replays the queue over the stored facts, as storage composes the shadow.
-/// A replay that does not end at the stored shadow (a write naming a row by
-/// a local identity) is not evidence, and the row keeps its protection.
+/// Storage builds the shadow from the same writes, so the replay ends at it;
+/// if it does not, the replay proves nothing and the row keeps its protection.
 fn every_prefix_in_window(
     bounded: &ValidatedIndexQuery,
     key: &RecordKey,
@@ -268,7 +268,16 @@ fn every_prefix_in_window(
     sources: &[(MutationId, OptimisticSource)],
 ) -> bool {
     let mut current: Option<EffectiveOptimisticProjection> = None;
-    for (owner, source) in sources {
+
+    // Composing copies and validates the row's state, so skip the writes
+    // that leave this row alone before composing.
+    let touching = sources.iter().filter(|(_, source)| {
+        source
+            .projection_mutations
+            .iter()
+            .any(|mutation| mutation.record_key() == key)
+    });
+    for (owner, source) in touching {
         let Ok(next) = compose_pending_optimistic_projection(
             key,
             Some(stored),
