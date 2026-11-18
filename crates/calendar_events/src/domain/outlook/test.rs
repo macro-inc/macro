@@ -290,6 +290,10 @@ fn only_the_mailboxs_own_read_only_calendars_are_system_calendars() {
         "shared with the mailbox, whoever Graph names as owner"
     );
     assert!(!listed_calendar("reader", None, false).is_system(mailbox));
+    assert!(
+        !listed_calendar("reader", None, true).is_system(mailbox),
+        "Graph lists a calendar subscribed from the web as shared, with no owner"
+    );
     let mut primary = listed_calendar("reader", Some(mailbox), false);
     primary.calendar.is_primary = true;
     assert!(!primary.is_system(mailbox));
