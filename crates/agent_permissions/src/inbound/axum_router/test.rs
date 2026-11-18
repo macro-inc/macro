@@ -49,6 +49,7 @@ impl MacroAuthorizationService for FakeAuthorization {
             identity: ValidatedIdentity {
                 agent_id,
                 agent_via: None,
+                routine_id: None,
                 user_id: USER.to_owned(),
                 fusion_user_id: String::new(),
                 organization_id: None,

@@ -937,7 +937,7 @@ impl ExecutionCredentials for NotRunCredentials {
         _: &str,
         _: ProgramLanguage,
         _: CancellationToken,
-    ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
+    ) -> Result<IssuedRun, CodeModeError> {
         Err(CodeModeError::NotRun(NotRun {
             message: "This OCaml program did not run.".into(),
             permission: self.0.clone(),
@@ -970,6 +970,7 @@ async fn a_program_its_permissions_stop_is_recorded_as_failed_with_why() {
                 Arc::new(NotRunCredentials(permission.clone())),
                 store.clone(),
                 Arc::new(TestTurns::default()),
+                Arc::new(Pixels),
             ),
             true,
         );

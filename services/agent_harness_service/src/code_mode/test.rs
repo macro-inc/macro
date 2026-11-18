@@ -102,6 +102,14 @@ impl NativeToolGate for Recording {
         self.0.lock().unwrap().push(args.clone());
         Box::pin(async { NativeToolVerdict::Refuse("recorded".into()) })
     }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
+    }
 }
 
 #[tokio::test]
@@ -936,6 +944,7 @@ async fn the_egress_flag_is_read_once_per_user_for_a_while() {
     failing.store(false, Ordering::SeqCst);
     assert_eq!(rollout.egress(&user).await, Egress::Proxied);
     assert_eq!(loads.load(Ordering::SeqCst), 4);
+}
 
 /// Agent permissions are on only with the OCaml rollout too, and off when
 /// the flags can't be read.
@@ -1029,6 +1038,7 @@ async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
             calls: AtomicUsize::new(0),
         });
         let credentials = RunCredentials {
+            egress: EgressRollout::new(None),
             signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
             correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
             gate: gate.clone(),
@@ -1053,7 +1063,7 @@ async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
         let parts = gate(analysis(), &[], ToolApprovalStatus::Approved, rollout);
         let analyzer = parts.analyzer.clone();
         let (issued, asked) = issue(parts, language).await;
-        assert_eq!(issued.unwrap().allowed_operations, None);
+        assert_eq!(issued.unwrap().environment.allowed_operations, None);
         assert_eq!(asked, 1);
         assert_eq!(*analyzer.calls.lock().unwrap(), 0);
     }
@@ -1105,7 +1115,7 @@ async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
     );
     let holds = parts.holds.clone();
     let (issued, asked) = issue(parts, ProgramLanguage::Ocaml).await;
-    let environment = issued.unwrap();
+    let environment = issued.unwrap().environment;
     assert_eq!(asked, 1);
     assert_eq!(holds.held.lock().unwrap()[0].approver, owner);
     assert_eq!(
