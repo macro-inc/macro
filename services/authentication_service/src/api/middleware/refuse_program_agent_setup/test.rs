@@ -99,6 +99,16 @@ async fn a_program_cannot_finish_an_agents_setup() {
 }
 
 #[tokio::test]
-async fn the_agents_own_session_finishes_setup() {
+async fn the_agents_own_credential_finishes_setup() {
     assert_eq!(set_up(&token(None, None), false).await.0, StatusCode::OK);
+}
+
+/// A credential that does not verify is rejected by the guard itself, so a
+/// check that fails can never let a program's setup through.
+#[tokio::test]
+async fn a_credential_that_does_not_verify_is_rejected() {
+    assert_eq!(
+        set_up("not-a-token", false).await.0,
+        StatusCode::UNAUTHORIZED
+    );
 }

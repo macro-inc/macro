@@ -41,15 +41,20 @@ pub(in crate::api) async fn handler(
         Ok(extractor) => extractor.authorization,
         Err(rejection) => return rejection.into_response(),
     };
-    let program = match &principal {
-        Some(MacroAuthorization::User(user)) => is_program_run(user.attribution(), &parts.headers),
-        Some(MacroAuthorization::Bot(_)) => true,
-        _ => parts
-            .headers
-            .contains_key(macro_authorization::CODE_EXECUTION_HEADER),
+    let attribution = match &principal {
+        Some(MacroAuthorization::User(user)) => Some(user.attribution()),
+        _ => None,
     };
+    let bot = matches!(principal, Some(MacroAuthorization::Bot(_)));
+    let program = bot
+        || match attribution {
+            Some(attribution) => is_program_run(attribution, &parts.headers),
+            None => parts
+                .headers
+                .contains_key(macro_authorization::CODE_EXECUTION_HEADER),
+        };
     if program {
-        tracing::warn!("refused an agent's setup to a program");
+        tracing::warn!(?attribution, bot, "refused an agent's setup to a program");
         return (
             StatusCode::FORBIDDEN,
             Json(ErrorResponse {
