@@ -62,7 +62,7 @@ export async function main({ macro, run, trigger, knobs }: StepContext) {
   // Only a document of the owner's own: a teammate's log with the same name is theirs to keep.
   const me = await macro.users.me();
   const logs = [];
-  // The search matches part of a name, newest first: look far enough to find an older log.
+  // The search matches part of a name, most relevant first: other documents can rank above the log.
   let seen = 0;
   let exhausted = true;
   for await (const document of macro.documents.search(knobs.log, { searchOn: 'name' })) {
@@ -73,8 +73,8 @@ export async function main({ macro, run, trigger, knobs }: StepContext) {
     }
   }
   if (logs.length === 0 && !exhausted) {
-    // A second log would split the history: say so rather than make one.
-    throw new Error(`Too many documents have "${knobs.log}" in their name to find yours. Give the log a more distinctive name.`);
+    // A second log would split the history, so say so rather than make one, even on a first run.
+    throw new Error(`Too many documents have "${knobs.log}" in their name to tell whether you already have that log. Give the log a more distinctive name.`);
   }
   if (logs.length > 1) {
     throw new Error(`You have ${logs.length} documents named "${knobs.log}". Rename all but one, or change the document this routine logs to.`);
