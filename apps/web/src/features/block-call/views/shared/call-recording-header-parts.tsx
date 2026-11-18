@@ -42,7 +42,7 @@ export function useCallRecordingHeaderTools(record: () => CallRecord) {
     ...(record().recordingUrl
       ? [
           {
-            group: 'file' as const,
+            group: 'share-export' as const,
             get label() {
               return t('entityActions.download');
             },
@@ -59,6 +59,7 @@ export function useCallRecordingHeaderTools(record: () => CallRecord) {
   ];
 
   const askMacro: BlockTool = {
+    group: 'most-used',
     label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () =>

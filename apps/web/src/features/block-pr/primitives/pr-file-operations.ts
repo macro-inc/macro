@@ -33,6 +33,7 @@ export function usePrFileOperations(
       .all()
       .filter((action) => !action.disabledReason)
       .map((action) => ({
+        group: 'state',
         label: action.label,
         icon: action.icon,
         action: action.run,
@@ -40,7 +41,7 @@ export function usePrFileOperations(
 
     operations.push(
       {
-        group: 'sharing',
+        group: 'copy',
         label: t('entityActions.copyGithubLink'),
         icon: Link,
         action: () =>
@@ -53,7 +54,7 @@ export function usePrFileOperations(
           ),
       },
       {
-        group: 'sharing',
+        group: 'open',
         label: t('entityActions.openOnGitHub'),
         icon: ArrowSquareOutIcon,
         action: () => openExternalUrl(githubUrl),
@@ -62,7 +63,7 @@ export function usePrFileOperations(
     const headBranch = data.headBranch;
     if (headBranch) {
       operations.push({
-        group: 'sharing',
+        group: 'copy',
         label: t('entityActions.copyBranchName'),
         icon: GitBranch,
         action: () =>

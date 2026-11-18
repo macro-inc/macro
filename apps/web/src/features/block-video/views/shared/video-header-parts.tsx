@@ -51,7 +51,7 @@ export function useVideoHeaderTools() {
     { op: 'copy' },
     { op: 'moveToProject' },
     {
-      group: 'file',
+      group: 'share-export',
       get label() {
         return t('entityActions.download');
       },
@@ -62,7 +62,7 @@ export function useVideoHeaderTools() {
   ];
 
   const share: BlockTool = {
-    group: 'sharing',
+    group: 'most-used',
     label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,

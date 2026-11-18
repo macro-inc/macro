@@ -18,7 +18,7 @@ export function aiHeaderTools(props: AiHeaderProps) {
     { op: 'copy' },
     { op: 'moveToProject' },
     {
-      group: 'file',
+      group: 'share-export',
       get label() {
         return t('entityActions.download');
       },
@@ -29,7 +29,7 @@ export function aiHeaderTools(props: AiHeaderProps) {
   ];
 
   const share: BlockTool = {
-    group: 'sharing',
+    group: 'most-used',
     label: () => t('entityActions.share'),
     icon: IconShared,
     action: props.openShare,

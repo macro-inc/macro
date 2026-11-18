@@ -421,7 +421,7 @@ function SplitLabelContextMenu(props: ParentProps) {
       <>
         {action().label}
         <Show when={action().disabledReason}>
-          <span class="block whitespace-normal text-xs text-ink-muted">
+          <span class="ml-2 text-xs text-ink-muted">
             {action().disabledReason}
           </span>
         </Show>
@@ -474,6 +474,7 @@ function SplitLabelContextMenu(props: ParentProps) {
               action().icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
             }
             text={label()}
+            class={action().group === 'delete' ? 'text-failure-ink' : undefined}
             hotkeyToken={action().hotkeyToken}
             disabled={!!action().disabledReason}
             onClick={() => action().action?.()}

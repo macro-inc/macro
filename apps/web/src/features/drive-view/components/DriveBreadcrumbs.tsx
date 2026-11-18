@@ -34,6 +34,7 @@ function FolderBreadcrumbMenu(props: {
     ...(props.onOpenInNewSplit
       ? [
           {
+            group: 'open' as const,
             label: 'Open in new split',
             icon: SplitIcon,
             action: () => props.onOpenInNewSplit?.(entity()),
@@ -44,7 +45,7 @@ function FolderBreadcrumbMenu(props: {
       label: 'Share',
       icon: ShareIcon,
       action: () => props.onShare(entity()),
-      group: 'sharing',
+      group: 'most-used',
     },
     { op: 'rename' },
     { op: 'copy' },

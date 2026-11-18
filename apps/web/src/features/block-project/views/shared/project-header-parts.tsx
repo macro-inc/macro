@@ -70,6 +70,7 @@ export function useProjectHeaderTools() {
   );
 
   const chat: BlockTool = {
+    group: 'most-used',
     label: () => t('entityActions.chatAboutProject'),
     icon: ChatWithAgentIcon,
     action: () => openChatWithAgent({ type: 'project', id, name: name() }),
@@ -84,7 +85,7 @@ export function useProjectHeaderTools() {
   };
 
   const share: BlockTool = {
-    group: 'sharing',
+    group: 'most-used',
     label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,

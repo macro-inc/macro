@@ -259,6 +259,7 @@ function NewTop(props: { channelId: string }) {
           mobileViews={isMobile() ? mobileViews() : undefined}
           tools={[
             {
+              group: 'most-used',
               label: () => t('entityActions.askMacro'),
               icon: ChatWithAgentIcon,
               action: () => {
@@ -269,7 +270,7 @@ function NewTop(props: { channelId: string }) {
               condition: () => !!askMacroEntity(),
             },
             {
-              group: 'file',
+              group: 'modify',
               label: () => t('entityActions.rename'),
               icon: RenameIcon,
               hotkeyToken: TOKENS.entity.action.rename,
@@ -284,14 +285,14 @@ function NewTop(props: { channelId: string }) {
               },
             },
             {
-              group: 'file',
+              group: 'modify',
               label: () => t('entityActions.setChannelPicture'),
               icon: PictureIcon,
               action: picture.pickFile,
               condition: picture.isAvailable,
             },
             {
-              group: 'file',
+              group: 'modify',
               label: () => t('entityActions.removeChannelPicture'),
               icon: TrashIcon,
               action: picture.remove,

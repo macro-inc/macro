@@ -3,7 +3,7 @@ import DownloadSimple from '@icon/system/regular/download-simple.svg';
 
 export function downloadFileOperation(action: () => void): FileOperation {
   return {
-    group: 'file',
+    group: 'share-export',
     label: 'Download',
     icon: DownloadSimple,
     action,

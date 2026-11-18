@@ -30,7 +30,7 @@ export function useUnknownHeaderTools(onShare: () => void) {
     { op: 'copy' },
     { op: 'moveToProject' },
     {
-      group: 'file',
+      group: 'share-export',
       get label() {
         return t('entityActions.download');
       },
@@ -41,7 +41,7 @@ export function useUnknownHeaderTools(onShare: () => void) {
   ];
 
   const share: BlockTool = {
-    group: 'sharing',
+    group: 'most-used',
     label: () => t('entityActions.share'),
     icon: IconShared,
     action: onShare,

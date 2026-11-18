@@ -72,19 +72,19 @@ const Icon = () => <svg />;
 // headers pass them, as a JSX array literal that is rebuilt on every read.
 const channelTools = (): BlockTool[] => [
   {
-    group: 'file',
+    group: 'modify',
     label: () => 'Rename',
     icon: Icon,
     action: mocks.rename,
   },
   {
-    group: 'file',
+    group: 'modify',
     label: () => 'Set channel picture',
     icon: Icon,
     action: mocks.setPicture,
   },
   {
-    group: 'file',
+    group: 'modify',
     label: () => 'Remove channel picture',
     icon: Icon,
     action: mocks.removePicture,

@@ -77,7 +77,7 @@ export function useCanvasHeaderTools(state: CanvasDocumentChrome) {
     { op: 'rename' },
     { op: 'moveToProject' },
     {
-      group: 'file',
+      group: 'share-export',
       get label() {
         return t('entityActions.download');
       },
@@ -88,6 +88,7 @@ export function useCanvasHeaderTools(state: CanvasDocumentChrome) {
   ];
 
   const askMacro: BlockTool = {
+    group: 'most-used',
     label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () =>
@@ -100,7 +101,7 @@ export function useCanvasHeaderTools(state: CanvasDocumentChrome) {
   };
 
   const share: BlockTool = {
-    group: 'sharing',
+    group: 'most-used',
     label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,

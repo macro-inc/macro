@@ -25,7 +25,7 @@ export function docxHeaderTools(props: DocxHeaderProps) {
     { op: 'copy' },
     { op: 'moveToProject' },
     {
-      group: 'file',
+      group: 'share-export',
       get label() {
         return t('entityActions.downloadDocx');
       },
@@ -36,13 +36,14 @@ export function docxHeaderTools(props: DocxHeaderProps) {
   ];
 
   const askMacro: BlockTool = {
+    group: 'most-used',
     label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () => openChatWithAgent(chatEntity(props)),
   };
 
   const share: BlockTool = {
-    group: 'sharing',
+    group: 'most-used',
     label: () => t('entityActions.share'),
     icon: IconShared,
     action: props.openShare,

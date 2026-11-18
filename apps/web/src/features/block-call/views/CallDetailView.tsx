@@ -91,7 +91,7 @@ function CallDetailMoreMenu(props: { data: CallDetailData }) {
     return [
       rename,
       {
-        group: 'file',
+        group: 'share-export',
         label: t('entityActions.download'),
         icon: DownloadIcon,
         action: () =>
@@ -143,7 +143,7 @@ function CallDetailMoreMenu(props: { data: CallDetailData }) {
             icon: ShareIcon,
             action: openShare,
             focusTarget: getShareDrawerRecipientInput,
-            group: 'sharing',
+            group: 'most-used',
           },
         ]}
       />

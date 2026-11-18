@@ -24,7 +24,7 @@ export function pptxHeaderTools(props: PptxHeaderProps) {
     { op: 'copy' },
     { op: 'moveToProject' },
     {
-      group: 'file',
+      group: 'share-export',
       get label() {
         return t('entityActions.download');
       },
@@ -35,13 +35,14 @@ export function pptxHeaderTools(props: PptxHeaderProps) {
   ];
 
   const askMacro: BlockTool = {
+    group: 'most-used',
     label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () => openChatWithAgent(chatEntity(props)),
   };
 
   const share: BlockTool = {
-    group: 'sharing',
+    group: 'most-used',
     label: () => t('entityActions.share'),
     icon: IconShared,
     action: props.openShare,
