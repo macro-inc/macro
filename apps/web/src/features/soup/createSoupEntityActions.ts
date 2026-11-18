@@ -53,6 +53,7 @@ import { itemToBlockName } from '@core/constant/allBlocks';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import type { MenuGroup } from '@core/menu/group-menu-items';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
@@ -93,6 +94,7 @@ import { type Component, createComponent, type JSX } from 'solid-js';
 import { supportsEntityAppearance } from '../entity-appearance/core/appearance';
 import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import { useAppearanceEditAccess } from '../entity-appearance/queries/access';
+import { groupSoupEntityActions } from './core/group-soup-entity-actions';
 
 export type SoupEntityActionItem = {
   id: string;
@@ -104,13 +106,15 @@ export type SoupEntityActionItem = {
   /** Clipboard actions keep the menu open and acknowledge success inline. */
   copy?: boolean;
   destructive?: boolean;
+  /** Explicit placement for host-owned actions. */
+  group?: MenuGroup;
   disabled?: boolean;
   muteMenu?: NotificationMuteMenuProps;
   /** Desktop-only composed item, such as an entity picker submenu. */
   menuItem?: Component<{ onActionComplete?: () => void }>;
 };
 
-type SoupEntityActionGroup = {
+export type SoupEntityActionGroup = {
   id: string;
   items: SoupEntityActionItem[];
 };
@@ -608,6 +612,7 @@ export function createSoupEntityActions(
     if (viewedProjectId && canExecuteAll(removeFromProjectAction.canExecute)) {
       middleItems.push({
         id: 'remove-from-folder',
+        destructive: true,
         icon: FolderIcon,
         label: t('entityActions.removeFromFolder'),
         onClick: handle(removeFromProjectAction.executeWithSoup),
@@ -778,13 +783,17 @@ export function createSoupEntityActions(
       });
     }
 
-    return [
-      { id: 'top', items: topItems },
-      { id: 'middle', items: middleItems },
-      { id: 'sender', items: senderItems },
-      { id: 'crm', items: crmItems },
-      { id: 'delete', items: deleteItems },
-    ].filter((group) => group.items.length > 0);
+    return groupSoupEntityActions(
+      [
+        ...topItems,
+        ...middleItems,
+        ...senderItems,
+        ...crmItems,
+        ...deleteItems,
+      ],
+      entities.length === 1 ? entities[0] : undefined,
+      entities.length === 1 && isTaskEntity(entities[0])
+    );
   };
 
   return { buildActionGroups, isFavorited: favoriteAction.isFavorited };

@@ -3,13 +3,13 @@ import {
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
 import { toSingleEntityActionListState } from '@app/features/next-soup/actions';
+import type { SoupEntityActionItem } from '@app/features/soup/createSoupEntityActions';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { SoupEntityActionsDropdown } from '@app/features/soup/SoupEntityActionsDropdown';
 import { SoupEntityActionsSheet } from '@app/features/soup/SoupEntityActionsSheet';
 import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { MenuItem } from '@core/component/ContextMenu';
 import { useChannelName, useChannelType } from '@core/context/channels';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Check from '@icon/system/regular/check.svg';
@@ -47,7 +47,18 @@ function useChannelTitleActions(channelId: () => string) {
     const seed = askMacroEntity();
     if (seed) fireAndForget(openChatWithAgent(seed), 'channel-title-menu');
   };
-  return { entity, list, askMacroEntity, askMacro };
+  const extraActions = (): SoupEntityActionItem[] =>
+    askMacroEntity()
+      ? [
+          {
+            id: 'ask-macro',
+            label: t('entityActions.askMacro'),
+            icon: ChatWithAgentIcon,
+            onClick: askMacro,
+          },
+        ]
+      : [];
+  return { entity, list, extraActions };
 }
 
 type ChannelTitleMenuProps = {
@@ -84,15 +95,7 @@ export function ChannelTitleMenu(props: ChannelTitleMenuProps) {
           list={actions.list}
           viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
           triggerProps={props.triggerProps ?? DEFAULT_TRIGGER_PROPS}
-          extraItems={
-            <Show when={actions.askMacroEntity()}>
-              <MenuItem
-                text={t('entityActions.askMacro')}
-                icon={ChatWithAgentIcon}
-                onClick={actions.askMacro}
-              />
-            </Show>
-          }
+          extraActions={actions.extraActions()}
         >
           {props.children ?? <DotsThreeIcon class="size-4 shrink-0" />}
         </SoupEntityActionsDropdown>
@@ -117,17 +120,7 @@ export function ChannelTitleSheet(
           list={actions.list}
           viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
           triggerProps={props.triggerProps ?? DEFAULT_TRIGGER_PROPS}
-          extraActions={
-            actions.askMacroEntity()
-              ? [
-                  {
-                    id: 'ask-macro',
-                    label: t('entityActions.askMacro'),
-                    onClick: actions.askMacro,
-                  },
-                ]
-              : []
-          }
+          extraActions={actions.extraActions()}
           leading={(close) => (
             <Show when={props.views}>
               {(views) => <ViewChoices views={views()} onChosen={close} />}

@@ -5,6 +5,7 @@ import type {
 import type { EntityData } from '@entity';
 import { Dropdown } from '@ui';
 import { type ComponentProps, createSignal, type JSX } from 'solid-js';
+import type { SoupEntityActionItem } from './createSoupEntityActions';
 import { SoupEntityActionsMenu } from './SoupEntityActionsMenu';
 import { createSoupEntityMenuPickers } from './SoupEntityMenuPickers';
 
@@ -12,8 +13,9 @@ type SoupEntityActionsDropdownProps = {
   entity: EntityData;
   list: EntityActionListState;
   viewContext: EntityActionViewContext;
-  /** Host-specific items appended after the entity actions. */
+  /** Host-specific JSX items placed before Delete. */
   extraItems?: JSX.Element;
+  extraActions?: readonly SoupEntityActionItem[];
   placement?: ComponentProps<typeof Dropdown>['placement'];
   triggerProps?: ComponentProps<typeof Dropdown.Trigger>;
   contentClass?: string;
@@ -75,6 +77,7 @@ export function SoupEntityActionsDropdown(
               onSetProject={pickers.openProjectPicker}
               onEditTags={pickers.openTagPicker()}
               extraItems={props.extraItems}
+              extraActions={props.extraActions}
             />
           </Dropdown.Group>
         </Dropdown.Content>

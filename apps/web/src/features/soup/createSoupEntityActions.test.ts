@@ -8,6 +8,7 @@ import {
   disarmOpenInNewTabIntent,
 } from '@components/app/tab-layout/open-in-tab-intent';
 import type { EntityData } from '@entity';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSoupEntityActions } from './createSoupEntityActions';
 
@@ -23,6 +24,9 @@ const mocks = vi.hoisted(() => ({
   existingSplit: vi.fn<() => { id: string } | undefined>(() => undefined),
   tabManager: vi.fn<() => object | undefined>(() => undefined),
   openProjectAction: vi.fn(),
+  copyLinkEnabled: false,
+  favoriteEnabled: false,
+  properties: [] as { id: string }[],
 }));
 
 vi.mock('@app/features/next-soup/actions', () => ({
@@ -33,11 +37,18 @@ vi.mock('@app/features/next-soup/actions', () => ({
   makeCopyAction: mocks.action,
   makeCopyBranchNameAction: mocks.action,
   makeCopyEntityIdAction: mocks.action,
-  makeCopyLinkAction: mocks.action,
+  makeCopyLinkAction: () => ({
+    canExecute: () => mocks.copyLinkEnabled,
+    executeWithSoup: async () => {},
+  }),
   makeCreateReminderAction: mocks.action,
   makeDeleteAction: mocks.action,
   makeDownloadAction: mocks.action,
-  makeFavoriteAction: mocks.action,
+  makeFavoriteAction: () => ({
+    canExecute: () => mocks.favoriteEnabled,
+    isFavorited: () => false,
+    executeWithSoup: async () => {},
+  }),
   makeGithubLinkAction: mocks.action,
   makeMarkDoneAction: mocks.action,
   makeMarkNotDoneAction: mocks.action,
@@ -64,7 +75,7 @@ vi.mock('@app/features/next-soup/utils', () => ({
   restoreSoupFocus: vi.fn(),
 }));
 vi.mock('@app/features/property/editor/hooks/useAllProperties', () => ({
-  useAllProperties: () => () => [],
+  useAllProperties: () => () => mocks.properties,
 }));
 vi.mock('@app/features/property/editor/state/propertyEditor', () => ({
   openPropertyEditor: vi.fn(),
@@ -117,6 +128,9 @@ beforeEach(() => {
   mocks.existingSplit.mockReset();
   mocks.tabManager.mockReset();
   mocks.openProjectAction.mockReset();
+  mocks.copyLinkEnabled = false;
+  mocks.favoriteEnabled = false;
+  mocks.properties = [];
 });
 
 afterEach(() => disarmOpenInNewTabIntent());
@@ -220,7 +234,76 @@ const menuItems = (entities: EntityData[]) =>
     )
     .flatMap((group) => group.items);
 
+describe('Task property actions', () => {
+  it('promotes the generated assignee action without promoting other properties', () => {
+    mocks.properties = [
+      { id: SYSTEM_PROPERTY_IDS.ASSIGNEES },
+      { id: SYSTEM_PROPERTY_IDS.STATUS },
+      { id: SYSTEM_PROPERTY_IDS.PRIORITY },
+    ];
+    const task = {
+      type: 'document',
+      id: 'task',
+      name: 'Task',
+      ownerId: 'user',
+      fileType: 'md',
+      subType: { type: 'task' },
+    } as EntityData;
+    const groups = createSoupEntityActions().buildActionGroups(
+      {} as EntityActionListState,
+      [task],
+      {
+        viewContext: {
+          supportsMarkDone: false,
+          supportsOpenInNewSplit: false,
+          senderBucket: undefined,
+        },
+      }
+    );
+    expect(
+      groups.find(({ id }) => id === 'most-used')?.items.map(({ id }) => id)
+    ).toEqual([`set-${SYSTEM_PROPERTY_IDS.ASSIGNEES}`]);
+    expect(
+      groups.find(({ id }) => id === 'modify')?.items.map(({ id }) => id)
+    ).toEqual([
+      `set-${SYSTEM_PROPERTY_IDS.STATUS}`,
+      `set-${SYSTEM_PROPERTY_IDS.PRIORITY}`,
+    ]);
+  });
+});
+
 describe('Project rows', () => {
+  it('groups only eligible actions without changing handlers', () => {
+    mocks.favoriteEnabled = true;
+    mocks.copyLinkEnabled = true;
+    const groups = createSoupEntityActions().buildActionGroups(
+      {
+        selection: { clear: clearSelection },
+      } as unknown as EntityActionListState,
+      [project('a', 'user')],
+      {
+        viewContext: {
+          supportsMarkDone: false,
+          supportsOpenInNewSplit: true,
+          senderBucket: undefined,
+        },
+      }
+    );
+    expect(groups.map(({ id }) => id)).toEqual([
+      'open',
+      'most-used',
+      'copy',
+      'modify',
+      'delete',
+    ]);
+    expect(
+      groups.find(({ id }) => id === 'most-used')?.items.map(({ id }) => id)
+    ).toEqual(['favorite', 'share']);
+    expect(
+      groups.find(({ id }) => id === 'copy')?.items.map(({ id }) => id)
+    ).toEqual(['copy-link']);
+    expect(groups.at(-1)?.items.map(({ id }) => id)).toEqual(['delete']);
+  });
   it('offers an owned project its rename, share and delete actions', async () => {
     const items = menuItems([project('a', 'user')]);
 
