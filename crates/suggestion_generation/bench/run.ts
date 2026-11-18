@@ -3,7 +3,7 @@
 // transcripts (they are deleted with the sessions), and read back what it
 // wrote, how long it took and what it cost.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -86,86 +86,66 @@ export type Generation = {
 
 export const userId = (email: string) => `macro|${email}`;
 
-/** FusionAuth on `instance`: its host port and API key, from what `run_local` generated. */
-function fusionAuth(instance: string): { url: string; key: string } {
-  const generated = join(REPO, 'infra/local/generated', instance);
-  const compose = readFileSync(join(generated, 'docker-compose.override.yml'), 'utf8');
-  const port = compose.split(/\n {2}fusionauth:\n/)[1]?.split(/\n {2}\S/)[0].match(/- "?(\d+):9011"?/)?.[1];
-  const key = readFileSync(join(generated, 'local.generated.env'), 'utf8').match(/^FUSIONAUTH_API_KEY=(.*)$/m)?.[1];
-  if (!port || !key) throw new Error(`no FusionAuth port or API key in ${instance}'s generated files`);
-  return { url: `http://localhost:${port}`, key };
-}
-
-/** Delete `email`'s FusionAuth account, so seeding them signs them up anew. */
-async function forgetLogin(instance: string, email: string) {
-  const auth = fusionAuth(instance);
-  const found = await fetch(`${auth.url}/api/user?email=${encodeURIComponent(email)}`, { headers: { Authorization: auth.key } });
-  if (found.status === 404) return;
-  if (!found.ok) throw new Error(`FusionAuth lookup of ${email}: ${found.status}`);
-  const { user } = (await found.json()) as { user: { id: string } };
-  const gone = await fetch(`${auth.url}/api/user/${user.id}?hardDelete=true`, { method: 'DELETE', headers: { Authorization: auth.key } });
-  if (!gone.ok) throw new Error(`FusionAuth delete of ${email}: ${gone.status}`);
-  // The delete settles after it answers; seeding before then finds the old
-  // account, creates none, and leaves the person with no login.
-  for (let attempt = 0; ; attempt++) {
-    const after = await fetch(`${auth.url}/api/user?email=${encodeURIComponent(email)}`, { headers: { Authorization: auth.key } });
-    if (after.status === 404) return;
-    if (attempt >= 30) throw new Error(`FusionAuth still has ${email} 30 s after deleting it`);
-    await Bun.sleep(1000);
-  }
-}
-
 /**
- * Clear the signup webhook's hourly cap on accounts from one address (50):
- * every account the bench signs up comes from the same one, and a run signs
- * up more than that, so the next signup after the cap would fail.
- */
-function allowSignups(instance: string) {
-  const result = Bun.spawnSync(
-    ['docker', 'exec', `macro-${instance}-redis-1`, 'sh', '-c', 'redis-cli --scan --pattern "rtl_create_user_hourly:*" | xargs -r redis-cli del'],
-    { stdout: 'pipe', stderr: 'pipe' },
-  );
-  if (result.exitCode !== 0) throw new Error(`clearing the signup cap on ${instance}: ${result.stderr.toString().trim()}`);
-}
-
-/**
- * Seed a variant's scenario afresh, as if each person signed up just now.
- * `apply` alone deletes only rows carrying the scenario's id marker, while a
- * person who signed up through the signup webhook has an id of the
- * database's, so their suggestions from an earlier run would survive. So:
- * `reset` deletes them by email (everything of theirs goes with them), the
- * bench deletes their FusionAuth account, and `apply` signs them up again
- * (FusionAuth keeps the old account's id, and a login with it fails once its
- * user is gone), with the signup cap cleared first.
+ * Seed a variant's scenario with the seed CLI. `apply` replaces every row
+ * carrying the scenario's id marker. Each person signs up through the signup
+ * webhook on their first seed, as anyone does, and keeps that account after:
+ * signing up again on every attempt would pile up what a signup makes (a
+ * support channel, a billing customer) and race it against the generation.
+ * What a generation leaves behind is `forgetWork`'s to clear.
  */
 export async function seed(instance: string, persona: Persona, variant: Variant, now: number, log: string) {
   const dir = join(CACHE, instance, 'scenarios');
   mkdirSync(dir, { recursive: true });
   const path = join(dir, `${scenarioName(persona, variant)}.json`);
   writeFileSync(path, `${JSON.stringify(scenario(persona, variant, now), null, 1)}\n`);
-  for (const step of ['reset', 'apply']) {
-    const result = Bun.spawnSync(['just', 'seed-scenario', '--instance', instance, step, '--file', path], {
-      cwd: REPO,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    writeFileSync(log, result.stdout.toString() + result.stderr.toString(), { flag: 'a' });
-    if (result.exitCode !== 0) throw new Error(`seed-scenario ${step} ${scenarioName(persona, variant)} exited with ${result.exitCode}; see ${log}`);
-    if (step === 'reset') {
-      const users = scenario(persona, variant, now).users as Record<string, { email: string }>;
-      for (const user of Object.values(users)) await forgetLogin(instance, user.email);
-      allowSignups(instance);
-    }
-  }
+  const result = Bun.spawnSync(['just', 'seed-scenario', '--instance', instance, 'apply', '--file', path], {
+    cwd: REPO,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  writeFileSync(log, result.stdout.toString() + result.stderr.toString(), { flag: 'a' });
+  if (result.exitCode !== 0) throw new Error(`seed-scenario apply ${scenarioName(persona, variant)} exited with ${result.exitCode}; see ${log}`);
 }
 
-/** Rows a clean person has none of; a reset that left any would let one run read another's work. */
-const LEFTOVERS = ['suggestion', 'routine_suggestion', 'suggestion_generation', 'suggestion_audience', 'suggestion_change'];
+const SIGNUP_SETTLE_MS = 20_000;
 
+/**
+ * The tables a generation writes a person's rows to: every suggestion and
+ * routine suggestion table keyed by `user_id` from "User" (their child
+ * tables cascade from them), read from the catalog so a new one is covered.
+ */
+const WORK_TABLES = `SELECT DISTINCT c.conrelid::regclass::text AS name
+  FROM pg_constraint c
+  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+ WHERE c.contype = 'f' AND c.confrelid = '"User"'::regclass AND a.attname = 'user_id'
+   AND c.conrelid::regclass::text ~ '^(routine_)?suggestion'`;
+
+/** The email drafts of a person's mailboxes: personas seed none, so any is a session's. */
+const DRAFTS = `FROM email_messages WHERE is_draft AND link_id IN (SELECT id FROM email_links WHERE macro_id = $1)`;
+
+async function workTables(db: SQL): Promise<string[]> {
+  const tables = (await db.unsafe(WORK_TABLES)).map((row: { name: string }) => row.name);
+  for (const table of ['suggestion', 'routine_suggestion', 'suggestion_generation']) {
+    if (!tables.includes(table)) throw new Error(`no ${table} among the tables to clear: ${tables.join(', ')}`);
+  }
+  return tables;
+}
+
+/** Delete everything an earlier generation left for `user`: suggestions, routine suggestions, generations, drafts. */
+export async function forgetWork(db: SQL, user: string) {
+  const tables = await workTables(db);
+  await db.begin(async (tx) => {
+    for (const table of tables) await tx.unsafe(`DELETE FROM ${table} WHERE user_id = $1`, [user]);
+    await tx.unsafe(`DELETE ${DRAFTS}`, [user]);
+  });
+}
+
+/** Check `user` has none of a generation's leftovers, so no run reads another's work. */
 export async function assertClean(db: SQL, user: string) {
-  for (const table of LEFTOVERS) {
-    const [{ count }] = await db.unsafe(`SELECT count(*)::int AS count FROM ${table} WHERE user_id = $1`, [user]);
-    if (count !== 0) throw new Error(`${user} still has ${count} ${table} rows after seeding`);
+  for (const [what, from] of [...(await workTables(db)).map((table) => [table, `FROM ${table} WHERE user_id = $1`]), ['draft', DRAFTS]]) {
+    const [{ count }] = await db.unsafe(`SELECT count(*)::int AS count ${from}`, [user]);
+    if (count !== 0) throw new Error(`${user} still has ${count} ${what} rows after seeding`);
   }
 }
 
@@ -230,10 +210,18 @@ const DEADLINE_MS: Record<Trigger, number> = { onboarding: 12 * 60_000, manual: 
 
 /** Seed `persona` clean as it is at `now`, and check nothing of an earlier run is left. */
 export async function prepare(at: Stack, persona: Persona, variant: Variant, now: number, out: string) {
-  await seed(at.instance, persona, variant, now, `${out}.seed.log`);
   const db = new SQL(at.postgres);
   try {
-    await assertClean(db, userId(ownerEmail(persona, variant)));
+    const email = ownerEmail(persona, variant);
+    const user = userId(email);
+    const [{ known }] = await db.unsafe('SELECT count(*)::int AS known FROM macro_user WHERE email = $1', [email]);
+    await seed(at.instance, persona, variant, now, `${out}.seed.log`);
+    // A first seed signs the person up, and the signup's sample content and
+    // support channel land a few seconds later: let them, so the generation
+    // sees what later attempts will.
+    if (known === 0) await Bun.sleep(SIGNUP_SETTLE_MS);
+    await forgetWork(db, user);
+    await assertClean(db, user);
   } finally {
     await db.close();
   }

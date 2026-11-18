@@ -163,14 +163,15 @@ COST
   or Outlook, which seeded mail never reaches); everything else goes to
   email_service. The suggestions service trusts a flag for a minute, so the
   bench waits a minute after changing them.
-- **Clean runs.** Every attempt seeds its persona again, as a new signup:
-  the seed CLI's `reset` deletes the person and everything of theirs, the
-  bench deletes their FusionAuth account, and `apply` signs them up again
-  through the signup webhook (with the sample content any signup gets). The
-  webhook allows 50 signups an hour from one address and a run makes more, so
-  the bench clears that count in the stack's Redis each time. It then checks
-  the person has no suggestions, routine suggestions, generations or audience
-  row left before it starts. Sessions delete their logs when they end, so the bench copies
+- **Clean runs.** Every attempt seeds its persona again with the seed CLI's
+  `apply`, which replaces the persona's seeded rows. A person signs up
+  through the signup webhook on their first seed and keeps that account (the
+  bench waits for a first signup's sample content to land); signing up anew
+  each time would pile up a support channel and a billing customer per
+  attempt. The bench then deletes what earlier generations left: the
+  person's rows in every suggestion and routine suggestion table (read from
+  the catalog) and their mailboxes' drafts, and checks none are left before
+  it starts. Sessions delete their logs when they end, so the bench copies
   `agent_session_log` while they run (the last lines can be missed).
 - **Parallel personas.** A rep seeds every persona, then runs their
   generations at once (`--concurrency`, default 3); the feed section indexes

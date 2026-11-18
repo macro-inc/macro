@@ -31,17 +31,11 @@ export async function seedGrader(instance: string) {
     inbox: { owner: { name: 'Bench Grader', email: GRADER }, persona: '', timezone: 'UTC', messages: [] },
   } as unknown as Persona;
   await seed(instance, persona, 'full', Date.now(), `${CACHE}/${instance}/grader.seed.log`);
-  forgetGrader();
 }
 
 // Local tokens last an hour and a run lasts longer: sign in again on a 401.
 let graderToken: Promise<string> | undefined;
 const grader = (at: Stack) => (graderToken ??= login(at, GRADER));
-
-/** Seeding the grader again deletes its account, so a token from before is no good. */
-export const forgetGrader = () => {
-  graderToken = undefined;
-};
 
 async function complete<T>(at: Stack, prompt: string, instructions: string, schema: object): Promise<T> {
   let last: unknown;
