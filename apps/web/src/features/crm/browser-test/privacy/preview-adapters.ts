@@ -88,6 +88,7 @@ const [threads, setThreads] = createSignal([
 ]);
 export const useCrmContext = () => ({
   canAccess: crmAccess,
+  accessState: () => (crmAccess() ? 'allowed' : 'denied'),
   EmailThreadMention,
   createEmailPrivacy: () =>
     createEmailPrivacySource(

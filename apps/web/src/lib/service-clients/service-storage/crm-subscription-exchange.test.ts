@@ -20,6 +20,7 @@ it('starts a mounted stream after a later proof recovers from an initial outage'
   const fetchProof = vi
     .fn<() => Promise<string>>()
     .mockRejectedValueOnce(new Error('offline'))
+    .mockRejectedValueOnce(new Error('offline'))
     .mockResolvedValue('none');
   configureCrmAccessAuthority({
     fetchProof,
@@ -50,7 +51,7 @@ it('starts a mounted stream after a later proof recovers from an initial outage'
     )
     .subscribe((result) => values.push(result.data));
   try {
-    await vi.waitFor(() => expect(fetchProof).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(fetchProof).toHaveBeenCalledTimes(2));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(sinks).toHaveLength(0);
     await crmAccessAuthority.refresh();
@@ -106,6 +107,7 @@ it('admits fresh frames after restarting a mounted subscription and rejects the 
       expect(values).toContainEqual({ activityUpdates: [{ id: 'initial' }] })
     );
     policy = policy.replace('allowed', 'denied');
+    await crmAccessAuthority.refresh();
     sinks[0].next({
       data: { activityUpdates: [{ id: 'old forbidden frame' }] },
     });
@@ -140,10 +142,9 @@ it('admits fresh frames after restarting a mounted subscription and rejects the 
 });
 
 it.each(['complete', 'error'] as const)(
-  'delivers the final frame after its proof and before socket %s',
+  'delivers the final frame offline with its existing proof before socket %s',
   async (terminal) => {
     let resume = () => {};
-    let releaseProof = () => {};
     const fetchProof = vi.fn(async () => 'none');
     configureCrmAccessAuthority({
       fetchProof,
@@ -182,25 +183,16 @@ it.each(['complete', 'error'] as const)(
     );
     try {
       await vi.waitFor(() => expect(sinks).toHaveLength(1));
-      fetchProof.mockImplementationOnce(
-        () =>
-          new Promise<string>((resolve) => {
-            releaseProof = () => resolve('none');
-          })
-      );
+      fetchProof.mockRejectedValue(new Error('offline'));
       sinks[0].next({ data: { activityUpdates: [{ id: 'final frame' }] } });
       if (terminal === 'error') sinks[0].error(new Error('socket ended'));
       else sinks[0].complete();
-      await vi.waitFor(() => expect(fetchProof).toHaveBeenCalledTimes(2));
-      expect(completed).toBe(false);
-      expect(values).toHaveLength(0);
-      releaseProof();
       await vi.waitFor(() => expect(completed).toBe(true));
       expect(values).toContainEqual({
         activityUpdates: [{ id: 'final frame' }],
       });
+      expect(fetchProof).toHaveBeenCalledTimes(1);
     } finally {
-      releaseProof();
       subscription.unsubscribe();
     }
   }

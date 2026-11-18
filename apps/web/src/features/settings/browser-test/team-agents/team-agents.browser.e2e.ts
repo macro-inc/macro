@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import { expect, type Page, type TestInfo, test } from '@playwright/test';
 
 type Agent = {
@@ -813,179 +812,23 @@ test('CRM access can be revoked and restored while privileged roles retain acces
 });
 
 for (const width of [360, 390]) {
-  test(`member controls fit long emails at ${width}px with aligned touch targets`, async ({
+  test(`CRM access controls fit the existing member row at ${width}px`, async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== 'phone', 'Phone touch layout');
     await page.setViewportSize({ width, height: 844 });
-    const longEmail = 'member.with.a.long.email.address@example.com';
-    const longMember = `macro|${longEmail}`;
-    const normalEmail = 'member.crm.access@example.com';
-    const normalMember = `macro|${normalEmail}`;
-    const backend = await scriptAuthService(page, 2, {
-      extraMembers: [
-        { user_id: longMember, role: 'member' },
-        { user_id: normalMember, role: 'member' },
-      ],
-    });
+    const backend = await scriptAuthService(page);
     await page.goto('/');
-    await page.getByRole('heading', { name: 'Members', exact: true }).waitFor();
-    await page.evaluate(async () => {
-      await document.fonts.ready;
-    });
-    expect(await page.evaluate(() => window.innerWidth)).toBe(width);
-    expect(
-      await page.evaluate(() => matchMedia('(pointer: coarse)').matches)
-    ).toBe(true);
-    const owner = page.locator(`[data-team-member="${OWNER}"]`);
-    const member = page.locator(`[data-team-member="${longMember}"]`);
-    await expect(member.getByText(longEmail, { exact: true })).toBeVisible();
-    await expect(owner.getByText('(you)', { exact: true })).toBeVisible();
-    const layout = await member.evaluate((row) => {
-      const bounds = row.getBoundingClientRect();
-      const avatar = row
-        .querySelector('[role="button"]')!
-        .getBoundingClientRect();
-      const role = row
-        .querySelector('button[aria-haspopup="listbox"]')!
-        .getBoundingClientRect();
-      const remove = row
-        .querySelector('[aria-label="Remove member"]')!
-        .getBoundingClientRect();
-      const toggle = row
-        .querySelector('[role="group"][aria-label^="CRM access"]')!
-        .getBoundingClientRect();
-      const identity = row
-        .querySelector('[data-member-identity]')!
-        .getBoundingClientRect();
-      return {
-        avatarHeight: avatar.height,
-        avatarWidth: avatar.width,
-        roleHeight: role.height,
-        removeHeight: remove.height,
-        removeWidth: remove.width,
-        toggleHeight: toggle.height,
-        toggleWidth: toggle.width,
-        controlAlignment: Math.abs(
-          role.y + role.height / 2 - remove.y - remove.height / 2
-        ),
-        toggleRight: toggle.right - bounds.right,
-        roleBelowIdentity: role.top >= identity.bottom,
-        roleIndent: role.left - identity.left,
-      };
-    });
-    expect(layout.avatarHeight).toBeGreaterThanOrEqual(44);
-    expect(layout.avatarWidth).toBeGreaterThanOrEqual(44);
-    expect(layout.roleHeight).toBeGreaterThanOrEqual(44);
-    expect(layout.removeHeight).toBeGreaterThanOrEqual(44);
-    expect(layout.removeWidth).toBeGreaterThanOrEqual(44);
-    expect(layout.toggleHeight).toBeGreaterThanOrEqual(44);
-    expect(layout.toggleWidth).toBeGreaterThanOrEqual(44);
-    expect(layout.controlAlignment).toBeLessThan(1);
-    expect(layout.toggleRight).toBeLessThanOrEqual(-15);
-    expect(layout.roleBelowIdentity).toBe(true);
-    expect(Math.abs(layout.roleIndent)).toBeLessThan(1);
-    for (const [id, normal] of [
-      [longMember, false],
-      [normalMember, true],
-    ] as const) {
-      const lineBreaks = await page
-        .locator(`[data-team-member="${id}"] [data-member-identity]`)
-        .evaluate((identity) => {
-          const walker = document.createTreeWalker(
-            identity,
-            NodeFilter.SHOW_TEXT
-          );
-          const characters: { text: string; top: number }[] = [];
-          let node = walker.nextNode();
-          while (node) {
-            for (let i = 0; i < (node.textContent?.length ?? 0); i++) {
-              const range = document.createRange();
-              range.setStart(node, i);
-              range.setEnd(node, i + 1);
-              const bounds = range.getBoundingClientRect();
-              if (bounds.width === 0) continue;
-              characters.push({
-                text: node.textContent![i],
-                top: bounds.top,
-              });
-            }
-            node = walker.nextNode();
-          }
-          return characters.flatMap((character, i) =>
-            i > 0 && Math.abs(character.top - characters[i - 1].top) > 1
-              ? [characters[i - 1].text]
-              : []
-          );
-        });
-      expect(
-        lineBreaks.every((before) => before === '.' || before === '@')
-      ).toBe(true);
-      if (normal) expect(lineBreaks).toEqual([]);
-    }
-    const markerOffset = await owner
-      .getByText('(you)', { exact: true })
-      .evaluate((marker) => {
-        const suffix = marker.parentElement!.firstChild!;
-        const range = document.createRange();
-        range.setStart(suffix, suffix.textContent!.length - 1);
-        range.setEnd(suffix, suffix.textContent!.length);
-        return Math.abs(
-          marker.getBoundingClientRect().bottom -
-            range.getBoundingClientRect().bottom
-        );
-      });
-    expect(markerOffset).toBeLessThan(2);
-    expect(
-      await member.getByText(longEmail, { exact: true }).evaluate((email) => {
-        const style = getComputedStyle(email);
-        return (
-          style.textOverflow !== 'ellipsis' &&
-          email.scrollWidth <= email.clientWidth
-        );
-      })
-    ).toBe(true);
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth)
-    ).toBeLessThanOrEqual(width);
-    await screenshot(page, testInfo, `crm-member-layout-${width}`);
-    await expect(page.locator('html')).toHaveAttribute(
-      'data-touch-device',
-      'true'
-    );
+    const member = page.locator(`[data-team-member="${MEMBER}"]`);
     const toggle = member.getByRole('group', { name: /^CRM access for/ });
-    await toggle.click({ position: { x: 1, y: 1 } });
+    await expect(toggle).toBeVisible();
+    const bounds = await toggle.boundingBox();
+    expect(bounds!.width).toBeGreaterThanOrEqual(44);
+    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    await toggle.click();
     await expect(toggle.getByRole('switch')).not.toBeChecked();
-    expect(backend.crmSaves).toEqual([{ user_id: longMember, enabled: false }]);
-    await page.evaluate(
-      async ({ id, source }) => {
-        const { seedMockDisplayNames } = await import(source);
-        seedMockDisplayNames([
-          { id, firstName: 'Example Workspace', lastName: 'Member' },
-        ]);
-      },
-      {
-        id: OWNER,
-        source: `/@fs${fileURLToPath(
-          new URL('../../../../lib/core/user/displayName.ts', import.meta.url)
-        )}`,
-      }
-    );
-    await expect(owner.locator('[data-member-identity]').first()).toContainText(
-      'Example Workspace Member'
-    );
-    const nameMarkerOffset = await owner
-      .getByText('(you)', { exact: true })
-      .evaluate((marker) => {
-        const suffix = marker.parentElement!.firstChild!;
-        const range = document.createRange();
-        range.selectNodeContents(suffix);
-        return Math.abs(
-          marker.getBoundingClientRect().bottom -
-            range.getBoundingClientRect().bottom
-        );
-      });
-    expect(nameMarkerOffset).toBeLessThan(3);
+    expect(backend.crmSaves).toEqual([{ user_id: MEMBER, enabled: false }]);
   });
 }
 
@@ -1018,4 +861,19 @@ test('CRM access save failures keep the prior setting and allow retry', async ({
   await expect(member).toBeChecked();
   await page.getByRole('group', { name: /^CRM access for/ }).click();
   await expect(member).not.toBeChecked();
+});
+
+test('CRM access controls are absent while the server write flag is off', async ({
+  page,
+}) => {
+  const backend = await scriptAuthService(page);
+  await page.goto('/?crmAccessChanges=off');
+  await expect(page.locator(`[data-team-member="${OWNER}"]`)).toBeVisible();
+  await expect(
+    page.getByRole('group', { name: /^CRM access for/ })
+  ).toHaveCount(0);
+  await expect(
+    page.getByText('Owners and admins always have access')
+  ).toHaveCount(0);
+  expect(backend.crmSaves).toEqual([]);
 });

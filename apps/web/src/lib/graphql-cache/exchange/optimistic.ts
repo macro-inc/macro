@@ -1,4 +1,4 @@
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import type { IdentityBindingWire } from '../protocol';
 /**
  * Typed entry point for durable optimistic GraphQL mutations.
@@ -207,7 +207,7 @@ export function withOptimisticMutationDisposition(
   disposition: OptimisticMutationDispositionMetadata
 ): OperationResult {
   const optimistic = optimisticContextOf(result.operation);
-  const authority = queryAuthorization();
+  const authority = crmSnapshotAuthorization();
   const admitted =
     !optimistic?.snapshotRejected &&
     !authority.paused &&
@@ -551,7 +551,7 @@ export function optimisticMutationContext<TData>(
     clientMetadata: options.clientMetadata,
     optimisticResponse: optimisticData,
     authorizationEpoch:
-      options.authorizationEpoch ?? queryAuthorization().epoch,
+      options.authorizationEpoch ?? crmSnapshotAuthorization().epoch,
     authorityGeneration: options.authorityGeneration,
     identityBindings: options.identityBindings
       ? [...options.identityBindings]

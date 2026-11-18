@@ -1,4 +1,4 @@
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { markSourceAuthority } from '@graphql-cache/source-authority';
@@ -32,14 +32,14 @@ export function graphqlSoupSubscriptionExchange(
             stop();
             if (!crmAccessAuthority.account()) return;
             const captured = await crmAccessAuthority
-              .refresh()
+              .ensureCurrent()
               .catch((error: unknown) => {
                 if (!disposed && version === attempt) waitingForProof = true;
                 throw error;
               });
             if (disposed || version !== attempt) return;
             waitingForProof = false;
-            const sourceEpoch = queryAuthorization().epoch;
+            const sourceEpoch = crmSnapshotAuthorization().epoch;
             const finish = (terminal: () => void) => {
               delivered = delivered
                 .catch(() => {})
@@ -56,7 +56,6 @@ export function graphqlSoupSubscriptionExchange(
                   .catch(() => {})
                   .then(async () => {
                     if (disposed || version !== attempt) return;
-                    await crmAccessAuthority.refresh();
                     try {
                       await crmAccessAuthority.assertCurrent(captured);
                     } catch (error) {

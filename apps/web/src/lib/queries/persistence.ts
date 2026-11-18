@@ -217,11 +217,13 @@ export function setupQueryPersistence(
   params: Readonly<{
     queryClient: QueryClient;
     scopes: readonly PersistScope[];
-    /** Protected snapshots are never read or written to an unversioned store. */
+    /** Entries excluded by the current permission policy cannot be restored or written. */
     exclude?: (key: QueryKey) => boolean;
+    /** Verify a reusable permission proof before restoring protected snapshots. */
+    beforeRestore?: (key: QueryKey) => Promise<void>;
   }>
 ): QueryPersistence {
-  const { queryClient, scopes, exclude } = params;
+  const { queryClient, scopes, exclude, beforeRestore } = params;
   let restores = new WeakMap<Query, Promise<void>>();
   let generation = 0;
   let clearing = false;
@@ -238,6 +240,8 @@ export function setupQueryPersistence(
   async function restoreFromStore(query: Query, scope: PersistScope) {
     const capturedGeneration = generation;
     try {
+      await beforeRestore?.(query.queryKey);
+      if (exclude?.(query.queryKey)) return;
       await handleRestore(
         queryClient,
         scope,
@@ -246,6 +250,7 @@ export function setupQueryPersistence(
           !disposed &&
           !clearing &&
           !isRetiring(query.queryKey) &&
+          !exclude?.(query.queryKey) &&
           capturedGeneration === generation &&
           queryClient.getQueryCache().get(query.queryHash) === query
       );
@@ -328,13 +333,16 @@ export function setupQueryPersistence(
       clearQueryMemory(queryClient, matches);
       // Finish earlier puts before pruning, while matching new writes and restores
       // stay fenced. This also removes entries that were never loaded this session.
-      await Promise.all(
-        scopes.map(async (scope) => {
-          await scope.store.flush({ throwOnError: true });
-          await scope.store.prune((entry) => !matches(entry.queryKey));
-        })
-      );
-      retiring.delete(matches);
+      try {
+        await Promise.all(
+          scopes.map(async (scope) => {
+            await scope.store.flush({ throwOnError: true });
+            await scope.store.prune((entry) => !matches(entry.queryKey));
+          })
+        );
+      } finally {
+        retiring.delete(matches);
+      }
     },
     async clear() {
       generation += 1;

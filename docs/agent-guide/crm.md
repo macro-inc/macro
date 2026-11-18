@@ -787,15 +787,18 @@ Go To hotkeys, or the mobile dock. Company/contact search, Quick Access, user-ca
 actions, and the Customer / Contact picker retire immediately when access is revoked.
 Preference mutations return 503 while the deployment
 rollout is disabled; existing access checks continue to enforce stored denials.
-In team settings, admins and owners see a CRM access switch for each member.
-Owners and admins show the reason they always retain access instead of a disabled switch.
-Member rows place the CRM label and switch on opposite sides below the identity and role controls.
-On phones, identity uses the full row width, addresses wrap at domain/local-part boundaries,
-and role/removal controls sit together underneath; the current-user marker stays attached to the address.
+In team settings, admins and owners see a CRM access switch for each member only
+while `enable-crm-member-access-changes` is enabled. Owners and admins show the
+reason they always retain access instead of a disabled switch. The access row
+sits below the existing member controls; the identity, role and seat layout stays
+the same on desktop and phones.
 A failed save keeps the previous state and can be retried; members do not see these controls.
 An independently shared item can remain open after revocation, but its CRM record
 breadcrumbs and task-creation preset disappear. Previews, including email mentions,
-show no access while cache retirement awaits successful permission verification.
+withhold retired snapshots until permission verification completes. A CRM deep
+link shows a loading skeleton while its first proof is pending. Only a proven
+denial shows the access-denied screen or closes CRM dialogs; a transient proof
+failure retains the last proven state and retries once.
 `GET /crm/member-access` reports current access even
 when record routes return access denied. Clients holding CRM caches may request
 the storage retirement hint with `x-macro-crm-access-signal: 1`; its three-second
@@ -805,15 +808,17 @@ requires a fresh proof); idle/offline clients have no fixed retirement deadline.
 The client sends that opt-in for storage responses that can carry CRM content;
 independent requests such as document creation and the fresh authority endpoint
 skip it. Changed or unavailable hints trigger a fresh proof before cache admission.
-Protected local reads also require fresh proof; unavailable proof keeps those
-results closed. Cached personal inbox, Work Feed, bookmark metadata and ordinary
+Protected local reads reuse the verified proof for their current account and
+cache generation, including offline. Stale proofs and explicit permission
+signals require verification; a transient failure does not discard a valid proof. Cached personal inbox, Work Feed, bookmark metadata and ordinary
 database views remain readable at offline startup without that proof. Cached Soup
 continuations stay readable after their independently scoped parent page is read;
 unknown cursors remain gated, and account or cache replacement closes that scope.
 An own
 thread is readable when its cached ownership matches the current account and
-generation; CRM-only shared threads remain closed. A permission transition still
-performs conservative cleanup of mixed mail/database snapshots, so independent
+generation; CRM-only shared threads remain closed without access. The first
+allowed or team-less proof preserves existing offline content. A proven denial
+or team-scope change performs conservative cleanup of mixed mail/database snapshots, so independent
 content removed by that cleanup needs an authorized refresh before it is
 available offline again. An already-started read retains its original generation and is
 discarded if authority changed while it was in flight. A completed write keeps

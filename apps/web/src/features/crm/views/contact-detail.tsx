@@ -1,7 +1,7 @@
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
-import { CrmAccessDenied } from '../components/access-denied';
+import { CrmAccessFallback } from '../components/access-denied';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
@@ -47,7 +47,10 @@ export function Contact(props: ContactProps) {
         'crm.section': props.section ?? 'overview',
       }}
     >
-      <Show when={context.canAccess()} fallback={<CrmAccessDenied />}>
+      <Show
+        when={context.canAccess()}
+        fallback={<CrmAccessFallback state={context.accessState()} />}
+      >
         <ContactContent {...props} />
       </Show>
     </TraceFlow>

@@ -1,3 +1,4 @@
+import { rememberOwnedEmail } from '@graphql-cache/authority-scope';
 import {
   type AnyVariables,
   type Client,
@@ -20,7 +21,10 @@ import {
 } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromValue, makeSubject, onEnd, pipe } from 'wonka';
-import { queryAuthorization } from './authorization';
+import {
+  beginQueryAuthorizationReset,
+  crmSnapshotAuthorization,
+} from './authorization';
 import { UrqlProvider } from './context';
 import { createUrqlQuery } from './create-urql-query';
 import { QueryObserver } from './query-observer';
@@ -132,7 +136,7 @@ it.each([false, true])(
             url: '/graphql',
             requestPolicy: replay.context.requestPolicy ?? 'cache-first',
             suspense: false,
-            cacheAuthorizationEpoch: queryAuthorization().epoch - 1,
+            cacheAuthorizationEpoch: crmSnapshotAuthorization().epoch - 1,
           }
         ),
       });
@@ -878,4 +882,180 @@ describe('createUrqlQuery refetch', () => {
     await expect(disposed).resolves.toBe(query);
     expect(fake.executions[3]?.unsubscribed).toBe(true);
   });
+});
+
+it('preserves unrelated mounted queries through CRM retirement epochs', () => {
+  const { client, executions } = makeFakeClient();
+  let dispose!: () => void;
+  createRoot((stop) => {
+    dispose = stop;
+    createUrqlQuery(() => ({
+      client,
+      query: gql`query Document { document(id: "note") { id } }`,
+      variables: {},
+    }));
+  });
+  try {
+    expect(executions).toHaveLength(1);
+    const resume = beginQueryAuthorizationReset();
+    resume();
+    expect(executions).toHaveLength(1);
+    expect(executions[0].unsubscribed).toBe(false);
+  } finally {
+    dispose();
+  }
+});
+
+it('retires a protected result even after its mounted query is disabled', () => {
+  const { client, executions } = makeFakeClient();
+  const [enabled, setEnabled] = createSignal(true);
+  let dispose!: () => void;
+  let query!: UrqlQueryResult<Data, Variables>;
+  createRoot((stop) => {
+    dispose = stop;
+    query = createUrqlQuery(() => ({
+      client,
+      query: gql`query CRM { user { emailThread { id } } }`,
+      variables: { input: 'fixture' },
+      enabled: enabled(),
+    }));
+  });
+  try {
+    executions[0].next({ data: { value: 'private' } });
+    expect(query.data).toEqual({ value: 'private' });
+    setEnabled(false);
+    expect(query.data).toEqual({ value: 'private' });
+    const resume = beginQueryAuthorizationReset();
+    expect(query.data).toBeUndefined();
+    resume();
+    expect(query.data).toBeUndefined();
+  } finally {
+    dispose();
+  }
+});
+
+it.each([true, false])(
+  'rechecks expired ownership witnesses at retirement (enabled: %s)',
+  (remainEnabled) => {
+    const { client, executions } = makeFakeClient();
+    const [enabled, setEnabled] = createSignal(true);
+    let current = true;
+    const threadId = crypto.randomUUID();
+    rememberOwnedEmail(threadId, () => current);
+    let dispose!: () => void;
+    let query!: UrqlQueryResult<Data, { threadId: string }>;
+    createRoot((stop) => {
+      dispose = stop;
+      query = createUrqlQuery(() => ({
+        client,
+        query: gql`query Thread($threadId: String!) { user { emailThread(input: {threadId: $threadId}) { id } } }`,
+        variables: { threadId },
+        enabled: enabled(),
+      }));
+    });
+    try {
+      executions[0].next({ data: { value: 'owned snapshot' } });
+      expect(query.data).toEqual({ value: 'owned snapshot' });
+      setEnabled(remainEnabled);
+      current = false;
+      const resume = beginQueryAuthorizationReset();
+      expect(query.data).toBeUndefined();
+      resume();
+      expect(query.data).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  }
+);
+
+it('retires an imperative result from an initially disabled protected query', async () => {
+  const { client, executions } = makeFakeClient();
+  let dispose!: () => void;
+  let query!: UrqlQueryResult<Data, Variables>;
+  createRoot((stop) => {
+    dispose = stop;
+    query = createUrqlQuery(() => ({
+      client,
+      query: gql`query CRM { user { emailThread { id } } }`,
+      variables: { input: 'fixture' },
+      enabled: false,
+    }));
+  });
+  try {
+    const pending = query.refetch();
+    executions[0].next({ data: { value: 'private' } });
+    await pending;
+    expect(query.data).toEqual({ value: 'private' });
+    const resume = beginQueryAuthorizationReset();
+    expect(query.data).toBeUndefined();
+    resume();
+  } finally {
+    dispose();
+  }
+});
+
+it('retires a protected refetch after disabled query inputs change', async () => {
+  const { client, executions } = makeFakeClient();
+  const [protectedQuery, setProtectedQuery] = createSignal(false);
+  const [enabled, setEnabled] = createSignal(true);
+  let dispose!: () => void;
+  let query!: UrqlQueryResult<Data, Variables>;
+  createRoot((stop) => {
+    dispose = stop;
+    query = createUrqlQuery(() => ({
+      client,
+      query: protectedQuery()
+        ? gql`query CRM { user { emailThread { id } } }`
+        : gql`query Document { document(id: "note") { id } }`,
+      variables: { input: 'fixture' },
+      enabled: enabled(),
+    }));
+  });
+  try {
+    executions[0].next({ data: { value: 'independent' } });
+    setEnabled(false);
+    setProtectedQuery(true);
+    const pending = query.refetch();
+    executions.at(-1)!.next({ data: { value: 'private' } });
+    await pending;
+    expect(query.data).toEqual({ value: 'private' });
+    // The observer retains the previous result while disabled, even if its
+    // next configured query is independent again.
+    setProtectedQuery(false);
+    const resume = beginQueryAuthorizationReset();
+    expect(query.data).toBeUndefined();
+    resume();
+  } finally {
+    dispose();
+  }
+});
+
+it('preserves a mounted variable-scoped document through CRM retirement', () => {
+  const { client, executions } = makeFakeClient<
+    Data,
+    { input: { entityType: string; id: string } }
+  >();
+  let dispose!: () => void;
+  let query!: UrqlQueryResult<
+    Data,
+    { input: { entityType: string; id: string } }
+  >;
+  createRoot((stop) => {
+    dispose = stop;
+    query = createUrqlQuery(() => ({
+      client,
+      query: gql`query Entity($input: SoupEntityInput!) { user { soupEntity(input: $input) { id } } }`,
+      variables: { input: { entityType: 'DOCUMENT', id: 'note' } },
+    }));
+  });
+  try {
+    executions[0].next({ data: { value: 'independent' } });
+    const resume = beginQueryAuthorizationReset();
+    expect(query.data).toEqual({ value: 'independent' });
+    resume();
+    expect(executions).toHaveLength(1);
+    expect(executions[0].unsubscribed).toBe(false);
+  } finally {
+    dispose();
+  }
 });

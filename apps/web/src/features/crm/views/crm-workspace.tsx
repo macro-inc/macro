@@ -46,7 +46,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { CrmAccessDenied } from '../components/access-denied';
+import { CrmAccessFallback } from '../components/access-denied';
 import { CrmListDialog } from '../components/company-list-dialog';
 import { CrmCreateMenu } from '../components/crm-create-menu';
 import { CrmMobileTabs } from '../components/crm-mobile-tabs';
@@ -201,6 +201,7 @@ export function CrmWorkspaceView(props: {
     exportCompanies: fetchCrmExportCompanies,
     PipelineEditor,
     canAccess,
+    accessState,
     copyPipelineLink,
   } = useCrmContext();
   const view = useCrmWorkspace();
@@ -293,7 +294,7 @@ export function CrmWorkspaceView(props: {
   };
   const [exporting, setExporting] = createSignal(false);
   createEffect(() => {
-    if (canAccess()) return;
+    if (accessState() !== 'denied') return;
     setEditing(undefined);
     setImporting(false);
     setExporting(false);
@@ -545,7 +546,7 @@ export function CrmWorkspaceView(props: {
                         <CrmNavigationControls />
                       </ViewShell.Header>
                     </Show>
-                    <CrmAccessDenied />
+                    <CrmAccessFallback state={accessState()} />
                   </>
                 }
               >
@@ -734,7 +735,7 @@ export function CrmWorkspaceView(props: {
                     {mobileHeader()}
                   </Show>
                 </ViewShell.Header>
-                <CrmAccessDenied />
+                <CrmAccessFallback state={accessState()} />
               </>
             }
           >

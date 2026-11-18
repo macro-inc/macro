@@ -1,4 +1,4 @@
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { type Client, CombinedError } from '@urql/core';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -47,7 +47,7 @@ function graphqlFavorite(entityId: string, sortOrder: number) {
 function favoritesResult(favorites: ReturnType<typeof graphqlFavorite>[]) {
   return {
     operation: {
-      context: { cacheAuthorizationEpoch: queryAuthorization().epoch },
+      context: { cacheAuthorizationEpoch: crmSnapshotAuthorization().epoch },
     },
     data: {
       user: {

@@ -3,15 +3,15 @@
 CRM access and email contribution are separate permissions. Existing and new
 members start with CRM access. Admins and owners can deny or restore a plain
 member in team member settings or through the API; admins and owners always retain access. A member
-can use company and contact records without contributing a mailbox. Existing CRM
-feature flags still control optional product surfaces such as pipelines.
+can use company and contact records without contributing a mailbox. Optional CRM product surfaces retain their own rollout gates.
 Existing record hiding remains a separate admin action; blocking email never
 hides or deletes a company or contact.
 
 ## Member access
 
 Preference changes are rollout-gated by `enable-crm-member-access-changes`,
-evaluated for service context `team-crm-member-access`. It starts off: missing
+evaluated for service context `team-crm-member-access`. The admin switch uses
+the same remote key and stays hidden until enabled. It starts off: missing
 configuration, missing/disabled flags, or evaluation failure returns 503 without
 updating the team. Enable it only after every old membership-removal writer has
 drained and all access consumers are upgraded. Older removal compensation omits
@@ -68,8 +68,15 @@ independent resources such as document creation and the fresh authority endpoint
 skip it. A changed, missing, or invalid hint triggers a fresh
 authority read; it never changes the policy directly. The response keeps its
 pre-request generation even when that fresh read changes authority, so a late
-response cannot be relabeled and admitted after retirement. Protected local reads
-also require fresh authority. Personal Soup mail, Work Feed, bookmark metadata
+response cannot be relabeled and admitted after retirement. Protected local reads,
+email/agent responses, and subscription frames reuse a verified proof for the
+current account and owner generation. Only stale authority or explicit signals
+trigger another primary proof; transient failures preserve the last proven state
+and retry once. Initial CRM routes show loading until proof establishes access.
+Email and Soup snapshots remain persisted for allowed members and are retired on
+a proven denial or account replacement. The first native or wasm proof preserves
+legacy offline snapshots when it is allowed or team-less; regrants also preserve
+content already admitted after denial. Personal Soup mail, Work Feed, bookmark metadata
 and independently scoped database views retain their cached offline reads when
 the permission endpoint is unavailable. Thread-by-ID reads first select only
 cached identity and ownership metadata: the current account's own thread can be
@@ -105,8 +112,9 @@ content, queued command variables, UUIDs, leases, and identity bindings survive.
 
 A completed ordinary write returns its actual status and payload to the same
 login even when later permission proof or cache admission fails. Only its cache
-effects are discarded; a failed proof closes protected views through the normal
-retirement path. Company/contact creation therefore closes the form after a
+effects are discarded when their captured authority is stale. A proven denial
+closes protected views through the retirement path; a transient proof failure
+retains the last proven state. Company/contact creation therefore closes the form after a
 successful write instead of offering a retry that could create a duplicate.
 POST reads and GraphQL queries still require content admission, and a replaced
 login cannot receive an earlier login's write outcome.

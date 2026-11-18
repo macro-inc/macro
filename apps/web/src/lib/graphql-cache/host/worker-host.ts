@@ -1361,7 +1361,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         kind: 'current-authority',
         identity: options.scope,
       });
-      authorityObserver.observe(authority, version);
+      const observed = authorityObserver.observe(authority, version);
+      if (observed.ready) authorityObserver.verify();
     })();
     const handshake = ready.then(
       () => {
@@ -1483,7 +1484,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       kind: 'current-authority',
       identity: options.scope,
     });
-    return authorityObserver.observe(value, version);
+    const observed = authorityObserver.observe(value, version);
+    if (observed.ready) authorityObserver.verify();
+    return observed;
   }
 
   function trackActiveOperation(opKey: number): void {

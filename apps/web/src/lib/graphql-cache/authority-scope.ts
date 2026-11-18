@@ -184,7 +184,10 @@ function hasCursorWitness(
   );
 }
 
-type ScopeCheck = (variables: Record<string, unknown>) => boolean;
+type ScopeCheck = (
+  variables: Record<string, unknown>,
+  allowWitnesses?: boolean
+) => boolean;
 type CompiledScope = {
   check: ScopeCheck;
   kind?: OperationTypeNode;
@@ -280,18 +283,20 @@ function compiledScope(query: string, operationName?: string): CompiledScope {
           ])
         );
       if (name === 'soupEntity')
-        return (variables) => {
+        return (variables, allowWitnesses = true) => {
           const input = object(args(variables).input);
           return (
             !unrelatedEntityTypes.has(String(input.entityType)) &&
             !(
+              allowWitnesses &&
               input.entityType === 'EMAIL_THREAD' &&
               hasOwnedEmailWitness(input.entityId ?? input.id)
             )
           );
         };
       if (name === 'emailThread')
-        return (variables) =>
+        return (variables, allowWitnesses = true) =>
+          !allowWitnesses ||
           !hasOwnedEmailWitness(object(args(variables).input).threadId);
       if (name === 'soup' || name === 'groupSoup') {
         const fields = selection.selectionSet?.selections ?? [];
@@ -319,11 +324,12 @@ function compiledScope(query: string, operationName?: string): CompiledScope {
               field.name.value === 'nextCursor'
           );
         if (exposesCursor) cursorFields.add(name);
-        return (variables) => {
+        return (variables, allowWitnesses = true) => {
           const input = object(args(variables).input);
           if (input.initial !== undefined)
             return !excludesCrmContent(object(input.initial).filters);
           return (
+            !allowWitnesses ||
             !exposesCursor ||
             !hasCursorWitness(
               query,
@@ -357,7 +363,8 @@ function compiledScope(query: string, operationName?: string): CompiledScope {
           ])
         : () => false;
     });
-    return (variables) => checks.some((check) => check(variables));
+    return (variables, allowWitnesses = true) =>
+      checks.some((check) => check(variables, allowWitnesses));
   };
   const result = {
     check: compile(operation.selectionSet),
@@ -461,6 +468,14 @@ export function queryNeedsCrmProof(
   operationName?: string
 ): boolean {
   return compiledScope(query, operationName).check(variables);
+}
+
+/** A mounted result can outlive its variables and temporary ownership witnesses. */
+export function queryNeedsCrmRetirement(
+  query: string,
+  variables: Record<string, unknown> = {}
+): boolean {
+  return compiledScope(query).check(variables, false);
 }
 
 /** Accepts both worker requests and the equivalent native command arguments. */

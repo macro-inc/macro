@@ -370,7 +370,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     const value = await request('graphql_cache_current_authority', {
       identity: options.scope,
     });
-    return authorityObserver.observe(value, version);
+    const observed = authorityObserver.observe(value, version);
+    if (observed.ready) authorityObserver.verify();
+    return observed;
   }
 
   let authorityListenerError: Error | undefined;

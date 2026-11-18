@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createCrmAccessAuthority } from './crm-access-authority';
 
 const team = '00000000-0000-4000-8000-000000000001';
-function sharedOwner(account = 'viewer') {
+function sharedOwner(account: string | null = 'viewer') {
   let state: CacheAuthority = {
     identity: 'anonymous-profile',
     account,
@@ -81,7 +81,9 @@ describe('CRM authority across cache clients', () => {
         await authority.refresh();
       }
       retire.mockClear();
-      authority.retireUnverified(old);
+      await expect(authority.assertCurrent(old)).rejects.toBeInstanceOf(
+        StaleCacheAuthorityError
+      );
       expect(authority.allowed()).toBe(true);
       expect(retire).not.toHaveBeenCalled();
     }
@@ -101,14 +103,19 @@ describe('CRM authority across cache clients', () => {
     await b.accept(await b.prepare(), `${team}:allowed`);
     expect(b.allowed()).toBe(true);
   });
-  it('obtains a new primary proof on every protected read, coalescing only in-flight work', async () => {
+  it('reuses a verified proof for offline reads until an explicit revocation signal', async () => {
     const owner = sharedOwner().port();
     const { authority, fetchProof } = client(owner);
     await Promise.all([owner.verifyRead(), owner.verifyRead()]);
     expect(fetchProof).toHaveBeenCalledTimes(1);
     await owner.verifyRead();
-    expect(fetchProof).toHaveBeenCalledTimes(2);
+    expect(fetchProof).toHaveBeenCalledTimes(1);
+    fetchProof.mockRejectedValueOnce(new Error('offline'));
+    await expect(owner.verifyRead()).resolves.toBeUndefined();
+    expect(fetchProof).toHaveBeenCalledTimes(1);
+    fetchProof.mockReset();
     fetchProof.mockResolvedValue(`${team}:denied`);
+    await authority.refresh();
     await owner.verifyRead();
     expect(authority.allowed()).toBe(false);
   });
@@ -240,6 +247,7 @@ describe('CRM authority across cache clients', () => {
     retire.mockRejectedValueOnce(new Error('later cleanup failed'));
     await port.transition((await port.current()).generation, `${team}:denied`);
     await port.transition((await port.current()).generation, `${team}:allowed`);
+    await port.transition((await port.current()).generation, `${team}:denied`);
     await new Promise((resolve) => setTimeout(resolve, 0));
     const refreshed = authority.refresh();
     const settled = vi.fn();
@@ -252,4 +260,72 @@ describe('CRM authority across cache clients', () => {
     await authority.refresh();
     expect(authority.allowed()).toBe(true);
   });
+});
+
+// Boot and transient network errors must not impersonate a proven denial.
+it('keeps boot pending and preserves the last proof across a bounded transient retry', async () => {
+  const proof = Promise.withResolvers<string>();
+  const fetchProof = vi.fn(() => proof.promise);
+  const { authority, retire } = client(sharedOwner().port(), fetchProof);
+  expect(authority.state()).toBe('pending');
+  const boot = authority.refresh();
+  expect(authority.state()).toBe('pending');
+  proof.resolve(`${team}:allowed`);
+  await boot;
+  expect(authority.state()).toBe('allowed');
+  expect(retire).not.toHaveBeenCalled();
+  fetchProof.mockRejectedValue(new Error('offline'));
+  await expect(authority.refresh()).rejects.toThrow('offline');
+  expect(fetchProof).toHaveBeenCalledTimes(3);
+  expect(authority.state()).toBe('allowed');
+  expect(retire).not.toHaveBeenCalled();
+  await expect(authority.ensureCurrent()).resolves.toBeDefined();
+  expect(fetchProof).toHaveBeenCalledTimes(3);
+  fetchProof.mockResolvedValue(`${team}:denied`);
+  await authority.refresh();
+  expect(authority.state()).toBe('denied');
+  expect(retire).toHaveBeenCalledTimes(1);
+  fetchProof.mockRejectedValue(new Error('offline'));
+  await expect(authority.refresh()).rejects.toThrow('offline');
+  expect(authority.state()).toBe('denied');
+});
+
+it('does not retire persisted queries while binding a fresh owner for the first proof', async () => {
+  const { authority, retire } = client(sharedOwner(null).port());
+  await authority.refresh();
+  expect(authority.state()).toBe('allowed');
+  expect(retire).not.toHaveBeenCalled();
+});
+
+it.each(['none', '00000000-0000-4000-8000-000000000002:allowed'])(
+  'retires the previous team scope when the same account changes to %s',
+  async (policy) => {
+    const { authority, retire, fetchProof } = client(sharedOwner().port());
+    await authority.refresh();
+    fetchProof.mockResolvedValue(policy);
+    await authority.refresh();
+    expect(retire).toHaveBeenCalledTimes(1);
+    expect(authority.state()).toBe(policy === 'none' ? 'denied' : 'allowed');
+  }
+);
+
+it('rejects an old owner lookup before it can deny or retire the replacement session', async () => {
+  const oldOwner = sharedOwner().port();
+  const { authority, retire } = client(oldOwner);
+  const old = await authority.refresh();
+  const previous = await oldOwner.current();
+  const reply = Promise.withResolvers<CacheAuthority>();
+  vi.spyOn(oldOwner, 'snapshot').mockReturnValue(undefined);
+  vi.spyOn(oldOwner, 'current').mockReturnValue(reply.promise);
+  const assertion = authority.assertCurrent(old);
+  const rejected = expect(assertion).rejects.toBeInstanceOf(
+    StaleCacheAuthorityError
+  );
+  authority.setHost(sharedOwner().port());
+  await authority.refresh();
+  retire.mockClear();
+  reply.resolve({ ...previous, policy: `${team}:denied` });
+  await rejected;
+  expect(authority.state()).toBe('allowed');
+  expect(retire).not.toHaveBeenCalled();
 });

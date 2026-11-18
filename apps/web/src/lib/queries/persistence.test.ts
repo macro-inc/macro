@@ -967,3 +967,23 @@ it('never restores or persists excluded content, even when another instance flus
   olderClient.clear();
   currentClient.clear();
 });
+
+it('releases the retirement fence after a failed disk flush', async () => {
+  const store = createMockStore();
+  const queryClient = new QueryClient();
+  const persistence = setupQueryPersistence({
+    queryClient,
+    scopes: [createScope([], store)],
+  });
+  const key = ['email', 'threadMessages', 'thread'];
+  store.flush.mockRejectedValueOnce(new Error('disk failure'));
+  await expect(persistence.retire((key) => key[0] === 'email')).rejects.toThrow(
+    'disk failure'
+  );
+  queryClient.setQueryData(key, { body: 'fresh allowed response' });
+  expect(store.entries.get(JSON.stringify(key))?.data).toEqual({
+    body: 'fresh allowed response',
+  });
+  persistence.dispose();
+  queryClient.clear();
+});

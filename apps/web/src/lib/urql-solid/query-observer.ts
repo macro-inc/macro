@@ -11,7 +11,7 @@ import {
 } from '@urql/core';
 import { onEnd, pipe, type Subscription, subscribe } from 'wonka';
 import { liveQueryData } from '../graphql-cache/exchange/live-query';
-import { queryAuthorization } from './authorization';
+import { crmSnapshotAuthorization } from './authorization';
 import type { ObserverEndReason, UrqlObserver } from './observer';
 import {
   createReactiveSelection,
@@ -256,7 +256,7 @@ export class QueryObserver<
         });
       }
 
-      context.cacheAuthorizationEpoch = queryAuthorization().epoch;
+      context.cacheAuthorizationEpoch = crmSnapshotAuthorization().epoch;
 
       const currentExecution: QueryExecution<QueryData, Variables, Data> = {
         options,
@@ -344,7 +344,7 @@ export class QueryObserver<
     nextResult: OperationResult<QueryData, Variables>
   ): void {
     if (this.execution !== execution) return;
-    const authorization = queryAuthorization();
+    const authorization = crmSnapshotAuthorization();
     if (
       nextResult.data != null &&
       queryNeedsCrmProof(

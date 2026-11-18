@@ -23,7 +23,7 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
-import { CrmAccessDenied } from '../components/access-denied';
+import { CrmAccessFallback } from '../components/access-denied';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordTabs } from '../components/record-tabs';
 import { useCrmContext } from '../context/crm-context';
@@ -84,14 +84,14 @@ type CrmRecordDetailProps = {
 };
 
 export function CrmRecordDetail(props: CrmRecordDetailProps) {
-  const { canAccess } = useCrmContext();
+  const { canAccess, accessState } = useCrmContext();
   return (
     <Show
       when={canAccess()}
       fallback={
         <>
           {props.deniedHeader}
-          <CrmAccessDenied />
+          <CrmAccessFallback state={accessState()} />
         </>
       }
     >

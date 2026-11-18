@@ -5,6 +5,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { crmAccessAuthority } from '@service-storage/crm-access-authority';
 import { onlineManager } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { crmProtectedQueryKey } from './crm-cache-scope';
@@ -52,7 +53,12 @@ const buster = import.meta.env.__APP_VERSION__ ?? 'dev';
 export const queryPersistence = setupQueryPersistence({
   queryClient,
   scopes: createQueryPersistenceScopes(buster),
-  exclude: crmProtectedQueryKey,
+  exclude: (key) =>
+    crmProtectedQueryKey(key) &&
+    crmAccessAuthority.snapshot()?.policy?.endsWith(':denied') === true,
+  beforeRestore: async (key) => {
+    if (crmProtectedQueryKey(key)) await crmAccessAuthority.ensureCurrent();
+  },
 });
 
 // Subscribe to query cache events for automatic normalization of soup entities

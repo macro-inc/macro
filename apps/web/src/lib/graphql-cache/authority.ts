@@ -18,7 +18,7 @@ export interface CacheAuthorityHost {
   /** Compare a proof to its pre-request generation under the owner lock. */
   transition(expected: string, policy: string): Promise<AuthorityTransition>;
   onChanged(callback: (authority: CacheAuthority) => void): () => void;
-  /** The application obtains a fresh server proof before protected local reads. */
+  /** The application verifies the current generation, reusing durable proof when possible. */
   setReadGuard(guard: () => Promise<unknown>): void;
   verifyRead(): Promise<void>;
 }

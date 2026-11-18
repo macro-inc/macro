@@ -1,5 +1,5 @@
 import {
-  queryAuthorization,
+  crmSnapshotAuthorization,
   runOptimisticCacheWrite,
 } from '@app/lib/urql-solid/authorization';
 import { StaleCacheAuthorityError } from '../authority';
@@ -1215,7 +1215,7 @@ export function normalizedCacheExchange(
           op.variables as Record<string, unknown>,
           operationName(op)
         );
-        const visible = queryAuthorization();
+        const visible = crmSnapshotAuthorization();
         if (
           visible.paused ||
           (optimistic.authorizationEpoch ?? visible.epoch) !== visible.epoch ||

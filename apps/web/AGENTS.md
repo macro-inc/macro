@@ -36,8 +36,10 @@
 
 ## Account-scoped source queries
 
-CRM-derived records, mail, search projections and mixed lists also require fresh
-member-access proof. `crm-access-authority.ts` orders primary proofs against the
+CRM-derived records, mail, search projections and mixed lists require verified
+member-access proof for the current account/owner generation. Reuse that proof
+on response, subscription and local-read hot paths; refresh on stale authority,
+a changed/missing storage hint, revocation, or login/account change. `crm-access-authority.ts` orders primary proofs against the
 browser/native owner's durable generation; `crm-access-cache.ts` retires visible
 and persisted query snapshots. Preserve source generations through HTTP decoding,
 cache writes, queued settlement and subscription reconnects; a current generation
@@ -49,6 +51,9 @@ independent resources such as document creates and `/crm/member-access` skip it.
 Treat the memoized response header only as a retirement
 hint: changed or missing hints require fresh JSON proof, and never relabel an
 in-flight response with the resulting generation.
+Keep initial access pending and retain the last proven state across transient proof failures with one bounded retry; show denial and tear down CRM dialogs only after a proven denial.
+Persist email and Soup snapshots for allowed members, verify the reusable proof before restoration, and retire protected snapshots on proven denial or account replacement.
+Gate the admin member-access switch with the remote `enable-crm-member-access-changes` flag used by the server; never gate denial enforcement on that rollout flag.
 Keep personal Soup mail, Work Feed, bookmark metadata and independently scoped database-view reads available offline without CRM proof; inspect resolver contracts and arguments rather than broad fragment type names.
 Admit opaque Soup continuations only from an independently scoped cached parent with the same query, operation, group and current account/owner generation; bound witnesses and invalidate them on cache replacement.
 Before exempting a thread-by-ID read, select only cached id/ownerId and bind its ownership witness to the account, login, host, owner and generation; reuse valid witnesses, coalesce pending probes, and retain witnesses through active Mail chunks, complete thread reads and mounted thread routes, including canonical IDs and fallback reads, while CRM-only shared threads remain gated.

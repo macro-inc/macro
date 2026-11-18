@@ -1,5 +1,8 @@
 import { useFlowTrace } from '@app/observability/flow';
-import { queryNeedsCrmProof } from '@graphql-cache/authority-scope';
+import {
+  queryNeedsCrmProof,
+  queryNeedsCrmRetirement,
+} from '@graphql-cache/authority-scope';
 import { Telemetry } from '@macro-inc/observability';
 import { stringifyDocument } from '@urql/core';
 import type { DocumentNode } from 'graphql';
@@ -13,7 +16,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
-import { queryAuthorization } from './authorization';
+import { crmSnapshotAuthorization } from './authorization';
 import { useOptionalUrqlClient } from './context';
 import type { ObserverClientOptions, UrqlObserverFactory } from './observer';
 import {
@@ -36,22 +39,48 @@ export function createBaseQuery<
   // Requests sent while the enclosing view loads join its trace; see
   // traceParentExchange.
   const flow = useFlowTrace();
+  const inputOptions = createMemo(getOptions);
+  const proofScope = createMemo<{
+    query?: string;
+    variables?: Record<string, unknown>;
+  }>(() => {
+    const input = inputOptions();
+    // Disabled infinite queries may have no page parameters yet. Classify
+    // their current selection without evaluating unavailable variables.
+    const disabled = 'enabled' in input && input.enabled === false;
+    if (!('query' in input)) return {};
+    return {
+      query:
+        typeof input.query === 'string'
+          ? input.query
+          : stringifyDocument(input.query as DocumentNode),
+      variables: scopeVariables
+        ? disabled
+          ? undefined
+          : scopeVariables(input)
+        : 'variables' in input
+          ? (input.variables as Record<string, unknown>)
+          : undefined,
+    };
+  });
+  const needsCrmProof = createMemo(() => {
+    // Ownership/cursor witnesses can expire even when query options stay the same.
+    crmSnapshotAuthorization().epoch;
+    const scope = proofScope();
+    return !scope.query || queryNeedsCrmProof(scope.query, scope.variables);
+  });
+  const retirementScope = createMemo(() => {
+    const scope = proofScope();
+    return (
+      !scope.query || queryNeedsCrmRetirement(scope.query, scope.variables)
+    );
+  });
   const options = createMemo(() => {
-    const input = getOptions();
+    const input = inputOptions();
     const pauseForCrm =
-      queryAuthorization().paused &&
-      !('enabled' in input && input.enabled === false) &&
-      (!('query' in input) ||
-        queryNeedsCrmProof(
-          typeof input.query === 'string'
-            ? input.query
-            : stringifyDocument(input.query as DocumentNode),
-          scopeVariables
-            ? scopeVariables(input)
-            : 'variables' in input
-              ? (input.variables as Record<string, unknown>)
-              : undefined
-        ));
+      needsCrmProof() &&
+      crmSnapshotAuthorization().paused &&
+      !('enabled' in input && input.enabled === false);
     const next = {
       ...input,
       ...(pauseForCrm ? { enabled: false } : {}),
@@ -143,12 +172,18 @@ export function createBaseQuery<
 
   let firstOptionsRun = true;
   let currentClient = initialClient;
-  let currentEpoch = untrack(queryAuthorization).epoch;
+  // Disabled queries and refetches can retain an earlier result after their
+  // configured scope changes. Keep its retirement requirement until disposal.
+  let retainedCrmScope = untrack(retirementScope);
+  let currentEpoch = untrack(crmSnapshotAuthorization).epoch;
 
   createComputed(() => {
     const nextOptions = options();
     const nextClient = client();
-    const nextEpoch = queryAuthorization().epoch;
+    retainedCrmScope ||= retirementScope();
+    const nextEpoch = retainedCrmScope
+      ? crmSnapshotAuthorization().epoch
+      : currentEpoch;
     if (firstOptionsRun) {
       firstOptionsRun = false;
       return;
@@ -157,6 +192,7 @@ export function createBaseQuery<
     const current = untrack(observer);
     if (nextClient !== currentClient || nextEpoch !== currentEpoch) {
       currentEpoch = nextEpoch;
+      retainedCrmScope = retirementScope();
       const replacement = untrack(() =>
         createObserver(nextClient, nextOptions)
       );
@@ -165,6 +201,7 @@ export function createBaseQuery<
       setObserver(replacement);
       current.destroy();
     } else {
+      currentEpoch = nextEpoch;
       untrack(() => current.setOptions(nextOptions, nextClient));
     }
   });

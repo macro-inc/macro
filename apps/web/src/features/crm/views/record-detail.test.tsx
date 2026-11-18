@@ -36,6 +36,7 @@ const taskContext = vi.hoisted(() => ({
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     canAccess: () => taskContext.canAccess(),
+    accessState: () => (taskContext.canAccess() ? 'allowed' : 'denied'),
     createNavigation: () => ({ openWithSplit: vi.fn() }),
     listsEnabled: () => () => false,
     isTeamAdmin: () => () => false,

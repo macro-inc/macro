@@ -10,6 +10,7 @@ vi.mock('graphql', async (importOriginal) => {
 import {
   excludesCrmContent,
   queryNeedsCrmProof,
+  queryNeedsCrmRetirement,
   rememberOwnedEmail,
   requestNeedsCrmProof,
 } from './authority-scope';
@@ -182,4 +183,30 @@ describe('CRM cache admission classification', () => {
       })
     ).toBe(true);
   });
+});
+
+it('retires witnessed literal mail selections without gating independent documents', () => {
+  const threadId = crypto.randomUUID();
+  rememberOwnedEmail(threadId, () => true);
+  const query = `{ user { emailThread(input: {threadId: "${threadId}"}) { id } } }`;
+  expect(queryNeedsCrmProof(query)).toBe(false);
+  expect(queryNeedsCrmRetirement(query)).toBe(true);
+  expect(queryNeedsCrmRetirement('{ document(id: "note") { id } }')).toBe(
+    false
+  );
+});
+
+it('keeps variable-scoped independent queries outside CRM retirement', () => {
+  const soup =
+    'query($input: SoupInput!) { user { soup(input:$input) { items { id } } } }';
+  expect(
+    queryNeedsCrmRetirement(soup, { input: { initial: { filters } } })
+  ).toBe(false);
+  const entity =
+    'query($input: SoupEntityInput!) { user { soupEntity(input:$input) { id } } }';
+  expect(
+    queryNeedsCrmRetirement(entity, {
+      input: { entityType: 'DOCUMENT', id: 'note' },
+    })
+  ).toBe(false);
 });

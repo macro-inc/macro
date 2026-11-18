@@ -4,7 +4,7 @@ import { createCrmAccessAuthority } from '@service-storage/crm-access-authority'
 import { Button } from '@ui';
 import { createSignal, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
-import { CrmAccessDenied } from '../../components/access-denied';
+import { CrmAccessFallback } from '../../components/access-denied';
 import { CrmMobileTabs } from '../../components/crm-mobile-tabs';
 import { CrmSidebar } from '../../components/crm-sidebar';
 
@@ -88,7 +88,10 @@ function Fixture() {
           <Show
             when={active() === 'pipeline:shared'}
             fallback={
-              <Show when={authority.allowed()} fallback={<CrmAccessDenied />}>
+              <Show
+                when={authority.allowed()}
+                fallback={<CrmAccessFallback state={authority.state()} />}
+              >
                 <div class="p-6">
                   <h1 class="text-xl font-semibold">Company records</h1>
                   <p>Private record content</p>

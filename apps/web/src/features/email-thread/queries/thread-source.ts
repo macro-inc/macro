@@ -1,4 +1,4 @@
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { hasOwnedEmailWitness } from '@graphql-cache/authority-scope';
 import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
 import { isListedLocalDraft } from '@queries/email/local-draft-entities';
@@ -122,7 +122,7 @@ export function createEmailThreadSource(
     thread?: EmailThread;
   }>((previous) => {
     const requested = threadId();
-    const epoch = queryAuthorization().epoch;
+    const epoch = crmSnapshotAuthorization().epoch;
     if (previous?.epoch !== epoch) previous = undefined;
     // Read non-suspending status before the witness guard so completion of an
     // offline ownership lookup can wake this source through its query result.
@@ -130,7 +130,7 @@ export function createEmailThreadSource(
     const failed = query.isError;
     const resolved = query.resolvedThreadId;
     if (
-      queryAuthorization().paused &&
+      crmSnapshotAuthorization().paused &&
       !hasOwnedEmailWitness(requested) &&
       !hasOwnedEmailWitness(resolved)
     )

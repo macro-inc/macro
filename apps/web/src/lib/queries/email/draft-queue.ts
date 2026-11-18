@@ -1,4 +1,4 @@
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
@@ -250,7 +250,7 @@ export async function readCachedDraftAndThread(
     | 'mutationUuid'
   >
 > {
-  const authorizationEpoch = queryAuthorization().epoch;
+  const authorizationEpoch = crmSnapshotAuthorization().epoch;
   const empty = {
     draftId,
     threadDbId: threadId,
@@ -261,7 +261,7 @@ export async function readCachedDraftAndThread(
     authorityGeneration: undefined,
   };
   const host = getGraphqlCacheHost();
-  if (!host || queryAuthorization().paused) return empty;
+  if (!host || crmSnapshotAuthorization().paused) return empty;
   // Settlement can land between these reads. Compose from one revision so a
   // local draft is never combined with a thread already using its server ID.
   for (let attempt = 0; attempt < SNAPSHOT_READ_ATTEMPTS; attempt++) {
@@ -279,16 +279,16 @@ export async function readCachedDraftAndThread(
     ]).catch((error: unknown) => {
       if (
         error instanceof StaleCacheAuthorityError ||
-        queryAuthorization().paused ||
-        queryAuthorization().epoch !== authorizationEpoch
+        crmSnapshotAuthorization().paused ||
+        crmSnapshotAuthorization().epoch !== authorizationEpoch
       )
         return undefined;
       throw error;
     });
     if (
       !records ||
-      queryAuthorization().paused ||
-      queryAuthorization().epoch !== authorizationEpoch
+      crmSnapshotAuthorization().paused ||
+      crmSnapshotAuthorization().epoch !== authorizationEpoch
     )
       return empty;
     const [draft, thread] = records;
@@ -426,7 +426,10 @@ export async function saveEmailDraftQueued(
       ),
     };
   }
-  if (outcome.kind === 'queued') {
+  if (
+    outcome.kind === 'queued' ||
+    outcome.kind === 'committed-without-content'
+  ) {
     if (attempt) {
       try {
         await markDraftAttemptQueued(attempt);
@@ -434,11 +437,6 @@ export async function saveEmailDraftQueued(
         reportError(error);
       }
     }
-    return { kind: 'queued' };
-  }
-  if (outcome.kind === 'committed-without-content') {
-    // An earlier journal binding cannot confirm this save's destination. Keep
-    // the accepted local handle until a settlement supplies its current identity.
     return { kind: 'queued' };
   }
   refreshAfterCommittedSave(input, outcome.threadId);

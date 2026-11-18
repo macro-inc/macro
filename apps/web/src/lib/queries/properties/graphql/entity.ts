@@ -1,4 +1,4 @@
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { createUrqlMutation } from '@app/lib/urql-solid/create-urql-mutation';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
 import type { UrqlMutationExecutor } from '@app/lib/urql-solid/types';
@@ -398,7 +398,7 @@ async function executeGraphqlEntityPropertyMutation(
   onEnqueued?: () => void,
   prepareGrouped?: PrepareGroupedPropertyUpdates
 ) {
-  const authorizationEpoch = queryAuthorization().epoch;
+  const authorizationEpoch = crmSnapshotAuthorization().epoch;
   const args = await prepareMutationArgs(input, prepareGrouped);
   const variables: SetEntityPropertyMutationVariables = {
     input: {
@@ -428,8 +428,8 @@ async function executeGraphqlEntityPropertyMutation(
     disposition.kind === 'queued' &&
     mutationResult.data == null &&
     args.optimisticProperty &&
-    !queryAuthorization().paused &&
-    queryAuthorization().epoch === authorizationEpoch &&
+    !crmSnapshotAuthorization().paused &&
+    crmSnapshotAuthorization().epoch === authorizationEpoch &&
     !queryNeedsCrmProof(stringifyDocument(mutation), variables)
   ) {
     return {

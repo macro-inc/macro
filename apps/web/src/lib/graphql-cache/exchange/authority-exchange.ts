@@ -1,4 +1,4 @@
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import {
   CombinedError,
   type Exchange,
@@ -32,7 +32,7 @@ export const cacheAuthorityExchange: Exchange =
         captureOperationResponse(
           makeOperation(operation.kind, operation, {
             ...operation.context,
-            cacheAuthorizationEpoch: queryAuthorization().epoch,
+            cacheAuthorizationEpoch: crmSnapshotAuthorization().epoch,
           })
         )
       ),
@@ -45,7 +45,7 @@ export const cacheAuthorityExchange: Exchange =
               await assertResponseAuthority(
                 operationResponse(result.operation)
               );
-              const authorization = queryAuthorization();
+              const authorization = crmSnapshotAuthorization();
               const epoch =
                 result.operation.kind === 'subscription'
                   ? (sourceAuthorityEpoch(result.data) ??

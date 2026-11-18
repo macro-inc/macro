@@ -6,7 +6,7 @@ import {
   selectRecords,
 } from '@app/lib/graphql-cache';
 import { createUrqlQuery } from '@app/lib/urql-solid';
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import { requestNeedsCrmProof } from '@graphql-cache/authority-scope';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -590,7 +590,7 @@ function startPreviewBatch(
     }));
     const [cached, setCached] = createSignal(new Map<string, PreviewItem>());
     const host = getGraphqlSoupCacheHost();
-    const epoch = queryAuthorization().epoch;
+    const epoch = crmSnapshotAuthorization().epoch;
     let disposed = false;
     onCleanup(() => {
       disposed = true;
@@ -604,11 +604,11 @@ function startPreviewBatch(
         items.map((item) => normalizedRecordKey(item)!)
       )
         .then(({ records }) => {
-          if (disposed || queryAuthorization().epoch !== epoch) return;
+          if (disposed || crmSnapshotAuthorization().epoch !== epoch) return;
           const previews = new Map<string, PreviewItem>();
           for (const { recordKey, record } of records) {
             if (
-              queryAuthorization().paused &&
+              crmSnapshotAuthorization().paused &&
               requestNeedsCrmProof('read-records-by-keys', {
                 keys: [recordKey],
               })
@@ -653,7 +653,7 @@ const previewBatchers = new WeakMap<
 >();
 
 function previewBatcher(client: Client, includeProperties: boolean) {
-  const epoch = queryAuthorization().epoch;
+  const epoch = crmSnapshotAuthorization().epoch;
   let current = previewBatchers.get(client);
   if (!current || current.epoch !== epoch) {
     current = { epoch, selections: new Map() };
@@ -699,9 +699,9 @@ export function createGraphqlItemPreviewQuery(
   let ready: Promise<PreviewBatch | undefined> = Promise.resolve(undefined);
   const isEnabled = () =>
     isGraphqlPreviewItem(item()) &&
-    (!queryAuthorization().paused || !previewNeedsCrmProof(item()));
+    (!crmSnapshotAuthorization().paused || !previewNeedsCrmProof(item()));
   createComputed(() => {
-    queryAuthorization().epoch;
+    crmSnapshotAuthorization().epoch;
     const current = item();
     setGroup(undefined);
     ready = Promise.resolve(undefined);
@@ -721,7 +721,8 @@ export function createGraphqlItemPreviewQuery(
   const cachedPreview = () =>
     group()?.cached().get(normalizedRecordKey(item())!);
   const data = () => {
-    if (queryAuthorization().paused && previewNeedsCrmProof(item())) return;
+    if (crmSnapshotAuthorization().paused && previewNeedsCrmProof(item()))
+      return;
     const preview = livePreview() ?? cachedPreview();
     if (!preview || preview.loading || preview.access !== 'access')
       return preview;

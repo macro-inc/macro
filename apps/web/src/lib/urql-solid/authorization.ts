@@ -2,7 +2,7 @@ import { createSignal } from 'solid-js';
 
 // Retire live observer snapshots as well as persisted rows after a permission change.
 const [state, setState] = createSignal({ epoch: 0, paused: false });
-export const queryAuthorization = state;
+export const crmSnapshotAuthorization = state;
 /** Capture before dispatch; retirement never grants an old response a new epoch. */
 export function captureQueryAuthorization(): () => boolean {
   const epoch = state().epoch;
@@ -23,7 +23,7 @@ export async function runOptimisticCacheWrite<T>(
   snapshotEpoch: number | undefined,
   write: (acceptSnapshot: boolean) => Promise<T>
 ): Promise<T> {
-  const state = queryAuthorization();
+  const state = crmSnapshotAuthorization();
   const accepted =
     !state.paused && (snapshotEpoch ?? state.epoch) === state.epoch;
   let settle!: () => void;

@@ -63,6 +63,7 @@ vi.mock('../context/crm-context', async () => {
   return {
     useCrmContext: () => ({
       canAccess: crmAccessAuthority.allowed,
+      accessState: crmAccessAuthority.state,
       registerTaskComposerRecord: () => () => {},
     }),
   };
@@ -226,15 +227,25 @@ it.each([
     expect(screen.queryByText(/Try again/i)).toBeNull();
     await waitFor(() => expect(screen.queryByRole('form')).toBeNull());
     expect(open()).toBe(false);
-    expect(screen.queryByText('Opened company content')).toBeNull();
-    expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
-    expect(
-      client.getQueryData(
-        (kind === 'company' ? crmKeys.company : crmKeys.contact)(
-          `${kind}-created`
-        ).queryKey
-      )
-    ).toBeUndefined();
+    if (proofState === 'revoked') {
+      expect(screen.queryByText('Opened company content')).toBeNull();
+      expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+    } else {
+      expect(screen.getByText('Opened company content')).toBeTruthy();
+      expect(screen.queryByText("You don't have access to CRM")).toBeNull();
+    }
+    const cached = client.getQueryData(
+      (kind === 'company' ? crmKeys.company : crmKeys.contact)(
+        `${kind}-created`
+      ).queryKey
+    );
+    if (kind === 'company' && proofState !== 'revoked') {
+      // A transient lookup failure leaves the proven generation current, so
+      // the successfully created company's detail can still be seeded.
+      expect(cached).toEqual({ id: 'company-created', name: 'Created once' });
+    } else {
+      expect(cached).toBeUndefined();
+    }
     // Even a stale form event cannot resubmit the cleared input after success.
     fireEvent.submit(form);
     await Promise.resolve();

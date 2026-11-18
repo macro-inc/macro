@@ -148,14 +148,15 @@ it.each([
         query:
           '{ user { soupEntity(input: {entityType: CRM_COMPANY, id: "company"}) { id name } } }',
       })
-    ).rejects.toThrow('Failed to fetch');
+    ).resolves.toEqual(cached);
+    expect(fetchProof).not.toHaveBeenCalled();
   }
 );
 
 it.each(['viewer', 'teammate'] as const)(
   'uses an offline ownership witness only for a thread owned by %s',
   async (ownerId) => {
-    state = { ...state, policy: 'none', ready: true };
+    state = { ...state, policy: null, ready: false };
     const threadId = crypto.randomUUID();
     const original = invoke.getMockImplementation()!;
     invoke.mockImplementation((command, args) =>
@@ -476,9 +477,7 @@ it('rejects a late transition reply after a newer owner event', async () => {
   release.resolve();
   await rejected;
   expect(host.authority!.snapshot()).toEqual(state);
-  await expect(host.authority!.verifyRead()).rejects.toBeInstanceOf(
-    StaleCacheAuthorityError
-  );
+  await expect(host.authority!.verifyRead()).resolves.toBeUndefined();
 });
 
 it('restores verification from a fresh unchanged proof after an authority event', async () => {
@@ -538,3 +537,30 @@ it.each(['initialization', 'explicit'] as const)(
     await rejected;
   }
 );
+
+it('reuses an allowed persisted native proof offline with one IPC per subsequent read', async () => {
+  state = {
+    ...state,
+    ready: true,
+    policy: '00000000-0000-4000-8000-000000000001:allowed',
+  };
+  const fetchProof = vi.fn(async (): Promise<string> => {
+    throw new Error('offline');
+  });
+  const controller = createCrmAccessAuthority({
+    fetchProof,
+    retire: async () => {},
+  });
+  controller.setSession('viewer');
+  controller.setHost(host.authority);
+  await host.authority!.verifyRead();
+  invoke.mockClear();
+  await expect(
+    host.readQuery({ query: '{ user { emailThread { id } } }' })
+  ).resolves.toMatchObject({ kind: 'hit' });
+  expect(invoke.mock.calls.map(([command]) => command)).toEqual([
+    'graphql_cache_read',
+  ]);
+  expect(controller.state()).toBe('allowed');
+  expect(fetchProof).not.toHaveBeenCalled();
+});

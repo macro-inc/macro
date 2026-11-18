@@ -7,6 +7,8 @@ import {
 import { Telemetry } from '@macro-inc/observability';
 import { createSignal } from 'solid-js';
 
+export type CrmAccessState = 'pending' | 'allowed' | 'denied';
+
 export type CrmRequestAuthority = Readonly<{
   owner: CacheAuthorityHost;
   generation: string;
@@ -73,7 +75,9 @@ export function createCrmAccessAuthority(options: {
     account: string
   ) => Promise<void>;
 }) {
-  const [allowed, setAllowed] = createSignal(false);
+  const [state, setState] = createSignal<CrmAccessState>('pending');
+  const allowed = () => state() === 'allowed';
+  let verifiedProof: CrmRequestAuthority | undefined;
   let account: string | undefined;
   let loginEpoch = 0;
   let loginGeneration = 0;
@@ -82,6 +86,9 @@ export function createCrmAccessAuthority(options: {
   let owner = memoryAuthority();
   let stopObserving: (() => void) | undefined;
   let observedGeneration: string | undefined;
+  let observedPolicy: string | null | undefined;
+  let observedAccount: string | null | undefined;
+  let retiredGeneration: string | undefined;
   let retiring = Promise.resolve();
   let retirementFailed = false;
   const sessionListeners = new Set<() => void>();
@@ -95,9 +102,8 @@ export function createCrmAccessAuthority(options: {
     | undefined;
 
   const retire = (generation: string) => {
-    if (observedGeneration === generation && !retirementFailed) return;
-    observedGeneration = generation;
-    setAllowed(false);
+    if (retiredGeneration === generation && !retirementFailed) return;
+    retiredGeneration = generation;
     retirementFailed = false;
     // The callback fences visible observers synchronously, before its disk work.
     const previous = retiring.catch(() => {});
@@ -117,11 +123,33 @@ export function createCrmAccessAuthority(options: {
       'crm.access.retirement'
     );
   };
+  const observeAuthority = (next: CacheAuthority) => {
+    const denied = next.policy?.endsWith(':denied') === true;
+    const accountChanged =
+      observedAccount != null && observedAccount !== next.account;
+    const previousTeam = observedPolicy?.split(':')[0];
+    const scopeChanged =
+      previousTeam &&
+      previousTeam !== 'none' &&
+      next.policy != null &&
+      previousTeam !== next.policy.split(':')[0];
+    const mustRetire =
+      accountChanged ||
+      scopeChanged ||
+      retirementFailed ||
+      (denied && (observedPolicy !== next.policy || retirementFailed));
+    observedGeneration = next.generation;
+    observedPolicy = next.policy;
+    observedAccount = next.account;
+    if (denied || next.policy === 'none') setState('denied');
+    else if (accountChanged) setState('pending');
+    if (mustRetire) retire(next.generation);
+  };
   const observe = () => {
     stopObserving?.();
     const observedOwner = owner;
     stopObserving = owner.onChanged((next) => {
-      if (owner === observedOwner) retire(next.generation);
+      if (owner === observedOwner) observeAuthority(next);
     });
   };
   observe();
@@ -136,6 +164,8 @@ export function createCrmAccessAuthority(options: {
       throw new StaleCacheAuthorityError();
     const bindAccount = options.bindAccount;
     const expectedAccount = account;
+    if (state.account && state.account !== expectedAccount)
+      retire(state.generation);
     if (state.account !== expectedAccount && bindAccount) {
       await context.run(() =>
         bindAccount(capturedOwner, state.generation, expectedAccount)
@@ -148,6 +178,7 @@ export function createCrmAccessAuthority(options: {
       (state.account && state.account !== account)
     )
       throw new StaleCacheAuthorityError();
+    observeAuthority(state);
     return {
       owner: capturedOwner,
       generation: state.generation,
@@ -157,13 +188,18 @@ export function createCrmAccessAuthority(options: {
   async function assertCurrent(captured: CrmRequestAuthority): Promise<void> {
     if (captured.session !== session || captured.owner !== owner || !account)
       throw new StaleCacheAuthorityError();
-    const current = await captured.owner.current();
+    const current =
+      captured.owner.snapshot() ?? (await captured.owner.current());
+    if (captured.session !== session || captured.owner !== owner || !account)
+      throw new StaleCacheAuthorityError();
+    observeAuthority(current);
     if (
       captured.session !== session ||
       captured.owner !== owner ||
       retirementFailed ||
       observedGeneration !== current.generation ||
       !current.ready ||
+      !isCrmPolicy(current.policy) ||
       current.generation !== captured.generation ||
       (current.account && current.account !== account)
     )
@@ -190,7 +226,7 @@ export function createCrmAccessAuthority(options: {
         if (captured.session !== session || captured.owner !== owner)
           throw new StaleCacheAuthorityError();
         span.setAttr('crm.access.changed', result.changed);
-        span.run(() => retire(result.authority.generation));
+        span.run(() => observeAuthority(result.authority));
         const admitted = {
           ...captured,
           generation: result.authority.generation,
@@ -198,7 +234,8 @@ export function createCrmAccessAuthority(options: {
         await retiring;
         await span.run(() => assertCurrent(admitted));
         span.setAttr('crm.access.outcome', 'verified');
-        setAllowed(policy.endsWith(':allowed'));
+        verifiedProof = admitted;
+        setState(policy.endsWith(':allowed') ? 'allowed' : 'denied');
         options.verified?.();
         for (const listener of verifiedListeners) listener();
         return admitted;
@@ -220,7 +257,8 @@ export function createCrmAccessAuthority(options: {
       { sampling: 'perf' },
       async (span) => {
         // A concurrent owner change can overtake preparation or win the proof
-        // CAS. Retry the full read and primary proof without relabelling old data.
+        // CAS, or the network can fail transiently. Retry once without relabelling
+        // old data or replacing the last proven UI state.
         for (let attempt = 0; ; attempt++) {
           try {
             const captured = await span.span('crm.access.prepare', async () =>
@@ -233,7 +271,7 @@ export function createCrmAccessAuthority(options: {
             return await span.run(() => accept(captured, policy));
           } catch (error) {
             if (
-              !(error instanceof StaleCacheAuthorityError) ||
+              retirementFailed ||
               attempt === 1 ||
               capturedSession !== session ||
               capturedOwner !== owner
@@ -242,37 +280,31 @@ export function createCrmAccessAuthority(options: {
           }
         }
       }
-    )
-      .catch((error: unknown) => {
-        if (capturedSession === session) {
-          setAllowed(false);
-          if (!retirementFailed) {
-            session += 1;
-            retire(`unknown:${session}`);
-          }
-        }
-        throw error;
-      })
-      .finally(() => {
-        if (pending === entry) pending = undefined;
-      });
+    ).finally(() => {
+      if (pending === entry) pending = undefined;
+    });
     pending = entry;
     return entry.promise;
   }
+  async function ensureCurrent(): Promise<CrmRequestAuthority> {
+    try {
+      const captured = verifiedProof ?? (await prepare());
+      await retiring;
+      await assertCurrent(captured);
+      verifiedProof = captured;
+      const policy = owner.snapshot()?.policy;
+      if (isCrmPolicy(policy))
+        setState(policy.endsWith(':allowed') ? 'allowed' : 'denied');
+      return captured;
+    } catch (error) {
+      if (!(error instanceof StaleCacheAuthorityError)) throw error;
+      return refresh();
+    }
+  }
   return {
     allowed,
-    retireUnverified(captured: CrmRequestAuthority) {
-      // An unavailable owner read must close visible/cache admission before a
-      // completed write is returned. Old requests cannot retire a newer scope.
-      if (
-        captured.session !== session ||
-        captured.owner !== owner ||
-        observedGeneration !== captured.generation
-      )
-        return;
-      session += 1;
-      retire(`unknown:${session}`);
-    },
+    state,
+    ensureCurrent,
     captureSession() {
       const captured = loginGeneration;
       return () => {
@@ -303,22 +335,28 @@ export function createCrmAccessAuthority(options: {
       shared = next;
       owner = next ?? memoryAuthority(account);
       session += 1;
-      setAllowed(false);
+      setState('pending');
+      verifiedProof = undefined;
       observedGeneration = undefined;
-      retire(`host:${session}`);
+      observedPolicy = undefined;
+      observedAccount = undefined;
       observe();
-      next?.setReadGuard(refresh);
+      next?.setReadGuard(ensureCurrent);
       for (const listener of sessionListeners) listener();
     },
     setSession(next: string | undefined, epoch = 0) {
       if (next === account && epoch === loginEpoch) return;
+      const replacingSession = account !== undefined;
       account = next;
       loginEpoch = epoch;
       loginGeneration += 1;
       session += 1;
-      setAllowed(false);
+      setState('pending');
+      verifiedProof = undefined;
       observedGeneration = undefined;
-      retire(`session:${session}`);
+      observedPolicy = undefined;
+      observedAccount = undefined;
+      if (replacingSession) retire(`session:${session}`);
       if (!shared) {
         owner = memoryAuthority(account);
         observe();
@@ -345,6 +383,7 @@ export const crmAccessAuthority = createCrmAccessAuthority({
   bindAccount: (...args) => bindAccount(...args),
 });
 export const crmAccessAllowed = crmAccessAuthority.allowed;
+export const crmAccessState = crmAccessAuthority.state;
 export function configureCrmAccessAuthority(options: {
   fetchProof: () => Promise<string>;
   retire: () => Promise<void>;

@@ -1,4 +1,4 @@
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   CacheHost,
@@ -328,7 +328,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     const protectedBuckets = activeBuckets.some((bucket) =>
       ['email', 'crm_company', 'crm_contact'].includes(bucket)
     );
-    const authority = queryAuthorization();
+    const authority = crmSnapshotAuthorization();
     const authorityEpoch = protectedBuckets ? authority.epoch : 0;
     const enabled =
       options.enabled?.() !== false &&

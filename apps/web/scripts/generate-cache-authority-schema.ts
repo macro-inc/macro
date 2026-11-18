@@ -28,6 +28,7 @@ for (const [name, schema] of Object.entries(document.schemas)) {
 }
 const input = Buffer.from(parts.join('\n\n'));
 const output = await $`${process.env.BIOME_BINARY ?? 'biome'} format --stdin-file-path=${OUTPUT} < ${input}`.cwd(resolve(ROOT, 'apps/web')).text();
+if (!output.trim()) throw new Error('Permission transport formatter produced no output');
 if (process.argv.includes('--check')) {
   if (await Bun.file(OUTPUT).text() !== output) throw new Error('Generated permission transport is stale');
 } else await Bun.write(OUTPUT, output);

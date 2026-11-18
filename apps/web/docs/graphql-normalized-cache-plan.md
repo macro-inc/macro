@@ -911,8 +911,12 @@ property content, mixed viewer lists, and projection-only orphans behind a close
 marker. Browser and native entry points check the captured generation while
 holding their owner lock. Request data retains its source generation through
 HTTP decoding, subscription reconnects, writes and final observer delivery.
-Protected local reads require a fresh primary proof; proof failure keeps them
-closed. An unchanged ready policy is a metadata check, not another retirement.
+Protected local reads reuse a verified proof for the current account and cache
+generation, including offline. Stale authority or an explicit permission signal
+requires a fresh primary proof; transient failures preserve the last proven UI
+state and receive a bounded retry. Initial allowed/team-less proofs preserve
+legacy offline data. Proven denial or loss of the prior team scope retires it;
+an unchanged ready policy remains a metadata check.
 
 Retirement preserves unrelated data and the durable command queue: variables,
 UUIDs, leases, retry state, identity bindings and authored draft recovery survive.

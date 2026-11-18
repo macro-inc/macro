@@ -14,6 +14,8 @@ import {
   queuedSettlementRequest,
   responseAuthorityGeneration,
 } from '@graphql-cache/response-authority';
+import { createClient, gql } from '@urql/core';
+import type { Client as GraphqlWsClient } from 'graphql-ws';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -41,6 +43,7 @@ vi.mock('@core/constant/servers', () => ({
 
 import { crmAccessAuthority } from './crm-access-authority';
 import { installCrmCacheHost } from './crm-access-cache';
+import { graphqlSoupSubscriptionExchange } from './crm-subscription-exchange';
 
 const TEAM = '00000000-0000-4000-8000-000000000001';
 const proof = (allowed: boolean) => ok({ team_id: TEAM, allowed });
@@ -72,11 +75,16 @@ function owner(account: string) {
     generation: crypto.randomUUID(),
   };
   const listeners = new Set<(state: CacheAuthority) => void>();
+  let readGuard: () => Promise<unknown> = async () => {};
   const authority: CacheAuthorityHost = {
     current: async () => state,
     snapshot: () => state,
-    setReadGuard: () => {},
-    verifyRead: async () => {},
+    setReadGuard: (guard) => {
+      readGuard = guard;
+    },
+    verifyRead: async () => {
+      await readGuard();
+    },
     onChanged(listener) {
       listeners.add(listener);
       return () => {
@@ -119,6 +127,83 @@ afterEach(() => {
 });
 
 describe('CRM HTTP response admission', () => {
+  it('bounds proof requests across an email session and preserves offline cache reads', async () => {
+    const current = await verifiedViewer();
+    const counts: Record<string, number> = { login: 1 };
+    for (const [phase, requests] of [
+      ['inbox', 1],
+      ['threads', 5],
+      ['autosave', 3],
+    ] as const) {
+      const before = mocks.proof.mock.calls.length;
+      for (let index = 0; index < requests; index++) {
+        const autosave = phase === 'autosave';
+        const observe = await prepareResponseObservers(
+          autosave
+            ? 'http://localhost/dss/items/soup/graphql'
+            : `http://localhost/email/email/threads/thread-${index}`,
+          autosave
+            ? {
+                method: 'POST',
+                body: JSON.stringify({
+                  query: 'mutation Save { saveEmailDraft { draftId } }',
+                }),
+              }
+            : {}
+        );
+        await (
+          await observe(
+            autosave ? responseWithHint(true) : Response.json({ id: index })
+          )
+        ).json();
+      }
+      counts[phase] = mocks.proof.mock.calls.length - before;
+    }
+    const connected =
+      Promise.withResolvers<Parameters<GraphqlWsClient['subscribe']>[1]>();
+    let delivered = Promise.withResolvers<void>();
+    const beforeSubscription = mocks.proof.mock.calls.length;
+    const client = createClient({
+      url: '/graphql',
+      exchanges: [
+        graphqlSoupSubscriptionExchange(
+          {
+            subscribe(_payload, sink) {
+              connected.resolve(sink);
+              return () => {};
+            },
+          },
+          (document) => document
+        ),
+      ],
+    });
+    const subscription = client
+      .subscription(
+        gql`subscription Activity { activityUpdates { ... on GraphqlActivityEvent { id } } }`,
+        {}
+      )
+      .subscribe(() => delivered.resolve());
+    try {
+      const sink = await connected.promise;
+      for (let index = 0; index < 10; index++) {
+        delivered = Promise.withResolvers<void>();
+        sink.next({ data: { activityUpdates: [{ id: `event-${index}` }] } });
+        await delivered.promise;
+      }
+      counts.realtime = mocks.proof.mock.calls.length - beforeSubscription;
+      const beforeReads = mocks.proof.mock.calls.length;
+      for (let index = 0; index < 10; index++)
+        await current.authority.verifyRead();
+      counts.cacheReads = mocks.proof.mock.calls.length - beforeReads;
+      console.info('CRM_PROOF_SESSION', JSON.stringify(counts));
+      expect(mocks.proof.mock.calls.length).toBe(0);
+      mocks.proof.mockRejectedValue(new Error('offline'));
+      await expect(current.authority.verifyRead()).resolves.toBeUndefined();
+      expect(mocks.proof.mock.calls.length).toBe(0);
+    } finally {
+      subscription.unsubscribe();
+    }
+  });
   it('prepares unrelated requests synchronously without a CRM proof', async () => {
     await verifiedViewer();
     const external = prepareResponseObservers(
@@ -155,7 +240,7 @@ describe('CRM HTTP response admission', () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual(data);
       await expect(assertResponseAuthority(response)).rejects.toThrow();
-      expect(crmAccessAuthority.allowed()).toBe(false);
+      expect(crmAccessAuthority.allowed()).toBe(state === 'unavailable');
     }
   );
   it.each(['headers', 'body'] as const)(
@@ -189,7 +274,7 @@ describe('CRM HTTP response admission', () => {
       }
     }
   );
-  it('closes cache admission when a later normalization authority lookup fails, while keeping the write payload', async () => {
+  it('uses the verified owner snapshot when a redundant authority lookup would fail', async () => {
     const current = await verifiedViewer();
     const observe = await prepareResponseObservers(
       'http://localhost/dss/crm/companies',
@@ -199,10 +284,8 @@ describe('CRM HTTP response admission', () => {
     vi.spyOn(current.authority, 'current').mockRejectedValueOnce(
       new Error('Owner unavailable')
     );
-    await expect(assertResponseAuthority(response)).rejects.toThrow(
-      'Owner unavailable'
-    );
-    expect(crmAccessAuthority.allowed()).toBe(false);
+    await expect(assertResponseAuthority(response)).resolves.toBeUndefined();
+    expect(crmAccessAuthority.allowed()).toBe(true);
     expect(await response.json()).toHaveProperty('data.id', 'canonical');
   });
   it('does not opt an unrelated document create into CRM proof or cache admission', async () => {
@@ -252,7 +335,7 @@ describe('CRM HTTP response admission', () => {
         id: 'company-1',
         name: 'Created once',
       });
-      expect(crmAccessAuthority.allowed()).toBe(false);
+      expect(crmAccessAuthority.allowed()).toBe(state === 'unavailable');
       expect(hasResponseAuthority(response)).toBe(true);
       expect(responseAuthorityGeneration(response)).toBeUndefined();
       await expect(assertResponseAuthority(response)).rejects.toBeDefined();
@@ -406,19 +489,19 @@ describe('CRM HTTP response admission', () => {
     expect(responseAuthorityGeneration(response)).toBe(generation);
   });
 
-  it('requires fresh proof to recover from a failed lookup even when the hint is unchanged', async () => {
+  it('retains the last verified proof after a transient failure when the hint is unchanged', async () => {
     await verifiedViewer();
     mocks.proof.mockResolvedValue(err(new Error('offline')));
     await expect(crmAccessAuthority.refresh()).rejects.toThrow(
       'Unable to verify CRM access'
     );
-    expect(crmAccessAuthority.allowed()).toBe(false);
+    expect(crmAccessAuthority.allowed()).toBe(true);
     mocks.proof.mockResolvedValue(proof(true)).mockClear();
     const observe = await prepareResponseObservers(
       'http://localhost/dss/graphql'
     );
     const response = await observe(responseWithHint(true));
-    expect(mocks.proof).toHaveBeenCalledOnce();
+    expect(mocks.proof).not.toHaveBeenCalled();
     expect(crmAccessAuthority.allowed()).toBe(true);
     await expect(assertResponseAuthority(response)).resolves.toBeUndefined();
   });

@@ -2,7 +2,7 @@ import {
   type EntityAppearance,
   sameAppearance,
 } from '@app/features/entity-appearance/core/appearance';
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { ThrownResultError } from '@core/util/result';
 import { cachedUserId } from '@queries/auth/cached-user-id';
@@ -97,7 +97,7 @@ function itemPreviewQueryOptions(
 
 function previewDenied(item: ItemEntity): boolean {
   return (
-    (queryAuthorization().paused && previewNeedsCrmProof(item)) ||
+    (crmSnapshotAuthorization().paused && previewNeedsCrmProof(item)) ||
     (!crmAccessAllowed() &&
       (item.type === 'crm_company' || item.type === 'crm_contact'))
   );
@@ -117,9 +117,9 @@ export async function getItemPreview(
   options?: { requireFresh?: boolean }
 ): Promise<PreviewItem> {
   if (previewDenied(item)) return noAccessPreview(item);
-  const epoch = queryAuthorization().epoch;
+  const epoch = crmSnapshotAuthorization().epoch;
   const stale = () =>
-    epoch !== queryAuthorization().epoch || previewDenied(item);
+    epoch !== crmSnapshotAuthorization().epoch || previewDenied(item);
   if (isGraphqlPreviewItem(item)) {
     try {
       const preview = await getGraphqlItemPreview(item, options);

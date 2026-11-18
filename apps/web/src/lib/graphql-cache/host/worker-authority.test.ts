@@ -1,3 +1,4 @@
+import { createCrmAccessAuthority } from '@service-storage/crm-access-authority';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { type CacheAuthority, StaleCacheAuthorityError } from '../authority';
 import type { CacheRequest, WorkerMessage } from '../protocol';
@@ -89,7 +90,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('requires a proof again after a preserved owner replacement', async () => {
+it('reuses the ready durable proof after a preserved owner replacement', async () => {
   await host.authority!.current();
   const read = () =>
     host.readQuery({ query: '{ user { emailThread { id } } }' });
@@ -109,7 +110,7 @@ it('requires a proof again after a preserved owner replacement', async () => {
   options.onEngineReplaced?.(2, 'opened-existing');
   await host.authority!.current();
   host.authority!.setReadGuard(async () => {});
-  await expect(read()).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+  await expect(read()).resolves.toMatchObject({ kind: 'hit' });
   host.authority!.setReadGuard(proof);
   await expect(read()).resolves.toMatchObject({ kind: 'hit' });
   expect(proof).toHaveBeenCalledTimes(2);
@@ -217,4 +218,29 @@ it('keeps a deletion source generation after authority advances before dispatch'
       authority: { generation: original, requireProof: false },
     })
   );
+});
+
+it('reuses an allowed persisted proof offline across a preserved worker replacement', async () => {
+  state = {
+    ...state,
+    ready: true,
+    policy: '00000000-0000-4000-8000-000000000001:allowed',
+  };
+  const fetchProof = vi.fn(async (): Promise<string> => {
+    throw new Error('offline');
+  });
+  const controller = createCrmAccessAuthority({
+    fetchProof,
+    retire: async () => {},
+  });
+  controller.setSession('viewer');
+  controller.setHost(host.authority);
+  const read = () =>
+    host.readQuery({ query: '{ user { emailThread { id } } }' });
+  await expect(read()).resolves.toMatchObject({ kind: 'hit' });
+  options.onEngineReplaced?.(2, 'opened-existing');
+  await host.authority!.current();
+  await expect(read()).resolves.toMatchObject({ kind: 'hit' });
+  expect(controller.state()).toBe('allowed');
+  expect(fetchProof).not.toHaveBeenCalled();
 });

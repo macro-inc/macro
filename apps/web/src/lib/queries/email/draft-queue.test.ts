@@ -25,6 +25,7 @@ import {
   beginDraftAttempt,
   emailSendOwnsDraft,
   localDraftMessage,
+  markDraftAttemptQueued,
   readLocalDraft,
   readLocalEmailSends,
   restoreLocalAttachments,
@@ -667,6 +668,9 @@ it('does not reuse a pre-save thread binding when committed content is unavailab
   // The draft moved since the journal recorded its last thread. This save's
   // accepted result has no payload confirming where it finally landed.
   expect(operations[0].variables?.input.threadDbId).toBe('server-thread');
+  expect(markDraftAttemptQueued).toHaveBeenCalledWith(
+    expect.objectContaining({ id: 'attempt' })
+  );
   await expect(
     saveEmailDraftQueued({ args: { ...args, subject: 'Next authored edit' } })
   ).resolves.toEqual({ kind: 'queued' });

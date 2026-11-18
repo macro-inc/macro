@@ -180,7 +180,10 @@ function install() {
           try {
             const policy = response.headers.get('x-macro-crm-access');
             const current = await captured.owner.current();
-            if (storage && isCrmPolicy(policy) && policy === current.policy) {
+            if (
+              !storage ||
+              (isCrmPolicy(policy) && policy === current.policy)
+            ) {
               try {
                 await crmAccessAuthority.assertCurrent(captured);
               } catch {
@@ -194,7 +197,6 @@ function install() {
             // changes authority; the response always retains its original generation.
             await crmAccessAuthority.assertCurrent(captured);
           } catch (error) {
-            crmAccessAuthority.retireUnverified(captured);
             // An ordinary write keeps its real outcome, while a successful queued
             // write still needs its identity to settle. Neither can publish rejected
             // content to a cache; only reads fail when content admission fails.
@@ -207,13 +209,8 @@ function install() {
             rejected = error;
           }
           const check = async () => {
-            try {
-              if (!admitted) throw rejected ?? new StaleCacheAuthorityError();
-              await crmAccessAuthority.assertCurrent(admitted);
-            } catch (error) {
-              crmAccessAuthority.retireUnverified(captured);
-              throw error;
-            }
+            if (!admitted) throw rejected ?? new StaleCacheAuthorityError();
+            await crmAccessAuthority.assertCurrent(admitted);
           };
           rememberResponseAuthority(response, admitted?.generation, check);
           if (scope.write && !queuedMutation) {

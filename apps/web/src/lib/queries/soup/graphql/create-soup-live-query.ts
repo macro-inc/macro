@@ -1,5 +1,5 @@
 import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
-import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { excludesCrmContent } from '@graphql-cache/authority-scope';
@@ -127,7 +127,8 @@ export function createSoupLiveQuery(
   const [localMailCurrent, setLocalMailCurrent] = createSignal(false);
 
   const crmBlocked = () =>
-    !excludesCrmContent(request()?.filters) && queryAuthorization().paused;
+    !excludesCrmContent(request()?.filters) &&
+    crmSnapshotAuthorization().paused;
   const firstPageInput = createMemo(() => {
     // Independent inputs must not track CRM proof epochs: replacing their
     // identity discards the loaded Mail cursor and any page still in flight.

@@ -5,7 +5,10 @@ import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
-import { enableAgentTeammates } from '@core/constant/featureFlags';
+import {
+  enableAgentTeammates,
+  enableCrmMemberAccessChanges,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
   getDisplayName,
@@ -124,7 +127,7 @@ function RoleSelect(props: {
       <Select.Trigger
         variant="ghost"
         as={Button}
-        class="w-18 rounded-xs px-2 text-xs touch:min-h-11 touch:justify-start touch:px-0 data-expanded:bg-ink/10"
+        class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
         disabled={props.disabled}
       >
         <Select.Value<RoleOption>>
@@ -148,35 +151,6 @@ function RoleSelect(props: {
 function memberPlan(member: TeamMember): PaidPlan {
   const plan = (member as TeamMember & { plan?: PaidPlan }).plan;
   return plan === 'max' ? 'max' : 'premium';
-}
-
-function MemberIdentity(props: { value: string; currentUser?: boolean }) {
-  const lastWord = () => props.value.match(/\S+$/)?.[0] ?? '';
-  const prefix = () =>
-    props.value.slice(0, props.value.length - lastWord().length);
-  const parts = () => lastWord().split(/(?<=[.@])/);
-  return (
-    <span
-      data-member-identity
-      classList={{ 'touch:text-xs': props.value.includes('@') }}
-    >
-      {prefix()}
-      <For each={parts().slice(0, -1)}>
-        {(part) => (
-          <span class="touch:inline-block touch:max-w-full">{part}</span>
-        )}
-      </For>
-      <span class="touch:inline-block touch:max-w-full">
-        {parts().at(-1)}
-        <Show when={props.currentUser}>
-          {' '}
-          <span class="inline-block whitespace-nowrap text-xs font-normal text-ink-muted">
-            (you)
-          </span>
-        </Show>
-      </span>
-    </span>
-  );
 }
 
 function MemberRow(props: {
@@ -210,33 +184,52 @@ function MemberRow(props: {
   };
 
   return (
-    <div class="py-2 touch:pb-0" data-team-member={props.member.user_id}>
-      <div class="flex items-start gap-3 px-4 py-1 touch:grid touch:grid-cols-[44px_minmax(0,1fr)] touch:gap-y-0">
-        <div class="flex min-h-9 touch:min-h-11 shrink-0 items-center touch:[&_[role=button]]:min-h-11 touch:[&_[role=button]]:min-w-11 [&_[role=button]]:items-center [&_[role=button]]:justify-center">
-          <UserIcon id={props.member.user_id} isDeleted={false} size="md" />
-        </div>
-        <div class="min-w-0 flex-1 py-2">
-          <div class="min-w-0 text-sm font-medium text-ink [overflow-wrap:anywhere]">
-            <MemberIdentity
-              value={displayName()}
-              currentUser={props.isCurrentUser}
-            />
-            <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
-              {' '}
-              <AgentTag />
+    <div data-team-member={props.member.user_id}>
+      <div class="flex items-center justify-between gap-2 px-4 py-4">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <div class="shrink-0">
+            <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <div class="text-sm font-medium text-ink truncate">
+                {displayName()}
+                {props.isCurrentUser && (
+                  <span class="text-ink-muted font-normal"> (you)</span>
+                )}
+              </div>
+              <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
+                <AgentTag />
+              </Show>
+            </div>
+            <Show when={showEmail()}>
+              <div class="text-xs text-ink-muted truncate">{email()}</div>
             </Show>
           </div>
-          <Show when={showEmail()}>
-            <div class="text-xs text-ink-muted [overflow-wrap:anywhere]">
-              <MemberIdentity value={email() ?? ''} />
-            </div>
-          </Show>
         </div>
-        <div class="flex min-h-9 touch:min-h-11 items-center gap-1 shrink-0 touch:col-start-2 touch:justify-between">
+        <div class="flex items-center gap-2 shrink-0">
+          <Show when={props.showPlan}>
+            <Show
+              when={props.canEditPlan}
+              fallback={
+                <span class="text-xs text-ink-muted capitalize">
+                  {memberPlan(props.member)}
+                </span>
+              }
+            >
+              <TeamSeatPlanSelect
+                value={memberPlan(props.member)}
+                onChange={props.onPlanChange}
+                disabled={props.planPending}
+                aiUsageBilling
+                pendingDowngrade={props.pendingDowngrade}
+              />
+            </Show>
+          </Show>
           <Show
             when={props.isOwner && !isMemberOwner()}
             fallback={
-              <span class="flex w-18 min-h-9 touch:min-h-11 items-center justify-center touch:justify-start text-xs text-ink-muted capitalize">
+              <span class="text-xs text-ink-muted capitalize">
                 {props.member.role}
               </span>
             }
@@ -259,10 +252,9 @@ function MemberRow(props: {
                 >
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    size="sm"
                     disabled
-                    aria-label="Remove member"
-                    class="touch:min-h-11 touch:min-w-11"
+                    class="opacity-50 cursor-not-allowed"
                   >
                     <TrashIcon class="size-4" />
                   </Button>
@@ -270,13 +262,7 @@ function MemberRow(props: {
               }
             >
               <Tooltip label="Remove member">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Remove member"
-                  class="touch:min-h-11 touch:min-w-11"
-                  onClick={props.onRemove}
-                >
+                <Button variant="ghost" size="sm" onClick={props.onRemove}>
                   <TrashIcon class="size-4" />
                 </Button>
               </Tooltip>
@@ -307,26 +293,6 @@ function MemberRow(props: {
           </Show>
         </SettingsRow>
       </Show>
-      <Show when={props.showPlan}>
-        <SettingsRow label="Seat plan">
-          <Show
-            when={props.canEditPlan}
-            fallback={
-              <span class="text-xs text-ink-muted capitalize">
-                {memberPlan(props.member)}
-              </span>
-            }
-          >
-            <TeamSeatPlanSelect
-              value={memberPlan(props.member)}
-              onChange={props.onPlanChange}
-              disabled={props.planPending}
-              aiUsageBilling
-              pendingDowngrade={props.pendingDowngrade}
-            />
-          </Show>
-        </SettingsRow>
-      </Show>
     </div>
   );
 }
@@ -353,6 +319,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const removeUserMutation = useRemoveUserFromTeamMutation();
   const patchTeamMutation = usePatchTeamMutation();
   const crmAccessMutation = usePatchTeamMutation();
+  const crmAccessChanges = useFeatureFlag(enableCrmMemberAccessChanges);
   const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
   const toggleNonAdminInvitesMutation = useToggleNonAdminInvitesMutation();
 
@@ -646,7 +613,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
                         teamQuery.data?.crm_member_access?.[member.user_id] !==
                           false
                       }
-                      canManageCrm={isAdminOrOwner()}
+                      canManageCrm={
+                        isAdminOrOwner() && crmAccessChanges().enabled
+                      }
                       crmPending={crmAccessMutation.isPending}
                       onCrmAccessChange={(enabled) => {
                         crmAccessMutation.mutate({

@@ -107,3 +107,39 @@ test('revokes open tabs, retains an individual pipeline, denies record navigatio
     ).toBe(true);
   }
 });
+
+test('a cold deep link waits for proof and an allowed view survives a transient outage', async ({
+  page,
+}) => {
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let offline = false;
+  let proofs = 0;
+  await page.route('**/fixture-authority', async (route) => {
+    proofs++;
+    await ready;
+    if (offline) return route.abort();
+    await route.fulfill({
+      status: 200,
+      headers: {
+        'x-macro-crm-access': '00000000-0000-7000-8000-000000000001:allowed',
+      },
+      body: '{}',
+    });
+  });
+  await page.goto('/');
+  await expect(page.getByRole('status', { name: 'Loading…' })).toBeVisible();
+  await expect(page.getByText("You don't have access to CRM")).toHaveCount(0);
+  release();
+  await expect(page.getByText('Private record content')).toBeVisible();
+  offline = true;
+  await page.getByRole('button', { name: 'Check access', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Access could not be refreshed'
+  );
+  await expect(page.getByText('Private record content')).toBeVisible();
+  await expect(page.getByText("You don't have access to CRM")).toHaveCount(0);
+  expect(proofs).toBe(3); // Boot plus one bounded retry of the explicit refresh.
+});

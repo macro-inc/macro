@@ -13,6 +13,9 @@ import { CrmWorkspaceView } from './crm-workspace';
 const fixture = vi.hoisted(() => ({
   workspace: undefined as unknown,
   canAccess: (): boolean => true,
+  accessState: undefined as
+    | (() => 'pending' | 'allowed' | 'denied')
+    | undefined,
   listsEnabled: true,
   touch: true,
   width: 600,
@@ -230,6 +233,8 @@ vi.mock('../context/workspace-context', () => ({
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     canAccess: () => fixture.canAccess(),
+    accessState: () =>
+      fixture.accessState?.() ?? (fixture.canAccess() ? 'allowed' : 'denied'),
     listsEnabled: () => () => fixture.listsEnabled,
     createNavigation: () => ({ openWithSplit: fixture.openWithSplit }),
     createPipelines: () => ({
@@ -266,6 +271,7 @@ vi.mock('./apply-view', () => ({
 
 afterEach(() => {
   fixture.canAccess = () => true;
+  fixture.accessState = undefined;
   cleanup();
   fixture.listsEnabled = true;
   fixture.touch = true;
@@ -661,3 +667,18 @@ it.each([
     expect(screen.getByText('Sales table')).toBeTruthy();
   }
 );
+
+it('waits for the initial CRM proof before choosing the deep-link fallback', () => {
+  const [state, setState] = createSignal<'pending' | 'allowed' | 'denied'>(
+    'pending'
+  );
+  fixture.accessState = state;
+  fixture.canAccess = () => state() === 'allowed';
+  setup('list:favorites');
+  expect(screen.queryByText("You don't have access to CRM")).toBeNull();
+  expect(screen.queryByText('Record list')).toBeNull();
+  setState('allowed');
+  expect(screen.getByText('Record list')).toBeTruthy();
+  setState('denied');
+  expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+});
