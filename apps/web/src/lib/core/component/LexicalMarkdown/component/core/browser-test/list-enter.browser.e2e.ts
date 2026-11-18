@@ -274,11 +274,16 @@ for (const surface of ['document', 'markdown', 'chat']) {
       expect(await outline(page)).toEqual(['- one', '- two']);
     });
 
-    test('Shift+Enter inside a list still adds an item', async () => {
+    test('Shift+Enter inside a list adds a line without sending', async () => {
+      // On iOS Lexical leaves Enter to the browser, whose Shift+Enter breaks
+      // the line inside the item instead of adding one, as on main.
+      const ios = /iPhone|iPad/.test(test.info().project.use.userAgent ?? '');
       await load(page, '- one\n- two', ['- one', '- two']);
       await placeCaret(page, 'two', 'end');
       await page.keyboard.press('Shift+Enter');
-      expect(await outline(page)).toEqual(['- one', '- two', '- ']);
+      expect(await outline(page)).toEqual(
+        ios ? ['- one', '- two\n'] : ['- one', '- two', '- ']
+      );
       expect(await sent(page)).toEqual([]);
     });
   });
