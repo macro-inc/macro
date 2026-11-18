@@ -60,7 +60,7 @@ impl PgMailboxSync {
 }
 
 fn db_error(error: sqlx::Error) -> MailboxError {
-    MailboxError::Database(DatabaseFailure::from(&error))
+    MailboxError::database(DatabaseFailure::from(&error))
 }
 
 /// For `email_db_client` calls, which wrap their `sqlx` errors in `anyhow`.
@@ -69,7 +69,7 @@ fn wrapped_db_error(error: anyhow::Error) -> MailboxError {
         .chain()
         .find_map(|cause| cause.downcast_ref::<sqlx::Error>())
         .map_or(MailboxError::Persistence, |error| {
-            MailboxError::Database(DatabaseFailure::from(error))
+            MailboxError::database(DatabaseFailure::from(error))
         })
 }
 

@@ -457,7 +457,10 @@ tools — hexagonal, heavily feature-gated.
   lifecycle event logs "outlook subscription lifecycle event".
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
-  `MailboxError::Persistence` for stored data that cannot be decoded.
+  `MailboxError::Persistence` for stored data that cannot be decoded. Both go
+  through `MailboxError::database`, which reports a value the database will
+  never accept (`is_unstorable_sqlstate`) as `Unstorable`
+  (`defer_reason=unstorable`) rather than `Database` (`persistence`).
   `MailboxError::Effect` (`defer_reason=effect`) is for a projection effect
   that fails outside the database; email-service's `MailboxEffects` maps its
   database steps with `database_failed` and everything else with `failed`.
@@ -490,7 +493,8 @@ tools — hexagonal, heavily feature-gated.
   `import_completed_at` and log "outlook import started", as
   `outbound/mailbox_pg/lifecycle.rs` does.
 - A message reconciliation that keeps failing is abandoned
-  (`message_retry` in `domain/mailbox.rs`): its row waits at
+  (`message_retry` in `domain/mailbox.rs`), and one the database refuses
+  (`Unstorable`) on its first failure: its row waits at
   `available_at = 'infinity'` with attempts reset, so claims stop at their
   index bound and every enqueue's `available_at = now()` revives it. Any query
   that reads queued or import-running state must leave those rows out, as

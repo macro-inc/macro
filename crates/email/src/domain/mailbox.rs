@@ -1,5 +1,6 @@
 //! Durable mailbox enumeration independent from provider-specific notifications.
 
+use crate::domain::backfill_jobs::worker::is_unstorable_sqlstate;
 use email_api_client::domain::models::{
     EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition,
     StreamToken,
@@ -50,6 +51,10 @@ pub enum MailboxError {
     /// A database call failed; the cause carries no row data.
     #[error("mailbox persistence is unavailable: {0}")]
     Database(DatabaseFailure),
+    /// The database refused a value the work carries with this SQLSTATE
+    /// ([`is_unstorable_sqlstate`]), so it fails the same way every time.
+    #[error("mailbox data cannot be stored: sqlstate {0}")]
+    Unstorable(String),
     /// A projection's downstream effect (event publishing, a queue, another
     /// service) failed or is not ready.
     #[error("a mailbox projection effect is unavailable: {0}")]
@@ -108,6 +113,19 @@ impl std::fmt::Display for EffectFailure {
             Self::AttachmentUploadPending {
                 claim_age_seconds, ..
             } => write!(f, "attachment upload claimed {claim_age_seconds} s ago"),
+        }
+    }
+}
+
+impl MailboxError {
+    /// A failed database call. A value the database will never accept is the
+    /// data's fault, not an outage, so it is `Unstorable` rather than `Database`.
+    pub fn database(failure: DatabaseFailure) -> Self {
+        match failure {
+            DatabaseFailure::Sqlstate(code) if is_unstorable_sqlstate(&code) => {
+                Self::Unstorable(code)
+            }
+            failure => Self::Database(failure),
         }
     }
 }
@@ -736,9 +754,11 @@ const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
 /// A transient provider failure (Graph 5xx or 408, a request Graph never
 /// answered) says nothing about the message either: during an outage every
 /// message gets one. It backs off like any failure but is never abandoned, and
-/// stops counting once the backoff is at its longest.
+/// stops counting once the backoff is at its longest. Data the database
+/// refuses would be refused again, so it is abandoned at once.
 fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
     match error {
+        MailboxError::Unstorable(_) => MessageRetry::Abandon,
         MailboxError::Provider(
             error @ (EmailApiError::RateLimited { .. }
             | EmailApiError::CredentialsUnavailable { .. }

@@ -19,13 +19,13 @@ use uuid::Uuid;
 
 /// Answers message reads and folder pages in order.
 #[derive(Default)]
-struct Provider {
+pub(super) struct Provider {
     messages: Mutex<VecDeque<Result<Option<MailboxMessage>, EmailApiError>>>,
     pages: Mutex<VecDeque<MailboxChangePage>>,
 }
 
 impl Provider {
-    fn answering(messages: Vec<Result<Option<MailboxMessage>, EmailApiError>>) -> Self {
+    pub(super) fn answering(messages: Vec<Result<Option<MailboxMessage>, EmailApiError>>) -> Self {
         Self {
             messages: Mutex::new(messages.into()),
             ..Self::default()
@@ -59,7 +59,7 @@ impl MailboxGateway for Arc<Provider> {
 }
 
 /// Live and import reads answer from the same queues.
-fn sync(
+pub(super) fn sync(
     repo: &PgMailboxSync,
     provider: Provider,
 ) -> MailboxSyncService<PgMailboxSync, Arc<Provider>, PgMailboxSync> {
@@ -68,7 +68,7 @@ fn sync(
 }
 
 /// `attempts` is what the row had before its next claim adds one.
-async fn queue(db: &PgPool, link: Uuid, provider_id: &str, attempts: i32) {
+pub(super) async fn queue(db: &PgPool, link: Uuid, provider_id: &str, attempts: i32) {
     sqlx::query!(
         "INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import,attempts) VALUES ($1,1,$2,true,$3)",
         link,
@@ -80,13 +80,13 @@ async fn queue(db: &PgPool, link: Uuid, provider_id: &str, attempts: i32) {
     .unwrap();
 }
 
-struct Row {
-    attempts: i32,
-    abandoned: bool,
-    delay_seconds: i64,
+pub(super) struct Row {
+    pub(super) attempts: i32,
+    pub(super) abandoned: bool,
+    pub(super) delay_seconds: i64,
 }
 
-async fn row(db: &PgPool, link: Uuid, provider_id: &str) -> Row {
+pub(super) async fn row(db: &PgPool, link: Uuid, provider_id: &str) -> Row {
     let row = sqlx::query!(
         r#"SELECT attempts,
             available_at = 'infinity' AS "abandoned!",
@@ -106,7 +106,7 @@ async fn row(db: &PgPool, link: Uuid, provider_id: &str) -> Row {
     }
 }
 
-fn outcomes(telemetry: &Telemetry) -> Vec<(String, String, Option<String>)> {
+pub(super) fn outcomes(telemetry: &Telemetry) -> Vec<(String, String, Option<String>)> {
     telemetry
         .spans("outlook.sync.reconcile")
         .into_iter()
