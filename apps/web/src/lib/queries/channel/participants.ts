@@ -8,7 +8,9 @@ import {
 } from '@service-storage/client';
 import { ChannelDetailSoupDocument } from '@service-storage/graphql/generated/graphql';
 import { useMutation } from '@tanstack/solid-query';
+import { queryClient } from '../client';
 import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
+import { channelKeys } from './keys';
 import { channelNotificationRefresh } from './notification-refresh';
 
 export const CHANNEL_PARTICIPANTS_MUTATION_KEY = [
@@ -48,6 +50,10 @@ export async function refreshChannelParticipants(channelId: string) {
     refreshChannelDetail({
       document: ChannelDetailSoupDocument,
       variables: { input },
+    }),
+    // Readers of a channel the soup read leaves out read REST instead.
+    queryClient.invalidateQueries({
+      queryKey: channelKeys.participantsFallback(channelId).queryKey,
     }),
   ]);
 }

@@ -52,6 +52,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 const storage = vi.hoisted(() => ({
   addParticipantsToChannel: vi.fn(),
   removeParticipantsFromChannel: vi.fn(),
+  getChannelParticipants: vi.fn(),
 }));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: storage }));
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -93,6 +94,13 @@ function setDetail(participants: ChannelParticipant[] | undefined) {
   for (const listener of detail.listeners) listener();
 }
 
+/** The by-id read came back without the channel. */
+function missChannel() {
+  detail.pending = false;
+  detail.entities = [];
+  for (const listener of detail.listeners) listener();
+}
+
 function mount() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -102,14 +110,16 @@ function mount() {
   let add!: ReturnType<typeof useAddParticipantsMutation>;
   let remove!: ReturnType<typeof useRemoveParticipantsMutation>;
   const [channelId] = createSignal('channel-1');
+  // A component, so the hooks' reads are not tracked by the render.
+  function Harness() {
+    query = useChannelParticipantsQuery(channelId);
+    add = useAddParticipantsMutation();
+    remove = useRemoveParticipantsMutation();
+    return null;
+  }
   render(() => (
     <QueryClientProvider client={client}>
-      {(() => {
-        query = useChannelParticipantsQuery(channelId);
-        add = useAddParticipantsMutation();
-        remove = useRemoveParticipantsMutation();
-        return null;
-      })()}
+      <Harness />
     </QueryClientProvider>
   ));
   const ids = () => query.data?.map((participant) => participant.user_id);
@@ -137,15 +147,46 @@ describe('useChannelParticipantsQuery', () => {
     expect(query.isSuccess).toBe(true);
     expect(ids()).toEqual(['owner', 'member']);
     expect(query.data?.[0]?.role).toBe('owner');
+    expect(storage.getChannelParticipants).not.toHaveBeenCalled();
   });
 
-  it('has no participants for a channel the viewer cannot read', () => {
-    const { query } = mount();
-    detail.pending = false;
-    detail.entities = [];
-    for (const listener of detail.listeners) listener();
+  it('reads a channel the soup read leaves out from REST', async () => {
+    storage.getChannelParticipants.mockResolvedValue(
+      ok([
+        {
+          channel_id: 'channel-1',
+          user_id: 'owner',
+          role: 'owner',
+          joined_at: '2026-01-01T00:00:00Z',
+        },
+        {
+          channel_id: 'channel-1',
+          user_id: 'member',
+          role: 'member',
+          joined_at: '2026-01-02T00:00:00Z',
+        },
+      ])
+    );
+    const { query, ids } = mount();
+    expect(storage.getChannelParticipants).not.toHaveBeenCalled();
+    missChannel();
 
-    expect(query.isPending).toBe(false);
+    expect(query.isPending).toBe(true);
+    await waitFor(() => expect(query.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner', 'member']);
+    expect(storage.getChannelParticipants).toHaveBeenCalledWith({
+      channel_id: 'channel-1',
+    });
+  });
+
+  it('has no participants for a channel the viewer cannot read', async () => {
+    storage.getChannelParticipants.mockResolvedValue(
+      err([{ code: 'UNAUTHORIZED', message: 'forbidden' }])
+    );
+    const { query } = mount();
+    missChannel();
+
+    await waitFor(() => expect(query.isPending).toBe(false));
     expect(query.isSuccess).toBe(false);
     expect(query.data).toBeUndefined();
   });

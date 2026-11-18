@@ -1,5 +1,9 @@
 import type { ChannelEntity } from '@entity';
-import { type Mutation, useMutationState } from '@tanstack/solid-query';
+import {
+  type Mutation,
+  useMutationState,
+  useQuery,
+} from '@tanstack/solid-query';
 import {
   type Accessor,
   createEffect,
@@ -15,6 +19,7 @@ import {
   CHANNEL_PARTICIPANTS_MUTATION_KEY,
   type ChannelParticipantsMutationVariables,
 } from './participants';
+import { channelParticipantsRestFallbackOptions } from './participants-rest-fallback';
 import type { ChannelParticipant } from './types';
 
 type ParticipantChange = {
@@ -200,6 +205,19 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
     }),
     () => queryClient
   );
+  // The soup read leaves out public channels the viewer has not joined, which
+  // REST lets them read. Only a by-id read that came back without the channel
+  // asks REST.
+  const missesChannel = () => {
+    const id = channelId();
+    if (!id || query.isPending || query.error) return false;
+    return !query.data?.entities.some(
+      (entity) => entity.type === 'channel' && entity.id === id
+    );
+  };
+  const fallback = useQuery(() =>
+    channelParticipantsRestFallbackOptions(channelId(), missesChannel())
+  );
   const confirmed = createMemo<
     | { channelId: string; participants: ChannelParticipant[] | undefined }
     | undefined
@@ -212,7 +230,11 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
       (entity): entity is ChannelEntity =>
         entity.type === 'channel' && entity.id === id
     );
-    return { channelId: id, participants: entity?.participants };
+    if (entity) return { channelId: id, participants: entity.participants };
+    // A failed REST refetch keeps its last participants.
+    const fromRest =
+      missesChannel() && !fallback.isPending ? fallback.data : undefined;
+    return { channelId: id, participants: fromRest };
   });
   // Ticks when a succeeded change's time to show runs out.
   const [tick, setTick] = createSignal(0);
@@ -242,10 +264,10 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
   const data = () => overlay().data;
   return {
     get isPending() {
-      return query.isPending;
+      return query.isPending || (missesChannel() && fallback.isPending);
     },
     get isLoading() {
-      return query.isLoading;
+      return query.isLoading || (missesChannel() && fallback.isLoading);
     },
     /** The channel's record arrived; a channel the viewer can't read has none. */
     get isSuccess() {

@@ -45,6 +45,7 @@ import type { Agent } from './generated/schemas/agent';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
+import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
 import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
 import type { BotOwnerProfile } from './generated/schemas/botOwnerProfile';
@@ -1326,6 +1327,16 @@ export const storageServiceClient = {
       await dssFetch<ApiChannelAttachmentsPage>(
         `/channels/${channel_id}/attachments?${params.toString()}`,
         { method: 'GET', signal }
+      )
+    ).map((result) => result);
+  },
+
+  async getChannelParticipants(args: WithChannelId) {
+    const { channel_id } = args;
+    return (
+      await dssFetch<ApiChannelParticipant[]>(
+        `/channels/${channel_id}/participants`,
+        { method: 'GET' }
       )
     ).map((result) => result);
   },
