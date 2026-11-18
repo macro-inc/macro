@@ -1,14 +1,27 @@
 //! Supplies the code-mode assets from exactly one place per build: the
 //! directory in `CODE_MODE_ASSETS_DIR` when the build provides them prebuilt
 //! (Nix and CI), otherwise a fresh run of `packages/code-mode-sdk`'s generator
-//! into `OUT_DIR`. A failed run or a missing asset fails the build.
+//! into `OUT_DIR`. A failed run or a missing asset fails the build. CI may still
+//! be building the directory when this runs; then it waits (see [`READY`]).
 
 use std::env;
+use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 const PREBUILT: &str = "CODE_MODE_ASSETS_DIR";
+
+/// Set by CI while it builds `CODE_MODE_ASSETS_DIR` alongside cargo: a file that
+/// appears holding `ok`, or the end of the build's log when it failed. Not a
+/// rerun trigger: the directory alone decides what this crate embeds.
+const READY: &str = "CODE_MODE_ASSETS_READY";
+
+/// Over three times the slowest build seen in CI, and under the jobs' own
+/// timeouts, so a build that hangs fails here with its log.
+const READY_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 
 const GENERATOR: &str = "packages/code-mode-sdk/scripts/generate.ts";
 
@@ -51,7 +64,36 @@ fn main() {
         directory.display()
     );
 
+    if let Some(status) = env::var_os(READY) {
+        wait_until_built(Path::new(&status));
+    }
+
     println!("cargo::rustc-env=CODE_MODE_ASSETS={}", directory.display());
+}
+
+fn wait_until_built(status: &Path) {
+    let deadline = Instant::now() + READY_TIMEOUT;
+    loop {
+        match fs::read_to_string(status) {
+            Ok(text) if text.trim() == "ok" => return,
+            Ok(text) => panic!("the code-mode assets did not build:\n{text}"),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                if Instant::now() >= deadline {
+                    let log = status.with_extension("log");
+                    let text = fs::read_to_string(&log).unwrap_or_default();
+                    let tail = text.lines().rev().take(60).collect::<Vec<_>>();
+                    panic!(
+                        "the code-mode assets were not built within {READY_TIMEOUT:?}; \
+                         the end of {}:\n{}",
+                        log.display(),
+                        tail.into_iter().rev().collect::<Vec<_>>().join("\n")
+                    );
+                }
+                thread::sleep(Duration::from_millis(500));
+            }
+            Err(error) => panic!("could not read {}: {error}", status.display()),
+        }
+    }
 }
 
 fn generate() -> PathBuf {
