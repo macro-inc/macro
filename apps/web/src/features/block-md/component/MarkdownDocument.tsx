@@ -1,5 +1,6 @@
 import { TraceFlow, useFlow } from '@app/observability/flow';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { RUST_EDITOR_ENGINE } from '@core/document-session/engine-selection';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { DocumentEntity } from '@entity';
 import {
@@ -312,6 +313,12 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
     const source = documentSource();
     return source.type === 'session' ? source : undefined;
   };
+  // Flag OFF mounts the Source body while the source loads, as main did.
+  const legacySource = () => {
+    const type = documentSource().type;
+    if (!RUST_EDITOR_ENGINE) return type !== 'session';
+    return type === 'sync' || type === 'dss';
+  };
   return (
     <Switch>
       <Match when={session()} keyed>
@@ -333,11 +340,7 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
           </Suspense>
         )}
       </Match>
-      <Match
-        when={
-          documentSource().type === 'sync' || documentSource().type === 'dss'
-        }
-      >
+      <Match when={legacySource()}>
         <LegacyMarkdownDocumentContent {...props} />
       </Match>
     </Switch>
