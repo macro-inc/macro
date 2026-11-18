@@ -645,6 +645,7 @@ impl Jails {
             gid: 0,
             env: [("PATH".to_owned(), GUEST_ROOT_PATH.to_owned())].into(),
             cwd: "/".to_owned(),
+            trace_id: macro_tower_layers::current_trace_id(),
         };
         write_frame(&mut stream, &Frame::Start(request))
             .await

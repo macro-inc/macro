@@ -383,9 +383,12 @@ async fn bridge(
             let Message::Binary(bytes) = message else {
                 continue;
             };
-            let Ok(frame) = Frame::decode(&bytes) else {
+            let Ok(mut frame) = Frame::decode(&bytes) else {
                 return;
             };
+            if let Frame::Start(request) = &mut frame {
+                request.trace_id = macro_tower_layers::current_trace_id();
+            }
             let allowed = match &frame {
                 Frame::Start(_) => !started,
                 Frame::Stdin(_) | Frame::CloseStdin => started,

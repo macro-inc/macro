@@ -368,6 +368,7 @@ async fn the_client_and_the_router_agree_on_every_route() {
                 gid: 0,
                 env: BTreeMap::new(),
                 cwd: "/".to_owned(),
+                trace_id: None,
             },
         )
         .await
@@ -389,6 +390,7 @@ async fn the_client_and_the_router_agree_on_every_route() {
                 gid: 0,
                 env: BTreeMap::new(),
                 cwd: "/".to_owned(),
+                trace_id: None,
             },
         )
         .await
