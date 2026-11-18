@@ -33,6 +33,10 @@ import {
   on,
   untrack,
 } from 'solid-js';
+import {
+  soupRestFallback,
+  traceSoupRestFallback,
+} from '../graphql/rest-fallback';
 import { createGraphqlGroupedSoupQueries } from './graphql/create-graphql-grouped-soup-queries';
 
 type InitialGroupPage = {
@@ -85,26 +89,47 @@ function groupPageQueryFn(input: {
       return input.initialPage;
     }
 
-    const response = await throwOnErr(async () =>
-      storageServiceClient.getGroupedSoupAstGroupPage({
-        params: {
-          cursor: ctx.pageParam,
-          group_by: serializeGroupByField(input.field),
-          group_key: input.groupKey,
-          limit: input.soupParams.limit,
-          sort_method: groupedSortMethod(input.soupParams.sort_method),
-          sort_property_definition_id:
-            input.soupParams.sort_property_definition_id,
-          sort_direction: input.soupParams.sort_direction,
-        },
-        body: input.soupBody,
-      })
-    );
+    const cursor = ctx.pageParam;
+    const read = () => readGroupPage(input, cursor);
+    const fallback = soupRestFallback({
+      params: input.soupParams,
+      body: input.soupBody,
+      groupBy: input.field,
+    });
+    return fallback
+      ? await traceSoupRestFallback(fallback, 'group_page', read)
+      : await read();
+  };
+}
 
-    return {
-      items: response.items,
-      group: parseGroupMeta(response.group),
-    };
+async function readGroupPage(
+  input: {
+    field: GroupByField;
+    groupKey: string;
+    soupParams: SoupParams;
+    soupBody: SoupAstBody;
+  },
+  cursor: string
+): Promise<GroupQueryPage> {
+  const response = await throwOnErr(async () =>
+    storageServiceClient.getGroupedSoupAstGroupPage({
+      params: {
+        cursor,
+        group_by: serializeGroupByField(input.field),
+        group_key: input.groupKey,
+        limit: input.soupParams.limit,
+        sort_method: groupedSortMethod(input.soupParams.sort_method),
+        sort_property_definition_id:
+          input.soupParams.sort_property_definition_id,
+        sort_direction: input.soupParams.sort_direction,
+      },
+      body: input.soupBody,
+    })
+  );
+
+  return {
+    items: response.items,
+    group: parseGroupMeta(response.group),
   };
 }
 
