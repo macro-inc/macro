@@ -7,6 +7,7 @@ import {
 } from '@core/constant/featureFlags';
 import { catchToResult } from '@core/util/result';
 import { isMentionsOnlyItem } from '@entity/utils/notification';
+import { Telemetry } from '@macro-inc/observability';
 import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { queryReadyGate } from '@queries/gate';
@@ -202,19 +203,32 @@ export function createChannelNotificationSettings(sources: Sources) {
     });
   };
 
-  /** Run a settings write and report a failure the way every setting does. */
-  const save = async (write: () => Promise<unknown>) => {
-    const result = await catchToResult(write);
-    if (result.isErr()) failed();
-    return result.isOk();
-  };
+  /**
+   * Run a settings write in its own span, keyed by what it changes, and
+   * report a failure the way every setting does.
+   */
+  const save = (
+    operation: string,
+    target: { channelId: string } | { section: NotificationSectionKey },
+    write: () => Promise<unknown>
+  ) =>
+    Telemetry.span(`notifications.settings.${operation}`, async (span) => {
+      if ('channelId' in target) span.setAttr('channel.id', target.channelId);
+      else span.setAttr('notification.section', target.section);
+      const result = await catchToResult(write);
+      if (result.isErr()) {
+        span.error(result.error);
+        failed();
+      }
+      return result.isOk();
+    });
 
   /** Set every kind on the channel itself, as a preset or the dialog does. */
   const setChannelKinds = (
     channelId: string,
     kinds: ReadonlySet<ChannelNotificationKind>
   ) =>
-    save(async () => {
+    save('set_channel_kinds', { channelId }, async () => {
       await channelMutation.mutateAsync({
         channelId,
         change: changeForKinds(kinds),
@@ -223,13 +237,13 @@ export function createChannelNotificationSettings(sources: Sources) {
     });
 
   const followSectionSettings = (channelId: string) =>
-    save(async () => {
+    save('follow_sections', { channelId }, async () => {
       await channelMutation.mutateAsync({ channelId, change: undefined });
       await dropLegacyMentionsOnly(channelId);
     });
 
   const setOverridesSectionMute = (channelId: string, value: boolean) =>
-    save(() =>
+    save('override_section_mute', { channelId }, () =>
       channelMutation.mutateAsync({
         channelId,
         change: { overridesSectionMute: value },
@@ -240,7 +254,7 @@ export function createChannelNotificationSettings(sources: Sources) {
     key: NotificationSectionKey,
     kinds: ReadonlySet<ChannelNotificationKind>
   ) =>
-    save(() =>
+    save('set_section_kinds', { section: key }, () =>
       sectionMutation.mutateAsync({
         section: channelSectionOf(key),
         ...changeForKinds(kinds),
@@ -248,7 +262,7 @@ export function createChannelNotificationSettings(sources: Sources) {
     );
 
   const setSectionMute = (key: NotificationSectionKey, mute: SectionMute) =>
-    save(() =>
+    save('set_section_mute', { section: key }, () =>
       sectionMutation.mutateAsync({ section: channelSectionOf(key), mute })
     );
 
