@@ -33,7 +33,7 @@ import {
   type PasswordListViewEntry,
 } from '../persistence';
 import { passwordKeys } from '../queries/keys';
-import { isUnreachable } from '../queries/source';
+import { isServiceUnavailable, isUnreachable } from '../queries/source';
 
 /**
  * An unsaved new item or an in-place edit of an existing one. Drafts live only
@@ -52,6 +52,11 @@ export type VaultDraft = {
   busy: boolean;
 };
 
+/** Why the list on screen may be out of date. */
+export type ConnectionProblem = Extract<
+  PasswordFailure,
+  'unreachable' | 'serviceUnavailable'
+>;
 export type VaultSelection =
   | { kind: 'item'; id: string }
   | { kind: 'draft'; key: string };
@@ -199,12 +204,18 @@ export function createVault(options: { entry?: PasswordListViewEntry } = {}) {
       fireAndForget(loadUsername(item), 'passwords');
   }
   /**
-   * No answer from Macro: the last request for the selected item, or the
-   * latest list reload. The list on screen may be out of date until it answers.
+   * No answer from Macro, or a service that answered it can't serve the vault
+   * right now: the last request for the selected item, or the latest list
+   * reload. The list on screen may be out of date until it answers.
    */
-  const unreachable = () =>
-    failure() === 'unreachable' ||
-    (items.isError && isUnreachable(items.error));
+  const connectionProblem = (): ConnectionProblem | undefined => {
+    const last = failure();
+    if (last === 'unreachable' || last === 'serviceUnavailable') return last;
+    if (!items.isError) return undefined;
+    if (isUnreachable(items.error)) return 'unreachable';
+    if (isServiceUnavailable(items.error)) return 'serviceUnavailable';
+    return undefined;
+  };
   /** Ask again: reload the list and folders, and the selected item's username. */
   function retryConnection() {
     fireAndForget(items.refetch(), 'passwords');
@@ -726,7 +737,7 @@ export function createVault(options: { entry?: PasswordListViewEntry } = {}) {
     usernameLoading,
     usernameCopied,
     failure,
-    unreachable,
+    connectionProblem,
     retryConnection,
     reveal,
     copy: copyPassword,

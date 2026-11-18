@@ -40,6 +40,8 @@ export default {
   loading: 'Loading passwords…',
   failed: 'Could not complete this action. Please try again.',
   unreachable: "Can't reach Macro. Check your connection.",
+  serviceUnavailable:
+    'Passwords is temporarily unavailable. Try again in a minute.',
   retry: 'Retry',
   name: 'Name',
   kind: 'Type',

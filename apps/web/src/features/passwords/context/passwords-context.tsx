@@ -30,11 +30,15 @@ import type {
   PasswordVersion,
 } from '../core/types';
 
-/** `unreachable`: no answer from Macro (offline, or a gateway that could not reach it). */
+/**
+ * `unreachable`: no answer from Macro (offline, or a gateway that could not
+ * reach it). `serviceUnavailable`: the service answered 503.
+ */
 export type PasswordFailure =
   | 'forbidden'
   | 'folderMissing'
   | 'unreachable'
+  | 'serviceUnavailable'
   | 'failed';
 export type PasswordResult<T> = Promise<Result<T, PasswordFailure>>;
 export type PasswordSource = {
