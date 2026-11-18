@@ -59,6 +59,7 @@ export function StaticSplitLabel(props: {
   icon?: JSX.Element;
   badges?: JSX.Element;
   class?: string;
+  weight?: 'normal' | 'semibold';
   colorIcon?: boolean;
   /** Enables double-click renaming while retaining the split title/menu
    * chrome. */
@@ -108,7 +109,12 @@ export function StaticSplitLabel(props: {
             <Show
               when={props.onRename}
               fallback={
-                <span class="inline-block truncate text-sm font-semibold">
+                <span
+                  class={cn(
+                    'inline-block truncate text-sm',
+                    props.weight === 'normal' ? 'font-normal' : 'font-semibold'
+                  )}
+                >
                   {props.label}
                 </span>
               }
@@ -118,7 +124,12 @@ export function StaticSplitLabel(props: {
                   when={renaming()}
                   fallback={
                     <span
-                      class="inline-block truncate text-sm font-semibold"
+                      class={cn(
+                        'inline-block truncate text-sm',
+                        props.weight === 'normal'
+                          ? 'font-normal'
+                          : 'font-semibold'
+                      )}
                       onDblClick={startRename}
                       onClick={(event) => {
                         if (isTouchDevice()) startRename(event);

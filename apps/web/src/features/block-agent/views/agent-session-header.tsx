@@ -32,6 +32,7 @@ export function AgentSessionHeader(props: {
     <>
       <SplitHeaderLeft>
         <StaticSplitLabel
+          weight="normal"
           icon={
             <ProviderIcon
               model={metadata()?.model ?? props.session?.model}

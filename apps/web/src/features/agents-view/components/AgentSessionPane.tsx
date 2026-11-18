@@ -208,6 +208,7 @@ function SessionContent(props: {
                 titleContent={
                   <>
                     <StaticSplitLabel
+                      weight="normal"
                       label={title()}
                       icon={
                         <Show
