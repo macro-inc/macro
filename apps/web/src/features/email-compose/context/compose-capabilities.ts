@@ -263,6 +263,11 @@ export interface EmailDelivery {
     sendAttemptId: string,
     changed: (progress: EmailSendProgress) => void
   ): () => void;
+  /** Reports the server's id for the send's thread once the server accepts it. */
+  watchSentThread?(
+    sendAttemptId: string,
+    found: (threadId: string) => void
+  ): () => void;
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
   unschedule(input: {
     draftGeneration?: number;

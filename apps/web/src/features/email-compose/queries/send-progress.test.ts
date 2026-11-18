@@ -13,7 +13,7 @@ import type { EmailSendAttemptFieldsFragment } from '@service-storage/graphql/ge
 import { CombinedError } from '@urql/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { EmailSendProgress } from '../context/compose-capabilities';
-import { watchEmailSendProgress } from './send-progress';
+import { watchEmailSendProgress, watchSentThread } from './send-progress';
 
 vi.mock('@service-storage/email-send', () => ({
   readEmailSendStatus: vi.fn(),
@@ -149,7 +149,8 @@ function dispatch(
 /** Another tab delivers the send and retires it before this tab reads the outbox again. */
 async function deliverInAnotherTab(
   session: Awaited<ReturnType<typeof emailStorageSession>>,
-  queued: EmailSendIntent
+  queued: EmailSendIntent,
+  delivered = attempt(queued, 'SENT')
 ) {
   const claimed = await localDraftStore.claimSend(
     session,
@@ -163,7 +164,7 @@ async function deliverInAnotherTab(
     queued.uuid,
     'other-tab',
     claimed.dispatch.generation,
-    { attempt: attempt(queued, 'SENT'), nextAttemptAt: Date.now() }
+    { attempt: delivered, nextAttemptAt: Date.now() }
   );
   await localDraftStore.removeSend(session, queued.uuid);
   await settled;
@@ -307,5 +308,52 @@ it.each(inboxes)(
       { state: 'pending' },
       { state: 'untracked' },
     ]);
+  }
+);
+
+// The queued draft names its thread by the composer's handle ('thread'); the
+// server stores the send under a thread it minted.
+it.each(inboxes)(
+  'reports the thread the server gave a $provider send once it accepts it',
+  async (inbox) => {
+    const session = await emailStorageSession();
+    const queued = await localDraftStore.putSend(session, intent(inbox), true);
+    const thread = new Promise<string>((resolve) =>
+      stops.push(watchSentThread(queued.uuid, resolve))
+    );
+    const runner = dispatch(session, {
+      submit: async () => ({
+        ...attempt(queued, 'ACCEPTED'),
+        threadId: 'server-thread',
+      }),
+      cancel: vi.fn(),
+      status: vi.fn(),
+    });
+    await runner.wake();
+
+    await expect(thread).resolves.toBe('server-thread');
+  }
+);
+
+it.each(inboxes)(
+  'reports the thread of a $provider send another tab delivered and retired',
+  async (inbox) => {
+    const session = await emailStorageSession();
+    const queued = await localDraftStore.putSend(session, intent(inbox), true);
+    const thread = new Promise<string>((resolve) =>
+      stops.push(watchSentThread(queued.uuid, resolve))
+    );
+    // Started after the thread watcher, so its first read follows that one.
+    const progress = follow(queued.uuid);
+    await progress.reached('pending');
+    const delivered = { ...attempt(queued, 'SENT'), threadId: 'server-thread' };
+    vi.mocked(readEmailSendStatus).mockImplementation(async (input) =>
+      input.attemptId === queued.uuid && input.linkId === inbox.linkId
+        ? delivered
+        : null
+    );
+    await deliverInAnotherTab(session, queued, delivered);
+
+    await expect(thread).resolves.toBe('server-thread');
   }
 );

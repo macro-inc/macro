@@ -56,6 +56,48 @@ async function departedSendProgress(
   return { state: 'untracked' };
 }
 
+/** The outbox records the server's thread id when the server accepts the send. */
+export function watchSentThread(
+  sendAttemptId: string,
+  found: (threadId: string) => void
+): () => void {
+  let seen: EmailSendIntent | undefined;
+  let departing = false;
+  let finished = false;
+  const finish = (threadId?: string | null) => {
+    if (finished) return;
+    finished = true;
+    unsubscribe();
+    if (threadId) found(threadId);
+  };
+  const read = async () => {
+    const intent = (await readEmailSendIntents()).find(
+      (row) => row.uuid === sendAttemptId
+    );
+    if (finished || departing) return;
+    if (intent) {
+      seen = intent;
+      if (intent.resolvedThreadId) finish(intent.resolvedThreadId);
+      return;
+    }
+    if (!seen) return finish();
+    // Another tab can deliver and retire the send before this one reads it.
+    departing = true;
+    let threadId: string | null | undefined;
+    try {
+      const attempt = await fetchEmailSendStatus(seen);
+      if (attempt?.status === 'SENT') threadId = attempt.threadId;
+    } finally {
+      finish(threadId);
+    }
+  };
+  const unsubscribe = watchEmailSends(() =>
+    fireAndForget(read(), 'email-compose')
+  );
+  fireAndForget(read(), 'email-compose');
+  return () => finish();
+}
+
 export function watchEmailSendProgress(
   sendAttemptId: string,
   changed: (progress: EmailSendProgress) => void

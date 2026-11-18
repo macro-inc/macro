@@ -18,6 +18,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import type { MessageOperationSourceFactory } from '../../email-message/context/message-operation-source';
@@ -834,14 +835,37 @@ export function createEmailComposer(props: EmailComposerOptions) {
     props.host?.showDraft?.(draftId);
   };
 
+  let stopFollowingSend: (() => void) | undefined;
+  onCleanup(() => stopFollowingSend?.());
+  const showSentThread = (threadId: string) => {
+    try {
+      props.host?.showThread?.(threadId);
+    } catch (error) {
+      props.notices.reportError(error);
+    }
+  };
+  // A thread minted with a new draft has no server row to open until the
+  // server accepts the send and names it.
+  const followSentThread = (sendAttemptId: string) => {
+    stopFollowingSend?.();
+    stopFollowingSend = props.delivery.watchSentThread?.(
+      sendAttemptId,
+      (threadId) => {
+        stopFollowingSend = undefined;
+        showSentThread(threadId);
+      }
+    );
+  };
+
   // Undo retains the inbox used by the send even after navigation.
   const undoSend = (
     draftId: string,
     threadId: string | undefined,
     inboxId: string | undefined,
     sendAttemptId?: string
-  ) =>
-    props.delivery.undoSend({
+  ) => {
+    stopFollowingSend?.();
+    return props.delivery.undoSend({
       sendAttemptId,
       threadId,
       draftId,
@@ -849,10 +873,13 @@ export function createEmailComposer(props: EmailComposerOptions) {
       onUndone: (result) =>
         restoreAfterUndoSend(draftId, threadId, inboxId, result?.draftRestored),
     });
+  };
 
   const afterSend = (
     identity: PersistedEmailIdentity,
-    inboxId: string | undefined
+    inboxId: string | undefined,
+    /** The draft's thread id came from the server, not a handle this composer minted. */
+    savedThread: boolean
   ) => {
     const draftId = identity.draftId;
     const threadId = identity.threadId;
@@ -875,13 +902,16 @@ export function createEmailComposer(props: EmailComposerOptions) {
           }
         : undefined,
     });
-    try {
-      // The server has no thread to show until an offline send goes out.
-      if (offline) props.host?.goBack?.();
-      else if (threadId) props.host?.showThread?.(threadId);
-    } catch (error) {
-      props.notices.reportError(error);
-    }
+    // The server has no thread to show until an offline send goes out.
+    if (offline) {
+      try {
+        props.host?.goBack?.();
+      } catch (error) {
+        props.notices.reportError(error);
+      }
+    } else if (threadId && (savedThread || identity.persistence !== 'queued'))
+      showSentThread(threadId);
+    else if (identity.sendAttemptId) followSentThread(identity.sendAttemptId);
   };
 
   const onSubmit = async () => {
@@ -1092,7 +1122,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
         setCompleted(true);
         session.dispatch({ type: 'reset' });
         setDraftGeneration(0);
-        afterSend(result, currentLink.id);
+        afterSend(result, currentLink.id, identity.kind === 'server');
         sent = true;
         sendUi.afterPaint();
       } finally {

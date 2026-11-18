@@ -726,3 +726,73 @@ it('refuses a saved reply whose text was deleted before Send', async () => {
     root.dispose();
   }
 });
+
+// A new email sent before its first server save carries only the handles the
+// composer minted; the server never serves a thread under them.
+function sendBeforeFirstServerSave() {
+  const context = queuedReplyContext();
+  vi.mocked(context.delivery.sendMessage).mockImplementationOnce(
+    async (input) => ({
+      draftId: input.clientHandles?.draftId,
+      threadId: input.clientHandles?.threadId,
+      inboxId: 'inbox',
+      sendAttemptId: 'attempt',
+      persistence: 'queued',
+    })
+  );
+  const following: { found?: (threadId: string) => void } = {};
+  const stopFollowing = vi.fn();
+  context.delivery.watchSentThread = vi.fn((_sendAttemptId, found) => {
+    following.found = found;
+    return stopFollowing;
+  });
+  const host = { showThread: vi.fn(), showDraft: vi.fn() };
+  const root = mountEmailComposer(context, host);
+  return { context, host, root, following, stopFollowing };
+}
+
+it('opens a new email by the thread id the server gives its send', async () => {
+  const { context, host, root, following } = sendBeforeFirstServerSave();
+  try {
+    root.edit('Sent before autosave');
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+    expect(context.delivery.watchSentThread).toHaveBeenCalledWith(
+      'attempt',
+      expect.any(Function)
+    );
+    expect(host.showThread).not.toHaveBeenCalled();
+
+    following.found?.('server-thread');
+    expect(host.showThread).toHaveBeenCalledExactlyOnceWith('server-thread');
+  } finally {
+    root.dispose();
+  }
+});
+
+it.each(['undone', 'closed'] as const)(
+  'stops waiting for a new email’s thread once the send is %s',
+  async (outcome) => {
+    const { context, host, root, stopFollowing } = sendBeforeFirstServerSave();
+    try {
+      root.edit('Sent before autosave');
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(stopFollowing).not.toHaveBeenCalled();
+
+      if (outcome === 'undone')
+        vi.mocked(context.notices.feedback.success)
+          .mock.calls.find(([text]) => text === 'Sending…')?.[1]
+          ?.actions?.find(({ kind }) => kind === 'undo')
+          ?.onClick();
+      else root.dispose();
+
+      expect(stopFollowing).toHaveBeenCalled();
+      expect(host.showThread).not.toHaveBeenCalled();
+    } finally {
+      root.dispose();
+    }
+  }
+);
