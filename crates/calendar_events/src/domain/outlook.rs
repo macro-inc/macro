@@ -55,6 +55,16 @@ pub struct OutlookCalendar {
     pub online_meeting_providers: Vec<String>,
 }
 
+/// What committing a discovery changed, for the account's viewers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OutlookCalendarsChange {
+    /// A calendar was added, removed or changed, so viewers refetch.
+    pub changed: bool,
+    /// A calendar changed in a way that may move teammates' out-of-office
+    /// rows, by the rule Google's calendar list follows.
+    pub team_ooo_changed: bool,
+}
+
 /// Every calendar one Outlook account can see.
 pub struct OutlookDiscovery {
     /// The account's calendars, each in the mailbox's time zone.
@@ -237,12 +247,13 @@ pub trait OutlookCalendarRepository: CalendarRepository {
         &self,
         lease: &OutlookCalendarLease,
     ) -> impl Future<Output = Result<(), Report>> + Send;
-    /// Commit complete calendar discovery, retiring removed calendars.
+    /// Commit complete calendar discovery, retiring removed calendars, and
+    /// report what it changed.
     fn commit_outlook_calendars(
         &self,
         lease: &OutlookCalendarLease,
         calendars: Vec<OutlookCalendar>,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<OutlookCalendarsChange, Report>> + Send;
     /// Whole-snapshot fixture helper; production uses staged checkpoints.
     #[cfg(test)]
     fn commit_outlook_calendar(
@@ -374,12 +385,20 @@ impl<
                     .fail_outlook_calendar(&lease, error.kind())
                     .await?;
             }
-            Ok(()) => {}
+            Ok(_) => {}
         }
-        result.map_err(|error| rootcause::report!(error))?;
-        if lease.target.is_none() {
+        let discovered = result.map_err(|error| rootcause::report!(error))?;
+        // As on Google, a discovery that found the calendars as stored sends
+        // nothing. Each event it retired announces itself through the relay.
+        if let Some(change) = discovered
+            && change.changed
+        {
             self.notifier
-                .calendar_changed(&lease.owner_id, lease.binding.link_id, true)
+                .calendar_changed(
+                    &lease.owner_id,
+                    lease.binding.link_id,
+                    change.team_ooo_changed,
+                )
                 .await;
         }
         Ok(true)
@@ -400,11 +419,15 @@ impl<
             rejected_field = tracing::field::Empty,
             skipped_occurrences = tracing::field::Empty,
             unmapped_time_zone = tracing::field::Empty,
+            calendars_changed = tracing::field::Empty,
             error_kind = tracing::field::Empty,
         ),
         err(level = tracing::Level::DEBUG)
     )]
-    async fn run_claim(&self, lease: &OutlookCalendarLease) -> Result<(), CalendarProviderError> {
+    async fn run_claim(
+        &self,
+        lease: &OutlookCalendarLease,
+    ) -> Result<Option<OutlookCalendarsChange>, CalendarProviderError> {
         let span = tracing::Span::current();
         let token = self
             .tokens
@@ -529,6 +552,7 @@ impl<
                     .await
                     .map_err(storage_error)?;
                 record_milestone(&span, lease, target, checkpoint);
+                Ok(None)
             } else {
                 span.record("step", "discover");
                 let discovery = self.provider.calendars(&token, lease.binding).await?;
@@ -540,12 +564,14 @@ impl<
                         "ignoring an Outlook mailbox time zone Macro cannot map"
                     );
                 }
-                self.repository
+                let change = self
+                    .repository
                     .commit_outlook_calendars(lease, discovery.calendars)
                     .await
                     .map_err(storage_error)?;
+                span.record("calendars_changed", change.changed);
+                Ok(Some(change))
             }
-            Ok(())
         };
         let heartbeat = async {
             loop {
@@ -556,7 +582,7 @@ impl<
                     .map_err(storage_error)?;
             }
             #[allow(unreachable_code)]
-            Ok(())
+            Ok(None)
         };
         futures::pin_mut!(work, heartbeat);
         match futures::future::select(work, heartbeat).await {
@@ -626,6 +652,9 @@ pub struct CalendarProjectionLease {
     pub lease_id: Uuid,
     /// Owning connected inbox, used for viewer refresh.
     pub link_id: Uuid,
+    /// Whether teammates' out-of-office rows may have changed: the event was
+    /// or is out of office in a change this revision carries.
+    pub team_ooo_changed: bool,
     /// Committed change metadata.
     pub event: super::events::CalendarTopicEvent,
 }
@@ -675,7 +704,12 @@ impl<
     #[tracing::instrument(
         name = "calendar.projection_relay",
         skip_all,
-        fields(event_id = %lease.event_id, revision = lease.revision, link_id = %lease.link_id),
+        fields(
+            event_id = %lease.event_id,
+            revision = lease.revision,
+            link_id = %lease.link_id,
+            team_ooo_changed = lease.team_ooo_changed,
+        ),
         err(level = tracing::Level::DEBUG)
     )]
     async fn publish(&self, lease: &CalendarProjectionLease) -> Result<(), Report> {
@@ -687,7 +721,11 @@ impl<
             .map_err(|e| rootcause::report!(e))?
             .map_err(|e| rootcause::report!(e))?;
         self.notifier
-            .calendar_changed(&lease.event.metadata().owner_id, lease.link_id, true)
+            .calendar_changed(
+                &lease.event.metadata().owner_id,
+                lease.link_id,
+                lease.team_ooo_changed,
+            )
             .await;
         self.repository.complete_projection(lease).await
     }

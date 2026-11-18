@@ -29,7 +29,7 @@ impl CalendarProjectionOutbox for PgCalendarRepository {
         let row=sqlx::query!(r#"WITH candidate AS(SELECT event_id FROM calendar_projection_outbox WHERE next_run_at<=now() AND(lease_until IS NULL OR lease_until<now())
             ORDER BY next_run_at LIMIT 1 FOR UPDATE SKIP LOCKED)
             UPDATE calendar_projection_outbox o SET lease_id=$1,lease_until=now()+interval '2 minutes' FROM candidate c WHERE o.event_id=c.event_id
-            RETURNING o.event_id,o.owner_id,o.link_id,o.change_kind,o.revision"#,lease_id).fetch_optional(&self.pool).await.map_err(report)?;
+            RETURNING o.event_id,o.owner_id,o.link_id,o.change_kind,o.revision,o.team_ooo_changed"#,lease_id).fetch_optional(&self.pool).await.map_err(report)?;
         row.map(|r| {
             use crate::domain::events::{CalendarEventMetadata, CalendarTopicEvent};
             let metadata = CalendarEventMetadata {
@@ -47,6 +47,7 @@ impl CalendarProjectionOutbox for PgCalendarRepository {
                 revision: r.revision,
                 lease_id,
                 link_id: r.link_id,
+                team_ooo_changed: r.team_ooo_changed,
                 event,
             })
         })
@@ -444,7 +445,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         &self,
         lease: &OutlookCalendarLease,
         calendars: Vec<OutlookCalendar>,
-    ) -> Result<(), Report> {
+    ) -> Result<OutlookCalendarsChange, Report> {
         if lease.target.is_some() {
             return Err(rootcause::report!(
                 "calendar discovery requires an account lease"
@@ -454,10 +455,11 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         let mut log = ChangeLogBatch::default();
         fence(&mut tx, lease).await?;
         let mut observed = vec![];
+        let mut change = OutlookCalendarsChange::default();
         let range = OccurrenceRange::maintenance_horizon(Utc::now());
         for calendar in calendars {
             observed.push(calendar.calendar.provider_calendar_id.clone());
-            let (c, _) = upsert_calendar_tx(
+            let (c, calendar_changed) = upsert_calendar_tx(
                 &mut tx,
                 &mut log,
                 lease.binding.link_id,
@@ -466,19 +468,26 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                 Some(CalendarProvider::Outlook),
             )
             .await?;
-            sqlx::query!(
-                "UPDATE calendars SET online_meeting_providers=$2 WHERE id=$1",
+            change.team_ooo_changed |= calendar_changed;
+            // Which meetings a calendar can add changes what its viewers can
+            // do, but no out-of-office row.
+            let providers_changed = sqlx::query!(
+                "UPDATE calendars SET online_meeting_providers=$2 WHERE id=$1 AND online_meeting_providers IS DISTINCT FROM $2",
                 c.id,
                 &calendar.online_meeting_providers
             )
             .execute(&mut *tx)
             .await
-            .map_err(report)?;
+            .map_err(report)?
+            .rows_affected()
+                > 0;
+            change.changed |= calendar_changed || providers_changed;
             sqlx::query!(r#"INSERT INTO calendar_outlook_work(id,account_id,calendar_id,sync_generation,grant_generation,starts_at,ends_at)
                 VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(account_id,calendar_id) WHERE calendar_id IS NOT NULL DO NOTHING"#,
                 Uuid::now_v7(),lease.account_id,c.id,lease.binding.sync_generation,lease.binding.grant_generation,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
         }
         let removed=sqlx::query!("UPDATE calendars SET is_deleted=true WHERE account_id=$1 AND NOT(provider_calendar_id=ANY($2::text[])) AND NOT is_deleted RETURNING id",lease.account_id,&observed).fetch_all(&mut *tx).await.map_err(report)?;
+        change.changed |= !removed.is_empty();
         for c in removed {
             retire_sources(&mut tx, &mut log, c.id, &[]).await?;
         }
@@ -486,7 +495,8 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         if observed.is_empty() {
             sqlx::query!("UPDATE calendar_accounts SET sync_status='ready',last_synced_at=now(),last_sync_error=NULL WHERE id=$1",lease.account_id).execute(&mut *tx).await.map_err(report)?;
         }
-        log.commit(tx).await
+        log.commit(tx).await?;
+        Ok(change)
     }
     #[cfg(test)]
     async fn commit_outlook_calendar(
