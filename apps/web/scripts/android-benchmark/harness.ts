@@ -182,7 +182,12 @@ async function observe(
   key: TargetKey
 ): Promise<Observation> {
   try {
-    return (await session.locate(row(item, key))) ? 'quiet' : 'missing';
+    // A virtual list can replace the row as it scrolls into place: look again.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (await session.locate(row(item, key))) return 'quiet';
+      await sleep(300);
+    }
+    return 'missing';
   } catch (error) {
     const message = (error as Error).message;
     if (message.includes(SHOWS_UNREAD)) return 'unread';

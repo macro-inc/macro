@@ -230,9 +230,10 @@ export class Session {
         // Keep the target clear of the header and the dock before tapping it.
         if (rect.top < 120 || rect.bottom > innerHeight - 160) {
           element.scrollIntoView({ block: 'center', behavior: 'instant' });
-          moved = true;
           await frame();
           await frame();
+          // Controls in the header stay put: only a scroll counts as a move.
+          if (element.getBoundingClientRect().top !== rect.top) moved = true;
         }
         const point = reachable(element);
         if (point)
