@@ -776,6 +776,63 @@ describe('command menu search ranking', () => {
 
     expect(ids(items, 'lee')).toEqual(['known', 'stranger']);
   });
+
+  it.each([
+    {
+      language: 'Japanese',
+      label: 'テーマを変更',
+      other: 'タスクに移動',
+      query: 'テーマ',
+    },
+    {
+      language: 'Simplified Chinese',
+      label: '显示/隐藏设置',
+      other: '更改主题',
+      query: '设置',
+    },
+    {
+      language: 'Traditional Chinese',
+      label: '顯示/隱藏設定',
+      other: '變更主題',
+      query: '設定',
+    },
+    {
+      language: 'Korean',
+      label: '테마 변경',
+      other: '설정 열기/닫기',
+      query: '테마 변경',
+    },
+    {
+      language: 'Russian',
+      label: 'Сменить тему',
+      other: 'Показать/скрыть настройки',
+      query: 'сменить тему',
+    },
+    {
+      language: 'Hindi',
+      label: 'थीम बदलें',
+      other: 'सेटिंग खोलें/बंद करें',
+      query: 'थीम बदलें',
+    },
+    { language: 'Thai', label: 'เปลี่ยนธีม', other: 'เปิด/ปิดการตั้งค่า', query: 'ธีม' },
+  ])(
+    'finds a command by its $language name and only that command',
+    ({ label, other, query }) => {
+      const items = [
+        command('other', other, NOW),
+        command('command', label, 0),
+      ];
+      expect(ids(items, query)).toEqual(['command']);
+    }
+  );
+
+  it('finds a document by several words of a Cyrillic name', () => {
+    const items = [
+      note('report', 'Отчёт за квартал'),
+      note('other', 'План запуска'),
+    ];
+    expect(ids(items, 'отчёт квартал', false)).toEqual(['report']);
+  });
 });
 
 describe('sameRankInput', () => {
