@@ -2454,20 +2454,18 @@ There is no periodic PR lookup polling.
 
 ### Agent reasoning effort
 
-Long model names wrap in model menus and touch sheets. Desktop composer
-triggers stay on one line within the available width; hover a truncated trigger
-to read its full model and effort in the native tooltip. Verify both ordinary
-model rows and rows that open effort submenus, including search results.
-Long runtime-provided effort names wrap within their submenu rows as well.
+The Agents composers use one model selector for models, custom agents, reasoning
+effort, and speed. The desktop pill shows the provider or agent avatar, bounded
+name, available effort, and selected speed glyph. Its shared tooltip gives the
+full choice. Search filters model labels and agent names; All models opens the
+catalog. Selecting an agent keeps the desktop menu open; selecting a model or
+option closes it. In the phone sheet, search and pinned settings remain above
+and below the scrolling list. Effort and speed open pushed views; choosing an
+option returns to the list, while model and agent choices close the sheet and
+restore editor focus. One-choice settings remain hidden.
 
-Open the model selector and hover a model to choose its reasoning effort in the
-submenu on desktop, opened with Right Arrow. On mobile, tap a model to select it,
-then use the adjacent effort button to adjust effort.
-Cursor and Macro's in-memory agent load the hovered model's own advertised
-choices. The selected label includes the effort, such as `Sonnet 5.5 · High`;
-the composer also offers a separate effort button for the selected model. Models without effort
-support remain selectable through `Use <model>` (or a desktop click/Enter).
-Default keeps the model's existing behavior.
+Only the selected runtime's advertised effort choices appear. A model without
+effort support remains selectable. Default keeps the model's existing behavior.
 
 In an open session, choosing a different model's effort confirms the model first,
 then validates and applies effort. Wait for the selector to become available
@@ -2639,24 +2637,14 @@ choose a vision model or start a conversation without images.
 
 ## Priority tier
 
-The **Priority tier** menu beside the model selector picks how a model's requests
-are processed: *Standard*; *Priority* (OpenAI priority processing, 2× usage) and
-*Ultrafast* (6× usage) for GPT-6 Astra and GPT-6.1 Sol. Each choice shows its
-usage multiplier before sending. Claude models, including Opus 5.5, stay on
-standard speed until Anthropic fast mode is enabled for this deployment
-(Anthropic's own Priority Tier doesn't support Opus 5.5 or Sonnet 5.5). Other
-models keep standard speed and show no menu. The preference is saved in browser
-local storage and shared by legacy chat and native Macro agent composers; an old
-saved "fast mode on" becomes Ultrafast. External coding agents use their own
-speed controls.
-
-Preview the control at `/app/debug/ui?ui=speed-selector`.
-Pick Priority and verify the trigger reads *Priority*.
-Reload, change between supported models, and confirm the preference survives.
-Select an unsupported model and verify the menu is hidden; switching back restores
-the preference. Native sessions confirm the tier before sending the prompt when
-the session reports a different one; a rejected configuration must retain the
-unsent draft and attachments.
+The Agents selector's Speed submenu uses the in-memory runtime's advertised
+choices. It labels `standard` Standard, `priority` or `fast` Fast (2× usage),
+and `ultrafast` Ultrafast (6× usage). It hides when only one tier is offered.
+These labels do not change the saved wire value. A model name never implies
+Ultrafast support. Other chat composers keep their existing priority controls.
+The preference is shared across legacy chat and native Macro agent composers.
+Running sessions confirm a changed speed before sending; a rejected change
+retains the draft and attachments.
 
 Usage records follow the provider's delivered speed for each call, including tool
 loops. OpenAI prompts exceeding 272,000 tokens use the long-context rate for that
@@ -2768,14 +2756,10 @@ presentation, and typing during a save is `bunx playwright test --config src/fea
 (from `apps/web`).
 ## Agent reasoning effort
 
-Open the model selector and hover a model to choose its reasoning effort in the
-submenu on desktop, opened with Right Arrow. On mobile, tap a model to select it,
-then use the adjacent effort button to adjust effort.
-Cursor and Macro's in-memory agent load the hovered model's own advertised
-choices. The selected label includes the effort, such as `Sonnet 5.5 · High`;
-the composer also offers a separate effort button for the selected model. Models without effort
-support remain selectable through `Use <model>` (or a desktop click/Enter).
-Default keeps the model's existing behavior.
+Open the unified Agents selector to choose an advertised model and its
+Reasoning effort or Speed options. Desktop uses submenus; phone uses pushed
+views in one sheet. Unsupported settings have no row. See [effort capabilities](../architecture/agent-effort.md)
+for the harness contracts.
 
 In an open session, choosing a different model's effort confirms the model first,
 then validates and applies effort. Wait for the selector to become available

@@ -13,9 +13,11 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - `views/archived-conversations/archived-conversations.tsx`: archived conversations in the main pane.
 - `core/conversation-list.ts` and `primitives/conversation-list-view.ts`: sorting, waiting partition, and user-scoped preferences.
 - `views/shared/conversation-row/`: new row composition; shared status/code presentation is under `components/`.
+- `core/model-selection.ts` and `components/unified-model-selector/`: advertised tier labels and shared selector state/trigger; `views/model-selector/` composes its desktop menu and phone sheet.
 
 ## Boundaries
 
+- Keep original agent/model/effort/speed pickers for unrelated consumers; new-chat and Agents running sessions share selector behavior without moving their preference or session mutations.
 - Keep `components/AgentsSidebar.tsx`, `AgentSessionRow.tsx`, and `views/AgentSessionListItem.tsx` for the legacy phone and Home consumers until their own migration.
 - Preserve Home row geometry and activity rendering when extracting shared behavior.
 - Reuse Soup entity actions and session archive mutations; do not add another action or cache path.

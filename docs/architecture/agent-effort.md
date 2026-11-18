@@ -97,17 +97,19 @@ an external harness result.
 
 ## Model menu interaction
 
-The selected model also has a labeled **Effort** button (dial icon and current
-level) beside its model selector in new-chat and running-session composers. It
-opens a titled desktop menu or a dedicated bottom sheet on mobile. A simple list shows the supported effort levels and checks the current choice. Selecting a level applies it and closes the menu; models with fewer than two choices hide the button.
+The Agents new-chat and running-session composers use one model selector. Its desktop
+menu shows Reasoning effort as a submenu only when the selected runtime offers
+multiple values; its phone sheet pushes an effort view and returns to the list
+after a choice. The selected model and effort appear in the bounded trigger,
+with the full selection in a shared tooltip. Model selection remains available
+when capability discovery is pending or effort is unsupported. The separate
+effort control remains available to unrelated consumers.
 
-On desktop, effort remains available in each model’s submenu.
-Discovery runs when the submenu opens, scoped to that model and harness;
-the current session's advertised options take precedence for its selected model.
-The trigger displays the model and selected effort together. Keyboard Right Arrow
-opens the submenu. On mobile, tapping a model selects it directly; use the adjacent
-effort button to adjust its supported effort levels. Loading, discovery errors, and models with
-no effort options keep ordinary model selection available.
+The Speed submenu uses only the in-memory runtime's advertised values. The
+presentation maps `standard` to Standard, `priority` and `fast` to Fast, and
+`ultrafast` to Ultrafast without changing the selected wire value or the shared
+preference. A single offered choice hides the submenu; no model-name inference
+creates an Ultrafast option.
 
 A combined running-session selection waits for the model's correlated ACP
 confirmation, validates effort against the new snapshot, then confirms effort.
