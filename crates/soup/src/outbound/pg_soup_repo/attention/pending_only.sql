@@ -17,9 +17,11 @@
     -- One index probe per key and state. A notification is filed under the
     -- entity copied onto its recipient row, so idx_user_notification_viewer_entity
     -- reaches a key's pending rows and no other notification of the viewer's
-    -- is read. Fenced so the keys always drive the join: joined the other
-    -- way round, every notification the viewer has is compared with every
-    -- key.
+    -- is read. Only the newest row is wanted and the index holds a key's
+    -- rows newest first, so the probe stops at one entry however many
+    -- pending notifications the item has. Fenced so the keys always drive
+    -- the join: joined the other way round, every notification the viewer
+    -- has is compared with every key.
     CROSS JOIN LATERAL (
         SELECT un.created_at
         FROM user_notification un
@@ -32,6 +34,8 @@
             (SELECT floor_at AT TIME ZONE 'UTC' FROM attention_floor),
             '-infinity'
         )
+        ORDER BY un.created_at DESC
+        LIMIT 1
         OFFSET 0
     ) filed
     GROUP BY k.entity_type, k.entity_id
