@@ -1,6 +1,7 @@
 import {
   type GraphqlSoupEntityType,
   MoveEntitiesDocument,
+  ReorderSavedViewsDocument,
   SetEntityPropertyDocument,
   type SetEntityPropertyMutationVariables,
   UpdateEntityPropertyOptionsDocument,
@@ -28,6 +29,34 @@ const filters = {
   crmCompanyFilter: { literal: { id: nil } },
 };
 describe('CRM cache admission classification', () => {
+  it('admits only non-CRM saved-view reorder results and checks every root', () => {
+    const query = print(ReorderSavedViewsDocument);
+    expect(
+      queryNeedsCrmProof(query, {
+        input: { kind: 'email', ids: ['first-view', 'second-view'] },
+      })
+    ).toBe(false);
+    for (const kind of ['crm', 'crm-list', undefined, null, 1]) {
+      expect(
+        queryNeedsCrmProof(query, { input: { kind, ids: ['view'] } })
+      ).toBe(true);
+    }
+    expect(queryNeedsCrmProof(query, {})).toBe(true);
+    const email =
+      'email: reorderSavedViews(input:{kind:"email",ids:["view"]}) { ...View }';
+    const fragment = 'fragment View on GraphqlSavedView { id name config }';
+    expect(queryNeedsCrmProof(`mutation { ${email} } ${fragment}`)).toBe(false);
+    for (const other of [
+      'crm: reorderSavedViews(input:{kind:"crm",ids:["crm-view"]}) { ...View }',
+      'createSavedView(input:{id:"view",config:{kind:"email"}}) { ...View }',
+      'updateSavedView(input:{id:"view"}) { ...View }',
+    ]) {
+      expect(
+        queryNeedsCrmProof(`mutation { ${email} ${other} } ${fragment}`)
+      ).toBe(true);
+    }
+    expect(queryNeedsCrmProof(`query { ${email} } ${fragment}`)).toBe(true);
+  });
   it('parses a repeated document once while rechecking mutable arguments and the selected operation', () => {
     const query =
       'query Scoped($input: SoupInput!) { user { soup(input:$input) { items { id } } } } query Independent { user { favorites { id } } }';

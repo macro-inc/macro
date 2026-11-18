@@ -20,9 +20,10 @@ import { emailKeys } from '@queries/email/keys';
 import { setupQueryPersistence } from '@queries/persistence';
 import { reminderKeys } from '@queries/reminders/keys';
 import { soupKeys } from '@queries/soup/keys';
+import { ReorderSavedViewsDocument } from '@service-storage/graphql/generated/graphql';
 import { QueryObserver } from '@tanstack/query-core';
 import { onlineManager, QueryClient } from '@tanstack/solid-query';
-import { createClient, gql } from '@urql/core';
+import { createClient, gql, stringifyDocument } from '@urql/core';
 import type { Client as GraphqlWsClient } from 'graphql-ws';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -60,6 +61,13 @@ const personalFolder = {
 };
 const emailReminder =
   'http://localhost/dss/reminders/email/00000000-0000-4000-8000-000000000001';
+const emailViewOrderRequest = {
+  method: 'POST',
+  body: JSON.stringify({
+    query: stringifyDocument(ReorderSavedViewsDocument),
+    variables: { input: { kind: 'email', ids: ['second-view', 'first-view'] } },
+  }),
+};
 const proof = (allowed: boolean) => ok({ team_id: TEAM, allowed });
 const responseWithHint = (allowed: boolean) =>
   Response.json(
@@ -275,6 +283,7 @@ describe('CRM HTTP response admission', () => {
         [emailReminder, {}],
         [emailReminder, { method: 'PUT' }],
         ['http://localhost/dss/reminders/email/collection', {}],
+        ['http://localhost/dss/graphql', emailViewOrderRequest],
         [
           'http://localhost/dss/items/soup/ast',
           { method: 'POST', body: JSON.stringify(personalFolder) },
@@ -313,6 +322,7 @@ describe('CRM HTTP response admission', () => {
         [emailReminder, {}],
         [emailReminder, { method: 'PUT' }],
         ['http://localhost/dss/reminders/email/collection', {}],
+        ['http://localhost/dss/graphql', emailViewOrderRequest],
         [
           'http://localhost/dss/items/soup/ast',
           { method: 'POST', body: JSON.stringify(personalFolder) },

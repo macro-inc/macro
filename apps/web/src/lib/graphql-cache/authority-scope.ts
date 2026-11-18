@@ -476,6 +476,17 @@ function compiledScope(query: string, operationName?: string): CompiledScope {
         return (variables) =>
           typeof args(variables).kind !== 'string' ||
           ['crm', 'crm-list'].includes(String(args(variables).kind));
+      if (
+        operation.operation === 'mutation' &&
+        path.length === 0 &&
+        name === 'reorderSavedViews'
+      )
+        return (variables) => {
+          // Reordering returns the same definitions it authorized and filtered
+          // by kind before writing positions; it never reloads another kind.
+          const kind = object(args(variables).input).kind;
+          return typeof kind !== 'string' || ['crm', 'crm-list'].includes(kind);
+        };
       if (protectedFields.has(name)) return () => true;
       return selection.selectionSet
         ? compile(selection.selectionSet, visiting, [
