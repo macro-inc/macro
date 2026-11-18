@@ -29,8 +29,10 @@ screenshots: [desktop](media/share-images/desktop.png) and
 Opening a document or file in a Drive, Home, CRM or Tasks detail view (tasks,
 snippets and skills included) records the open once in the user's history,
 which orders Recents and Cmd+K. On dev, expect one `POST /history/document/<id>`
-per open, none when access changes or a retry reloads the same document, and the
-item listed first in empty Cmd+K afterwards.
+per open, none when access changes or a retry reloads the same document. An item
+already in Quick Access's history list is then first in empty Cmd+K; one opened
+for the first time outside that list is recorded but appears there only once the
+tab's cache learns the view.
 
 Verify **Public → View** links in a fresh signed-out browser context. The
 `/app/drive/md/<id>` route (including folder/tab document links and legacy
