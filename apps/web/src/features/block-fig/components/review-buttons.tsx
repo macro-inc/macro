@@ -17,7 +17,9 @@ export function CommentButton(props: {
     <Show when={props.comments}>
       {(c) => (
         <Button
-          aria-label="Comment (C)"
+          aria-label={
+            c().unread > 0 ? `Comment (C), ${c().unread} unread` : 'Comment (C)'
+          }
           variant="ghost"
           size={c().unread > 0 ? 'md' : 'icon-md'}
           aria-pressed={c().active}

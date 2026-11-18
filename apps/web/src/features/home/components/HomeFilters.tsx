@@ -1,4 +1,5 @@
 import {
+  filterLabel,
   ListFilterDropdown,
   type ListFilterGroup,
   MobileFilterDrawer,
@@ -218,7 +219,7 @@ export function HomeFilterDropdown() {
       label="Filter Home"
       customTrigger={
         <Dropdown.Trigger
-          aria-label="Filter Home"
+          aria-label={filterLabel('Filter Home', filters.activeCount())}
           tooltip="Filter Home"
           ref={tourTarget(HOME_TOUR.filter)}
           variant="ghost"

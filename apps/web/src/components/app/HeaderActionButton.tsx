@@ -1,6 +1,14 @@
 import { Button, ButtonGroup, type ButtonSize, CountBadge, cn } from '@ui';
 import { type JSX, type Ref, Show } from 'solid-js';
 
+const LABELED_SIZES: Partial<Record<ButtonSize, ButtonSize>> = {
+  'icon-xs': 'xs',
+  'icon-sm': 'sm',
+  'icon-md': 'md',
+  'icon-lg': 'lg',
+  'icon-xl': 'xl',
+};
+
 /** Shared geometry for labeled actions in a block's header. */
 export function HeaderActionButton(props: {
   ref?: Ref<HTMLButtonElement>;
@@ -21,6 +29,11 @@ export function HeaderActionButton(props: {
   const Control = props.grouped ? ButtonGroup.Button : Button;
   const iconOnly = () => props.size?.startsWith('icon-') ?? false;
   const counted = () => (props.count ?? 0) > 0;
+  const size = () => {
+    const requested = props.size ?? (props.grouped ? undefined : 'md');
+    if (!counted() || !requested) return requested;
+    return LABELED_SIZES[requested] ?? requested;
+  };
   const accessibleLabel = () =>
     counted() && props.countLabel
       ? `${props.label}, ${props.countLabel}`
@@ -29,7 +42,7 @@ export function HeaderActionButton(props: {
     <Control
       ref={props.ref}
       variant="ghost"
-      size={props.size ?? (props.grouped ? undefined : 'md')}
+      size={size()}
       data-header-action
       aria-label={accessibleLabel()}
       tooltip={props.tooltip}

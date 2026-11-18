@@ -79,12 +79,16 @@ it('filters by type from the shared filter menu and shows how many types apply',
     new MouseEvent('pointerup', { button: 0, bubbles: true })
   );
   expect(kinds()).toEqual(['card']);
-  expect(screen.getByLabelText('Filter items').textContent).toBe('1');
+  expect(
+    screen.getByLabelText('Filter items, 1 filter applied').textContent
+  ).toBe('1');
 });
 
 it('clears the type filter from the menu', async () => {
   const { kinds, user } = mount(['card', 'note']);
-  await user.click(screen.getByRole('button', { name: 'Filter items' }));
+  await user.click(
+    screen.getByRole('button', { name: 'Filter items, 2 filters applied' })
+  );
   await user.click(
     await screen.findByRole('menuitem', { name: 'Clear filters' })
   );

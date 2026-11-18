@@ -27,6 +27,7 @@ import {
   Show,
   useContext,
 } from 'solid-js';
+import { filterLabel } from './ListDropdowns';
 
 const ScrollContext = createContext<Accessor<HTMLElement | undefined>>();
 
@@ -75,7 +76,10 @@ function Root(props: MobileFilterDrawerProps) {
       <MobileDrawer.Trigger
         ref={setTrigger}
         as={Button}
-        aria-label={props.triggerLabel ?? 'Open filters'}
+        aria-label={filterLabel(
+          props.triggerLabel ?? 'Open filters',
+          props.activeCount
+        )}
         variant={props.inline ? 'secondary' : 'ghost'}
         size={props.activeCount > 0 ? 'md' : 'icon-md'}
         class={cn(

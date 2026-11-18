@@ -83,6 +83,10 @@ export default {
   sortList: 'Sort list',
   groupList: 'Group list',
   filterList: 'Filter list',
+  filtersApplied: {
+    one: '{{label}}, {{count}} filter applied',
+    other: '{{label}}, {{count}} filters applied',
+  },
   clearFilters: 'Clear filters',
   showHiddenRoutineRuns: 'Show hidden routine runs',
   retryOptions: 'Retry options',

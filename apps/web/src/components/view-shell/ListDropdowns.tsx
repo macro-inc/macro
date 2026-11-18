@@ -272,6 +272,12 @@ export type ListFilterDropdownProps<
   footer?: JSX.Element;
 } & ListDropdownOpenProps;
 
+/** A filter trigger's accessible name, with how many filters apply. */
+export function filterLabel(label: string, count: number) {
+  if (count === 0) return label;
+  return t('viewMenus.filtersApplied', { label, count });
+}
+
 function SourcedFilterSubmenu<TId extends string>(props: {
   createSource: SearchableOptionSourceFactory<TId>;
   selected: Accessor<TId[]>;
@@ -386,7 +392,10 @@ export function ListFilterDropdown<
         when={props.customTrigger}
         fallback={
           <Dropdown.Trigger
-            aria-label={props.label ?? t('viewMenus.filterList')}
+            aria-label={filterLabel(
+              props.label ?? t('viewMenus.filterList'),
+              props.activeCount ?? 0
+            )}
             tooltip={props.label ?? t('viewMenus.filterList')}
             as={props.grouped ? ButtonGroup.Button : Button}
             ref={props.triggerRef}
