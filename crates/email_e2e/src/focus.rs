@@ -116,15 +116,16 @@ impl FocusClassifier {
     /// Turns the Focus flag off for the owner at `address`, so the worker
     /// classifies the mail of none of their inboxes.
     ///
-    /// The worker reads the flag when it first looks at an owner's mail and
-    /// again only five minutes later, so this fails once it has: turn the
-    /// flag off before any of the stack's mail arrives.
+    /// The worker reads the flag when it first looks at an inbox, mail or no
+    /// mail (it looks at every linked inbox once a minute), and again only
+    /// five minutes later, so this fails once it has: turn the flag off
+    /// before linking any inbox.
     pub fn turn_off_focus_flag_for(&self, address: &str) -> Result<(), Report> {
         let mut answers = self.answers();
         if answers.flag_read {
             bail!(
                 "the Focus worker has read the flag already: turn it off for {address} before \
-                 any mail arrives"
+                 linking any inbox"
             );
         }
         answers.flag_off.push(address.to_owned());

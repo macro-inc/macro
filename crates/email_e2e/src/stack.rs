@@ -116,8 +116,8 @@ pub struct StackOptions {
     /// [`User::link_outlook_with_calendar`]). `env` reaches that service too.
     pub calendar: bool,
     /// Also start `email_focus_worker`, which classifies the mail of the
-    /// scenario's inboxes for Focus, with stand-ins for the model and the
-    /// due date reader it asks ([`Stack::focus_classifier`]). `env` reaches
+    /// scenario's inboxes for Focus, with stand-ins for the model, the due
+    /// date reader and the Focus flag it asks ([`Stack::focus_classifier`]). `env` reaches
     /// the worker too. Set
     /// `document_storage` as well to read Focus the way the web app does.
     /// The worker's consumer group is one for every scenario, so these
@@ -158,7 +158,8 @@ pub struct Stack {
     document_storage: Option<ServiceProcess>,
     search_indexer: Option<ServiceProcess>,
     focus_worker: Option<ServiceProcess>,
-    /// The model and the due date reader the Focus worker asks.
+    /// The model, the due date reader and the Focus flag the Focus worker
+    /// asks.
     focus_stand_ins: Option<FocusStandIns>,
     /// The search cluster, on a stack that searches.
     opensearch_url: Option<String>,
@@ -463,7 +464,8 @@ impl Stack {
     }
 
     /// Starts `email_focus_worker` on the scenario's database, with the
-    /// stand-ins for the model and the due date reader it asks.
+    /// stand-ins for the model, the due date reader and the Focus flag it
+    /// asks.
     async fn start_focus_worker(&mut self, options: &StackOptions) -> Result<(), Report> {
         crate::process::ensure_built(&[FOCUS_WORKER])?;
         if let Some(brokers) = self.worker_env.get(KAFKA_BROKERS) {
@@ -493,8 +495,9 @@ impl Stack {
         .await
     }
 
-    /// The model and the due date reader the Focus worker asks: a scenario
-    /// says here which mail the model finds worth Focus. Needs a stack
+    /// The model, the due date reader and the Focus flag the Focus worker
+    /// asks: a scenario says here which mail the model finds worth Focus
+    /// and whose flag is off. Needs a stack
     /// started with `focus: true`.
     pub fn focus_classifier(&self) -> Result<&FocusClassifier, Report> {
         match &self.focus_stand_ins {

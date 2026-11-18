@@ -155,9 +155,9 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   stand-in answers yes only to the first, "would the owner want this in
   Focus". The worker classifies an inbox only while its owner has the
   Focus flag: every owner has it unless the scenario turns it off with
-  `turn_off_focus_flag_for(address)`, before any of the stack's mail
-  arrives, since the worker reads the flag again only five minutes
-  later. Classifying follows
+  `turn_off_focus_flag_for(address)` before linking any inbox, since the
+  worker reads the flag on its first look at the inboxes and again only
+  five minutes later. Classifying follows
   the sync, so wait for the list or the thread's `focus`. Keep these
   scenarios in `tests/focus.rs`, whose tests nextest runs one at a time.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
@@ -415,9 +415,12 @@ shared with the web app's suite) and backend entry points second.
   `email-focus`, so two of them split the mail events between them. The
   `email-e2e-focus` test group runs `tests/focus.rs` serially. The harness
   gives the group an offset before its first worker starts, so mail that
-  arrives while a worker joins is still read; the worker's later sweeps are
-  an hour apart and no scenario sees one. Events of other scenarios name
-  threads that are not in this scenario's database and are passed over.
+  arrives while a worker joins is still read. The worker's later sweeps
+  are an hour apart and no scenario sees one, but it looks at every linked
+  inbox once a minute and backfills those whose owner has the flag, so a
+  scenario longer than a minute may see a thread classified by that too.
+  Events of other scenarios name threads that are not in this scenario's
+  database and are passed over.
 - A Redis database whose lease ran out is not handed out while any client
   is still connected to it: the services of a scenario that stalled would
   write into the next one's state. A former writer that is not connected at
