@@ -625,7 +625,7 @@ async fn bridge(
                 if outcome.is_some() {
                     return Err(ExecutionFailure::new(FailureCode::Protocol, "output after terminal frame"));
                 }
-                let frame: ChildFrame = serde_json::from_str(&line).map_err(|_| ExecutionFailure::new(FailureCode::Protocol, "invalid child frame"))?;
+                let frame: ChildFrame = serde_json::from_str(&line).map_err(|error| ExecutionFailure::new(FailureCode::Protocol, format!("invalid child frame: {error}")))?;
                 let budget = if matches!(&frame, ChildFrame::Progress { .. }) {
                     &mut remaining_progress
                 } else {
