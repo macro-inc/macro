@@ -91,10 +91,14 @@ no I/O.
 - `dangerously_operate_as_user` only changes code steps' attribution; agent
   steps keep their agent's. Only the owner sets it: drafts never carry it and
   sharing a routine as a template drops it.
-- An entity knob reaches code marked `{"$entity": {type, id}}`, which the
-  harness's Deno bootstrap turns into the SDK handle (`macro.<kind>s.byId`),
-  and is typed as that handle (`ReturnType<Macro['channels']['byId']>`), so
-  a new kind needs a namespace in both. Its item may be unpicked (`null`, in
+- An entity knob names one item of one of 11 kinds: the 10 the app's entity
+  picker can pick (`PICKABLE_ENTITY_TYPES` in the web app; a test there fails
+  when the two differ) plus a whole database, which no other kind may share a
+  knob with. It reaches code marked `{"$entity": {type, id}}`, which the
+  harness's Deno bootstrap turns into the SDK handle its kind's factory
+  (`EntityKind::factory`, e.g. `macro.crm.companyById`) gives, and is typed as
+  that handle (`ReturnType<Macro['crm']['companyById']>`), so a new kind needs
+  its factory in both. Its item may be unpicked (`null`, in
   starters); validation here only checks its kind, and the scheduler checks
   the owner can open it (`scheduled_action::domain::knob_entities`).
 - `RoutineModelId` rejects blank models while parsing, so a single agent task

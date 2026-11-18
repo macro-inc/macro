@@ -100,7 +100,11 @@ pub enum Knob {
     },
 }
 
-/// A kind of item an entity knob names: one Macro's SDK has a handle for.
+/// A kind of item an entity knob names: each kind the app's entity picker
+/// offers, which Macro's SDK has a handle for, and whole databases. Its
+/// name is the SDK's for the kind (`EntityReference`'s `type`, which the
+/// handle's `entityType` repeats), except `task`, a document that is a
+/// task.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schema", schema(as = RoutineKnobEntityType))]
@@ -112,25 +116,60 @@ pub enum EntityKind {
     Document,
     /// A folder.
     Project,
-    /// A database.
+    /// A whole database.
     Database,
     /// A person.
     User,
+    /// A task: a document that is a task.
+    Task,
+    /// An email thread.
+    EmailThread,
+    /// An AI chat.
+    Chat,
+    /// A CRM company.
+    CrmCompany,
+    /// A CRM contact.
+    CrmContact,
+    /// A project: a named group of tasks.
+    Initiative,
 }
 
 impl EntityKind {
-    /// The SDK namespace whose `byId` gives this kind's handle.
-    fn namespace(self) -> &'static str {
+    /// Every kind, in the order the drafter's guide lists them.
+    pub const ALL: [Self; 11] = [
+        Self::Channel,
+        Self::Document,
+        Self::Project,
+        Self::Database,
+        Self::User,
+        Self::Task,
+        Self::EmailThread,
+        Self::Chat,
+        Self::CrmCompany,
+        Self::CrmContact,
+        Self::Initiative,
+    ];
+
+    /// The SDK call that gives this kind's handle from its id:
+    /// `macro.<namespace>.<method>(id)`. The Deno bootstrap makes the same
+    /// calls (`code_execution`'s `bootstrap.mjs`).
+    pub fn factory(self) -> (&'static str, &'static str) {
         match self {
-            Self::Channel => "channels",
-            Self::Document => "documents",
-            Self::Project => "projects",
-            Self::Database => "databases",
-            Self::User => "users",
+            Self::Channel => ("channels", "byId"),
+            Self::Document => ("documents", "byId"),
+            Self::Project => ("projects", "byId"),
+            Self::Database => ("databases", "byId"),
+            Self::User => ("users", "byId"),
+            Self::Task => ("tasks", "byId"),
+            Self::EmailThread => ("email", "byId"),
+            Self::Chat => ("chats", "byId"),
+            Self::CrmCompany => ("crm", "companyById"),
+            Self::CrmContact => ("crm", "contactById"),
+            Self::Initiative => ("initiatives", "byId"),
         }
     }
 
-    /// What it is called, for the owner: "a channel".
+    /// What it is called, for the owner: "channel".
     pub fn noun(self) -> &'static str {
         match self {
             Self::Channel => "channel",
@@ -138,6 +177,12 @@ impl EntityKind {
             Self::Project => "folder",
             Self::Database => "database",
             Self::User => "person",
+            Self::Task => "task",
+            Self::EmailThread => "email thread",
+            Self::Chat => "chat",
+            Self::CrmCompany => "company",
+            Self::CrmContact => "contact",
+            Self::Initiative => "project",
         }
     }
 }
@@ -285,10 +330,8 @@ impl Knob {
             Self::Entity { entity_types, .. } => entity_types
                 .iter()
                 .map(|kind| {
-                    format!(
-                        "ReturnType<import('@macro-inc/sdk').Macro['{}']['byId']>",
-                        kind.namespace()
-                    )
+                    let (namespace, method) = kind.factory();
+                    format!("ReturnType<import('@macro-inc/sdk').Macro['{namespace}']['{method}']>")
                 })
                 .collect::<Vec<_>>()
                 .join(" | "),

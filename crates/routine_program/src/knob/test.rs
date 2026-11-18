@@ -173,16 +173,31 @@ fn an_entity_knob_names_an_item_and_reaches_code_as_a_handle() {
 fn an_entity_knob_names_only_items_code_can_get_a_handle_for() {
     let parse = |knob: serde_json::Value| serde_json::from_value::<Knob>(knob);
     let entity = |entity_types: serde_json::Value, value: serde_json::Value| json!({ "type": "entity", "name": "where", "label": "Where", "entity_types": entity_types, "value": value });
-    for kind in ["channel", "document", "project", "database", "user"] {
+    // The kinds the app's entity picker offers, and whole databases.
+    let kinds = [
+        "channel",
+        "document",
+        "project",
+        "database",
+        "user",
+        "task",
+        "email_thread",
+        "chat",
+        "crm_company",
+        "crm_contact",
+        "initiative",
+    ];
+    for kind in kinds {
         parse(entity(json!([kind]), json!({ "type": kind, "id": "a1" }))).unwrap();
     }
-    assert!(
-        parse(entity(
-            json!(["email_thread"]),
-            json!({ "type": "email_thread", "id": "a1" })
-        ))
-        .is_err()
+    assert_eq!(
+        EntityKind::ALL.map(|kind| serde_json::to_value(kind).unwrap()),
+        kinds.map(|kind| json!(kind))
     );
+    // Rows, calendar events and calls aren't items the picker offers.
+    for kind in ["database_row", "calendar_event", "call", "thread"] {
+        assert!(parse(entity(json!([kind]), json!({ "type": kind, "id": "a1" }))).is_err());
+    }
     assert!(
         parse(entity(
             json!(["channel"]),
@@ -201,4 +216,32 @@ fn an_entity_knob_names_only_items_code_can_get_a_handle_for() {
     // A starter's knob has nothing picked yet; its owner picks before saving.
     let unpicked = parse(entity(json!(["channel"]), json!(null))).unwrap();
     assert_eq!(unpicked.value(), json!(null));
+}
+
+#[test]
+fn an_entity_knob_is_typed_as_the_handle_the_sdk_gives_for_each_kind_it_allows() {
+    let typed = |kinds: &[EntityKind]| {
+        Knob::Entity {
+            name: KnobName::try_from("target".to_owned()).unwrap(),
+            label: "Target".to_owned(),
+            entity_types: kinds.to_vec(),
+            value: None,
+        }
+        .ts_type()
+    };
+    assert_eq!(
+        typed(&[EntityKind::CrmCompany]),
+        "ReturnType<import('@macro-inc/sdk').Macro['crm']['companyById']>"
+    );
+    assert_eq!(
+        typed(&[EntityKind::EmailThread, EntityKind::Task]),
+        "ReturnType<import('@macro-inc/sdk').Macro['email']['byId']> | ReturnType<import('@macro-inc/sdk').Macro['tasks']['byId']>"
+    );
+    for kind in EntityKind::ALL {
+        let (namespace, method) = kind.factory();
+        assert_eq!(
+            typed(&[kind]),
+            format!("ReturnType<import('@macro-inc/sdk').Macro['{namespace}']['{method}']>")
+        );
+    }
 }

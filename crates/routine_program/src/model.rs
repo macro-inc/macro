@@ -113,14 +113,14 @@ impl CodeStep {
             .collect()
     }
 
-    /// Its entity knobs: each one's label, the item picked (if any) and the
-    /// kinds it allows.
+    /// Its entity knobs: each knob, the item picked (if any) and the kinds
+    /// it allows.
     pub fn entities(
         &self,
-    ) -> impl Iterator<Item = (&str, Option<&crate::EntityValue>, &[crate::EntityKind])> {
+    ) -> impl Iterator<Item = (&Knob, Option<&crate::EntityValue>, &[crate::EntityKind])> {
         self.knobs.iter().filter_map(|knob| {
             let (value, kinds) = knob.entity()?;
-            Some((knob.label(), value, kinds))
+            Some((knob, value, kinds))
         })
     }
 }

@@ -867,6 +867,94 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
 
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
+    async fn every_entity_knob_kind_reaches_code_as_the_handle_its_type_names() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let run = async |routine: &RoutineProgram| {
+            code.run(
+                &owner(),
+                CodeRun {
+                    step: routine.code_steps()[0],
+                    context: &json!({ "run": {} }),
+                    steps: &json!({}),
+                    dry_run: false,
+                    acts_as: CodeIdentity::Agent,
+                    routine_id: Uuid::from_u128(1),
+                },
+            )
+            .await
+        };
+        // One knob per kind: the type checks as the handle `factory` names,
+        // and the bootstrap hands over that very handle.
+        let kinds = routine_program::EntityKind::ALL;
+        let knobs: Vec<_> = kinds
+            .iter()
+            .enumerate()
+            .map(|(i, kind)| {
+                json!({
+                    "type": "entity", "name": format!("k{i}"), "label": format!("Item {i}"),
+                    "entity_types": [kind], "value": { "type": kind, "id": format!("id-{i}") },
+                })
+            })
+            .collect();
+        let reads = kinds
+            .iter()
+            .enumerate()
+            .map(|(i, kind)| {
+                let (namespace, method) = kind.factory();
+                format!(
+                    "k{i}: knobs.k{i}.constructor === macro.{namespace}.{method}('x').constructor && knobs.k{i}.id"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let every = program(json!([{
+            "type": "code", "title": "Read every kind",
+            "source": format!("export async function main({{ macro, knobs }}: StepContext) {{ return {{ {reads} }}; }}"),
+            "knobs": knobs,
+        }]));
+        assert_eq!(code.check_program(&every).await.unwrap(), Vec::new());
+        let expected: serde_json::Map<_, _> = (0..kinds.len())
+            .map(|i| (format!("k{i}"), json!(format!("id-{i}"))))
+            .collect();
+        assert_eq!(
+            run(&every).await.result.unwrap(),
+            serde_json::Value::Object(expected)
+        );
+        // A knob allowing several kinds is their union: code narrows it by
+        // `entityType` before calling what only an email thread has.
+        let any = |source: &str| {
+            program(json!([{
+                "type": "code", "title": "Archive it", "source": source,
+                "knobs": [{
+                    "type": "entity", "name": "item", "label": "Item",
+                    "entity_types": ["email_thread", "task", "crm_company"],
+                    "value": { "type": "email_thread", "id": "t1" },
+                }],
+            }]))
+        };
+        let narrowed = any(
+            "export async function main({ knobs }: StepContext) { if (knobs.item.entityType === 'email_thread') return { kind: knobs.item.entityType, archive: typeof knobs.item.archive }; return { kind: knobs.item.entityType }; }",
+        );
+        assert_eq!(code.check_program(&narrowed).await.unwrap(), Vec::new());
+        assert_eq!(
+            run(&narrowed).await.result.unwrap(),
+            json!({ "kind": "email_thread", "archive": "function" })
+        );
+        let unnarrowed = code
+            .check_program(&any(
+                "export async function main({ knobs }: StepContext) { await knobs.item.archive(); }",
+            ))
+            .await
+            .unwrap();
+        assert_eq!(unnarrowed.len(), 1, "{unnarrowed:?}");
+        assert!(
+            unnarrowed[0].problems[0].contains("Property 'archive' does not exist"),
+            "{unnarrowed:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
     async fn a_step_posts_in_the_channel_its_knob_names_and_follows_a_swap() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let host = format!("http://{}", listener.local_addr().unwrap());
