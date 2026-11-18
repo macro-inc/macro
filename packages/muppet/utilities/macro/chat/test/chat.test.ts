@@ -12,6 +12,7 @@ import {
   postMessage,
   pushed,
   typing,
+  typingIndicators,
 } from '../index.ts';
 
 const message = (id: string, text: string): Message => ({
@@ -220,4 +221,41 @@ describe('pushed', () => {
     expect(await reader.next()).toEqual({ done: false, value: 3 });
     expect(started).toBe(1);
   });
+});
+
+test('overlapping typing indicators in a channel stop only when the last one does', async () => {
+  const sent: string[] = [];
+  const indicators = typingIndicators({
+    send: async (channelId, action) => {
+      sent.push(`${action} ${channelId}`);
+    },
+    every: 60_000,
+    most: 60_000,
+  });
+  const greeting = indicators.start('dm-1');
+  const reply = indicators.start('dm-1');
+  expect(sent).toEqual(['start dm-1']);
+  await greeting();
+  // The reply is still being written: nothing tells Macro to stop.
+  expect(sent).toEqual(['start dm-1']);
+  await greeting();
+  expect(sent).toEqual(['start dm-1']);
+  await reply();
+  expect(sent).toEqual(['start dm-1', 'stop dm-1']);
+  // A new indicator after the last one stopped starts again.
+  const again = indicators.start('dm-1');
+  expect(sent).toEqual(['start dm-1', 'stop dm-1', 'start dm-1']);
+  await again();
+});
+
+test('a typing send that fails never throws from start or stop', async () => {
+  const indicators = typingIndicators({
+    send: async () => {
+      throw new Error('Macro is unreachable');
+    },
+    every: 60_000,
+    most: 60_000,
+  });
+  const stop = indicators.start('dm-1');
+  await expect(stop()).resolves.toBeUndefined();
 });

@@ -357,6 +357,65 @@ export const typing = ({
   };
 };
 
+/** Shows the agent typing, and returns a stop for this indicator only. */
+export type TypingIndicators = {
+  readonly start: (channelId: string, root?: string) => () => Promise<void>;
+};
+
+/**
+ * Typing indicators that can overlap in one channel, each with a stop of its
+ * own: "start" is sent (and resent, as indicators expire) while any is
+ * showing, and "stop" once the last one stops, so one consumer (a greeting)
+ * never ends another's (a reply's). A channel's stop is channel-wide in
+ * Macro, so they are counted per channel, threads included. Sends never
+ * throw: a failed one is retried by the next resend or ignored. Each
+ * indicator stops by itself after `most`.
+ */
+export const typingIndicators = ({
+  send,
+  every = resendEvery,
+  most = longest,
+}: {
+  readonly send: Chat['typing'];
+  readonly every?: number;
+  readonly most?: number;
+}): TypingIndicators => {
+  const showing = new Map<
+    string,
+    { count: number; readonly tick: ReturnType<typeof setInterval> }
+  >();
+  return {
+    start: (channelId, root) => {
+      const quiet = (action: 'start' | 'stop') =>
+        send(channelId, action, root).catch(() => undefined);
+      const shown = showing.get(channelId);
+      if (shown === undefined) {
+        showing.set(channelId, {
+          count: 1,
+          tick: setInterval(() => void quiet('start'), every),
+        });
+        void quiet('start');
+      } else shown.count += 1;
+      let stopped: Promise<void> | undefined;
+      const stop = (): Promise<void> => {
+        stopped ??= (async () => {
+          clearTimeout(cap);
+          const now = showing.get(channelId);
+          if (now === undefined) return;
+          now.count -= 1;
+          if (now.count > 0) return;
+          clearInterval(now.tick);
+          showing.delete(channelId);
+          await quiet('stop');
+        })();
+        return stopped;
+      };
+      const cap = setTimeout(() => void stop(), most);
+      return stop;
+    },
+  };
+};
+
 type Context = { readonly chat: Chat; readonly typing: Typing };
 
 /** The text to post: trimmed, and never empty. A flag where a message should be is a mistyped command, not something to send. */
