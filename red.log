@@ -1,0 +1,73 @@
+
+ RUN  v5.1.0 <repo>/apps/web
+
+ ❯ |notifications| src/features/notifications/computer-setup-toast.test.ts (4 tests | 2 failed) 111ms
+   ❯ openAgentDirectMessage (4)
+     × opens nothing from a notice shown to an account that has since signed out of this tab 5ms
+     × opens nothing when the account changes while the DM is being made 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |notifications| src/features/notifications/computer-setup-toast.test.ts > openAgentDirectMessage > opens nothing from a notice shown to an account that has since signed out of this tab
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "recipient_id": "macro|ada@agents.macro.invalid",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/features/notifications/computer-setup-toast.test.ts:105:35
+    103|     await openAgentDirectMessage('macro|ada@agents.macro.invalid', sho…
+    104|
+    105|     expect(mocks.getOrCreate).not.toHaveBeenCalled();
+       |                                   ^
+    106|     expect(mocks.openWithSplit).not.toHaveBeenCalled();
+    107|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |notifications| src/features/notifications/computer-setup-toast.test.ts > openAgentDirectMessage > opens nothing when the account changes while the DM is being made
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "id": "channel-ada",
+        "type": "channel",
+      },
+      Object {
+        "activate": true,
+        "referredFrom": null,
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/features/notifications/computer-setup-toast.test.ts:123:37
+    121|     await opening;
+    122|
+    123|     expect(mocks.openWithSplit).not.toHaveBeenCalled();
+       |                                     ^
+    124|   });
+    125| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  19:56:46
+   Duration  915ms (environment 34%, import 30%, transform 22%, tests 14%, worker 1%)
+
