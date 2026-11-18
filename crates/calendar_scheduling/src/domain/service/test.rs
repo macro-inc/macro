@@ -1197,6 +1197,10 @@ async fn a_refused_move_whose_revert_is_not_saved_returns_the_receipt() {
         .await
         .unwrap();
     assert_eq!(receipt.booking.status, BookingStatus::Processing);
+    let stored = store.booking(r.booking.id).await.unwrap().unwrap();
+    assert_eq!(stored.booking.starts_at, next);
+    assert_eq!(receipt.booking.starts_at, stored.booking.starts_at);
+    assert_eq!(receipt.booking.ends_at, stored.booking.ends_at);
 }
 
 #[tokio::test]

@@ -820,16 +820,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .repository
             .move_booking(record, original_status, start, end)
             .await?;
-        let moved = self.finish_operation(record).await?;
-        if moved.booking.status != BookingStatus::Processing
-            && moved.booking.starts_at != slot.starts_at
-        {
-            // The host's calendar refused the move and the booking was saved
-            // back at its time. An unsaved revert returns the processing
-            // receipt instead, since recovery still owns the move.
-            return Err(Error::CalendarRejected);
-        }
-        Ok(moved)
+        self.finish_operation(record).await
     }
     /// Cancel through a booker capability or an authorized profile administrator.
     pub async fn cancel(
