@@ -116,6 +116,19 @@ async function forgetLogin(instance: string, email: string) {
 }
 
 /**
+ * Clear the signup webhook's hourly cap on accounts from one address (50):
+ * every account the bench signs up comes from the same one, and a run signs
+ * up more than that, so the next signup after the cap would fail.
+ */
+function allowSignups(instance: string) {
+  const result = Bun.spawnSync(
+    ['docker', 'exec', `macro-${instance}-redis-1`, 'sh', '-c', 'redis-cli --scan --pattern "rtl_create_user_hourly:*" | xargs -r redis-cli del'],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  if (result.exitCode !== 0) throw new Error(`clearing the signup cap on ${instance}: ${result.stderr.toString().trim()}`);
+}
+
+/**
  * Seed a variant's scenario afresh, as if each person signed up just now.
  * `apply` alone deletes only rows carrying the scenario's id marker, while a
  * person who signed up through the signup webhook has an id of the
@@ -123,7 +136,7 @@ async function forgetLogin(instance: string, email: string) {
  * `reset` deletes them by email (everything of theirs goes with them), the
  * bench deletes their FusionAuth account, and `apply` signs them up again
  * (FusionAuth keeps the old account's id, and a login with it fails once its
- * user is gone).
+ * user is gone), with the signup cap cleared first.
  */
 export async function seed(instance: string, persona: Persona, variant: Variant, now: number, log: string) {
   const dir = join(CACHE, instance, 'scenarios');
@@ -141,6 +154,7 @@ export async function seed(instance: string, persona: Persona, variant: Variant,
     if (step === 'reset') {
       const users = scenario(persona, variant, now).users as Record<string, { email: string }>;
       for (const user of Object.values(users)) await forgetLogin(instance, user.email);
+      allowSignups(instance);
     }
   }
 }
