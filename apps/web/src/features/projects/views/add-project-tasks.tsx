@@ -4,9 +4,27 @@ import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { Button, Dropdown } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useProjectsContext } from '../context/projects-context';
 import type { ProjectDetail } from '../core/project';
-import { createAddProjectTasks } from '../primitives/add-project-tasks';
+import {
+  type AddProjectTasksError,
+  createAddProjectTasks,
+} from '../primitives/add-project-tasks';
+
+function errorText(error: AddProjectTasksError) {
+  return match(error)
+    .with(
+      { kind: 'partial' },
+      ({ count, reason }) =>
+        `${count} ${count === 1 ? 'task could' : 'tasks could'} not be added. ${reason}`
+    )
+    .with(
+      { kind: 'request' },
+      ({ message }) => message ?? 'Could not add tasks. Try again.'
+    )
+    .exhaustive();
+}
 
 export function AddProjectTasksMenu(props: { project: ProjectDetail }) {
   const commands = useProjectsContext().createCommands();
@@ -57,9 +75,9 @@ export function AddProjectTasksMenu(props: { project: ProjectDetail }) {
             </Suspense>
           </div>
           <Show when={picker.error()}>
-            {(message) => (
+            {(error) => (
               <p role="alert" class="px-3 pb-2 text-sm text-failure">
-                {message()}
+                {errorText(error())}
               </p>
             )}
           </Show>

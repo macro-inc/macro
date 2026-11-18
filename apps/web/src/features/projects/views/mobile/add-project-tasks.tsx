@@ -6,9 +6,25 @@ import ListPlusIcon from '@icon/system/regular/list-plus.svg';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { Button } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useProjectsContext } from '../../context/projects-context';
 import type { ProjectDetail } from '../../core/project';
-import { createAddProjectTasks } from '../../primitives/add-project-tasks';
+import {
+  type AddProjectTasksError,
+  createAddProjectTasks,
+} from '../../primitives/add-project-tasks';
+
+function errorText(error: AddProjectTasksError) {
+  return match(error)
+    .with({ kind: 'partial' }, ({ count, reason }) =>
+      t('mobile.addTasksPartialFailure', { count, reason })
+    )
+    .with(
+      { kind: 'request' },
+      ({ message }) => message ?? t('mobile.addTasksFailed')
+    )
+    .exhaustive();
+}
 
 /** Add existing tasks on touch: a picker sheet; phones show the icon alone. */
 export function MobileAddProjectTasks(props: { project: ProjectDetail }) {
@@ -47,9 +63,9 @@ export function MobileAddProjectTasks(props: { project: ProjectDetail }) {
         />
         <PickerSheet.Body>
           <Show when={picker.error()}>
-            {(message) => (
+            {(error) => (
               <p role="alert" class="shrink-0 px-4 pb-2 text-sm text-failure">
-                {message()}
+                {errorText(error())}
               </p>
             )}
           </Show>
