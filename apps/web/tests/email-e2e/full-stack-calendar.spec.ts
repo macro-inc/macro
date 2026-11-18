@@ -2,6 +2,7 @@
 // inbox linked together with its calendar, the calendar service syncing that
 // calendar from the provider emulator, and the invitation card in a thread
 // answering, joining, opening and saving events for real.
+import { readFile } from 'node:fs/promises';
 import type { Locator, Page } from '@playwright/test';
 import { body, composeNew } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
@@ -598,10 +599,11 @@ test.describe('first calendar sync from email', { tag: '@full-stack' }, () => {
     const thread = await mailbox.synced(TITLE);
     await invitationReady(mailbox, thread.id, false);
 
+    const recording = test.info().outputPath('first-calendar-sync.webm');
     const release = await delayCalendarDiscovery(mailbox, calendarAddress);
     try {
       await page.screencast.start({
-        path: test.info().outputPath('first-calendar-sync.webm'),
+        path: recording,
         size: { width: 1280, height: 720 },
       });
       await mailbox.stack.link(
@@ -661,6 +663,11 @@ test.describe('first calendar sync from email', { tag: '@full-stack' }, () => {
       await release();
       await page.screencast.stop();
     }
+    // The full-stack workflow only uploads loose recordings on failure.
+    await test.info().attach('first-calendar-sync', {
+      body: await readFile(recording),
+      contentType: 'video/webm',
+    });
   });
 });
 
