@@ -16,8 +16,11 @@ const LOCAL_DRAFT: EntityItem = {
     name: 'Draft email',
     type: 'email',
     ownerId: 'owner',
+    isRead: true,
     isDraft: true,
-  } as EntityItem['data'],
+    isImportant: false,
+    done: false,
+  },
 };
 
 const CACHED_THREAD: EntityItem = {
@@ -32,41 +35,55 @@ const CACHED_THREAD: EntityItem = {
     name: 'Invitation to the project',
     type: 'email',
     ownerId: 'owner',
-  } as EntityItem['data'],
+    isRead: true,
+    isDraft: false,
+    isImportant: false,
+    done: false,
+  },
 };
 
-const OLDER_REST_THREAD = {
+const OLDER_REST_THREAD: EmailEntity = {
   type: 'email',
   id: 'older-rest-thread',
   name: 'Quarterly numbers',
   ownerId: 'owner',
+  isRead: true,
   isDraft: false,
+  isImportant: false,
+  done: false,
   updatedAt: new Date('2026-11-03T09:00:00Z'),
-} as EmailEntity;
+};
 
-const REST_DRAFT = {
+const REST_DRAFT: EmailEntity = {
   type: 'email',
   id: 'rest-draft',
   name: 'Unsent reply',
   ownerId: 'owner',
+  isRead: true,
   isDraft: true,
+  isImportant: false,
+  done: false,
   updatedAt: new Date('2026-11-06T09:00:00Z'),
-} as EmailEntity;
+};
 
-const NEWER_REST_THREAD = {
+const NEWER_REST_THREAD: EmailEntity = {
   type: 'email',
   id: 'newer-rest-thread',
   name: 'Receipt 1042',
   ownerId: 'owner',
+  isRead: true,
   isDraft: false,
+  isImportant: false,
+  done: false,
   updatedAt: new Date('2026-11-05T12:00:00Z'),
-} as EmailEntity;
+};
 
 const mocks = vi.hoisted(() => ({
   bucketRows: [] as EntityItem[],
   searchEnabled: [] as boolean[],
   restEnabled: [] as boolean[],
   restSettled: true,
+  cacheServesEmails: false,
 }));
 
 beforeEach(() => {
@@ -74,6 +91,7 @@ beforeEach(() => {
   mocks.searchEnabled.length = 0;
   mocks.restEnabled.length = 0;
   mocks.restSettled = true;
+  mocks.cacheServesEmails = false;
 });
 
 /** The bucket's rows, narrowed by the term as the Quick Access search would. */
@@ -85,7 +103,7 @@ function bucketRowsMatching(term: string): EntityItem[] {
 
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
-    usesRecordSelection: () => false,
+    usesRecordSelection: () => mocks.cacheServesEmails,
     useList: (options: {
       enabled: () => boolean;
       searchTerm?: () => string;
@@ -106,21 +124,24 @@ vi.mock('@core/context/quickAccess', () => ({
   }),
 }));
 
-vi.mock('@queries/soup/search', () => ({
-  validateSearchServiceText: (text: string) => text.length >= 3,
-  useSearchSoupQuery: (
-    _args: unknown,
-    options: () => { enabled: boolean }
-  ) => ({
-    get status() {
-      mocks.searchEnabled.push(options().enabled);
-      return 'pending';
+vi.mock('@queries/soup/search', async () => {
+  const { createRenderEffect } = await import('solid-js');
+  return {
+    validateSearchServiceText: (text: string) => text.length >= 3,
+    useSearchSoupQuery: (
+      _args: unknown,
+      options: () => { enabled: boolean }
+    ) => {
+      createRenderEffect(() => mocks.searchEnabled.push(options().enabled));
+      return {
+        status: 'pending',
+        data: [],
+        hasNextPage: false,
+        isFetching: false,
+      };
     },
-    data: [],
-    hasNextPage: false,
-    isFetching: false,
-  }),
-}));
+  };
+});
 
 vi.mock('@queries/soup/items', async () => {
   const { createRenderEffect } = await import('solid-js');
@@ -131,11 +152,8 @@ vi.mock('@queries/soup/items', async () => {
     ) => {
       createRenderEffect(() => mocks.restEnabled.push(options().enabled));
       return {
-        get isSuccess() {
-          return options().enabled && mocks.restSettled;
-        },
-        get isFetching() {
-          return options().enabled && !mocks.restSettled;
+        get isPending() {
+          return !options().enabled || !mocks.restSettled;
         },
         data: [NEWER_REST_THREAD, REST_DRAFT, OLDER_REST_THREAD],
       };
@@ -147,7 +165,7 @@ vi.mock('@app/features/next-soup/filters/query-filters', () => ({
   QUERY_FILTERS_BASE: {},
 }));
 
-it('lists the newest REST threads, without drafts, when Quick Access has no emails', () => {
+it('lists the newest REST threads, without drafts, when the GraphQL cache is off', () => {
   const [term, setTerm] = createSignal('');
   const { mention, dispose } = createRoot((dispose) => ({
     mention: useEmailSearchMention({
@@ -174,7 +192,8 @@ it('lists the newest REST threads, without drafts, when Quick Access has no emai
   dispose();
 });
 
-it('lists Quick Access threads, not drafts, and leaves the REST list alone when it has some', () => {
+it('lists Quick Access threads, not drafts, and leaves the REST list alone with the cache on', () => {
+  mocks.cacheServesEmails = true;
   mocks.bucketRows = [LOCAL_DRAFT, CACHED_THREAD];
   const { mention, dispose } = createRoot((dispose) => ({
     mention: useEmailSearchMention({
@@ -190,7 +209,8 @@ it('lists Quick Access threads, not drafts, and leaves the REST list alone when 
   dispose();
 });
 
-it('stays on Quick Access when it has threads but none match a short term', () => {
+it('stays on Quick Access when none of its threads match a short term', () => {
+  mocks.cacheServesEmails = true;
   mocks.bucketRows = [CACHED_THREAD];
   const [term, setTerm] = createSignal('');
   const { mention, dispose } = createRoot((dispose) => ({
@@ -223,8 +243,8 @@ it('reports the REST threads as loading until they arrive', () => {
   dispose();
 });
 
-it('falls back to REST threads when Quick Access lists only drafts', () => {
-  mocks.bucketRows = [LOCAL_DRAFT];
+it('leaves the REST list alone while the cache is still loading its threads', () => {
+  mocks.cacheServesEmails = true;
   const { mention, dispose } = createRoot((dispose) => ({
     mention: useEmailSearchMention({
       searchTerm: () => '',
@@ -233,10 +253,8 @@ it('falls back to REST threads when Quick Access lists only drafts', () => {
     dispose,
   }));
 
-  expect(mention.emails().map((item) => item.id)).toEqual([
-    'newer-rest-thread',
-    'older-rest-thread',
-  ]);
+  expect(mention.emails()).toEqual([]);
+  expect(mocks.restEnabled).not.toContain(true);
   dispose();
 });
 
