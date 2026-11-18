@@ -336,3 +336,19 @@ it('drops an unmatched key when its field blurs before the next edit', () => {
   const span = vi.mocked(Telemetry.span).mock.results[0].value;
   expect(span.setAttr).toHaveBeenCalledWith('ui.input_type', 'beforeinput');
 });
+
+it('measures the native document body', () => {
+  dispose = startTypingBurstTelemetry();
+  // RustMarkdownEditor's root; jsdom does not derive isContentEditable.
+  const body = document.createElement('div');
+  body.dataset.inputSurface = 'editor';
+  Object.defineProperty(body, 'isContentEditable', { value: true });
+  document.body.append(body);
+  edit(body);
+  expect(Telemetry.span).toHaveBeenCalledOnce();
+  vi.advanceTimersByTime(750);
+  expect(spanAttributes()).toMatchObject({
+    'typing.surface': 'editor',
+    'typing.input_count': 1,
+  });
+});

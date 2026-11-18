@@ -603,10 +603,11 @@ exported sample can be checked against a known long task.
 a marked field's first `beforeinput` (joining its keyboard event when matched)
 and ends on field change, blur, hide, disposal, 750 ms without edits
 (`typing.quiet_ms`) or the shared 30 s operation limit. Fields opt in with a
-static `data-input-surface` category (`typing.surface`): the Lexical wrapper
-marks document, composer and other editors, and Command-K and grid text editors
-mark themselves. Read-only and unmarked fields never start bursts. No text, key
-values, selectors, namespaces or labels are exported.
+static `data-input-surface` category (`typing.surface`). Only database grid
+text editors (`grid-cell`) and the native document body (`editor`) mark
+themselves; Lexical editors, composers and Command-K are unmarked. Read-only
+and unmarked fields never start bursts. No text, key values, selectors,
+namespaces or labels are exported.
 
 - `typing.input_count` counts edit events (including paste and composition),
   not key presses, so it can differ from the interaction count.
