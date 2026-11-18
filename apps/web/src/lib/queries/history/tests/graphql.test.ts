@@ -273,25 +273,33 @@ describe('cached GraphQL history', () => {
 
 describe('cached history views', () => {
   const viewedAt = '2026-11-18T21:00:00.000Z';
-  const named = (recordKey: string) => ({
-    recordKey,
-    record: {
-      __typename: recordKey.split(':')[0],
-      name: 'Old canvas',
-      ownerId: 'owner',
-      createdAt: '2025-01-01T00:00:00Z',
-      updatedAt: '2025-01-01T00:00:00Z',
-      viewedAt: null,
-    },
-  });
-  function viewHost(held: () => boolean) {
+  function viewHost(
+    held: () => boolean,
+    stored: { viewedAt: string | null } = { viewedAt: null }
+  ) {
     const readRecordsByKeys = vi.fn(async ({ keys }: ReadRecordsByKeysArgs) =>
-      held() ? keys.map(named) : []
+      held()
+        ? keys.map((recordKey) => ({
+            recordKey,
+            record: {
+              __typename: recordKey.split(':')[0],
+              name: 'Old canvas',
+              ownerId: 'owner',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+              viewedAt: stored.viewedAt,
+            },
+          }))
+        : []
     );
-    const writeQuery = vi.fn(async () => ({
-      revision: INITIAL_CACHE_REVISION,
-      changed: true,
-    }));
+    const writeQuery = vi.fn(
+      async (args: {
+        data: { soupUpdates: Array<{ item: { viewedAt: string } }> };
+      }) => {
+        stored.viewedAt = args.data.soupUpdates[0].item.viewedAt;
+        return { revision: INITIAL_CACHE_REVISION, changed: true };
+      }
+    );
     const host = {
       readRecordsByKeys: async (args: ReadRecordsByKeysArgs) => ({
         revision: INITIAL_CACHE_REVISION,
@@ -299,7 +307,7 @@ describe('cached history views', () => {
       }),
       writeQuery,
     } as unknown as Pick<CacheHost, 'readRecordsByKeys' | 'writeQuery'>;
-    return { host, readRecordsByKeys, writeQuery };
+    return { host, readRecordsByKeys, writeQuery, stored };
   }
 
   it('stamps the viewed time on a cached record without loading it', async () => {
@@ -396,6 +404,80 @@ describe('cached history views', () => {
     ).resolves.toBe(false);
     expect(readRecordsByKeys).not.toHaveBeenCalled();
     expect(writeQuery).not.toHaveBeenCalled();
+  });
+
+  it('keeps a later viewed time the cache already holds', async () => {
+    const later = '2026-11-18T21:00:05.000Z';
+    const { host, writeQuery, stored } = viewHost(() => true, {
+      viewedAt: later,
+    });
+
+    await expect(
+      stampCachedHistoryView(
+        host,
+        { itemId: 'canvas', itemType: 'document', viewedAt },
+        async () => {}
+      )
+    ).resolves.toBe(true);
+    expect(writeQuery).not.toHaveBeenCalled();
+    expect(stored.viewedAt).toBe(later);
+  });
+
+  it('applies overlapping stamps in turn, so the later view wins', async () => {
+    const stored = { viewedAt: null as string | null };
+    let reads = 0;
+    let releaseFirstRead: () => void = () => {};
+    const writeQuery = vi.fn(
+      async (args: {
+        data: { soupUpdates: Array<{ item: { viewedAt: string } }> };
+      }) => {
+        stored.viewedAt = args.data.soupUpdates[0].item.viewedAt;
+        return { revision: INITIAL_CACHE_REVISION, changed: true };
+      }
+    );
+    const host = {
+      readRecordsByKeys: async ({ keys }: ReadRecordsByKeysArgs) => {
+        const snapshot = stored.viewedAt;
+        reads += 1;
+        if (reads === 1)
+          await new Promise<void>((resolve) => {
+            releaseFirstRead = resolve;
+          });
+        return {
+          revision: INITIAL_CACHE_REVISION,
+          records: keys.map((recordKey) => ({
+            recordKey,
+            record: {
+              __typename: 'GraphqlSoupDocument',
+              name: 'Old canvas',
+              ownerId: 'owner',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+              viewedAt: snapshot,
+            },
+          })),
+        };
+      },
+      writeQuery,
+    } as unknown as Pick<CacheHost, 'readRecordsByKeys' | 'writeQuery'>;
+    const later = '2026-11-18T21:00:05.000Z';
+
+    const first = stampCachedHistoryView(
+      host,
+      { itemId: 'race', itemType: 'document', viewedAt },
+      async () => {}
+    );
+    const second = stampCachedHistoryView(
+      host,
+      { itemId: 'race', itemType: 'document', viewedAt: later },
+      async () => {}
+    );
+    await vi.waitFor(() => expect(reads).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releaseFirstRead();
+
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(stored.viewedAt).toBe(later);
   });
 
   it('loads one item by id from the network', async () => {

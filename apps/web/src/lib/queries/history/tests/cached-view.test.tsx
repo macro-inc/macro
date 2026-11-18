@@ -3,7 +3,7 @@ import {
   type ReadRecordsByKeysArgs,
 } from '@graphql-cache/index';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
-import { QueryClientProvider } from '@tanstack/solid-query';
+import { QueryClientProvider, QueryObserver } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryClient } from '../../client';
@@ -131,6 +131,38 @@ describe('a recorded view in cached history', () => {
 
     await waitFor(() => expect(stampedIds()).toEqual(['shared']));
     expect(order).toEqual(['upsert', 'load']);
+  });
+
+  it('reads history again when a read before the stamp is still in flight', async () => {
+    mocks.held.add('GraphqlSoupDocument:old-canvas');
+    queryClient.removeQueries({ queryKey: historyKeys.graphqlList.queryKey });
+    let finishFirstRead: (items: unknown[]) => void = () => {};
+    const reads = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishFirstRead = resolve;
+          })
+      )
+      .mockResolvedValue([{ id: 'old-canvas' }]);
+    const observer = new QueryObserver(queryClient, {
+      queryKey: historyKeys.graphqlList.queryKey,
+      queryFn: reads,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(reads).toHaveBeenCalledTimes(1));
+
+    await mutate('old-canvas');
+    await vi.waitFor(() => expect(reads).toHaveBeenCalledTimes(2));
+    finishFirstRead([]);
+
+    await vi.waitFor(() =>
+      expect(
+        queryClient.getQueryData(historyKeys.graphqlList.queryKey)
+      ).toEqual([{ id: 'old-canvas' }])
+    );
+    unsubscribe();
   });
 
   it('loads and stamps nothing when the server did not record the view', async () => {

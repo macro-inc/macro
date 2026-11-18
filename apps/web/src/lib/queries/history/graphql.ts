@@ -156,18 +156,24 @@ export async function materializeCachedGraphqlHistoryItems(
   });
 }
 
-async function holdsHistoryRecord(
+/** The cached record's viewedAt, null when it has none, undefined when the
+ * cache holds no record history can list. */
+async function cachedViewedAt(
   cacheHost: Pick<CacheHost, 'readRecordsByKeys'>,
   typename: HistoryTypename,
   id: string
-): Promise<boolean> {
+): Promise<string | null | undefined> {
   const { records } = await readRecordsByKeys(
     cacheHost,
     nameSelection(typename),
     [`${typename}:${id}`]
   );
-  return typeof records[0]?.record.name === 'string';
+  const record = records[0]?.record;
+  if (typeof record?.name !== 'string') return undefined;
+  return typeof record.viewedAt === 'string' ? record.viewedAt : null;
 }
+
+const pendingStamps = new Map<string, Promise<boolean>>();
 
 /**
  * Stamps a view on the item's cached record. Cached history is ordered by each
@@ -175,20 +181,43 @@ async function holdsHistoryRecord(
  * rehydrates the item, so an item outside the cached history (never viewed, or
  * viewed long ago) would stay unlisted until then. A record the cache does not
  * hold is loaded first, and nothing is stamped if it is still missing after
- * `load`. Returns whether the record was stamped.
+ * `load`. Stamps of one record run in turn and never lower its viewedAt, so the
+ * latest view wins however their loads finish. Returns whether the record holds
+ * the view.
  */
-export async function stampCachedHistoryView(
+export function stampCachedHistoryView(
   cacheHost: Pick<CacheHost, 'readRecordsByKeys' | 'writeQuery'>,
   view: { itemId: string; itemType: HistoryItemType; viewedAt: string },
   load: (typename: HistoryTypename) => Promise<void>
 ): Promise<boolean> {
   const typename = HISTORY_TYPENAME_BY_ITEM_TYPE[view.itemType];
-  if (!typename) return false;
-  if (!(await holdsHistoryRecord(cacheHost, typename, view.itemId))) {
+  if (!typename) return Promise.resolve(false);
+  const key = `${typename}:${view.itemId}`;
+  const run = () => stampRecord(cacheHost, typename, view, load);
+  const stamp = (pendingStamps.get(key) ?? Promise.resolve(false)).then(
+    run,
+    run
+  );
+  pendingStamps.set(key, stamp);
+  return stamp.finally(() => {
+    if (pendingStamps.get(key) === stamp) pendingStamps.delete(key);
+  });
+}
+
+async function stampRecord(
+  cacheHost: Pick<CacheHost, 'readRecordsByKeys' | 'writeQuery'>,
+  typename: HistoryTypename,
+  view: { itemId: string; viewedAt: string },
+  load: (typename: HistoryTypename) => Promise<void>
+): Promise<boolean> {
+  let cached = await cachedViewedAt(cacheHost, typename, view.itemId);
+  if (cached === undefined) {
     await load(typename);
-    if (!(await holdsHistoryRecord(cacheHost, typename, view.itemId)))
-      return false;
+    cached = await cachedViewedAt(cacheHost, typename, view.itemId);
+    if (cached === undefined) return false;
   }
+  if (cached !== null && Date.parse(cached) >= Date.parse(view.viewedAt))
+    return true;
   await cacheHost.writeQuery({
     query: stringifyDocument(HistoryViewedAtCacheWriteDocument),
     operationName: 'HistoryViewedAtCacheWrite',

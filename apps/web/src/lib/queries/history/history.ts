@@ -225,7 +225,7 @@ async function listViewInCachedHistory(
 ): Promise<void> {
   const cacheHost = getGraphqlSoupCacheHost();
   if (!cacheHost || cacheHost.disabled) return;
-  const stamped = await stampCachedHistoryView(
+  const viewed = await stampCachedHistoryView(
     cacheHost,
     { ...params, viewedAt: new Date().toISOString() },
     async (typename) => {
@@ -241,11 +241,16 @@ async function listViewInCachedHistory(
       );
     }
   );
-  if (!stamped) return;
+  if (!viewed) return;
   const listed = queryClient
     .getQueryData<HistoryQueryFnResult>(historyKeys.graphqlList.queryKey)
     ?.some((item) => item.id === params.itemId);
   if (listed) return;
+  // A read in flight may predate the stamp, and with no history data yet an
+  // invalidation would join it instead of reading again.
+  await queryClient.cancelQueries({
+    queryKey: historyKeys.graphqlList.queryKey,
+  });
   await queryClient.invalidateQueries({
     queryKey: historyKeys.graphqlList.queryKey,
   });
