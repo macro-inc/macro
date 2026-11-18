@@ -35,14 +35,51 @@ ACP log through the owning agent-session/fold services, and an event that arrive
 while a reconcile for its session is still queued is covered by that reconcile
 (see the Kafka delivery contract). It never indexes the
 event's excerpt as a substitute for the transcript. Completed turns, questions,
-renames, and deletions therefore converge on current persisted state.
+renames, and deletions therefore converge on current persisted state. Three
+kinds change nothing search reads and are committed without a handoff, before
+they could take a session's reread claim: `settled`, `mentioned`, and
+`command_rejected` (`changes_search_projection`).
 
 Live events and backfills hold the same per-session PostgreSQL advisory lease
 through the OpenSearch write. Lease connections have their own pool so waiting
-workers cannot exhaust the pool used to load snapshots. Each reconcile writes
-the parent and both authors' folded messages, refreshes them, then removes
-documents from older projection generations. Missing sessions delete their
-entire projection, even when triggered by an older event.
+workers cannot exhaust the pool used to load snapshots. The parent keeps a
+record of a content hash per message child (`indexed_messages`, in `_source`
+only), read back in real time on each reconcile. A reconcile writes only the
+children whose hash changed and deletes recorded children the session no
+longer has by id. Before touching any, it rewrites the parent to name them in
+`pending_messages` and drop them from the record; once they succeed it writes
+the final record. So a reconcile whose request fails part way leaves the next
+one to rewrite or delete exactly those children, whatever their hashes say.
+Every write and delete carries an `external_gte` version: the time Postgres
+granted the reconcile's session lease, in microseconds. One clock serves every
+worker and a session's leases never overlap, so a request that times out and
+applies after a later reconcile is refused instead of rolling a child back; the
+refused reconcile fails; a live event's retry takes a new lease, and a backfill
+stops and is rerun. (A delete's tombstone
+keeps its version for the index's `gc_deletes`, 60 s by default. A delayed
+write of a deleted child arriving later than that is left to the sweep, and a
+delayed parent write of a deleted session can recreate its parent; search never
+shows it, because results hydrate from the database, which omits deleted
+sessions, and a backfill of that id removes it.) Last, a sweep searches for any
+child no record or pending list names and deletes it by id under the same
+version. A reconcile
+that changes no child writes the parent only when it changed; one that does
+writes it twice. Nothing waits for a refresh; writes are
+searchable after the index's next scheduled refresh. Missing sessions delete
+their entire projection, even when triggered by an older event. The reconcile
+span records the trigger (lifecycle kind or `backfill`) and the parent and
+messages it wrote, left unchanged, and deleted.
+
+The record lives in an unindexed object: the mapping is `dynamic: false` and
+maps `indexed_messages` with `enabled: false`, so its child-id keys never become
+fields. The real-time parent read needs the `agent_sessions` alias to point at
+exactly one index. A backfill to the alias trusts the record and rewrites only
+what it says changed; to rebuild every child, backfill into a fresh index with
+`index_override` and move the alias. Live updates and deletes during that
+backfill reach only the index behind the alias, so after the move, backfill the
+ids of the sessions changed or deleted since it started. Until then a changed
+session shows its older projection, and a deleted one's documents sit in the
+new index, hidden from results as above.
 
 Provision and verify the `agent_sessions` index and alias manually before
 deploying this consumer; deployment does not create indices. Normal parent and

@@ -154,12 +154,14 @@ enum EventOutcome {
     Dropped,
     /// Committed without processing: a reread for the same entity was queued.
     Coalesced,
+    /// Committed without processing: the event changes nothing indexed.
+    NoIndexChange,
 }
 
 /// Result of decoding and attempting a channel handoff.
 ///
-/// Successful handoffs, coalesced rereads, and malformed records are safe to
-/// commit. A closed worker channel must leave the current record uncommitted so
+/// Successful handoffs, coalesced rereads, events that change nothing indexed,
+/// and malformed records are safe to commit. A closed worker channel must leave the current record uncommitted so
 /// supervision can restart the consumer and redeliver it.
 #[derive(Debug)]
 enum HandoffOutcome<E> {
@@ -167,6 +169,8 @@ enum HandoffOutcome<E> {
     /// A reread for the same entity is already queued and has not started, so
     /// it will read state at least as new as this event.
     Coalesced,
+    /// The event cannot change anything the search index holds.
+    NoIndexChange,
     MalformedRecord(E),
     WorkerClosed,
 }
@@ -221,6 +225,24 @@ fn ordering_key(event: &DeclaredMacroEvent) -> Cow<'_, str> {
         DeclaredMacroEvent::MessageMacroEvent(event) => Cow::Borrowed(event.key()),
         DeclaredMacroEvent::ProjectMacroEvent(event) => Cow::Borrowed(event.key()),
         DeclaredMacroEvent::PropertyMacroEvent(event) => Cow::Borrowed(event.key()),
+    }
+}
+
+/// Whether processing `event` can change the search index.
+fn changes_search_index(event: &DeclaredMacroEvent) -> bool {
+    match event {
+        DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => {
+            agent_session::changes_search_projection(event)
+        }
+        DeclaredMacroEvent::CalendarMacroEvent(_)
+        | DeclaredMacroEvent::CallMacroEvent(_)
+        | DeclaredMacroEvent::ChannelMacroEvent(_)
+        | DeclaredMacroEvent::ChatMacroEvent(_)
+        | DeclaredMacroEvent::DocumentMacroEvent(_)
+        | DeclaredMacroEvent::EmailMacroEvent(_)
+        | DeclaredMacroEvent::MessageMacroEvent(_)
+        | DeclaredMacroEvent::ProjectMacroEvent(_)
+        | DeclaredMacroEvent::PropertyMacroEvent(_) => true,
     }
 }
 
@@ -329,6 +351,12 @@ impl WorkerPool {
             Ok(event) => event,
             Err(error) => return HandoffOutcome::MalformedRecord(error),
         };
+        // Before any reread claim: an event that changes nothing must not hold
+        // one and absorb a later event that does.
+        if !changes_search_index(&event.event) {
+            record_outcome(&processing_span(&event), EventOutcome::NoIndexChange);
+            return HandoffOutcome::NoIndexChange;
+        }
 
         let shard = self.shard_index(ordering_key(&event.event).as_ref());
         let sender = &self.senders[shard];
@@ -651,7 +679,9 @@ async fn poll_events(
                 let (span, decoded) = receive_record(kafka_message, || message.decode_payload());
 
                 match workers.handoff(decoded).instrument(span.clone()).await {
-                    HandoffOutcome::HandedOff | HandoffOutcome::Coalesced => {}
+                    HandoffOutcome::HandedOff
+                    | HandoffOutcome::Coalesced
+                    | HandoffOutcome::NoIndexChange => {}
                     HandoffOutcome::MalformedRecord(error) => {
                         record_span_error(&span, &error);
                         tracing::error!(
