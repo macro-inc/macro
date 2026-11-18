@@ -89,7 +89,7 @@ function StepOutput(props: { output: unknown }) {
         {open() ? 'Hide output' : 'Show output'}
       </button>
       <Show when={open()}>
-        <pre class="max-h-64 min-w-0 overflow-auto rounded-lg border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
+        <pre class="max-h-64 min-w-0 select-text select-children overflow-auto rounded-lg border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
           <code>{outputText(props.output)}</code>
         </pre>
       </Show>
