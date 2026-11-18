@@ -26,12 +26,23 @@ beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
-      observe() {}
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe() {
+        queueMicrotask(() => this.callback([], this));
+      }
       unobserve() {}
       disconnect() {}
     }
   );
   vi.stubGlobal('scrollTo', vi.fn());
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
 });
 afterEach(() => {
   cleanup();
@@ -39,7 +50,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup() {
+function setup(description = '') {
   const submit = vi.fn();
   let controller:
     | ReturnType<typeof createCalendarEventFormController>
@@ -50,6 +61,7 @@ function setup() {
         ...defaultEditorInitialValues(new Date('2030-11-11T11:00'), false),
         title: 'Review',
         calendarId: 'calendar',
+        description,
       },
       calendarOptions: () => [
         { id: 'calendar', label: 'Calendar', color: 'var(--color-blue-ink)' },
@@ -105,4 +117,39 @@ it('keeps a populated field mounted when the user clears it', async () => {
   expect(controller.state().location).toBe('');
   expect(screen.getByRole('textbox', { name: /^Location$/ })).toBe(input);
   expect(document.activeElement).toBe(input);
+});
+
+it('keeps the location row in place through add, clear, remove, and re-add', async () => {
+  setup();
+  const add = screen.getByRole('button', { name: 'Add location' });
+  const row = add.closest('[data-optional-field]');
+  const parent = row?.parentElement;
+  await userEvent.click(add);
+  const input = await screen.findByLabelText('Location');
+  expect(input.closest('[data-optional-field]')).toBe(row);
+  await userEvent.type(input, 'Notes');
+  expect(screen.queryByRole('button', { name: 'Remove location' })).toBeNull();
+  await userEvent.clear(input);
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Remove location' })
+  );
+  const restored = screen.getByRole('button', { name: 'Add location' });
+  expect(restored.closest('[data-optional-field]')).toBe(row);
+  expect(row?.parentElement).toBe(parent);
+  await userEvent.click(restored);
+  expect(screen.getByLabelText('Location')).toHaveProperty('value', '');
+});
+
+it('does not restore removed initial description content when re-added', async () => {
+  setup('Original notes');
+  const input = await screen.findByLabelText('Description');
+  await userEvent.click(input);
+  await userEvent.keyboard('{Control>}a{/Control}{Backspace}');
+  await userEvent.click(
+    await screen.findByRole('button', { name: 'Remove description' })
+  );
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Add description' })
+  );
+  expect((await screen.findByLabelText('Description')).textContent).toBe('');
 });

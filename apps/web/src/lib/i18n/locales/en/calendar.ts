@@ -1,6 +1,8 @@
 export default {
   busy: 'Busy',
   pinHere: 'Pin here',
+  removeDescription: 'Remove description',
+  removeLocation: 'Remove location',
   chooseMonth: 'Choose month',
   previousYear: 'Previous year',
   nextYear: 'Next year',

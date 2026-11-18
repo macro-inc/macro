@@ -7,13 +7,22 @@ export function createComposerOptionalFields(options: {
   value: (field: ComposerOptionalField) => string;
   disabled: (field: ComposerOptionalField) => boolean;
 }) {
-  const [opened, setOpened] = createStore({
-    description: false,
-    location: false,
-  });
+  const initiallyVisible = {
+    description: options.value('description').trim().length > 0,
+    location: options.value('location').trim().length > 0,
+  };
+  const [opened, setOpened] = createStore({ ...initiallyVisible });
+  const empty = (field: ComposerOptionalField) =>
+    options.value(field).trim().length === 0;
   return {
-    visible: (field: ComposerOptionalField) =>
-      opened[field] || options.value(field).length > 0,
+    initiallyVisible: (field: ComposerOptionalField) => initiallyVisible[field],
+    empty,
+    remove: (field: ComposerOptionalField) => {
+      if (!empty(field) || options.disabled(field)) return false;
+      setOpened(field, false);
+      return true;
+    },
+    visible: (field: ComposerOptionalField) => opened[field] || !empty(field),
     reveal: (field: ComposerOptionalField) => {
       if (options.disabled(field)) return false;
       setOpened(field, true);

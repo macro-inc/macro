@@ -20,6 +20,28 @@ describe('optional composer fields', () => {
       dispose();
     });
   });
+  it('only removes empty unlocked fields and retains the original slot', () => {
+    createRoot((dispose) => {
+      let value = 'Existing notes';
+      let disabled = false;
+      const fields = createComposerOptionalFields({
+        value: () => value,
+        disabled: () => disabled,
+      });
+      expect(fields.initiallyVisible('description')).toBe(true);
+      expect(fields.remove('description')).toBe(false);
+      value = '';
+      disabled = true;
+      expect(fields.remove('description')).toBe(false);
+      disabled = false;
+      expect(fields.remove('description')).toBe(true);
+      expect(fields.visible('description')).toBe(false);
+      expect(fields.initiallyVisible('description')).toBe(true);
+      fields.reveal('description');
+      expect(fields.visible('description')).toBe(true);
+      dispose();
+    });
+  });
   it('never reveals a disabled field through its add action', () => {
     createRoot((dispose) => {
       const fields = createComposerOptionalFields({

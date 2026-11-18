@@ -88,8 +88,9 @@ ink, and action copy has no trailing ellipsis unless opening a dialog.
 
 The phone composer orders title and creation-only kind choices, When, people,
 call/calendar, optional-field add rows, time zone, reminders, guest permissions,
-and visibility. Adding a Description or Location replaces its add row and focuses
-the field in its final position. The compact title overlays the scroller below
+and visibility. Adding Description or Location replaces that same add row and focuses the
+field without moving it to another group. Empty added fields stay open on blur;
+their trailing remove button restores the add row in place. The compact title overlays the scroller below
 the grabber without consuming height. Its left-aligned 20/26 semibold text and
 12px swatch align with the full title. Once the first title line clears the
 grabber, a reversible 24px scroll ramp fades/slides it and its 24px bottom fade
@@ -113,7 +114,7 @@ and keep the meridiem at the right edge. Inline options use the same scroll body
 the sheet surface stays opaque.
 
 Phone agent review cards use the same grouped fields and clock picker as the
-standalone sheet. Adding Location inserts and focuses it after the call row.
+standalone sheet. Adding Location replaces its add row in place and focuses it.
 Explicit time-zone changes survive individual and stack submission; unsupported
 visibility stays read-only because the calendar tool does not accept that field.
 The current tool supplies one proposed time, so the three-alternative presentation

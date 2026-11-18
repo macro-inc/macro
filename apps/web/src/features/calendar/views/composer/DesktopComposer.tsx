@@ -28,13 +28,13 @@ import { ComposerPin } from '../../components/composer/actions/ComposerPin';
 import { ComposerSubmit } from '../../components/composer/actions/ComposerSubmit';
 import { ComposerCalendar } from '../../components/composer/calendar/ComposerCalendar';
 import { ComposerConference } from '../../components/composer/conference/ComposerConference';
-import { ComposerDescription } from '../../components/composer/description/ComposerDescription';
+import type { ComposerDescription } from '../../components/composer/description/ComposerDescription';
 import { ComposerFieldRow } from '../../components/composer/field-row/ComposerFieldRow';
 import { ComposerGuests } from '../../components/composer/guests/ComposerGuests';
 import { ComposerHeader } from '../../components/composer/header/ComposerHeader';
 import { ComposerKind } from '../../components/composer/kind/ComposerKind';
-import { ComposerLocation } from '../../components/composer/location/ComposerLocation';
 import { ComposerNotices } from '../../components/composer/notices/ComposerNotices';
+import { DesktopOptionalField } from '../../components/composer/optional-field/DesktopOptionalField';
 import { ComposerDecline } from '../../components/composer/out-of-office/ComposerDecline';
 import { ComposerDeclineMessage } from '../../components/composer/out-of-office/ComposerDeclineMessage';
 import { ComposerGuestPermissions } from '../../components/composer/permissions/ComposerGuestPermissions';
@@ -134,7 +134,10 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
           <Match when={!model.isOutOfOffice()}>
             <Show when={descriptionInMainFields}>
               <ComposerFieldRow icon={<DescriptionIcon class="size-4" />}>
-                <ComposerDescription resolveAppLink={props.resolveAppLink} />
+                <DesktopOptionalField
+                  field="description"
+                  resolveAppLink={props.resolveAppLink}
+                />
               </ComposerFieldRow>
             </Show>
             <ComposerFieldRow icon={<UsersIcon class="size-3.5" />}>
@@ -153,7 +156,7 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
               />
             </ComposerFieldRow>
             <ComposerFieldRow icon={<LocationIcon class="size-4" />}>
-              <ComposerLocation />
+              <DesktopOptionalField field="location" />
             </ComposerFieldRow>
           </Match>
           <Match when={model.isOutOfOffice()}>
@@ -173,7 +176,10 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
         <Show when={showOptions()}>
           <Show when={!descriptionInMainFields && !model.isOutOfOffice()}>
             <ComposerFieldRow icon={<DescriptionIcon class="size-4" />}>
-              <ComposerDescription resolveAppLink={props.resolveAppLink} />
+              <DesktopOptionalField
+                field="description"
+                resolveAppLink={props.resolveAppLink}
+              />
             </ComposerFieldRow>
           </Show>
           <ComposerFieldRow icon={<BellIcon class="size-4" />}>

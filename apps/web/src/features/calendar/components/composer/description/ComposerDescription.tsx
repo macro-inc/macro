@@ -17,10 +17,10 @@ export function ComposerDescription(
   }));
   return (
     <Show keyed when={editorIdentity()}>
-      {(identity) => (
+      {(_identity) => (
         <ComposerDescriptionEditor
           {...props}
-          initialValue={identity.initialValue}
+          initialValue={model.state().description}
         />
       )}
     </Show>

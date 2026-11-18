@@ -36,10 +36,10 @@ import {
   createComposerOptionalFields,
 } from '../../../primitives/create-composer-optional-fields';
 import { createComposerTitleVisibility } from '../../../primitives/create-composer-title-visibility';
-import { MobileComposerAddRow } from './MobileComposerAddRow';
 import { MobileComposerCompactTitle } from './MobileComposerCompactTitle';
 import { MobileComposerGuestPermissions } from './MobileComposerGuestPermissions';
 import { MobileComposerGuests } from './MobileComposerGuests';
+import { MobileComposerOptionalField } from './MobileComposerOptionalField';
 import { MobileComposerReminders } from './MobileComposerReminders';
 import { MobileComposerTitle } from './MobileComposerTitle';
 import { PhoneWhen } from './PhoneWhen';
@@ -75,6 +75,41 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
       button
     );
   };
+  const optionalField = (field: ComposerOptionalField) => (
+    <MobileComposerOptionalField
+      field={field}
+      label={t(
+        field === 'description'
+          ? 'calendar.addDescription'
+          : 'calendar.addLocation'
+      )}
+      icon={
+        field === 'description' ? (
+          <TextIcon class="size-4" />
+        ) : (
+          <LocationIcon class="size-4" />
+        )
+      }
+      visible={fields.visible(field)}
+      empty={fields.empty(field)}
+      disabled={model.fieldIsDisabled(field)}
+      onReveal={(button) => reveal(field, button)}
+      onFocus={() => fields.reveal(field)}
+      onRemove={() => fields.remove(field)}
+    >
+      <Show
+        when={field === 'description'}
+        fallback={
+          <ComposerLocation inputRef={(element) => (location = element)} />
+        }
+      >
+        <ComposerDescription
+          inputRef={(element) => (description = element)}
+          resolveAppLink={props.resolveAppLink}
+        />
+      </Show>
+    </MobileComposerOptionalField>
+  );
   const footer = () => (
     <SheetFooter
       scrollElement={props.scrollElement}
@@ -107,23 +142,8 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
         />
         <PhoneWhen scrollElement={props.scrollElement} />
         <Show when={!model.isOutOfOffice()}>
-          <Show when={fields.visible('description')}>
-            <SheetGroup>
-              <SheetRow
-                icon={<TextIcon class="size-4" />}
-                class="items-start py-3"
-              >
-                <div
-                  class="w-full"
-                  onFocusIn={() => fields.reveal('description')}
-                >
-                  <ComposerDescription
-                    inputRef={(element) => (description = element)}
-                    resolveAppLink={props.resolveAppLink}
-                  />
-                </div>
-              </SheetRow>
-            </SheetGroup>
+          <Show when={fields.initiallyVisible('description')}>
+            <SheetGroup>{optionalField('description')}</SheetGroup>
           </Show>
           <MobileComposerGuests />
         </Show>
@@ -144,14 +164,8 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
                 fullWidth
               />
             </SheetRow>
-            <Show when={fields.visible('location')}>
-              <SheetRow icon={<LocationIcon class="size-4" />}>
-                <div class="w-full" onFocusIn={() => fields.reveal('location')}>
-                  <ComposerLocation
-                    inputRef={(element) => (location = element)}
-                  />
-                </div>
-              </SheetRow>
+            <Show when={fields.initiallyVisible('location')}>
+              {optionalField('location')}
             </Show>
           </Show>
           <Show when={model.isOutOfOffice()}>
@@ -171,25 +185,16 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
         <Show
           when={
             !model.isOutOfOffice() &&
-            (!fields.visible('description') || !fields.visible('location'))
+            (!fields.initiallyVisible('description') ||
+              !fields.initiallyVisible('location'))
           }
         >
           <SheetGroup>
-            <Show when={!fields.visible('description')}>
-              <MobileComposerAddRow
-                label={t('calendar.addDescription')}
-                icon={<TextIcon class="size-4" />}
-                disabled={model.fieldIsDisabled('description')}
-                onClick={(button) => reveal('description', button)}
-              />
+            <Show when={!fields.initiallyVisible('description')}>
+              {optionalField('description')}
             </Show>
-            <Show when={!fields.visible('location')}>
-              <MobileComposerAddRow
-                label={t('calendar.addLocation')}
-                icon={<LocationIcon class="size-4" />}
-                disabled={model.fieldIsDisabled('location')}
-                onClick={(button) => reveal('location', button)}
-              />
+            <Show when={!fields.initiallyVisible('location')}>
+              {optionalField('location')}
             </Show>
           </SheetGroup>
         </Show>
