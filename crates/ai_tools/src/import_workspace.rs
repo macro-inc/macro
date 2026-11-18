@@ -13,8 +13,8 @@ use documents::domain::ports::DocumentService as _;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService as _;
 use import::domain::ports::{
-    ImportedDocumentProperties, ImportedTaskProperties, NewDatabase, NotionLinks, SharedEntity,
-    SourceDates, TeamMember,
+    ImportedDocumentProperties, ImportedTarget, ImportedTaskProperties, NewDatabase, NotionLinks,
+    SharedEntity, SourceDates, TeamMember,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
@@ -22,6 +22,8 @@ use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use projects::domain::ports::ProjectService as _;
 use uuid::Uuid;
+
+mod lifecycle;
 
 #[cfg(test)]
 mod test;
@@ -106,6 +108,20 @@ fn new_database(detail: &DatabaseDetail) -> anyhow::Result<NewDatabase> {
         table: table.table.id,
         title_column: title_column.column.id,
     })
+}
+
+impl import::domain::ports::ImportedTargetReader for ToolEntityCreator {
+    #[tracing::instrument(skip(self), err)]
+    async fn target_exists(&self, target: ImportedTarget) -> anyhow::Result<bool> {
+        lifecycle::exists(
+            self.document_service.as_ref(),
+            self.project_service.as_ref(),
+            self.databases_service.as_ref(),
+            self.initiative_service.as_ref(),
+            target,
+        )
+        .await
+    }
 }
 
 impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
@@ -227,7 +243,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         user: &MacroUserIdStr<'static>,
         folder: Uuid,
     ) -> anyhow::Result<bool> {
-        let Ok(receipt) = self
+        match self
             .entity_access_service
             .generate_entity_access_receipt::<ViewAccessLevel>(
                 user,
@@ -236,15 +252,16 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 model_entity::EntityType::Project,
             )
             .await
-        else {
-            return Ok(false);
-        };
-        match self.project_service.get_project(receipt).await {
-            Ok(project) => Ok(project.project_metadata.deleted_at.is_none()),
-            Err(error) => {
-                tracing::warn!(error = ?error, %folder, "imported root folder was not read");
-                Ok(false)
+        {
+            Ok(_) => {
+                import::domain::ports::ImportedTargetReader::target_exists(
+                    self,
+                    ImportedTarget::Folder(folder),
+                )
+                .await
             }
+            Err(error) if crate::tool_context::refuses_view(&error) => Ok(false),
+            Err(error) => Err(anyhow::Error::new(error)),
         }
     }
 
