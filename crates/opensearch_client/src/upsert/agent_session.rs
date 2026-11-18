@@ -217,6 +217,7 @@ fn plan(
     Ok(plan)
 }
 
+#[tracing::instrument(skip_all, fields(written = plan.write.len(), deleted = plan.delete.len()))]
 async fn write_children(
     client: &opensearch::OpenSearch,
     index: &str,
@@ -282,10 +283,12 @@ async fn write_children(
 /// children written before parents kept records (older projections of
 /// renumbered turns among them), and any a failed reconcile wrote without
 /// recording. Delete-by-query only sees refreshed documents, so this skips the
-/// ids this reconcile just wrote or deleted, which it may still see in their
-/// old state; a leftover younger than a refresh goes on the next reconcile.
-/// When nothing matches, which is the normal case, it neither writes nor
-/// refreshes.
+/// ids this reconcile just wrote or deleted, and a child an earlier reconcile
+/// deleted can still appear and conflict; conflicts proceed, since such a
+/// child is already gone. A leftover younger than a refresh goes on the next
+/// reconcile. When nothing matches, which is the normal case, it neither
+/// writes nor refreshes.
+#[tracing::instrument(skip_all)]
 async fn prune_unrecorded_children(
     client: &opensearch::OpenSearch,
     index: &str,
@@ -307,6 +310,7 @@ async fn prune_unrecorded_children(
     let response = client
         .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .routing(&routing_values)
+        .conflicts(opensearch::params::Conflicts::Proceed)
         .body(prune_query)
         .send()
         .await
@@ -323,14 +327,43 @@ async fn prune_unrecorded_children(
     .await
 }
 
+#[tracing::instrument(skip_all)]
+async fn write_parent(
+    client: &opensearch::OpenSearch,
+    index: &str,
+    args: &ReconcileAgentSessionArgs,
+    parent: serde_json::Value,
+    require_alias: bool,
+) -> Result<()> {
+    let response = client
+        .index(opensearch::IndexParts::IndexId(
+            index,
+            &args.agent_session_id,
+        ))
+        .routing(&args.agent_session_id)
+        .require_alias(require_alias)
+        .body(parent)
+        .send()
+        .await
+        .map_err(|error| {
+            OpensearchClientError::request_failed(
+                OpensearchOperation::ReconcileAgentSessionParent,
+                &error,
+            )
+        })?;
+    response_error(response, OpensearchOperation::ReconcileAgentSessionParent).await
+}
+
 /// Write the messages that changed since the parent's record, remove the ones
-/// the session no longer has, then record the result on the parent. Callers
-/// serialize reconciles by session id.
+/// the session no longer has, record the result on the parent, then sweep
+/// children no record names. Callers serialize reconciles by session id.
 ///
 /// Nothing waits for a refresh: no caller reads the index back, and every
 /// write and delete names its document by id, which needs no refresh to apply.
-/// The parent is written last, so its record only names children that were
-/// written; after a failure the next reconcile rewrites the difference.
+/// The parent is written after its children, so its record only names
+/// children that were written; after a failure the next reconcile rewrites
+/// the difference. The sweep comes last so a failed sweep never leaves the
+/// parent's name or recency stale.
 pub(crate) async fn reconcile_agent_session(
     client: &opensearch::OpenSearch,
     args: &ReconcileAgentSessionArgs,
@@ -349,31 +382,15 @@ pub(crate) async fn reconcile_agent_session(
     if !plan.write.is_empty() || !plan.delete.is_empty() {
         write_children(client, index, routing, &plan, require_alias).await?;
     }
-    prune_unrecorded_children(client, index, args, &plan).await?;
 
     let parent = serde_json::to_value(parent_document(args, &plan.record)).map_err(|error| {
         serialization_error(OpensearchOperation::ReconcileAgentSessionParent, error)
     })?;
     let parent_written = stored.as_ref().map(|stored| stored.source()) != Some(&parent);
     if parent_written {
-        let response = client
-            .index(opensearch::IndexParts::IndexId(
-                index,
-                &args.agent_session_id,
-            ))
-            .routing(routing)
-            .require_alias(require_alias)
-            .body(parent)
-            .send()
-            .await
-            .map_err(|error| {
-                OpensearchClientError::request_failed(
-                    OpensearchOperation::ReconcileAgentSessionParent,
-                    &error,
-                )
-            })?;
-        response_error(response, OpensearchOperation::ReconcileAgentSessionParent).await?;
+        write_parent(client, index, args, parent, require_alias).await?;
     }
+    prune_unrecorded_children(client, index, args, &plan).await?;
 
     Ok(AgentSessionReconcileWrites {
         parent_written,

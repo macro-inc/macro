@@ -53,6 +53,13 @@ their entire projection, even when triggered by an older event. The reconcile
 span records the trigger (lifecycle kind or `backfill`) and the parent and
 messages it wrote, left unchanged, and deleted.
 
+The record lives in an unindexed object: the mapping is `dynamic: false` and
+maps `indexed_messages` with `enabled: false`, so its child-id keys never become
+fields. The real-time parent read needs the `agent_sessions` alias to point at
+exactly one index. A backfill to the alias trusts the record and rewrites only
+what it says changed; to rebuild every child, backfill into a fresh index with
+`index_override` and move the alias.
+
 Provision and verify the `agent_sessions` index and alias manually before
 deploying this consumer; deployment does not create indices. Normal parent and
 bulk writes require an alias, so a missing alias fails instead of automatically

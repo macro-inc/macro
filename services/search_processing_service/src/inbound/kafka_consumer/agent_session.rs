@@ -34,9 +34,9 @@ pub(super) fn changes_search_projection(event: &AgentSessionLifecycleMacroEvent)
 
 /// The session a queued reread for `event` is tracked by.
 ///
-/// Every lifecycle event, whatever its kind, runs the same full reconcile of
-/// its session from the owning service below, so a reread queued for the
-/// session and not yet started covers any later event for it. Keep this in
+/// Every lifecycle event handed to a worker, whatever its kind, runs the same
+/// full reconcile of its session from the owning service below, so a reread
+/// queued for the session and not yet started covers any later event for it. Keep this in
 /// step with [`process_agent_session_event`]: an event kind handled any other
 /// way must not be coalesced.
 pub(super) fn reread_key(event: &AgentSessionLifecycleMacroEvent) -> String {

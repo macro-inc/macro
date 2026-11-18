@@ -33,6 +33,7 @@ impl StoredParent {
 /// Read a session's parent in real time, so it reflects the last write even
 /// before a refresh. A missing parent, or a missing index, reads as `None`;
 /// the writes that follow report a missing alias.
+#[tracing::instrument(skip_all)]
 pub(crate) async fn stored_parent(
     client: &opensearch::OpenSearch,
     index: &str,
@@ -55,10 +56,9 @@ pub(crate) async fn stored_parent(
         .json()
         .await
         .map_err(|error| OpensearchClientError::deserialization_failed(operation, &error))?;
-    Ok(match body.get_mut("_source") {
-        Some(source) => Some(StoredParent(source.take())),
-        None => None,
-    })
+    Ok(body
+        .get_mut("_source")
+        .map(|source| StoredParent(source.take())))
 }
 
 /// Report a failed status with its body as sent; a gateway error page is not JSON.
@@ -81,7 +81,10 @@ pub(crate) async fn response_error(
     })
 }
 
-/// Delete-by-query may report partial failure in an otherwise successful HTTP response.
+/// Delete-by-query may report partial failure in an otherwise successful HTTP
+/// response. Agent-session queries proceed past version conflicts: a
+/// conflicting document was changed or deleted since the query's view, so
+/// leaving it is the intended outcome, and conflicts are not failures.
 pub(crate) async fn check_delete_response(
     response: opensearch::http::response::Response,
     operation: OpensearchOperation,
@@ -104,9 +107,6 @@ pub(crate) async fn check_delete_response(
 
 fn delete_failed(body: &serde_json::Value) -> bool {
     body["timed_out"].as_bool() == Some(true)
-        || body["version_conflicts"]
-            .as_u64()
-            .is_some_and(|count| count > 0)
         || body["failures"]
             .as_array()
             .is_some_and(|items| !items.is_empty())

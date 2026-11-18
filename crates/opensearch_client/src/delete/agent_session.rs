@@ -12,7 +12,8 @@ use crate::{
 /// The parent and the children its record names go by id, which applies
 /// before any refresh. Delete-by-query then removes the rest, such as children
 /// written before parents kept records. It skips the ids just deleted, which
-/// it may still see, and forces no refresh.
+/// it may still see, proceeds past conflicts with children an earlier
+/// reconcile deleted, and forces no refresh.
 pub(crate) async fn delete_agent_session(
     client: &opensearch::OpenSearch,
     agent_session_id: &str,
@@ -36,7 +37,6 @@ pub(crate) async fn delete_agent_session(
         .collect();
     let response = client
         .bulk(BulkParts::Index(index))
-        .require_alias(index_override.is_none())
         .body(body)
         .send()
         .await
@@ -59,6 +59,7 @@ pub(crate) async fn delete_agent_session(
     let response = client
         .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .routing(&routing)
+        .conflicts(opensearch::params::Conflicts::Proceed)
         .body(serde_json::json!({
             "query": { "bool": {
                 "filter": [{ "term": { "agent_session_id": agent_session_id } }],

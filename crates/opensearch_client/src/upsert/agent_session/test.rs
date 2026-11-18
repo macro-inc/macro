@@ -123,11 +123,11 @@ struct Captured {
 
 /// Answer each request in turn with each status and body, capturing the
 /// actual HTTP requests so their serialization is covered.
-async fn serve_reconcile(
-    responses: Vec<(&'static str, String)>,
-    args: ReconcileAgentSessionArgs,
-    index_override: Option<&'static str>,
-) -> (Vec<Captured>, Result<AgentSessionReconcileWrites>) {
+async fn serve<T, F, Fut>(responses: Vec<(&'static str, String)>, action: F) -> (Vec<Captured>, T)
+where
+    F: FnOnce(crate::OpensearchClient) -> Fut,
+    Fut: std::future::Future<Output = T>,
+{
     use std::io::{BufRead, Read, Write};
     use std::net::TcpListener;
     use std::time::Duration;
@@ -167,8 +167,19 @@ async fn serve_reconcile(
     });
     let client =
         crate::OpensearchClient::new(format!("http://{address}"), "".into(), "".into()).unwrap();
-    let result = client.reconcile_agent_session(&args, index_override).await;
+    let result = action(client).await;
     (server.join().unwrap(), result)
+}
+
+async fn serve_reconcile(
+    responses: Vec<(&'static str, String)>,
+    args: ReconcileAgentSessionArgs,
+    index_override: Option<&'static str>,
+) -> (Vec<Captured>, Result<AgentSessionReconcileWrites>) {
+    serve(responses, |client| async move {
+        client.reconcile_agent_session(&args, index_override).await
+    })
+    .await
 }
 
 fn ok(body: &str) -> (&'static str, String) {
@@ -189,7 +200,7 @@ const PRUNE_OK: &str = r#"{"deleted":0,"failures":[],"timed_out":false}"#;
 #[tokio::test]
 async fn a_session_without_a_record_writes_every_child_then_records_them() {
     let (requests, result) = serve_reconcile(
-        vec![not_found(), ok(BULK_OK), ok(PRUNE_OK), ok("{}")],
+        vec![not_found(), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
         args(),
         None,
     )
@@ -215,18 +226,22 @@ async fn a_session_without_a_record_writes_every_child_then_records_them() {
     assert!(
         requests[2]
             .line
-            .starts_with("POST /agent_sessions/_delete_by_query?")
+            .starts_with("POST /agent_sessions/_doc/session-1?")
+    );
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&requests[2].body).unwrap(),
+        stored_parent_source(&args())
     );
     assert!(
         requests[3]
             .line
-            .starts_with("POST /agent_sessions/_doc/session-1?")
+            .starts_with("POST /agent_sessions/_delete_by_query?")
     );
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&requests[3].body).unwrap(),
-        stored_parent_source(&args())
+    assert!(
+        requests[3].line.contains("conflicts=proceed"),
+        "{requests:?}"
     );
-    for request in [&requests[1], &requests[3]] {
+    for request in [&requests[1], &requests[2]] {
         assert!(request.line.contains("require_alias=true"), "{request:?}");
     }
     for request in &requests {
@@ -237,7 +252,7 @@ async fn a_session_without_a_record_writes_every_child_then_records_them() {
 #[tokio::test]
 async fn explicit_backfill_overrides_allow_a_physical_index() {
     let (requests, result) = serve_reconcile(
-        vec![not_found(), ok(BULK_OK), ok(PRUNE_OK), ok("{}")],
+        vec![not_found(), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
         args(),
         Some("scratch-index"),
     )
@@ -251,11 +266,11 @@ async fn explicit_backfill_overrides_allow_a_physical_index() {
     );
     assert!(requests[1].line.starts_with("POST /scratch-index/_bulk?"));
     assert!(
-        requests[3]
+        requests[2]
             .line
             .starts_with("POST /scratch-index/_doc/session-1?")
     );
-    for request in [&requests[1], &requests[3]] {
+    for request in [&requests[1], &requests[2]] {
         assert!(request.line.contains("require_alias=false"), "{request:?}");
     }
 }
@@ -291,7 +306,7 @@ async fn a_changed_message_is_rewritten_and_a_removed_one_deleted_by_id() {
     });
 
     let (requests, result) = serve_reconcile(
-        vec![found(stored), ok(BULK_OK), ok(PRUNE_OK), ok("{}")],
+        vec![found(stored), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
         args(),
         None,
     )
@@ -319,8 +334,10 @@ async fn a_changed_message_is_rewritten_and_a_removed_one_deleted_by_id() {
         bulk[2],
         json!({"delete": {"_id": "session-1:2:user", "routing": "session-1"}})
     );
+    let parent: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
+    assert_eq!(parent, stored_parent_source(&args()));
     // Delete-by-query may still see the child just deleted, so it skips it.
-    let prune: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
+    let prune: serde_json::Value = serde_json::from_str(&requests[3].body).unwrap();
     let kept = &prune["query"]["bool"]["must_not"][0]["ids"]["values"];
     assert!(
         kept.as_array()
@@ -328,8 +345,63 @@ async fn a_changed_message_is_rewritten_and_a_removed_one_deleted_by_id() {
             .contains(&json!("session-1:2:user")),
         "{prune}"
     );
-    let parent: serde_json::Value = serde_json::from_str(&requests[3].body).unwrap();
-    assert_eq!(parent, stored_parent_source(&args()));
+}
+
+#[tokio::test]
+async fn a_sweep_conflicting_with_an_earlier_delete_still_succeeds() {
+    let (_, result) = serve_reconcile(
+        vec![
+            found(stored_parent_source(&args())),
+            ok(r#"{"deleted":0,"version_conflicts":1,"failures":[],"timed_out":false}"#),
+        ],
+        args(),
+        None,
+    )
+    .await;
+
+    result.unwrap();
+}
+
+#[tokio::test]
+async fn deleting_a_session_removes_recorded_children_by_id_first() {
+    let mut stored = stored_parent_source(&args());
+    stored["indexed_messages"] = json!({
+        "session-1:3:agent": "0000000000000000",
+        "session-1:4:user": "1111111111111111",
+    });
+
+    let (requests, result) = serve(
+        vec![found(stored), ok(BULK_OK), ok(PRUNE_OK)],
+        |client| async move { client.delete_agent_session("session-1", None).await },
+    )
+    .await;
+
+    result.unwrap();
+    let bulk: Vec<serde_json::Value> = requests[1]
+        .body
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let deleted: Vec<&str> = bulk
+        .iter()
+        .map(|action| action["delete"]["_id"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        deleted,
+        ["session-1:3:agent", "session-1:4:user", "session-1"]
+    );
+    let sweep: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
+    assert_eq!(
+        sweep["query"]["bool"]["must_not"][0]["ids"]["values"],
+        json!(deleted)
+    );
+    assert!(
+        requests[2].line.contains("conflicts=proceed"),
+        "{requests:?}"
+    );
+    for request in &requests {
+        assert!(!request.line.contains("refresh"), "{request:?}");
+    }
 }
 
 #[tokio::test]
@@ -357,6 +429,7 @@ async fn a_load_balancer_error_page_on_prune_is_reported_with_its_body() {
         vec![
             not_found(),
             ok(BULK_OK),
+            ok("{}"),
             (
                 "502 Bad Gateway",
                 "<html><head><title>502 Bad Gateway</title></head></html>".to_owned(),
@@ -496,6 +569,8 @@ async fn empty_index_accepts_both_authors_and_converges_on_each_snapshot() {
         projection.messages[0].content = "newhistory".into();
         let writes = client.reconcile_agent_session(&projection, Some(&index)).await?;
         assert_eq!(writes, AgentSessionReconcileWrites { parent_written: true, messages_written: 1, messages_unchanged: 0, messages_deleted: 1 });
+        // The next event's sweep still sees the child deleted by id, unrefreshed.
+        client.reconcile_agent_session(&projection, Some(&index)).await?;
         refresh().await?;
         assert_eq!(contents().await?, ["newhistory"]);
 
