@@ -80,6 +80,7 @@ import { MarkdownEditorErrors } from './constants';
 import {
   $applyDocumentMetadataFromSerialized,
   $getDocumentMetadata,
+  LOAD_STATE_TAG,
 } from './plugins';
 import { MARKDOWN_VERSION_COUNTER } from './version';
 
@@ -175,12 +176,15 @@ export function initializeEditorWithState(
   if (!state || state.root.children?.length === 0) return;
   try {
     const parsed = editor.parseEditorState(stripDraftCommentMarks(state));
-    editor.setEditorState(parsed);
+    editor.setEditorState(parsed, { tag: LOAD_STATE_TAG });
     editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
-    editor.dispatchCommand(INITIALIZE_DOCUMENT_IDS, undefined);
-    if (peerId) {
-      editor.dispatchCommand(INITIALIZE_LOCAL_STATUS, peerId);
-    }
+    editor.update(() => {
+      $addUpdateTag(LOAD_STATE_TAG);
+      editor.dispatchCommand(INITIALIZE_DOCUMENT_IDS, undefined);
+      if (peerId) {
+        editor.dispatchCommand(INITIALIZE_LOCAL_STATUS, peerId);
+      }
+    });
   } catch (e) {
     console.error(e);
   }
@@ -205,19 +209,23 @@ export function initializeEditorWithVersionedState(
       return $getDocumentMetadata();
     });
 
-    editor.setEditorState(parsed);
+    editor.setEditorState(parsed, { tag: LOAD_STATE_TAG });
     editor.update(
       () => {
+        $addUpdateTag(LOAD_STATE_TAG);
         $applyDocumentMetadataFromSerialized(state);
       },
       { discrete: true }
     );
 
     editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
-    editor.dispatchCommand(INITIALIZE_DOCUMENT_IDS, undefined);
-    if (peerId) {
-      editor.dispatchCommand(INITIALIZE_LOCAL_STATUS, peerId);
-    }
+    editor.update(() => {
+      $addUpdateTag(LOAD_STATE_TAG);
+      editor.dispatchCommand(INITIALIZE_DOCUMENT_IDS, undefined);
+      if (peerId) {
+        editor.dispatchCommand(INITIALIZE_LOCAL_STATUS, peerId);
+      }
+    });
     if (metadata.version > MARKDOWN_VERSION_COUNTER) {
       return MarkdownEditorErrors.VERSION_MISMATCH_ERROR;
     }

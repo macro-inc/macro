@@ -1,8 +1,12 @@
-import { mergeRegister } from '@lexical/utils';
-import { HISTORY_MERGE_TAG } from '@macro-inc/lexical-core';
+import {
+  COLLAB_SELECTION_TAG,
+  COLLABORATION_TAG,
+  LOCAL_STATUS_TAG,
+} from '@macro-inc/lexical-core';
 import {
   $getRoot,
   $getState,
+  $hasUpdateTag,
   $setState,
   createState,
   type LexicalEditor,
@@ -21,6 +25,20 @@ type DocumentMetadata = {
 const DEFAULT_METADATA: DocumentMetadata = {
   version: -1,
 };
+
+/** Marks the updates that load a stored document into the editor. */
+export const LOAD_STATE_TAG = 'load-state';
+
+// Updates that load or receive the stored state, or only record ids and
+// per-peer bookkeeping for it. Stamping the version in one of them writes the
+// stamp back as this viewer's edit, which moves the document's Updated time
+// when it was only opened.
+const NOT_LOCAL_EDIT_TAGS = [
+  LOAD_STATE_TAG,
+  COLLABORATION_TAG,
+  COLLAB_SELECTION_TAG,
+  LOCAL_STATUS_TAG,
+];
 
 const documentMetadataState = createState('documentMetadata', {
   parse: (value: unknown): DocumentMetadata => {
@@ -111,32 +129,18 @@ export function $applyDocumentMetadataFromSerialized(
 export function documentMetadataPlugin(props: {
   onVersionError?: (error: MarkdownEditorErrors) => void;
 }) {
-  return (editor: LexicalEditor) => {
-    return mergeRegister(
-      editor.registerUpdateListener(({ prevEditorState, mutatedNodes }) => {
-        if (!mutatedNodes) return;
-        const meta = prevEditorState.read(() => $getDocumentMetadata());
-        queueMicrotask(() => {
-          editor.update(
-            () => {
-              if (meta.version < MARKDOWN_VERSION_COUNTER) {
-                $setDocumentVersion(MARKDOWN_VERSION_COUNTER);
-              }
-            },
-            {
-              tag: HISTORY_MERGE_TAG,
-            }
-          );
-        });
-      }),
-      editor.registerNodeTransform(RootNode, () => {
-        const meta = $getDocumentMetadata();
-        if (meta.version > MARKDOWN_VERSION_COUNTER) {
-          if (props.onVersionError) {
-            props.onVersionError(MarkdownEditorErrors.VERSION_MISMATCH_ERROR);
-          }
-        }
-      })
-    );
-  };
+  // Lexical runs the root's transform last in every update that changes the
+  // document, so the stamp is part of the same update, and the same write, as
+  // the edit that needs it.
+  return (editor: LexicalEditor) =>
+    editor.registerNodeTransform(RootNode, () => {
+      const meta = $getDocumentMetadata();
+      if (meta.version > MARKDOWN_VERSION_COUNTER) {
+        props.onVersionError?.(MarkdownEditorErrors.VERSION_MISMATCH_ERROR);
+        return;
+      }
+      if (meta.version === MARKDOWN_VERSION_COUNTER) return;
+      if (NOT_LOCAL_EDIT_TAGS.some((tag) => $hasUpdateTag(tag))) return;
+      $setDocumentVersion(MARKDOWN_VERSION_COUNTER);
+    });
 }
