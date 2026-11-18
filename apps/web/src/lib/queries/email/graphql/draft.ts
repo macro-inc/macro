@@ -391,6 +391,8 @@ export type GraphqlDeleteEmailDraftArgs = {
   /** Thread the draft lives in — targets the optimistic removal from the
    * thread page's message list and the post-commit revalidation. */
   threadDbId: string;
+  /** Cached draft record; once a save commits, its ID is the server's. */
+  existingDraft?: OptimisticDraftEntity;
   existingThread?: DraftThread;
   mutationUuid?: string;
   clientMetadata?: DraftAttempt;
@@ -430,8 +432,11 @@ export async function executeGraphqlDeleteEmailDraft(
     offset: 0,
     limit: DEFAULT_THREAD_MESSAGES_LIMIT,
   };
+  const draftIds = args.existingDraft
+    ? [args.draftId, args.existingDraft.id]
+    : [args.draftId];
   const thread = args.existingThread
-    ? removeDraftFromThread(args.existingThread, args.draftId)
+    ? removeDraftFromThread(args.existingThread, draftIds)
     : undefined;
   const optimisticData: OptimisticResponse<DeleteEmailDraftMutation> = {
     deleteEmailDraft: {

@@ -448,6 +448,7 @@ export async function deleteEmailDraftQueued(input: {
     const client = getGraphqlSoupClient();
     assertEmailDraftQueueAvailable();
     outcome = await executeGraphqlDeleteEmailDraft(client, {
+      existingDraft: cached.existingDraft,
       existingThread: cached.existingThread,
       mutationUuid: cached.mutationUuid ?? input.draftId,
       draftId: local?.draftId ?? String(cached.draftId),

@@ -163,6 +163,10 @@ or a soup view) that carry the Draft badge. The thread keeps its row and its
 place, even though its sort time falls back to the last real message, until
 the tab, filters, or sort change; only the badge and preview change back to
 that message. Check it on a reply draft in All: the row must not move.
+From the list and from the composer alike, a discarded draft leaves Drafts (or
+drops its badge elsewhere) as the delete is queued, before the server answers;
+check it with a draft written on this device, whose client handle differs from
+its server ID.
 
 Star and mute feedback reports what happened to the write. A star queued
 while offline toasts that it is waiting to sync (for example `Added to favorites,
@@ -506,7 +510,7 @@ skip REST/TanStack email invalidations as well, including Done/Undo batches and
 thread archive replay. Committed writes and failed non-queued batches still
 reconcile. Permanent failures roll back the failed intent.
 Mark Done and Mark Not Done on a selection, even of one row, send one
-`setEmailThreadsArchived` per 100 threads (REST: `PATCH /email/threads/archived`).
+`setEmailThreadsArchived` per 100 threads.
 The server sends Gmail one label write per inbox, for only the messages whose
 labels change, and lists the threads it could not change; those settle as
 rejected, with their unchanged state reloaded, while their siblings stay done.
@@ -1785,10 +1789,11 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   the unavailable state, never all mail. Email views are private, so their
   menus have no Copy link.
 - **Order and unread.** Desktop rows drag to reorder (a 4px move starts the
-  drag, so a click still opens the view); their menus have no Move items. In
-  the mobile picker, which has no drag, each row's menu has Move up/Move down.
-  The order is personal and follows the account. A dot marks a view whose first
-  unread page has unread mail.
+  drag, so a click still opens the view). On phones and tablets, tap a row's
+  menu in the sidebar sheet and choose **Move up** or **Move down**. Each
+  action appears when there's a view in that direction. The order is personal
+  and follows the account. A dot marks a view whose first unread page has
+  unread mail.
 - **Touch.** Views are listed and managed in the sidebar sheet opened by
   **Show sidebar**; the list header has no saved-view pill. The filter drawer shows "Save these filters as a view" with Save view
   and Revert above its footer, and Save changes/Reset in the footer while a view
