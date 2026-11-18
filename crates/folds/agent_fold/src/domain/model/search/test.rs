@@ -374,3 +374,33 @@ fn searchable_text_leaves_out_what_cards_and_lines_keep_behind_a_disclosure() {
     );
     assert!(!message.searchable_text().contains("upstream 529"));
 }
+
+#[test]
+fn searchable_text_leaves_out_the_agent_context_a_prompt_hides() {
+    let prompt = |text: &str| {
+        let mut prompt = message(vec![MessagePart::Text {
+            text: text.to_owned(),
+        }]);
+        prompt.author = Author::User { user_id: None };
+        prompt
+    };
+
+    let hidden = prompt(
+        "<m-agent-context>{\"version\":1,\"text\":\"Private instructions\"}</m-agent-context>\n\nSummarize the queue design",
+    );
+    assert_eq!(hidden.searchable_text(), "Summarize the queue design");
+    assert!(hidden.readable_text().contains("Private instructions"));
+    let windows = prompt(
+        "<m-agent-context>{\"version\":1,\"text\":\"Private\"}</m-agent-context>\r\n\nSummarize",
+    );
+    assert_eq!(windows.searchable_text(), "Summarize");
+
+    // The transcript does not hide any other block, so search keeps it.
+    let shown = prompt(
+        "<m-agent-context>{\"version\":1,\"text\":\"Private\",\"extra\":true}</m-agent-context>\n\nSummarize",
+    );
+    assert!(shown.searchable_text().contains("Private"));
+    let mut reply = hidden.clone();
+    reply.author = Author::Agent;
+    assert!(reply.searchable_text().contains("Private instructions"));
+}
