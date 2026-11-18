@@ -924,7 +924,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     tagOptionIds: activeTagOptionIds(),
     tagFilterMode: activeTagFilterMode(),
     membershipFilter: config().itemMembershipFilter,
-    testPredicates: soup.predicates.test,
+    testPredicates: soup.predicates.snapshotTest(),
     filterContext: getFilterContext(),
     readFilter: readFilter(),
     admittedIds,
