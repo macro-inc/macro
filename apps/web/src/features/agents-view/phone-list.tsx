@@ -125,10 +125,15 @@ export function PhoneAgentsList(props: {
     isSelectable: () => false,
   });
   const list = toEntityActionListState({ controller, getEntity: (row) => row });
+  let clearPress: (() => void) | undefined;
   const renderRows = (rows: AgentConversationEntity[], waiting = false) => (
     <For each={rows}>
       {(row) => (
-        <ConversationContextMenu conversation={row} list={list}>
+        <ConversationContextMenu
+          conversation={row}
+          list={list}
+          onOpenChange={() => clearPress?.()}
+        >
           <PhoneConversationRow
             archived={
               Boolean(props.search) &&
@@ -176,7 +181,9 @@ export function PhoneAgentsList(props: {
           onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
         />
         <div
-          ref={soupNavigationTouchHighlight}
+          ref={(element) => {
+            clearPress = soupNavigationTouchHighlight(element);
+          }}
           class="size-full min-h-0 overflow-auto"
           classList={{
             'pt-2': props.archived || !!props.search || props.rosterLoading,

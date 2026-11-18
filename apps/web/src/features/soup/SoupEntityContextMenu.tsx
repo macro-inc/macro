@@ -133,6 +133,7 @@ export const SoupEntityContextMenu: FlowComponent<
                   createActionNavigationHandler:
                     props.createActionNavigationHandler,
                   viewedProjectId: props.viewedProjectId,
+                  onClose: () => props.onOpenChange?.(false),
                 });
               },
             }));

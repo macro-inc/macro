@@ -9,6 +9,7 @@ export function ConversationContextMenu(props: {
   focusKey?: string;
   list: EntityActionListState;
   children: JSX.Element;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
     <SoupEntityContextMenu
@@ -19,6 +20,7 @@ export function ConversationContextMenu(props: {
       as="div"
       class="block h-auto w-full shrink-0"
       onOpenChange={(open) => {
+        props.onOpenChange?.(open);
         if (open) props.list.focus.set(props.focusKey ?? props.conversation.id);
       }}
     >
