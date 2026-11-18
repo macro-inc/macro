@@ -31,8 +31,9 @@ export function ClaudeSignInDialog(props: {
 }) {
   const signOut = useClaudeSignOutMutation();
   const mode = useClaudeModeQuery(() => props.harnessId);
-  // Unknown until the mode loads: closing is the safe reading.
-  const onCredits = () => !mode.isSuccess || mode.data.mode === 'macro_credits';
+  // Unknown until the mode loads: closing is the safe reading. A failed
+  // refetch keeps the last known mode, so gate on pending, not success.
+  const onCredits = () => mode.isPending || mode.data?.mode !== 'own_account';
   const switchToCredits = async () => {
     const confirmed = await confirmDialog({
       title: props.switchToCredits?.title ?? t('computers.claudeSwitchTitle'),
