@@ -74,6 +74,12 @@ gateway `/calendar` prefix.
   loop count is a code constant, not configuration: one item per account at a
   time keeps it safe at any count, and autoscaling to three tasks runs 24.
   Google's calendar sync runs its 25 backfill workers in the same process.
+- The Outlook projection relay (`calendar.projection_relay`) claims up to
+  `PROJECTION_BATCH` due revisions a round, publishes each to Kafka
+  (`calendar.projection_publish`), and refreshes each inbox the batch changed
+  once. A round that claims fewer waits for the next two-second poll, so a
+  first import or a bulk change refreshes open clients about every two
+  seconds instead of once per event.
 - Reauth-required notifications ride the shared `LinkManagerQueue`, consumed by
   `email_service`; don't add a second calendar-specific reconnect notification.
 - Forward `team_ooo_changed` to both inbox and teammate refresh notifications;

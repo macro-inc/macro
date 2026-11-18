@@ -68,3 +68,154 @@ fn equally_near_events_and_untimed_ones_keep_id_order() {
         ["a-in-an-hour", "b-in-an-hour", "y-untimed", "z-untimed"]
     );
 }
+
+/// The revisions waiting for the relay, and the ones it acknowledged.
+#[derive(Clone, Default)]
+struct Outbox {
+    pending: std::sync::Arc<std::sync::Mutex<Vec<CalendarProjectionLease>>>,
+    completed: std::sync::Arc<std::sync::Mutex<Vec<Uuid>>>,
+}
+
+impl CalendarProjectionOutbox for Outbox {
+    async fn claim_projections(
+        &self,
+        _: Uuid,
+        limit: u16,
+    ) -> Result<Vec<CalendarProjectionLease>, Report> {
+        let mut pending = self.pending.lock().unwrap();
+        let taken = pending.len().min(usize::from(limit));
+        Ok(pending.drain(..taken).collect())
+    }
+    async fn complete_projection(&self, lease: &CalendarProjectionLease) -> Result<(), Report> {
+        self.completed.lock().unwrap().push(lease.event_id);
+        Ok(())
+    }
+}
+
+/// Publishes every event but those of the entities `failing` names.
+#[derive(Clone, Default)]
+struct Broker {
+    failing: Vec<Uuid>,
+}
+
+impl macro_event_broker::MacroEventBroker for Broker {
+    fn send_event<E: macro_event_broker::MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<
+        tokio::task::JoinHandle<Result<(), macro_event_broker::EventBrokerError>>,
+        macro_event_broker::EventBrokerError,
+    > {
+        let fails = self.failing.iter().any(|id| event.key() == id.to_string());
+        Ok(tokio::spawn(async move {
+            if fails {
+                Err(macro_event_broker::EventBrokerError::MissingMessageKey)
+            } else {
+                Ok(())
+            }
+        }))
+    }
+}
+
+/// The inboxes refreshed, in order, with each refresh's team out-of-office hint.
+#[derive(Clone, Default)]
+struct Refreshes(std::sync::Arc<std::sync::Mutex<Vec<(String, Uuid, bool)>>>);
+
+impl CalendarRefreshNotifier for Refreshes {
+    async fn calendar_changed(&self, owner_id: &str, email_link_id: Uuid, team_ooo_changed: bool) {
+        self.0
+            .lock()
+            .unwrap()
+            .push((owner_id.to_owned(), email_link_id, team_ooo_changed));
+    }
+    async fn join_request_answered(&self, _: &str, _: Uuid) {}
+}
+
+fn revision(owner_id: &str, link_id: Uuid) -> CalendarProjectionLease {
+    let event_id = Uuid::now_v7();
+    CalendarProjectionLease {
+        event_id,
+        revision: 1,
+        lease_id: Uuid::nil(),
+        link_id,
+        team_ooo_changed: false,
+        event: crate::domain::events::CalendarTopicEvent::Updated(
+            crate::domain::events::CalendarEventMetadata {
+                event_id,
+                owner_id: owner_id.to_owned(),
+            },
+        ),
+    }
+}
+
+#[tokio::test]
+async fn a_batch_refreshes_each_inbox_it_changed_once() {
+    let (ada, grace) = (Uuid::now_v7(), Uuid::now_v7());
+    let away = CalendarProjectionLease {
+        team_ooo_changed: true,
+        ..revision("macro|ada@example.com", ada)
+    };
+    let outbox = Outbox::default();
+    *outbox.pending.lock().unwrap() = vec![
+        revision("macro|ada@example.com", ada),
+        revision("macro|grace@example.com", grace),
+        away,
+        revision("macro|ada@example.com", ada),
+    ];
+    let refreshes = Refreshes::default();
+    let relay = CalendarProjectionRelay::new(outbox.clone(), Broker::default(), refreshes.clone());
+
+    assert!(
+        !relay.run_once().await.unwrap(),
+        "everything due fit in one batch"
+    );
+    assert_eq!(
+        *refreshes.0.lock().unwrap(),
+        [
+            ("macro|ada@example.com".to_owned(), ada, true),
+            ("macro|grace@example.com".to_owned(), grace, false)
+        ],
+        "an inbox's refresh carries the hint of any of its changes"
+    );
+    assert_eq!(outbox.completed.lock().unwrap().len(), 4);
+}
+
+#[tokio::test]
+async fn a_revision_that_fails_to_publish_stays_for_its_retry() {
+    let (ada, grace) = (Uuid::now_v7(), Uuid::now_v7());
+    let published = revision("macro|ada@example.com", ada);
+    let failed = revision("macro|ada@example.com", ada);
+    let alone = revision("macro|grace@example.com", grace);
+    let (published_id, failing) = (published.event_id, vec![failed.event_id, alone.event_id]);
+    let outbox = Outbox::default();
+    *outbox.pending.lock().unwrap() = vec![published, failed, alone];
+    let refreshes = Refreshes::default();
+    let relay = CalendarProjectionRelay::new(outbox.clone(), Broker { failing }, refreshes.clone());
+
+    relay.run_once().await.unwrap();
+    assert_eq!(
+        *refreshes.0.lock().unwrap(),
+        [("macro|ada@example.com".to_owned(), ada, false)],
+        "an inbox whose every change failed waits for the retry"
+    );
+    assert_eq!(*outbox.completed.lock().unwrap(), [published_id]);
+}
+
+#[tokio::test]
+async fn a_full_batch_asks_for_the_next_one_at_once() {
+    let ada = Uuid::now_v7();
+    let outbox = Outbox::default();
+    *outbox.pending.lock().unwrap() = (0..=PROJECTION_BATCH)
+        .map(|_| revision("macro|ada@example.com", ada))
+        .collect();
+    let refreshes = Refreshes::default();
+    let relay = CalendarProjectionRelay::new(outbox.clone(), Broker::default(), refreshes.clone());
+
+    assert!(relay.run_once().await.unwrap(), "more may be due");
+    assert!(!relay.run_once().await.unwrap(), "the last one was taken");
+    assert_eq!(refreshes.0.lock().unwrap().len(), 2, "one per batch");
+    assert_eq!(
+        outbox.completed.lock().unwrap().len(),
+        usize::from(PROJECTION_BATCH) + 1
+    );
+}
