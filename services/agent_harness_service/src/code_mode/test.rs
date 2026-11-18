@@ -380,6 +380,8 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.setChannelSection",
         "storage.updateChannelSection",
         "scheduled-action.attachSuggestionDraft",
+        // An agent restricting its own tool permissions only takes away.
+        "agent-harness.tightenAgentToolPermissions",
         // Reads and inference sent as POST.
         "agent-harness.agentSessionsForPullRequest",
         "agent-harness.agentSessionsForPullRequests",

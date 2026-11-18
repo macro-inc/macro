@@ -923,7 +923,6 @@ dependencies = [
  "bot_id",
  "chrono",
  "entity_access",
- "http-body-util",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",

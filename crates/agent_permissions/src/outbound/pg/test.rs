@@ -164,11 +164,11 @@ async fn a_sessions_overlay_upserts_and_deletes(pool: PgPool) {
     fixtures(path = "../../../fixtures", scripts("permissions"))
 )]
 async fn the_tables_refuse_a_stored_default_and_a_bad_target(pool: PgPool) {
-    let always_group_action = sqlx::query(
+    let always_group_action = sqlx::query!(
         "INSERT INTO agent_tool_permission (bot_id, kind, target, state)
          VALUES ($1, 'group_action', 'email:send', 'always')",
+        AGENT.as_uuid(),
     )
-    .bind(AGENT.as_uuid())
     .execute(&pool)
     .await;
     assert!(always_group_action.is_err());
@@ -179,23 +179,23 @@ async fn the_tables_refuse_a_stored_default_and_a_bad_target(pool: PgPool) {
         ("tool", "email:send"),
         ("tool", "storage delete"),
     ] {
-        let inserted = sqlx::query(
+        let inserted = sqlx::query!(
             "INSERT INTO agent_tool_permission (bot_id, kind, target, state)
              VALUES ($1, $2, $3, 'never')",
+            AGENT.as_uuid(),
+            kind,
+            target,
         )
-        .bind(AGENT.as_uuid())
-        .bind(kind)
-        .bind(target)
         .execute(&pool)
         .await;
         assert!(inserted.is_err(), "{kind} {target}");
     }
 
-    let always_overlay = sqlx::query(
+    let always_overlay = sqlx::query!(
         "INSERT INTO agent_session_tool_permission (agent_session_id, kind, target, state)
          VALUES ($1, 'tool', 'email.send_email', 'always')",
+        SESSION,
     )
-    .bind(SESSION)
     .execute(&pool)
     .await;
     assert!(always_overlay.is_err());
@@ -228,8 +228,7 @@ async fn rows_go_with_their_agent_person_and_session(pool: PgPool) {
         .unwrap();
 
     // Deleting the person who set the agent's rule keeps it, without them.
-    sqlx::query(r#"DELETE FROM "User" WHERE id = $1"#)
-        .bind(OTHER)
+    sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, OTHER)
         .execute(&pool)
         .await
         .unwrap();
@@ -237,15 +236,13 @@ async fn rows_go_with_their_agent_person_and_session(pool: PgPool) {
     assert!(store.rules(&persona).await.unwrap().is_empty());
     assert_eq!(store.session_rules(session).await.unwrap().len(), 1);
 
-    sqlx::query("DELETE FROM agent_session WHERE id = $1")
-        .bind(SESSION)
+    sqlx::query!("DELETE FROM agent_session WHERE id = $1", SESSION)
         .execute(&pool)
         .await
         .unwrap();
     assert!(store.session_rules(session).await.unwrap().is_empty());
 
-    sqlx::query("DELETE FROM bots WHERE id = $1")
-        .bind(AGENT.as_uuid())
+    sqlx::query!("DELETE FROM bots WHERE id = $1", AGENT.as_uuid())
         .execute(&pool)
         .await
         .unwrap();

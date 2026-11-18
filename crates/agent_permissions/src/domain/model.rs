@@ -29,6 +29,7 @@ use utoipa::ToSchema;
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
+#[schema(as = ToolPermissionState)]
 pub enum PermissionState {
     /// Runs without asking: the default for everything.
     Always,
@@ -42,8 +43,10 @@ pub enum PermissionState {
 /// one operation.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[schema(as = ToolPermissionTarget)]
 pub enum Target {
     /// Every operation of `group` whose action is `action`.
+    #[schema(title = "GroupActionTarget")]
     GroupAction {
         /// A registry group id, e.g. `documents`.
         group: String,
@@ -51,6 +54,7 @@ pub enum Target {
         action: Action,
     },
     /// One SDK operation.
+    #[schema(title = "ToolTarget")]
     Tool {
         /// The SDK's spec name, e.g. `storage`.
         service: String,
@@ -295,6 +299,7 @@ pub struct ToolPermissionCatalog {
 /// built-in persona.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
+#[schema(as = ToolPermissionPolicyKind)]
 pub enum PolicyKind {
     /// An owned agent's.
     Agent,
@@ -307,6 +312,7 @@ pub enum PolicyKind {
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, schemars::JsonSchema,
 )]
 #[serde(rename_all = "snake_case")]
+#[schema(as = ToolPermissionOrigin)]
 pub enum Origin {
     /// The operation's own setting.
     Tool,
@@ -390,6 +396,7 @@ pub struct PermissionsView {
 /// Where a tightening was saved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
+#[schema(as = ToolPermissionAppliedTo)]
 pub enum AppliedTo {
     /// The agent's saved settings.
     Agent,
