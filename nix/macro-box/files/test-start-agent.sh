@@ -24,6 +24,8 @@ cat >"$root/bin/bun" <<EOF
 #!$(command -v bash)
 [[ \$1 == -e ]] && exec "$real_bun" "\$@"
 echo "\$*" >>"$root/bun.ran"
+echo "\${MACRO_SETUP_TRACEPARENT-unset}" >"$root/bun.trace"
+echo "\${OTEL_EXPORTER_OTLP_ENDPOINT-unset}" >"$root/bun.otlp"
 EOF
 chmod +x "$root/bin/bun"
 export PATH=$root/bin:$PATH
@@ -62,6 +64,8 @@ script() { # script <name>: the assembled script, as `_agent.nix` builds it
     echo "runtime=$case/runtime"
     echo "helper=true"
     echo "helper_credentials=$case/agent.env"
+    echo "setup_traceparent=$case/inbox/setup-traceparent"
+    echo "setup_traceparent_used=$case/state/setup-traceparent"
     [[ $1 == start-agent ]] && cat "$files/agent-env-setting"
     cat "$files/$1"
   } >"$case/$1"
@@ -163,5 +167,25 @@ stopped 0
 check 'B9 a restart after a land and a clean stop never count' bash -c "[[ \$(cat '$root/case/state/failures') == 0 ]]"
 stopped 1
 check 'B9 a crash on a new head counts' bash -c "[[ \$(cat '$root/case/state/failures') == 1 ]]"
+
+# --- B10: the setup trace reaches the runtime's first start only -----------
+trace=00-11111111111111111111111111111111-2222222222222222-01
+fresh
+mkdir -p "$root/case/inbox"
+echo -n "$trace" >"$root/case/inbox/setup-traceparent"
+start
+check 'B10 the first start runs under the setup trace macrod staged' bash -c "[[ \$(cat '$root/bun.trace') == '$trace' ]]"
+start
+check 'B10 a restart in the same boot does not join it again' bash -c "[[ \$(cat '$root/bun.trace') == unset ]]"
+echo -n 'not-a-trace' >"$root/case/inbox/setup-traceparent"
+start
+check 'B10 a malformed one is ignored' bash -c "[[ \$(cat '$root/bun.trace') == unset ]]"
+fresh
+start
+check 'B10 without one the runtime gets none' bash -c "[[ \$(cat '$root/bun.trace') == unset ]]"
+fresh
+echo 'OTEL_EXPORTER_OTLP_ENDPOINT="https://intake.test/i/otlp"' >>"$root/case/agent.env"
+start
+check 'B10 the runtime exports where agent.env says' bash -c "[[ \$(cat '$root/bun.otlp') == https://intake.test/i/otlp ]]"
 
 exit "$failed"

@@ -96,12 +96,13 @@ pub(crate) async fn publish_deliver_agent(
     Ok(())
 }
 
-/// Sends an agent environment down a harness's runtime connection; whether
-/// this replica held it.
+/// Sends an agent environment, with the setup trace the agent's start
+/// joins, down a harness's runtime connection; whether this replica held it.
 pub(crate) type SendAgent = Arc<
     dyn Fn(
             HarnessId,
             agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+            Option<String>,
         ) -> futures::future::BoxFuture<'static, bool>
         + Send
         + Sync,
@@ -140,11 +141,26 @@ pub(crate) async fn deliver_agent_to_runtime(
                 .map(|(key, value)| (key.as_str().to_owned(), value.clone()))
                 .collect(),
         );
-        let delivered = send(request.deliver_agent_harness, environment).await;
+        let delivered = send(
+            request.deliver_agent_harness,
+            environment,
+            current_traceparent(),
+        )
+        .await;
         tracing::Span::current().record("delivered", delivered);
     }
     .instrument(span)
     .await;
+}
+
+/// The current span's W3C context, absent when nothing is traced.
+fn current_traceparent() -> Option<String> {
+    use tracing_opentelemetry::OpenTelemetrySpanExt as _;
+    let mut carrier = std::collections::HashMap::new();
+    opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&tracing::Span::current().context(), &mut carrier);
+    });
+    carrier.remove("traceparent")
 }
 
 // Untagged: an agent hand-off's required fields appear in no other event,

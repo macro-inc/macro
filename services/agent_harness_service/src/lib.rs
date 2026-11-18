@@ -1808,10 +1808,12 @@ pub async fn run() -> anyhow::Result<()> {
                             };
                             let send: runtime_commands::SendAgent = {
                                 let runtimes = Arc::clone(&runtimes);
-                                Arc::new(move |harness, environment| {
+                                Arc::new(move |harness, environment, traceparent| {
                                     let runtimes = Arc::clone(&runtimes);
                                     Box::pin(async move {
-                                        runtimes.apply_agent(harness, environment).await
+                                        runtimes
+                                            .apply_agent(harness, environment, traceparent)
+                                            .await
                                     })
                                 })
                             };

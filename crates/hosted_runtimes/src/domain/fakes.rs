@@ -467,8 +467,15 @@ impl ComputerRepo for FakeRepo {
             state.waiting_for_capacity(),
             state.payment_progress(),
         );
+        let agent = crate::domain::setup::AgentProgress {
+            awaiting: state.awaiting_agent,
+            delivering: effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::DeliverAgent)),
+        };
         if let Some(setup) = state.setup.as_mut() {
             setup.advance(&phase, connected, waiting, payment, now);
+            setup.advance_agent(agent, now);
         }
         computer.state = state;
         self.push_effects(computer, effects, now);

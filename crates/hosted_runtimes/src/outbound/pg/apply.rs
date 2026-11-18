@@ -142,6 +142,12 @@ impl PgComputerRepo {
         if effects.iter().any(Effect::starts_guest) {
             Self::count_admitted_start(tx, host, now).await?;
         }
+        let agent = crate::domain::setup::AgentProgress {
+            awaiting: state.awaiting_agent,
+            delivering: effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::DeliverAgent)),
+        };
         Self::store_effects(tx, computer_id, effects, now).await?;
 
         if let Some(tag) = serde_json::to_value(&state.phase)?
@@ -160,7 +166,12 @@ impl PgComputerRepo {
         let finished_setup = state
             .setup
             .as_mut()
-            .map(|setup| setup.advance(&phase, connected, waiting_for_capacity, payment, now))
+            .map(|setup| {
+                let mut finished =
+                    setup.advance(&phase, connected, waiting_for_capacity, payment, now);
+                finished.extend(setup.advance_agent(agent, now));
+                finished
+            })
             .unwrap_or_default();
 
         if !state.is_live() {

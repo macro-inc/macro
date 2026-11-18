@@ -2,7 +2,8 @@
 # start, configures git, links the image's packages, rolls back to the last
 # good commit after repeated failed boots, then runs the runtime.
 # `_agent.nix` prepends `workspace`, `last_good`, `failures`, `boot_head`,
-# `helper`, `helper_credentials`, `runtime` and `max_failed_boots`.
+# `helper`, `helper_credentials`, `runtime`, `max_failed_boots`,
+# `setup_traceparent` and `setup_traceparent_used`.
 umask 077
 mode=${1:?usage: start-agent run}
 # The unit sets MUPPET_CREDENTIALS_FILE to its agent.env credential.
@@ -124,6 +125,23 @@ modules=$workspace/node_modules
 if [[ "$(readlink "$modules" || true)" != "$runtime/node_modules" ]]; then
   rm -rf "$modules"
   ln -s "$runtime/node_modules" "$modules"
+fi
+
+# Where the runtime's spans go: agent.env's, not a credential.
+endpoint=$(setting "$credentials" OTEL_EXPORTER_OTLP_ENDPOINT)
+if [[ -n $endpoint ]]; then
+  export OTEL_EXPORTER_OTLP_ENDPOINT=$endpoint
+fi
+# The computer's setup trace, which macrod stages beside agent.env: the
+# runtime's start (agent.start) joins it once. A restart after that (a land,
+# a crash) is not setup, so a context already used is left out.
+if [[ -s $setup_traceparent ]]; then
+  trace=$(head -c 64 "$setup_traceparent")
+  if [[ $trace =~ ^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$ ]] &&
+    [[ $trace != "$(cat "$setup_traceparent_used" 2>/dev/null || true)" ]]; then
+    echo "$trace" >"$setup_traceparent_used"
+    export MACRO_SETUP_TRACEPARENT=$trace
+  fi
 fi
 
 cd "$workspace"
