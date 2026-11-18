@@ -8,6 +8,7 @@ export function ProjectTopBar(props: {
   titleMenu: JSX.Element;
   navigation: (compact: Accessor<boolean>) => JSX.Element;
   share: JSX.Element;
+  shareRequests: JSX.Element;
 }) {
   return (
     <Show
@@ -24,6 +25,7 @@ export function ProjectTopBar(props: {
         titleMenu={props.titleMenu}
         navigation={props.navigation}
         share={props.share}
+        shareRequests={props.shareRequests}
       />
     </Show>
   );

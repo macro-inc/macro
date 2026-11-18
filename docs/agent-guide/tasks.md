@@ -1096,6 +1096,8 @@ desktop, and the project name truncates instead. On phones the bar keeps its
 room for the name, as phone file headers do: the Tasks breadcrumb becomes a back
 arrow, the project icon is no longer its own button, and Share and Copy link
 leave the bar; Change icon, Share, and Copy Link stay in `Project actions`.
+While permission requests wait, a reviewer sees Share back in the bar as the
+share icon with their count; it opens Share, which also opens once per visit.
 Tablets and desktop keep the full bar. In Tasks, an outlined
 circular search button expands into a focused `Search in <project name>` field.
 Close or Escape clears the query and restores focus to the button. The task

@@ -5,12 +5,14 @@ import { type Accessor, type JSX, Show } from 'solid-js';
 /**
  * On a phone the bar keeps its room for the project's name, as phone file
  * headers do: its crumbs compact, and Share and Copy link stay in the
- * project's menu instead of the bar.
+ * project's menu instead of the bar. While permission requests wait, Share
+ * returns with their count so reviewers still see them.
  */
 export function MobileProjectTopBar(props: {
   titleMenu: JSX.Element;
   navigation: (compact: Accessor<boolean>) => JSX.Element;
   share: JSX.Element;
+  shareRequests: JSX.Element;
 }) {
   return (
     <EntityDetailTopBar
@@ -18,7 +20,9 @@ export function MobileProjectTopBar(props: {
       navigation={props.navigation}
       compact={isMobile()}
     >
-      <Show when={!isMobile()}>{props.share}</Show>
+      <Show when={!isMobile()} fallback={props.shareRequests}>
+        {props.share}
+      </Show>
     </EntityDetailTopBar>
   );
 }

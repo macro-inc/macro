@@ -21,7 +21,10 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import {
+  ShareRequestsTrigger,
+  ShareTrigger,
+} from '@core/component/TopBar/ShareButton';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -280,6 +283,17 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                 id={project().id}
                 blockType="initiative"
                 hotkeyScope={panel.splitHotkeyScope}
+              />
+            )}
+          </Show>
+        }
+        shareRequests={
+          <Show when={source.project()}>
+            {(project) => (
+              <ShareRequestsTrigger
+                onClick={openShare}
+                id={project().id}
+                blockType="initiative"
               />
             )}
           </Show>
