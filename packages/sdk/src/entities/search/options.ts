@@ -9,7 +9,13 @@ import type {
   EntityFilters,
   UnifiedSearchResponseItem,
 } from '../../../generated/search/types.gen';
-import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
+import {
+  type IterationOptions,
+  iterate,
+  MacroError,
+  paginate,
+  unwrap,
+} from '../../utils';
 import type { MacroClient } from '../../utils/client';
 
 type Hit = UnifiedSearchResponseItem;
@@ -26,7 +32,9 @@ export interface SearchOpts extends IterationOptions {
 /**
  * Build a `search(client, query, opts?)` function for one entity type: unified
  * search hits narrowed to `type`, each mapped through `make`.
- * Most relevant first, auto-paginated; `maxItems` caps the total.
+ * Most relevant first, auto-paginated; `maxItems` caps the total. A query
+ * with no word to search for throws before any request, as the server
+ * refuses it, naming `listWith` when given.
  */
 export function entitySearch<T, K extends Hit['type']>(opts: {
   filters?: EntityFilters;
@@ -34,19 +42,29 @@ export function entitySearch<T, K extends Hit['type']>(opts: {
   make: (client: MacroClient, hit: Extract<Hit, { type: K }>) => T;
   /** Opt in to CRM results (off by default server-side; required for company hits). */
   includeCrm?: boolean;
+  /** The method that lists these items without a query, named when one has no word. */
+  listWith?: string;
 }): (
   client: MacroClient,
   query: string,
   searchOpts?: SearchOpts,
 ) => AsyncGenerator<T> {
-  const { filters, type, make, includeCrm } = opts;
-  return (client, query, searchOpts) =>
-    iterate(
+  const { filters, type, make, includeCrm, listWith } = opts;
+  return (client, query, searchOpts) => {
+    // As the server's `trimmed_query`: whitespace and double quotes are no word.
+    if (typeof query !== 'string' || /^[\s"]*$/.test(query))
+      throw new MacroError(
+        listWith
+          ? `Search needs a word to look for; to list without one, use ${listWith}.`
+          : 'Search needs a word to look for.',
+      );
+    return iterate(
       `${type} search`,
       searchOpts,
       { searchOn: true, pageSize: true },
       () => pages(client, query, searchOpts),
     );
+  };
 
   function pages(
     client: MacroClient,

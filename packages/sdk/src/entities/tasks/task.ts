@@ -1,5 +1,14 @@
-import type { PropertyInput } from '../../../generated/storage/types.gen';
-import { MacroError, unwrap } from '../../utils';
+import type {
+  PropertyInput,
+  SoupApiItem,
+} from '../../../generated/storage/types.gen';
+import {
+  type IterationOptions,
+  iterate,
+  MacroError,
+  paginate,
+  unwrap,
+} from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { rejectUnknownOptions } from '../../utils/options';
 import { Document } from '../documents/document';
@@ -8,6 +17,7 @@ import type { Project } from '../projects/project';
 import { entitySearch } from '../search/options';
 import { Team } from '../teams/team';
 import { User } from '../users/user';
+import { WorkspaceQuery } from '../workspace/query';
 
 /**
  * System task property definitions and Status options. Values mirror
@@ -28,6 +38,47 @@ export interface TaskSummary {
   owner: User;
   updatedAt?: string;
   completed: boolean;
+}
+
+/** A task's Status. */
+export type TaskStatus =
+  | 'not_started'
+  | 'in_progress'
+  | 'in_review'
+  | 'completed'
+  | 'canceled';
+
+/** The system Status options, by name. */
+const STATUS_OPTION_IDS: Record<TaskStatus, string> = {
+  not_started: NOT_STARTED_STATUS_OPTION_ID,
+  in_progress: '00000001-0000-0000-0002-000000000002',
+  in_review: '00000001-0000-0000-0002-000000000003',
+  completed: COMPLETED_STATUS_OPTION_ID,
+  canceled: '00000001-0000-0000-0002-000000000005',
+};
+
+/** The Statuses of a task still to do, as the app's Tasks view counts them. */
+const OPEN_STATUSES: TaskStatus[] = ['not_started', 'in_progress', 'in_review'];
+
+/** Filters for {@link Task.list}. */
+export interface TaskListOptions extends IterationOptions {
+  /** Whose tasks: those assigned to this user. Defaults to you. */
+  assignee?: User;
+  /** Only tasks due at or after this instant. */
+  dueAfter?: Date;
+  /** Only tasks due before this instant (exclusive). */
+  dueBefore?: Date;
+  /** Only tasks with one of these Statuses. Defaults to the open ones: not_started, in_progress and in_review. */
+  status?: TaskStatus[];
+}
+
+/** A task with the name, due date and Status its listing already carries. */
+export interface TaskListing {
+  task: Task;
+  name: string;
+  /** When it is due, as an ISO 8601 instant; `undefined` when it has no due date. */
+  dueDate: string | undefined;
+  status: TaskStatus | undefined;
 }
 
 /** The `owner/repo/pull/number` key of a GitHub pull request URL. */
@@ -205,6 +256,48 @@ export class Task extends Document {
   }
 
   /**
+   * Open tasks assigned to a user (you by default) that match every given
+   * filter, soonest due first and those with no due date last: the query the
+   * app's Tasks view runs for its My tasks tab.
+   */
+  static list(
+    client: MacroClient,
+    options: TaskListOptions = {},
+  ): AsyncGenerator<TaskListing> {
+    if (typeof options !== 'object' || options === null)
+      throw new MacroError(
+        'tasks.list takes an options object, { assignee, dueAfter, dueBefore, status }.',
+      );
+    for (const [name, value] of [
+      ['dueAfter', options.dueAfter],
+      ['dueBefore', options.dueBefore],
+    ] as const) {
+      if (
+        value !== undefined &&
+        !(value instanceof Date && Number.isFinite(value.getTime()))
+      )
+        throw new MacroError(`tasks.list: \`${name}\` must be a valid Date.`);
+    }
+    if (
+      options.status !== undefined &&
+      (!Array.isArray(options.status) ||
+        options.status.length === 0 ||
+        options.status.some(
+          (status) => !Object.hasOwn(STATUS_OPTION_IDS, status),
+        ))
+    )
+      throw new MacroError(
+        `tasks.list: \`status\` must be a non-empty list of ${Object.keys(STATUS_OPTION_IDS).join(', ')}.`,
+      );
+    return iterate(
+      'tasks.list',
+      options,
+      { assignee: true, dueAfter: true, dueBefore: true, status: true },
+      () => listPages(client, options),
+    );
+  }
+
+  /**
    * Whether the task is completed (its Status property is "Completed");
    * `undefined` if the document is not a task.
    *
@@ -259,6 +352,7 @@ export class Task extends Document {
     filters: { document_filters: { sub_types: ['task'], task_filters: {} } },
     type: 'document',
     make: (client, hit) => new Task(client, hit.document_id),
+    listWith: 'macro.tasks.list',
   });
 }
 
@@ -307,4 +401,82 @@ async function initialProperties(
     });
   }
   return values;
+}
+
+/** A Soup filter expression. */
+type Filter = Record<string, unknown>;
+
+const all = (filters: Filter[]): Filter =>
+  filters.reduce((left, right) => ({ '&': [left, right] }));
+
+const any = (filters: Filter[]): Filter =>
+  filters.reduce((left, right) => ({ '|': [left, right] }));
+
+/**
+ * The pages of {@link Task.list}: the Tasks view's My tasks query (Assignees,
+ * Status and Due date property filters over task documents), soonest due
+ * first.
+ */
+async function* listPages(
+  client: MacroClient,
+  options: TaskListOptions,
+): AsyncGenerator<TaskListing> {
+  const assignee = options.assignee ?? (await User.me(client));
+  const filters: Filter[] = [
+    { l: { pd: ASSIGNEES_PROPERTY_ID, v: { er: assignee.id } } },
+    any(
+      (options.status ?? OPEN_STATUSES).map((status) => ({
+        l: { pd: STATUS_PROPERTY_ID, v: { so: STATUS_OPTION_IDS[status] } },
+      })),
+    ),
+  ];
+  if (options.dueAfter || options.dueBefore)
+    filters.push({
+      l: {
+        pd: DUE_DATE_PROPERTY_ID,
+        et: 'TASK',
+        v: {
+          dr: {
+            start: options.dueAfter?.toISOString(),
+            end: options.dueBefore?.toISOString(),
+          },
+        },
+      },
+    });
+  const body = await new WorkspaceQuery(client).body({
+    includeTypes: ['document'],
+    df: { l: { dst: 'task' } },
+    propf: all(filters),
+    limit: 100,
+  });
+  body.sort_method = 'property';
+  body.sort_property_definition_id = DUE_DATE_PROPERTY_ID;
+  body.sort_direction = 'asc';
+  const items = paginate<SoupApiItem>(async (cursor) => {
+    const page = unwrap(
+      await client.storage.postItemsSoupAst({
+        body,
+        query: cursor ? { cursor } : undefined,
+      }),
+    );
+    return { items: page.items, nextCursor: page.next_cursor };
+  });
+  for await (const item of items) {
+    if (item.tag !== 'document') continue;
+    const value = (property: string) =>
+      item.data.properties.find((each) => each.definition.id === property)
+        ?.value;
+    const due = value(DUE_DATE_PROPERTY_ID);
+    const status = value(STATUS_PROPERTY_ID);
+    const statusId =
+      status?.type === 'SelectOption' ? status.value[0] : undefined;
+    yield {
+      task: Task.byId(client, item.data.id),
+      name: item.data.name,
+      dueDate: due?.type === 'Date' ? due.value : undefined,
+      status: (Object.keys(STATUS_OPTION_IDS) as TaskStatus[]).find(
+        (name) => STATUS_OPTION_IDS[name] === statusId,
+      ),
+    };
+  }
 }

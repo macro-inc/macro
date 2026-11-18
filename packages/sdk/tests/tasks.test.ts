@@ -509,3 +509,254 @@ describe('Task.create options', () => {
     expect(requests).toHaveLength(0);
   });
 });
+
+describe('Task.list', () => {
+  const OWNER = 'macro|owner@example.test';
+  const ASSIGNEES = '00000001-0000-0000-0000-000000000001';
+  const STATUS = '00000001-0000-0000-0000-000000000002';
+  const DUE_DATE = '00000001-0000-0000-0000-000000000004';
+  const nil = '00000000-0000-0000-0000-000000000000';
+
+  const property = (id: string, value: unknown) => ({
+    id: `${id}-assignment`,
+    definition: { id },
+    value,
+  });
+
+  const taskItem = (
+    id: string,
+    name: string,
+    properties: ReturnType<typeof property>[],
+  ) => ({
+    tag: 'document',
+    frecency_score: 0,
+    is_favorited: false,
+    data: {
+      id,
+      name,
+      ownerId: 'macro|creator@example.test',
+      createdAt: '2026-11-01T00:00:00Z',
+      updatedAt: '2026-11-02T00:00:00Z',
+      documentVersionId: 1,
+      subType: { type: 'task' },
+      properties,
+    },
+  });
+
+  function serve(requests: Request[], pages: unknown[][]) {
+    let page = 0;
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      if (new URL(request.url).pathname === '/user/me')
+        return Response.json({ user_id: OWNER });
+      const items = pages[page] ?? [];
+      page += 1;
+      return Response.json({
+        items,
+        next_cursor: page < pages.length ? `cursor-${page}` : null,
+      });
+    }) as typeof fetch;
+    return new Macro({
+      token: 'user-token',
+      hosts: {
+        auth: 'https://auth.example.test',
+        storage: 'https://storage.example.test',
+      },
+    });
+  }
+
+  test("runs the Tasks view's My tasks query for your open tasks due in a window", async () => {
+    const requests: Request[] = [];
+    const macro = serve(requests, [
+      [
+        taskItem('0198a4cc-e138-7670-a308-a6b766602740', 'Ship the beta', [
+          property(STATUS, {
+            type: 'SelectOption',
+            value: ['00000001-0000-0000-0002-000000000003'],
+          }),
+          property(DUE_DATE, { type: 'Date', value: '2026-11-20T05:00:00Z' }),
+        ]),
+      ],
+      [
+        taskItem('0198a4cc-e138-7670-a308-a6b766602741', 'Write the notes', [
+          property(STATUS, {
+            type: 'SelectOption',
+            value: ['00000001-0000-0000-0002-000000000001'],
+          }),
+          property(DUE_DATE, { type: 'Date', value: '2026-11-23T05:00:00Z' }),
+        ]),
+      ],
+    ]);
+
+    const listed = [];
+    for await (const listing of macro.tasks.list({
+      dueAfter: new Date('2026-11-19T05:00:00Z'),
+      dueBefore: new Date('2026-11-26T05:00:00Z'),
+    }))
+      listed.push({ ...listing, task: listing.task.id });
+
+    expect(listed).toEqual([
+      {
+        task: '0198a4cc-e138-7670-a308-a6b766602740',
+        name: 'Ship the beta',
+        dueDate: '2026-11-20T05:00:00Z',
+        status: 'in_review',
+      },
+      {
+        task: '0198a4cc-e138-7670-a308-a6b766602741',
+        name: 'Write the notes',
+        dueDate: '2026-11-23T05:00:00Z',
+        status: 'not_started',
+      },
+    ]);
+    expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+      '/user/me',
+      '/items/soup/ast',
+      '/items/soup/ast',
+    ]);
+    expect(new URL(requests[2].url).searchParams.get('cursor')).toBe(
+      'cursor-1',
+    );
+    const body = await requests[1].json();
+    expect(body.df).toEqual({ l: { dst: 'task' } });
+    expect(body.propf).toEqual({
+      '&': [
+        {
+          '&': [
+            { l: { pd: ASSIGNEES, v: { er: OWNER } } },
+            {
+              '|': [
+                {
+                  '|': [
+                    {
+                      l: {
+                        pd: STATUS,
+                        v: { so: '00000001-0000-0000-0002-000000000001' },
+                      },
+                    },
+                    {
+                      l: {
+                        pd: STATUS,
+                        v: { so: '00000001-0000-0000-0002-000000000002' },
+                      },
+                    },
+                  ],
+                },
+                {
+                  l: {
+                    pd: STATUS,
+                    v: { so: '00000001-0000-0000-0002-000000000003' },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          l: {
+            pd: DUE_DATE,
+            et: 'TASK',
+            v: {
+              dr: {
+                start: '2026-11-19T05:00:00.000Z',
+                end: '2026-11-26T05:00:00.000Z',
+              },
+            },
+          },
+        },
+      ],
+    });
+    expect(body).toMatchObject({
+      sort_method: 'property',
+      sort_property_definition_id: DUE_DATE,
+      sort_direction: 'asc',
+    });
+    // Every other kind of item is left out, as the workspace listing does it.
+    expect(body.ef).toEqual({ l: { ThreadId: nil } });
+    expect(body.asf).toBeUndefined();
+  });
+
+  test("lists another person's tasks in the Statuses asked for, with no due filter", async () => {
+    const requests: Request[] = [];
+    const macro = serve(requests, [
+      [
+        taskItem('0198a4cc-e138-7670-a308-a6b766602742', 'No date yet', [
+          property(STATUS, {
+            type: 'SelectOption',
+            value: ['00000001-0000-0000-0002-000000000004'],
+          }),
+        ]),
+      ],
+    ]);
+
+    const listed = [];
+    for await (const listing of macro.tasks.list({
+      assignee: macro.users.byId('macro|teammate@example.test'),
+      status: ['completed'],
+    }))
+      listed.push({ ...listing, task: listing.task.id });
+
+    expect(listed).toEqual([
+      {
+        task: '0198a4cc-e138-7670-a308-a6b766602742',
+        name: 'No date yet',
+        dueDate: undefined,
+        status: 'completed',
+      },
+    ]);
+    expect(requests).toHaveLength(1);
+    expect((await requests[0].json()).propf).toEqual({
+      '&': [
+        { l: { pd: ASSIGNEES, v: { er: 'macro|teammate@example.test' } } },
+        {
+          l: {
+            pd: STATUS,
+            v: { so: '00000001-0000-0000-0002-000000000004' },
+          },
+        },
+      ],
+    });
+  });
+
+  test('refuses a bad date, an unknown Status and an unknown option before any request', () => {
+    const requests: Request[] = [];
+    const macro = serve(requests, []);
+
+    expect(() =>
+      macro.tasks.list({ dueBefore: new Date('next week') }),
+    ).toThrow('tasks.list: `dueBefore` must be a valid Date.');
+    expect(() =>
+      macro.tasks.list({ dueAfter: '2026-11-19' as unknown as Date }),
+    ).toThrow('tasks.list: `dueAfter` must be a valid Date.');
+    expect(() =>
+      macro.tasks.list({ status: ['open' as 'not_started'] }),
+    ).toThrow(
+      'tasks.list: `status` must be a non-empty list of not_started, in_progress, in_review, completed, canceled.',
+    );
+    expect(() =>
+      macro.tasks.list({ due: 'this week' } as unknown as { dueAfter: Date }),
+    ).toThrow('tasks.list does not take `due`');
+    expect(requests).toHaveLength(0);
+  });
+});
+
+describe('Task.search', () => {
+  test('names tasks.list for a query with no word, before any request', () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      requests.push(
+        input instanceof Request ? input : new Request(input, init),
+      );
+      return Response.json({ results: [], next_cursor: null });
+    }) as typeof fetch;
+    const macro = new Macro({ token: 'user-token' });
+
+    for (const query of ['', '   ', ' "" '])
+      expect(() => macro.tasks.search(query, { maxItems: 200 })).toThrow(
+        'Search needs a word to look for; to list without one, use macro.tasks.list.',
+      );
+    expect(requests).toHaveLength(0);
+  });
+});
