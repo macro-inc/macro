@@ -169,6 +169,10 @@ the gateway `/email` prefix.
   attachment bytes through the provider-aware reader.
 - Preserve the calendar domain's `team_ooo_changed` hint when forwarding a
   calendar refresh so unrelated invitation updates retain teammates' OOO rows.
+- The Outlook sync loop (`mailbox_sync_worker::run`) claims a due folder page
+  before every message read. An import keeps its folders' next pages due, so
+  claiming pages once per cycle would leave a folder with new mail behind
+  every worker's whole cycle of queued messages.
 - `OUTLOOK_IMPORTS_PAUSED` (read at startup) makes the Outlook sync loop claim
   only live message work; import rows wait and live changes keep importing.
   `src/bin/reimport_outlook_folders` re-imports folders whose delta round
