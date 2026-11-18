@@ -1,0 +1,48 @@
+packages/sdk/src/entities/agents/tool-permissions.ts
+  s_6966afebcdde0a::t_baaaf43cded6cf 1-51
+packages/sdk/specs/agent-harness.json
+  s_6966afebcdde0a::t_fa8d2ed4563c65 3520-3580,3779-3817,3852-4142,5645-5707,7698-7724,7903-7907,9075-9089,9105-9430,9848-9851
+packages/sdk/src/entities/agents/agent.ts
+  s_6966afebcdde0a::t_2a6bffc75ff00d 14-19,198-236
+  s_6966afebcdde0a::t_b4fec923757de2 237
+packages/sdk/src/entities/agent-sessions/agent-session.ts
+  s_6966afebcdde0a::t_2a6bffc75ff00d 21-25,240-253
+  s_6966afebcdde0a::t_b5b0be81caa516 254-255
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_6966afebcdde0a::t_fa8d2ed4563c65 5,727-735,783-789,797-844
+  s_6966afebcdde0a::t_7804f5b9c6941c 845
+packages/sdk/src/macro.ts
+  s_6966afebcdde0a::t_f27c279eb39731 392-403
+packages/sdk/src/coverage/skipped.ts
+  s_6966afebcdde0a::t_2a6bffc75ff00d 45-46
+packages/sdk/src/utils/verbs.ts
+  s_6966afebcdde0a::t_2a6bffc75ff00d 57,64,71
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_6966afebcdde0a::t_fa8d2ed4563c65 749-791,2313-2338,2449-2454,3142-3155,3171-3432,5225-5250,5346-5368,5389-5503
+  s_6966afebcdde0a::t_a9c95f4d1e9a88 5504
+packages/sdk/src/entities/agents/namespace.ts
+  s_6966afebcdde0a::t_2a6bffc75ff00d 4,58-67
+  s_6966afebcdde0a::t_f282140f4968d8 68-70
+packages/sdk/generated/agent-harness/index.ts
+  s_6966afebcdde0a::t_fa8d2ed4563c65 4
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_6966afebcdde0a::t_589290ea0e2819 3,6-7
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_6966afebcdde0a::t_aa45ab98b1d4f9 13-14,20,51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c336a4a745b45468dfe4610d2206da688f155d93",
+  "prompts": {},
+  "sessions": {
+    "s_6966afebcdde0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13694447-aca1-404a-8fbf-c900186fe6c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
