@@ -283,13 +283,59 @@ class TurnContext(unittest.TestCase):
 
 
 RELEASE_RUNS = {"workflow_runs": [
-    {"name": "Deploy Production Release", "conclusion": "success", "head_sha": "aaa111", "head_branch": "v2026.11.16.0",
+    {"name": "Deploy Production Release", "status": "completed", "conclusion": "success", "head_sha": "aaa111", "head_branch": "v2026.11.16.0",
      "created_at": "2026-11-16T14:09:45Z", "updated_at": "2026-11-16T14:41:20Z"},
-    {"name": "Deploy Production Release", "conclusion": "success", "head_sha": "bbb222", "head_branch": "v2026.11.16.1",
+    {"name": "Deploy Production Release", "status": "completed", "conclusion": "success", "head_sha": "bbb222", "head_branch": "v2026.11.16.1",
      "created_at": "2026-11-16T23:15:25Z", "updated_at": "2026-11-16T23:35:38Z"},
-    {"name": "Android APK on Release", "conclusion": "success", "head_sha": "ccc333", "head_branch": "v2026.11.16.1",
+    {"name": "Android APK on Release", "status": "completed", "conclusion": "success", "head_sha": "ccc333", "head_branch": "v2026.11.16.1",
      "created_at": "2026-11-16T23:15:25Z", "updated_at": "2026-11-16T23:51:09Z"},
 ]}
+
+
+# The 2026-11-18 production deploys: the last three concluded "failure"
+# because an unrelated worker job failed, though each deployed the harness.
+RUNS_2026_11_18 = {"workflow_runs": [
+    {"name": "Deploy Production Release", "status": "completed", "conclusion": conclusion, "head_sha": sha,
+     "head_branch": tag, "created_at": created, "updated_at": updated}
+    for tag, sha, conclusion, created, updated in [
+        ("v2026.11.18.0", "7b93e795a5a", "failure", "2026-11-18T18:24:30Z", "2026-11-18T19:02:03Z"),
+        ("v2026.11.17.1", "dce2afa890f", "failure", "2026-11-18T00:08:45Z", "2026-11-18T01:22:25Z"),
+        ("v2026.11.17.0", "87308ca67aa", "failure", "2026-11-17T21:43:40Z", "2026-11-17T22:50:33Z"),
+        ("v2026.11.16.1", "cd959802725", "success", "2026-11-16T23:15:25Z", "2026-11-16T23:35:38Z"),
+        ("v2026.11.16.0", "f2cc9feea1a", "success", "2026-11-16T14:09:45Z", "2026-11-16T14:41:20Z"),
+    ]
+]}
+RELEASES_2026_11_18 = [
+    {"tag_name": tag, "published_at": published, "draft": False}
+    for tag, published in [
+        ("v2026.11.18.0", "2026-11-18T18:24:27Z"), ("v2026.11.17.1", "2026-11-18T00:08:43Z"),
+        ("v2026.11.17.0", "2026-11-17T21:43:38Z"), ("v2026.11.16.1", "2026-11-16T23:15:23Z"),
+        ("v2026.11.16.0", "2026-11-16T14:09:41Z"),
+    ]
+]
+
+
+def github(runs, releases, tags=None, registered=None):
+    """A `subprocess.run` stand-in for the deploy lookup's `gh` and `aws` reads."""
+    def run(args, **_):
+        if args[0] == "aws":
+            if registered is None:
+                raise subprocess.CalledProcessError(255, args)
+            return completed(json.dumps(registered))
+        path = args[2]
+        if "/actions/runs" in path:
+            return completed(json.dumps(runs))
+        if "/releases" in path:
+            return completed(json.dumps(releases))
+        if "/commits/" in path:
+            return completed(json.dumps((tags or {})[path.rsplit("/", 1)[1]]))
+        raise AssertionError(args)
+    return run
+
+
+def lookup(task, turn_started, runs, releases, **fake):
+    with mock.patch("subprocess.run", side_effect=github(runs, releases, **fake)):
+        return reconstruct.deploy_commit(task, reconstruct.iso(turn_started), "prod", reconstruct.production_deploys())
 
 
 def completed(stdout):
@@ -307,33 +353,62 @@ class Reconstruct(unittest.TestCase):
 
     def test_the_commit_is_the_deploy_that_registered_the_task(self):
         asked = []
+        fake = github(RELEASE_RUNS, [], registered="2026-11-16T23:31:34.381000+00:00")
 
-        def run(args, **_):
+        def run(args, **kwargs):
             asked.append(args)
-            if args[0] == "gh":
-                return completed(json.dumps(RELEASE_RUNS))
-            return completed('"2026-11-16T23:31:34.381000+00:00"')
+            return fake(args, **kwargs)
         with mock.patch("subprocess.run", side_effect=run):
             commit = reconstruct.deploy_commit("agent-harness-service-52dc1429:1",
                                                reconstruct.iso("2026-11-17T16:00:42Z"), "prod",
                                                reconstruct.production_deploys())
-        self.assertIn("agent-harness-service-52dc1429:1", asked[1])
+        self.assertIn("agent-harness-service-52dc1429:1", asked[2])
         self.assertEqual(commit["sha"], "bbb222")
         self.assertTrue(commit["exact"])
 
     def test_an_unreadable_task_falls_back_to_the_last_deploy_with_its_reason(self):
-        def run(args, **_):
-            if args[0] == "gh":
-                return completed(json.dumps(RELEASE_RUNS))
-            raise subprocess.CalledProcessError(255, args)
-        with mock.patch("subprocess.run", side_effect=run):
-            commit = reconstruct.deploy_commit("agent-harness-service-52dc1429:1",
-                                               reconstruct.iso("2026-11-16T20:00:00Z"), "prod",
-                                               reconstruct.production_deploys())
+        commit = lookup("agent-harness-service-52dc1429:1", "2026-11-16T20:00:00Z", RELEASE_RUNS, [])
         self.assertEqual(commit["sha"], "aaa111")
         self.assertFalse(commit["exact"])
         self.assertIn("not readable", commit["reason"])
-        self.assertIn("last production deploy before the turn", commit["reason"])
+        self.assertIn("inferred: v2026.11.16.0", commit["reason"])
+
+    def test_a_deploy_run_that_failed_elsewhere_still_registered_the_task(self):
+        commit = lookup("agent-harness-service-8410addf:1", "2026-11-18T19:30:00Z",
+                        RUNS_2026_11_18, RELEASES_2026_11_18, registered="2026-11-18T18:55:51.371000+00:00")
+        self.assertEqual(commit["sha"], "7b93e795a5a")
+        self.assertTrue(commit["exact"])
+        self.assertIn("v2026.11.18.0", commit["reason"])
+        self.assertIn("failure", commit["reason"])
+
+    def test_without_the_task_the_newest_release_deployed_before_the_turn_is_inferred(self):
+        commit = lookup("agent-harness-service-8410addf:1", "2026-11-18T19:30:00Z",
+                        RUNS_2026_11_18, RELEASES_2026_11_18)
+        self.assertEqual(commit["sha"], "7b93e795a5a")
+        self.assertFalse(commit["exact"])
+        self.assertIn("v2026.11.18.0", commit["reason"])
+
+    def test_a_release_still_deploying_at_the_turn_is_not_inferred(self):
+        commit = lookup(None, "2026-11-18T18:40:00Z", RUNS_2026_11_18, RELEASES_2026_11_18)
+        self.assertEqual(commit["sha"], "dce2afa890f")
+        self.assertFalse(commit["exact"])
+
+    def test_a_release_with_no_listed_run_is_inferred_from_its_tag_time(self):
+        runs = {"workflow_runs": RUNS_2026_11_18["workflow_runs"][3:]}
+        commit = lookup(None, "2026-11-18T19:30:00Z", runs, RELEASES_2026_11_18,
+                        tags={"v2026.11.18.0": {"sha": "7b93e795a5a09dd"}})
+        self.assertEqual(commit["sha"], "7b93e795a5a09dd")
+        self.assertFalse(commit["exact"])
+        self.assertIn("v2026.11.18.0", commit["reason"])
+        self.assertIn("no deploy run listed", commit["reason"])
+
+    def test_an_older_only_listing_does_not_jump_ahead(self):
+        runs = {"workflow_runs": RUNS_2026_11_18["workflow_runs"][3:]}
+        commit = lookup("agent-harness-service-8410addf:1", "2026-11-18T19:30:00Z",
+                        runs, RELEASES_2026_11_18[3:], registered="2026-11-18T18:55:51.371000+00:00")
+        self.assertEqual(commit["sha"], "cd959802725")
+        self.assertFalse(commit["exact"])
+        self.assertIn("no production deploy run spans", commit["reason"])
 
     def test_an_unseen_turn_checks_neither_the_session_preamble_nor_a_macro_prompt(self):
         output = {"preamble": "P", "macro_prompt": "inline", "routed_macro_prompt": "routed",
