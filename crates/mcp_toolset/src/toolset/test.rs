@@ -225,7 +225,10 @@ async fn only_servers_we_run_are_sent_the_callers_trace_context() {
     let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
     let subscriber = tracing_subscriber::registry()
         .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
-    let _guard = tracing::subscriber::set_default(subscriber);
+    // Global: other tests reach `call_tool`'s span callsite with no
+    // subscriber of their own, and a thread-local one can lose that race.
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("no other test in this binary installs a global subscriber");
 
     let session = |server: TraceRecordingServer| async move {
         let (server_side, client_side) = tokio::io::duplex(8192);

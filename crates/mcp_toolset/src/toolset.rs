@@ -59,13 +59,15 @@ pub struct ListedServer {
     pub trace_context: TraceContext,
 }
 
-/// Whether a server is sent the caller's W3C trace context in each call's
-/// `_meta` (SEP-414), so its work joins the caller's trace.
+/// Whether this toolset puts the caller's W3C trace context in each call's
+/// `_meta` (SEP-414), so the server's work joins the caller's trace.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TraceContext {
-    /// A server we run: its spans belong in the caller's trace.
+    /// A server we run in this process's trace: the harness's internal MCP.
     Propagate,
-    /// Anyone else's server, which has no use for our trace ids.
+    /// Any other server: this toolset adds nothing to its requests. (Calls
+    /// that go through the egress proxy get context from the proxy's own
+    /// upstream exchange.)
     Withhold,
 }
 

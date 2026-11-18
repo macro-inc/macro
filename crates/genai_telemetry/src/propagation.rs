@@ -69,9 +69,8 @@ pub fn set_parent(span: &tracing::Span, meta: Option<&Map<String, Value>>) {
 const MCP_TRACE_KEYS: [&str; 2] = ["traceparent", "tracestate"];
 
 /// Put `span`'s context in an MCP request's `_meta` under the keys SEP-414
-/// reserves (`traceparent`, `tracestate`), keeping every other key. Only for
-/// a server we run: a third party has no use for our trace ids. A disabled
-/// span clears stale context.
+/// reserves (`traceparent`, `tracestate`), keeping every other key. A
+/// disabled span clears stale context.
 pub fn inject_mcp(span: &tracing::Span, meta: &mut Map<String, Value>) {
     for key in MCP_TRACE_KEYS {
         meta.remove(key);

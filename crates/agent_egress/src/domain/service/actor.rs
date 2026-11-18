@@ -303,17 +303,24 @@ async fn traced_exchange(
         app.kind = app_kind,
         app.key = app_key,
         mcp.method = request["method"].as_str().unwrap_or_default(),
-        mcp.request_bytes = json_bytes(&request),
+        mcp.request_bytes = tracing::field::Empty,
         mcp.response_bytes = tracing::field::Empty,
         mcp.outcome = tracing::field::Empty,
     );
+    // Sizing serializes the JSON again; skip it when nobody records the span.
+    let traced = !span.is_disabled();
+    if traced {
+        span.record("mcp.request_bytes", json_bytes(&request));
+    }
     let result = transport
         .exchange(session, actor, upstream, request)
         .instrument(span.clone())
         .await;
     match &result {
         Ok(value) => {
-            span.record("mcp.response_bytes", json_bytes(value));
+            if traced {
+                span.record("mcp.response_bytes", json_bytes(value));
+            }
             let outcome = if value["isError"] == Value::Bool(true) {
                 "tool_error"
             } else {

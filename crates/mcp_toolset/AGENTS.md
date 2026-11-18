@@ -49,9 +49,11 @@ names, and routes calls back to the right server.
   agent loop waits for running tools on cancel, and a server may hold a call
   (owner approval). Dropping the rmcp call sends `notifications/cancelled`.
 - `ListedServer::trace_context`: `TraceContext::Propagate` puts the caller's
-  W3C context in each call's `_meta` (SEP-414 keys); only for a server we run
-  (`agent_inmem` marks the harness's `macro_internal`). Third-party servers
-  and every `ConnectedServer` get `Withhold`.
+  W3C context in each call's `_meta` (SEP-414 keys); `agent_inmem` sets it
+  only for the harness's own `macro_internal`. Every other server, and every
+  `ConnectedServer`, gets `Withhold`: this toolset adds nothing to its
+  requests (calls through the egress proxy get context from the proxy's own
+  upstream exchange).
 
 ## Related
 

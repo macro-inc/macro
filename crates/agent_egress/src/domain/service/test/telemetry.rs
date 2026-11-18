@@ -32,11 +32,28 @@ impl ActorMcpTransport for AnsweringTransport {
 
 type Fields = BTreeMap<String, String>;
 
-/// The fields of every closed span with `name`, as text.
-#[derive(Clone)]
+/// The fields of every closed `connected_app.mcp_exchange` span, as text.
+///
+/// Installed once as the global subscriber: other tests in this binary reach
+/// the same span callsite with no subscriber of their own, and a thread-local
+/// one can lose that race and see the span disabled. Each test reads only the
+/// spans of its own session.
+#[derive(Clone, Default)]
 struct ClosedSpans {
-    name: &'static str,
     closed: Arc<Mutex<Vec<Fields>>>,
+}
+
+static CLOSED_EXCHANGES: std::sync::OnceLock<ClosedSpans> = std::sync::OnceLock::new();
+
+fn closed_exchanges() -> &'static ClosedSpans {
+    CLOSED_EXCHANGES.get_or_init(|| {
+        let closed = ClosedSpans::default();
+        tracing::subscriber::set_global_default(
+            tracing_subscriber::registry().with(closed.clone()),
+        )
+        .expect("no other test in this binary installs a global subscriber");
+        closed
+    })
 }
 
 struct FieldText<'a>(&'a mut Fields);
@@ -66,7 +83,7 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for ClosedSpans {
 
     fn on_close(&self, id: Id, ctx: LayerContext<'_, S>) {
         let span = ctx.span(&id).unwrap();
-        if span.name() == self.name {
+        if span.name() == "connected_app.mcp_exchange" {
             let fields = span.extensions().get::<Fields>().unwrap().clone();
             self.closed.lock().unwrap().push(fields);
         }
@@ -74,12 +91,7 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for ClosedSpans {
 }
 
 async fn exchange(answer: Option<Value>, destination: McpDestination) -> Fields {
-    let closed = ClosedSpans {
-        name: "connected_app.mcp_exchange",
-        closed: Arc::default(),
-    };
-    let _guard =
-        tracing::subscriber::set_default(tracing_subscriber::registry().with(closed.clone()));
+    let captured = closed_exchanges();
     let service = gated(prompted_by(Some(owner())), SpyCredentials::knowing())
         .with_actor_mcp(Arc::new(AnsweringTransport(answer)));
     let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
@@ -91,7 +103,15 @@ async fn exchange(answer: Option<Value>, destination: McpDestination) -> Fields 
             json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"q":"secret words"}}}),
         )
         .await;
-    let mut closed = closed.closed.lock().unwrap().clone();
+    let session = grant.session.to_string();
+    let mut closed: Vec<Fields> = captured
+        .closed
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|fields| fields.get("agent_session_id") == Some(&session))
+        .cloned()
+        .collect();
     assert_eq!(closed.len(), 1, "one span per exchange: {closed:?}");
     closed.remove(0)
 }
