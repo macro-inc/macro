@@ -794,6 +794,28 @@ describe('pipe characters inside pipe-table cells', () => {
     expect(table.split('\n')).toContain(`| ${paragraph} |`);
   });
 
+  it('exports every chip in a cell the way a paragraph exports it', async () => {
+    const editor = createTestEditor();
+    const chips = [
+      '<m-group-mention>{"groupAlias":"here"}</m-group-mention>',
+      '<m-tag>{"optionId":"tag-1","propertyDefinitionId":"prop-1","scope":"team","name":"Launch","color":"#0091FF"}</m-tag>',
+      '<m-pr-mention>{"id":"foreign-1","label":"macro-inc/macro#7945","url":"https://github.com/macro-inc/macro/pull/7945"}</m-pr-mention>',
+      '<m-agent-session-mention>{"id":"01a10ac3-013f-72f8-afbb-3bad148dee04","label":"Agent"}</m-agent-session-mention>',
+      '<m-not-a-real-tag>{"x":1}</m-not-a-real-tag>',
+    ].join(' ');
+    await importWith(editor, chips, ALL_TRANSFORMERS);
+    const paragraph = exportMarkdown(editor, EXTERNAL_TRANSFORMERS).trim();
+
+    await importWith(
+      editor,
+      ['| Chips |', '| --- |', `| ${chips} |`].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    const table = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+
+    expect(table.split('\n')).toContain(`| ${paragraph} |`);
+  });
+
   it('imports a header row with alignment markers and an empty first cell', async () => {
     const editor = createTestEditor();
     await importWith(
