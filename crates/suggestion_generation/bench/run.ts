@@ -353,6 +353,10 @@ export async function generate(
     result.traceId = ended.trace_id;
     result.wallMs = (ended.finished_at ? new Date(ended.finished_at).getTime() : Date.now()) - start;
     result.sessions = (await db.unsafe(SESSIONS, [row.id])) as SessionRow[];
+    // A session whose first prompt the harness didn't take in time never ran:
+    // that is the stack falling behind, not the generation's work.
+    const undelivered = result.sessions.filter((session) => session.ending === 'delivery_unknown').length;
+    if (undelivered) result.error = `${undelivered} of ${result.sessions.length} sessions never got their prompt (delivery_unknown): the stack is overloaded; run fewer at once (--concurrency)`;
     result.routines = await routinesOf(db, user);
     result.cards = await cardsOf(db, user);
     // Usage rows land as each model call settles: give the last ones a moment.

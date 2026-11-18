@@ -28,6 +28,12 @@ type SectionSpec = {
   /** The default size: copies of each persona run side by side, and rounds of them. */
   seats: number;
   reps: number;
+  /**
+   * Generations at once. Past about 20 agent sessions at once (nine onboarding
+   * generations of three sessions each), the harness on a busy machine took
+   * more than the 30 s it allows to accept a session's first prompt.
+   */
+  concurrency: number;
 };
 
 /**
@@ -46,6 +52,7 @@ export const SECTIONS: Record<Section, SectionSpec> = {
     search: false,
     seats: 3,
     reps: 3,
+    concurrency: 3,
   },
   feed: {
     about: 'The Suggestions feed: a "fresh suggestions" generation with only suggestions on, over a workspace in use for weeks.',
@@ -55,16 +62,19 @@ export const SECTIONS: Record<Section, SectionSpec> = {
     search: true,
     seats: 3,
     reps: 3,
+    // One session a generation.
+    concurrency: 9,
   },
 };
 
 /**
- * What two runs of main against main moved each section's score by, at the
- * default size (3 personas × 3 reps): a smaller difference is noise. Measured
- * with `noise` (README, Baseline); a run of another size needs its own.
+ * How far two runs of main land apart on each part, at the default size
+ * (3 personas × 3 seats × 3 reps): the far end of the 95% interval of their
+ * difference, from `noise` (README, Noise). A smaller move is noise; a run
+ * of another size needs margins of its own.
  */
 export const MARGINS: Record<Section, Margins> = {
-  routines: { score: 37, found: 1, bad: 2 },
+  routines: { score: 11.5, found: 0.47, bad: 0.53 },
   feed: { score: 17, found: 1, bad: 1 },
 };
 
@@ -186,7 +196,7 @@ async function runSection(section: Section, values: Record<string, string | unde
   const seats = Number(values.seats ?? spec.seats);
   // Every copy of every persona is a person of its own: they run side by side.
   const slots = people.flatMap((persona) => Array.from({ length: seats }, (_, i) => seatOf(persona, i + 1)));
-  const concurrency = Math.max(1, Number(values.concurrency ?? slots.length));
+  const concurrency = Math.max(1, Number(values.concurrency ?? spec.concurrency));
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const dir = join(RUNS, `${values.label}-${section}-${set}-${stamp}`);
   mkdirSync(dir, { recursive: true });
@@ -376,7 +386,7 @@ async function main() {
 
 options: --instance sugbench --set tune|<held-out set> --personas a,b --label local
          --seats <copies of each persona> --reps <rounds> (default: the section's size)
-         --concurrency <generations at once> (default: all) --out <file> --margin <points>`);
+         --concurrency <generations at once> (default: the section's) --out <file> --margin <points>`);
   }
 }
 

@@ -77,6 +77,6 @@
       "why": "Routines may not send or act as him."
     }
   ],
-  "fine": ["triage", "stuck", "email_tags", "document_tags", "mentions", "weekly_wrap", "recurring_task", "archive_noise", "cold_outreach", "end_of_day", "delegated", "promises", "reconnect", "customer_followups"],
-  "misfit": ["updates", "task_routing", "date_changes", "channel_answers", "blockers", "agent_digest", "pull_requests", "team_progress", "project_hygiene", "project_update", "prd_tasks", "decision_log", "meeting_agenda", "one_on_one_prep", "week_ahead", "focus_time", "call_tasks", "call_followups", "call_recap", "approvals", "channel_digest", "questionnaire"]
+  "fine": ["approvals", "archive_noise", "blockers", "call_followups", "call_recap", "call_tasks", "channel_answers", "channel_digest", "cold_outreach", "customer_followups", "date_changes", "decision_log", "delegated", "document_tags", "email_tags", "end_of_day", "meeting_agenda", "mentions", "project_hygiene", "project_update", "promises", "reconnect", "recurring_task", "stuck", "task_routing", "triage", "updates", "week_ahead", "weekly_wrap"],
+  "misfit": ["agent_digest", "pull_requests", "team_progress", "prd_tasks", "one_on_one_prep", "focus_time", "questionnaire"]
 }
