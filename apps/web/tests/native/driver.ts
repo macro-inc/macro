@@ -161,3 +161,26 @@ export async function selectTab(browser: Browser, label: 'Noise' | 'All') {
     }
   );
 }
+
+/** The account initials on the rail's Settings button, once they read `expected`. */
+export async function expectAccountInitials(
+  browser: Browser,
+  expected: string
+) {
+  const avatar = browser.$('[data-sidebar-next-item="settings"]');
+  await avatar.waitForExist({ timeout: 30_000 });
+  let shown = '';
+  try {
+    await browser.waitUntil(
+      async () => {
+        shown = (await avatar.getText()).trim();
+        return shown === expected;
+      },
+      { timeout: 30_000 }
+    );
+  } catch {
+    throw new Error(
+      `Account initials: expected ${JSON.stringify(expected)}, got ${JSON.stringify(shown)}`
+    );
+  }
+}
