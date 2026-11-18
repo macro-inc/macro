@@ -195,10 +195,13 @@ cost nothing beyond the model calls.
 - **Clean runs.** Every attempt seeds its persona again with the seed CLI's
   `apply`, which replaces the persona's seeded rows. A person signs up
   through the signup webhook on their first seed and keeps that account (the
-  bench waits for a first signup's support channel, the last of its sample
-  content, and stops if the webhook refused the signup); signing up anew
+  bench waits for a first signup's support channel, which lands with the last
+  of its sample content, and stops if the webhook refused the person's
+  signup); signing up anew
   each time would pile up a support channel and a billing customer per
   attempt. The bench waits out a generation an earlier attempt gave up on,
+  until the harness has ended and deleted its sessions (up to 25 minutes
+  after a killed run),
   then deletes what earlier generations left: the person's rows in every
   suggestion and routine suggestion table (read from the catalog) and their
   mailboxes' drafts (`apply` already replaces the seeded mailbox), and checks

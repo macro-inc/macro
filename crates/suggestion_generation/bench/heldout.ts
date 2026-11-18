@@ -205,7 +205,7 @@ For each: a short slug (lowercase letters), a one-sentence persona, a first and 
       const { messages: batch } = await write<{ messages: Record<string, unknown>[] }>(
         at,
         `Write ${BATCH} emails from the inbox of ${who}
-It is now ${anchor}. Write messages ${part * BATCH + 1} to ${part * BATCH + BATCH} of their newest 100, newest first, dated between ${part * 2} and ${part * 2 + 2} days before now (ISO timestamps in UTC). Mix the recurring streams (keep their senders and subjects consistent with earlier messages), real conversations with customers, colleagues and suppliers, a little promotion and one phishing attempt over the whole mailbox. Labels: INBOX on each, UNREAD on a few recent ones, CATEGORY_UPDATES or CATEGORY_PROMOTIONS for automated mail, and their own labels where they would file it. Snippets are the first 300 to 500 characters of the body, concrete (names, amounts, dates, ids). Every name, company and address is invented; addresses end in .example.
+It is now ${anchor}. Write messages ${part * BATCH + 1} to ${part * BATCH + BATCH} of their newest 100, newest first, dated between ${part * 2} and ${part * 2 + 2} days before now (ISO timestamps in UTC). Mix the recurring streams (keep their senders and subjects consistent with earlier messages), real conversations with customers, colleagues and suppliers, a little promotion${part === 3 ? ', and one phishing attempt' : ''}. Labels: INBOX on each, UNREAD on a few recent ones, CATEGORY_UPDATES or CATEGORY_PROMOTIONS for automated mail, and their own labels where they would file it. Snippets are the first 300 to 500 characters of the body, concrete (names, amounts, dates, ids). Every name, company and address is invented; addresses end in .example.
 ${messages.length ? `Earlier batches' subjects, so you don't repeat them: ${messages.map((m) => m.subject).join(' | ')}` : ''}`,
         MESSAGES,
       );
@@ -252,6 +252,9 @@ Write the markdown content of documents ${part.map((d) => d.key).join(', ')}: re
       );
       for (const d of documents) contents.set(d.key, d.content);
     }
+    // A document the writer dropped would lose the evidence the plan put in it.
+    const unwritten = plan.documents.filter((d) => !contents.has(d.key)).map((d) => d.key);
+    if (unwritten.length) throw new Error(`${sketch.slug}: documents ${unwritten.join(', ')} came back unwritten; run heldout make again with a new name`);
     const { messages: chat } = await write<{ messages: Record<string, unknown>[] }>(
       at,
       `${brief}
@@ -270,7 +273,7 @@ Write the transcript of call ${c.key} ("${c.name}"): 8 to 16 turns, speakers are
     }
     const ws = {
       projects: plan.projects,
-      documents: plan.documents.map((d) => ({ ...d, content: contents.get(d.key) ?? d.about })),
+      documents: plan.documents.map((d) => ({ ...d, content: contents.get(d.key)! })),
       tasks: plan.tasks,
       channels: plan.channels,
       messages: chat,
