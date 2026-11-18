@@ -1,7 +1,8 @@
 //! [`Disks`] as sparse files, cloned copy-on-write: the rootfs from the
 //! golden's, `/home` from an empty per-size template. On ZFS (the default)
 //! each computer and golden is its own dataset and clones are block clones
-//! across datasets (~45 ms); on XFS they are reflinks (~3 ms).
+//! across datasets (~45 ms for a rootfs, seconds for a large `/home`); on
+//! XFS they are reflinks (~3 ms).
 
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -177,7 +178,9 @@ impl FileDisks {
         self.remove_golden_files(&directory);
         let template = self.home_template(gib).await?;
         let staged = directory.join("home.ext4.new");
-        clone_file(&template, &staged).map_err(io("clone", &template))?;
+        clone_file(&template, &staged)
+            .await
+            .map_err(io("clone", &template))?;
         new_filesystem_uuid(&staged).await?;
         let home = directory.join("home.ext4");
         std::fs::rename(&staged, &home).map_err(io("replace", &home))?;
@@ -249,9 +252,9 @@ impl FileDisks {
         }
     }
 
-    fn clone_rootfs(&self, record: &ComputerRecord) -> Result<(), DiskError> {
+    async fn clone_rootfs(&self, record: &ComputerRecord) -> Result<(), DiskError> {
         let source = self.layout.golden(&record.golden_key()).join("rootfs.ext4");
-        reflink_file(&source, &self.rootfs(record.computer_id))
+        reflink_file(&source, &self.rootfs(record.computer_id)).await
     }
 }
 
@@ -298,9 +301,11 @@ async fn new_filesystem_uuid(path: &Path) -> Result<(), DiskError> {
 }
 
 /// Clone `source` to a staged file, then put it at `target`.
-fn reflink_file(source: &Path, target: &Path) -> Result<(), DiskError> {
+async fn reflink_file(source: &Path, target: &Path) -> Result<(), DiskError> {
     let staged = target.with_extension("ext4.new");
-    clone_file(source, &staged).map_err(io("clone", source))?;
+    clone_file(source, &staged)
+        .await
+        .map_err(io("clone", source))?;
     std::fs::rename(&staged, target).map_err(io("replace", target))
 }
 
@@ -327,7 +332,7 @@ impl Disks for FileDisks {
     async fn prepare(&self, record: &ComputerRecord) -> Result<ComputerDisks, DiskError> {
         self.ensure_computer(record).await?;
         if !self.rootfs(record.computer_id).exists() {
-            self.clone_rootfs(record)?;
+            self.clone_rootfs(record).await?;
         }
         grow(
             &self.rootfs(record.computer_id),
@@ -337,7 +342,9 @@ impl Disks for FileDisks {
         if !home.exists() {
             let template = self.home_template(record.resources.home_disk_gib).await?;
             let staged = home.with_extension("ext4.new");
-            clone_file(&template, &staged).map_err(io("clone", &template))?;
+            clone_file(&template, &staged)
+                .await
+                .map_err(io("clone", &template))?;
             // A clone carries the template's filesystem UUID; two homes with
             // one UUID collide wherever both meet a kernel or tool.
             new_filesystem_uuid(&staged).await?;

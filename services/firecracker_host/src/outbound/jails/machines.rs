@@ -173,7 +173,7 @@ impl Machines for Jails {
         let loaded = self.layout().in_chroot(&jail, MEMORY);
         let snapshot_type = if loaded.is_file() && !earlier_attempt {
             let merged = self.layout().in_chroot(&jail, staged_memory);
-            reflink(&loaded, &merged)?;
+            reflink(&loaded, &merged).await?;
             own(&merged, self.uid(process.slot), 0o600)?;
             "Diff"
         } else {
@@ -208,7 +208,9 @@ impl Machines for Jails {
             let destination = partial.join(name);
             // Synced by the clone: a host crash after the publish must not
             // leave a whole-looking, torn snapshot.
-            move_file(&source, &destination).map_err(io("move", &source))?;
+            move_file(&source, &destination)
+                .await
+                .map_err(io("move", &source))?;
             own(&destination, 0, 0o444)?;
         }
         sync_path(&partial).await?;

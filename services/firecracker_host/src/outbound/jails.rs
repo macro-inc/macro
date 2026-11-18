@@ -787,8 +787,10 @@ fn own(path: &Path, uid: u32, mode: u32) -> Result<(), JailError> {
 }
 
 /// A copy-on-write clone of `source` at `target`.
-fn reflink(source: &Path, target: &Path) -> Result<(), JailError> {
-    clone_file(source, target).map_err(io("clone", source))
+async fn reflink(source: &Path, target: &Path) -> Result<(), JailError> {
+    clone_file(source, target)
+        .await
+        .map_err(io("clone", source))
 }
 
 /// Where a hibernation is assembled before its one-rename publish.
