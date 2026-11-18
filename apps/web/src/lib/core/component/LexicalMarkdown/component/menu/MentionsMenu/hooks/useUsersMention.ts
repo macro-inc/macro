@@ -10,6 +10,7 @@ import {
   rankAgentsAfterPeople,
 } from '@core/user/people-before-agents';
 import { deferredGate } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createFreshSearch,
   FreshSearchPresets,
@@ -18,7 +19,14 @@ import {
 } from '@core/util/freshSort';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  untrack,
+} from 'solid-js';
 import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
 import { isBotMentionUser } from '../utils/botMention';
 
@@ -149,6 +157,36 @@ export function useUsersMention(
   // directory that has not answered by the time other menus stop saying the
   // cache is searching gets its agents listed after all.
   const listsPeople = () => usersList().some((item) => !isBotMentionUser(item));
+
+  // The directory does not read a failed window again until its input
+  // changes. The menu reads it once more by itself, since a busy cache's read
+  // timeout usually clears, and offers Retry only when that read fails too.
+  const opens = createMemo(
+    (count: number) => (usesDirectory() ? count : count + 1),
+    0
+  );
+  const readKey = () => `${opens()}\n${searchTerm()}`;
+  const [rereadFor, setRereadFor] = createSignal<string>();
+  const [rereadDone, setRereadDone] = createSignal<string>();
+  const failedRead = () =>
+    usesDirectory() &&
+    !workspace.isLoading() &&
+    workspace.error() != null &&
+    !listsPeople();
+  const rereadSpent = () => rereadDone() === readKey();
+  const rereadOnce = async (key: string) => {
+    setRereadFor(key);
+    await workspace.retry?.();
+    setRereadDone(key);
+  };
+  createEffect(
+    on(failedRead, (failed) => {
+      const key = untrack(readKey);
+      if (failed && untrack(rereadFor) !== key)
+        fireAndForget(rereadOnce(key), 'mentions-menu');
+    })
+  );
+
   const [attempt, setAttempt] = createSignal(0);
   const firstAnswer = createMemo<{ attempt: number; state: DirectoryAnswer }>(
     (previous) => {
@@ -161,6 +199,7 @@ export function useUsersMention(
       if (!usesDirectory()) return answer('unread');
       if (state === 'answered' || listsPeople()) return answer('answered');
       if (workspace.isLoading()) return answer('reading');
+      if (failedRead() && !rereadSpent()) return answer(state);
       return answer(state === 'reading' ? 'answered' : 'unread');
     },
     { attempt: 0, state: 'unread' }
@@ -174,13 +213,9 @@ export function useUsersMention(
   );
   const waitingForPeople = () => awaitingDirectory() && !waitedTooLong();
 
-  // A failed read is not repeated until the text changes, so the menu offers
-  // to retry it, as other contact menus do.
+  // As other contact menus do, a read that failed again offers Retry.
   const peopleFailed = () =>
-    usesDirectory() &&
-    !waitingForPeople() &&
-    workspace.error() != null &&
-    !listsPeople();
+    failedRead() && rereadSpent() && !waitingForPeople();
 
   // Macro leads, then people come before the other agents and bots, as in
   // assignee menus. The directory's personal window keeps its own order among

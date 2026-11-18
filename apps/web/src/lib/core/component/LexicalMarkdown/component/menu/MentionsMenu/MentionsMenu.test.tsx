@@ -904,10 +904,8 @@ function openWhilePeopleLoad(options: {
       setError(new Error('cache worker timeout: read'));
       setLoading(false);
     },
-    read: () => {
-      setError(undefined);
-      setLoading(true);
-    },
+    // A refetch keeps the failed read's error until it answers.
+    read: () => setLoading(true),
   };
 }
 const placeholderRows = (label: string) =>
@@ -983,18 +981,40 @@ it('lists nothing below Macro on phones until the people it pins arrive, at the 
   expect(listed()).toBeGreaterThanOrEqual(256);
 });
 
-it('offers to retry a failed people read, and waits for the retried read as on opening', () => {
+it('reads a failed people window again by itself, holding the People rows meanwhile', () => {
   const people = openWhilePeopleLoad({ agents: [codex, macroAgent] });
 
-  // The read failed, so the agents are listed and People says so.
+  // A busy cache timed the read out: the menu reads it again and keeps waiting.
   people.fail();
+  expect(mocks.retryPeople).toHaveBeenCalledOnce();
+  people.read();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.queryByText('Review Desk Codex')).toBeNull();
+  expect(placeholderRows('Loading people')).toBe(2);
+
+  people.land();
+  const text = document.body.textContent ?? '';
+  const order = ['Macro', 'Ana Lima', 'Bo Chen'].map((name) =>
+    text.indexOf(name)
+  );
+  expect(order).toEqual([...order].sort((left, right) => left - right));
+  expect(mocks.retryPeople).toHaveBeenCalledOnce();
+});
+
+it('offers Retry when the people read fails again, and waits for the retried read as on opening', async () => {
+  const people = openWhilePeopleLoad({ agents: [codex, macroAgent] });
+
+  people.fail();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(mocks.retryPeople).toHaveBeenCalledOnce();
   expect(screen.getByText('Review Desk Codex')).toBeTruthy();
   expect(screen.getByRole('alert').textContent).toContain(
     "Couldn't load people"
   );
-  fireEvent.click(screen.getByText('Retry'));
-  expect(mocks.retryPeople).toHaveBeenCalledOnce();
 
+  fireEvent.click(screen.getByText('Retry'));
+  expect(mocks.retryPeople).toHaveBeenCalledTimes(2);
   people.read();
   expect(screen.queryByRole('alert')).toBeNull();
   expect(screen.queryByText('Review Desk Codex')).toBeNull();

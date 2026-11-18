@@ -18,6 +18,7 @@ vi.mock('@core/context/quickAccess', () => ({
       windowKey: () => 'window',
       hasMore: () => true,
       isLoading: () => mocks.loading(),
+      error: () => undefined,
       isLoadingMore: () => false,
       loadMore: mocks.loadMore,
     }),
