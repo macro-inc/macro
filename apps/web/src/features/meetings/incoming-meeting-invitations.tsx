@@ -9,10 +9,10 @@ import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { usePlatformNotificationState } from '@notifications';
-import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
 import { invalidateActiveMeetings } from '@queries/call/meetings';
 import { useNavigate } from '@solidjs/router';
 import { onCleanup, type ParentProps } from 'solid-js';
+import { callerDisplayName } from './caller-name';
 import { IncomingChannelCallsContext } from './context/incoming-channel-calls';
 import { IncomingMeetingInvitationsContext } from './context/incoming-meeting-invitations';
 import {
@@ -49,7 +49,7 @@ function IncomingMeetingInvitationsReceiver() {
     userId,
     ring: (key, shouldStop, duration) =>
       startCallRinger(key, shouldStop, duration).stop,
-    callerName: DefaultUserNameResolver,
+    callerName: callerDisplayName,
     publishResolution: publishMeetingInvitationResolution,
     openMeeting: (shareToken) => navigate(getMeetingPath(shareToken)),
     notify: async (invitation, handlers) => {
