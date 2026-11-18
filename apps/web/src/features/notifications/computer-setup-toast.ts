@@ -107,5 +107,8 @@ export function showComputerSetupToast(notice: ComputerSetupNotice) {
     fireAndForget(showAgentSetupToast(notice, agent), 'notifications');
     return;
   }
-  showComputerSetupNotice(notice, () => openComputerSetup(notice.computerId));
+  fireAndForget(
+    showComputerSetupNotice(notice, () => openComputerSetup(notice.computerId)),
+    'notifications'
+  );
 }

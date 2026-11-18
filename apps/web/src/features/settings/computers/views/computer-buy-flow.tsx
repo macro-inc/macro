@@ -253,17 +253,20 @@ export function ComputerBuyFlow(props: {
     setWaitingForLink(false);
     // The same notice the computer's setup notification shows, so the two
     // never stack; this one reopens this dialog in place.
-    showComputerSetupNotice(
-      {
-        computerId: current.id,
-        harnessId: current.harnessId ?? null,
-        computerName: current.name,
-        outcome: { kind: 'ready' },
-      },
-      () => {
-        setStep('claude');
-        setReopened(true);
-      }
+    fireAndForget(
+      showComputerSetupNotice(
+        {
+          computerId: current.id,
+          harnessId: current.harnessId ?? null,
+          computerName: current.name,
+          outcome: { kind: 'ready' },
+        },
+        () => {
+          setStep('claude');
+          setReopened(true);
+        }
+      ),
+      'macro-computers'
     );
   });
 
