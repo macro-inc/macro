@@ -249,7 +249,10 @@ switcher triggers, and scrolling list controls have a backend-free regression:
 The same suite's `list-search.browser.e2e.ts` drives the list header's search
 field, and the sidebar's (`?surface=sidebar`), over the real hotkey engine and
 list controller: ArrowDown and Enter move to the first result, and Escape keeps
-the search in the field and clears it from the list after a selection.
+the search in the field and clears it from the list after a selection. In a real
+`ListHeader` (`?surface=header&width=<px>`) the open field narrows, down to its
+96px minimum, before the header's other actions would push its end out of view,
+and keeps its full width when there is room.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
