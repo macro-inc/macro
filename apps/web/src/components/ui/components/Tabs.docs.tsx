@@ -198,9 +198,9 @@ export default defineDoc({
     },
     {
       id: 'track',
-      title: 'Composer mode switch',
+      title: 'Legacy track reference',
       description:
-        '`variant="track"` slides one flat pill along a filled track on every device. It is only for the agent composer\'s Chat/Code switch in the composer tray.',
+        '`variant="track"` retains the previous composer treatment for reference. Production Auto/Chat/Code switches use the shared grouped Tabs pill.',
       render: TrackDemo,
     },
   ],

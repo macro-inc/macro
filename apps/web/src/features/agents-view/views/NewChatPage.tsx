@@ -585,25 +585,13 @@ export function NewChatPage(props: {
           { value: 'chat', label: agentsModeLabel('chat'), icon: ChatIcon },
           { value: 'code', label: agentsModeLabel('code'), icon: CodeIcon },
         ]}
-        {...(phoneComposer()
-          ? {
-              variant: 'grouped' as const,
-              touch: 'inset' as const,
-              size: 'sm' as const,
-            }
-          : { variant: 'track' as const })}
-        fullWidth
+        variant="grouped"
+        touch="inset"
+        size="sm"
         // Phones keep the icons; the name stays for assistive tech.
         iconOnly={isTouchDevice()}
         value={mode()}
         onChange={setMode}
-        class={
-          phoneComposer()
-            ? 'w-auto'
-            : ownMode.autoAvailable()
-              ? 'w-72 touch:w-36'
-              : 'w-56 touch:w-24'
-        }
       />
     </div>
   );

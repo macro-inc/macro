@@ -587,23 +587,12 @@ the shimmer.
   16px top padding when expanded. Light mode uses a faint shadow outline and
   layered outer shadow; dark mode retains the production glass rim and shadow.
   Both modes retain the production composer background.
-- In dark mode, the footer is darker than the input, with successively lighter
-  toggle track and selected segment.
-- The starting page has **Auto / Chat / Code** in the composer’s inset bar, below the input on
-  desktop and above it on phones. On desktop, the borderless footer is inset 12px
-  from the 28px-radius input; Auto / Chat / Code share one track with equal 8px insets
-  in the 52px footer. The dark track is lighter than the footer lip and the selected segment lighter again;
-  a faint gradient gives the dark toggle depth without borders or shadows.
-  Light mode uses a panel-colored selected segment with a subtle border and shadow.
-  The footer, track, and selected segment follow the active theme's color tokens.
-  The footer mixes a little ink into the panel color so its rounded lower lip
-  remains distinct from the page, including behind the input's bottom corners.
-  Verify them with a colored dark theme (such as Moon) and a colored light theme,
-  including switching Chat / Code; none should retain fixed neutral grays.
-  The selected segment glides for 250ms with
-  an ease-out curve. The greeting text flips vertically into place on each mode change
-  with the same duration; both animations respect reduced motion.
-  Its bottom corners follow the toggle's curve. Chat and Code limit the offered agents; the choice
+- The starting page uses the shared grouped **Auto / Chat / Code** Tabs pill,
+  below the input on desktop and above it in the phone drawer. The shared Tabs
+  component owns spacing, selection, focus, and touch treatment; the composer
+  does not resize or recolor its parts. Verify switching modes with the pointer
+  and keyboard on desktop and at 390×844.
+  Chat and Code limit the offered agents; the choice
   lasts only while the composer is mounted, and every composer opens in **Auto**. Auto is
   behind the `enable-composer-auto-mode` PostHog flag (Macro employees only), which the
   agent harness checks too; without it the switch is Chat / Code and Auto reads as Chat.
@@ -714,7 +703,7 @@ the shimmer.
   with the repository bar below the input on desktop and above it on mobile.
   The plus attachment button stays at the far left: before the
   text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
-  on the left and the agent/model and Send on the right. On mobile, Auto/Chat/Code sits at the top left and repository controls at the top right; repository and branch selection open in standard bottom drawers. These controls sit inside the same continuous surface as the input with no inset or dividing border. On desktop, the borderless bar sits 12px inside each input edge and gives the 36px Auto/Chat/Code toggle equal 8px insets, with concentric bottom corners and a darker fill. The settings row keeps a stable height when changing modes: 52px on desktop and a 46px minimum on mobile.
+  on the left and the agent/model and Send on the right. On mobile, the grouped Auto/Chat/Code pill sits at the top left and repository controls at the top right; repository and branch selection open in standard bottom drawers. The same grouped Tabs pill sits in the desktop settings row; switching modes does not change the row height.
   Selecting Chat hides the repository controls and keeps the mode switch in
   the settings row, without remounting the editor or losing the draft. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**

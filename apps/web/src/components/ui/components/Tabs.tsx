@@ -92,8 +92,7 @@ export type TabsProps<T extends string> = {
     }
   | {
       /**
-       * One flat pill slides along a filled track, on every device. Only for
-       * the agent composer's mode switch, which sits in the composer's tray.
+       * Retained legacy track treatment. Production value switches use grouped tabs.
        */
       variant: 'track';
       size?: never;
@@ -117,7 +116,7 @@ export type TabsProps<T extends string> = {
  * @dont Do not put Tabs inside a HeaderActionGroup or ButtonGroup.
  * @dont Do not use Tabs for tabs that own panels or a dynamic collection; use TabSelector.
  * @dont Do not branch on `isTouchDevice()` to pick a tab component; set `touch`.
- * @dont Do not use `variant="track"` outside the agent composer's tray.
+ * @dont Do not use the retained legacy `track` variant for new controls.
  */
 export function Tabs<T extends string>(props: TabsProps<T>) {
   const select = (value: string) => {
