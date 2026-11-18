@@ -1,5 +1,6 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { PropertyApiValues } from '@property/types';
+import { composeDraftInput } from '@queries/email/graphql/compose';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import {
   $createParagraphNode,
@@ -9,7 +10,6 @@ import {
 } from 'lexical';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { composeDraftInput } from '@queries/email/graphql/compose';
 import { decodeBase64Utf8 } from '../email-compose/core/decode-base64';
 import { createInputActions } from './actions';
 import { fieldsSchema, type Submission } from './core/input';
@@ -238,7 +238,8 @@ function input(intent: Submission['intent'], values = {}): Submission {
     }),
   };
 }
-const UUID_V7 = /^[\da-f]{8}-[\da-f]{4}-7[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/;
+const UUID_V7 =
+  /^[\da-f]{8}-[\da-f]{4}-7[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/;
 async function withActions<T>(
   snapshot: Submission,
   run: (
