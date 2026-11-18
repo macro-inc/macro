@@ -1,20 +1,28 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { type Accessor, createEffect, on, onCleanup, untrack } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  on,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 
 /** The close requests of the sheets open right now. */
 const OPEN_SHEETS = new Set<() => void>();
 
 /**
- * The page the app shows: the active pane and the content in it. A search
- * change (a filter, a target message) keeps the page, so a filter sheet stays
- * open while it filters.
+ * The page the app shows: the view mounted in the active pane. Navigating to
+ * other content mounts a new view, and another pane has its own. A search
+ * change (a filter, a target message) keeps the view, and so does a pane
+ * adopting the real id of what it shows (a provisioned agent session).
  */
-function shownPage(): string | undefined {
-  const split = globalSplitManager()?.activeSplit();
-  if (!split) return;
+export function shownPage(): unknown {
+  const manager = globalSplitManager();
+  const id = manager?.activeSplitId();
+  if (!manager || !id) return;
 
-  const content = split.content();
-  return `${split.id}:${content.type}:${content.id}`;
+  return manager.splitState(id)?.mount.element;
 }
 
 /**
@@ -34,8 +42,9 @@ export function closeSheetsForNavigation() {
  * portaled sheet would otherwise stay over the new page.
  *
  * `close` makes the request a scrim tap makes: an owner that refuses it, or
- * asks to confirm a discard first, still does. A sheet opened before any page
- * showed (during startup) closes only for `closeSheetsForNavigation`.
+ * asks to confirm a discard first, still does, and is asked again only on the
+ * next navigation. A sheet opened before any page showed (during startup)
+ * closes only for `closeSheetsForNavigation`.
  */
 export function createCloseOnNavigation(options: {
   open: Accessor<boolean>;
@@ -48,14 +57,17 @@ export function createCloseOnNavigation(options: {
     OPEN_SHEETS.add(request);
     onCleanup(() => OPEN_SHEETS.delete(request));
 
-    const openedOver = untrack(shownPage);
+    let openedOver = untrack(shownPage);
     if (openedOver === undefined) return;
 
+    const page = createMemo(shownPage);
     createEffect(
       on(
-        shownPage,
-        (page) => {
-          if (page !== openedOver) request();
+        page,
+        (shown) => {
+          if (shown === openedOver) return;
+          openedOver = shown;
+          request();
         },
         { defer: true }
       )

@@ -12,9 +12,22 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { closeSheetsForNavigation } from './close-on-navigation';
 import { MobileDrawer } from './MobileDrawer';
 
-type Page = { split: string; type: string; id: string; params?: string };
+/**
+ * What the active pane shows. `view` names the mounted view: navigating to
+ * other content mounts a new one, while a search change or an adopted id
+ * keeps it.
+ */
+type Page = { split: string; view: string; id?: string; search?: string };
 
 const [page, setPage] = createSignal<Page | undefined>();
+const VIEWS = new Map<string, () => null>();
+const mountedView = (name: string) => {
+  const existing = VIEWS.get(name);
+  if (existing) return existing;
+  const view = () => null;
+  VIEWS.set(name, view);
+  return view;
+};
 
 beforeEach(() => {
   const computedStyle = window.getComputedStyle;
@@ -35,19 +48,17 @@ beforeEach(() => {
       disconnect() {}
     }
   );
-  setPage({ split: 'front', type: 'md', id: 'notes' });
-  // Only the active split is read: which pane shows, and what it shows.
+  setPage({ split: 'front', view: 'notes' });
+  // Only the active split is read: which pane shows, and the view in it.
   setGlobalSplitManager({
-    activeSplit: () => {
+    activeSplitId: () => page()?.split,
+    splitState: (id: string) => {
       const shown = page();
-      if (!shown) return;
+      if (shown?.split !== id) return;
       return {
-        id: shown.split,
-        content: () => ({
-          type: shown.type,
-          id: shown.id,
-          params: shown.params,
-        }),
+        id,
+        content: { type: 'md', id: shown.id ?? shown.view },
+        mount: { kind: 'block', element: mountedView(shown.view) },
       };
     },
   } as unknown as SplitManager);
@@ -108,7 +119,7 @@ function renderControlled(
 it('closes when another pane comes to the front', async () => {
   const { onOpenChange } = renderControlled();
 
-  setPage({ split: 'channel-pane', type: 'channel', id: 'general' });
+  setPage({ split: 'channel-pane', view: 'general' });
 
   expect(onOpenChange).toHaveBeenLastCalledWith(false);
   await expectClosed();
@@ -117,7 +128,7 @@ it('closes when another pane comes to the front', async () => {
 it('closes when the pane under it shows other content', async () => {
   renderControlled();
 
-  setPage({ split: 'front', type: 'md', id: 'plans' });
+  setPage({ split: 'front', view: 'plans' });
 
   await expectClosed();
 });
@@ -127,7 +138,7 @@ it('closes an uncontrolled sheet', async () => {
   fireEvent.click(screen.getByText('Open sheet'));
   expect(screen.getByRole('dialog', { name: 'Sheet' })).toBeTruthy();
 
-  setPage({ split: 'channel-pane', type: 'channel', id: 'general' });
+  setPage({ split: 'channel-pane', view: 'general' });
 
   await expectClosed();
 });
@@ -135,7 +146,16 @@ it('closes an uncontrolled sheet', async () => {
 it('stays open while the page only changes its search, as a filter does', () => {
   const { onOpenChange } = renderControlled();
 
-  setPage({ split: 'front', type: 'md', id: 'notes', params: 'filter=open' });
+  setPage({ split: 'front', view: 'notes', search: 'filter=open' });
+
+  expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  expect(screen.getByRole('dialog', { name: 'Sheet' })).toBeTruthy();
+});
+
+it('stays open while its pane adopts the real id of what it shows', () => {
+  const { onOpenChange } = renderControlled();
+
+  setPage({ split: 'front', view: 'notes', id: 'provisioned-session' });
 
   expect(onOpenChange).not.toHaveBeenCalledWith(false);
   expect(screen.getByRole('dialog', { name: 'Sheet' })).toBeTruthy();
@@ -148,7 +168,7 @@ it('keeps a sheet the destination opens as it arrives', () => {
 
   // The navigation and the sheet's opening land in one update.
   batch(() => {
-    setPage({ split: 'front', type: 'md', id: 'plans' });
+    setPage({ split: 'front', view: 'plans' });
     setOpen(true);
   });
 
@@ -156,19 +176,26 @@ it('keeps a sheet the destination opens as it arrives', () => {
   expect(screen.getByRole('dialog', { name: 'Sheet' })).toBeTruthy();
 });
 
-it('leaves the sheet open when its owner refuses the close', () => {
+it('leaves the sheet open when its owner refuses, until the next navigation', () => {
   const { onOpenChange } = renderControlled({ refuseClose: true });
 
-  setPage({ split: 'channel-pane', type: 'channel', id: 'general' });
-
+  setPage({ split: 'channel-pane', view: 'general' });
   expect(onOpenChange).toHaveBeenLastCalledWith(false);
   expect(screen.getByRole('dialog', { name: 'Sheet' })).toBeTruthy();
+
+  // The page only changes its search: the owner isn't asked again.
+  setPage({ split: 'channel-pane', view: 'general', search: 'message=1' });
+  expect(onOpenChange).toHaveBeenCalledTimes(2);
+
+  setPage({ split: 'front', view: 'notes' });
+  expect(onOpenChange).toHaveBeenCalledTimes(3);
+  expect(onOpenChange).toHaveBeenLastCalledWith(false);
 });
 
 it('keeps a sheet that opts out', () => {
   const { onOpenChange } = renderControlled({ keepOpenOnNavigation: true });
 
-  setPage({ split: 'channel-pane', type: 'channel', id: 'general' });
+  setPage({ split: 'channel-pane', view: 'general' });
   closeSheetsForNavigation();
 
   expect(onOpenChange).not.toHaveBeenCalledWith(false);
@@ -194,7 +221,7 @@ it('leaves a sheet opened during startup to its owner until a navigation closes 
     </Show>
   ));
 
-  setPage({ split: 'home', type: 'component', id: 'home' });
+  setPage({ split: 'home', view: 'home' });
   expect(onOpenChange).not.toHaveBeenCalled();
 
   closeSheetsForNavigation();

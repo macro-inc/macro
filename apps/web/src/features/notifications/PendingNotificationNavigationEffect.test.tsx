@@ -45,7 +45,7 @@ function managerHarness(initiallyReady = false) {
     contentNavigationReady: ready,
     contentNavigationVersion: version,
     events: event,
-    activeSplit: () => undefined,
+    activeSplitId: () => undefined,
   } as unknown as SplitManager;
 
   return {

@@ -40,6 +40,11 @@ export type DialogProps = {
   visibleScrim?: boolean /* if the scrim is visible */;
   /** Desktop opening animation; mobile drawers own their transitions. */
   animate?: boolean;
+  /**
+   * Stay open when the app navigates (touch closes dialogs on navigation).
+   * Only for a dialog whose dismissal records a choice the user didn't make.
+   */
+  keepOpenOnNavigation?: boolean;
 };
 
 export function Dialog(props: DialogProps) {
@@ -74,6 +79,7 @@ function DialogDrawer(props: DialogProps) {
         onFinalFocus={props.onCloseAutoFocus}
         restoreFocus
         noOutsidePointerEvents
+        keepOpenOnNavigation={props.keepOpenOnNavigation}
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay
@@ -107,7 +113,7 @@ function DesktopDialog(props: DialogProps) {
   // dialogs, tablets' cards); desktop keeps its dialogs.
   if (isTouchDevice()) {
     createCloseOnNavigation({
-      open: () => props.open,
+      open: () => !props.keepOpenOnNavigation && props.open,
       close: () => props.onOpenChange?.(false),
     });
   }

@@ -100,8 +100,10 @@ read their code, and follow that pattern rather than inventing a new one.
   open.
 - Sheets and touch dialogs close themselves when the app navigates to
   another page; don't close them per sheet. Pass `keepOpenOnNavigation` only
-  when dismissing discards something the user can't get back (files shared to
-  the app).
+  when dismissing does something the user didn't choose (discards files
+  shared to the app, records a prompt as dismissed). A sheet that reopens
+  after a dialog closes checks `shownPage()` first: a navigation may have
+  closed the dialog.
 - A sheet opened from another sheet stacks on it under its own scrim, which
   shares the sheets' layer (as Dialog's does), so the sheet beneath dims with
   the page and only the top sheet's handle stands out. Open it under the
