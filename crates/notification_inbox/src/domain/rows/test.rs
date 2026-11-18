@@ -224,6 +224,11 @@ fn a_thread_without_mentions_is_not_listed_under_mentions() {
     let listed = channel_rows(&[channel_reply(1, CHANNEL, ROOT, 0x100, 1)]);
     assert!(listed[0].also_listed_as.is_empty());
     assert_eq!(listed_in(&listed, &[MENTIONS, REPLIES]), vec![0, 1]);
+
+    // A reply that names one of your documents mentions the document, not you.
+    let document = channel_rows(&[document_mention(1, 0x100, Some(ROOT), USER, 1)]);
+    assert_eq!(document[0].row_type, InboxRowType::ChannelThread);
+    assert!(document[0].also_listed_as.is_empty());
 }
 
 #[test]

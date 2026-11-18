@@ -255,6 +255,10 @@ async fn a_thread_is_listed_under_each_kind_it_shows() {
         .page(viewer(), query(vec![InboxRowType::ChannelMention]))
         .await
         .unwrap();
+    assert_eq!(
+        mentions.entries[0].rows[0].row_type,
+        InboxRowType::ChannelThread
+    );
     assert_eq!(listed(mentions), vec![row(&channel(), &thread_slot())]);
 }
 
@@ -686,6 +690,52 @@ async fn clear_takes_only_the_rows_the_request_names() {
     }
     for id in [1, 5] {
         assert_eq!(state(&harness, id), NotificationState::Unseen);
+    }
+}
+
+#[tokio::test]
+async fn a_clear_of_a_kind_takes_the_rows_listed_under_it_whole() {
+    let channel_and_doc = || {
+        harness(
+            vec![
+                candidate("channel", channel().into_entity(), Some(9), None),
+                candidate("doc", entity(EntityType::Document, DOC), Some(7), None),
+            ],
+            vec![
+                // A thread whose second reply mentions the viewer.
+                channel_reply(1, CHANNEL, ROOT, 0x100, 8),
+                channel_mention(2, CHANNEL, 0x101, Some(ROOT), 9),
+                // Comments, one of which mentions the viewer.
+                doc_comment_mention(3, DOC, 0xA0, 0xA0, 6),
+                doc_reply(4, DOC, 0xA1, 0xA0, 7),
+            ],
+        )
+    };
+    let clear_kind = |row_type| {
+        clear_request(InboxScope {
+            row_types: vec![row_type],
+            ..Default::default()
+        })
+    };
+
+    let mentions = channel_and_doc();
+    let cleared = clear(&mentions, clear_kind(InboxRowType::ChannelMention)).await;
+    assert_eq!(cleared.rows, 1);
+    for id in [1, 2] {
+        assert_eq!(state(&mentions, id), NotificationState::Done, "{id}");
+    }
+    for id in [3, 4] {
+        assert_eq!(state(&mentions, id), NotificationState::Unseen, "{id}");
+    }
+
+    let comments = channel_and_doc();
+    let cleared = clear(&comments, clear_kind(InboxRowType::DiscussionMessages)).await;
+    assert_eq!(cleared.rows, 1);
+    for id in [3, 4] {
+        assert_eq!(state(&comments, id), NotificationState::Done, "{id}");
+    }
+    for id in [1, 2] {
+        assert_eq!(state(&comments, id), NotificationState::Unseen, "{id}");
     }
 }
 
