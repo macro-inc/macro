@@ -143,7 +143,8 @@ the gateway `/email` prefix.
 - The API's server spans come from `macro_tower_layers`
   (`api::traced`). tower-http's default `TraceLayer` span is DEBUG, below the
   exporter's INFO filter, so an API wrapped in it sends no server spans.
-- `models_email`'s `Link` `Debug` prints only opaque fields. Keep addresses,
+- `models_email`'s `Link`, `BlockSenderPayload` and `UnblockSenderPayload`
+  `Debug` print only opaque fields. Keep addresses,
   `macro_id`, contact emails and whole messages out of span fields: skip them
   in `#[tracing::instrument]` and record `link_id` or provider ids instead.
 

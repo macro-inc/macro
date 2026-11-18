@@ -60,6 +60,20 @@ OpenSearch, and exposes backfill HTTP routes for each.
   formatters drop `<m-paste>` (long pastes; in agent sessions also quoted
   replies) with every tag they do not know, so a new message index writes its
   pastes the same way.
+- Email documents are keyed `{thread_id}:{message_id}`, so a message that
+  changes threads gets a new document and keeps the old one. An
+  `email.message_sent` from a Macro send (`origin: UserAction`) deletes the
+  message's copies under other threads; a draft that moved and was never sent
+  keeps its old copy. A draft transferred to another inbox gets a new message
+  id, so this cleanup does not reach its source copy.
+- Removing an inbox only starts an OpenSearch delete task and follows it in the
+  background (`process/email/mailbox_delete.rs`), at most two at a time; never
+  await a whole-inbox delete on a consumer worker. Starting adopts a delete
+  already running for the inbox (`X-Opaque-Id`), so a retry or redelivery
+  follows that task; list-then-start is not atomic, so a rebalance can still
+  start two. A shutdown leaves running tasks unfollowed and drops deletes still
+  waiting for a slot; the `email.mailbox_delete` span's `outcome` and task ids
+  say which.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those.
 - Run `POST /internal/backfill/email-attachment-status` on an environment only

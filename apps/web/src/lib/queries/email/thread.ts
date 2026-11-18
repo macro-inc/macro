@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
@@ -25,6 +26,7 @@ import {
   getUnmaintainedGraphqlSoupRevalidations,
   refreshActiveGraphqlSoupQueries,
 } from '../soup/graphql/active-queries';
+import { revalidateMailImportanceLists } from '../soup/graphql/mail-list-revalidation';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -538,6 +540,11 @@ export async function blockSenderWithToast(
   });
 }
 
+function invalidateSenderFilterLists() {
+  invalidateAllSoup();
+  fireAndForget(revalidateMailImportanceLists(), 'email-sender-filter');
+}
+
 async function upsertSenderFilterWithToast(
   senderEmail: string,
   isImportant: boolean,
@@ -561,7 +568,7 @@ async function upsertSenderFilterWithToast(
   }
 
   const filterId = result.value.filter.id;
-  invalidateAllSoup();
+  invalidateSenderFilterLists();
 
   toast.success(`Sender marked as ${label}`, {
     dismissStyle: 'icon',
@@ -579,7 +586,7 @@ async function upsertSenderFilterWithToast(
           if (undoResult.isErr()) {
             toast.failure('Failed to undo', { subtext: senderEmail });
           } else {
-            invalidateAllSoup();
+            invalidateSenderFilterLists();
             toast.success('Sender filter removed');
           }
         },

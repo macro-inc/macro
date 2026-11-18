@@ -133,6 +133,10 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- Personal data stays off spans and logs (`.agents/rules/observability.md`);
+  here that also means a `MacroUserIdStr` parse error, which quotes the
+  address. `draft_save_and_delete_spans_record_no_personal_data` reads the
+  draft spans back.
 - Moving a thread into a folder (`update_thread_project`) calls
   `entity_access_db_utils::project_grants::refuse_filing_in` in the
   transaction that writes `project_id`, so a scoped agent session can't file
@@ -421,6 +425,8 @@ tools — hexagonal, heavily feature-gated.
   `SharedThreadReplyAccess` (edit access to its thread; wired in
   `document_storage_service` with `with_shared_thread_replies`). The reply
   starts a thread in the caller's inbox; other hosts keep `NoSharedThreadReplies`.
+- Let first saves adopt unbound reply drafts by reply target. Keep separately
+  bound working copies distinct when Undo restores a draft for that target.
 - Sender discovery authorizes the inbox first. Gmail aliases use the sender
   provider; Outlook exposes its verified primary address without a Gmail lookup.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
