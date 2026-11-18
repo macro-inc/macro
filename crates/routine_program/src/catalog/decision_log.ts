@@ -53,16 +53,28 @@ export async function main({ macro, run, trigger, knobs }: StepContext) {
   const entry = [
     `## ${day} · ${call.title ?? 'Call'}`,
     decisions
-      .map(({ decision, owner, due }) => `- ${decision}${owner ? ` (${owner}${due ? `, due ${due}` : ''})` : ''}`)
+      .map(({ decision, owner, due }) => {
+        const about = [owner, due && `due ${due}`].filter(Boolean).join(', ');
+        return about ? `- ${decision} (${about})` : `- ${decision}`;
+      })
       .join('\n'),
   ].join('\n\n');
   // Only a document of the owner's own: a teammate's log with the same name is theirs to keep.
   const me = await macro.users.me();
   const logs = [];
+  // The search matches part of a name, newest first: look far enough to find an older log.
   let seen = 0;
+  let exhausted = true;
   for await (const document of macro.documents.search(knobs.log, { searchOn: 'name' })) {
     if ((await document.name()) === knobs.log && (await document.owner())?.id === me.id) logs.push(document);
-    if (++seen === 20) break;
+    if (++seen === 100) {
+      exhausted = false;
+      break;
+    }
+  }
+  if (logs.length === 0 && !exhausted) {
+    // A second log would split the history: say so rather than make one.
+    throw new Error(`Too many documents have "${knobs.log}" in their name to find yours. Give the log a more distinctive name.`);
   }
   if (logs.length > 1) {
     throw new Error(`You have ${logs.length} documents named "${knobs.log}". Rename all but one, or change the document this routine logs to.`);
