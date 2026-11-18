@@ -24,6 +24,8 @@ import {
   type DriveDetailTarget,
   detailRouteFromTarget,
   detailTargetFromRoute,
+  listTrail,
+  openedFromList,
   sameDocumentRoute,
 } from './primitives/drive-detail-trail';
 import {
@@ -34,6 +36,7 @@ import {
 } from './primitives/drive-route';
 
 type DriveDetailRootOptions = EntityDetailNavigationOptions & {
+  /** Opens here instead of from the list on screen, so with no location. */
   location?: DriveLocation;
 };
 
@@ -41,6 +44,8 @@ type DriveDetailNavigation = {
   activeCallId: Accessor<string | undefined>;
   entries: Accessor<readonly EntityDetailNavigationEntry[]>;
   active: Accessor<EntityDetailNavigationEntry | undefined>;
+  /** Whether there is a list to name: the one on screen, or the detail's own. */
+  showsLocation: Accessor<boolean>;
   navigate: (
     target: EntityDetailTarget,
     options?: EntityDetailNavigationOptions
@@ -107,6 +112,7 @@ export function DriveDetailNavigationProvider(
     }))
   );
   const active = () => entries().at(-1);
+  const showsLocation = () => !activeDocument() || openedFromList(trail());
 
   const resolveTarget = (
     target: EntityDetailTarget,
@@ -147,6 +153,7 @@ export function DriveDetailNavigationProvider(
     entries,
     activeCallId,
     active,
+    showsLocation,
 
     navigate(target, options) {
       const resolved = resolveTarget(target, options);
@@ -178,7 +185,11 @@ export function DriveDetailNavigationProvider(
             options?.location ?? props.location(),
             resolved.document
           ),
-          { state: [resolved.target] }
+          {
+            state: options?.location
+              ? [resolved.target]
+              : listTrail(resolved.target),
+          }
         ),
         'drive-view'
       );

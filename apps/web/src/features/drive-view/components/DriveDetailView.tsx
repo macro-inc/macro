@@ -233,14 +233,14 @@ function StackEntityDetail(props: {
 
 export function DriveDetailView() {
   const drive = useOptionalDriveView();
+  const navigationStack = useDriveDetailNavigation();
   const breadcrumbOrderOffset = () =>
-    drive
+    drive && navigationStack.showsLocation()
       ? driveLocationBreadcrumbs(
           drive.state.value().location,
           drive.sidebar.folders()
         ).length
       : 0;
-  const navigationStack = useDriveDetailNavigation();
   const activeHasBlockHeader = () => {
     const target = navigationStack.active()?.data;
     return target !== undefined && hasBlockHeader(target);
