@@ -55,6 +55,7 @@ impl JwtValidator for Tokens {
                 fusion_user_id: "test-fusion-user".into(),
                 organization_id: None,
                 permissions: None,
+                routine_id: None,
             },
         })
     }
