@@ -67,7 +67,7 @@ impl ToolAnnotated for CreateConfirmedCalendarEvent {
 #[async_trait]
 impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for CreateConfirmedCalendarEvent
 where
-    M: CalendarMutationService,
+    M: CalendarMutationService + super::ProgramForwarding,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -82,14 +82,16 @@ where
         // The schema makes the field required, so a call gets here with one;
         // a blank one is the model going through the motions, and is refused
         // the same way a missing one would be.
-        if self.user_confirmation.trim().is_empty() {
+        let Some(request_context) =
+            request_context.with_quoted_confirmation(&self.user_confirmation)
+        else {
             return Err(ToolCallError {
                 description: "CreateConfirmedCalendarEvent requires the user's own message approving this event in userConfirmation. Describe the event in prose, ask whether to create it, and call this tool only after they say yes.".to_owned(),
                 internal_error: anyhow::anyhow!(
                     "CreateConfirmedCalendarEvent called without a confirmation"
                 ),
             });
-        }
+        };
         self.event.call(service_context, request_context).await
     }
 }

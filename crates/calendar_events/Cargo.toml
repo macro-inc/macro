@@ -10,6 +10,7 @@ outlook = ["dep:tokio"]
 # The AI toolset adapter exposing calendar CRUD to agents.
 ai_tools = [
   "dep:ai_toolset",
+  "dep:macro_authorization",
   "dep:anyhow",
   "dep:async-trait",
   "dep:email_validator",

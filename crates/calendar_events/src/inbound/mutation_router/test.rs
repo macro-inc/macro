@@ -235,14 +235,14 @@ fn a_program_cannot_create_an_event_the_user_has_not_seen() {
     );
     let browser = axum::http::HeaderMap::new();
 
-    let refusal = refuse_program_create(CredentialAttribution::Person, &program).unwrap_err();
+    let refusal = refuse_program_create(CredentialAttribution::Person, &program, None).unwrap_err();
     assert_eq!(refusal.status, StatusCode::FORBIDDEN);
     assert_eq!(
         refusal.code,
         CalendarMutationErrorCode::ConfirmationRequired
     );
-    assert!(refuse_program_create(CredentialAttribution::Agent, &browser).is_err());
-    assert!(refuse_program_create(CredentialAttribution::Person, &browser).is_ok());
+    assert!(refuse_program_create(CredentialAttribution::Agent, &browser, None).is_err());
+    assert!(refuse_program_create(CredentialAttribution::Person, &browser, None).is_ok());
 }
 
 #[test]
@@ -254,8 +254,22 @@ fn an_owner_routine_code_step_creates_events_but_an_agent_program_does_not() {
     );
     // The runtime marks every code step's request; the signed owner routine
     // claim decides.
-    assert!(refuse_program_create(CredentialAttribution::Routine, &code_step).is_ok());
-    assert!(refuse_program_create(CredentialAttribution::Agent, &code_step).is_err());
+    assert!(refuse_program_create(CredentialAttribution::Routine, &code_step, None).is_ok());
+    assert!(refuse_program_create(CredentialAttribution::Agent, &code_step, None).is_err());
+}
+
+/// An agent's create the user approved, on a review card or by a quoted
+/// reply its internal caller forwarded, goes through; one without is refused.
+#[test]
+fn an_agents_create_goes_through_only_with_the_users_approval() {
+    let headers = axum::http::HeaderMap::new();
+    assert!(refuse_program_create(CredentialAttribution::Agent, &headers, None).is_err());
+    for approval in [ProgramApproval::Reviewed, ProgramApproval::Quoted] {
+        assert!(
+            refuse_program_create(CredentialAttribution::Agent, &headers, Some(approval)).is_ok(),
+            "{approval:?}"
+        );
+    }
 }
 
 /// Two inboxes hold the meeting, so a request that names no copy is refused.

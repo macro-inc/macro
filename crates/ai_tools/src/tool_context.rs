@@ -2327,6 +2327,15 @@ impl ToolServiceContext {
         self.pipeline_tool_context.actor = actor;
         self.crm_transfer_tool_context.actor = actor;
         self.databases_sql_tool_context = self.databases_sql_tool_context.with_actor(actor);
+        // Calendar writes reach calendar_service as the agent's, so its
+        // create refuses one the user hasn't approved.
+        self.calendar_tool_context =
+            self.calendar_tool_context
+                .with_program(macro_authorization::ForwardedProgram::new(
+                    Some(actor),
+                    None,
+                    false,
+                ));
         self
     }
 

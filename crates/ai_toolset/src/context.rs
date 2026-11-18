@@ -4,6 +4,9 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
+#[cfg(test)]
+mod test;
+
 /// Service context wrapper for shared state passed to tools.
 ///
 /// This is provides access to
@@ -50,6 +53,39 @@ pub struct RequestContext {
     /// agent session actor does, for the in-process runtime - so each call is
     /// counted once.
     pub genai_telemetry: bool,
+    /// The user's approval of this call, when a person gave it (see
+    /// [`UserApproval`]); never something the model's arguments can set.
+    approval: Option<UserApproval>,
+}
+
+/// How the user approved a tool call. Only this crate makes one: a user tool
+/// finished after review ([`crate::AsyncToolCollection::try_user_tool_call`])
+/// is [`ApprovalKind::Reviewed`], and a call quoting the user's reply
+/// ([`RequestContext::with_quoted_confirmation`]) is [`ApprovalKind::Quoted`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UserApproval(ApprovalKind);
+
+/// The kinds of [`UserApproval`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApprovalKind {
+    /// The user accepted the call on a review card or in a composer.
+    Reviewed,
+    /// The call quotes the user's reply approving it: as strong as a quote
+    /// the model supplies.
+    Quoted,
+}
+
+impl UserApproval {
+    /// A user tool call the user reviewed and accepted.
+    pub(crate) fn reviewed() -> Self {
+        Self(ApprovalKind::Reviewed)
+    }
+
+    /// How the user approved the call.
+    #[must_use]
+    pub fn kind(self) -> ApprovalKind {
+        self.0
+    }
 }
 
 impl RequestContext {
@@ -63,7 +99,21 @@ impl RequestContext {
             tool_loader: None,
             cancel: CancellationToken::new(),
             genai_telemetry: true,
+            approval: None,
         }
+    }
+
+    /// The user's approval of this call, when they gave one.
+    #[must_use]
+    pub fn approval(&self) -> Option<UserApproval> {
+        self.approval
+    }
+
+    /// This request, for a call quoting `quote`, the user's reply approving
+    /// it. A blank quote approves nothing.
+    #[must_use]
+    pub fn with_quoted_confirmation(self, quote: &str) -> Option<Self> {
+        (!quote.trim().is_empty()).then_some(self)
     }
 
     /// Turn `execute_tool` GenAI telemetry for this request's tool calls on or

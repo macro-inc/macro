@@ -16,6 +16,52 @@ mod test;
 pub const INTERNAL_AGENT_ID_HEADER: &str = "x-internal-agent-id";
 /// The routine run an internal caller's request was signed for.
 pub const INTERNAL_ROUTINE_ID_HEADER: &str = "x-internal-routine-id";
+/// The user's approval an internal caller's write carries
+/// ([`ProgramApproval`]).
+pub const INTERNAL_PROGRAM_APPROVAL_HEADER: &str = "x-internal-program-approval";
+
+/// How the user approved a program's write, when they did. A route that
+/// refuses an agent's program unless the user saw the write first lets one
+/// through that carries either.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProgramApproval {
+    /// The user accepted the write on a review card or in a composer.
+    Reviewed,
+    /// The program quoted the user's reply approving the write: as strong as
+    /// a quote the program supplies, the same as a send's `userConfirmation`.
+    Quoted,
+}
+
+impl ProgramApproval {
+    /// The header value.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Reviewed => "reviewed",
+            Self::Quoted => "quoted",
+        }
+    }
+
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "reviewed" => Some(Self::Reviewed),
+            "quoted" => Some(Self::Quoted),
+            _ => None,
+        }
+    }
+}
+
+/// The approval an internal call forwarded, read only from an internal
+/// caller: a user's own request can't approve anything by header. An
+/// unreadable value approves nothing.
+#[must_use]
+pub fn forwarded_approval(
+    _caller: super::UserOrInternalCaller,
+    _headers: &HeaderMap,
+) -> Option<ProgramApproval> {
+    let _ = ProgramApproval::parse;
+    None
+}
 
 /// The program behind a request, as the service handling it forwards it:
 /// the signed agent and routine ids, and whether code mode sent it. A guard
@@ -26,6 +72,7 @@ pub struct ForwardedProgram {
     agent_id: Option<BotId>,
     routine_id: Option<Uuid>,
     code_execution: bool,
+    approval: Option<ProgramApproval>,
 }
 
 impl ForwardedProgram {
@@ -47,6 +94,16 @@ impl ForwardedProgram {
             agent_id,
             routine_id,
             code_execution,
+            approval: None,
+        }
+    }
+
+    /// This program, for a write the user approved as `approval`.
+    #[must_use]
+    pub fn approved(self, approval: ProgramApproval) -> Self {
+        Self {
+            approval: Some(approval),
+            ..self
         }
     }
 

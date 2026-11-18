@@ -68,10 +68,12 @@ async fn guards(
     headers: HeaderMap,
 ) -> Json<Value> {
     let attribution = authorization.authorization.user.attribution();
+    let approval = forwarded_approval(authorization.authorization.caller, &headers);
     Json(json!({
         "attribution": format!("{attribution:?}"),
         "agentRun": is_agent_run(attribution, &headers),
         "programRun": is_program_run(attribution, &headers),
+        "approval": approval.map(ProgramApproval::as_str),
     }))
 }
 
@@ -106,7 +108,7 @@ async fn an_agents_program_reaches_the_downstream_guard_as_an_agent() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         seen,
-        json!({"attribution": "Agent", "agentRun": true, "programRun": true})
+        json!({"attribution": "Agent", "agentRun": true, "programRun": true, "approval": null})
     );
 }
 
@@ -117,7 +119,7 @@ async fn an_owner_routine_reaches_it_as_a_routine_not_an_agent() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         seen,
-        json!({"attribution": "Routine", "agentRun": false, "programRun": true})
+        json!({"attribution": "Routine", "agentRun": false, "programRun": true, "approval": null})
     );
 }
 
@@ -128,7 +130,7 @@ async fn a_code_mode_request_on_a_persons_token_reaches_it_as_a_program() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         seen,
-        json!({"attribution": "Person", "agentRun": true, "programRun": true})
+        json!({"attribution": "Person", "agentRun": true, "programRun": true, "approval": null})
     );
 }
 
@@ -140,7 +142,7 @@ async fn a_person_in_the_app_forwards_nothing_and_stays_a_person() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         seen,
-        json!({"attribution": "Person", "agentRun": false, "programRun": false})
+        json!({"attribution": "Person", "agentRun": false, "programRun": false, "approval": null})
     );
 }
 
@@ -197,4 +199,42 @@ async fn a_forwarded_program_with_nobody_to_act_for_refuses_the_call() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+/// An approved write reaches the downstream guard with its approval, which
+/// only an internal caller can forward.
+#[tokio::test]
+async fn an_agents_approved_write_reaches_the_guard_with_its_approval() {
+    for approval in [ProgramApproval::Reviewed, ProgramApproval::Quoted] {
+        let program =
+            ForwardedProgram::new(Some(bot_id::MACRO_AI_BOT_ID), None, false).approved(approval);
+        let (status, seen) = seen(internal_call(program.headers())).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(seen["attribution"], "Agent");
+        assert_eq!(seen["approval"], approval.as_str());
+    }
+}
+
+#[tokio::test]
+async fn a_users_own_request_cannot_approve_by_header() {
+    let request = Request::get("/")
+        .header(header::AUTHORIZATION, "Bearer person")
+        .header(INTERNAL_PROGRAM_APPROVAL_HEADER, "reviewed")
+        .body(Body::empty())
+        .unwrap();
+    let (status, seen) = seen(request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(seen["approval"], Value::Null);
+}
+
+#[tokio::test]
+async fn an_unreadable_approval_approves_nothing() {
+    let mut forwarded = ForwardedProgram::new(Some(bot_id::MACRO_AI_BOT_ID), None, false).headers();
+    forwarded.insert(
+        INTERNAL_PROGRAM_APPROVAL_HEADER,
+        "yes please".parse().unwrap(),
+    );
+    let (status, seen) = seen(internal_call(forwarded)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(seen["approval"], Value::Null);
 }

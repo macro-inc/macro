@@ -36,7 +36,8 @@ pub use bot::{
     BOT_FOR_ORGANIZATION_ID_HEADER, BOT_SCOPE_HEADER, BOT_TOKEN_HEADER,
 };
 pub use forwarded_program::{
-    ForwardedProgram, INTERNAL_AGENT_ID_HEADER, INTERNAL_ROUTINE_ID_HEADER,
+    ForwardedProgram, INTERNAL_AGENT_ID_HEADER, INTERNAL_PROGRAM_APPROVAL_HEADER,
+    INTERNAL_ROUTINE_ID_HEADER, ProgramApproval, forwarded_approval,
 };
 pub use harness::{HARNESS_FOR_MACRO_USER_ID_HEADER, HARNESS_TOKEN_HEADER};
 #[allow(deprecated)]
