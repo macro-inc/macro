@@ -96,7 +96,11 @@ using the app's own perf spans so lab and Datadog field numbers compare. It navi
 reads only. Building the benchmark APK, the emulator settings it was baselined on, the
 private targets file and how to read its noise figures are in
 [`apps/web/scripts/android-benchmark/README.md`](../../apps/web/scripts/android-benchmark/README.md).
-Measure before and after every Android performance change with it.
+Measure before and after every Android performance change with it. Add
+`--cpu-throttle 4` to slow the WebView to an Android phone's CPU when judging work on its
+main thread, such as view switches; the README says when to use which profile and what
+throttling does not model (the Android UI thread, Rust, and the emulator's slow software
+rendering, which makes IPC-bound flows such as a cold channel open slower than on phones).
 
 ## Release signing
 
