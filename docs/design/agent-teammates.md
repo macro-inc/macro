@@ -56,7 +56,9 @@ Team admins and owners can read the repo with their Macro credential.
    event sources and records the healthy HEAD. At the same moment it greets
    its owner in their DM, once in its life (muppet's `utilities/greeting`
    behavior, `agent.greeting` span): one quick model call with no tools
-   writes the hello from the starter agent's `identity/greeting.md` and the
+   (a direct gateway request in Macro-credits mode; Claude Code started at
+   once and asked later on a Claude plan), overlapped with opening the DM,
+   typing and reading the facts, writes the hello from the starter agent's `identity/greeting.md` and the
    capabilities it has, and asks what it can help with, and who it should be
    when it has no identity yet. It stands down once the DM has a message.
    Its span is a child of `agent.start`, which isn't held for it: start

@@ -72,8 +72,14 @@ export const assistant = (
   agent: Agent,
   /** How areas other than the wake run Claude Code: as a wake does. */
   claude: PeopleClaude,
-  /** Whether the agent runs on a computer of its own. */
-  hosted: boolean,
+  greetingWiring: {
+    /** Whether the agent runs on a computer of its own. */
+    readonly hosted: boolean;
+    /** The Anthropic gateway, in Macro-credits mode. */
+    readonly anthropic: () => Promise<
+      { readonly url: string; readonly token: string } | undefined
+    >;
+  },
   /** Restarts the agent onto code that landed; none outside a supervisor. */
   restart?: () => Promise<void>
 ) => {
@@ -109,7 +115,8 @@ export const assistant = (
     chat: chat.decorations.chat,
     typing: chat.decorations.typingIndicators,
     claude,
-    hosted,
+    hosted: greetingWiring.hosted,
+    anthropic: greetingWiring.anthropic,
     vault: secrets.decorations.secrets.vault,
   });
   const composed = behavior()

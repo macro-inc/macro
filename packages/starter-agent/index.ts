@@ -263,4 +263,10 @@ const claudeRuns: PeopleClaude = {
 const hosted = started.credentials.kind === 'file';
 
 // An appraisal of people runs Claude Code as a wake does, on the same ledger.
-export const assistant = makeAgent(base, agent, claudeRuns, hosted, restart);
+export const assistant = makeAgent(
+  base,
+  agent,
+  claudeRuns,
+  { hosted, anthropic: wiring.anthropic },
+  restart
+);
