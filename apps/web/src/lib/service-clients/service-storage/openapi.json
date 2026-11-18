@@ -29632,6 +29632,51 @@
         }
       }
     },
+    "/threads/{thread_id}/channel-shares": {
+      "get": {
+        "tags": ["threads"],
+        "summary": "List a thread owner's grants to channels they participate in.",
+        "operationId": "get_thread_channel_shares",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ThreadChannelShare"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid thread ID"
+          },
+          "401": {
+            "description": "Owner access required"
+          },
+          "403": {
+            "description": "User session required"
+          },
+          "500": {
+            "description": "Unable to read thread shares"
+          }
+        }
+      }
+    },
     "/user-api-keys": {
       "get": {
         "tags": ["user-api-keys"],
@@ -67027,6 +67072,30 @@
           }
         ],
         "description": "A thread's location within its document. PDF geometry remains annotation-owned."
+      },
+      "ThreadChannelShare": {
+        "type": "object",
+        "description": "A channel grant the thread owner can see in the sharing roster.",
+        "required": ["channel_id", "access_level", "channel_type"],
+        "properties": {
+          "access_level": {
+            "$ref": "#/components/schemas/AccessLevel",
+            "description": "The access level granted to the channel."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel with access to the thread."
+          },
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "The channel's configured name, if it has one."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Whether the share is with a conversation or a group."
+          }
+        }
       },
       "ThreadOrigin": {
         "type": "object",

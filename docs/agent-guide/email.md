@@ -866,8 +866,9 @@ new thread or clear its highlight. Closing the split cancels pending positioning
 ### Sharing a thread
 
 The thread's **Share** dialog forwards it to people or channels at **Can edit**
-by default; its access dropdown also offers **Can view**, and the People tab
-changes an existing recipient between the two. Edit lets a recipient reply:
+by default. Its access dropdown also offers **Can view**. The owner can see,
+change, and remove grants to channels they participate in, including a direct
+message created when they share with a person. Edit lets a recipient reply:
 they get Reply, Reply all, and the inline reply box, sending from an inbox of
 their own (their primary unless they pick another in From), never the owner's.
 Forward stays with the owner, since it re-sends attachments held in the
