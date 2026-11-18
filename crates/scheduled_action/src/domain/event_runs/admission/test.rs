@@ -421,14 +421,14 @@ fn account(email: &str) -> MacroUserIdStr<'static> {
 
 #[tokio::test]
 async fn mail_into_a_delegated_inbox_reaches_the_routines_of_who_reads_it() {
-    let helpdesk = account("helpdesk@macro.com");
+    let team_inbox = account("team-inbox@macro.com");
     let reader = account("reader@macro.com");
     let stranger = account("stranger@macro.com");
     let (shared, private) = (generate_uuid_v7(), generate_uuid_v7());
     let routines = [
         mail_routine(&reader),
         mail_routine(&stranger),
-        mail_routine(&helpdesk),
+        mail_routine(&team_inbox),
     ];
     let repo = Arc::new(Repo::default());
     repo.0.lock().unwrap().configurations = routines.to_vec();
@@ -438,7 +438,7 @@ async fn mail_into_a_delegated_inbox_reaches_the_routines_of_who_reads_it() {
         .edges
         .lock()
         .unwrap()
-        .push((helpdesk.clone(), shared, reader.clone()));
+        .push((team_inbox.clone(), shared, reader.clone()));
     let service = EventAdmissionService::new(
         repo.clone(),
         access.clone(),
@@ -446,13 +446,15 @@ async fn mail_into_a_delegated_inbox_reaches_the_routines_of_who_reads_it() {
         1.try_into().unwrap(),
     );
 
-    // The reader's routine runs on the helpdesk's mail, as the owner's does.
-    let into_shared = received(&helpdesk, shared);
+    // The reader's routine runs on the team inbox's mail, as the owner's does.
+    let into_shared = received(&team_inbox, shared);
     assert_eq!(
         service.ingest(&into_shared).await.unwrap(),
         EventIngestionResult::Admitted { inserted: 2 }
     );
-    let admitted: Vec<_> = repo
+    // Candidates page in id order, and v7 ids made in one millisecond aren't
+    // ordered: compare as sets.
+    let mut admitted: Vec<_> = repo
         .0
         .lock()
         .unwrap()
@@ -460,21 +462,26 @@ async fn mail_into_a_delegated_inbox_reaches_the_routines_of_who_reads_it() {
         .iter()
         .map(|run| run.action_id)
         .collect();
-    assert_eq!(admitted, vec![routines[0].action_id, routines[2].action_id]);
+    admitted.sort();
+    let mut expected = vec![routines[0].action_id, routines[2].action_id];
+    expected.sort();
+    assert_eq!(admitted, expected);
     // A delegation is never an access grant: the reader is still checked.
-    assert_eq!(
-        *access.calls.lock().unwrap(),
-        vec![reader.clone(), helpdesk.clone()]
-    );
+    let mut checked = access.calls.lock().unwrap().clone();
+    checked.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+    assert_eq!(checked, vec![reader.clone(), team_inbox.clone()]);
     // One lookup per event, however many candidates page through.
     assert_eq!(
         *delegates.calls.lock().unwrap(),
-        vec![(helpdesk.clone(), shared)]
+        vec![(team_inbox.clone(), shared)]
     );
 
-    // Delegation is per inbox: the helpdesk's other inbox stays its own.
+    // Delegation is per inbox: the account's other inbox stays its own.
     assert_eq!(
-        service.ingest(&received(&helpdesk, private)).await.unwrap(),
+        service
+            .ingest(&received(&team_inbox, private))
+            .await
+            .unwrap(),
         EventIngestionResult::Admitted { inserted: 1 }
     );
     assert_eq!(repo.0.lock().unwrap().pending.len(), 3);
@@ -510,7 +517,7 @@ async fn delegations_are_read_only_for_mail_another_owner_could_receive() {
 
 #[tokio::test]
 async fn unreadable_delegations_defer_intake_until_redelivery() {
-    let helpdesk = account("helpdesk@macro.com");
+    let team_inbox = account("team-inbox@macro.com");
     let reader = user();
     let link = generate_uuid_v7();
     let repo = Arc::new(Repo::default());
@@ -520,7 +527,7 @@ async fn unreadable_delegations_defer_intake_until_redelivery() {
         .edges
         .lock()
         .unwrap()
-        .push((helpdesk.clone(), link, reader.clone()));
+        .push((team_inbox.clone(), link, reader.clone()));
     *delegates.unavailable.lock().unwrap() = true;
     let service = EventAdmissionService::new(
         repo.clone(),
@@ -528,7 +535,7 @@ async fn unreadable_delegations_defer_intake_until_redelivery() {
         delegates.clone(),
         10.try_into().unwrap(),
     );
-    let event = received(&helpdesk, link);
+    let event = received(&team_inbox, link);
     assert!(service.ingest(&event).await.is_err());
     assert!(repo.0.lock().unwrap().pending.is_empty());
     *delegates.unavailable.lock().unwrap() = false;

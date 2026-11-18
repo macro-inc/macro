@@ -57,32 +57,32 @@ async fn delegate(
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_inbox_is_read_by_the_accounts_it_is_delegated_to(pool: PgPool) {
-    let helpdesk = user(&pool, "helpdesk@example.com").await;
+    let team_inbox = user(&pool, "team-inbox@example.com").await;
     let reader = user(&pool, "reader@example.com").await;
     let other = user(&pool, "other@example.com").await;
-    let shared = inbox(&pool, &helpdesk, "helpdesk@example.com").await;
-    let private = inbox(&pool, &helpdesk, "helpdesk-private@example.com").await;
+    let shared = inbox(&pool, &team_inbox, "team-inbox@example.com").await;
+    let private = inbox(&pool, &team_inbox, "team-inbox-private@example.com").await;
     let readers_own = inbox(&pool, &reader, "reader@example.com").await;
-    delegate(&pool, &reader, &helpdesk, shared).await;
-    delegate(&pool, &other, &helpdesk, shared).await;
-    // The reverse edge: the helpdesk reads the reader's inbox, not the other way.
-    delegate(&pool, &helpdesk, &reader, readers_own).await;
+    delegate(&pool, &reader, &team_inbox, shared).await;
+    delegate(&pool, &other, &team_inbox, shared).await;
+    // The reverse edge: the team inbox account reads the reader's inbox.
+    delegate(&pool, &team_inbox, &reader, readers_own).await;
     let delegates = PgInboxDelegates::new(pool);
 
-    let mut shared_readers = delegates.delegates(&helpdesk, shared).await.unwrap();
+    let mut shared_readers = delegates.delegates(&team_inbox, shared).await.unwrap();
     shared_readers.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
     assert_eq!(shared_readers, vec![other, reader.clone()]);
     // Delegation is per inbox: the owner's other inbox stays theirs alone.
     assert!(
         delegates
-            .delegates(&helpdesk, private)
+            .delegates(&team_inbox, private)
             .await
             .unwrap()
             .is_empty()
     );
     assert_eq!(
         delegates.delegates(&reader, readers_own).await.unwrap(),
-        vec![helpdesk.clone()]
+        vec![team_inbox.clone()]
     );
     // A link only counts for the owner the event names.
     assert!(

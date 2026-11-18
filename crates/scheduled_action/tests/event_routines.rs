@@ -804,23 +804,23 @@ async fn simulated_bot_document_and_channel_outputs_cannot_start_a_routine_loop(
     assert!(h.dispatch().pending(page()).await.unwrap().is_empty());
 }
 
-const HELPDESK: &str = "macro|helpdesk@macro.com";
+const TEAM_INBOX: &str = "macro|team-inbox@macro.com";
 
 /// A mailbox that is its own account, delegated to `USER` (multi-inbox) as
 /// one of its inboxes; its other inbox is not.
-async fn delegated_helpdesk(pool: &PgPool) -> (Uuid, Uuid) {
+async fn delegated_team_inbox(pool: &PgPool) -> (Uuid, Uuid) {
     let user_id = generate_uuid_v7();
     sqlx::query!(
         "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)",
         user_id,
-        HELPDESK,
+        TEAM_INBOX,
     )
     .execute(pool)
     .await
     .unwrap();
     sqlx::query!(
         r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#,
-        HELPDESK,
+        TEAM_INBOX,
         user_id,
     )
     .execute(pool)
@@ -828,14 +828,14 @@ async fn delegated_helpdesk(pool: &PgPool) -> (Uuid, Uuid) {
     .unwrap();
     let (shared, private) = (generate_uuid_v7(), generate_uuid_v7());
     for (link, address) in [
-        (shared, "helpdesk@macro.com"),
-        (private, "helpdesk-private@macro.com"),
+        (shared, "team-inbox@macro.com"),
+        (private, "team-inbox-private@macro.com"),
     ] {
         sqlx::query!(
             "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
              VALUES ($1, $2, $2, $3, 'GMAIL')",
             link,
-            HELPDESK,
+            TEAM_INBOX,
             address,
         )
         .execute(pool)
@@ -845,7 +845,7 @@ async fn delegated_helpdesk(pool: &PgPool) -> (Uuid, Uuid) {
     sqlx::query!(
         "INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id) VALUES ($1, $2, $3)",
         USER,
-        HELPDESK,
+        TEAM_INBOX,
         shared,
     )
     .execute(pool)
@@ -877,15 +877,15 @@ fn received(owner: &str, link_id: Uuid) -> IncomingEvent {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn mail_into_an_inbox_delegated_to_the_owner_runs_their_email_routine(pool: PgPool) {
     let h = Harness::new(pool, FakeRunner::default()).await;
-    let (shared, private) = delegated_helpdesk(&h.pool).await;
+    let (shared, private) = delegated_team_inbox(&h.pool).await;
     let routine = h
-        .create(json!({"name":"helpdesk", "kind":"Agent",
+        .create(json!({"name":"team inbox", "kind":"Agent",
             "trigger":{"type":"events", "filters":[{"events":["email.message_received"]}]},
             "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true}))
         .await;
 
-    // Mail into the helpdesk inbox the owner reads is theirs too.
-    let mail = received(HELPDESK, shared);
+    // Mail into the team inbox the owner reads is theirs too.
+    let mail = received(TEAM_INBOX, shared);
     h.ingest(&mail, 1).await;
     h.dispatch_head().await;
     h.assert_terminal(
@@ -894,8 +894,8 @@ async fn mail_into_an_inbox_delegated_to_the_owner_runs_their_email_routine(pool
         true,
     )
     .await;
-    // The helpdesk's other inbox isn't delegated, so its mail stays the helpdesk's.
-    h.ingest(&received(HELPDESK, private), 0).await;
+    // The team inbox account's other inbox isn't delegated, so its mail stays that account's.
+    h.ingest(&received(TEAM_INBOX, private), 0).await;
     assert_eq!(h.count().await, 1);
     let calls = h.runner.calls.lock().unwrap();
     assert_eq!(calls.len(), 1);
