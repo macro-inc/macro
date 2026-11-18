@@ -110,6 +110,15 @@ interface RoutineCommonOptions {
    * creation; an update that omits it keeps the stored value.
    */
   runVisibility?: RunVisibility;
+  /**
+   * An icon and color for what the routine does, picked by the agent writing
+   * it: `{ icon: { kind: 'macro', name }, color }`, with `name` from Macro's
+   * icon catalog (a check or save naming another lists the catalog). Saved
+   * on create and update unless the owner chose the routine's look with
+   * {@link Routine.setAppearance}, which it never replaces; omit it to keep
+   * the stored look.
+   */
+  appearance?: EntityAppearance;
 }
 
 /**
@@ -562,6 +571,7 @@ export function routineBody(options: RoutineOptions) {
     name: options.name,
     enabled: options.enabled,
     run_visibility: options.runVisibility,
+    appearance: options.appearance,
     trigger: triggerBody(options.trigger),
     task: taskBody(options),
   };

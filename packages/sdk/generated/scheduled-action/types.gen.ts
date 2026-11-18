@@ -22,6 +22,12 @@ export type AcceptSuggestionRequest = {
  */
 export type ActionConfiguration = {
     /**
+     * An icon and colour an agent picked for what the routine does. Saved
+     * unless the owner chose the routine's appearance, which only the
+     * appearance endpoint does; absent leaves the stored one.
+     */
+    appearance?: EntityAppearance;
+    /**
      * What the routine is for, in the owner's words; empty when unset.
      */
     description?: string;
@@ -42,6 +48,10 @@ export type ActionConfiguration = {
  * `description` keeps them too, so clients that predate them do not reset them.
  */
 export type ActionConfigurationUpdate = {
+    /**
+     * An icon and colour an agent picked, as on create.
+     */
+    appearance?: EntityAppearance;
     /**
      * An empty string clears it.
      */
@@ -615,6 +625,11 @@ export type DraftUpdateState = 'drafting' | 'ready' | 'failed' | 'removed';
  * A drafted routine.
  */
 export type DraftedRoutine = {
+    /**
+     * The icon and colour AI picked for it from Macro's icons; absent when
+     * it picked none, or one Macro doesn't have.
+     */
+    appearance?: EntityAppearance;
     /**
      * What AI created while drafting, such as the database the routine
      * writes to. These exist whether or not the routine is saved.

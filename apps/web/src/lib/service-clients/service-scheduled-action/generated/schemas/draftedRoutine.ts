@@ -5,8 +5,10 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+
 import type { DraftCreated } from './draftCreated';
 import type { DraftedRoutineTrigger } from './draftedRoutineTrigger';
+import type { EntityAppearance } from './entityAppearance';
 import type { RoutineStep } from './routineStep';
 import type { StepProblem } from './stepProblem';
 
@@ -14,6 +16,9 @@ import type { StepProblem } from './stepProblem';
  * A drafted routine.
  */
 export interface DraftedRoutine {
+  /** The icon and colour AI picked for it from Macro's icons; absent when
+it picked none, or one Macro doesn't have. */
+  appearance?: EntityAppearance;
   /** What AI created while drafting, such as the database the routine
 writes to. These exist whether or not the routine is saved. */
   created: DraftCreated[];
