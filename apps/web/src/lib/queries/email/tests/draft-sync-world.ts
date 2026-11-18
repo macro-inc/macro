@@ -529,23 +529,22 @@ async function boot(world: WorldCore) {
           await autosave.settled().catch(() => {});
           await autosave.flushLocal().catch(() => {});
           const draftId = session.draftId();
-          if (draftId)
-            await deleteDraftForDiscard(storageCapabilities, {
-              draftId,
-              draftGeneration: serverGeneration,
-              threadId: session.threadId(),
-              inboxId: INBOX,
-            });
+          if (draftId) {
+            try {
+              await deleteDraftForDiscard(storageCapabilities, {
+                draftId,
+                draftGeneration: serverGeneration,
+                threadId: session.threadId(),
+                inboxId: INBOX,
+              });
+            } catch (error) {
+              // The draft went out meanwhile: nothing is left to discard.
+              if (!session.alreadySent()) throw error;
+            }
+          }
           text = '';
           serverGeneration = 0;
           session.dispatch({ type: 'reset' });
-        } catch (error) {
-          busy = false;
-          discarding = false;
-          // A refusal that arrived during the delete was left to the discard.
-          if (session.alreadySent())
-            fireAndForget(settleAlreadySent(), 'draft-sync-world');
-          throw error;
         } finally {
           busy = false;
           discarding = false;

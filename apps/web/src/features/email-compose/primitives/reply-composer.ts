@@ -1512,13 +1512,15 @@ export function createReplyComposer(
             inboxId: activeInboxId(),
           });
         } catch (error) {
-          await reportPersistenceFailure(error, 'delete');
-          setPendingDeletion(false);
-          void lifecycle.refresh().catch(props.notices.reportError);
-          // A refusal that arrived during the delete was left to the discard.
-          if (session.alreadySent())
-            fireAndForget(settleAlreadySent(), 'email-compose');
-          throw error;
+          // The draft went out meanwhile, so nothing is left to discard: the
+          // discard drops the text as asked instead of failing.
+          if (!session.alreadySent()) {
+            await reportPersistenceFailure(error, 'delete');
+            setPendingDeletion(false);
+            void lifecycle.refresh().catch(props.notices.reportError);
+            throw error;
+          }
+          props.notices.reportError(error);
         }
       }
       identityVersion += 1;

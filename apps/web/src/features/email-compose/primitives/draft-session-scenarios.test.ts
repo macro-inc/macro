@@ -1149,7 +1149,7 @@ describe.each(['reply', 'compose'] as const)(
       }
     });
 
-    it('settles nothing once the composer closes while the refusal is read', async () => {
+    it('shows nothing once the composer closes while the refusal is read', async () => {
       const context = createComposeContext();
       const workingCopy = queuedWorkingCopy(context);
       const read = Promise.withResolvers<EmailDraftLifecycleState>();
@@ -1169,7 +1169,40 @@ describe.each(['reply', 'compose'] as const)(
 
       expect(context.notices.feedback.alert).not.toHaveBeenCalled();
       expect(host.showThread).not.toHaveBeenCalled();
-      expect(newDraftSaves(context)).toEqual([]);
+    });
+
+    it('drops the text when a discard fails to delete a draft sent elsewhere', async () => {
+      const context = createComposeContext();
+      const workingCopy = queuedWorkingCopy(context);
+      const read = Promise.withResolvers<EmailDraftLifecycleState>();
+      readOnlyOnRefusal(context, () => read.promise);
+      const root = mount(context);
+      try {
+        root.edit('Reply that another device sends');
+        await vi.advanceTimersByTimeAsync(600);
+        workingCopy.acknowledge();
+        await vi.advanceTimersByTimeAsync(0);
+        refuseNextSave(context);
+        root.edit('Text typed after the send');
+        await vi.advanceTimersByTimeAsync(600);
+        const unavailable = new Error('Service unavailable');
+        vi.mocked(context.drafts.deleteDraft).mockRejectedValueOnce(
+          unavailable
+        );
+        await root.discard();
+        read.resolve(sentElsewhere);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(context.notices.reportError).toHaveBeenCalledWith(unavailable);
+        expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+        expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+        expect(newDraftSaves(context)).toEqual([]);
+        expect(
+          root.editor.read(() => $getRoot().getTextContent())
+        ).not.toContain('Text typed after the send');
+      } finally {
+        root.dispose();
+      }
     });
 
     it('keeps nothing when the draft refused as sent was emptied', async () => {
