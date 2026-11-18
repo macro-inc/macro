@@ -52,6 +52,7 @@ function isWorkingCalendar(link: EmailLink) {
  */
 function isStoppedCalendar(link: EmailLink) {
   return (
+    link.is_sync_active &&
     link.needs_calendar_permission &&
     link.has_calendar_data &&
     !link.calendar_disabled &&
@@ -135,6 +136,11 @@ export function SetupStatus() {
   const setupMessage = createMemo(
     () => SETUP_MESSAGES[setupState() ?? 'connect']
   );
+  // A stopped calendar beside working ones keeps to the pill, so the working
+  // calendars' sync errors still show above it.
+  const showsWarnings = () =>
+    setupState() === undefined ||
+    (setupState() === 'stopped' && (hasEvents() || seesWorkingCalendar()));
   const setupTitle = () => {
     const stopped = setupState() === 'stopped' ? stoppedLink() : undefined;
     return stopped
@@ -170,10 +176,10 @@ export function SetupStatus() {
 
   return (
     <>
-      <Show when={setupState() === undefined && warnings().length > 0}>
+      <Show when={showsWarnings() && warnings().length > 0}>
         <div
           role="status"
-          class="absolute bottom-2 left-2 right-2 z-20 flex flex-col gap-1 rounded-lg border border-warning/40 bg-warning-bg p-3 text-xs text-warning-ink"
+          class={`absolute left-2 right-2 z-20 flex flex-col gap-1 rounded-lg border border-warning/40 bg-warning-bg p-3 text-xs text-warning-ink ${setupState() === 'stopped' ? 'bottom-12' : 'bottom-2'}`}
         >
           <For each={warnings()}>
             {(calendar) => (

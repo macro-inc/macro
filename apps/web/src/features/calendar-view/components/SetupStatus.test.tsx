@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({ startAddInbox: vi.fn() }));
 
 const [userId, setUserId] = createSignal<string | undefined>('macro|self');
 const [links, setLinks] = createSignal<EmailLink[]>([]);
+const [calendars, setCalendars] = createSignal<
+  { emailAddress: string; name: string; syncError?: string }[]
+>([]);
 
 vi.mock('@app/features/calendar/components/CalendarPagerContext', () => ({
   useCalendarPager: () => ({
@@ -31,7 +34,12 @@ vi.mock('@core/email-link', () => ({
 }));
 
 vi.mock('@queries/calendar/calendars', () => ({
-  useVisibleCalendarsQuery: () => ({ isSuccess: true, data: [] }),
+  useVisibleCalendarsQuery: () => ({
+    isSuccess: true,
+    get data() {
+      return calendars();
+    },
+  }),
 }));
 
 vi.mock('@queries/email/link', () => ({
@@ -70,6 +78,7 @@ beforeEach(() => {
   mocks.startAddInbox.mockResolvedValue(undefined);
   setUserId('macro|self');
   setLinks([]);
+  setCalendars([]);
 });
 
 afterEach(() => {
@@ -187,6 +196,47 @@ describe('SetupStatus', () => {
       emailAddress: 'stopped@example.com',
       scopes: 'calendar',
     });
+  });
+
+  it('keeps a working calendar’s sync error in view beside a stopped one', () => {
+    setLinks([
+      link('working'),
+      link('stopped', {
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+      }),
+    ]);
+    setCalendars([
+      {
+        emailAddress: 'working@example.com',
+        name: 'Team',
+        syncError: 'Google rejected the request',
+      },
+    ]);
+    render(() => <SetupStatus />);
+
+    expect(
+      screen.getByText('Calendar for stopped@example.com stopped syncing')
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'working@example.com — Team: Google rejected the request'
+      )
+    ).toBeTruthy();
+  });
+
+  it('leaves a disconnected inbox’s old calendar alone', () => {
+    setLinks([
+      link('working'),
+      link('gone', {
+        is_sync_active: false,
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+      }),
+    ]);
+    render(() => <SetupStatus />);
+
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('explains a stopped calendar over an empty grid when it is the only one', () => {
