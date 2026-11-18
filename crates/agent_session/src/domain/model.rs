@@ -8,6 +8,9 @@ use model_owner::Owner;
 
 use super::error::AgentSessionError;
 
+#[cfg(test)]
+mod test;
+
 // The log vocabulary - the session id, the log entry, and the frame it
 // carries - is owned by `agent_fold`, the bottom of the agent session stack,
 // so that this crate can depend on the fold (see `agent_fold::domain::log`).
