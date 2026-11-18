@@ -26,8 +26,9 @@ val yields_request : ?env:Env.t Lazy.t -> Types.type_expr -> bool
 
 val default_libraries : string list
 (** Compilation units (and their [Unit__] submodules) a program may use: the
-    standard library, the SDK, its runtime and transport, and the libraries
-    their interfaces expose. Their code is trusted, not analyzed. *)
+    standard library, the SDK, its runtime, its transports (Eio and code
+    mode's [Macro_sdk_fetch]), [Code_mode], and the libraries their
+    interfaces expose. Their code is trusted, not analyzed. *)
 
 val operation_of : unit:string -> string -> operation option
 (** The operation a service unit's value builds, e.g.

@@ -1,5 +1,7 @@
 ; test_corpus: the programs in corpus/ and the answers they state.
 ; test_coverage: every SDK operation is in the analyzer's table and found.
+; test_trusted: code mode's runtime, which the analyzer trusts, names no
+; operation.
 
 (test
  (name test_corpus)
@@ -31,3 +33,13 @@
   (glob_files corpus/.corpus.objs/byte/*.cmt))
  (action
   (run %{test} %{exe:../bin/macro_sdk_calls.exe})))
+
+; Reads the sources of fetch/ and code_mode/ (built only in the wasm
+; profile) through DUNE_SOURCEROOT.
+
+(test
+ (name test_trusted)
+ (modules test_trusted)
+ (libraries compiler-libs.common)
+ (deps (universe)))
+

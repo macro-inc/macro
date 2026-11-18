@@ -174,16 +174,25 @@ let contains ~fragment text =
   search 0
 
 (* Libraries a program may use by default: the standard library, the SDK
-   and its transport, and what their interfaces expose. Their code is not
-   analyzed; they are trusted not to build SDK requests or cast values. Any
-   other unit (another unit of the program, Dynlink, a third-party library)
-   could call the SDK out of sight. *)
+   and its transports, code mode's program contract, and what their
+   interfaces expose. Their code is not analyzed; they are trusted not to
+   build SDK requests or cast values. Any other unit (another unit of the
+   program, Dynlink, a third-party library, the JavaScript interop) could
+   call the SDK out of sight.
+
+   Macro_sdk_fetch and Code_mode (fetch/, code_mode/) are code mode's
+   runtime. Neither depends on the generated operations: the transport sends
+   only a request its caller hands it, and Code_mode only builds the client
+   ([test_trusted] checks their sources). Js_of_ocaml, which both are built
+   on, stays out: through it a program could call [fetch] directly. *)
 let default_libraries =
   [
     "Stdlib";
     "Macro_sdk";
     "Macro_sdk_runtime";
     "Macro_sdk_eio";
+    "Macro_sdk_fetch";
+    "Code_mode";
     "Yojson";
     "Uri";
     "Eio";

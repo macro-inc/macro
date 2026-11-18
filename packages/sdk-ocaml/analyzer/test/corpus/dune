@@ -4,6 +4,12 @@
 (library
  (name corpus)
  (wrapped false)
- (libraries macro_sdk macro_sdk_eio unix dynlink)
+ (libraries
+  macro_sdk
+  macro_sdk_eio
+  code_mode_interfaces
+  js_of_ocaml
+  unix
+  dynlink)
  (flags
   (:standard -w -a)))
