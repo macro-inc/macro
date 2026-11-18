@@ -54,6 +54,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useNativeNavigationEdge } from '@core/mobile/nativeNavigationEdge';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { hasLoginCookie, updateCookie } from '@core/util/cookies';
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isDesktopPlatform, isPlatform } from '@core/util/platform';
 import { useDesktopZoom } from '@macro/tauri/zoom';
@@ -65,7 +66,6 @@ import { cn } from '@ui';
 import {
   createEffect,
   createMemo,
-  lazy,
   onCleanup,
   onMount,
   type ParentProps,

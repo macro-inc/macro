@@ -14,7 +14,9 @@ use std::time::Duration;
 
 use agent_client_protocol::schema::v1::SessionId;
 use agent_harness::domain::model::{DORMANT_AFTER, ListedSessions, RuntimeAccessFacts};
-use agent_harness::domain::ports::{HarnessBindings, HarnessPresence, RuntimeConnectionId};
+use agent_harness::domain::ports::{
+    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeConnectionId,
+};
 use agent_session::domain::model::ReplicaId;
 use bot_id::BotId;
 use harness_id::HarnessId;
@@ -160,7 +162,7 @@ impl HarnessPresence for PgHarnessPresence {
         self: Arc<Self>,
         harness: HarnessId,
         connection: RuntimeConnectionId,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>> {
         let span = tracing::info_span!(
             "harness.presence.connected",
             %harness,
@@ -209,6 +211,8 @@ impl HarnessPresence for PgHarnessPresence {
                         tracing::error!(error = ?error, %harness, %connection, "failed to record harness attach");
                     }
                 }
+                // Presence itself never binds an agent.
+                ConnectionRecorded::AgentsUnchanged
             }
             .instrument(span),
         )
