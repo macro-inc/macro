@@ -463,7 +463,16 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD` failures) appears or is reworded
   (`failure_changes_sync_error_badge`) and when the round that clears it
   commits, never on a routine round (Outlook polls every two minutes).
-  Neither nudges open clients for it, so a tab sees it on its next delta.
+  Outlook also nudges open clients at those same moments
+  (`fail_outlook_calendar` reports a shown or reworded badge,
+  `OutlookCheckpoint::RoundFinished` a cleared one), with the out-of-office
+  hint raised as for any coverage failure. Teammates' rows already move at the
+  first failure, below the threshold, since the overlay leaves out an account
+  or calendar with a stored error; their clients catch that up within the
+  60-second team cache. A repeat of the shown failure stays quiet, so an
+  outage does not refresh every client on every retry. Google nudges after a
+  run in which a calendar failed on its own (`report.team_ooo_changed`), not
+  on the badge itself, and not when the badge clears.
   Outlook logged none before November 2026;
   `20261105002046_log_outlook_calendars_for_their_sync_error.sql` logs every
   visible Outlook calendar once so caches that missed a change refetch it.

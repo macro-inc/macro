@@ -257,10 +257,11 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                     }
                     sqlx::query!(r#"UPDATE calendar_outlook_work SET cursor=$2,page_cursor=$2,terminal_cursor=NULL,page_loaded=false,full_scan=$3,scan_id=gen_random_uuid(),visited_pages='{}'
                         WHERE id=$1"#,lease.id,if lease.is_primary{state.terminal_cursor}else{None},!lease.is_primary).execute(&mut *tx).await.map_err(report)?;
-                    if visible_calendar_sync_error_tx(&mut tx, target.calendar_id)
-                        .await?
-                        .is_some()
-                    {
+                    let cleared_sync_error =
+                        visible_calendar_sync_error_tx(&mut tx, target.calendar_id)
+                            .await?
+                            .is_some();
+                    if cleared_sync_error {
                         log.record(
                             lease.binding.link_id,
                             CalendarChangeOp::UpsertCalendar(target.calendar_id),
@@ -283,7 +284,10 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                     } else {
                         OUTLOOK_ROUND_INTERVAL
                     };
-                    checkpoint = OutlookCheckpoint::RoundFinished { first_sync };
+                    checkpoint = OutlookCheckpoint::RoundFinished {
+                        first_sync,
+                        cleared_sync_error,
+                    };
                 }
             }
         }
@@ -550,7 +554,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         &self,
         lease: &OutlookCalendarLease,
         kind: CalendarProviderErrorKind,
-    ) -> Result<(), Report> {
+    ) -> Result<bool, Report> {
         let message = match kind {
             CalendarProviderErrorKind::ReauthRequired => "Reconnect Microsoft calendar",
             CalendarProviderErrorKind::Permanent => "Microsoft could not synchronize this calendar",
@@ -560,16 +564,18 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         let mut log = ChangeLogBatch::default();
         // An old worker must not alter the replacement grant's health.
         if fence(&mut tx, lease).await.is_err() {
-            return Ok(());
+            return Ok(false);
         }
         sqlx::query!(r#"UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,last_error=$2,attempts=attempts+1,
             next_run_at=now()+make_interval(secs=>LEAST(900,30*power(2,LEAST(attempts,5)))::int) WHERE id=$1"#,lease.id,message).execute(&mut *tx).await.map_err(report)?;
+        let mut badge_changed = false;
         if let Some(target) = &lease.target {
             let shown_before = visible_calendar_sync_error_tx(&mut tx, target.calendar_id).await?;
             let failures = sqlx::query_scalar!("UPDATE calendars SET last_sync_error=$2,last_sync_error_kind=$3,last_sync_error_at=now(),consecutive_sync_failures=consecutive_sync_failures+1 WHERE id=$1 RETURNING consecutive_sync_failures",target.calendar_id,message,super::sync_health::stored_sync_failure(kind.into())).fetch_optional(&mut *tx).await.map_err(report)?;
-            if failures.is_some_and(|failures| {
+            badge_changed = failures.is_some_and(|failures| {
                 failure_changes_sync_error_badge(shown_before.as_deref(), failures, message)
-            }) {
+            });
+            if badge_changed {
                 log.record(
                     lease.binding.link_id,
                     CalendarChangeOp::UpsertCalendar(target.calendar_id),
@@ -589,7 +595,8 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         .execute(&mut *tx)
         .await
         .map_err(report)?;
-        log.commit(tx).await
+        log.commit(tx).await?;
+        Ok(badge_changed)
     }
     async fn defer_outlook_calendar(
         &self,
