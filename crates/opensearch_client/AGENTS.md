@@ -64,9 +64,11 @@ projects.
   retries, so a recovered attempt does not record an error span.
 - Requests time out after five minutes (`REQUEST_TIMEOUT`); delete-by-query
   across a large mailbox runs for minutes.
-- Agent-session writes never wait for a refresh. A search sees only refreshed
-  documents, so delete what you know by id first and leave those ids out of
-  the sweep's search, which finds the leftovers to delete by id. The parent's
+- Agent-session writes and single-message email deletes never wait for a
+  refresh. A search sees only refreshed documents, so delete what you know by
+  id first and leave those ids out of the sweep's search, which finds the
+  leftovers to delete by id. A forced refresh per event refreshes every shard
+  of the index, and a run of such events stalls their partition. The parent's
   `indexed_messages` record (child id to content hash) and `pending_messages`
   (children being changed, not yet confirmed) are read with a real-time GET,
   so they are current without a refresh. Never trust a record
