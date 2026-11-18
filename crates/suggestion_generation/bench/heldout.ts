@@ -51,32 +51,41 @@ export function spent(): string[] {
 
 // ---------- writing a set ----------
 
+let authorSeeded = false;
 let authorToken: Promise<string> | undefined;
 
-async function write<T>(at: Stack, prompt: string, schema: object): Promise<T> {
-  authorToken ??= (async () => {
-    const author = {
+/** The author's token, seeding the author once per process. */
+function author(at: Stack): Promise<string> {
+  if (!authorSeeded) {
+    authorSeeded = true;
+    const account = {
       name: 'author',
       heldout: false,
       dir: '',
       workspace: { scenario: 'sugbench-author', description: 'The account the bench writes held-out personas as.', users: { author: { email: AUTHOR, first_name: 'Bench', last_name: 'Author', roles: ['team_subscriber', 'sub_opus'] } } },
       inbox: { owner: { name: 'Bench Author', email: AUTHOR }, persona: '', timezone: 'UTC', messages: [] },
     } as unknown as Persona;
-    seed(at.instance, author, 'full', Date.now(), join(HELDOUT_DIR, 'author.seed.log'));
-    return login(at, AUTHOR);
-  })();
+    seed(at.instance, account, 'full', Date.now(), join(HELDOUT_DIR, 'author.seed.log'));
+  }
+  authorToken ??= login(at, AUTHOR);
+  return authorToken;
+}
+
+async function write<T>(at: Stack, prompt: string, schema: object): Promise<T> {
   let last: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const response = await call<{ outcome: { status: string; result?: T; reason?: string } }>(`${at.harness}/cognition/structured-completion`, {
         method: 'POST',
-        token: await authorToken,
+        token: await author(at),
         body: JSON.stringify({ prompt, model: AUTHOR_MODEL, output_schema: { name: 'authored', schema }, toolset: { type: 'none' } }),
       });
       if (response.outcome.status === 'completed' && response.outcome.result) return response.outcome.result;
       last = response.outcome.reason;
     } catch (error) {
       last = error;
+      // Local tokens last an hour: sign in again.
+      if (/ 401: /.test(String(error))) authorToken = undefined;
     }
   }
   throw new Error(`writing failed: ${String(last).slice(0, 300)}`);
@@ -238,7 +247,7 @@ ${digest}
       FEED_TRUTH,
     );
     writeFileSync(join(dir, 'feed-truth.json'), `${JSON.stringify(feedTruth, null, 1)}\n`);
-    const catalog = Object.entries(CATALOG).filter(([, e]) => e.suggest).map(([key, e]) => `${key}: ${e.does} (${e.surfaces.join(', ')})`).join('\n');
+    const catalog = Object.entries(CATALOG).map(([key, e]) => `${key}: ${e.does} (${e.surfaces.join(', ')})`).join('\n');
     const routinesTruth = await write<{ needs: Record<string, unknown>[]; decoys: Record<string, unknown>[] }>(
       at,
       `Write the answer key for judging automations ("routines") suggested to ${owner.name} a minute after signup, from their mail alone. Needs (ids r1, …, 4 to 6): routines they would still have on a month later because a steady stream of their mail shows the work: what, evidence (subjects), the catalog keys that meet it on their own (empty when only a drafted routine can), what a drafted routine that meets it does (empty when the catalog covers it), and the sidebars (email, calendar, tasks, files, crm, chat, calls, reviews, agents). Make one need "mail sorting" met by inbox or email_tags when they file mail under labels. Decoys (ids x1, …, 3 to 5): routines that look plausible from their mail but that they would switch off, with why, and the catalog keys that are that decoy (empty when none). Include one decoy that would send or act as them.

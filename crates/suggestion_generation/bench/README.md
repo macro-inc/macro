@@ -31,7 +31,9 @@ Suggestions on main come from generations (`crates/suggestion_generation`):
 a suggestions session that writes the feed's cards (prompt, entity and
 routine cards) and routines sessions that write routine suggestions (catalog
 picks and drafted routines). Each section runs one kind alone, with only its
-flag on, so its number moves only with that kind's prompt and tools.
+flag on, so its number moves only with that kind's prompt and tools. Both
+also turn on `enable-event-routines` (`BASE_FLAGS`), without which a drafted
+routine can't start when mail arrives; every other flag is off.
 
 | Section | Generation | Persona copy | Answer key |
 | --- | --- | --- | --- |
@@ -57,7 +59,10 @@ Each attempt scores **100 × (found − bad) / needs**:
 - A fine suggestion the key didn't plant counts nothing.
 
 So finding everything with nothing wrong is 100, suggesting nothing is 0, and
-noise drives it below 0. Underneath, each run reports found / needs, bad,
+noise drives it below 0. A generation the build fails (a server error
+starting it, or still running at the deadline: 12 minutes at onboarding, 25
+on request) scores 0; a failure of the bench's own (seeding, the stand-in,
+the judge) leaves the attempt out and is listed under the table. Underneath, each run reports found / needs, bad,
 invented, wrong by reason, suggestions made, a quality mean (the judge's
 1–5 *keep* for routines, *worth* for cards, and a 1–10 feed rating), time to
 the first suggestion and to the end, and the generation's cost from

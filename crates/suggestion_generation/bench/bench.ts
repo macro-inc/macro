@@ -14,7 +14,7 @@ import { seedId } from '../../scheduled_action/bench/setup';
 import { type Persona, type Variant, ownerEmail, personas, scenarioName } from './personas';
 import { lines as reportLines } from './report';
 import { CACHE, type Trigger, generate, prepare } from './run';
-import { type Attempt, type RunFile, type Section, noiseMargin, scoreFeed, scoreRoutines, summary, verdict } from './score';
+import { type Attempt, type RunFile, type Section, failedScore, noiseMargin, scoreFeed, scoreRoutines, summary, verdict } from './score';
 import { startStub, stopStub, stubDir, writeFlags } from './stub';
 
 type SectionSpec = {
@@ -27,19 +27,26 @@ type SectionSpec = {
   search: boolean;
 };
 
+/**
+ * Flags on in every section besides its own: what the people suggestions
+ * reach have on. Event routines let a drafted routine start when mail
+ * arrives, which most of the answer keys' drafted needs ask for.
+ */
+const BASE_FLAGS: Record<string, boolean> = { 'enable-event-routines': true };
+
 export const SECTIONS: Record<Section, SectionSpec> = {
   routines: {
     about: 'Routine suggestions at signup: the onboarding generation with only routine suggestions on, for a person whose mailbox is all Macro has.',
     variant: 'signup',
     trigger: 'onboarding',
-    flags: { 'enable-routine-suggestions': true },
+    flags: { ...BASE_FLAGS, 'enable-routine-suggestions': true },
     search: false,
   },
   feed: {
     about: 'The Suggestions feed: a "fresh suggestions" generation with only suggestions on, over a workspace in use for weeks.',
     variant: 'full',
     trigger: 'manual',
-    flags: { 'enable-suggestions': true },
+    flags: { ...BASE_FLAGS, 'enable-suggestions': true },
     search: true,
   },
 };
@@ -85,7 +92,7 @@ async function setFlags(instance: string, flags: Record<string, boolean>) {
 async function indexAll(at: Stack, people: Persona[], variant: Variant) {
   const indexer = searchIndexer(at);
   const headers = { 'x-internal-auth-key': indexer.key };
-  for (const kind of ['documents', 'channels', 'projects', 'emails']) {
+  for (const kind of ['documents', 'channels', 'projects', 'emails', 'calls', 'chats']) {
     const { job_id } = await call<{ job_id: string }>(`${indexer.url}/internal/backfill/${kind}`, { method: 'POST', headers, body: '{}' });
     for (let attempt = 0; ; attempt++) {
       const job = await call<{ status: string; error?: string }>(`${indexer.url}/internal/backfill/${job_id}`, { headers });
@@ -116,7 +123,16 @@ async function indexAll(at: Stack, people: Persona[], variant: Variant) {
   }
 }
 
-async function judgeAndScore(at: Stack, section: Section, persona: Persona, attempt: Attempt) {
+/** One judgement at a time: they all call as the grader, so each one's cost is read from its own window. */
+let judging = Promise.resolve();
+
+function judgeAndScore(at: Stack, section: Section, persona: Persona, attempt: Attempt): Promise<void> {
+  const turn = judging.then(() => judgeAlone(at, section, persona, attempt));
+  judging = turn.catch(() => {});
+  return turn;
+}
+
+async function judgeAlone(at: Stack, section: Section, persona: Persona, attempt: Attempt) {
   const started = new Date();
   try {
     if (section === 'routines') {
@@ -129,7 +145,9 @@ async function judgeAndScore(at: Stack, section: Section, persona: Persona, atte
   } catch (error) {
     attempt.benchError = `judge: ${String(error).slice(0, 300)}`;
   }
-  attempt.judgeUsd = await judgeCost(at, new Date(started.getTime() - 1000), new Date(Date.now() + 5000)).catch(() => 0);
+  // Usage rows land as each call settles: give the last one a moment.
+  await Bun.sleep(3000);
+  attempt.judgeUsd = await judgeCost(at, new Date(started.getTime() - 1000), new Date()).catch(() => 0);
 }
 
 /** Run `section` for every chosen persona, `reps` times, and write the run file as it goes. */
@@ -181,13 +199,15 @@ async function runSection(section: Section, values: Record<string, string | unde
             const base = join(dir, `${persona.name}-${rep}`);
             const generation = await generate(at, persona, spec.variant, spec.trigger, now, base);
             const attempt: Attempt = { section, label: run.label, persona: persona.name, heldout: persona.heldout, rep, generation, judgeUsd: 0 };
-            if (generation.error) attempt.benchError = `generation: ${generation.error}`;
+            const truth = section === 'routines' ? persona.routinesTruth!.needs : persona.feedTruth!.planted;
+            if (generation.buildFailed) attempt.score = failedScore(truth.length);
+            else if (generation.error) attempt.benchError = `generation: ${generation.error}`;
             else await judgeAndScore(at, section, persona, attempt);
             run.attempts.push(attempt);
             save();
             const s = attempt.score;
             console.log(
-              `${section} ${persona.name} #${rep}: ${attempt.benchError ?? `score ${s!.score.toFixed(0)} (found ${s!.found}/${s!.needs}, bad ${s!.bad}, ${s!.suggestions} suggested), ${generation.status}, ${((generation.wallMs ?? 0) / 1000).toFixed(0)}s, $${generation.cost.usd.toFixed(3)}`}`,
+              `${section} ${persona.name} #${rep}: ${generation.buildFailed ? `build failed (scored 0): ${generation.error}` : attempt.benchError ?? `score ${s!.score.toFixed(0)} (found ${s!.found}/${s!.needs}, bad ${s!.bad}, ${s!.suggestions} suggested), ${generation.status}, ${((generation.wallMs ?? 0) / 1000).toFixed(0)}s, $${generation.cost.usd.toFixed(3)}`}`,
             );
           }),
         );
@@ -208,7 +228,7 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
   seedGrader(at.instance);
   const people = new Map(personas(run.set).map((persona) => [persona.name, persona]));
   for (const attempt of run.attempts) {
-    if (attempt.generation.error) continue;
+    if (attempt.generation.error) continue; // a build failure keeps its 0
     attempt.benchError = undefined;
     await judgeAndScore(at, run.section, people.get(attempt.persona)!, attempt);
   }

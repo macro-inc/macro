@@ -26,6 +26,8 @@ const CADDYFILE = `{
 	handle /flags* {
 		root * /srv
 		rewrite * /flags.json
+		# PostHog's client asks with POST; the file server answers only GET.
+		method GET
 		header Content-Type application/json
 		file_server
 	}

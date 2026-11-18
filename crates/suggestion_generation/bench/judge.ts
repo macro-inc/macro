@@ -7,9 +7,10 @@
 
 import { SQL } from 'bun';
 
+import { seedId } from '../../scheduled_action/bench/setup';
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
 import { CATALOG } from './catalog';
-import { type FeedTruth, type Persona, type RoutinesTruth, recentMessages, scenario, truthAt } from './personas';
+import { type FeedTruth, type Persona, type RoutinesTruth, type Variant, recentMessages, scenario, scenarioName, truthAt } from './personas';
 import type { CardRow, Generation, RoutineRow } from './run';
 import { CACHE, seed } from './run';
 
@@ -32,6 +33,7 @@ export function seedGrader(instance: string) {
   seed(instance, persona, 'full', Date.now(), `${CACHE}/${instance}/grader.seed.log`);
 }
 
+// Local tokens last an hour and a run lasts longer: sign in again on a 401.
 let graderToken: Promise<string> | undefined;
 const grader = (at: Stack) => (graderToken ??= login(at, GRADER));
 
@@ -57,6 +59,7 @@ async function complete<T>(at: Stack, prompt: string, instructions: string, sche
       last = response.outcome.reason ?? response.outcome.status;
     } catch (error) {
       last = error;
+      if (/\b401\b/.test(String(error))) graderToken = undefined;
     }
     await Bun.sleep(3000);
   }
@@ -79,8 +82,9 @@ export async function judgeCost(at: Stack, from: Date, to: Date): Promise<number
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
-const inboxDigest = (persona: Persona, now: number) =>
-  recentMessages(persona, 'full', now)
+/** The mailbox the generation read: the same copy, so addresses match what it quoted. */
+const inboxDigest = (persona: Persona, variant: Variant, now: number) =>
+  recentMessages(persona, variant, now)
     .messages.map(
       (m, i) =>
         `[${i + 1}] ${m.received_at.slice(0, 16)} from ${m.from.name} <${m.from.email}> | ${m.subject} | labels: ${m.labels.join(', ')}\n${m.snippet}`,
@@ -177,8 +181,8 @@ export function describeRoutine(row: RoutineRow): string {
 export async function judgeRoutines(at: Stack, persona: Persona, generation: Generation): Promise<RoutineMark[]> {
   if (!generation.routines.length) return [];
   const truth = truthAt(persona.routinesTruth as RoutinesTruth, generation.now);
+  // Every key: `suggest` only decides which ones fill a sidebar unasked; a session may pick any.
   const catalog = Object.entries(CATALOG)
-    .filter(([, entry]) => entry.suggest)
     .map(([key, entry]) => `- ${key}: ${entry.title}. ${entry.does} (sidebars: ${entry.surfaces.join(', ')})`)
     .join('\n');
   const suggestions = generation.routines.map((row, i) => `S${i + 1}. ${describeRoutine(row)}`).join('\n\n');
@@ -188,7 +192,7 @@ Who they are: ${persona.inbox.persona}
 
 Their newest mail, newest first:
 <mail>
-${inboxDigest(persona, generation.now)}
+${inboxDigest(persona, generation.variant, generation.now)}
 </mail>
 
 The catalog of ready-made routines:
@@ -289,7 +293,20 @@ const FEED_SCHEMA = {
   },
 };
 
-/** The seeded workspace as the judge reads it, with every item's id so a card's targets can be named. */
+/** Seeded item kinds whose ids the seed CLI derives from their keys, so a card's targets can be named. */
+const NAMED: Record<string, string> = { documents: 'document', tasks: 'task', channels: 'channel', projects: 'project', calls: 'call' };
+
+/** Each seeded item's id, as `kind:key`, for the targets of a persona's cards. */
+export function targetNames(persona: Persona): Map<string, string> {
+  const name = scenarioName(persona, 'full');
+  const names = new Map<string, string>();
+  for (const [kind, seedKind] of Object.entries(NAMED)) {
+    for (const key of Object.keys((persona.workspace[kind] ?? {}) as Record<string, unknown>)) names.set(seedId(name, seedKind, key), `${kind}:${key}`);
+  }
+  return names;
+}
+
+/** The seeded workspace as the judge reads it, each item under the name card targets use. */
 function workspaceDigest(persona: Persona, now: number) {
   const spec = scenario(persona, 'full', now) as Record<string, Record<string, Record<string, unknown>>> & { emails: { inbox: { threads: Record<string, Record<string, unknown>> } } };
   const lines: string[] = [];
@@ -305,11 +322,11 @@ function workspaceDigest(persona: Persona, now: number) {
   return lines.join('\n');
 }
 
-export function describeCard(card: CardRow): string {
+export function describeCard(card: CardRow, names = new Map<string, string>()): string {
   const lines = [`[${card.kind}${card.action ? `: ${card.action}` : ''}] ${card.title} (importance ${card.importance}${card.categories.length ? `, ${card.categories.join(', ')}` : ''})`, card.summary];
   if (card.prompt) lines.push(`prompt it would run: ${card.prompt.slice(0, 1500)}`);
   if (card.draft_preview) lines.push(`reply draft starts: ${card.draft_preview}`);
-  if (card.targets.length) lines.push(`points at: ${card.targets.map((t) => `${t.role} ${t.entity_type}`).join(', ')}`);
+  if (card.targets.length) lines.push(`points at: ${card.targets.map((t) => `${t.role} ${names.get(t.entity_id) ?? `${t.entity_type} (not a seeded item: mail, or something it made)`}`).join(', ')}`);
   return lines.join('\n');
 }
 
@@ -317,6 +334,7 @@ export async function judgeFeed(at: Stack, persona: Persona, generation: Generat
   const cards = generation.cards.filter((card) => card.state === 'proposed');
   if (!cards.length) return { cards: [], feed_rating: 1 };
   const truth = truthAt(persona.feedTruth as FeedTruth, generation.now);
+  const names = targetNames(persona);
   const prompt = `Now is ${iso(generation.now)}; the person's time zone is ${generation.timezone}.
 
 Workspace of ${persona.inbox.owner.name}: ${persona.workspace.description}
@@ -328,7 +346,7 @@ Answer key:
 ${JSON.stringify(truth, null, 1)}
 
 The feed, most important first:
-${cards.map((card, i) => `C${i + 1}. ${describeCard(card)}`).join('\n\n')}
+${cards.map((card, i) => `C${i + 1}. ${describeCard(card, names)}`).join('\n\n')}
 
 Mark every card, C1 to C${cards.length}, in order.`;
   const result = await complete<FeedMarks>(at, prompt, FEED_RUBRIC, FEED_SCHEMA);

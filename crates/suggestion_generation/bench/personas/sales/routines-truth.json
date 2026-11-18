@@ -4,7 +4,7 @@
       "id": "r1",
       "what": "Mail sorting: prospects, contracts and forecast mail mixed with CRM, signing and chat notifications, which Tessa already files under her own labels (Prospects, Contracts, Forecast).",
       "evidence": ["labels Prospects, Contracts, Forecast on most messages"],
-      "catalog": ["inbox", "email_tags"],
+      "catalog": ["inbox"],
       "surfaces": ["email"]
     },
     {

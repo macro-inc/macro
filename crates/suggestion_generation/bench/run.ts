@@ -80,6 +80,8 @@ export type Generation = {
   /** The transcripts, one JSON line per log entry. */
   transcript?: string;
   error?: string;
+  /** The build failed, not the bench: the start was refused with a server error, or the generation outran the deadline. Scored 0. */
+  buildFailed?: boolean;
 };
 
 export const userId = (email: string) => `macro|${email}`;
@@ -215,6 +217,9 @@ export async function generate(
     await call(`${at.harness}/scheduled-action/suggestions/${route}?timezone=${encodeURIComponent(timezone)}`, {
       method: 'POST',
       token,
+    }).catch((error) => {
+      if (/ 5\d\d: /.test(String(error))) result.buildFailed = true;
+      throw error;
     });
     const [row] = await db.unsafe(
       `SELECT id::text FROM suggestion_generation WHERE user_id = $1 AND trigger = $2 ORDER BY started_at DESC LIMIT 1`,
@@ -241,7 +246,10 @@ export async function generate(
         ended = state;
         break;
       }
-      if (Date.now() - asked > DEADLINE_MS[trigger]) throw new Error(`generation still running after ${DEADLINE_MS[trigger] / 60_000} minutes`);
+      if (Date.now() - asked > DEADLINE_MS[trigger]) {
+        result.buildFailed = true;
+        throw new Error(`generation still running after ${DEADLINE_MS[trigger] / 60_000} minutes`);
+      }
       await Bun.sleep(1500);
     }
     result.status = ended.status;

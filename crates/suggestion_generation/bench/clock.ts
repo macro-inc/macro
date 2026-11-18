@@ -40,8 +40,10 @@ const MONTH_DAY =
   /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(\.?) (\d{1,2})(st|nd|rd|th)?(, (20\d\d))?\b/g;
 // "10/26", only for the months the personas span, so pipe sizes ("3/4") and "24/7" stay.
 const NUMERIC = /(?<![\d/.])\b(9|10|11|12)\/(\d{1,2})\b(?![\d/"”])/g;
-const ISO = /\b(20\d\d)-(\d\d)-(\d\d)\b/g;
-const WEEKDAY = /\b(Sun|Mon|Tue|Wed|Thu|Fri|Sat)(day|sday|nesday|rsday|urday)?(s?)\b/g;
+// "2026-11-12", also as the start of "2026-11-12T09:00Z".
+const ISO = /\b(20\d\d)-(\d\d)-(\d\d)(?!\d)/g;
+// "Thu", "Thursday", "Thursdays", and the longer "Tues", "Weds", "Thurs".
+const WEEKDAY = /\b(Sun|Mon|Tues|Tue|Weds|Wed|Thurs|Thur|Thu|Fri|Sat)(day|sday|nesday|rsday|urday)?(s?)\b/g;
 
 const ordinal = (day: number) => {
   if (day % 100 >= 11 && day % 100 <= 13) return 'th';
@@ -79,7 +81,7 @@ export function shiftText(text: string, days: number): string {
   });
   const step = ((days % 7) + 7) % 7;
   out = out.replace(WEEKDAY, (whole, short: string, rest: string | undefined, plural: string) => {
-    const index = WEEKDAYS.findIndex((weekday) => weekday.startsWith(short));
+    const index = WEEKDAYS.findIndex((weekday) => weekday.startsWith(short.slice(0, 3)));
     // "Wed" with "day" after it isn't a weekday; only the real endings count.
     if (rest && !WEEKDAYS[index].endsWith(rest)) return whole;
     const next = WEEKDAYS[(index + step) % 7];

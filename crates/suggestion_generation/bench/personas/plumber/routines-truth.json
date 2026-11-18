@@ -4,7 +4,7 @@
       "id": "r1",
       "what": "Mail sorting: about 100 messages a fortnight across jobs, staff, permits, invoices and reviews, which Dan already files under his own labels (Jobs, Staff, Permits, Invoices, Reviews).",
       "evidence": ["labels Jobs, Staff, Permits, Invoices, Reviews on most messages"],
-      "catalog": ["inbox", "email_tags"],
+      "catalog": ["inbox"],
       "surfaces": ["email"]
     },
     {
@@ -18,7 +18,7 @@
       "id": "r3",
       "what": "Customer job and quote requests arrive every few days from homeowners and property managers (leaks, water heaters, drain calls, quotes); each needs a reply or a visit booked.",
       "evidence": ["Garbage disposal jammed + kitchen faucet drip", "Tankless water heater quote", "Toilet running nonstop, can someone come Monday?", "Estimate for repiping 1950s house", "No hot water since this morning"],
-      "catalog": ["email_tags"],
+      "catalog": [],
       "drafted": "When a new email is a customer asking for a visit, repair or quote, make a task naming the customer, address and problem (or tag it to reply).",
       "surfaces": ["email", "tasks"]
     },

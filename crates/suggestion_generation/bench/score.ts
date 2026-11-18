@@ -145,6 +145,11 @@ export function scoreFeed(generation: Generation, marks: FeedMarks, truth: FeedT
   };
 }
 
+/** A generation the build failed (see `Generation.buildFailed`): it found nothing. */
+export function failedScore(needs: number): Score {
+  return { score: 0, needs, found: 0, missed: [], suggestions: 0, bad: 0, invented: 0, wrong: {}, quality: null };
+}
+
 // ---------- summaries ----------
 
 export const scored = (attempts: Attempt[]) => attempts.filter((a): a is Attempt & { score: Score } => !a.benchError && !!a.score);
@@ -177,7 +182,7 @@ export function summary(attempts: Attempt[]) {
     bad: avg(done.map((a) => a.score.bad)),
     invented: avg(done.map((a) => a.score.invented)),
     wrongPerRun: Object.fromEntries(Object.entries(wrong).map(([k, v]) => [k, v / Math.max(1, done.length)])),
-    quality: avg(done.map((a) => a.score.quality ?? 0)),
+    quality: avg(done.flatMap((a) => (a.score.quality === null ? [] : [a.score.quality]))),
     feedRating: done.some((a) => a.score.feedRating !== undefined) ? avg(done.map((a) => a.score.feedRating ?? 0)) : undefined,
     failedGenerations: done.filter((a) => a.generation.status !== 'ready').length,
     firstMedianMs: quantile(first, 0.5),
@@ -277,7 +282,7 @@ export function verdict(a: Attempt[], b: Attempt[], margin: number): Verdict {
       bad: part((s) => s.bad),
       invented: part((s) => s.invented),
       suggestions: part((s) => s.suggestions),
-      quality: part((s) => s.quality ?? 0),
+      quality: [avg(sample.flatMap((p) => (p.a.score.quality === null ? [] : [p.a.score.quality]))), avg(sample.flatMap((p) => (p.b.score.quality === null ? [] : [p.b.score.quality])))],
     },
     usd: [avg(sample.map((p) => p.a.generation.cost.usd)), avg(sample.map((p) => p.b.generation.cost.usd))],
     usdInterval: interval(sample, usdDelta),

@@ -4,7 +4,7 @@
       "id": "r1",
       "what": "Mail sorting: a heavy inbox of investors, board, customers, hiring and legal mail that Priya already files under her own labels (Investors, Board, Customers, Hiring, Legal).",
       "evidence": ["labels Investors, Board, Customers, Hiring, Legal on most messages"],
-      "catalog": ["inbox", "email_tags"],
+      "catalog": ["inbox"],
       "surfaces": ["email"]
     },
     {
