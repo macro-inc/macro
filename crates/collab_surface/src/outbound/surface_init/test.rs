@@ -93,43 +93,26 @@ fn a_sync_service_conflict_is_a_surface_conflict() {
 
 #[tokio::test]
 async fn surface_markdown_is_read_in_the_lossless_internal_format() {
-    use std::io::{BufRead, BufReader, Write};
+    use wiremock::matchers::{method, path, query_param};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap();
-    let server = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let mut reader = BufReader::new(stream.try_clone().unwrap());
-        let mut line = String::new();
-        reader.read_line(&mut line).unwrap();
-        assert_eq!(
-            line.trim_end(),
-            "GET /markdown/project-1?target=internal HTTP/1.1"
-        );
-        loop {
-            line.clear();
-            reader.read_line(&mut line).unwrap();
-            if line == "\r\n" || line.is_empty() {
-                break;
-            }
-        }
-        let body = r#"{"data":"Owner: <m-user-mention>{}</m-user-mention>"}"#;
-        write!(
-            stream,
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.len()
-        )
-        .unwrap();
-    });
-    let url = format!("http://{address}");
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/markdown/project-1"))
+        .and(query_param("target", "internal"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"data": "Owner: <m-user-mention>{}</m-user-mention>"}),
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
     let initializer = LexicalSyncSurfaceInitializer::new(
-        LexicalClient::new("local-test-key".to_string(), url.clone()),
-        SyncServiceClient::new("local-test-key".to_string(), url),
+        LexicalClient::new("local-test-key".to_string(), server.uri()),
+        SyncServiceClient::new("local-test-key".to_string(), server.uri()),
     );
 
     assert_eq!(
         initializer.markdown("project-1").await.unwrap(),
         "Owner: <m-user-mention>{}</m-user-mention>"
     );
-    server.join().unwrap();
 }
