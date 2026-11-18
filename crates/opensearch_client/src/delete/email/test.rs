@@ -19,19 +19,24 @@ fn resolves_overridden_email_destination() {
 #[test]
 fn delete_by_query_counts_default_to_zero_and_failures_fail_the_call() {
     assert_eq!(
-        parse_deleted_by_query(r#"{"deleted":2,"version_conflicts":1,"failures":[]}"#).unwrap(),
+        parse_deleted_by_query(
+            r#"{"deleted":2,"version_conflicts":1,"failures":[]}"#,
+            OpensearchOperation::DeleteEmailMessages
+        )
+        .unwrap(),
         DeletedByQuery {
             deleted: 2,
             version_conflicts: 1
         }
     );
     assert_eq!(
-        parse_deleted_by_query(r#"{"took":3}"#).unwrap(),
+        parse_deleted_by_query(r#"{"took":3}"#, OpensearchOperation::DeleteEmailMessages).unwrap(),
         DeletedByQuery::default()
     );
     assert!(
         parse_deleted_by_query(
-            r#"{"deleted":0,"failures":[{"cause":{"type":"es_rejected_execution_exception"}}]}"#
+            r#"{"deleted":0,"failures":[{"cause":{"type":"es_rejected_execution_exception"}}]}"#,
+            OpensearchOperation::DeleteEmailMessages,
         )
         .is_err()
     );
@@ -266,7 +271,7 @@ async fn deleting_a_moved_message_s_old_copies_forces_no_refresh() {
     let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
 
     client
-        .delete_email_message_outside_thread("message-1", "thread-2", None)
+        .delete_email_message_outside_thread("message-1", "thread-2")
         .await
         .unwrap();
 

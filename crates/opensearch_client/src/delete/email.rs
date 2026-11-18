@@ -217,22 +217,35 @@ async fn delete_by_message_ids(
             operation: OPERATION,
         });
     }
-    parse_deleted_by_query(&body)
+    parse_deleted_by_query(&body, OPERATION)
 }
 
 /// Deletes `message_id`'s documents under every thread but `thread_id`: the
 /// copies a message leaves behind when it moves to another thread. No refresh
-/// is forced; a stale copy leaves search at the next scheduled refresh. A copy
-/// another write changes mid-query is skipped and counted, not retried: that
-/// write's own event handles it.
+/// is forced unless a copy changed mid-query: then the index is refreshed and
+/// the delete runs once more, as for a single deleted message. A copy written
+/// within the last refresh interval, or after this returns, is not seen and
+/// stays until the message's next delete.
 pub async fn delete_email_message_outside_thread(
     client: &opensearch::OpenSearch,
     message_id: &str,
     thread_id: &str,
-    index_override: Option<&str>,
+) -> Result<EmailMessageDeleted> {
+    let index = SearchIndex::Emails.as_ref();
+    delete_with_recheck(
+        || delete_outside_thread_pass(client, message_id, thread_id, index),
+        || refresh_index(client, index),
+    )
+    .await
+}
+
+async fn delete_outside_thread_pass(
+    client: &opensearch::OpenSearch,
+    message_id: &str,
+    thread_id: &str,
+    index: &str,
 ) -> Result<DeletedByQuery> {
     const OPERATION: OpensearchOperation = OpensearchOperation::DeleteEmailMessageOutsideThread;
-    let index = resolve_destination(index_override);
     let response = client
         .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .body(outside_thread_query(message_id, thread_id))
@@ -252,7 +265,7 @@ pub async fn delete_email_message_outside_thread(
             operation: OPERATION,
         });
     }
-    parse_deleted_by_query(&body)
+    parse_deleted_by_query(&body, OPERATION)
 }
 
 pub(crate) fn outside_thread_query(message_id: &str, thread_id: &str) -> serde_json::Value {
@@ -268,11 +281,14 @@ pub(crate) fn outside_thread_query(message_id: &str, thread_id: &str) -> serde_j
 
 /// Reads a delete-by-query response; per-document failures other than the
 /// version conflicts `conflicts=proceed` counts fail the call.
-pub(crate) fn parse_deleted_by_query(body: &str) -> Result<DeletedByQuery> {
+pub(crate) fn parse_deleted_by_query(
+    body: &str,
+    operation: OpensearchOperation,
+) -> Result<DeletedByQuery> {
     let value: serde_json::Value =
         serde_json::from_str(body).map_err(|err| OpensearchClientError::DeserializationFailed {
             details: err.to_string(),
-            operation: OpensearchOperation::DeleteEmailMessages,
+            operation,
         })?;
     if value["failures"]
         .as_array()
@@ -280,12 +296,12 @@ pub(crate) fn parse_deleted_by_query(body: &str) -> Result<DeletedByQuery> {
     {
         return Err(OpensearchClientError::Unknown {
             details: value["failures"].to_string(),
-            operation: OpensearchOperation::DeleteEmailMessages,
+            operation,
         });
     }
     serde_json::from_value(value).map_err(|err| OpensearchClientError::DeserializationFailed {
         details: err.to_string(),
-        operation: OpensearchOperation::DeleteEmailMessages,
+        operation,
     })
 }
 

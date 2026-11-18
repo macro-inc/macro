@@ -50,11 +50,13 @@ pub async fn process_upsert_message(
     index_message(opensearch_client, db, message_info, owner).await
 }
 
-/// Indexes a sent message under its current thread, then deletes the copies it
-/// left under other threads. Completing a send can move a message, as when a
-/// draft joins the provider's existing conversation or was sent from another
-/// inbox, and nothing else removes its document under the old thread. The
-/// new copy is written first, so the message never drops out of search.
+/// Indexes a message sent from Macro under its current thread, then deletes
+/// the copies it left under other threads. A draft can change threads before
+/// it is sent (saved into another thread, sent from another inbox, or joined
+/// to the provider's existing conversation when the send completes), and
+/// nothing else removes its document under the old thread. The new copy is
+/// written before the old ones go; the old ones go even when the message is
+/// not indexed, such as a sent message without content.
 pub async fn process_upsert_sent_message(
     opensearch_client: &OpensearchClient,
     db: &PgPool,
@@ -67,7 +69,7 @@ pub async fn process_upsert_sent_message(
     let thread_id = message_info.thread_db_id;
     index_message(opensearch_client, db, message_info, owner).await?;
     opensearch_client
-        .delete_email_message_outside_thread(&message_id.to_string(), &thread_id.to_string(), None)
+        .delete_email_message_outside_thread(&message_id.to_string(), &thread_id.to_string())
         .await?;
     Ok(())
 }

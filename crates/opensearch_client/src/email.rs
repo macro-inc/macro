@@ -97,27 +97,27 @@ impl OpensearchClient {
     /// the copies it left behind when it moved to another thread.
     #[tracing::instrument(
         skip(self),
-        fields(deleted = tracing::field::Empty, version_conflicts = tracing::field::Empty),
+        fields(deleted = tracing::field::Empty, passes = tracing::field::Empty),
         err
     )]
     pub async fn delete_email_message_outside_thread(
         &self,
         message_id: &str,
         thread_id: &str,
-        index_override: Option<&str>,
     ) -> Result<()> {
         let deleted = resend_on_lost_connection(|| {
-            delete::email::delete_email_message_outside_thread(
-                &self.inner,
-                message_id,
-                thread_id,
-                index_override,
-            )
+            delete::email::delete_email_message_outside_thread(&self.inner, message_id, thread_id)
         })
         .await?;
         let span = tracing::Span::current();
         span.record("deleted", deleted.deleted);
-        span.record("version_conflicts", deleted.version_conflicts);
+        span.record("passes", deleted.passes);
+        if deleted.deleted > 0 {
+            tracing::info!(
+                deleted = deleted.deleted,
+                "removed a moved email message's copies under other threads"
+            );
+        }
         Ok(())
     }
 

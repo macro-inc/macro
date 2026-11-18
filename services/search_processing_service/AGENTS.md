@@ -61,10 +61,11 @@ OpenSearch, and exposes backfill HTTP routes for each.
   replies) with every tag they do not know, so a new message index writes its
   pastes the same way.
 - Email documents are keyed `{thread_id}:{message_id}`, so a message that
-  changes threads gets a new document and keeps the old one. `email.message_sent`
-  deletes the message's copies under other threads (sends are where a draft
-  joins the provider's conversation or leaves another inbox); a draft moved
-  without being sent keeps its old copy until it is sent or deleted.
+  changes threads gets a new document and keeps the old one. An
+  `email.message_sent` from a Macro send (`origin: UserAction`) deletes the
+  message's copies under other threads; a draft that moved and was never sent
+  keeps its old copy. A draft transferred to another inbox gets a new message
+  id, so this cleanup does not reach its source copy.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those.
 - Run `POST /internal/backfill/email-attachment-status` on an environment only
