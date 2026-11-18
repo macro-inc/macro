@@ -73,7 +73,7 @@ const mean = (values: number[]) => (values.length ? values.reduce((a, b) => a + 
  * alone, so the same pick scores the same every time. Only what the session
  * wrote for it is the judge's: its reason (invented) and the knobs it set.
  */
-function catalogFlags(generation: Generation, i: number, mark: RoutineMark, truth: RoutinesTruth, key: string): Record<string, boolean> {
+export function catalogFlags(generation: Generation, i: number, mark: RoutineMark, truth: RoutinesTruth, key: string): Record<string, boolean> {
   const row = generation.routines[i];
   const knobs = Object.keys(row.knob_values ?? {}).length > 0;
   return {

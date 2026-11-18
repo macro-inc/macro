@@ -11,7 +11,8 @@ import { keyGaps } from './catalog';
 import { makeHeldout, spend, spent } from './heldout';
 import { asGrader, judgeCost, judgeFeed, judgeRoutines, seedGraders } from './judge';
 import { seedId } from '../../scheduled_action/bench/setup';
-import { type Persona, type Variant, ownerEmail, personas, scenarioName, seatOf, slotName } from './personas';
+import { type Persona, type Variant, contentKey, ownerEmail, personas, scenarioName, seatOf, slotName } from './personas';
+import { shiftDays } from './clock';
 import { lines as reportLines } from './report';
 import { CACHE, type Trigger, generate, prepare } from './run';
 import { type Attempt, type Margins, type RunFile, type Section, PARTS, failedScore, noiseMargins, scoreFeed, scoreRoutines, summary, verdict } from './score';
@@ -110,7 +111,7 @@ async function setFlags(instance: string, flags: Record<string, boolean>) {
 }
 
 /** Index every seeded item for search, and wait until each persona's documents are found. */
-async function indexAll(at: Stack, people: Persona[], variant: Variant) {
+async function indexAll(at: Stack, people: Persona[], variant: Variant, now: number) {
   const indexer = searchIndexer(at);
   const headers = { 'x-internal-auth-key': indexer.key };
   for (const kind of ['documents', 'channels', 'projects', 'emails', 'calls', 'chats']) {
@@ -127,7 +128,7 @@ async function indexAll(at: Stack, people: Persona[], variant: Variant) {
     const docs = Object.entries((persona.workspace.documents ?? {}) as Record<string, { name: string }>);
     if (!docs.length) continue;
     const [key, { name: probe }] = docs[0];
-    const id = seedId(scenarioName(persona, variant), 'document', key);
+    const id = seedId(scenarioName(persona, variant), 'document', contentKey(key, shiftDays(now)));
     const macro = sdk(at, await login(at, ownerEmail(persona, variant)));
     for (let attempt = 0; ; attempt++) {
       let found = false;
@@ -227,7 +228,7 @@ async function runSection(section: Section, values: Record<string, string | unde
       await eachAtMost(slots, SEEDING, (slot) => prepare(at, slot, spec.variant, now, base(slot, rep)));
       // A held-out set is read once its people are seeded and generations start.
       if (rep === 1 && set !== 'tune') spend(set, section, values.label!);
-      if (spec.search) await indexAll(at, slots, spec.variant);
+      if (spec.search) await indexAll(at, slots, spec.variant, now);
       await eachAtMost(slots, concurrency, async (slot) => {
         const generation = await generate(at, slot, spec.variant, spec.trigger, now, base(slot, rep));
         const attempt: Attempt = { section, label: run.label, persona: slot.name, seat: slot.seat, heldout: slot.heldout, rep, generation, judgeUsd: 0 };
@@ -390,4 +391,4 @@ options: --instance sugbench --set tune|<held-out set> --personas a,b --label lo
   }
 }
 
-await main();
+if (import.meta.main) await main();

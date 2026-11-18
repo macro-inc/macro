@@ -10,7 +10,8 @@ import { SQL } from 'bun';
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
 import { CATALOG } from './catalog';
-import { type FeedTruth, type Persona, type RoutinesTruth, type Variant, recentMessages, scenario, scenarioName, truthAt } from './personas';
+import { CONTENT_KINDS, type FeedTruth, type Persona, type RoutinesTruth, type Variant, contentKey, plainKey, recentMessages, scenario, scenarioName, truthAt } from './personas';
+import { shiftDays } from './clock';
 import type { CardRow, Generation, RoutineRow } from './run';
 import { CACHE, seed } from './run';
 
@@ -320,12 +321,16 @@ const FEED_SCHEMA = {
 /** Seeded item kinds whose ids the seed CLI derives from their keys, so a card's targets can be named. */
 const NAMED: Record<string, string> = { documents: 'document', tasks: 'task', channels: 'channel', projects: 'project', calls: 'call' };
 
-/** Each seeded item's id, as `kind:key`, for the targets of a persona's cards. */
-export function targetNames(persona: Persona): Map<string, string> {
+/** Each seeded item's id at `now`, as `kind:key`, for the targets of a persona's cards. */
+export function targetNames(persona: Persona, now: number): Map<string, string> {
   const name = scenarioName(persona, 'full');
+  const days = shiftDays(now);
   const names = new Map<string, string>();
   for (const [kind, seedKind] of Object.entries(NAMED)) {
-    for (const key of Object.keys((persona.workspace[kind] ?? {}) as Record<string, unknown>)) names.set(seedId(name, seedKind, key), `${kind}:${key}`);
+    for (const key of Object.keys((persona.workspace[kind] ?? {}) as Record<string, unknown>)) {
+      const seeded = (CONTENT_KINDS as readonly string[]).includes(kind) ? contentKey(key, days) : key;
+      names.set(seedId(name, seedKind, seeded), `${kind}:${key}`);
+    }
   }
   return names;
 }
@@ -337,7 +342,7 @@ function workspaceDigest(persona: Persona, now: number) {
   for (const [kind, items] of Object.entries(spec)) {
     if (['scenario', 'description', 'emails', 'teams', 'users'].includes(kind) || !items || typeof items !== 'object') continue;
     lines.push(`## ${kind}`);
-    for (const [key, item] of Object.entries(items)) lines.push(`### ${kind}:${key}\n${JSON.stringify(item)}`);
+    for (const [key, item] of Object.entries(items)) lines.push(`### ${kind}:${plainKey(key)}\n${JSON.stringify(item).replace(/"document:([^"]+)"/g, (_, ref: string) => `"document:${plainKey(ref)}"`)}`);
   }
   lines.push('## mail (each a thread)');
   for (const [key, thread] of Object.entries(spec.emails.inbox.threads)) {
@@ -358,7 +363,7 @@ export async function judgeFeed(at: Stack, grader: string, persona: Persona, gen
   const cards = generation.cards.filter((card) => card.state === 'proposed');
   if (!cards.length) return { cards: [], feed_rating: 1 };
   const truth = truthAt(persona.feedTruth as FeedTruth, generation.now);
-  const names = targetNames(persona);
+  const names = targetNames(persona, generation.now);
   const prompt = `Now is ${iso(generation.now)}; the person's time zone is ${generation.timezone}.
 
 Workspace of ${persona.inbox.owner.name}: ${persona.workspace.description}

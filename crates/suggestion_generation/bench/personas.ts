@@ -163,6 +163,33 @@ const minutesBefore = (message: InboxMessage) => Math.max(1, Math.round((ANCHOR 
 const key = (index: number) => `m${String(index + 1).padStart(3, '0')}`;
 
 /**
+ * The seed key of a document or task for text moved `days`. Their text lives
+ * in sync-service, which keeps an id's first content for good (a re-apply
+ * can't replace it), so text moved another number of days needs ids of its
+ * own; an earlier day's items carry the scenario's marker, so the apply
+ * removes them.
+ */
+export const contentKey = (key: string, days: number) => `${key}-day${days}`;
+
+/** The persona's key of a seed key `contentKey` made. */
+export const plainKey = (key: string) => key.replace(/-day-?\d+$/, '');
+
+/** Kinds whose text lives in sync-service, so their keys follow the day (`contentKey`). */
+export const CONTENT_KINDS = ['documents', 'tasks'] as const;
+
+/** `workspace` with each document and task under its key for `days`, and every `document:` reference to one moved with it. */
+function contentKeys<T extends Record<string, unknown>>(workspace: T, days: number): T {
+  const renamed = JSON.parse(JSON.stringify(workspace), (_, value) =>
+    typeof value === 'string' && value.startsWith('document:') ? `document:${contentKey(value.slice('document:'.length), days)}` : value,
+  );
+  for (const kind of CONTENT_KINDS) {
+    const items = renamed[kind] as Record<string, unknown> | undefined;
+    if (items) renamed[kind] = Object.fromEntries(Object.entries(items).map(([key, item]) => [contentKey(key, days), item]));
+  }
+  return renamed;
+}
+
+/**
  * The seed scenario for `variant` at `now`: every date in its text moved to
  * now (clock.ts) and each message a thread of its own, as old as it was at
  * the anchor. The signup copy keeps only the owner and their mail.
@@ -170,7 +197,7 @@ const key = (index: number) => `m${String(index + 1).padStart(3, '0')}`;
 export function scenario(persona: Persona, variant: Variant, now: number): Record<string, unknown> {
   const copy = variantOf(persona, variant);
   const days = shiftDays(now);
-  const workspace = shiftAll(copy.workspace, days);
+  const workspace = contentKeys(shiftAll(copy.workspace, days), days);
   const inbox = shiftAll(copy.inbox, days);
   const ownerKey = Object.entries(workspace.users).find(([, user]) => user.email === inbox.owner.email)?.[0];
   if (!ownerKey) throw new Error(`${persona.name}: no user with the inbox owner's address`);
