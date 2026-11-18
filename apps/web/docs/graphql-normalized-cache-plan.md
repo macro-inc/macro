@@ -137,13 +137,19 @@ entire cache in browser memory. With 10s of thousands of cached objects
     Each queued network attempt has a one-minute timeout, comfortably inside its
     five-minute lease. A page that reloads or closes mid-attempt never settles
     its claim, so each page holds a Web Lock named after its lease owner
-    (`mutation-queue-owner.ts`) for as long as it lives. A runner that finds
-    the head leased by another page's live owner waits for that lock, which the
-    browser grants only once the page has gone, and releases the claim by
-    deferring it with the holder's owner and generation; the engine refuses a
-    release once the claim has moved on. Queue inspections therefore carry the
-    head's lease. Claims made without Web Locks, before the lock is granted, or
-    by older bundles keep their full lease, as do claims on a native app built
+    (`mutation-queue-owner.ts`) while it is shown and lets it go on
+    `pagehide`, as the coordinator does with its own lock, so the lock never
+    keeps a page out of the back/forward cache; a page restored from it claims
+    under a new owner. A runner that finds the head leased by another page's
+    live owner waits for that lock, which is granted only once the page has
+    been hidden or gone, waits one more second (a timed-out attempt's first
+    retry delay) for a request the page left in flight, and releases the claim
+    by deferring it with the holder's owner and generation; the engine refuses
+    a release once the claim has moved on. Queue inspections therefore carry
+    the head's lease; they read the whole queue, so a runner looks at most once
+    per 30-second poll, and once more right after a refused release. Claims
+    made without Web Locks, before the lock is granted, while hidden, or by
+    older bundles keep their full lease, as do claims on a native app built
     before inspections carried the lease.
 
 ### Open questions

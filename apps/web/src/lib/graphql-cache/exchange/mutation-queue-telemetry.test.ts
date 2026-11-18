@@ -336,14 +336,18 @@ describe('createMutationQueueTelemetry', () => {
 
   it('records a released lease with its remaining time and whether it held', async () => {
     const queue = create();
-    await queue.releaseLease(
-      { transactionId: '7', expiresAtMs: 301_000 },
-      async () => true
-    );
-    await queue.releaseLease(
-      { transactionId: '8', expiresAtMs: 500 },
-      async () => false
-    );
+    expect(
+      await queue.releaseLease(
+        { transactionId: '7', itemId: 'item-7', expiresAtMs: 301_000 },
+        async () => true
+      )
+    ).toBe(true);
+    expect(
+      await queue.releaseLease(
+        { transactionId: '8', itemId: 'item-8', expiresAtMs: 500 },
+        async () => false
+      )
+    ).toBe(false);
     expect(
       telemetry.spans.map(({ name, attributes, ended }) => ({
         name,
@@ -354,6 +358,7 @@ describe('createMutationQueueTelemetry', () => {
       {
         name: 'graphql.mutation_queue.lease_release',
         attributes: {
+          'mutation_queue.item_id': 'item-7',
           'mutation_queue.transaction_id': '7',
           'mutation_queue.lease_remaining_ms': 300_000,
           'mutation_queue.lease_released': true,
@@ -363,6 +368,7 @@ describe('createMutationQueueTelemetry', () => {
       {
         name: 'graphql.mutation_queue.lease_release',
         attributes: {
+          'mutation_queue.item_id': 'item-8',
           'mutation_queue.transaction_id': '8',
           'mutation_queue.lease_remaining_ms': 0,
           'mutation_queue.lease_released': false,

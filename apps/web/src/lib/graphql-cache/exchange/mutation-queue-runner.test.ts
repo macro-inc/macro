@@ -376,7 +376,8 @@ const GONE = 'exchange-live:gone';
 /** The queue head as an inspection reports it, claimed by `leaseOwner`. */
 function headLeasedBy(
   leaseOwner: string,
-  expiresAtMs = Date.now() + 300_000
+  expiresAtMs = Date.now() + 300_000,
+  generation = '4'
 ): MutationInspection {
   return {
     transactionId: '1',
@@ -387,7 +388,7 @@ function headLeasedBy(
     variables: {},
     clientMetadata: null,
     optimisticData: savedDraft,
-    lease: { owner: leaseOwner, generation: '4', expiresAtMs },
+    lease: { owner: leaseOwner, generation, expiresAtMs },
   };
 }
 
@@ -418,11 +419,14 @@ it('releases the claim a departed page left on the head, then sends the head', a
     .mockResolvedValueOnce(claimOf(enqueue(operation(), '5')));
   const startedAt = Date.now();
   runner.start();
-  await vi.advanceTimersByTimeAsync(1);
+  // A request the page left in flight gets a second to land.
+  await vi.advanceTimersByTimeAsync(999);
+  expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(2);
   expect(host.deferOptimisticWrite).toHaveBeenCalledWith(
     '1',
     { owner: GONE, generation: '4' },
-    startedAt,
+    startedAt + 1_000,
     'Lease owner left'
   );
   expect(claim).toHaveBeenCalledTimes(2);
@@ -464,12 +468,85 @@ it.each([
   expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
 });
 
+it('looks no more than once per poll, however often the queue wakes', async () => {
+  const { runner, host } = fixture(
+    {},
+    liveOwner(() => new Promise<void>(() => {}))
+  );
+  host.inspectMutations = vi.fn(async () => [headLeasedBy(GONE)]);
+  runner.start();
+  await vi.advanceTimersByTimeAsync(0);
+  for (let wakeup = 0; wakeup < 5; wakeup += 1) {
+    runner.wake();
+    await vi.advanceTimersByTimeAsync(1_000);
+  }
+  expect(host.inspectMutations).toHaveBeenCalledOnce();
+});
+
+it('does not look while the head waits out its own backoff', async () => {
+  const { runner, forwarded, host } = fixture(
+    { shouldRetryMutation: () => true },
+    liveOwner(async () => {})
+  );
+  host.inspectMutations = vi.fn(async () => [headLeasedBy(GONE)]);
+  await runner.admit(operation(), enqueue(operation(), '2'), runner.epoch());
+  const attempt = queueAttemptOf(forwarded[0])!;
+  attempt.response = new Response(null, { status: 503 });
+  await runner.settle(
+    { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
+    attempt
+  );
+  runner.wake();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(host.inspectMutations).not.toHaveBeenCalled();
+});
+
+it('keeps the claim when its page cannot be judged after all', async () => {
+  const { runner, host } = fixture(
+    {},
+    liveOwner(async () => {
+      throw new Error('lock request failed');
+    })
+  );
+  host.inspectMutations = vi.fn(async () => [headLeasedBy(GONE)]);
+  runner.start();
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+});
+
+it('watches the claim that took the head from a refused release at once', async () => {
+  const OTHER = 'exchange-live:other';
+  const { runner, host } = fixture(
+    {},
+    liveOwner(async () => {})
+  );
+  host.inspectMutations = vi
+    .fn<() => Promise<MutationInspection[]>>()
+    .mockResolvedValueOnce([headLeasedBy(GONE)])
+    .mockResolvedValue([headLeasedBy(OTHER, Date.now() + 300_000, '5')]);
+  vi.mocked(host.deferOptimisticWrite).mockRejectedValueOnce(
+    new Error('stale mutation claim')
+  );
+  const claim = vi.spyOn(host, 'claimNextMutation');
+  runner.start();
+  await vi.advanceTimersByTimeAsync(2_001);
+  expect(
+    vi.mocked(host.deferOptimisticWrite).mock.calls.map((call) => call[1])
+  ).toEqual([
+    { owner: GONE, generation: '4' },
+    { owner: OTHER, generation: '5' },
+  ]);
+  expect(claim).toHaveBeenCalledTimes(2);
+});
+
 it('reports a release whose claim had already moved on, and looks again at the next poll', async () => {
   const releases: unknown[] = [];
   const telemetry: MutationQueueTelemetry = {
     ...NOOP_MUTATION_QUEUE_TELEMETRY,
     releaseLease: async (_lease, release) => {
-      releases.push(await release());
+      const released = await release();
+      releases.push(released);
+      return released;
     },
   };
   const { runner, host } = fixture(
@@ -488,10 +565,12 @@ it('reports a release whose claim had already moved on, and looks again at the n
     });
   const claim = vi.spyOn(host, 'claimNextMutation');
   runner.start();
-  await vi.advanceTimersByTimeAsync(1);
+  await vi.advanceTimersByTimeAsync(1_000);
   expect(releases).toEqual([false]);
+  // It looked once more, and the same claim still held the head.
+  expect(host.inspectMutations).toHaveBeenCalledTimes(2);
   expect(claim).toHaveBeenCalledOnce();
-  await vi.advanceTimersByTimeAsync(30_000);
+  await vi.advanceTimersByTimeAsync(30_001);
   expect(releases).toEqual([false, true]);
   // The release woke the queue at once.
   expect(claim).toHaveBeenCalledTimes(3);

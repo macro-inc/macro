@@ -32,9 +32,11 @@
  *
  * A page that reloads or closes mid-attempt leaves its lease on the head. When
  * the pump finds the head held, it waits for the holder's page to go
- * (`MutationQueueOwner.departed`) and releases that lease with the holder's
- * own owner and generation, so the head runs again without waiting out
+ * (`MutationQueueOwner.departed`), gives a request the page may have left in
+ * flight `LEASE_RELEASE_GRACE_MS` to land, and releases that lease with the
+ * holder's own owner and generation, so the head runs again without waiting out
  * `QUEUE_LEASE_MS`. The engine refuses the release once the claim has moved on.
+ * Inspections read the whole queue, so the pump looks at most once per poll.
  */
 
 import { anyAbortSignal } from '@core/util/abort-signal';
@@ -85,6 +87,9 @@ const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
 export const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 export const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
+// A departed page's request may still reach the server. Its replay waits as
+// long as a request that timed out waits before it is sent again.
+const LEASE_RELEASE_GRACE_MS = retryDelayMs(1);
 // A deferred admission usually waits on user info, which lands within a
 // second or two of the cache client at startup.
 const DEFERRED_ADMISSION_RETRY_MS = 1_000;
@@ -181,6 +186,16 @@ export function replayDocument(query: string, name?: string): DocumentNode {
 
 function retryDelayMs(attemptCount: number): number {
   return Math.min(1_000 * 2 ** Math.max(0, attemptCount - 1), 60_000);
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function sameLease(a: MutationLease, b: MutationLease): boolean {
+  return a.owner === b.owner && a.generation === b.generation;
 }
 
 /** Bounds network time inside the lease and retains HTTP status for settlement. */
@@ -394,6 +409,8 @@ export function createMutationQueueRunner(
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
   // Lease owners whose page this runner is waiting to see go.
   const watchedOwners = new Set<string>();
+  // When a drain last inspected the queue for a held head.
+  let headInspectedAt: number | undefined;
 
   function isNewClaim(claim: ClaimedMutation): boolean {
     if (!latestClaim) return true;
@@ -803,8 +820,21 @@ export function createMutationQueueRunner(
    * until the lease runs out, and every later mutation waits behind it. Waits
    * for the page holding the head's lease to go, then releases the claim so
    * the head runs now. An owner whose liveness is unknown keeps its lease.
+   *
+   * `refused` is a lease whose release the engine just refused: the claim
+   * moved on, so the head is looked at once more, and watched only if another
+   * claim holds it now.
    */
-  async function watchHeadLease(): Promise<void> {
+  async function watchHeadLease(refused?: MutationLease): Promise<void> {
+    if (!refused) {
+      const now = Date.now();
+      if (
+        headInspectedAt !== undefined &&
+        now - headInspectedAt < EMPTY_QUEUE_POLL_MS
+      )
+        return;
+      headInspectedAt = now;
+    }
     let queued: MutationInspection[] | undefined;
     try {
       queued = await host.inspectMutations?.();
@@ -818,28 +848,33 @@ export function createMutationQueueRunner(
       !first ||
       !lease ||
       lease.expiresAtMs <= Date.now() ||
+      (refused && sameLease(lease, refused)) ||
       watchedOwners.has(lease.owner)
     )
       return;
     const departure = owner.departed(lease.owner);
     if (!departure) return;
     watchedOwners.add(lease.owner);
+    let released: boolean;
     try {
       await departure;
-      await telemetry.releaseLease(
-        { transactionId: first.transactionId, expiresAtMs: lease.expiresAtMs },
-        async () => {
-          const released = await releaseLease(first.transactionId, lease);
-          // A claim that moved on has a live holder; the next poll looks again.
-          if (released) wakeDrain();
-          return released;
-        }
+      await wait(LEASE_RELEASE_GRACE_MS);
+      released = await telemetry.releaseLease(
+        {
+          transactionId: first.transactionId,
+          itemId: first.uuid,
+          expiresAtMs: lease.expiresAtMs,
+        },
+        async () => await releaseLease(first.transactionId, lease)
       );
     } catch {
       // Liveness is unknown after all; the lease runs out as before.
+      return;
     } finally {
       watchedOwners.delete(lease.owner);
     }
+    if (released) wakeDrain();
+    else if (!refused) await watchHeadLease(lease);
   }
 
   /** Releases `lease` if it still holds the head; false once it moved on. */
