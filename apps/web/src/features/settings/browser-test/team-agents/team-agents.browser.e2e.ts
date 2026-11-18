@@ -342,6 +342,16 @@ async function scriptAuthService(
         scheduled_seat_plans: {},
       });
 
+    // Message <name> opens the agent's real DM, made on the spot.
+    if (
+      path.endsWith('/channels/get_or_create_dm') &&
+      request.method() === 'POST'
+    )
+      return json(200, {
+        action: 'created',
+        channel_id: `dm-${request.postDataJSON().recipient_id}`,
+      });
+
     // Nothing else is part of this flow.
     return json(404, { message: 'not scripted' });
   });
@@ -655,6 +665,13 @@ test('the inviter hears when the agent is ready: Message Ada, and Connect Claude
       )
     )
     .toContain('channel');
+  expect(
+    await page.evaluate(() =>
+      window.teamAgentsFixture.opened.find(
+        (content) => content.type === 'channel'
+      )
+    )
+  ).toEqual({ type: 'channel', id: `dm-${ADA}` });
 });
 
 test("an admin signs the agent's computer in to Claude from its row", async ({
