@@ -1,4 +1,8 @@
 import type {
+  ChannelNotificationKind,
+  ChannelNotificationSettingsResponse,
+} from '../../../generated/notification/types.gen';
+import type {
   ActivityType,
   ApiChannelWithLatest,
   ChannelType,
@@ -58,6 +62,26 @@ export type ChannelAttachment =
 /**
  * A channel.
  */
+/** A user's own notification settings for one channel. */
+export type ChannelNotificationSettings = {
+  /** Kinds turned off for this channel, whatever its sections allow. */
+  disabled: ChannelNotificationKind[];
+  /** Kinds turned on for this channel, whatever its sections turn off. */
+  enabled: ChannelNotificationKind[];
+  /** Whether the channel notifies while every section holding it is muted. */
+  overridesSectionMute: boolean;
+};
+
+function toNotificationSettings(
+  settings: ChannelNotificationSettingsResponse | undefined,
+): ChannelNotificationSettings {
+  return {
+    disabled: settings?.disabled ?? [],
+    enabled: settings?.enabled ?? [],
+    overridesSectionMute: settings?.overridesSectionMute ?? false,
+  };
+}
+
 export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
    * Start or join this channel's call, ringing members if a new call starts;
@@ -366,6 +390,66 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
         body: { channel_name: name },
       }),
     );
+  }
+
+  /**
+   * The user's own notification settings for this channel. A kind in neither
+   * list follows the channel's Chat sections, and is on when they don't
+   * decide it. These are separate from muting: a muted channel sends nothing,
+   * and unmuting it restores these settings.
+   *
+   * @readonly
+   */
+  async notificationSettings(): Promise<ChannelNotificationSettings> {
+    const { channels } = unwrap(
+      await this.client.notification.listChannelNotificationSettings(),
+    );
+    const settings = channels.find((channel) => channel.channelId === this.id);
+    return toNotificationSettings(settings);
+  }
+
+  /**
+   * Change the user's own notification settings for this channel, as the
+   * app's Notification Settings menu does; nobody else's notifications
+   * change. Kinds not named keep their setting, and a kind may appear in only
+   * one list. Returns the resulting settings.
+   *
+   * @write
+   * @idempotent
+   */
+  async setNotificationSettings(change: {
+    /** Kinds to receive, whatever the channel's sections turn off. */
+    enable?: ChannelNotificationKind[];
+    /** Kinds to stop receiving for this channel. */
+    disable?: ChannelNotificationKind[];
+    /** Kinds to hand back to the channel's sections. */
+    inherit?: ChannelNotificationKind[];
+    /** Keep notifying while every section holding the channel is muted. */
+    overridesSectionMute?: boolean;
+  }): Promise<ChannelNotificationSettings> {
+    const settings = unwrap(
+      await this.client.notification.updateChannelNotificationSettings({
+        path: { channel_id: this.id },
+        body: change,
+      }),
+    );
+    return toNotificationSettings(settings);
+  }
+
+  /**
+   * Remove the user's own notification settings for this channel, so it
+   * follows its Chat sections again. Returns this handle for chaining.
+   *
+   * @write
+   * @idempotent
+   */
+  async resetNotificationSettings(): Promise<this> {
+    unwrap(
+      await this.client.notification.resetChannelNotificationSettings({
+        path: { channel_id: this.id },
+      }),
+    );
+    return this;
   }
 
   /**
