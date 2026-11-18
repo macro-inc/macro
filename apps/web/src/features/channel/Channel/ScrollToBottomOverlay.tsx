@@ -37,6 +37,7 @@ export function ScrollToBottomOverlay(props: ScrollToBottomOverlayProps) {
           fallback={
             <button
               type="button"
+              data-scroll-to-bottom
               class="absolute top-4 left-1/2 -translate-x-1/2 z-10 rounded-full px-3 py-1.5 text-xs bg-surface border border-edge-muted shadow-lg not-touch:hover:overlay-hover not-touch:active:overlay-active"
               onClick={() => {
                 props.onScrollToBottom();

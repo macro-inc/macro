@@ -9,8 +9,9 @@ positioned (`data-scroll-phase="ready"`), nothing but the reader moves it.
 - **Not pinned:** the message at the top of the view keeps its place, within 1 px.
 - **Height:** the timeline keeps its height.
 
-Movement right after input is excused for 150 ms, and longer while the scroll
-is still moving. Resizes are excused for 800 ms after typing or a window
+Movement right after scrolling input (the wheel, touch, keys, a scrollbar
+drag, a scroll-to-bottom button) is excused for 150 ms, and longer while the
+scroll is still moving. Other clicks excuse no movement. Resizes are excused for 800 ms after typing or a window
 resize. A navigation starts over.
 
 ## How it checks

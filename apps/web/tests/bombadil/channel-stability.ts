@@ -70,19 +70,41 @@ const probe = extract((state): ProbeReport => {
     page.__channelProbe = report;
 
     // Any input explains a height change for a while (typing grows the
-    // composer). Only input that scrolls explains motion: a click that does
-    // not scroll keeps the reading position under check.
-    let lastInputAt = 0;
-    let lastScrollInputAt = 0;
-    let lastScrollAt = 0;
-    let lastResizeAt = 0;
+    // composer). Only input that scrolls explains motion: the wheel, touch,
+    // keys, a drag on a scrollbar, or a scroll-to-bottom button. Any other
+    // click (opening a pane) keeps the reading position under check.
+    // Nothing has happened yet: a page fresh from load excuses nothing.
+    let lastInputAt = Number.NEGATIVE_INFINITY;
+    let lastScrollInputAt = Number.NEGATIVE_INFINITY;
+    let lastScrollAt = Number.NEGATIVE_INFINITY;
+    let lastResizeAt = Number.NEGATIVE_INFINITY;
     let scrollInputPending = false;
+    let scrollbarHeld = false;
+    const onScrollbar = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return false;
+      const scrolls =
+        target.scrollHeight > target.clientHeight ||
+        target.scrollWidth > target.clientWidth;
+      return (
+        scrolls &&
+        (event.offsetX >= target.clientWidth ||
+          event.offsetY >= target.clientHeight)
+      );
+    };
+    const onScrollControl = (event: PointerEvent) =>
+      event.target instanceof Element &&
+      event.target.closest('[data-scroll-to-bottom]') !== null;
     const onInput = (event: Event) => {
       lastInputAt = performance.now();
-      if (event.type !== 'beforeinput') scrollInputPending = true;
-      if (event.type !== 'beforeinput' && event.type !== 'pointerdown') {
-        lastScrollInputAt = lastInputAt;
+      if (event.type === 'beforeinput') return;
+      if (event instanceof PointerEvent && event.type === 'pointerdown') {
+        scrollbarHeld = onScrollbar(event);
+        if (scrollbarHeld || onScrollControl(event)) scrollInputPending = true;
+        return;
       }
+      scrollInputPending = true;
+      lastScrollInputAt = lastInputAt;
     };
     for (const type of [
       'wheel',
@@ -94,6 +116,15 @@ const probe = extract((state): ProbeReport => {
     ]) {
       page.addEventListener(type, onInput, { capture: true, passive: true });
     }
+    for (const type of ['pointerup', 'pointercancel']) {
+      page.addEventListener(
+        type,
+        () => {
+          scrollbarHeld = false;
+        },
+        { capture: true, passive: true }
+      );
+    }
     page.addEventListener('resize', () => {
       lastResizeAt = performance.now();
     });
@@ -102,7 +133,8 @@ const probe = extract((state): ProbeReport => {
       () => {
         const now = performance.now();
         const answersInput =
-          scrollInputPending && now - lastInputAt < INPUT_SCROLL_DELAY_MS;
+          scrollbarHeld ||
+          (scrollInputPending && now - lastInputAt < INPUT_SCROLL_DELAY_MS);
         if (
           answersInput ||
           now - Math.max(lastScrollInputAt, lastScrollAt) < MOTION_GRACE_MS
@@ -231,7 +263,10 @@ const probe = extract((state): ProbeReport => {
       }
 
       const now = performance.now();
+      // A scrolling click's first frame of motion can paint before its
+      // scroll event fires.
       const motionExplained =
+        (scrollInputPending && now - lastInputAt < INPUT_SCROLL_DELAY_MS) ||
         now - Math.max(lastScrollInputAt, lastScrollAt) < MOTION_GRACE_MS ||
         now - lastResizeAt < LAYOUT_GRACE_MS;
       const heightExplained =
