@@ -217,6 +217,19 @@ on and Reconnect only start consent for one of them. It covers the grid only in 
 week without events and with no working calendar the viewer can see; a working
 calendar shared with them keeps it to the bottom-right pill, so a delegate whose
 only working calendar is shared sees the pill in every week.
+An own inbox whose calendar used to sync but lost calendar access without the
+user turning it off (a Google grant from before Macro narrowed its calendar
+scopes, which the server turns off and clears hourly) shows **Calendar for
+<address> stopped syncing** with **Reconnect** even while another inbox works;
+Reconnect asks for calendar access alone, and the re-grant re-imports its events.
+For the same inbox the app-wide toast reads **Calendar stopped syncing** with
+**Reconnect** (shown again even if an earlier Enable calendar was dismissed), and
+the sidebar's Connect more calendars card and the calendar settings menu say
+**Reconnect**. A calendar that was never connected keeps Enable calendar, Grant
+access and Turn on calendar. The signal is the inbox's calendar data
+(`has_calendar_data`) beside missing calendar permission: Macro creates the
+calendar account only from a grant with the capability and keeps it when the
+capability goes.
 Account checkboxes show/hide all child calendars; partial selection is shown as
 mixed. Individual calendars can also be shown/hidden. The account color is the
 default for its calendars; a child color overrides it. Click a color dot to open
