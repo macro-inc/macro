@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, errors } from 'playwright';
 
 // BUILDS: `label=dist` pairs, comma separated. Builds are measured in turn for
 // every size and throttle, in alternating order, so a busy machine slows them
@@ -28,7 +28,11 @@ const CADENCE_MS = Number(process.env.CADENCE_MS ?? 120);
 const PEOPLE = Number(process.env.PEOPLE ?? 5000);
 const DMS = Number(process.env.DMS ?? 500);
 const LATENCY_MS = Number(process.env.LATENCY_MS ?? 60);
-const SETTLE_MS = 1500;
+// The list is final once no contact read is pending and nothing has changed
+// for QUIET_MS, longer than the contact window's 200 ms debounce. A query
+// whose list is not final within SETTLE_LIMIT_MS is reported incomplete.
+const QUIET_MS = 500;
+const SETTLE_LIMIT_MS = 30_000 + LATENCY_MS;
 
 const TYPES = {
   '.html': 'text/html',
@@ -62,10 +66,18 @@ function serve(dist) {
 
 // Each typed character is timed from its keydown's timestamp (so time spent
 // queued behind earlier work counts) to the first moment after the frame that
-// follows its input event: the next paint. Each list change is logged with
-// the rows on screen, so arrival of final results can be timed too.
+// follows its input event: the next paint. `type` adds how late the key was
+// sent. Each list change is logged with the rows on screen, so arrival of
+// final results can be timed too. `lastActivity` is the last input, paint,
+// list change or contact read, for `settle`.
 function instrument() {
-  const m = { keys: [], changes: [], frames: [], recording: false };
+  const m = {
+    keys: [],
+    changes: [],
+    frames: [],
+    recording: false,
+    lastActivity: 0,
+  };
   window.__share = m;
   const rows = () =>
     [...document.querySelectorAll('[role="option"]')].map((option) => ({
@@ -83,6 +95,7 @@ function instrument() {
   document.addEventListener(
     'input',
     () => {
+      m.lastActivity = performance.now();
       const record = pending;
       pending = undefined;
       if (!record) return;
@@ -93,20 +106,32 @@ function instrument() {
           record.painted = performance.now();
           record.rows = rows();
           m.keys.push(record);
+          m.lastActivity = record.painted;
         };
         channel.port2.postMessage(0);
       });
     },
     true
   );
+  const readState = () =>
+    ['reads', 'pending-reads']
+      .map((id) => document.querySelector(`[data-testid="${id}"]`)?.textContent)
+      .join('/');
   let last = '';
+  let lastReads = '';
   new MutationObserver(() => {
-    if (!m.recording) return;
-    const now = rows();
-    const key = JSON.stringify(now);
+    const now = performance.now();
+    const reads = readState();
+    if (reads !== lastReads) {
+      lastReads = reads;
+      m.lastActivity = now;
+    }
+    const shown = rows();
+    const key = JSON.stringify(shown);
     if (key === last) return;
     last = key;
-    m.changes.push({ t: performance.now(), rows: now });
+    m.lastActivity = now;
+    if (m.recording) m.changes.push({ t: now, rows: shown });
   }).observe(document, {
     childList: true,
     subtree: true,
@@ -138,13 +163,38 @@ const quantile = (values, p) => {
 };
 const round = (value) => (value == null ? null : Math.round(value * 10) / 10);
 
+/** Waits until `keys` keystrokes have painted, no contact read is pending and
+ * nothing has changed for QUIET_MS. Returns false if that takes too long. */
+async function settle(page, keys) {
+  try {
+    await page.waitForFunction(
+      ({ keys, quiet }) => {
+        const m = window.__share;
+        const pending = document.querySelector('[data-testid="pending-reads"]');
+        if (!pending) throw new Error('This build has no pending read count');
+        return (
+          m.keys.length >= keys &&
+          pending.textContent === '0' &&
+          performance.now() - m.lastActivity >= quiet
+        );
+      },
+      { keys, quiet: QUIET_MS },
+      { polling: 50, timeout: SETTLE_LIMIT_MS }
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof errors.TimeoutError) return false;
+    throw error;
+  }
+}
+
 async function open(browser, port, groups, throttle) {
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
   });
   const page = await context.newPage();
-  const errors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
+  const pageErrors = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.addInitScript(instrument);
   await page.goto(
     `http://127.0.0.1:${port}/?share-recipients&groups=${groups}&people=${PEOPLE}&dms=${DMS}&latency=${LATENCY_MS}`
@@ -154,8 +204,8 @@ async function open(browser, port, groups, throttle) {
   const cdp = await context.newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
   await input.click();
-  await page.waitForTimeout(SETTLE_MS);
-  return { context, page, cdp, errors, runs: [] };
+  if (!(await settle(page, 0))) throw new Error('The list never settled');
+  return { context, page, cdp, errors: pageErrors, runs: [] };
 }
 
 /** Types `query` at the set cadence, waits for results, and clears it. */
@@ -173,13 +223,18 @@ async function type(session, query, profilePath) {
     m.frames = [];
     m.recording = true;
   });
-  const start = Date.now();
+  const start = performance.now();
+  // How late each key was sent. A press returns once the page has taken the
+  // key, so a busy page holds back the next one; that wait counts too.
+  const late = [];
   for (let index = 0; index < query.length; index++) {
-    const wait = start + index * CADENCE_MS - Date.now();
+    const due = start + index * CADENCE_MS;
+    const wait = due - performance.now();
     if (wait > 0) await page.waitForTimeout(wait);
+    late.push(Math.max(0, performance.now() - due));
     await page.keyboard.press(query[index] === ' ' ? 'Space' : query[index]);
   }
-  await page.waitForTimeout(SETTLE_MS);
+  const complete = await settle(page, query.length);
   const run = await page.evaluate(() => {
     const m = window.__share;
     m.recording = false;
@@ -189,6 +244,8 @@ async function type(session, query, profilePath) {
     const { profile } = await cdp.send('Profiler.stop');
     fs.writeFileSync(profilePath, JSON.stringify(profile));
   }
+  if (complete && run.keys.length !== late.length)
+    throw new Error(`Timed ${run.keys.length} of ${late.length} keys`);
   const last = run.keys.at(-1);
   const final = run.changes.at(-1);
   // The list is final at the paint after the last keystroke, or at its last
@@ -197,20 +254,28 @@ async function type(session, query, profilePath) {
   const settledAt = last ? Math.max(last.painted, lastChange) : undefined;
   session.runs.push({
     query,
-    keys: run.keys.map((key) => ({
+    // An incomplete run's list was still changing or reading when the wait
+    // ended, so it has no final list or settled time.
+    complete,
+    keys: run.keys.map((key, index) => ({
       key: key.key,
-      toPaint: key.painted - key.t0,
-      queued: key.handled - key.t0,
+      late: late[index],
+      toPaint: late[index] + key.painted - key.t0,
+      queued: late[index] + key.handled - key.t0,
       people: key.rows.filter((row) => row.person).length,
       rows: key.rows.length,
     })),
-    settledAfterLastKey: settledAt != null && last ? settledAt - last.t0 : null,
-    finalRows: final?.rows ?? last?.rows ?? [],
+    settledAfterLastKey:
+      complete && settledAt != null && last
+        ? late.at(-1) + settledAt - last.t0
+        : null,
+    finalRows: complete ? (final?.rows ?? last?.rows ?? []) : null,
     longFrames: run.frames,
   });
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.press('Backspace');
-  await page.waitForTimeout(SETTLE_MS);
+  if (!(await settle(page, 0)))
+    throw new Error(`The list never settled after clearing "${query}"`);
 }
 
 function summarize(label, groups, throttle, runs) {
@@ -232,9 +297,10 @@ function summarize(label, groups, throttle, runs) {
     // Keystrokes after which the list painted empty although the query ends
     // with results: no listed row matched the text until its read landed.
     emptyKeys: runs
-      .filter((run) => run.finalRows.length > 0)
+      .filter((run) => run.complete && run.finalRows.length > 0)
       .flatMap((run) => run.keys)
       .filter((key) => key.rows === 0).length,
+    incompleteRuns: runs.filter((run) => !run.complete).length,
     longFrameMsPerQuery: round(
       runs
         .flatMap((run) => run.longFrames)

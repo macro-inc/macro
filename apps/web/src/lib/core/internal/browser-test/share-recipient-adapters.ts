@@ -160,8 +160,10 @@ export const useChannelsContext = () => {
 export const useIsConnectedSecondaryInbox = () => () => false;
 
 const [reads, setReads] = createSignal(0);
+/** Contact reads started and not yet answered. */
+const [pendingReads, setPendingReads] = createSignal(0);
 
-export { reads };
+export { pendingReads, reads };
 
 /** Ranked like the cache: names starting with the query, then other names or
  * addresses containing it, most recent first in each group. */
@@ -200,7 +202,9 @@ const HOST: ContactWindowHost = {
     },
     search: async (request) => {
       setReads((value) => value + 1);
+      setPendingReads((value) => value + 1);
       await new Promise((resolve) => setTimeout(resolve, world().latencyMs));
+      setPendingReads((value) => value - 1);
       const { page, next } = search(
         request.query,
         request.cursor ? Number(request.cursor) : 0,

@@ -103,7 +103,9 @@ export default defineConfig({
             './use-directory',
           ].includes(source)
         )
-          return `${directory}/share-recipient-adapters.ts`;
+          // `directory` ends with a slash. The fixture imports this file too,
+          // and a build keeps two copies of a module reached by two spellings.
+          return `${directory}share-recipient-adapters.ts`;
         if (
           importer?.endsWith('/queries/contacts/use-directory.ts') &&
           [

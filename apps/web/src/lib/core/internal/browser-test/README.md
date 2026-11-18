@@ -136,7 +136,8 @@ main email fields also use it, with composition coverage in
 URL: `groups` (named channels and group DMs), `dms`, `people` in the contact
 cache and its read `latency` in milliseconds. `share-recipient-adapters.ts`
 builds them from a fixed seed. The page shows the selected recipients
-(`data-testid="recipients"`) and counts contact reads (`data-testid="reads"`).
+(`data-testid="recipients"`) and counts contact reads (`data-testid="reads"`)
+and those still pending (`data-testid="pending-reads"`).
 Desktop/phone tests hold each read for 4 s and check that the people still
 matching the typed text stay listed while it is pending, nobody who stopped
 matching stays, and a listed person can be picked.
@@ -153,8 +154,12 @@ BUILDS=before=/tmp/before,after=/tmp/after OUT=/tmp/share-timing \
 
 It types each query in `QUERIES` at `CADENCE_MS` per key, for every size in
 `SIZES` and CPU slowdown in `THROTTLES`, `REPS` times, alternating the builds.
-Each keystroke is timed from its keydown to the next paint; settled is the
-time from the last keystroke to the final list. `emptyKeys` counts keystrokes
+Each keystroke is timed from when it was due to the next paint, so a key the
+busy page held back counts from its slot. After each query it waits until no
+contact read is pending and the list has not changed for 500 ms; settled is
+the time from the last keystroke to that final list. A query still changing
+after 30 s plus `LATENCY_MS` (the fixture's read time) counts in
+`incompleteRuns` and has no settled time. `emptyKeys` counts keystrokes
 that painted an empty list although results followed. It prints one summary
 row per build and configuration, and writes per-keystroke runs and a CPU
 profile of the first query at the largest slowdown to `OUT`.
