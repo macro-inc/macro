@@ -99,18 +99,19 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
 
   /**
    * Unmuting a channel its sections mute keeps that channel notifying inside
-   * them; its own mute, if any, is removed separately. Returns how many.
+   * them; its own mute, if any, is removed separately. Returns how many
+   * were saved.
    */
   const keepNotifyingInMutedSections = async (targets: EntityData[]) => {
     const settings = options.channelSettings;
     const sectionMuted = targets.filter(isSectionMuted);
     if (!settings || sectionMuted.length === 0) return 0;
-    await Promise.all(
+    const saved = await Promise.all(
       sectionMuted.map((entity) =>
         settings.setOverridesSectionMute(entity.id, true)
       )
     );
-    return sectionMuted.length;
+    return saved.filter(Boolean).length;
   };
 
   const setMuted = async (

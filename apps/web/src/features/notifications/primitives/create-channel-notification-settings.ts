@@ -129,15 +129,16 @@ export function createChannelNotificationSettings(sources: Sources) {
 
   /** A legacy mentions-only channel reads as notifying for @mentions alone. */
   const ownSettings = (channelId: string): ChannelOwnSettings => {
-    const own = channelSettings().get(channelId);
-    if (own || !legacyMentionsOnly(channelId)) {
-      return own ?? UNSET_CHANNEL_SETTINGS;
-    }
+    const own = channelSettings().get(channelId) ?? UNSET_CHANNEL_SETTINGS;
+    const choosesKinds = own.enabled.size > 0 || own.disabled.size > 0;
+    if (choosesKinds || !legacyMentionsOnly(channelId)) return own;
+
+    // The server applies the legacy row until a kind change replaces it.
     const { enable, disable } = changeForKinds(new Set(['channel_mention']));
     return {
       enabled: new Set(enable),
       disabled: new Set(disable),
-      overridesSectionMute: false,
+      overridesSectionMute: own.overridesSectionMute,
     };
   };
 
@@ -303,7 +304,10 @@ export function useChannelNotificationSettings() {
   const readSections = () => settingsFlag().enabled && sectionsFlag().enabled;
   const teamLabels = useChannelLabelsQuery(undefined, readSections);
   const personalLabels = useChannelLabelsQuery('personal', readSections);
-  const favorites = useFavoritesData({ entityType: ['channel'] });
+  const favorites = useFavoritesData(
+    { entityType: ['channel'] },
+    () => settingsFlag().enabled
+  );
 
   const labels = createMemo<readonly ChannelNotificationLabel[]>(() => {
     if (!readSections()) return [];
