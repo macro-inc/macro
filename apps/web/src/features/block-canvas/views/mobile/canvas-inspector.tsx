@@ -32,6 +32,9 @@ export function MobileCanvasInspectorSheet(props: {
   );
 }
 
+/** What the side panel takes of the canvas's right edge: its width and gutter. */
+export const INSPECTOR_PANEL_CLEARANCE = '17rem';
+
 /**
  * A tablet's inspector (and a phone's, turned sideways): the floating panel
  * on the right, between the split header and the bottom chrome.

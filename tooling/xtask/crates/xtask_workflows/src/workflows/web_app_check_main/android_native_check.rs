@@ -1,6 +1,6 @@
 //! `Android Native Check` — merge gate for PRs that change Android native
-//! code, as a job of the web app PR checks so that `Web App Status Check`
-//! (the required status check) covers it. The twin of
+//! code, as a job of the web app PR checks so that `CI gate` (the required
+//! status) covers it. The twin of
 //! [`super::ios_native_check`]. The gate:
 //!
 //! 1. Requires an Android `versionCode` bump against the base branch when

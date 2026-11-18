@@ -24,7 +24,9 @@ only, behind `enable-suggestions`.
 - `primitives/feed.ts` decides what a card's action does for its kind: a
   composer prompt accepts, then opens the composer; a background prompt only
   accepts, which starts its run; an entity suggestion accepts, then opens its item
-  or draft; a routine suggestion saves its drafted routine.
+  or draft; a routine suggestion saves its drafted routine. Whether a card is
+  then done is the server's: a reply suggestion stays open until the person
+  replies on its thread (the browser fixture's Send replies plays that).
 - `suggestion-actions.ts` is the only place that knows the app's splits, composer
   and routine suggestions.
 - The first generation starts in onboarding, not here: connecting an inbox

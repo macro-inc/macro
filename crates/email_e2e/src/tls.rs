@@ -49,7 +49,7 @@ impl TlsFront {
             .context("the local development certificate and key do not match")?;
         let acceptor = TlsAcceptor::from(Arc::new(config));
 
-        let listener = TcpListener::bind("127.0.0.1:0")
+        let listener = crate::host::local_listener()
             .await
             .context("could not bind the HTTPS listener")?;
         let port = listener.local_addr()?.port();
