@@ -5,7 +5,9 @@ import { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   type Accessor,
   createContext,
+  createSignal,
   type FlowComponent,
+  onCleanup,
   useContext,
 } from 'solid-js';
 
@@ -27,7 +29,13 @@ export type SoupSearchPoolEntry = {
 };
 
 interface SearchContextValue {
-  entityPool: Accessor<SoupSearchPoolEntry[]>;
+  /**
+   * The rows Home, Drive, Tasks and Soup searches match locally, for a caller
+   * whose `searching` is true while its search has text. The pool reads the
+   * cache only while some caller is searching, and lists nothing otherwise:
+   * a loaded pool rereads its cache list on every cache change.
+   */
+  entityPool: (searching: Accessor<boolean>) => Accessor<SoupSearchPoolEntry[]>;
   /**
    * Routines, kept out of `entityPool`: that pool also feeds the Home, Drive,
    * and Tasks searches, which never list routines. Workspace Search adds them.
@@ -48,13 +56,23 @@ export const useSearchContext = () => {
 export const useOptionalSearchContext = () => useContext(SearchContext);
 
 export const SearchProvider: FlowComponent = (props) => {
-  const { items } = useQuickAccessEntities(() => [...SEARCH_ENTITY_TYPES]);
+  const [searches, setSearches] = createSignal<Accessor<boolean>[]>([]);
+  const { items } = useQuickAccessEntities(
+    () => [...SEARCH_ENTITY_TYPES],
+    () => '',
+    () => searches().some((searching) => searching())
+  );
   const routines = useQuickAccess().useList('routine').items;
+  const entityPool = (searching: Accessor<boolean>) => {
+    setSearches((list) => [...list, searching]);
+    onCleanup(() =>
+      setSearches((list) => list.filter((entry) => entry !== searching))
+    );
+    return items;
+  };
 
   return (
-    <SearchContext.Provider
-      value={{ entityPool: items, routinePool: routines }}
-    >
+    <SearchContext.Provider value={{ entityPool, routinePool: routines }}>
       {props.children}
     </SearchContext.Provider>
   );

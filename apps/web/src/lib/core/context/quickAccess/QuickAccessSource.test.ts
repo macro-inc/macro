@@ -1,4 +1,9 @@
 import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
+import {
+  SearchProvider,
+  type SoupSearchPoolEntry,
+  useSearchContext,
+} from '@app/features/soup/search/context';
 import type {
   CrmCompanyEntity,
   CrmContactEntity,
@@ -28,11 +33,13 @@ import {
   useQuery,
 } from '@tanstack/solid-query';
 import {
+  type Accessor,
   createComponent,
   createMemo,
   createRenderEffect,
   createRoot,
   createSignal,
+  Show,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQuickAccess } from './context';
@@ -45,6 +52,10 @@ import {
   type QuickAccessListOptions,
 } from './types';
 
+vi.mock(
+  '@property',
+  () => import('@app/features/property/editors/selectors/entityUtils')
+);
 const localDrafts = vi.hoisted(() => ({ read: (): LocalDraft[] => [] }));
 vi.mock('@queries/email/local-draft-source', async () => ({
   createLocalDraftSource: (enabled: () => boolean) => ({
@@ -1489,6 +1500,81 @@ describe('Quick Access source integration', () => {
     expect(list.totalCount()).toBe(81);
     expect(list.hasMore()).toBe(false);
     expect(mocks.search).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('Soup search pool', () => {
+  it('reads the cache only while a search holds the pool', async () => {
+    const [searching, setSearching] = createSignal(false);
+    const [mounted, setMounted] = createSignal(true);
+    let pool: Accessor<SoupSearchPoolEntry[]> = () => [];
+    const Search = () => {
+      pool = useSearchContext().entityPool(searching);
+      return null;
+    };
+    const client = new QueryClient();
+    const rendered = render(() =>
+      createComponent(QueryClientProvider, {
+        client,
+        get children() {
+          return createComponent(QuickAccessProvider, {
+            get children() {
+              return createComponent(SearchProvider, {
+                get children() {
+                  return createComponent(Show, {
+                    get when() {
+                      return mounted();
+                    },
+                    get children() {
+                      return createComponent(Search, {});
+                    },
+                  });
+                },
+              });
+            },
+          });
+        },
+      })
+    );
+    try {
+      mocks.changed?.();
+      expect(mocks.search).not.toHaveBeenCalled();
+      expect(pool()).toEqual([]);
+
+      mocks.search.mockResolvedValue(page(0, 1));
+      setSearching(true);
+      await vi.waitFor(() =>
+        expect(pool().map((entry) => entry.id)).toEqual(['0'])
+      );
+      expect(mocks.search).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          buckets: [
+            'channel',
+            'dm',
+            'chat',
+            'document',
+            'note',
+            'project',
+            'task',
+          ],
+          query: '',
+        }),
+        expect.anything()
+      );
+
+      setSearching(false);
+      mocks.changed?.();
+      expect(pool()).toEqual([]);
+
+      setSearching(true);
+      await vi.waitFor(() => expect(mocks.search).toHaveBeenCalledTimes(2));
+      setMounted(false);
+      mocks.changed?.();
+      expect(mocks.search).toHaveBeenCalledTimes(2);
+    } finally {
+      rendered.unmount();
+      client.clear();
+    }
   });
 });
 
