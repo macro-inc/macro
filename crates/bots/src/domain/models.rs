@@ -714,6 +714,9 @@ pub struct CreateChannelScopedBotResponse {
 pub struct ChannelWebhookRequest {
     /// Message body.
     pub content: String,
+    /// Who hears about the message; `Silent` notifies no one.
+    #[serde(default)]
+    pub notification_policy: messages::domain::models::PostMessageNotificationPolicy,
 }
 
 /// Response returned after posting a channel webhook message.

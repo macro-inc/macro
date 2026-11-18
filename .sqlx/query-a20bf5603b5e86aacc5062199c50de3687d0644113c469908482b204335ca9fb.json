@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            time_zone, default_reminders, name, color, access_role, is_primary, is_deleted,\n            (snapshot_normalization_version < 1 OR EXISTS (\n                SELECT 1 FROM calendar_event_sources source\n                WHERE source.calendar_id = calendars.id\n                  AND source.provider_access_role IS DISTINCT FROM calendars.access_role\n            )) AS \"needs_verification!\"\n        FROM calendars\n        WHERE account_id = $1 AND provider_calendar_id = $2\n        ",
+  "query": "\n        SELECT\n            time_zone, default_reminders, name, color, access_role, is_primary, is_deleted,\n            (snapshot_normalization_version < 1 OR EXISTS (\n                SELECT 1 FROM calendar_event_sources source\n                WHERE source.calendar_id = calendars.id\n                  AND source.provider_access_role IS DISTINCT FROM calendars.access_role\n                  AND source.last_seen_at >= calendars.synced_at\n            )) AS \"needs_verification!\"\n        FROM calendars\n        WHERE account_id = $1 AND provider_calendar_id = $2\n        ",
   "describe": {
     "columns": [
       {
@@ -61,5 +61,5 @@
       null
     ]
   },
-  "hash": "17090b38abc7076647ca9d230465f4c9879f75e2c606678904ca5e3206e4e763"
+  "hash": "a20bf5603b5e86aacc5062199c50de3687d0644113c469908482b204335ca9fb"
 }

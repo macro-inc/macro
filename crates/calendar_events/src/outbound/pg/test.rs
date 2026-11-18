@@ -1,6 +1,7 @@
 #[cfg(feature = "outlook")]
 mod outlook;
 use super::*;
+mod owner_scope;
 mod point_events;
 mod snapshot_coverage;
 mod team_refresh;

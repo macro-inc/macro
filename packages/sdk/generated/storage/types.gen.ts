@@ -4044,6 +4044,10 @@ export type ChannelWebhookRequest = {
      * Message body.
      */
     content: string;
+    /**
+     * Who hears about the message; `Silent` notifies no one.
+     */
+    notification_policy?: PostMessageNotificationPolicy;
 };
 
 /**
@@ -17286,13 +17290,20 @@ export type PostMessage = {
      */
     nonce?: string | null;
     /**
+     * Who hears about this post. `Silent` still delivers and shows the
+     * message, but sends no notification of any kind, mentions included.
+     * Channel messages only; other parents accept only `Default`.
+     */
+    notification_policy?: PostMessageNotificationPolicy;
+    /**
      * Root to reply to, if this is a reply.
      */
     thread_id?: string | null;
 };
 
 /**
- * Internal notification behavior for a posted channel message.
+ * Who hears about a posted message. A caller may choose it for its own
+ * channel message, since every choice only narrows who is notified.
  */
 export type PostMessageNotificationPolicy = 'Default' | 'MentionsOnly' | 'Silent';
 
