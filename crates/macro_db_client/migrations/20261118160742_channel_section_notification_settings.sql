@@ -1,3 +1,7 @@
+-- The foreign key briefly locks its referenced table; fail fast rather than
+-- queue writers behind a long transaction.
+SET LOCAL lock_timeout = '3s';
+
 -- A user's own notification settings for one Chat sidebar section, applied
 -- at send time to every channel the section holds for that user, including
 -- channels added later. A custom section (channel_label) is shared by its team

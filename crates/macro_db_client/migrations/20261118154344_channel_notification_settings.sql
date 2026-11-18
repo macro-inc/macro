@@ -1,3 +1,7 @@
+-- The foreign keys briefly lock their referenced tables; fail fast rather than
+-- queue writers behind a long transaction.
+SET LOCAL lock_timeout = '3s';
+
 -- A user's own notification choices for one channel. Each notification event
 -- type is turned off, turned on (over the channel's sections), or follows the
 -- sections; with no section setting either, it is on. Only channels with a
