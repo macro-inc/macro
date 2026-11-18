@@ -127,6 +127,7 @@ export function routineSections(props: {
               props.onChange((current) => ({ ...current, apps }))
             }
             Picker={props.slots.Apps}
+            Connect={props.slots.ConnectApp}
           />
         )}
       </Show>

@@ -1358,7 +1358,9 @@ label it Finance and make a task to pay it", finding the labels, tags,
 channels, folders, people and agents it names with the user's access; one it
 can't find, or that matches several, is left for the user to pick, and
 anything it had to create for the routine, such as a new database, is listed
-on the review), **Templates** (with
+on the review; an **Ask AI** step it writes requires the connected apps it
+uses, and an app it needs that the user hasn't connected is listed under
+**Connections** as not connected, with **Connect**), **Templates** (with
 `enable-routine-starter-templates` on; the scheduler's routine catalog,
 `GET /scheduled-actions/catalog`, in its order: **Sort my inbox**, **Triage new
 tasks**, **Morning brief**, **Share updates** only where AI decisions are
@@ -1550,9 +1552,10 @@ in another split. **Back to routines** returns to the list in the same pane.
 The apps chip in New routine (**Add apps**) and **Add connection** under
 **Connections** on a routine's page open the app picker: search the Pipedream catalog and pick the apps the
 routine's **Ask AI** step needs, on top of the agent's own. Each picked app
-shows **Connected** or a **Connect** button for the routine owner. Until every
-listed app is connected the composer shows **Connect every app this routine
-requires.** and Overview does not save; the server rejects the save too, and a
+shows **Connected**, or **Not connected** with a **Connect** button that opens
+Pipedream Connect, for the routine owner. Until every listed app is connected
+the composer names the rest (**Connect Notion, which this routine requires.**)
+and Overview does not save; the server rejects the save too, and a
 run whose app was disconnected later fails before a session opens. A routine
 with apps needs an **Ask AI** step ("Apps are for an Ask AI step. Add one, or
 remove the apps."). Agents whose runtime opens its own sessions (macrod, other
