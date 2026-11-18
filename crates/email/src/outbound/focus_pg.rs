@@ -511,7 +511,7 @@ impl FocusStore for FocusPgRepository {
             .collect()
     }
 
-    #[tracing::instrument(skip(self), fields(threads = tracing::field::Empty), err)]
+    #[tracing::instrument(skip(self, owner), fields(threads = tracing::field::Empty), err)]
     async fn focus_thread_ids(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -585,7 +585,7 @@ impl FocusStore for FocusPgRepository {
     }
 
     #[tracing::instrument(
-        skip(self, thread_ids),
+        skip(self, owner, thread_ids),
         fields(
             threads = thread_ids.len(),
             waiting = tracing::field::Empty,

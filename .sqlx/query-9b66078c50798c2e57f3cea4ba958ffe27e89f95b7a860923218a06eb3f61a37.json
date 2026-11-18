@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT (\n            EXISTS(SELECT 1 FROM email_draft_client_ids WHERE message_id = $1)\n            AND $1 IS DISTINCT FROM (\n                SELECT message_id FROM email_draft_client_ids\n                WHERE link_id = $2 AND client_id = $3\n            )\n        ) AS \"bound_to_another!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bound_to_another!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9b66078c50798c2e57f3cea4ba958ffe27e89f95b7a860923218a06eb3f61a37"
+}

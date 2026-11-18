@@ -37,6 +37,79 @@ fn long_names_keep_the_leading_graphemes_dss_accepts() {
     }
 }
 
+fn name_and_type(filename: &str, mime_type: &str) -> (String, String) {
+    let mut attachment = metadata(filename);
+    attachment.mime_type = mime_type.to_string();
+    determine_file_metadata(&attachment).unwrap()
+}
+
+#[test]
+fn a_known_extension_decides_unless_the_mime_type_names_another_macro_type() {
+    let wrong: Vec<_> = [
+        ("notes.txt", "text/plain", ("notes", "txt")),
+        ("notes.md", "text/plain", ("notes", "md")),
+        ("data.csv", "application/vnd.ms-excel", ("data", "csv")),
+        ("Contract.docx", "application/zip", ("Contract", "docx")),
+        ("report.pdf ", "application/octet-stream", ("report", "pdf")),
+        (
+            "Contract.docx",
+            "application/octet-stream",
+            ("Contract", "docx"),
+        ),
+        ("scan.pdf", "application/octet-stream", ("scan", "pdf")),
+        ("photos.zip", "application/octet-stream", ("photos", "zip")),
+        ("REPORT.PDF", "application/octet-stream", ("REPORT", "pdf")),
+        ("IMG_0001.HEIC", "image/heif", ("IMG_0001", "heic")),
+        ("minutes.doc", "application/msword", ("minutes", "doc")),
+        ("page.html", "text/html", ("page", "html")),
+    ]
+    .into_iter()
+    .filter_map(|(filename, mime_type, (name, file_type))| {
+        let got = name_and_type(filename, mime_type);
+        (got != (name.to_string(), file_type.to_string()))
+            .then(|| format!("{filename} sent as {mime_type} gave {got:?}"))
+    })
+    .collect();
+
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+#[test]
+fn a_specific_mime_type_naming_another_format_decides_the_file_type() {
+    assert_eq!(
+        name_and_type("report.xlsx", "application/pdf"),
+        ("report".to_string(), "pdf".to_string())
+    );
+}
+
+#[test]
+fn a_dotted_name_keeps_everything_before_its_extension() {
+    assert_eq!(
+        name_and_type("Q3.final.pdf", "application/pdf"),
+        ("Q3.final".to_string(), "pdf".to_string())
+    );
+}
+
+#[test]
+fn without_a_known_extension_the_mime_type_decides_and_the_name_is_whole() {
+    assert_eq!(
+        name_and_type("statement", "application/pdf"),
+        ("statement".to_string(), "pdf".to_string())
+    );
+    assert_eq!(
+        name_and_type("statement.final", "application/pdf"),
+        ("statement.final".to_string(), "pdf".to_string())
+    );
+}
+
+#[test]
+fn a_name_with_neither_a_known_extension_nor_a_known_mime_type_uses_its_last_extension() {
+    assert_eq!(
+        name_and_type("archive.qqq", "application/x-unknown-to-mime-guess"),
+        ("archive.qqq".to_string(), "qqq".to_string())
+    );
+}
+
 fn upload_args(sender: &str, recipients: &[&str]) -> AttachmentUploadArgs {
     AttachmentUploadArgs {
         attachment_metadata: AttachmentUploadMetadata {

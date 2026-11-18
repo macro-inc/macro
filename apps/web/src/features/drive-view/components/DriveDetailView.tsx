@@ -17,15 +17,12 @@ import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
-import { ErrorBoundary, For, Match, Show, Switch } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import { useOptionalDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
 import { FileDetailBreadcrumbItem } from '../views/FileDetailBreadcrumbItem';
-import {
-  MarkdownDetail,
-  MarkdownDetailBodyState,
-} from '../views/MarkdownDetail';
+import { DetailErrorBoundary, MarkdownDetail } from '../views/MarkdownDetail';
 import { DriveBreadcrumbsOutlet } from './DriveBreadcrumbs';
 
 function DriveDetailAncestorBreadcrumbs(props: { orderOffset: number }) {
@@ -186,7 +183,7 @@ function StackEntityDetail(props: {
             );
           }}
           previewHeaderLeading={
-            <Show when={hasBlockHeader(props.entry.data)}>
+            <Show when={hasBlockHeader(props.entry.data) && props.order > 0}>
               <DriveBreadcrumbsOutlet
                 aria-label="File location"
                 class="max-w-[min(40vw,24rem)] overflow-hidden"
@@ -233,14 +230,14 @@ function StackEntityDetail(props: {
 
 export function DriveDetailView() {
   const drive = useOptionalDriveView();
+  const navigationStack = useDriveDetailNavigation();
   const breadcrumbOrderOffset = () =>
-    drive
+    drive && navigationStack.showsLocation()
       ? driveLocationBreadcrumbs(
           drive.state.value().location,
           drive.sidebar.folders()
         ).length
       : 0;
-  const navigationStack = useDriveDetailNavigation();
   const activeHasBlockHeader = () => {
     const target = navigationStack.active()?.data;
     return target !== undefined && hasBlockHeader(target);
@@ -259,14 +256,9 @@ export function DriveDetailView() {
         >
           <Show when={navigationStack.active()}>
             {(entry) => (
-              <ErrorBoundary
-                fallback={(error, reset) => (
-                  <MarkdownDetailBodyState
-                    error={error}
-                    actionLabel="Reset"
-                    onAction={reset}
-                  />
-                )}
+              <DetailErrorBoundary
+                entityType={entry().data.type}
+                entityId={entry().data.id}
               >
                 <StackEntityDetail
                   entry={entry()}
@@ -276,7 +268,7 @@ export function DriveDetailView() {
                     1
                   }
                 />
-              </ErrorBoundary>
+              </DetailErrorBoundary>
             )}
           </Show>
         </EntityDetailFrame>

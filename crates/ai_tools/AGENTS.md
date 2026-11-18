@@ -29,8 +29,14 @@ execution, display) that don't belong to a single domain.
   `updated_at`), and folders through
   `ProjectService::create_project_dated_by_contents`, so the copy keeps
   Notion's dates. Notion tasks are created unshared and reached through their
-  shared folder, while single tracked tasks (Linear) stay team-shared at
-  creation.
+  shared folder, while individual tracked tasks (Linear) stay team-shared at
+  creation. `ImportedTargetReader` reads document/folder/database/initiative lifecycle
+  state through their owning domain ports, independently of viewer permissions;
+  root-folder reuse separately checks view access. Transient read failures propagate
+  so the import domain does not invalidate a live copy on an outage.
+- `src/import_workspace/lifecycle.rs`: physical lifecycle dispatch through owning
+  ports. PostgreSQL adapter tests cover live targets without grants,
+  trash/restore/purge and transient failures; hosts never reach service repos.
 - `src/import_jobs.rs`: `ImportJobs`, the shutdown token and tracker every
   host passes to `build_tool_service_context_from_env` (or its own import
   service) and calls `hand_over` on at shutdown, so running Notion imports

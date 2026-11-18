@@ -8,6 +8,7 @@ import {
 const row = (id: string, latestAt: number): NotificationInboxRow => ({
   id,
   type: 'channel_messages',
+  alsoListedAs: [],
   revision: `rev-${id}`,
   latestAt,
   actions: [],

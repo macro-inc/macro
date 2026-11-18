@@ -2,18 +2,24 @@
 
 use std::borrow::Cow;
 
-use ::email::domain::events::{EmailMacroEvent, EmailTopicEvent};
+use ::email::domain::events::{EmailEventOrigin, EmailMacroEvent, EmailTopicEvent};
 use macro_event_broker::MacroEvent as _;
 use opensearch_client::OpensearchClient;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
-use crate::process::email::{remove, upsert};
+use crate::process::email::{mailbox_delete::MailboxDeletes, remove, upsert};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum EmailIndexAction {
     UpsertMessage {
+        message_id: Uuid,
+        owner: String,
+    },
+    /// Index a sent message under its thread and drop the copies it left
+    /// under threads the send moved it from.
+    UpsertSentMessage {
         message_id: Uuid,
         owner: String,
     },
@@ -122,9 +128,18 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             event_type: "email.message_draft_synced",
         },
         EmailTopicEvent::MessageSent(metadata) => EmailEventDescription {
-            action: EmailIndexAction::UpsertMessage {
-                message_id: metadata.message_id,
-                owner: metadata.owner.to_string(),
+            // Only a send made in Macro can move an existing message to
+            // another thread; a sent message synced from the provider is a
+            // new row with no older copy to clean up.
+            action: match metadata.origin {
+                EmailEventOrigin::UserAction => EmailIndexAction::UpsertSentMessage {
+                    message_id: metadata.message_id,
+                    owner: metadata.owner.to_string(),
+                },
+                EmailEventOrigin::ProviderSync => EmailIndexAction::UpsertMessage {
+                    message_id: metadata.message_id,
+                    owner: metadata.owner.to_string(),
+                },
             },
             link_id: metadata.link_id,
             event_type: "email.message_sent",
@@ -221,11 +236,15 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
 async fn process_email_index_action(
     db: &PgPool,
     opensearch_client: &OpensearchClient,
+    mailbox_deletes: &MailboxDeletes,
     action: EmailIndexAction,
 ) -> anyhow::Result<()> {
     match action {
         EmailIndexAction::UpsertMessage { message_id, owner } => {
             upsert::process_upsert_message(opensearch_client, db, message_id, &owner).await
+        }
+        EmailIndexAction::UpsertSentMessage { message_id, owner } => {
+            upsert::process_upsert_sent_message(opensearch_client, db, message_id, &owner).await
         }
         EmailIndexAction::RemoveMessage { message_id } => {
             remove::process_remove_message(opensearch_client, message_id, None).await
@@ -244,9 +263,7 @@ async fn process_email_index_action(
             )
             .await
         }
-        EmailIndexAction::RemoveLink { link_id } => {
-            remove::process_remove_messages_by_link_id(opensearch_client, link_id).await
-        }
+        EmailIndexAction::RemoveLink { link_id } => mailbox_deletes.start(link_id).await,
         EmailIndexAction::Ignore => Ok(()),
     }
 }
@@ -254,6 +271,7 @@ async fn process_email_index_action(
 pub(super) async fn process_email_event(
     db: &PgPool,
     opensearch_client: &OpensearchClient,
+    mailbox_deletes: &MailboxDeletes,
     event: &EmailMacroEvent,
     partition: i32,
     offset: i64,
@@ -281,7 +299,7 @@ pub(super) async fn process_email_event(
                 attempt,
                 "processing email search-index event"
             );
-            process_email_index_action(db, opensearch_client, action)
+            process_email_index_action(db, opensearch_client, mailbox_deletes, action)
                 .await
                 .inspect_err(|error| {
                     if attempt < MAX_PROCESSING_ATTEMPTS {

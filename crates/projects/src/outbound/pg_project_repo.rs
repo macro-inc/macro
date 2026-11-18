@@ -520,3 +520,11 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
         Ok(())
     }
 }
+
+impl<B: BotFacts + 'static> crate::domain::ports::ProjectLifecycleReads for PgProjectRepo<B> {
+    #[tracing::instrument(skip(self), err)]
+    async fn project_is_live(&self, id: uuid::Uuid) -> anyhow::Result<bool> {
+        let project = self.get_basic_project(&id.to_string()).await?;
+        Ok(project.is_some_and(|project| project.deleted_at.is_none()))
+    }
+}

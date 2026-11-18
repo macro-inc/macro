@@ -15,13 +15,13 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AGENT_EMAIL_DOMAIN, ComputerId, ComputerPurchase, CreateTeamAgent, MAX_NAME_CHARS,
-    MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError, TeamAgentRecord,
-    TeamAgentStatus, TeamAgents,
+    AGENT_EMAIL_DOMAIN, AgentReady, ComputerId, ComputerPurchase, CreateTeamAgent, CreatedAccount,
+    MAX_NAME_CHARS, MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError,
+    TeamAgentRecord, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
-    AgentApiKeys, AgentRepos, Computers, EnrollmentEnvironment, TeamAgentRepository,
-    TeamAgentService, TeamMembership,
+    AgentApiKeys, AgentReadyNotices, AgentRepos, Computers, EnrollmentEnvironment,
+    TeamAgentRepository, TeamAgentService, TeamMembership,
 };
 use super::voice::AgentVoice;
 
@@ -55,7 +55,16 @@ pub mod env_keys {
 }
 
 /// The agent teammates service, over its ports.
-pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags> {
+pub struct TeamAgentServiceImpl<
+    Repository,
+    Membership,
+    ApiKeys,
+    Repos,
+    Computer,
+    Creators,
+    Flags,
+    Notices,
+> {
     repository: Repository,
     membership: Membership,
     api_keys: ApiKeys,
@@ -64,11 +73,13 @@ pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer
     /// Whose rollout each agent follows, for its enrollment.
     creators: Creators,
     flags: Option<Flags>,
+    /// Tells an agent's inviter when the agent first comes online.
+    notices: Notices,
     environment: Box<dyn EnrollmentEnvironment>,
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
-    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
+    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
 {
     /// Build the service. Without `flags`, agent teammates stay off.
     #[expect(
@@ -83,6 +94,7 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
         computers: Computer,
         creators: Creators,
         flags: Option<Flags>,
+        notices: Notices,
         environment: impl EnrollmentEnvironment,
     ) -> Self {
         Self {
@@ -93,6 +105,7 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
             computers,
             creators,
             flags,
+            notices,
             environment: Box::new(environment),
         }
     }
@@ -128,7 +141,8 @@ fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError>
     let job_description = request.job_description.trim().to_owned();
     let personality = request.personality.trim().to_owned();
     for profile in [&job_description, &personality] {
-        if profile.is_empty() || profile.chars().count() > MAX_PROFILE_CHARS {
+        // Empty is fine: an agent invited by name only asks its owner what to take on.
+        if profile.chars().count() > MAX_PROFILE_CHARS {
             return Err(TeamAgentError::InvalidProfile);
         }
     }
@@ -196,6 +210,14 @@ fn env_entry(
     Ok(())
 }
 
+/// What [`TeamAgentServiceImpl::prepare`] led to.
+enum Prepared {
+    /// A new account, joined to the team, with its repo.
+    New(MacroUserIdStr<'static>, PersonaSeed),
+    /// The invite's purchase key already made this agent.
+    Repeat(TeamAgentRecord),
+}
+
 /// What a failed invite must take back, newest first.
 #[derive(Default)]
 struct Undo {
@@ -204,14 +226,15 @@ struct Undo {
     repo: bool,
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
-    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
+    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
 where
     Repository: TeamAgentRepository,
     Membership: TeamMembership,
     ApiKeys: AgentApiKeys,
     Repos: AgentRepos,
     Computer: Computers,
+    Notices: AgentReadyNotices,
     Creators: agent_credentials::AgentCreators + 'static,
     Flags: FeatureFlags + 'static,
 {
@@ -261,6 +284,48 @@ where
             });
     }
 
+    /// Take back an agent whose computer was released after failing its
+    /// first start, as removing it does but with no admin and no computer to
+    /// release (the lifecycle released it): revoke its keys, delete its repository, take it off the
+    /// team and delete its seat. Its account stays, since it may already own
+    /// docs or threads. Each step is idempotent and the seat goes last, so a
+    /// retry after a failed step finds the agent and finishes; an agent
+    /// already taken back, or on another team, is done.
+    #[tracing::instrument(
+        name = "team_agents.undo_invite",
+        skip_all,
+        fields(team_id = %team_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
+        err
+    )]
+    pub async fn undo_invite(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<(), TeamAgentError> {
+        let Some(record) = self
+            .repository
+            .get(agent)
+            .await
+            .map_err(TeamAgentError::internal)?
+            .filter(|record| record.team_id == team_id)
+        else {
+            return Ok(());
+        };
+        self.api_keys.revoke_all(&record.user_id).await?;
+        self.repos.delete(&record.user_id).await?;
+        let removed_by = record
+            .created_by
+            .clone()
+            .unwrap_or_else(|| record.user_id.clone());
+        self.membership
+            .take_back_agent(team_id, &record.user_id, removed_by)
+            .await?;
+        self.repository
+            .remove_seat(&record.user_id)
+            .await
+            .map_err(TeamAgentError::internal)
+    }
+
     /// Everything before the purchase, recording each step in `undo`.
     async fn prepare(
         &self,
@@ -268,7 +333,7 @@ where
         created_by: &MacroUserIdStr<'static>,
         request: &CreateTeamAgent,
         undo: &mut Undo,
-    ) -> Result<(MacroUserIdStr<'static>, PersonaSeed), TeamAgentError> {
+    ) -> Result<Prepared, TeamAgentError> {
         let team_id = team_id(receipt)?;
         // A short suffix keeps two agents with the same name apart.
         let suffix: String = Uuid::now_v7()
@@ -294,7 +359,8 @@ where
             voice: request.voice.clone(),
         };
 
-        self.repository
+        let created = self
+            .repository
             .create_account(&NewAgentAccount {
                 user_id: user_id.clone(),
                 email,
@@ -303,9 +369,17 @@ where
                 name: request.name.clone(),
                 avatar_url: request.avatar_url.clone(),
                 persona_seed: seed.clone(),
+                purchase_key: request.purchase_key.clone(),
             })
             .await
             .map_err(TeamAgentError::internal)?;
+        if let CreatedAccount::AlreadyInvited(record) = created {
+            tracing::Span::current().record(
+                "agent_user_id",
+                tracing::field::display(agent_credentials::telemetry_id(record.user_id.as_ref())),
+            );
+            return Ok(Prepared::Repeat(*record));
+        }
         undo.account = Some(user_id.clone());
 
         self.membership.add_agent(receipt.clone(), &user_id).await?;
@@ -314,7 +388,21 @@ where
         self.repos.create(&user_id, team_id, &seed).await?;
         undo.repo = true;
 
-        Ok((user_id, seed))
+        Ok(Prepared::New(user_id, seed))
+    }
+
+    /// A repeat of an invite (a double click, or a retry after a lost
+    /// answer) answers with the agent the first request made, and changes
+    /// nothing: the first request owns the setup and its undo. Until that
+    /// one has bought the computer (a purchase still confirming counts), the
+    /// agent may yet be taken back, so the repeat is refused.
+    async fn repeated_invite(&self, record: TeamAgentRecord) -> Result<TeamAgent, TeamAgentError> {
+        let agent = self.team_agent(record).await?;
+        let Some(computer_id) = agent.computer_id else {
+            return Err(TeamAgentError::InviteInProgress);
+        };
+        tracing::Span::current().record("computer_id", tracing::field::display(computer_id));
+        Ok(agent)
     }
 
     async fn team_agent(&self, record: TeamAgentRecord) -> Result<TeamAgent, TeamAgentError> {
@@ -323,11 +411,10 @@ where
             .computer_for_agent(record.team_id, &record.user_id)
             .await?;
         let status = match computer_id {
-            Some(computer_id) => self
-                .computers
-                .state(record.team_id, computer_id)
-                .await?
-                .into(),
+            Some(computer_id) => TeamAgentStatus::of(
+                self.computers.state(record.team_id, computer_id).await?,
+                record.first_online_at.is_some(),
+            ),
             // The account exists but its purchase never completed.
             None => TeamAgentStatus::Failed,
         };
@@ -345,14 +432,24 @@ where
     }
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags> TeamAgentService
-    for TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices> TeamAgentService
+    for TeamAgentServiceImpl<
+        Repository,
+        Membership,
+        ApiKeys,
+        Repos,
+        Computer,
+        Creators,
+        Flags,
+        Notices,
+    >
 where
     Repository: TeamAgentRepository,
     Membership: TeamMembership,
     ApiKeys: AgentApiKeys,
     Repos: AgentRepos,
     Computer: Computers,
+    Notices: AgentReadyNotices,
     Creators: agent_credentials::AgentCreators + 'static,
     Flags: FeatureFlags + 'static,
 {
@@ -377,7 +474,8 @@ where
             .prepare(&receipt, &created_by, &request, &mut undo)
             .await
         {
-            Ok(prepared) => prepared,
+            Ok(Prepared::New(user_id, seed)) => (user_id, seed),
+            Ok(Prepared::Repeat(record)) => return self.repeated_invite(record).await,
             Err(error) => {
                 self.undo(receipt, undo).await;
                 return Err(error);
@@ -519,6 +617,63 @@ where
     }
 
     #[tracing::instrument(
+        name = "team_agents.agent_online",
+        skip_all,
+        fields(team_id = %receipt.entity().entity_id, agent_user_id = tracing::field::Empty, computer_id = tracing::field::Empty, first = tracing::field::Empty),
+        err
+    )]
+    async fn agent_online(
+        &self,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<(), TeamAgentError> {
+        let agent = acting_user(&receipt)?;
+        let team_id = team_id(&receipt)?;
+        let span = tracing::Span::current();
+        span.record(
+            "agent_user_id",
+            tracing::field::display(agent_credentials::telemetry_id(agent.as_ref())),
+        );
+        let record = self
+            .repository
+            .get(&agent)
+            .await
+            .map_err(TeamAgentError::internal)?
+            .filter(|record| record.team_id == team_id)
+            .ok_or(TeamAgentError::NotFound)?;
+        let first = record.first_online_at.is_none();
+        span.record("first", first);
+        if !first {
+            return Ok(());
+        }
+
+        // Told before the stamp, so a failed hand-off or notice is retried by
+        // the agent's next report; both are idempotent, so a repeat changes
+        // nothing.
+        let computer_id = self.computers.computer_for_agent(team_id, &agent).await?;
+        if let Some(computer_id) = computer_id {
+            span.record("computer_id", tracing::field::display(computer_id));
+            self.computers.agent_online(team_id, computer_id).await?;
+        }
+        if let (Some(computer_id), Some(inviter)) = (computer_id, record.created_by) {
+            let computer = self.computers.details(team_id, computer_id).await?;
+            self.notices
+                .send(AgentReady {
+                    computer_id,
+                    team_id,
+                    computer,
+                    inviter,
+                    agent: agent.clone(),
+                    agent_name: record.persona_seed.name,
+                })
+                .await?;
+        }
+        self.repository
+            .mark_online(&agent)
+            .await
+            .map_err(TeamAgentError::internal)
+    }
+
+    #[tracing::instrument(
         name = "team_agents.issue_enrollment",
         skip(self),
         fields(agent_user_id = tracing::field::Empty),
@@ -619,5 +774,40 @@ where
             agent_user_id: agent,
             env,
         }))
+    }
+}
+
+/// hosted_runtimes takes back the agent of a computer released after a failed
+/// first start through here.
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
+    hosted_runtimes::domain::ports::AgentInvites
+    for TeamAgentServiceImpl<
+        Repository,
+        Membership,
+        ApiKeys,
+        Repos,
+        Computer,
+        Creators,
+        Flags,
+        Notices,
+    >
+where
+    Repository: TeamAgentRepository,
+    Membership: TeamMembership,
+    ApiKeys: AgentApiKeys,
+    Repos: AgentRepos,
+    Computer: Computers,
+    Creators: agent_credentials::AgentCreators + 'static,
+    Flags: FeatureFlags + 'static,
+    Notices: AgentReadyNotices,
+{
+    type Err = TeamAgentError;
+
+    async fn undo_invite(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<(), TeamAgentError> {
+        TeamAgentServiceImpl::undo_invite(self, team_id, agent).await
     }
 }

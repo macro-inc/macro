@@ -113,6 +113,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             thread_ids: args.email_search_args.thread_ids,
             required_thread_ids: args.email_search_args.required_thread_ids,
             link_ids: args.email_search_args.link_ids,
+            exclude_link_ids: args.email_search_args.exclude_link_ids,
             sender: args.email_search_args.sender,
             cc: args.email_search_args.cc,
             bcc: args.email_search_args.bcc,
@@ -257,6 +258,8 @@ pub struct UnifiedEmailSearchArgs {
     /// the access filter.
     pub required_thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
+    /// Links no hit may come from, whatever else matches it.
+    pub exclude_link_ids: Vec<String>,
     pub sender: Vec<String>,
     pub cc: Vec<String>,
     pub bcc: Vec<String>,

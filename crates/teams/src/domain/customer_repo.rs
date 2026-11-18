@@ -5,8 +5,9 @@ use std::collections::HashMap;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::model::{
-    CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration, ItemQuantityChange,
-    ItemRemoval, PriceInfo, ScheduledSeatPlan, SeatPlan, SubscriptionItemView, SubscriptionTerms,
+    ComputerPurchaseCredit, CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration,
+    ItemQuantityChange, ItemRemoval, PriceInfo, ScheduledSeatPlan, SeatPlan, SubscriptionItemView,
+    SubscriptionTerms,
 };
 
 /// The CustomerRepository defines a set of actions to perform on customer data
@@ -180,6 +181,16 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         item_id: &stripe::SubscriptionItemId,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<ItemRemoval, CustomerError>> + Send;
+
+    /// Credit note the lines `computer_id`'s purchase added to a paid
+    /// invoice of the subscription, refunding the card part. Idempotent on
+    /// `idempotency_key`. `None` when no paid invoice carries the computer.
+    fn refund_computer_purchase(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        computer_id: computer_id::ComputerId,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<Option<ComputerPurchaseCredit>, CustomerError>> + Send;
 
     /// Every item on the subscription, all pages.
     fn subscription_items(

@@ -61,10 +61,6 @@ const operationMocks = vi.hoisted(() => {
     bulkMarkNotificationsAsDone: vi.fn(async () => {}),
     bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
     cancelQueries: vi.fn(async () => {}),
-    flagArchived: vi.fn(async () => ({
-      isErr: () => false,
-      value: undefined,
-    })),
     invalidateQueries: vi.fn(
       async (_options: { queryKey?: readonly unknown[] }) => {}
     ),
@@ -131,9 +127,6 @@ vi.mock('@queries/soup/graphql/optimistic-done', () => ({
 }));
 vi.mock('@queries/soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: operationMocks.refreshGraphqlSoup,
-}));
-vi.mock('@service-email/client', () => ({
-  emailClient: { flagArchived: operationMocks.flagArchived },
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   const actual =
