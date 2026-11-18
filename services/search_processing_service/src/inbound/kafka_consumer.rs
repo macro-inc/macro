@@ -511,6 +511,8 @@ async fn run_event_worker(
     let context = &context;
     drain_worker_events(events, pending_rereads, |received| async move {
         let span = processing_span(&received);
+        // A span ends at its last exit, so the record's span is entered again
+        // here to cover the processing it waited for.
         let outcome = process_event(
             context,
             &received.event,
@@ -518,6 +520,7 @@ async fn run_event_worker(
             received.offset,
         )
         .instrument(span.clone())
+        .instrument(received.span.clone())
         .await;
         record_outcome(&span, outcome);
     })
