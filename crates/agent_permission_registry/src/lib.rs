@@ -20,7 +20,7 @@ mod test;
 /// What an operation does to its group's data, the unit a person allows,
 /// asks about or refuses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema), schema(as = PermissionAction))]
 #[serde(rename_all = "lowercase")]
 pub enum Action {
     /// Makes something new.
