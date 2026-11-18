@@ -37,7 +37,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Preserve `agents-conversation-list-view-v1` filters when changing sort; legacy grouping does not determine the redesigned list.
 - Partition desktop rows once: Waiting on you first, flagged Open PRs second, Conversations last; share filters and sort, and fill paging from unpinned Conversations.
 - Render desktop row ages as pointer-transparent hover/focus overlays using the row's hover or active surface; never let the age change title truncation or appear on phone rows.
-- Compose menus from shared Dropdown content, groups, items, labels, and indicators without row spacing overrides; keep phone choices on MobileDrawer parts.
+- Compose menus from shared Dropdown content, groups, items, labels, and indicators without row spacing overrides; separate model-menu groups with labels and spacing, never divider lines, and keep phone choices on MobileDrawer parts.
 - Keep All models as a desktop submenu and a pushed phone page; derive both catalogs from non-Suggested IDs, including search, and omit empty provider groups.
 - Use the shared grouped Tabs pill for Auto/Chat/Code on desktop and in the phone drawer; keep its Auto gate and host mode state unchanged.
 - Keep session model controls inside the composer; place only + on the left and dictation, model, then Send/Stop on the right, with desktop mode/repository controls in the right group and phone controls in their upper drawer.

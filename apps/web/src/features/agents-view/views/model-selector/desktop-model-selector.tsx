@@ -235,7 +235,7 @@ export function DesktopModelSelector() {
             </Show>
           </div>
           <Show when={showOptions()}>
-            <div class="shrink-0 border-t border-edge-muted">
+            <div class="shrink-0">
               <Dropdown.Group>
                 <Show when={options().model}>
                   <Dropdown.Sub>
