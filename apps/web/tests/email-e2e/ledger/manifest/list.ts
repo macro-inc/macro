@@ -21,31 +21,31 @@ export const list = {
       id: 'SL-03',
       name: 'Signal tab (id important)',
       opened:
-        'Sidebar Inbox > header tab Signal; g i; mobile pill; default tab',
+        'Sidebar Inbox > header tab Signal; g e; mobile pill; default tab',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-04',
       name: 'Noise tab',
-      opened: 'Inbox header tab Noise; g o; mobile pill',
+      opened: 'Inbox header tab Noise; mobile pill',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-05',
       name: 'Favorites tab',
-      opened: 'Sidebar Favorites; g s; touch sidebar sheet',
+      opened: 'Sidebar Favorites; touch sidebar sheet',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-06',
       name: 'Drafts tab',
-      opened: 'Sidebar Drafts; g d; touch sidebar sheet',
+      opened: 'Sidebar Drafts; touch sidebar sheet',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-07',
       name: 'Sent tab',
-      opened: 'Sidebar Sent; g t; touch sidebar sheet',
+      opened: 'Sidebar Sent; g s; touch sidebar sheet',
       viewports: BOTH_VIEWPORTS,
     },
     {
@@ -63,13 +63,13 @@ export const list = {
     {
       id: 'SL-10',
       name: 'All mail tab',
-      opened: 'Sidebar Library > All mail; g a; touch sidebar sheet',
+      opened: 'Sidebar Library > All mail; touch sidebar sheet',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-11',
       name: 'Archived tab',
-      opened: 'Sidebar Library > Archived; g e; touch sidebar sheet',
+      opened: 'Sidebar Library > Archived; touch sidebar sheet',
       viewports: BOTH_VIEWPORTS,
     },
     {

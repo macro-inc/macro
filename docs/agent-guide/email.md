@@ -121,10 +121,10 @@ emulation: the pill row scrolls, so the search pill can start off screen on a
 tab far to the right.
 
 Mail-client keys work in the list, the reading pane, and the open thread while
-Email is focused: `s` star, `z` undo the last action, and `g` then a letter
-for a tab (`i` Signal, `o` Noise, `s` Favorites, `t` Sent, `d` Drafts, `e`
-Archived, `a` All). These letters replace the app-wide `g` targets only inside
-Email (`g t` is still Tasks elsewhere); `g h` still goes Home. `Escape` in a
+Email is focused: `s` star and `z` undo the last action. `g` then a letter
+keeps its app-wide meaning inside Email too ([navigation](navigation.md)):
+`g e` opens Email on Signal and `g s` on Sent from any view; other tabs are on
+the number keys and the sidebar. `Escape` in a
 list steps back one level: it clears a selection, then a search, and with
 neither returns to Signal; in the reading pane it first hands the keyboard back
 to the list. From the search field, `ArrowDown` or `Enter` moves to the first

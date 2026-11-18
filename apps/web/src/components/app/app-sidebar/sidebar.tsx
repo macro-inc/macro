@@ -7,6 +7,14 @@ import {
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import {
+  DEFAULT_EMAIL_TAB,
+  type EmailTab,
+} from '@app/features/email-view/constants';
+import {
+  emailTabSearch,
+  emailTabSearchCodec,
+} from '@app/features/email-view/email-route';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
@@ -21,6 +29,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGoToLeader } from '@components/app/app-sidebar/go-to-leader';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type {
+  OpenWithSplitOptions,
   ReferredFrom,
   SplitContent,
   SplitHandle,
@@ -48,6 +57,7 @@ import BellIcon from '@icon/system/regular/bell.svg';
 import SplitIcon from '@icon/system/regular/columns.svg';
 import HomeIcon from '@icon/system/regular/house.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import ActivityIcon from '@icon/system/regular/pulse.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -67,11 +77,17 @@ export interface SidebarItem {
   label: string;
   href: string;
   params?: Record<string, unknown>;
+  /** Route search that picks a place inside the view, such as an Email tab. */
+  search?: OpenWithSplitOptions['search'];
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   hotkey?: ValidHotkey | ValidHotkey[];
   hotkeyToken: HotkeyToken;
   standaloneHotkey?: boolean;
 }
+
+const emailTab = (tab: EmailTab): OpenWithSplitOptions['search'] => ({
+  [emailTabSearch.namespace]: emailTabSearchCodec.serialize({ tab }),
+});
 
 /**
  * Home answers `g i` too, unless the Notifications link is on the rail: two
@@ -119,9 +135,21 @@ const SIDEBAR_LINKS = [
       return t('nav.email');
     },
     href: LIST_VIEW_PATHS.mail,
+    search: emailTab(DEFAULT_EMAIL_TAB),
     icon: getIconConfig('email').icon,
     hotkey: 'e',
     hotkeyToken: TOKENS.sidebar.goTo.mail,
+  },
+  {
+    id: 'mail',
+    get label() {
+      return t('viewMenus.sent');
+    },
+    href: LIST_VIEW_PATHS.mail,
+    search: emailTab('sent'),
+    icon: PaperPlaneTiltIcon,
+    hotkey: 's',
+    hotkeyToken: TOKENS.sidebar.goTo.sent,
   },
   {
     id: 'documents',
@@ -199,17 +227,28 @@ export function sidebarContent(
 export function navigateToSidebarView(args: {
   viewId: SidebarItem['id'];
   params?: SidebarItem['params'];
+  search?: SidebarItem['search'];
   shiftKey: boolean;
   openWithSplit: OpenWithSplitFn;
   referredFrom?: ReferredFrom;
   onApplied?: () => void;
 }): SplitHandle | undefined {
-  const { viewId, params, shiftKey, openWithSplit, referredFrom, onApplied } =
-    args;
+  const {
+    viewId,
+    params,
+    search,
+    shiftKey,
+    openWithSplit,
+    referredFrom,
+    onApplied,
+  } = args;
 
   return openWithSplit(sidebarContent(viewId, params), {
     preferNewSplit: shiftKey,
-    resume: !shiftKey,
+    // A link that names its place (Email's Signal or Sent) lands there, not
+    // wherever the view was left.
+    resume: !shiftKey && !search,
+    search,
     mergeHistory: false,
     allowDuplicate: viewId !== 'calendar',
     referredFrom,
@@ -285,6 +324,7 @@ export const GoToHotkeys = () => {
         const handle = navigateToSidebarView({
           viewId: link.id,
           params: link.params,
+          search: link.search,
           shiftKey: !!e?.shiftKey,
           openWithSplit,
           onApplied:
@@ -309,8 +349,8 @@ export const GoToHotkeys = () => {
         description: () => t('nav.goTo', { label: link.label }),
         keyDownHandler: openSidebarView,
         icon: link.icon,
-        // Views can claim a letter while focused (Email's g then i). Re-running
-        // this effect when flags load must not eclipse those.
+        // Views add letters the app doesn't use (a list's g then g).
+        // Re-running this effect when flags load must not eclipse those.
         registrationType: 'add',
       });
     });
