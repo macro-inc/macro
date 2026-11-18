@@ -70,6 +70,17 @@ pub struct DeletedByQuery {
     pub version_conflicts: u64,
 }
 
+impl std::ops::AddAssign for DeletedByQuery {
+    fn add_assign(&mut self, other: Self) {
+        self.deleted += other.deleted;
+        self.version_conflicts += other.version_conflicts;
+    }
+}
+
+/// Message ids sent in one delete-by-query, far below OpenSearch's
+/// `index.max_terms_count` (65,536), however large a reindex batch is.
+pub const MESSAGE_IDS_PER_DELETE: usize = 1_000;
+
 /// Deletes every document of a thread page's spam and trash messages, whatever
 /// thread each was indexed under, in one delete-by-query that refreshes the
 /// index when it removed something, so removals are visible to search when

@@ -195,3 +195,49 @@ async fn a_page_without_spam_or_trash_sends_no_request() {
 
     client.delete_email_messages(&[], None).await.unwrap();
 }
+
+#[tokio::test]
+async fn a_page_over_the_id_limit_is_deleted_in_chunks_and_its_counts_summed() {
+    let (first_url, first) = crate::test_support::serve_once(
+        "200 OK",
+        r#"{"deleted":1000,"version_conflicts":0,"failures":[]}"#,
+    );
+    let ids: Vec<String> = (0..MESSAGE_IDS_PER_DELETE + 1)
+        .map(|index| format!("message-{index}"))
+        .collect();
+    let client = crate::OpensearchClient::new(first_url, "".into(), "".into()).unwrap();
+
+    // The one-request server answers the first chunk; the second chunk then
+    // finds nothing listening, which proves the ids went out in two requests.
+    let result = client.delete_email_messages(&ids, None).await;
+    let (_, first_body) = first.join().unwrap();
+
+    let first_body: serde_json::Value = serde_json::from_str(&first_body).unwrap();
+    assert_eq!(
+        first_body["query"]["terms"]["message_id"]
+            .as_array()
+            .unwrap()
+            .len(),
+        MESSAGE_IDS_PER_DELETE
+    );
+    assert!(result.is_err(), "the second chunk needed its own request");
+}
+
+#[test]
+fn chunk_counts_add_up() {
+    let mut total = DeletedByQuery {
+        deleted: 2,
+        version_conflicts: 0,
+    };
+    total += DeletedByQuery {
+        deleted: 3,
+        version_conflicts: 1,
+    };
+    assert_eq!(
+        total,
+        DeletedByQuery {
+            deleted: 5,
+            version_conflicts: 1
+        }
+    );
+}

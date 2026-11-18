@@ -58,10 +58,13 @@ impl OpensearchClient {
         message_ids: &[String],
         index_override: Option<&str>,
     ) -> Result<()> {
-        let deleted = resend_on_lost_connection(|| {
-            delete::email::delete_email_messages(&self.inner, message_ids, index_override)
-        })
-        .await?;
+        let mut deleted = delete::email::DeletedByQuery::default();
+        for chunk in message_ids.chunks(delete::email::MESSAGE_IDS_PER_DELETE) {
+            deleted += resend_on_lost_connection(|| {
+                delete::email::delete_email_messages(&self.inner, chunk, index_override)
+            })
+            .await?;
+        }
         let span = tracing::Span::current();
         span.record("deleted", deleted.deleted);
         span.record("version_conflicts", deleted.version_conflicts);
