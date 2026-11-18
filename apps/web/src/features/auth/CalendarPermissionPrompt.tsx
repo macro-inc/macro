@@ -58,19 +58,21 @@ export function CalendarPermissionPrompt() {
     itemsLoaded: () => linksQuery.isSuccess && userId() !== undefined,
     toast: (link, dismiss) => ({
       title: calendarStoppedSyncing(link)
-        ? 'Calendar stopped syncing'
-        : 'Enable calendar',
+        ? t('calendarPrompt.stoppedTitle')
+        : t('calendarPrompt.enableTitle'),
       icon: CalendarIcon,
       color: 'var(--color-accent)',
       dismissLabel: t('common.notNow'),
       content(): string {
         return calendarStoppedSyncing(link)
-          ? `Reconnect ${link.email_address} to show its events in Macro again.`
-          : `Macro can now sync your calendar. Grant calendar access for ${link.email_address} to turn it on.`;
+          ? t('calendarPrompt.stoppedContent', { email: link.email_address })
+          : t('calendarPrompt.enableContent', { email: link.email_address });
       },
       actions: [
         {
-          label: calendarStoppedSyncing(link) ? 'Reconnect' : 'Grant access',
+          label: calendarStoppedSyncing(link)
+            ? t('calendarPrompt.stoppedAction')
+            : t('calendarPrompt.enableAction'),
           onClick: () => {
             // Suppress re-prompting until the grant upgrades; on native the
             // page stays mounted while the OAuth flow runs.
