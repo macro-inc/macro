@@ -471,7 +471,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
                 "Make a task named {name}, due {dueInDays} days later.",
             )),
             named_knobs: &[],
-            instructions: "Make a task named \u{201c}Weekly review\u{201d}, assigned to me, due this Friday. If last week\u{2019}s is still open, add a comment on it saying so instead of making another.",
+            instructions: "Make a task named \u{201c}Weekly review\u{201d}, assigned to me, due this Friday.",
             affects_others: false,
             safe_default: false,
             template: true,
