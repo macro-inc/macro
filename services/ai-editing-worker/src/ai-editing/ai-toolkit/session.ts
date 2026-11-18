@@ -1,10 +1,5 @@
 import { registerCodeHighlighting } from '@lexical/code';
 import { $convertFromMarkdownString } from '@lexical/markdown';
-import { type InferType, validateSchema } from '@loro-mirror/core';
-import {
-  MARKDOWN_LORO_SCHEMA,
-  type MarkdownLoroSchemaType,
-} from '@macro-inc/lexical-core/markdown-loro-schema';
 import {
   NodeReplacements,
   SupportedNodeTypes,
@@ -99,14 +94,6 @@ export function loadSnapshot(
 /** Export the current document as a serialized editor-state snapshot. */
 export function toSnapshot(session: LexicalSession): SerializedEditorState {
   return session.editor.getEditorState().toJSON();
-}
-
-/** Whether an editor snapshot is the Mirror's state shape: the same check the
- *  Mirror runs on `setState`, so a snapshot that passes is one it accepts. */
-export function isMarkdownLoroState(
-  value: unknown
-): value is InferType<MarkdownLoroSchemaType> {
-  return validateSchema(MARKDOWN_LORO_SCHEMA, value).valid;
 }
 
 /** Derive the retype id for a node: `b3` -> `b3~v1` -> `b3~v2`. The stem stays
