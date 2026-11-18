@@ -19,12 +19,12 @@ mod test;
 
 use std::sync::Arc;
 
-use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
+use ai_toolset::{ApprovalKind, AsyncToolCollection, RequestContext, ToolCallError};
 use chrono::NaiveDate;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use email_validator::EmailAddress;
-use macro_authorization::ForwardedProgram;
+use macro_authorization::{ForwardedProgram, ProgramApproval};
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -156,8 +156,14 @@ where
     /// The client for a write `request` makes: it carries the tools' program
     /// and the user's approval of the call, when they gave one.
     pub fn mutations_for(&self, request: &RequestContext) -> Arc<M> {
-        let _ = request;
-        Arc::clone(&self.mutations)
+        let program = match request.approval().map(|approval| approval.kind()) {
+            None => self.program.clone(),
+            Some(ApprovalKind::Reviewed) => {
+                self.program.clone().approved(ProgramApproval::Reviewed)
+            }
+            Some(ApprovalKind::Quoted) => self.program.clone().approved(ProgramApproval::Quoted),
+        };
+        self.mutations.for_program(&program)
     }
 }
 

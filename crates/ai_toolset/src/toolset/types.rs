@@ -252,7 +252,8 @@ where
                     tool.try_deserialize(json)
                         .map_err(ToolSetError::Deserialization)
                 })?;
-            Ok(tool.call(context, request_context).await)
+            // A user tool runs only once a person has reviewed the call.
+            Ok(tool.call(context, request_context.reviewed()).await)
         }
         .instrument(span)
         .await;

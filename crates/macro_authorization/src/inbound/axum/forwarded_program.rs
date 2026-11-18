@@ -56,11 +56,18 @@ impl ProgramApproval {
 /// unreadable value approves nothing.
 #[must_use]
 pub fn forwarded_approval(
-    _caller: super::UserOrInternalCaller,
-    _headers: &HeaderMap,
+    caller: super::UserOrInternalCaller,
+    headers: &HeaderMap,
 ) -> Option<ProgramApproval> {
-    let _ = ProgramApproval::parse;
-    None
+    if caller != super::UserOrInternalCaller::Internal {
+        return None;
+    }
+    let value = headers.get(INTERNAL_PROGRAM_APPROVAL_HEADER)?;
+    let approval = value.to_str().ok().and_then(ProgramApproval::parse);
+    if approval.is_none() {
+        tracing::warn!("internal call forwarded an unreadable approval");
+    }
+    approval
 }
 
 /// The program behind a request, as the service handling it forwards it:
@@ -125,6 +132,12 @@ impl ForwardedProgram {
         }
         if self.code_execution {
             headers.insert(CODE_EXECUTION_HEADER, HeaderValue::from_static("1"));
+        }
+        if let Some(approval) = self.approval {
+            headers.insert(
+                INTERNAL_PROGRAM_APPROVAL_HEADER,
+                HeaderValue::from_static(approval.as_str()),
+            );
         }
         headers
     }

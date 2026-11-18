@@ -103,6 +103,14 @@ impl RequestContext {
         }
     }
 
+    /// This request, for a user tool the user reviewed and accepted.
+    pub(crate) fn reviewed(self) -> Self {
+        Self {
+            approval: Some(UserApproval::reviewed()),
+            ..self
+        }
+    }
+
     /// The user's approval of this call, when they gave one.
     #[must_use]
     pub fn approval(&self) -> Option<UserApproval> {
@@ -113,7 +121,10 @@ impl RequestContext {
     /// it. A blank quote approves nothing.
     #[must_use]
     pub fn with_quoted_confirmation(self, quote: &str) -> Option<Self> {
-        (!quote.trim().is_empty()).then_some(self)
+        (!quote.trim().is_empty()).then_some(Self {
+            approval: Some(UserApproval(ApprovalKind::Quoted)),
+            ..self
+        })
     }
 
     /// Turn `execute_tool` GenAI telemetry for this request's tool calls on or

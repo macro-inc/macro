@@ -83,7 +83,10 @@ puts the forwarded ids on the acting user, so the callee's `attribution()`
 and program guards see the program; a user's own request carrying them is
 still a person. An unreadable or repeated id, or one with no acting user,
 refuses the call (400). A guard in the forwarding service itself checks
-`is_agent_run(program.attribution(), &program.headers())`.
+`is_agent_run(program.attribution(), &program.headers())`. A write the user
+approved forwards that too (`ForwardedProgram::approved`, header
+`x-internal-program-approval`); `forwarded_approval(caller, headers)` reads it
+only from an internal caller, and an unreadable value approves nothing.
 
 An account manager's credential arrives as a normal `x-macro-user-api-key` and
 authenticates as the managed account, with `CredentialOrigin::AccountManager`

@@ -486,15 +486,21 @@ fn refuse_program_create(
     headers: &HeaderMap,
     approval: Option<ProgramApproval>,
 ) -> Result<(), CalendarMutationApiError> {
-    let _ = approval;
-    if is_agent_run(attribution, headers) {
-        return Err(CalendarMutationApiError {
-            code: CalendarMutationErrorCode::ConfirmationRequired,
-            message: PROGRAM_CREATE_REFUSAL.to_owned(),
-            status: StatusCode::FORBIDDEN,
-        });
+    if !is_agent_run(attribution, headers) {
+        return Ok(());
     }
-    Ok(())
+    if let Some(approval) = approval {
+        tracing::info!(
+            approval = approval.as_str(),
+            "agent create admitted by the user's approval"
+        );
+        return Ok(());
+    }
+    Err(CalendarMutationApiError {
+        code: CalendarMutationErrorCode::ConfirmationRequired,
+        message: PROGRAM_CREATE_REFUSAL.to_owned(),
+        status: StatusCode::FORBIDDEN,
+    })
 }
 
 /// Make a program name the copy it changes when the meeting is on several of
