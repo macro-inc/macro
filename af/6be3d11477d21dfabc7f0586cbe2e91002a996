@@ -1,0 +1,80 @@
+crates/agent_permissions/src/inbound/axum_router/test.rs
+  s_6966afebcdde0a::t_1398271cb8e30f 1-9,11-56,65-67,69-318
+  s_6966afebcdde0a::t_cb31b99af4d800 10,57-64
+  s_6966afebcdde0a::t_eb32b0c2b08ee0 68
+crates/agent_permissions/src/domain/resolve/test.rs
+  s_6966afebcdde0a::t_f8e32b96de87b8 2-337
+  s_681af3c6cf1e93::t_7e957b6cf91771 1
+crates/agent_permissions/src/outbound/pg.rs
+  s_6966afebcdde0a::t_5c1503de37e587 14
+  s_6966afebcdde0a::t_1b05fa1039264a 1-13,15-299
+crates/agent_permissions/fixtures/permissions.sql
+  s_6966afebcdde0a::t_28fd44bcececf0 1-10
+crates/agent_permissions/src/inbound/axum_router.rs
+  s_6966afebcdde0a::t_5d80879ce029a0 232-233,235-236,240-242
+  s_6966afebcdde0a::t_4ef3ab98674ca8 1-231,234,237-239,243-438
+Cargo.toml
+  s_6966afebcdde0a::t_cdc2ee91eec7b5 29
+crates/agent_permissions/src/inbound.rs
+  s_6966afebcdde0a::t_5d80879ce029a0 1-3
+crates/agent_permissions/src/domain.rs
+  s_6966afebcdde0a::t_34ca1c185f0cfb 1-7
+crates/agent_permissions/src/domain/resolve.rs
+  s_6966afebcdde0a::t_f2a70ec049f293 1-16,18-64,66-259,261,266-269,273-274,281,283,285-286,289-291,293-326
+  s_6966afebcdde0a::t_fd877e840d5d62 260,262-265,270-272
+  s_6966afebcdde0a::t_bb19f0ccb97c6f 17,65,275-280,282,284,287-288,292
+crates/agent_permissions/src/domain/service.rs
+  s_6966afebcdde0a::t_cf3ac40c73f2bc 1-380,387-400,405-498,500-510,512-606
+  s_6966afebcdde0a::t_bb19f0ccb97c6f 381-386,401-404,499,511
+crates/agent_permissions/src/lib.rs
+  s_6966afebcdde0a::t_6cc035beaf75d7 1-14
+crates/agent_permissions/src/outbound/pg/test.rs
+  s_6966afebcdde0a::t_28fd44bcececf0 1-4,6-226
+  s_6966afebcdde0a::t_0c020f635652dc 5
+crates/agent_permissions/src/domain/service/test.rs
+  s_6966afebcdde0a::t_58ee9f7fe885ba 1-586
+crates/agent_permissions/src/outbound.rs
+  s_6966afebcdde0a::t_5c1503de37e587 1-4
+.github/workspace-dep-closures.json
+  s_6966afebcdde0a::t_2134adba3c9eeb 1372-1414
+crates/agent_permissions/AGENTS.md
+  s_6966afebcdde0a::t_bd82d3dd0d2766 1-32,34-51
+crates/agent_permissions/src/domain/ports.rs
+  s_6966afebcdde0a::t_24cfa8fc8f2137 1-80
+crates/agent_permissions/Cargo.toml
+  s_6966afebcdde0a::t_5d80879ce029a0 24
+  s_6966afebcdde0a::t_cdc2ee91eec7b5 1-23,25-34,36-41
+  s_6966afebcdde0a::t_eb32b0c2b08ee0 35
+crates/agent_permissions/src/domain/model.rs
+  s_6966afebcdde0a::t_880fb2d31a6159 1-486
+crates/agent_permissions/src/outbound/registry.rs
+  s_6966afebcdde0a::t_5c1503de37e587 1-27
+Cargo.lock
+  s_6966afebcdde0a::t_89cecf67409326 903-935
+crates/agent_permissions/CLAUDE.md
+  s_6966afebcdde0a::t_17f3e992a812f5 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "af6be3d11477d21dfabc7f0586cbe2e91002a996",
+  "prompts": {},
+  "sessions": {
+    "s_681af3c6cf1e93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "598d9450-511b-4236-be87-7da0f8ded17b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_6966afebcdde0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13694447-aca1-404a-8fbf-c900186fe6c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
