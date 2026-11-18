@@ -106,6 +106,9 @@ pub struct RunCredentials {
     pub gate: Arc<dyn NativeToolGate>,
     pub endpoints: SdkEndpoints,
     pub scopes: Arc<dyn SessionScopes>,
+    /// The agent permissions gate on OCaml programs; `None` where the runner
+    /// has no OCaml bundle, and then every program runs as before.
+    pub permissions: Option<Arc<permissions::PermissionGate>>,
 }
 
 /// Which narrower scope a session's code runs in, decided where its
@@ -232,7 +235,16 @@ impl ExecutionCredentials for RunCredentials {
         language: ProgramLanguage,
         cancel: CancellationToken,
     ) -> Result<IssuedRun, CodeModeError> {
+        // Refused or rewritten before anyone is asked anything.
+        let checked = match &self.permissions {
+            Some(gate) => gate.check(identity, source, language).await?,
+            None => None,
+        };
         let actor = approve_run(self.gate.as_ref(), identity, source, language, &cancel).await?;
+        if let (Some(gate), Some(checked)) = (&self.permissions, &checked) {
+            gate.hold(checked, identity, &actor, source, &cancel)
+                .await?;
+        }
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
         let correlation = self
             .correlations
@@ -275,6 +287,8 @@ impl ExecutionCredentials for RunCredentials {
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
                 egress: self.egress.egress(&actor).await,
+                // The whole analyzed set, not only what was asked about.
+                allowed_operations: checked.map(|checked| checked.calls.into_iter().collect()),
             },
             acting_user: actor,
         })
@@ -348,6 +362,7 @@ impl UserExecutionCredentials for UserRunCredentials {
             execution_id: None,
             unattended: None,
             egress: self.egress.egress(user).await,
+            allowed_operations: None,
         })
     }
 }
@@ -418,6 +433,17 @@ impl<Flags: feature_flags::FeatureFlags + 'static>
             .is_ok_and(|snapshot| {
                 snapshot.is_enabled(OCAML_FLAG) && snapshot.is_enabled(PERMISSIONS_FLAG)
             })
+    }
+}
+
+/// The same rollout, as code mode and the OCaml gate ask it of a session
+/// owner.
+#[async_trait]
+impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OcamlRollout
+    for PermissionsFlag<Flags>
+{
+    async fn enabled(&self, owner: &MacroUserIdStr<'static>) -> bool {
+        agent_permissions::domain::ports::PermissionsRollout::enabled(self, owner).await
     }
 }
 
@@ -492,6 +518,7 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 
 pub mod connected_apps;
 pub mod images;
+pub mod permissions;
 pub mod reviews;
 pub mod ui_commands;
 

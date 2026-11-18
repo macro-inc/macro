@@ -768,6 +768,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             }),
             endpoints: SdkEndpoints::default(),
             scopes: Arc::new(Scopes(scope)),
+            permissions: None,
         }
         .issue(
             &identity,
@@ -968,4 +969,151 @@ async fn agent_permissions_need_both_flags() {
             .enabled(&both)
             .await
     );
+}
+
+/// The whole credential issue with the permission gate, against the same
+/// fixtures as [`a_run_signs_its_sessions_scope_into_its_credential`].
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
+    use super::permissions::test::{call, gate};
+    use agent_permissions::domain::model::PermissionState;
+    use agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus;
+    use code_execution::domain::Analysis;
+    sqlx::raw_sql(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ('00000000-0000-4000-8000-000000000001', 'owner@example.com', 'owner@example.com', 'stripe_owner');
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ('macro|owner@example.com', 'owner@example.com', '00000000-0000-4000-8000-000000000001');
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../crates/agent_code_mode/src/outbound/postgres/test/sessions.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(
+        1,
+    )));
+    let owner = session.owner_user().unwrap().clone();
+    let identity = ExecutionIdentity {
+        execution: agent_code_mode::domain::ExecutionId::mint(),
+        acting_as: ai_toolset::actor::ToolActor::Owner,
+        session: session.id,
+        agent_id: bot_id::BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0xa9e7)),
+        owner: owner.clone(),
+        turn: macro_uuid::Uuid::from_u128(1),
+    };
+    let correlations = || async {
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM agent_correlations"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+    };
+    let analysis = || {
+        Analysis::Calls(
+            [
+                call("email", "send_message"),
+                call("storage", "get_document"),
+            ]
+            .into(),
+        )
+    };
+    let issue = |parts: super::permissions::test::Parts, language: ProgramLanguage| {
+        let gate = Arc::new(Gate {
+            verdict: NativeToolVerdict::RunAs(owner.clone()),
+            calls: AtomicUsize::new(0),
+        });
+        let credentials = RunCredentials {
+            signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            gate: gate.clone(),
+            endpoints: SdkEndpoints::default(),
+            scopes: Arc::new(Scopes(None)),
+            permissions: Some(Arc::new(parts.gate)),
+        };
+        let identity = identity.clone();
+        async move {
+            let issued = credentials
+                .issue(&identity, "fixture", language, CancellationToken::new())
+                .await;
+            (issued, gate.calls.load(Ordering::SeqCst))
+        }
+    };
+
+    // Flag off, or JavaScript: exactly today's run, never analyzed.
+    for (rollout, language) in [
+        (false, ProgramLanguage::Ocaml),
+        (true, ProgramLanguage::Javascript),
+    ] {
+        let parts = gate(analysis(), &[], ToolApprovalStatus::Approved, rollout);
+        let analyzer = parts.analyzer.clone();
+        let (issued, asked) = issue(parts, language).await;
+        assert_eq!(issued.unwrap().allowed_operations, None);
+        assert_eq!(asked, 1);
+        assert_eq!(*analyzer.calls.lock().unwrap(), 0);
+    }
+    let before = correlations().await;
+
+    // Never: refused before the owner hold, a correlation or a credential.
+    let parts = gate(
+        analysis(),
+        &[("email.send_message", PermissionState::Never)],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    let holds = parts.holds.clone();
+    let (issued, asked) = issue(parts, ProgramLanguage::Ocaml).await;
+    assert!(matches!(
+        issued,
+        Err(CodeModeError::NotRun(agent_code_mode::domain::NotRun {
+            permission: Some(agent_code_mode::domain::ExecutionPermission::Blocked { .. }),
+            ..
+        }))
+    ));
+    assert_eq!(asked, 0);
+    assert!(holds.held.lock().unwrap().is_empty());
+    assert_eq!(correlations().await, before);
+
+    // Ask, declined: no correlation or credential either.
+    let parts = gate(
+        analysis(),
+        &[("email.send_message", PermissionState::Ask)],
+        ToolApprovalStatus::Denied,
+        true,
+    );
+    let (issued, _) = issue(parts, ProgramLanguage::Ocaml).await;
+    assert!(matches!(
+        issued,
+        Err(CodeModeError::NotRun(agent_code_mode::domain::NotRun {
+            permission: Some(agent_code_mode::domain::ExecutionPermission::Declined { .. }),
+            ..
+        }))
+    ));
+    assert_eq!(correlations().await, before);
+
+    // Ask, approved: runs limited to everything it may call.
+    let parts = gate(
+        analysis(),
+        &[("email.send_message", PermissionState::Ask)],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    let holds = parts.holds.clone();
+    let (issued, asked) = issue(parts, ProgramLanguage::Ocaml).await;
+    let environment = issued.unwrap();
+    assert_eq!(asked, 1);
+    assert_eq!(holds.held.lock().unwrap()[0].approver, owner);
+    assert_eq!(
+        environment.allowed_operations,
+        Some(vec![
+            call("email", "send_message"),
+            call("storage", "get_document")
+        ])
+    );
+    assert_eq!(correlations().await, before + 1);
 }

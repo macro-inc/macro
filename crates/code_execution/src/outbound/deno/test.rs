@@ -140,6 +140,7 @@ async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
         },
         unattended: None,
         egress: Egress::Direct,
+        allowed_operations: None,
     };
     let source = r#"
 import { Macro } from '@macro-inc/sdk';
@@ -228,6 +229,7 @@ async fn a_program_presents_a_view_through_its_session() {
         },
         unattended: None,
         egress: Egress::Direct,
+        allowed_operations: None,
     };
     let source = r#"
 export async function main({execution}) {

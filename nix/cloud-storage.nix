@@ -302,6 +302,7 @@
             isUnder = directory: rel == directory || pkgs.lib.hasPrefix "${directory}/" rel;
           in
           !(isUnder "fetch/test")
+          && !(isUnder "analyzer/test")
           && !(isUnder "code_mode/test")
           && !(isUnder "code_mode/policy/test")
           && (
@@ -314,6 +315,7 @@
               "generated"
               "fetch"
               "code_mode"
+              "analyzer"
             ]
           );
       };
@@ -346,7 +348,8 @@
           # The copied compilers need none of the OCaml installation at run
           # time (build.sh); keep it out of the image.
           remove-references-to -t ${pkgs.ocamlPackages.ocaml} -t ${pkgs.ocamlPackages.findlib} \
-            "$out/bin/ocamlc" "$out/bin/wasm_of_ocaml" "$out/bin/code_mode_policy"
+            "$out/bin/ocamlc" "$out/bin/wasm_of_ocaml" "$out/bin/code_mode_policy" \
+            "$out/bin/macro_sdk_calls"
           runHook postBuild
         '';
         dontInstall = true;

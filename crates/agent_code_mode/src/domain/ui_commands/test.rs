@@ -158,6 +158,7 @@ fn record(execution: ExecutionId, turn: Uuid) -> ExecutionRecord {
         calls: Vec::new(),
         activity: Vec::new(),
         activity_truncated: false,
+        permission: None,
     }
 }
 

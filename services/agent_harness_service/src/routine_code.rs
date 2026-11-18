@@ -330,6 +330,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 dry_run: run.dry_run,
             }),
             egress: self.egress.egress(owner).await,
+            allowed_operations: None,
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let started = Instant::now();

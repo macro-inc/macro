@@ -9,6 +9,7 @@ import type { ExecutionActivity } from './executionActivity';
 import type { ExecutionId } from './executionId';
 import type { ExecutionRecordActingAs } from './executionRecordActingAs';
 import type { ExecutionRecordError } from './executionRecordError';
+import type { ExecutionRecordPermission } from './executionRecordPermission';
 import type { ExecutionRecordSdkFingerprint } from './executionRecordSdkFingerprint';
 import type { ExecutionRecordTurnId } from './executionRecordTurnId';
 import type { ExecutionStatus } from './executionStatus';
@@ -35,6 +36,7 @@ export interface ExecutionRecord {
 JavaScript, the default, is left out, so records of sessions without
 OCaml serialize as they did before languages. */
   language?: ProgramLanguage;
+  permission?: ExecutionRecordPermission;
   /** JSON returned by the program, if successful. */
   result?: unknown;
   /** For an OCaml program, the fingerprint of the OCaml SDK bundle it ran

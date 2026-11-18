@@ -114,9 +114,19 @@ stacks. Process isolation belongs to
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `toolset_with_ocaml()`
   for a session that may run OCaml (`session_toolset` picks; its description
   adds `toolset/session/ocaml.md`, the `Code_mode.run` contract and one
-  example), `user_toolset()` for the public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
+  example), `toolset_with_ocaml_permissions()` when agent permissions gate
+  its OCaml programs (`SessionCodeMode::permissions_enabled`; adds
+  `toolset/session/ocaml_permissions.md`), `user_toolset()` for the public MCP.
+  Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
   guidance once, there.
+- Agent permissions: credential issue may answer `CodeModeError::NotRun`
+  (the program was checked and not run). `run` records it as `failed` with
+  `error` (the model's text) and, when its permissions stopped it,
+  `permission` (`ExecutionPermission`: `blocked` or `declined`), on both the
+  record and the receipt, and returns the receipt. Absent `permission`
+  serializes as before. The `code_mode.execution` span's `permission` field
+  says `off`, `admitted`, `blocked`, `declined` or `cannot_analyze`.
 
 ## Boundaries
 

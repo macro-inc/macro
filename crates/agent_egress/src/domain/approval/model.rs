@@ -7,7 +7,7 @@ use agent_runtime_protocol::domain::tool_approval::{ToolApprovalNotice, ToolAppr
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
-use super::MACRO_SERVER_SLUG;
+use super::{MACRO_SERVER_SLUG, SDK_PERMISSION_SLUG};
 use crate::domain::error::EgressError;
 use crate::domain::model::AgentSessionId;
 
@@ -94,7 +94,28 @@ impl ToolApproval {
                 .as_ref()
                 .map(|user| user.as_ref().to_owned()),
             remembered: self.remembered,
+            approver: (self.server_slug == SDK_PERMISSION_SLUG)
+                .then(|| self.owner.as_ref().to_owned()),
         }
+    }
+
+    /// For a hold on the agent's permissions, the operations it asks for,
+    /// as `service.operation`, read from `arguments.permission.operations`.
+    #[must_use]
+    pub fn permission_operations(&self) -> Vec<String> {
+        self.arguments
+            .pointer("/permission/operations")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|operation| {
+                Some(format!(
+                    "{}.{}",
+                    operation.get("service")?.as_str()?,
+                    operation.get("operation")?.as_str()?
+                ))
+            })
+            .collect()
     }
 }
 
@@ -129,6 +150,27 @@ impl StandingApproval {
                 .then(|| approval.tool_name.clone()),
             granted_by: granted_by.clone(),
         })
+    }
+
+    /// What approving a hold on the agent's permissions for good covers: each
+    /// operation it asked for, for the person who approves it (the account
+    /// the program acts as), in this session. Empty when it names none.
+    #[must_use]
+    pub fn covering_permissions(
+        approval: &ToolApproval,
+        granted_by: &MacroUserIdStr<'static>,
+    ) -> Vec<Self> {
+        approval
+            .permission_operations()
+            .into_iter()
+            .map(|operation| Self {
+                session: approval.session,
+                user: approval.owner.clone(),
+                server_slug: SDK_PERMISSION_SLUG.to_owned(),
+                tool_name: Some(operation),
+                granted_by: granted_by.clone(),
+            })
+            .collect()
     }
 
     /// Whether it covers `user` calling `tool` on `server_slug` in `session`.
@@ -190,6 +232,10 @@ pub enum ToolApprovalError {
     /// A call no person asked for cannot be approved for good.
     #[error("a call a bot made on nobody's behalf cannot be approved for good")]
     NobodyToRemember,
+    /// Only a person, in Macro, may approve or decline a hold on an agent's
+    /// permissions; an agent's or a program's credential may only cancel it.
+    #[error("a person must answer this in Macro")]
+    NeedsPerson,
     /// The store failed.
     #[error(transparent)]
     Egress(#[from] EgressError),

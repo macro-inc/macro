@@ -1,3 +1,4 @@
+pub use agent_permissions::domain::model::{DeclinedStatus, ExecutionPermission, GatedOperation};
 use agent_session::domain::model::AgentSessionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -142,6 +143,9 @@ pub enum RecordedCallStatus {
     Failed,
     /// Execution ended before a response was observed.
     Unknown,
+    /// Never sent: the operation was outside what the permission gate checked
+    /// the program to call.
+    Refused,
 }
 
 /// Durable source and final outcome, with historical bridge calls when present.
@@ -182,6 +186,11 @@ pub struct ExecutionRecord {
     /// Additional request activity was omitted at the bounded observation limit.
     #[serde(default)]
     pub activity_truncated: bool,
+    /// Set when the agent's permissions stopped the program before it ran:
+    /// an operation set to never, or an approval that was not given. The
+    /// status is then `failed`, and `error` says why in the model's words.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission: Option<ExecutionPermission>,
 }
 
 /// Compact model result with an identity the UI uses to load the durable record.
@@ -202,6 +211,10 @@ pub struct ExecutionReceipt {
     /// Pixels of the images `main` returned in `images`, for the model.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub model_media: Vec<ModelImage>,
+    /// Set when the agent's permissions stopped the program; see
+    /// [`ExecutionRecord::permission`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission: Option<ExecutionPermission>,
 }
 
 /// Most images one result may show the model, as for a RenderCanvas result.
@@ -264,6 +277,18 @@ pub enum ModelImageMediaType {
     Png,
 }
 
+/// A program that was not run, with what the model is told and, when its
+/// permissions stopped it, how. The run is recorded as failed and the
+/// caller gets a receipt, not an error: the program was the problem.
+#[derive(Debug, Clone)]
+pub struct NotRun {
+    /// What the model is told: why, and what to do instead.
+    pub message: String,
+    /// How the agent's permissions stopped it; `None` when the program has
+    /// to be rewritten (it cannot be analyzed, or does not compile).
+    pub permission: Option<ExecutionPermission>,
+}
+
 /// Safe service errors, separate from failures returned by a running program.
 #[derive(Debug, thiserror::Error)]
 pub enum CodeModeError {
@@ -308,6 +333,10 @@ pub enum CodeModeError {
     /// The supervised request task failed unexpectedly.
     #[error("code execution task failed")]
     Task(#[source] tokio::task::JoinError),
+    /// The program was checked before running and not run. `run` records it
+    /// and returns a receipt instead of this error.
+    #[error("{}", .0.message)]
+    NotRun(NotRun),
 }
 
 /// A bounded SDK operation observed during execution; not an authorization or write receipt.

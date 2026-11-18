@@ -198,6 +198,7 @@ async fn ocaml_tool_example_creates_and_reads_a_task() {
     .with_ocaml(OcamlPrograms {
         fingerprint: fingerprint.clone(),
         rollout: Arc::new(On),
+        permissions: None,
     });
     let session = agent_session::testing::test_agent_session(AgentSessionId::new());
     let tools = session_toolset(&service, &session).await;

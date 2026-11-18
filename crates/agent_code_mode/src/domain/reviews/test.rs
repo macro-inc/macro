@@ -115,6 +115,7 @@ impl ExecutionStore for Executions {
             calls: vec![],
             activity: Vec::new(),
             activity_truncated: false,
+            permission: None,
         })
     }
 }

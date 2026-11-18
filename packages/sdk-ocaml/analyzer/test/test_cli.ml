@@ -38,6 +38,9 @@ let () =
          (member "operation" storage = `String "create_task_handler"
          && member "path" storage
             = `String "Macro_sdk.Storage.create_task_handler");
+       check "json: method and route"
+         (member "method" storage = `String "POST"
+         && member "route" storage = `String "/documents/create_task");
        check "json: location"
          (match member "locations" storage with
          | `List [ location ] ->
@@ -46,6 +49,16 @@ let () =
              && member "via" location = `String "reference"
          | _ -> false)
    | _ -> check "json: two operations" false);
+  (let code, text = run ([ "--json" ] @ root @ [ cmt "code_mode_task" ]) in
+   let json = Yojson.Safe.from_string text in
+   check "json: a parameter is {} in the route"
+     (code = 0
+     &&
+     match member "operations" json with
+     | `List [ _; markdown ] ->
+         member "operation" markdown = `String "get_document_markdown"
+         && member "route" markdown = `String "/documents/{}/markdown"
+     | _ -> false));
   (let code, text = run ([ "--json" ] @ root @ [ cmt "functor_parameter" ]) in
    let json = Yojson.Safe.from_string text in
    check "json: a module use is marked"

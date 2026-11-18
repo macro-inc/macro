@@ -42,6 +42,9 @@ let last () =
 (* The service.operation the last fetch was told. *)
 let operation () = Js.to_string (Js.Unsafe.meth_call test "operation" [||])
 
+(* The service.operationId (raw, as the spec has it) the last fetch was told. *)
+let operation_id () = Js.to_string (Js.Unsafe.meth_call test "operationId" [||])
+
 let check_names () =
   let names = Js.to_array (Js.Unsafe.get test "names") in
   check "operation names to check" (Array.length names > 100);
@@ -82,6 +85,7 @@ let () =
   check "parameter header" (seen.header "x-trace" = Some "t-1");
   check "accept" (seen.header "accept" = Some "application/json");
   check "operation handed to fetch" (operation () = "kinds.getProfile");
+  check "raw operationId handed to fetch" (operation_id () = "kinds.get_profile");
   check "verb header from the operation"
     (seen.header "x-macro-sdk-verb" = Some "read");
 

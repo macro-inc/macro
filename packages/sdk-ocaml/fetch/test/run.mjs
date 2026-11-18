@@ -49,6 +49,7 @@ closed.close();
 
 // The bootstrap's side of the contract (macro_sdk_fetch.mli).
 const operations = [];
+const operationIds = [];
 const verbs = { "kinds.getProfile": "read", "kinds.createProfile": "created" };
 const originalFetch = globalThis.fetch.bind(globalThis);
 const test = {
@@ -58,6 +59,7 @@ const test = {
   requests: () => log.length,
   last: () => log.at(-1),
   operation: () => operations.at(-1),
+  operationId: () => operationIds.at(-1),
   names: [],
   finish: failures => {
     server.shutdown().then(() => Deno.exit(failures === 0 ? 0 : 1));
@@ -66,6 +68,7 @@ const test = {
 globalThis.fetch = (input, init) => {
   const operation = init?.macroSdkOperation;
   operations.push(operation ? `${operation.service}.${operation.operation}` : "none");
+  operationIds.push(operation ? `${operation.service}.${operation.operationId}` : "none");
   const key = operation && `${operation.service}.${operation.operation}`;
   if (key === "kinds.putTree") return Promise.reject(new Error("refused by the gate"));
   if (key === "kinds.upload" && test.dryRun) return Promise.resolve(new Response(null, { status: 204 }));
