@@ -1,0 +1,49 @@
+crates/agent_permissions/src/inbound/axum_router/test.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 10-11,147-152,188-195,200-203,217-220,230-236,259-262
+.github/workspace-dep-closures.json
+  s_6966afebcdde0a::t_fc887f390d7091 952-953
+crates/agent_permission_registry/src/lib.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 62-64
+crates/agent_permissions/src/domain/ports.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 19-22
+crates/agent_permissions/src/domain/resolve/test.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 62-67,211-214,245-248
+services/agent_harness_service/src/api/test.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 444-463
+services/agent_harness_service/src/code_mode.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 287-288
+crates/agent_correlation/src/scope/test.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 87-90
+services/agent_harness_service/src/code_mode/test.rs
+  s_6966afebcdde0a::t_3115f1fdf4d968 383-384
+  s_6966afebcdde0a::t_4c75ee0297a62c 757-761
+crates/agent_permissions/src/domain/service/test.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 249-252,281-284,288-291,373-376,477-480
+crates/agent_permissions/src/domain/service.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 25-26,79-83,440-448,535-542,597-606,608-619,621-622
+crates/agent_permissions/src/domain/resolve.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 89-93
+crates/agent_permissions/src/outbound/pg/test.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 5,69-74,81-85,115-120,148-152,217-228
+  s_6966afebcdde0a::t_d250db70872319 167,170,182,185-187,194,197,231,239,245
+crates/agent_permissions/src/outbound/pg.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 109-117,131-139
+services/agent_harness_service/src/tool_permissions.rs
+  s_6966afebcdde0a::t_4c75ee0297a62c 46-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "79160cd6e0dbb1c0bfa55e10b4640a4709431465",
+  "prompts": {},
+  "sessions": {
+    "s_6966afebcdde0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13694447-aca1-404a-8fbf-c900186fe6c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
