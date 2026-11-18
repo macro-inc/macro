@@ -881,6 +881,22 @@ describe('destination adapters', () => {
     );
     expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
+  it('does not save a moved draft after the account changes during its delete', async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
+    mocks.deleteEmail.mockImplementationOnce(async () => {
+      mocks.accountCurrent = false;
+    });
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
+      await expect(actions.submit(submission)).rejects.toThrow('refused');
+      submission.fields.inboxId = 'work';
+      await expect(actions.submit(submission)).rejects.toThrow(
+        'Query account changed'
+      );
+    });
+    expect(mocks.saveEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+  });
   it('does not send a message after account replacement during DM creation', async () => {
     mocks.dm.mockImplementationOnce(async () => {
       mocks.accountCurrent = false;

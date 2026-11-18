@@ -298,6 +298,7 @@ export function createInputActions(
     assertQueryAccount(account);
     const inboxId = selectedInbox(input.fields)!.id;
     const draft = await submissionDraft(input, inboxId);
+    assertQueryAccount(account);
     const saved = await email.drafts.saveDraft({
       ...draftSave(draft, emailMessage(input)),
       inboxId,
@@ -401,6 +402,7 @@ export function createInputActions(
         const inboxId = selectedInbox(f)!.id;
         const message = emailMessage(input);
         const prior = await submissionDraft(input, inboxId);
+        assertQueryAccount(account);
         // A send carries the whole message, so a retry after a failed send
         // sends the draft it saved without saving it again.
         const draft =
