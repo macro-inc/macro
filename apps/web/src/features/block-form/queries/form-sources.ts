@@ -2,6 +2,7 @@
 
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
+import { useCachedChannelsByIds } from '@queries/channel/by-ids';
 import { queryReadyGate } from '@queries/gate';
 import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import {
@@ -9,7 +10,7 @@ import {
   submitResponse,
   updateForm,
   useFormDetailQuery,
-  useFormInvitedCount,
+  useFormSharePermissionsQuery,
   useMyResponseQuery,
   useResponseSummaryQuery,
   useTallyQuery,
@@ -301,20 +302,46 @@ export function createTallySource(
   };
 }
 
+/**
+ * How many distinct people the channels a form was posted in hold, for "n% of
+ * invited": `null` when it was posted nowhere, undefined while reading.
+ * Sharing is owner-only, so other editors read nothing.
+ */
 export function createInvitedSource(
   formId: Accessor<string>,
   ownerId: Accessor<string>,
   enabled: Accessor<boolean>
 ): ReadSource<number | null> {
-  const invited = useFormInvitedCount(
+  const permissions = useFormSharePermissionsQuery(
     () => formId() || undefined,
-    ownerId,
     enabled
   );
+  const channelIds = () =>
+    permissions.isSuccess
+      ? (permissions.data.channelSharePermissions ?? []).map(
+          (grant) => grant.channel_id
+        )
+      : [];
+  // One batched read of the channels' soup records, shared with the cache.
+  const channels = useCachedChannelsByIds(
+    channelIds,
+    () => channelIds().length > 0
+  );
   return {
-    value: invited.count,
+    value: () => {
+      if (!permissions.isSuccess) return undefined;
+      if (channelIds().length === 0) return null;
+      if (channels.pendingIds().size) return undefined;
+      // A channel the owner can no longer read counts no one.
+      const people = new Set(
+        channels.channels().flatMap((channel) => channel.participantIds ?? [])
+      );
+      // The owner is in every channel they posted to.
+      people.delete(ownerId());
+      return people.size;
+    },
     failure: () => {
-      const error = invited.error();
+      const error = permissions.error ?? channels.error();
       return error ? loadFailureOf(error) : undefined;
     },
   };
