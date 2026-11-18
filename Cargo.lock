@@ -12787,6 +12787,7 @@ dependencies = [
  "macro_redis",
  "redis",
  "tokio",
+ "uuid",
  "workspace-hack",
 ]
 

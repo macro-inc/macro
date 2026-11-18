@@ -5,6 +5,9 @@ use redis::AsyncCommands;
 
 use crate::MacroCache;
 
+#[cfg(test)]
+mod test;
+
 pub static MACRO_MOBILE_LOGIN_SESSION_PREFIX: &str = "mbl_login:";
 pub static MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS: u64 = 5 * 60;
 
@@ -16,6 +19,11 @@ pub static MACRO_PASSWORDLESS_LOGIN_CODE_EXPIRY_SECONDS: u64 = 630;
 /// attributed as a signup (the create-user webhook and the auth callback run
 /// within the same auth flow, so this only needs to cover slow IdP round trips).
 pub static MACRO_JUST_SIGNED_UP_EXPIRY_SECONDS: u64 = 30 * 60;
+
+/// How long a passwordless signup waits for its first completed sign-in
+/// before its deferred onboarding (domain team auto-join, referral credit) is
+/// dropped. Longer than one code's lifetime so a user can request new codes.
+pub static MACRO_PASSWORDLESS_PENDING_SIGNUP_EXPIRY_SECONDS: u64 = 7 * 24 * 60 * 60;
 
 /// Reads a mobile login session and deletes it in one step, returning the
 /// stored refresh token and its remaining lifetime in milliseconds.
@@ -72,6 +80,21 @@ macro_rules! macro_just_signed_up {
     ($email:expr) => {
         format!("just_signed_up:{}", $email)
     };
+}
+
+/// Generates the pending passwordless signup marker key for a given email
+macro_rules! macro_passwordless_pending_signup {
+    ($email:expr) => {
+        format!("pw_pending_signup:{}", $email)
+    };
+}
+
+/// Onboarding deferred from a passwordless signup until its address is proven
+/// by a completed sign-in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingPasswordlessSignup {
+    /// The referral code the signup was started with, if any.
+    pub referral_code: Option<String>,
 }
 
 impl MacroCache {
@@ -207,6 +230,47 @@ impl MacroCache {
         let key = macro_just_signed_up!(email.to_lowercase());
         let value = macro_redis::get::get_del_optional::<u8>(&self.inner, &key).await?;
         Ok(value.is_some())
+    }
+
+    /// Marks a passwordless signup as unproven: the account is created before
+    /// any code is verified, so onboarding that trusts the address waits for
+    /// [`Self::take_passwordless_signup_pending`].
+    pub async fn mark_passwordless_signup_pending(
+        &self,
+        email: &str,
+        pending: &PendingPasswordlessSignup,
+    ) -> anyhow::Result<()> {
+        let key = macro_passwordless_pending_signup!(email.to_lowercase());
+        // An empty value means no referral code; codes are never empty.
+        let value = pending.referral_code.as_deref().unwrap_or_default();
+        macro_redis::set::set_with_expiry(
+            &self.inner,
+            &key,
+            value,
+            MACRO_PASSWORDLESS_PENDING_SIGNUP_EXPIRY_SECONDS,
+        )
+        .await
+    }
+
+    /// Whether the account for an email is a passwordless signup that has not
+    /// completed a sign-in yet.
+    pub async fn is_passwordless_signup_pending(&self, email: &str) -> anyhow::Result<bool> {
+        let key = macro_passwordless_pending_signup!(email.to_lowercase());
+        let value = macro_redis::get::get_optional::<String>(&self.inner, &key).await?;
+        Ok(value.is_some())
+    }
+
+    /// Consumes the pending passwordless signup for an email once a sign-in has
+    /// proven the address. Returns it exactly once: GETDEL is atomic.
+    pub async fn take_passwordless_signup_pending(
+        &self,
+        email: &str,
+    ) -> anyhow::Result<Option<PendingPasswordlessSignup>> {
+        let key = macro_passwordless_pending_signup!(email.to_lowercase());
+        let value = macro_redis::get::get_del_optional::<String>(&self.inner, &key).await?;
+        Ok(value.map(|referral_code| PendingPasswordlessSignup {
+            referral_code: Some(referral_code).filter(|code| !code.is_empty()),
+        }))
     }
 }
 
