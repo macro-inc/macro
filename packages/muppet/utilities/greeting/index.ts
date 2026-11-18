@@ -16,7 +16,7 @@
  * without posting.
  */
 
-import { codeTools } from '../../agents/claude-code.ts';
+import { codeTools } from '../../agents/code-tools.ts';
 import { behavior } from '../../core/behavior.ts';
 import type { Catalog } from '../../core/capability.ts';
 import { source } from '../../core/event.ts';
@@ -31,7 +31,10 @@ export type GreetingPrompt = {
   readonly haves: Readonly<Record<string, string>>;
 };
 
-/** Splits a greeting prompt into its instructions and its `## Have: <name>` sections. Comments are dropped. */
+/**
+ * Splits a greeting prompt into its instructions and its `## Have: <name>`
+ * sections. Comments are dropped.
+ */
 export const parseGreeting = (markdown: string): GreetingPrompt => {
   const [instructions = '', ...sections] = markdown
     .replace(comment, '')
@@ -62,9 +65,13 @@ export const greetingRequest = (
   const haves = Object.entries(prompt.haves)
     .filter(([name]) => facts.have.includes(name))
     .map(([, text]) => `- ${text}`);
+  const what =
+    haves.length === 0
+      ? 'Nothing to mention yet: say nothing about what you have.'
+      : haves.join('\n');
   return [
     prompt.instructions,
-    `## What you have\n\n${haves.join('\n')}`,
+    `## What you have\n\n${what}`,
     `## Your owner\n\n${facts.ownerName ?? 'Their name is unknown: greet them without one.'}`,
     `## Who you are\n\n${facts.identity ?? "You don't know yet: your owner hasn't told you."}`,
   ].join('\n\n');
@@ -84,16 +91,17 @@ const machinery = [
 const camelCase = /^[a-z]+[A-Z]/;
 
 /**
- * Words a greeting must never contain: the library's machinery, the name of
- * every function in the catalog, and the agent's own (its other tools'
- * names, its command).
+ * Words a greeting must never contain: the library's machinery, the agent's
+ * own (its other tools' names, its command), and every catalog function
+ * whose name is camelCase. A one-word name (`react`) is an ordinary word,
+ * so it is left out.
  */
 export const unsayable = (
   catalog: Catalog,
   own: readonly string[] = []
 ): readonly string[] => [
   ...machinery,
-  ...own,
+  ...own.filter((word) => word.trim() !== ''),
   ...Object.values(catalog).flatMap((capability) =>
     capability.kind === 'module'
       ? Object.keys(capability.functions).filter((name) => camelCase.test(name))
@@ -162,24 +170,42 @@ export type Greeter = {
   readonly ownerName: () => Promise<string | undefined>;
   /** The id of the DM with the owner, opened if needed. */
   readonly ownerDm: () => Promise<string>;
-  /** Whether anyone has written in a channel yet. */
+  /**
+   * Whether anyone has written in a channel yet. It must read fresh (the
+   * primary, not a replica that lags), or a reply the owner just got goes
+   * unseen and the hello lands after it.
+   */
   readonly hasMessages: (channelId: string) => Promise<boolean>;
   readonly send: (
     channelId: string,
     text: string
   ) => Promise<{ readonly messageId: string }>;
-  /** Shows the agent typing; returns a stop for this indicator only. */
+  /**
+   * Shows the agent typing; returns a stop for this indicator only. The
+   * greeting calls the stop once, and a stop that rejects is recorded on
+   * the span and otherwise ignored: the indicator expires by itself.
+   */
   readonly startTyping: (channelId: string) => () => Promise<void>;
   /** What the agent has written about who it is, if anything. */
   readonly identity: () => Promise<string | undefined>;
   /** Whether the agent has greeted, or is past greeting. */
   readonly greeted: () => Promise<boolean>;
   readonly markGreeted: () => Promise<void>;
-  /** Earlier starts whose greeting failed: kept so a broken greeting doesn't spend, or wait, on every start. */
+  /**
+   * Earlier starts whose greeting didn't finish, by kind: kept so a broken
+   * greeting doesn't spend, or wait, on every start. A start is counted as
+   * paid as it asks the model, before it knows whether it will finish, so a
+   * start that dies mid-ask still counts.
+   */
   readonly failures: () => Promise<Failures>;
   readonly recordFailure: (kind: FailureKind) => Promise<void>;
   /** Waits before trying again after a failure the model wasn't paid for. */
   readonly sleep: (ms: number) => Promise<void>;
+  /**
+   * Calls `run` after `ms`, unless the returned function is called first:
+   * an attempt's deadline.
+   */
+  readonly after: (ms: number, run: () => void) => () => void;
   readonly trace: GreetingTrace;
   /** How long ago the agent's process started. */
   readonly sinceStartMs: () => number;
@@ -189,7 +215,10 @@ export type Greeter = {
 export type FailureKind = 'paid' | 'unpaid';
 export type Failures = Readonly<Record<FailureKind, number>>;
 
-/** A draft that names its machinery is written again once, told what it said; a second one fails. */
+/**
+ * A draft that names its machinery is written again once, told what it
+ * said; a second one fails.
+ */
 const attempts = 2;
 /**
  * Failed starts of each kind before the agent stops trying. A start that
@@ -203,29 +232,60 @@ export const mostFailures: Failures = { paid: 3, unpaid: 10 };
  * owner is watching the DM now, not at the next restart.
  */
 export const retryDelaysMs: readonly number[] = [1_000, 5_000];
+/**
+ * The longest one attempt may take, all lanes and the model together: a
+ * port that hangs must not leave the agent typing at its owner, or the
+ * model running, for long.
+ */
+export const attemptDeadlineMs = 90_000;
+
+/** Runs `run` at most once; later calls get the first call's result. */
+const onlyOnce = (run: () => Promise<void>): (() => Promise<void>) => {
+  let ran: Promise<void> | undefined;
+  return () => {
+    ran ??= run();
+    return ran;
+  };
+};
 
 const write = async (
   model: GreetingModel,
   unsaid: readonly string[],
   request: string,
   span: GreetingSpan,
-  paid: () => void
+  paid: () => Promise<void>
 ): Promise<string> => {
   let asked = request;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     span.set('agent.greeting.attempts', attempt);
-    // Asked is paid: a call that fails or times out may still be charged.
-    paid();
+    // Asked is paid: a call that fails, times out or is killed may still be
+    // charged, so it is counted before it is made.
+    await paid();
     const text = (await model.answer(asked)).trim();
     if (text === '') throw new Error('the greeting came back empty');
     const named = said(text, unsaid);
     if (named.length === 0) return text;
     // Tool and function names: nothing personal, and what tells a false positive from a leak.
     span.set('agent.greeting.rejected_words', named.join(','));
-    asked = `${request}\n\n## Your last draft\n\nIt named how you are built, which your owner must never see: ${named.join(', ')}. Write it again without them.`;
+    asked = [
+      request,
+      '## Your last draft',
+      `It named how you are built, which your owner must never see: ${named.join(', ')}. Write it again without them.`,
+    ].join('\n\n');
   }
   throw new Error('the greeting kept naming how the agent is built');
 };
+
+/** What an attempt holds that must be let go however it ends. */
+type Held = {
+  model: GreetingModel | undefined;
+  stopTyping: () => Promise<void>;
+  /** Set once the attempt has been given up on: it must not act any more. */
+  abandoned: boolean;
+};
+
+/** Thrown at an abandoned attempt's next step, so it stops without acting. */
+const abandonedError = 'the greeting attempt ran past its deadline';
 
 /**
  * One try. Three lanes start together: the model warms up; the DM is opened,
@@ -237,72 +297,111 @@ const write = async (
 const attempt = async (
   greeter: Greeter,
   span: GreetingSpan,
-  paid: () => void
+  paid: () => Promise<void>,
+  held: Held
 ): Promise<Greeted> => {
+  const live = (): void => {
+    if (held.abandoned) throw new Error(abandonedError);
+  };
   const model = greeter.model();
-  let stopTyping: () => Promise<void> = async () => {};
-  try {
-    const dmLane = async () => {
-      const dm = await greeter.ownerDm();
-      span.set('agent.greeting.channel_id', dm);
-      // The owner sees the agent typing as soon as the DM is known. The stop
-      // is this indicator's own, so it never ends a reply's.
-      stopTyping = greeter.startTyping(dm);
-      return { dm, written: await greeter.hasMessages(dm) };
-    };
-    const factsLane = () =>
-      Promise.all([
-        greeter.prompt(),
-        greeter.ownerName(),
-        greeter.identity(),
-        greeter.have(),
-      ]);
-    // Both lanes settle before either's failure is thrown, so typing can't
-    // start after the cleanup below has run.
-    const [dmSettled, factsSettled] = await Promise.allSettled([
-      dmLane(),
-      factsLane(),
-    ]);
-    if (dmSettled.status === 'rejected') throw dmSettled.reason;
-    const { dm, written } = dmSettled.value;
-    const standDown = async (): Promise<Greeted> => {
-      span.set('agent.greeting.outcome', 'conversation_started');
-      await greeter.markGreeted();
-      return { kind: 'conversation_started' };
-    };
-    // A conversation that has started needs no facts: it is done either way.
-    if (written) return await standDown();
-    if (factsSettled.status === 'rejected') throw factsSettled.reason;
-    const [prompt, ownerName, identity, have] = factsSettled.value;
-    span.set('agent.greeting.have', have.join(','));
-    span.set('agent.greeting.identity_known', identity !== undefined);
-    span.set('agent.greeting.owner_named', ownerName !== undefined);
-    const request = greetingRequest(parseGreeting(prompt), {
-      have,
-      ownerName,
-      identity,
+  held.model = model;
+  const dmLane = async () => {
+    const dm = await greeter.ownerDm();
+    live();
+    span.set('agent.greeting.channel_id', dm);
+    // The owner sees the agent typing as soon as the DM is known. The stop
+    // is this indicator's own, so it never ends a reply's.
+    const stop = greeter.startTyping(dm);
+    held.stopTyping = onlyOnce(async () => {
+      try {
+        await stop();
+      } catch {
+        span.set('agent.greeting.typing_stop_failed', true);
+      }
     });
-    const text = await greeter.trace('agent.greeting.write', () =>
-      write(model, greeter.unsayable, request, span, paid)
-    );
-    await stopTyping();
-    // The owner may have written while the words were being written.
-    if (await greeter.hasMessages(dm)) return await standDown();
-    const posted = await greeter.trace('agent.greeting.post', () =>
-      greeter.send(dm, text)
-    );
-    // Measured as the post lands, before the marker is written.
-    span.set(
-      'agent.greeting.since_start_ms',
-      Math.round(greeter.sinceStartMs())
-    );
-    span.set('agent.greeting.message_id', posted.messageId);
-    span.set('agent.greeting.outcome', 'posted');
+    return { dm, written: await greeter.hasMessages(dm) };
+  };
+  const factsLane = () =>
+    Promise.all([
+      greeter.prompt(),
+      greeter.ownerName(),
+      greeter.identity(),
+      greeter.have(),
+    ]);
+  // Both lanes settle before either's failure is thrown, so typing can't
+  // start after the cleanup has run.
+  const [dmSettled, factsSettled] = await Promise.allSettled([
+    dmLane(),
+    factsLane(),
+  ]);
+  if (dmSettled.status === 'rejected') throw dmSettled.reason;
+  live();
+  const { dm, written } = dmSettled.value;
+  const standDown = async (): Promise<Greeted> => {
+    live();
+    span.set('agent.greeting.outcome', 'conversation_started');
     await greeter.markGreeted();
-    return { kind: 'posted', channelId: dm, messageId: posted.messageId, text };
+    return { kind: 'conversation_started' };
+  };
+  // A conversation that has started needs no facts: it is done either way.
+  if (written) return await standDown();
+  if (factsSettled.status === 'rejected') throw factsSettled.reason;
+  const [prompt, ownerName, identity, have] = factsSettled.value;
+  span.set('agent.greeting.have', have.join(','));
+  span.set('agent.greeting.identity_known', identity !== undefined);
+  span.set('agent.greeting.owner_named', ownerName !== undefined);
+  const request = greetingRequest(parseGreeting(prompt), {
+    have,
+    ownerName,
+    identity,
+  });
+  const text = await greeter.trace('agent.greeting.write', () =>
+    write(model, greeter.unsayable, request, span, paid)
+  );
+  live();
+  await held.stopTyping();
+  // The owner may have written while the words were being written.
+  if (await greeter.hasMessages(dm)) return await standDown();
+  live();
+  const posted = await greeter.trace('agent.greeting.post', () =>
+    greeter.send(dm, text)
+  );
+  // Measured as the post lands, before the marker is written.
+  span.set('agent.greeting.since_start_ms', Math.round(greeter.sinceStartMs()));
+  span.set('agent.greeting.message_id', posted.messageId);
+  span.set('agent.greeting.outcome', 'posted');
+  await greeter.markGreeted();
+  return { kind: 'posted', channelId: dm, messageId: posted.messageId, text };
+};
+
+/**
+ * One attempt, held to `attemptDeadlineMs`. However it ends (done, failed,
+ * or past its deadline), its model is dropped and its typing stopped.
+ */
+const bounded = async (
+  greeter: Greeter,
+  span: GreetingSpan,
+  paid: () => Promise<void>
+): Promise<Greeted> => {
+  const held: Held = {
+    model: undefined,
+    stopTyping: async () => {},
+    abandoned: false,
+  };
+  let cancelDeadline: () => void = () => {};
+  const deadline = new Promise<never>((_, reject) => {
+    cancelDeadline = greeter.after(attemptDeadlineMs, () => {
+      held.abandoned = true;
+      span.set('agent.greeting.timed_out', true);
+      reject(new Error(abandonedError));
+    });
+  });
+  try {
+    return await Promise.race([attempt(greeter, span, paid, held), deadline]);
   } finally {
-    model.cancel();
-    await stopTyping();
+    cancelDeadline();
+    held.model?.cancel();
+    await held.stopTyping();
   }
 };
 
@@ -315,12 +414,12 @@ const attempt = async (
  * again just before posting; a message that arrives between that last check
  * and the post still gets the hello after it, a window of one request.
  *
- * A failure before the model was asked is tried again within the start,
- * after `retryDelaysMs`; one after it (the model may have charged) is left to
- * the next start. Each failed start is counted by kind, and at
- * `mostFailures` of either the agent stops trying. Posting and marking aren't one step: a crash between them leaves
- * the DM non-empty, so the next start marks it done instead of greeting
- * again.
+ * A start counts as paid the moment it asks the model. A failure before
+ * that is tried again within the start, after `retryDelaysMs`, and counted
+ * as unpaid if the start gives up; one after it is left to the next start.
+ * At `mostFailures` of either kind the agent stops trying. Posting and
+ * marking aren't one step: a crash between them leaves the DM non-empty, so
+ * the next start marks it done instead of greeting again.
  */
 export const greet = async (greeter: Greeter): Promise<Greeted> => {
   if (await greeter.greeted()) return { kind: 'already' };
@@ -336,17 +435,27 @@ export const greet = async (greeter: Greeter): Promise<Greeted> => {
       await greeter.markGreeted();
       return { kind: 'gave_up', failures };
     }
+    // Counted once per start, as the model is first asked.
+    const paid = onlyOnce(() => greeter.recordFailure('paid'));
+    let asked = false;
+    const ask = async (): Promise<void> => {
+      asked = true;
+      await paid();
+    };
     try {
       for (let retry = 0; ; retry += 1) {
-        let wasPaid = false;
         try {
-          return await attempt(greeter, span, () => {
-            wasPaid = true;
-          });
+          return await bounded(greeter, span, ask);
         } catch (error) {
           const delay = retryDelaysMs[retry];
-          if (wasPaid || delay === undefined) {
-            await greeter.recordFailure(wasPaid ? 'paid' : 'unpaid');
+          if (asked) throw error;
+          if (delay === undefined) {
+            // Counting must not hide why the start failed.
+            try {
+              await greeter.recordFailure('unpaid');
+            } catch {
+              span.set('agent.greeting.failure_not_recorded', true);
+            }
             throw error;
           }
           span.set('agent.greeting.retries', retry + 1);
@@ -382,7 +491,11 @@ const nothing: Around = (run) => run();
 export type GreetingOptions<Context> = {
   /** Wraps the whole greeting, so its span can sit under the agent's own start span. */
   readonly around?: (context: Context) => Around;
-  /** Told how the greeting ended, e.g. to log it. A throw is a failed handler. */
+  /**
+   * Told how the greeting ended, e.g. to log it. A throw is a failed handler.
+   * A posted greeting's `text` is what the owner was sent: log its kind and
+   * ids, not its words.
+   */
   readonly done?: (context: Context) => (greeted: Greeted) => Promise<void>;
 };
 

@@ -5,14 +5,9 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { Agent } from '../core/agent.ts';
+import { codeTools } from './code-tools.ts';
 
 const server = 'muppet';
-
-/** The code-mode tools' names: the library's own, so they never collide with Macro's MCP tools. */
-export const codeTools = {
-  run: 'RunCapabilityScript',
-  describe: 'DescribeCapabilities',
-} as const;
 
 /**
  * Claude Code as an agent, through the Claude Agent SDK. Each wake starts a

@@ -108,6 +108,9 @@ const fakeGreeter = ({
   /** What happened, in order: the model's life, the DM's, the facts'. */
   const events: string[] = [];
   const slept: number[] = [];
+  /** Each attempt's deadline: fired only when a test says so. */
+  const deadlines: { readonly ms: number; readonly run: () => void }[] = [];
+  let cancelledDeadlines = 0;
   let dmFailing = dmFailures;
   const asked: string[] = [];
   const sent: [string, string][] = [];
@@ -176,6 +179,12 @@ const fakeGreeter = ({
     sleep: async (ms) => {
       slept.push(ms);
     },
+    after: (ms, run) => {
+      deadlines.push({ ms, run });
+      return () => {
+        cancelledDeadlines += 1;
+      };
+    },
     trace: (name, run) => {
       traced.push(name);
       return run({
@@ -195,6 +204,8 @@ const fakeGreeter = ({
     spans,
     traced,
     slept,
+    deadlines,
+    cancelledDeadlines: () => cancelledDeadlines,
     marked: () => marked,
     failed: () => failed,
   };
@@ -209,8 +220,12 @@ test('a new agent greets its owner in their DM, typing while it writes, and is m
     text: hello,
   });
   expect(fake.sent).toEqual([['dm-1', hello]]);
-  expect(fake.typing.at(-1)).toBe('stop dm-1');
+  // Typing starts once and is stopped exactly once.
+  expect(fake.typing).toEqual(['start dm-1', 'stop dm-1']);
   expect(fake.slept).toEqual([]);
+  // The attempt had a deadline, and it was cancelled.
+  expect(fake.deadlines.map(({ ms }) => ms)).toEqual([90_000]);
+  expect(fake.cancelledDeadlines()).toBe(1);
   expect(fake.marked()).toBe(true);
   expect(fake.asked[0]).toContain('A computer of your own.');
   expect(fake.traced).toEqual([
@@ -305,7 +320,8 @@ test('a failure before the model answers is tried again within the start, with a
   expect(await greet(fake.greeter)).toMatchObject({ kind: 'posted' });
   expect(fake.slept).toEqual([1_000]);
   expect(fake.spans['agent.greeting.retries']).toBe(1);
-  expect(fake.failed()).toEqual({ paid: 0, unpaid: 0 });
+  // The model was asked once, so the start counted as paid then; no unpaid.
+  expect(fake.failed()).toEqual({ paid: 1, unpaid: 0 });
 });
 
 test('a model call that fails was asked, so may have been charged: counted as paid, not retried', async () => {
@@ -456,4 +472,181 @@ test('a DM that already has messages is done even when the facts fail to load', 
   expect(fake.marked()).toBe(true);
   expect(fake.failed()).toEqual({ paid: 0, unpaid: 0 });
   expect(fake.slept).toEqual([]);
+});
+
+test('a typing stop that rejects is recorded, and the greeting still posts', async () => {
+  const fake = fakeGreeter({ answers: [hello] });
+  let stops = 0;
+  const greeter: Greeter = {
+    ...fake.greeter,
+    startTyping: () => async () => {
+      stops += 1;
+      throw new Error('typing is down');
+    },
+  };
+  expect(await greet(greeter)).toMatchObject({ kind: 'posted' });
+  expect(stops).toBe(1);
+  expect(fake.spans['agent.greeting.typing_stop_failed']).toBe(true);
+});
+
+test('facts that keep failing on an empty DM fail the start unpaid, after its waits', async () => {
+  const fake = fakeGreeter({ answers: [hello] });
+  const greeter: Greeter = {
+    ...fake.greeter,
+    prompt: async () => {
+      throw new Error('the prompt file is gone');
+    },
+  };
+  await expect(greet(greeter)).rejects.toThrow('the prompt file is gone');
+  expect(fake.asked).toEqual([]);
+  expect(fake.slept).toEqual([1_000, 5_000]);
+  expect(fake.failed()).toEqual({ paid: 0, unpaid: 1 });
+});
+
+test('a DM check that fails after the words were written fails the start paid, unposted', async () => {
+  let checks = 0;
+  const fake = fakeGreeter({ answers: [hello] });
+  const greeter: Greeter = {
+    ...fake.greeter,
+    hasMessages: async () => {
+      checks += 1;
+      if (checks > 1) throw new Error('Macro is unreachable');
+      return false;
+    },
+  };
+  await expect(greet(greeter)).rejects.toThrow('Macro is unreachable');
+  expect(fake.sent).toEqual([]);
+  expect(fake.slept).toEqual([]);
+  expect(fake.failed()).toEqual({ paid: 1, unpaid: 0 });
+});
+
+test('a greeting posted but not marked is not posted again: the next start sees the DM', async () => {
+  let messages = 0;
+  const fake = fakeGreeter({
+    answers: [hello, hello],
+    messages: () => messages,
+  });
+  const first: Greeter = {
+    ...fake.greeter,
+    send: async (channelId, text) => {
+      const posted = await fake.greeter.send(channelId, text);
+      messages += 1;
+      return posted;
+    },
+    markGreeted: async () => {
+      throw new Error('the disk is full');
+    },
+  };
+  await expect(greet(first)).rejects.toThrow('the disk is full');
+  expect(fake.sent).toHaveLength(1);
+  expect(await greet(fake.greeter)).toEqual({ kind: 'conversation_started' });
+  expect(fake.sent).toHaveLength(1);
+  expect(fake.marked()).toBe(true);
+});
+
+test('a start that dies while the model is asked is already counted as paid', async () => {
+  const fake = fakeGreeter({ answers: [hello] });
+  let asked: () => void = () => {};
+  const wasAsked = new Promise<void>((resolve) => {
+    asked = resolve;
+  });
+  const greeter: Greeter = {
+    ...fake.greeter,
+    model: () => ({
+      answer: () => {
+        asked();
+        return new Promise<string>(() => {});
+      },
+      cancel: () => {},
+    }),
+  };
+  void greet(greeter).catch(() => undefined);
+  await wasAsked;
+  // The process could be killed now: the start is on record.
+  expect(fake.failed()).toEqual({ paid: 1, unpaid: 0 });
+});
+
+test('an attempt past its deadline drops the model, stops typing, and never posts', async () => {
+  const fake = fakeGreeter({ answers: [hello] });
+  let cancelled = 0;
+  let asked: () => void = () => {};
+  const wasAsked = new Promise<void>((resolve) => {
+    asked = resolve;
+  });
+  let answer: (text: string) => void = () => {};
+  const greeter: Greeter = {
+    ...fake.greeter,
+    model: () => ({
+      answer: () =>
+        new Promise<string>((resolve) => {
+          answer = resolve;
+          asked();
+        }),
+      cancel: () => {
+        cancelled += 1;
+      },
+    }),
+  };
+  const greeting = greet(greeter);
+  await wasAsked;
+  fake.deadlines[0]?.run();
+  await expect(greeting).rejects.toThrow('past its deadline');
+  expect(cancelled).toBe(1);
+  expect(fake.typing).toEqual(['start dm-1', 'stop dm-1']);
+  expect(fake.spans['agent.greeting.timed_out']).toBe(true);
+  // Paid: the model had been asked. Not retried within the start.
+  expect(fake.failed()).toEqual({ paid: 1, unpaid: 0 });
+  // The model answering late changes nothing.
+  answer(hello);
+  await Promise.resolve();
+  expect(fake.sent).toEqual([]);
+});
+
+test('an attempt that hangs before the model is asked is tried again, unpaid', async () => {
+  let checks = 0;
+  const fake = fakeGreeter({ answers: [hello] });
+  let checking: () => void = () => {};
+  const firstCheck = new Promise<void>((resolve) => {
+    checking = resolve;
+  });
+  const greeter: Greeter = {
+    ...fake.greeter,
+    hasMessages: async () => {
+      checks += 1;
+      if (checks === 1) {
+        checking();
+        return new Promise<boolean>(() => {});
+      }
+      return false;
+    },
+  };
+  const greeting = greet(greeter);
+  await firstCheck;
+  fake.deadlines[0]?.run();
+  expect(await greeting).toMatchObject({ kind: 'posted' });
+  expect(fake.slept).toEqual([1_000]);
+  expect(fake.failed()).toEqual({ paid: 1, unpaid: 0 });
+});
+
+test('a failure count that can not be written does not hide why the start failed', async () => {
+  const fake = fakeGreeter({ dmFailures: 3 });
+  const greeter: Greeter = {
+    ...fake.greeter,
+    recordFailure: async () => {
+      throw new Error('the disk is full');
+    },
+  };
+  await expect(greet(greeter)).rejects.toThrow('Macro is unreachable');
+  expect(fake.spans['agent.greeting.failure_not_recorded']).toBe(true);
+});
+
+test('an agent with nothing to mention is told so, and empty words are never banned', () => {
+  const request = greetingRequest(parseGreeting(prompt), {
+    have: [],
+    ownerName: 'Maya',
+    identity: undefined,
+  });
+  expect(request).toContain('Nothing to mention yet');
+  expect(unsayable(catalog, ['', '  '])).not.toContain('');
+  expect(said('Hi Maya.', unsayable(catalog, ['']))).toEqual([]);
 });

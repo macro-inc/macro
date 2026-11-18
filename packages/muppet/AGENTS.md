@@ -23,6 +23,8 @@ fails isn't run.
   its own with `inSubprocess`).
 - `utilities/scripts/index.ts`: the type checker and loader for
   scripts.
+- `utilities/greeting/index.ts`: a new agent's first hello, and the model
+  for a utility that is a behavior with every port injected.
 - `examples/`: two small agents that run without credentials.
 
 ## Scope
