@@ -17,8 +17,10 @@ the web, the system browser in the desktop app. Reviews still opens it here.
 
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
-side panel below the top bar. The Checks summary names failed and running checks
-before passes (`1 failed 2 running 26 passed`), and failed checks list first. An open PR has a split button in the top bar
+side panel below the top bar. The Checks summary names failed and pending checks
+before passes (`1 failed 2 pending 26 passed`), and failed checks list first. Failed
+means the conclusions the Reviews board's Failing column counts (`failure`,
+`timed_out`, `cancelled`, `action_required`, `startup_failure`). An open PR has a split button in the top bar
 beside **Changes** (`[data-pull-request-primary-action]` names its main action).
 For a draft the main action is **Ready for review**; otherwise it is **Merge**,
 disabled (with a tooltip) until every check has finished with a success, skipped,
@@ -79,10 +81,9 @@ The Changes toggle has no diff totals and becomes icon-only below 28rem of heade
 width, retaining its name, tooltip, and active state. Breadcrumbs keep their existing layout.
 The full-height file tree has a fixed header with its file count on the left and
 **Hide file tree** on the right. Borderless diff controls float above the diff stack
-rather than spanning the pane in a second toolbar. Unified/Split sits on the left
-with its text labels, with diff collapse/expand and refresh on the right; a diff
-column 600px or narrower (and every phone) shows the unified diff without that
-toggle, and the chosen style returns when the column widens (hide the tree). Hiding the tree moves its count
+rather than spanning the pane in a second toolbar. Unified/Split retains text labels
+at narrow non-touch widths on the left, with diff collapse/expand and refresh on
+the right. Hiding the tree moves its count
 and **Show file tree** above the diffs, as described in
 [AI Chat](ai-chat.md#reviewing-a-linked-github-pull-request).
 Spotlighting changes hides the left pane and its top bar; **Back to the split**

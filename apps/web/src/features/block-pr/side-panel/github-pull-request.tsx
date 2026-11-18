@@ -13,7 +13,7 @@ import type {
 } from '@service-storage/generated/schemas';
 import { cn, Layer } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
-import { orderChecks, summarizeChecks } from '../data/checks';
+import { checkOutcome, orderChecks, summarizeChecks } from '../data/checks';
 
 type GithubPullRequestWithPanelDetails = GithubPullRequest & {
   authorLogin?: string | null;
@@ -62,24 +62,18 @@ function GithubPullRequestCheckStatusIcon(props: {
 }) {
   return (
     <Switch fallback={<Circle class="size-3.5 text-ink-placeholder" />}>
-      <Match when={props.check.status !== 'completed'}>
+      <Match when={checkOutcome(props.check) === 'pending'}>
         <CircleNotch class="size-3.5 text-ink-placeholder animate-spin" />
       </Match>
-      <Match when={props.check.conclusion === 'success'}>
+      <Match when={checkOutcome(props.check) === 'passed'}>
         <CheckCircle class="size-3.5 text-success" />
       </Match>
-      <Match
-        when={
-          props.check.conclusion === 'failure' ||
-          props.check.conclusion === 'timed_out'
-        }
-      >
+      <Match when={checkOutcome(props.check) === 'failed'}>
         <XCircle class="size-3.5 text-failure" />
       </Match>
       <Match
         when={
           props.check.conclusion === 'skipped' ||
-          props.check.conclusion === 'cancelled' ||
           props.check.conclusion === 'neutral'
         }
       >
@@ -231,8 +225,8 @@ export function GithubPullRequestChecksContent(props: {
           <Show when={summary().failed}>
             {(count) => <span class="text-failure">{count()} failed</span>}
           </Show>
-          <Show when={summary().running}>
-            {(count) => <span>{count()} running</span>}
+          <Show when={summary().pending}>
+            {(count) => <span>{count()} pending</span>}
           </Show>
           <span>{summary().passed} passed</span>
         </div>

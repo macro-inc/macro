@@ -20,28 +20,49 @@ const CHECKS = [
   check('browser tests', 'in_progress'),
   check('typecheck', 'completed', 'success'),
   check('deploy', 'completed', 'timed_out'),
+  check('queued', 'queued'),
 ];
 
 describe('summarizeChecks', () => {
-  it('counts failures and running checks, not only passes', () => {
+  it('counts failures and pending checks, not only passes', () => {
     expect(summarizeChecks(CHECKS)).toEqual({
       failed: 2,
-      running: 1,
+      pending: 2,
       passed: 2,
     });
   });
 
+  it.each([
+    'failure',
+    'timed_out',
+    'cancelled',
+    'action_required',
+    'startup_failure',
+  ])(
+    'counts a %s conclusion as failed, as the Reviews board does',
+    (conclusion) => {
+      expect(
+        summarizeChecks([check('build', 'completed', conclusion)])
+      ).toEqual({
+        failed: 1,
+        pending: 0,
+        passed: 0,
+      });
+    }
+  );
+
   it('counts nothing for no checks', () => {
-    expect(summarizeChecks([])).toEqual({ failed: 0, running: 0, passed: 0 });
+    expect(summarizeChecks([])).toEqual({ failed: 0, pending: 0, passed: 0 });
   });
 });
 
 describe('orderChecks', () => {
-  it('lists failed checks first, then running ones, keeping GitHub order within each', () => {
+  it('lists failed checks first, then pending ones, keeping GitHub order within each', () => {
     expect(orderChecks(CHECKS).map((c) => c.name)).toEqual([
       'unit tests',
       'deploy',
       'browser tests',
+      'queued',
       'lint',
       'preview',
       'typecheck',
