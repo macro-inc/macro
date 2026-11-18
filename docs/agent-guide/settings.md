@@ -249,43 +249,51 @@ limit; re-inviting the address from **Invite** follows the same rule.
 Behind `enable-agent-teammates` (on in dev), owners and admins see a
 **People | Agent** switch at the top of the invite dialog; members, and
 everyone while the flag is off or still loading, see the people form unchanged.
-**Agent** asks for a name, job description, personality, an optional picture
-(**Upload**), and the agent's computer size from the same catalog and prices as
-Buy a computer (sold-out sizes are disabled and marked **Sold out**). The agent's seat is
-included, so **Invite agent · $X/month** shows the computer's price, or
-**Invite agent** when it is included; while it is disabled, a line beside it
-says why (fields to fill in or shorten, no size for sale, a picture still
-uploading). Inviting calls `POST /team_agents` on the auth service, which
-creates the agent's account, buys its computer and adds it to the team;
-refusals show inline at the end of the form, which scrolls them into view and
-focuses them (sold out or no subscription, a failed workspace that charged
-nothing), and a retry reuses the dialog's purchase key. A successful invite
-closes the dialog at once with the notice "<name> is being set up. We'll let
-you know when it's ready." The new agent appears in **Team → Members** as its
-own row (name, **Agent** tag, job description) with a status in place of a
-role: **Setting up** with a spinner while its computer provisions, with the
-computer's setup step under the job description (**Updating billing…**,
-**Creating the computer**, **Starting up**, **Connecting to Macro**; the agent
-and computer lists poll), then **Running**, **Paused**, **Needs attention** or
-**Released**. A failed computer's row offers owners and admins **Retry**,
-the computer's own retry (`POST /team/computers/{id}/retry`), so it never buys
-a second computer. The invite form also has a **Voice** picker (`GET /voices` on the
-agent harness): it suggests a voice from the personality, **Play sample** plays
-a fixed line (the first play of a voice is billed to the team), and the chosen
-model goes out as `voice`. Owners and admins change a voice later with the
+**Agent** (titled for adding an agent teammate) asks only for a name and the
+agent's computer size; picture, voice and role come later, and the agent asks
+what to take on once it is online. While the name is empty, **Try** offers
+**Ada**, **Bo**, **Kim** and **Nova**, and the avatar shows the name's first
+letter. Sizes come from the same catalog and prices as Buy a computer
+(sold-out sizes are disabled and marked **Sold out**). The agent's seat is
+included, so the button reads **Add <name> · $X/month** (or **Add <name>**
+when included); while it is disabled, the line under it says why ("Give your
+agent a name to continue.", a name too long, no size for sale). Adding calls
+`POST /team_agents` with `jobDescription` and `personality` empty, then waits
+in the dialog (**Adding <name>…**, "Starting <name>…") reading
+`GET /team_agents` every 500 ms until the agent reports itself online, and
+closes into the agent's DM, where it has said hi; no toast. Past five seconds
+it closes into the DM anyway, where the banner says it is still being set up
+and its Members row shows the setup step. Every failure stays in the dialog
+with the name and size kept: a declined card (402 `payment_declined`;
+nothing was bought) with **Update card** (Settings → Billing) and **Try again ·
+$X/month**, which sends a new purchase key; no room for the size (409
+`no_room`, checked before any charge), which marks the size sold out and picks
+the next one on sale; a computer that didn't start, whose **Retry** is the
+computer's own retry (`POST /team/computers/{id}/retry`, no new charge); and a
+second failed start, which the server undoes (computer released, charge
+refunded, agent taken back), with **Retry** buying afresh. Other refusals
+(a trial, an invite already in flight, a failed workspace) show in place.
+The new agent appears in **Team → Members** as its own row (name, **Agent**
+tag) with a status in place of a role: **Setting up** with a spinner while its
+computer provisions, with the computer's setup step under it (**Creating the
+computer**, **Starting up**, **Connecting to Macro**), then **Starting**
+(spinner; the computer is up and the agent hasn't reported online yet), then
+**Running**, **Paused**, **Needs attention** or **Released**. A failed
+computer's row offers owners and admins **Retry**, the computer's own retry,
+so it never buys a second computer. Owners and admins pick a voice later with the
 row's waveform button (**Change voice**): **Save voice** calls
 `PUT /team_agents/{agent}/voice`, which commits `config/voice.json` in the
 agent's repository and applies from its next call; a failed save keeps the
 pick for retry.
 
-When the agent's computer first connects, its inviter (the team agent's
-`created_by`) gets the `computer_setup` notification with the agent's
+When the agent itself first reports online (not when its computer connects),
+its inviter (the team agent's `created_by`) gets the `computer_setup` notification with the agent's
 `agent { userId, name }`: "<name> is ready", in-app as a one-minute notice
 with **Message <name>** (the DM, through the same open-DM path as any member)
 and, for owners and admins (who own the computer's runtime), **Connect
 Claude plan**. A failed first setup notifies "<name> couldn't be set up" with the
 reason and **Retry**. Clicking the notification opens the DM (ready) or
-**Team → Members** (failed). The agent flow has no **Try it**; that stays in
+**Team → Members** (failed). The agent flow has no **Chat with <agent>**; that stays in
 the computer purchase flow. With `enable-macro-computers` on, **Connect
 <name> to your Claude plan** is the Claude sign-in for the agent's computer,
 opened from the notification or the row, never as a step of the invite. One
@@ -307,7 +315,8 @@ sign-out), or
 `claude.sign_in.entry` (`team_agent_row`, `notification`).
 
 A DM with an agent teammate that isn't running says so in its header (a
-short chip) and above the composer; messages still send. **Setting up**: "<name>
+short chip) and above the composer; messages still send. **Setting up** (also
+while the agent is **Starting**): "<name>
 is still being set up. It'll answer once it's ready."; a failed setup:
 "<name> isn't running: setup failed." with **Retry** for owners and admins;
 a powered-off computer, or one whose macrod isn't connected: "<name> isn't
@@ -325,7 +334,7 @@ An agent teammate is reached only by DM or in channels, like any member: its
 computer's runtime (`team_agent_user_id` on `/harnesses`) never appears in
 **Where it runs**, the Agents page or composer roster, the machine strips,
 Settings → Runtimes, or teammates' machines; its computer setup offers no
-**Try it** or **Create agent here**; and the API refuses saving an agent or
+**Chat with <agent>** or **Add another agent**; and the API refuses saving an agent or
 opening a session on it (409). Connect Claude plan and the DM banner still read it
 from the full `/harnesses` list. On phones the dialog and
 confirmation are sheets and rows stay touch rows. Backend-free check (invite,
@@ -920,8 +929,9 @@ session were not exercised by that UI check.
 Macro computers are hosted machines a team buys for its agents, billed on the
 team subscription. They never sleep. They sit in `Machines`, behind the
 `enable-macro-computers` flag for purchases and Claude account controls, and
-need a team: without one the page shows nothing about them. The flag follows
-PostHog in every environment unless explicitly overridden locally. With the
+need a team: without one the page shows nothing about them. The web asks the
+backend (`GET /team/computers/rollout`), which evaluates the PostHog flag and,
+in dev only, `COMPUTERS_ROLLOUT_ALLOWLIST`. With the
 flag off, the computer UI is hidden (the Macro computers section, Billing,
 Agents and settings search show nothing about computers; a team owner or admin
 still sees an existing computer under Your machines as an ordinary machine
@@ -994,43 +1004,49 @@ To buy one as a team admin:
    answers 403 with `code: "team_on_trial"` to offers, purchase, undo and
    restore. Showing the panel loads the offers, so the dialog opens with the
    sizes already there.
-2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
-   step header, **Buy computer → Configure agent → Bring your AI → Create agent**
-   (**Buy → Agent → Your AI → Create** on phones, so it stays on one line;
-   done steps carry a check, the current one is in ink), that stays open from
-   Buy to Try it. The Buy computer step has the size radios (**Standard**,
-   **Large**, **XL**) with price per interval, a sold-out size disabled and
-   marked **Sold out**, a size too large for every host left out (with none
-   left the step shows only "No computer sizes are available right now." and
-   "Macro's hosts have no room for a new computer. Try again later.", with
-   **Close** and no Name, price line, heads-up or Buy); **Name**, prefilled "<first name>'s Agent Box" (**Agent
-   Box** without a first name); the price breakdown; and under **Buy** the
-   heads-up "Next you'll name your agent and sign in to Claude (Pro or Max) —
-   have claude.ai handy." While the sizes load, three shimmering size cards
-   stand in for the radios and **Buy** is disabled. Every computer request
-   gives up after 15 seconds; the sizes request retries once on a 5xx or a
-   dropped connection and never on a 4xx or a timeout. When the sizes cannot
-   load the step says why, in place of the cards: no paid plan (422) or a
-   trial (403 `team_on_trial`) with **Go to Billing**; an account outside the
-   rollout (any other 403, "Computers aren't available for this account yet.")
-   with only **Close**; computers unavailable (503, "Computers aren't
-   available right now. Try again later."), the billing provider failing (502,
-   "Macro's billing provider didn't answer. Try again in a moment."), a
-   timeout ("Loading computer sizes took too long. Try again.") or a dropped
+2. **Get a computer** opens the Buy dialog (a sheet on phones), titled **Get a
+   Macro computer**: the size radios (**Standard**, **Large**, **XL**) with
+   price per interval, a sold-out size disabled and marked **Sold out**, a size
+   too large for every host left out (with none left the step shows only "No
+   computer sizes are available right now." and "Macro's hosts have no room
+   for a new computer. Try again later.", with **Close** and no Name, price
+   line, heads-up or Buy); **Name**, prefilled "<first name>'s Agent Box"
+   (**Agent Box** without a first name); the price line; and under **Buy** the
+   heads-up "It's ready in a couple of seconds, on the list with the team's
+   other computers." While the sizes load, three shimmering size cards stand
+   in for the radios and **Buy** is disabled. Every computer request gives up
+   after 15 seconds; the sizes request retries once on a 5xx or a dropped
+   connection and never on a 4xx or a timeout. When the sizes cannot load the
+   step says why, in place of the cards: no paid plan (422) or a trial (403
+   `team_on_trial`) with **Go to Billing**; an account outside the rollout (any
+   other 403, "Computers aren't available for this account yet.") with only
+   **Close**; computers unavailable (503, "Computers aren't available right
+   now. Try again later."), the billing provider failing (502, "Macro's
+   billing provider didn't answer. Try again in a moment."), a timeout
+   ("Loading computer sizes took too long. Try again.") or a dropped
    connection ("Couldn't reach Macro. Check your connection and try again."),
    each with **Retry**.
-3. **Buy · <price>/month** (or **Buy** for an included offer) adds it. Each
-   opening of the modal makes one `purchaseKey`, sent again on every retry, so
-   a retried Buy never charges twice. Any error means nothing was charged and
-   stays in the step for a retry: sold out or a key used for another purchase
-   (409), payment declined (402), a team on a trial (403 `team_on_trial`), a
+3. **Buy · <price>/month** (or **Buy** for an included offer) adds it, then
+   waits in the dialog, with one status on the button (**Getting your
+   computer…**), reading
+   `GET /team/computers` every 500 ms until the computer is ready (at most
+   five seconds), then, in the same dialog and with no step bar, sets up the
+   computer's agent on Macro credits under its default name and ends on its
+   Ready (**Chat with <agent>**, below). No toast. Each opening of the dialog
+   makes one `purchaseKey`, sent again on every retry, so a retried Buy never
+   charges twice. Every refusal means nothing was charged and stays in the
+   dialog: a declined card (402 `payment_declined`) with **Update card** and
+   **Try again · <price>/month**, which uses a new key; no room for the size
+   (409 `no_room`), which marks it sold out and picks the next size on sale;
+   a key used for another purchase (409), a trial (403 `team_on_trial`), a
    subscription that can't add computers (422), the billing provider failing
-   (502), a timeout, or sales unavailable (503). A 200 (`state: ready`) toasts "Computer
-   purchased. Provisioning now."; a 202 (`state: confirming`) is a success too
-   and toasts "Confirming your payment. Setup starts once it goes through.",
-   with the computer listed as `purchasing`. Phones skip that toast, which
-   would cover the sheet's footer; the progress list says the same. Either way the modal moves
-   straight to **Configure agent**.
+   (502), a timeout, or sales unavailable (503). Agents are added through
+   **Add an agent teammate**, so Buy asks nothing about the agent; its own
+   Claude account is brought later from the row's menu (**Sign in with
+   Claude**). The row's **Finish setup** reopens the same stepless dialog
+   on Ready. The guided variant below (`afterPurchase="guided"` on `ComputerBuyFlow`, not
+   used by the app) moves from Buy to **Configure agent** after the same
+   wait.
 
 While the computer provisions, one progress line sits under the step bar: the current stage and how long it has taken, "Starting
 up · 0:24" (`0:42`, from the API's `setup.stepStartedAt` when it sends one,
@@ -1052,8 +1068,7 @@ case after the colon), with **Retry setup** (`POST .../retry`) and
 it fails again."); `needs_attention` reads "Needs attention — contact
 support" with neither. The agent form below stays usable. Disabled controls
 say why beside them (**Buy**: sizes loading; **Complete sign-in**: paste the
-code; **Try it** and **Create an agent on this computer**: setup finishing),
-except **Continue**, whose two fields sit right above it. The row in Machines shows the same live line, `Setting up ·
+code), except **Continue**, whose two fields sit right above it. The row in Machines shows the same live line, `Setting up ·
 Starting up (2 of 3) · 0:42`. The dialog closes at any time while setup
 carries on; the row's **Finish setup** reopens the same dialog where it left
 off. **Let's set up an agent on it** (no subtitle) names the agent Macro
@@ -1095,21 +1110,25 @@ can create one under **Agents**. Agents created later on a computer also
 default to bypassing permission prompts. Releasing a computer, or its disk
 being destroyed, deletes every agent on it.
 
-**Create agent**, the last step ("<agent> is ready"), follows by itself once
-the computer is connected and Claude is set; the computer status is refreshed
-first. It offers **Done**, **Create an agent on this computer** and **Try it**:
+**Create agent**, the last step, waits in the dialog while setup finishes
+(about three seconds: "Setting up <agent>", the button reading **Setting
+up…**), then shows "<agent> is ready". Finishing runs rename, the Claude
+sign-out (Macro credits only), setup-complete and a status refresh in order,
+each with a 20-second deadline and its own span under
+`computers.setup.finish` (`setup.finish.step`, `setup.finish.outcome`). A step
+that fails or runs out stops there: "Couldn't finish setting up <agent>" with
+**Retry**, which runs the steps again. Ready has one action:
 
-- **Try it** opens a new Agents conversation in Code with the configured agent
-  selected (`openAgentsPage` with `composerAgentId`; the Agents view hands the
-  composer an agent request keyed by the page request, so every Try it
-  selects it again). The agent is created server-side when the computer first
-  comes up, so the setup steps refetch a cached agents list that lacks it; the
-  composer's roster reads the same list and selects the agent once it is there.
-- **Create an agent on this computer** opens **Settings → Agents** on the
-  **New agent** form with this computer chosen under **Where it runs**
+- **Chat with <agent>** opens the DM with the computer's agent
+  (`useOpenAgentDm`, `bot|<botId>`), like an agent's **Message**. With
+  `ENABLE_AGENT_DMS` off it is not offered, and **Done** is the action. The
+  agent is created server-side when the computer first comes up, so the setup
+  steps refetch a cached agents list that lacks it.
+- **Add another agent**, a quiet link in the body, opens **Settings → Agents**
+  on the **New agent** form with this computer chosen under **Where it runs**
   (`requestCreateAgent(harnessId)` in `agentSettingsState.ts`). Bought from an
-  agent's **Where it runs**, it reads **Use for this agent** and only closes:
-  the editor selects the new computer when the modal closes.
+  agent's **Where it runs**, the action is **Use for this agent** instead, and
+  only closes: the editor selects the new computer when the modal closes.
 
 Closing at any step keeps its place; the row's **Finish setup** reopens it.
 

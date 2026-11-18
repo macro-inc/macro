@@ -321,6 +321,12 @@ the flag from definitions it polls from PostHog every 5 minutes) and backfills t
 the last 3 days first, then the rest of the 30 without due dates (an older
 thread gets one with its next mail). With nothing classified the tab
 shows the empty state `You're caught up`, whose **See the rest of your inbox** opens Signal.
+PostHog counts each visit to the tab when the server answers the read it
+makes as it opens (`email_focus_tab_opened`, with the threads the list holds,
+so an empty tab reads as `threads: 0`; refreshes are not counted) and each
+thread opened from it by click, tap or Enter (`email_focus_thread_opened`,
+with its position); a thread the reading pane opens as the keyboard cursor
+moves is not counted.
 
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the

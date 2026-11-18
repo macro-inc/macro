@@ -160,16 +160,6 @@ export const enableDesktopTabs = defineFlag({
 });
 
 /**
- * Macro computers: the whole computer UI (Settings → Machines, Billing,
- * Agents). Off hides it; existing computers keep running and billing.
- * No dev default: dev follows PostHog like the backend, which fails closed.
- */
-export const enableMacroComputers = defineFlag({
-  key: 'enable-macro-computers',
-  env: 'ENABLE_MACRO_COMPUTERS',
-});
-
-/**
  * Agent teammates: team admins invite an AI agent, with its own account and
  * Macro computer, from Settings → Team → Members.
  */

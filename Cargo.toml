@@ -137,7 +137,11 @@ members = [
   "crates/harnessd_protocol",
   "crates/harnesses",
   "crates/hosted_runtimes",
-  "crates/incus_client",
+  "crates/firecracker_host_api",
+  "crates/pinned_tls",
+  "crates/computer_types",
+  "services/firecracker_guest_agent",
+  "services/firecracker_host",
   "crates/import",
   "crates/import_notion",
   "crates/import_tracker",
@@ -432,6 +436,7 @@ lambda_runtime = "0.13.0"
 lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
 libc = "0.2"
+memchr = "2"
 # Signal's curve25519 keys and XEdDSA; see crates/whatsmeow_signal/AGENTS.md.
 libsignal-core = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.2" }
 livekit-api = { version = "0.4.16", default-features = false, features = [
@@ -569,6 +574,7 @@ tokio-tungstenite = { version = "0.28", default-features = false, features = [
 tokio-tungstenite-signal = { package = "tokio-tungstenite", version = "0.27", default-features = false, features = ["handshake"] }
 tungstenite-signal = { package = "tungstenite", version = "0.27", default-features = false, features = ["handshake", "deflate"] }
 tokio-util = "0.7.13"
+tokio-vsock = "0.7.2"
 tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3"
 tower-http = { version = "0.6.1", features = [

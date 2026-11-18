@@ -87,7 +87,10 @@ access, webhook reconciliation and billing workers remain independent of attachm
   `ComputerBillingObserver` (`ComputerService::observe_subscription`), which
   decides per computer by computer id, never by price or count. A snapshot
   with more than ten items is completed by paging the items once.
-- Computer billing work (effects and purchase confirmation) runs on its own
+- Computer billing work (effects, purchase refunds and purchase confirmation)
+  and taking back the agent teammates of computers released after a failed
+  first start (`run_computer_agent_effects`,
+  with the team_agents service as `AgentInvites`) run on their own
   `TaskTracker` (`computer_billing`), drained at shutdown.
 - Team deletion releases the team's computers first through
   `TeamOwnedEntityCleanupAdapter::release_computers`, backed by
