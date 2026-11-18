@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use email_api_client::domain::models::{
-    EmailApiError, RateLimitOrigin, RoundStart, SubmissionOutcome,
+    EmailApiError, FolderRole, RateLimitOrigin, RoundStart, StreamPosition, SubmissionOutcome,
 };
 use email_api_client::domain::ports::{
     FolderChangeReader, MailboxActionWriter, MailboxContentReader,
@@ -46,6 +46,82 @@ async fn a_throttled_request_carries_graphs_retry_after() {
     let recorded = emulator.requests();
     assert_eq!(recorded[0].status, 429);
     assert_eq!(recorded[1].status, 200);
+}
+
+#[tokio::test]
+async fn a_fault_for_a_folder_applies_to_that_folders_requests_only() {
+    let (emulator, api) = start(SEED).await;
+    let token = token(&emulator, ADA);
+    let inbox = api
+        .folders(&token)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|folder| folder.role == FolderRole::Inbox)
+        .unwrap()
+        .id;
+    // Named by its well-known name, the fault finds the folder the client
+    // names by id; one that lets a request through goes first.
+    emulator.inject_fault(Fault {
+        route: Some(Route::MessagesDelta),
+        folder: Some("inbox".into()),
+        times: Some(1),
+        ..Fault::default()
+    });
+    emulator.inject_fault(Fault {
+        route: Some(Route::MessagesDelta),
+        folder: Some("inbox".into()),
+        error: Some(FaultError::Unavailable),
+        ..Fault::default()
+    });
+
+    api.folder_changes(&token, &inbox, None, RoundStart::Unordered)
+        .await
+        .unwrap();
+    api.folder_changes(&token, &inbox, None, RoundStart::Unordered)
+        .await
+        .unwrap_err();
+    api.folder_changes(&token, &id("sentitems"), None, RoundStart::Unordered)
+        .await
+        .unwrap();
+    api.folders(&token).await.unwrap();
+}
+
+#[tokio::test]
+async fn a_continuation_fault_holds_a_rounds_later_pages_but_not_a_new_round() {
+    let mut seed = format!("mailboxes:\n  - email: {ADA}\n    messages:\n");
+    for index in 0..150 {
+        seed.push_str(&format!("      - subject: Message {index:03}\n"));
+    }
+    let (emulator, api) = start(&seed).await;
+    let token = token(&emulator, ADA);
+    emulator.inject_fault(Fault {
+        route: Some(Route::MessagesDelta),
+        folder: Some("inbox".into()),
+        continuation: true,
+        error: Some(FaultError::Unavailable),
+        ..Fault::default()
+    });
+
+    let first = api
+        .folder_changes(&token, &id("inbox"), None, RoundStart::NewestFirst)
+        .await
+        .unwrap();
+    let StreamPosition::Continue(next) = first.position else {
+        panic!("150 messages are a round of two pages");
+    };
+    api.folder_changes(&token, &id("inbox"), Some(&next), RoundStart::NewestFirst)
+        .await
+        .unwrap_err();
+    // A new round of the same folder, as a live pass reads, goes through.
+    api.folder_changes(
+        &token,
+        &id("inbox"),
+        None,
+        RoundStart::ReceivedSince(emulator.now()),
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
