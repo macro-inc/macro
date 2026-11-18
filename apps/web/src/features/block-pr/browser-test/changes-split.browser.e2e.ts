@@ -19,7 +19,6 @@ async function openAt(page: Page, width: number) {
   return {
     changes,
     pullRequest: page.getByRole('region', { name: 'Pull request' }),
-    layoutToggle: page.getByRole('radiogroup', { name: 'Diff layout' }),
     sideBySide: changes.locator('[data-diff-type="split"]'),
     unified: changes.locator('[data-diff-type="single"]'),
   };
@@ -41,18 +40,11 @@ test.describe('desktop', () => {
     await expect
       .poll(async () => (await view.changes.boundingBox())?.width)
       .toBeGreaterThan(780);
-    // Beside the file tree the diff column is too narrow for side by side.
-    await expect(view.layoutToggle).toBeHidden();
-    await expect(view.unified.first()).toBeVisible();
-    await capture(page, 'changes-800');
-    // Without the tree it has room, so the chosen side-by-side diff returns.
-    await page.getByRole('button', { name: 'Hide file tree' }).click();
-    await expect(view.layoutToggle).toBeVisible();
     await expect(view.sideBySide.first()).toBeVisible();
-    await capture(page, 'changes-800-no-tree');
+    await capture(page, 'changes-800');
   });
 
-  test('beside the PR, a narrow pane shows the unified diff', async ({
+  test('beside Changes, the PR keeps the width its header needs', async ({
     page,
   }) => {
     const view = await openAt(page, 1100);
@@ -60,16 +52,13 @@ test.describe('desktop', () => {
     await expect
       .poll(async () => (await view.pullRequest.boundingBox())?.width)
       .toBeGreaterThanOrEqual(560);
-    await expect(view.layoutToggle).toBeHidden();
-    await expect(view.unified.first()).toBeVisible();
-    await expect(view.sideBySide).toHaveCount(0);
+    await expect(view.sideBySide.first()).toBeVisible();
     await capture(page, 'changes-1100');
   });
 
   test('a wide PR keeps Changes beside it, side by side', async ({ page }) => {
     const view = await openAt(page, 1600);
     await expect(view.pullRequest).toBeVisible();
-    await expect(view.layoutToggle).toBeVisible();
     await expect(view.sideBySide.first()).toBeVisible();
     await capture(page, 'changes-1600');
   });
@@ -82,7 +71,6 @@ test('on a phone, Changes covers the PR with the unified diff', async ({
   test.skip(!isMobile, 'phone only');
   const view = await openAt(page, 390);
   await expect(view.pullRequest).toBeHidden();
-  await expect(view.layoutToggle).toBeHidden();
   await expect(view.unified.first()).toBeVisible();
   await capture(page, 'changes-phone');
 });
