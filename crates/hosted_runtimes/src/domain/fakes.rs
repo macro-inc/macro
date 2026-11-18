@@ -890,6 +890,7 @@ pub fn deployment() -> crate::domain::enrollment::Deployment {
         document_storage_url: "http://10.210.0.1:8081".parse().unwrap(),
         app_url: "http://10.210.0.1:3000".parse().unwrap(),
         egress_url: "http://10.210.0.1:41027".parse().unwrap(),
+        telemetry_url: None,
     }
 }
 

@@ -300,6 +300,7 @@ async fn an_enrolled_computer_is_left_alone() {
             root: directory.path().to_owned(),
         },
         &host,
+        |_| (),
     )
     .await
     .unwrap();
@@ -372,6 +373,7 @@ async fn a_marker_as_new_as_the_enrollment_is_left_alone() {
             root: directory.path().to_owned(),
         },
         &FakeHost::default(),
+        |_| (),
     )
     .await
     .unwrap();
@@ -437,6 +439,7 @@ pairing_id = "00000000-0000-0000-0000-00000000000a"
             root: directory.path().to_owned(),
         },
         &FakeHost::default(),
+        |_| (),
     )
     .await
     .unwrap_err();
@@ -449,4 +452,60 @@ pairing_id = "00000000-0000-0000-0000-00000000000a"
         "00000000-0000-0000-0000-00000000000c\n1\n"
     );
     assert_eq!(std::fs::read_to_string(home_file).unwrap(), "keep me");
+}
+
+#[tokio::test]
+async fn an_enrollment_naming_an_intake_starts_telemetry_there_over_http() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let marker = directory.path().join("var/lib/macrod/enrolled");
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, "00000000-0000-0000-0000-00000000000c\n1\n").unwrap();
+    let source = directory.path().join("enrollment.json");
+    let mut enrollment: serde_json::Value = serde_json::from_str(ENROLLMENT_JSON).unwrap();
+    enrollment["deployment"]["telemetry_url"] = "https://intake.example.com/i/otlp/".into();
+    std::fs::write(&source, enrollment.to_string()).unwrap();
+    let started = RefCell::new(None);
+
+    run_enroll_with_host(
+        EnrollOptions {
+            from: EnrollmentSource::File(source),
+            config: directory.path().join("macrod.toml"),
+            workspace: directory.path().join("work"),
+            agent: "claude-code".to_owned(),
+            root: directory.path().to_owned(),
+        },
+        &FakeHost::default(),
+        |exporter| *started.borrow_mut() = Some(exporter),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        started.into_inner(),
+        Some(Some(crate::telemetry::Exporter::Http(
+            "https://intake.example.com/i/otlp".to_owned()
+        )))
+    );
+}
+
+#[test]
+fn the_telemetry_settings_are_written_for_the_service_and_removed_without_an_intake() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("var/lib/macrod/telemetry.env");
+
+    write_telemetry_env(
+        &path,
+        Some(&crate::telemetry::Exporter::Http(
+            "https://intake.example.com/i/otlp".to_owned(),
+        )),
+    )
+    .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "OTEL_EXPORTER_OTLP_ENDPOINT=https://intake.example.com/i/otlp\nOTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf\n"
+    );
+
+    write_telemetry_env(&path, None).unwrap();
+    assert!(!path.exists());
+    write_telemetry_env(&path, None).unwrap();
 }
