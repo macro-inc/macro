@@ -268,10 +268,6 @@ fn other_mail_views_use_their_own_timestamp_and_membership() {
     });
 }
 
-/// A partial thread edit, as a queued mutation's optimistic data or its result.
-fn edit(item: Value) -> Value {
-    json!({"user":{"id":VIEWER,"soup":{"items":[item]}}})
-}
 async fn begin_pending<S: PredicateIndexStorage>(
     engine: &mut Engine<S>,
     uuid: &str,
@@ -321,6 +317,7 @@ async fn begin_pending<S: PredicateIndexStorage>(
         .unwrap()
         .0
 }
+
 async fn claim<S: PredicateIndexStorage>(engine: &mut Engine<S>) -> MutationClaimToken {
     let claimed = engine
         .claim_next_mutation(MutationClaimRequest {
@@ -336,9 +333,6 @@ async fn claim<S: PredicateIndexStorage>(engine: &mut Engine<S>) -> MutationClai
         generation: claimed.lease_generation,
     }
 }
-fn keys(ids: &[u128]) -> Vec<String> {
-    ids.iter().map(|n| format!("{TYPE}:{}", id(*n))).collect()
-}
 
 #[test]
 fn pending_writes_that_list_a_thread_survive_negative_server_membership() {
@@ -353,11 +347,11 @@ fn pending_writes_that_list_a_thread_survive_negative_server_membership() {
             &response(&[20, 18, 16, 15, 14, 8], Value::Null),
         )
         .await;
-        let data = edit(json!({"__typename":TYPE,"id":id(15),"inboxVisible":true}));
+        let data = json!({"user":{"id":VIEWER,"soup":{"items":[{"__typename":TYPE,"id":id(15),"inboxVisible":true}]}}});
         begin_pending(&mut engine, "00000000-0000-0000-0000-000000009000", &data).await;
         assert_eq!(
             current_keys(&mut engine, noise(), "DESC").await,
-            keys(&[20, 18, 16, 15, 14, 8])
+            [20, 18, 16, 15, 14, 8].map(|n| format!("{TYPE}:{}", id(n)))
         );
         persist(
             &mut engine,
@@ -368,7 +362,7 @@ fn pending_writes_that_list_a_thread_survive_negative_server_membership() {
         .await;
         assert_eq!(
             current_keys(&mut engine, noise(), "DESC").await,
-            keys(&[20, 16, 15, 8])
+            [20, 16, 15, 8].map(|n| format!("{TYPE}:{}", id(n)))
         );
         let states = engine
             .storage()
@@ -394,7 +388,7 @@ async fn pending_mark_read<S: PredicateIndexStorage>(storage: S) {
     .await;
     // 18 was trashed through REST, which the cache does not see, while
     // its mark read is still queued. The first page is the only evidence.
-    let data = edit(json!({"__typename":TYPE,"id":id(18),"isRead":true}));
+    let data = json!({"user":{"id":VIEWER,"soup":{"items":[{"__typename":TYPE,"id":id(18),"isRead":true}]}}});
     let transaction =
         begin_pending(&mut engine, "00000000-0000-0000-0000-000000009000", &data).await;
     persist(
@@ -406,9 +400,16 @@ async fn pending_mark_read<S: PredicateIndexStorage>(storage: S) {
     .await;
     assert_eq!(
         current_keys(&mut engine, noise(), "DESC").await,
-        keys(&[20, 16, 8])
+        [20, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
     );
-    // Neither the mark read settling nor the restarted engine lists it again.
+
+    // An engine restarted while the mark read is still queued, the mark
+    // read settling, and a restart after that all leave it out too.
+    let mut engine = Engine::new(engine.into_storage());
+    assert_eq!(
+        current_keys(&mut engine, noise(), "DESC").await,
+        [20, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
+    );
     let claim = claim(&mut engine).await;
     let projections = projection_updates(
         engine.schema(),
@@ -434,18 +435,20 @@ async fn pending_mark_read<S: PredicateIndexStorage>(storage: S) {
         .unwrap();
     assert_eq!(
         current_keys(&mut engine, noise(), "DESC").await,
-        keys(&[20, 16, 8])
+        [20, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
     );
     let mut engine = Engine::new(engine.into_storage());
     assert_eq!(
         current_keys(&mut engine, noise(), "DESC").await,
-        keys(&[20, 16, 8])
+        [20, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
     );
 }
+
 #[test]
 fn a_pending_mark_read_does_not_keep_a_thread_the_server_dropped() {
     pollster::block_on(pending_mark_read(InMemoryStorage::new()));
 }
+
 #[test]
 fn turso_pending_mark_read_does_not_keep_a_thread_the_server_dropped() {
     pollster::block_on(pending_mark_read(
@@ -465,14 +468,14 @@ async fn queued_archive_and_undo<S: PredicateIndexStorage>(storage: S) {
     .await;
     // The server has applied the archive of 18 but not yet its Undo, which
     // the user already sees: the page leaves 18 out, and the queue explains it.
-    let archive = edit(json!({"__typename":TYPE,"id":id(18),"inboxVisible":false}));
+    let archive = json!({"user":{"id":VIEWER,"soup":{"items":[{"__typename":TYPE,"id":id(18),"inboxVisible":false}]}}});
     begin_pending(
         &mut engine,
         "00000000-0000-0000-0000-000000009000",
         &archive,
     )
     .await;
-    let undo = edit(json!({"__typename":TYPE,"id":id(18),"inboxVisible":true}));
+    let undo = json!({"user":{"id":VIEWER,"soup":{"items":[{"__typename":TYPE,"id":id(18),"inboxVisible":true}]}}});
     begin_pending(&mut engine, "00000000-0000-0000-0000-000000009001", &undo).await;
     persist(
         &mut engine,
@@ -483,13 +486,15 @@ async fn queued_archive_and_undo<S: PredicateIndexStorage>(storage: S) {
     .await;
     assert_eq!(
         current_keys(&mut engine, noise(), "DESC").await,
-        keys(&[20, 18, 16, 8])
+        [20, 18, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
     );
 }
+
 #[test]
 fn a_queued_undo_keeps_a_thread_the_server_has_only_archived() {
     pollster::block_on(queued_archive_and_undo(InMemoryStorage::new()));
 }
+
 #[test]
 fn turso_queued_undo_keeps_a_thread_the_server_has_only_archived() {
     pollster::block_on(queued_archive_and_undo(
@@ -509,7 +514,7 @@ fn a_rolled_back_mark_read_does_not_restore_a_thread_the_server_dropped() {
             &response(&[20, 18, 16, 14, 8], Value::Null),
         )
         .await;
-        let data = edit(json!({"__typename":TYPE,"id":id(18),"isRead":true}));
+        let data = json!({"user":{"id":VIEWER,"soup":{"items":[{"__typename":TYPE,"id":id(18),"isRead":true}]}}});
         let transaction =
             begin_pending(&mut engine, "00000000-0000-0000-0000-000000009000", &data).await;
         persist(
@@ -526,7 +531,7 @@ fn a_rolled_back_mark_read_does_not_restore_a_thread_the_server_dropped() {
             .unwrap();
         assert_eq!(
             current_keys(&mut engine, noise(), "DESC").await,
-            keys(&[20, 16, 8])
+            [20, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
         );
     });
 }
