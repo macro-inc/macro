@@ -135,6 +135,7 @@ export function PhoneAgentsList(props: {
               isSessionArchived(row)
             }
             conversation={row}
+            search={props.search}
             mode={props.modeForConversation(row)}
             waiting={waiting}
             actions={props.actions}

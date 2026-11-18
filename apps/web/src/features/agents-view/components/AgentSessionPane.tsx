@@ -16,7 +16,7 @@ import { AgentSidePanelSections } from '@app/features/block-agent/component/side
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
 import { createAgentRouteTarget } from '@app/features/block-agent/primitives/create-agent-route-target';
-import { MobileAgentSessionHeader } from '@app/features/block-agent/views/mobile/agent-session-header';
+import { MobileAgentSessionHeader } from '@app/features/block-agent/views/mobile/redesigned-session-header/redesigned-session-header';
 import { AgentChangesProvider } from '@app/features/changes/agent-session-changes';
 import {
   ChangesHandoff,

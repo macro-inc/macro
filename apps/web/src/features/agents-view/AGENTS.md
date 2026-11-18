@@ -1,6 +1,6 @@
 # Agents workspace
 
-Status: redesigned desktop and phone lists; composer and session header migration remains.
+Status: redesigned desktop/phone lists, shared model selection, and phone session header; phone composer integration remains.
 
 ## What it is
 
@@ -16,7 +16,10 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - `views/archived-conversations/archived-conversations.tsx`: archived conversations in the main pane.
 - `core/conversation-list.ts` and `primitives/conversation-list-view.ts`: sorting, waiting partition, and user-scoped preferences.
 - `views/shared/conversation-row/`: new row composition; shared status/code presentation is under `components/`.
-- `core/model-selection.ts` and `components/unified-model-selector/`: advertised tier labels and shared selector state/trigger; `views/model-selector/` composes its desktop menu and phone sheet.
+- `core/model-selection.ts`, `primitives/model-selector-navigation.ts`, and `model-selector.tsx`: shared selector logic and platform entry; trigger parts live under `views/shared/`.
+- `views/shared/code-details-drawer/`: common phone PR/branch drawer for rows and the session header.
+- `queries/session-code-details.ts`: bounded session-ID/owner lookup for cold header code identity.
+- `../block-agent/views/mobile/redesigned-session-header/`: normal-weight session title, code details, Info, and retained action owners.
 
 ## Boundaries
 

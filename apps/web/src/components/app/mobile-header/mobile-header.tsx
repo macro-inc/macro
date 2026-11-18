@@ -73,6 +73,8 @@ function Title(props: {
   /** Shown after the label, such as a Beta badge. */
   trailingBadges?: JSX.Element;
   colorIcon?: boolean;
+  /** Session identities use the same regular weight as their list rows. */
+  weight?: 'normal' | 'semibold';
   class?: string;
 }) {
   const panel = useSplitPanelOrThrow();
@@ -113,7 +115,12 @@ function Title(props: {
         </Show>
         {props.badges}
         <span class="inline-flex min-w-0 items-center gap-1">
-          <span class="inline-block truncate text-sm font-semibold">
+          <span
+            class={cn(
+              'inline-block truncate text-sm',
+              props.weight === 'normal' ? 'font-normal' : 'font-semibold'
+            )}
+          >
             {props.label}
           </span>
           <Show when={panel.titleFileMenuTrigger()}>

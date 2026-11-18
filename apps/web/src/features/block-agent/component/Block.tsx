@@ -40,7 +40,7 @@ import { useAgentSession } from '../context/AgentSessionContext';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
 import { AgentSessionHeader } from '../views/agent-session-header';
-import { MobileAgentSessionHeader } from '../views/mobile/agent-session-header';
+import { MobileAgentSessionHeader } from '../views/mobile/redesigned-session-header/redesigned-session-header';
 import { AgentComposer } from './AgentComposer';
 import { AgentConnections } from './AgentConnections';
 import { AgentPreviewBanner } from './AgentPreviewBanner';

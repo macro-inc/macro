@@ -33,6 +33,7 @@ export default {
   openOnGithub: 'Open on GitHub',
   openPullRequest: 'Open pull request #{{number}}',
   branchDetails: 'Branch details',
+  pullRequestDetails: 'Pull request details',
   nameColumn: 'Name',
   codeColumn: 'Code',
   archivedColumn: 'Archived',

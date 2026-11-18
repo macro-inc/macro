@@ -157,9 +157,12 @@ vi.mock('./agent-session-header', () => ({
 vi.mock('../views/agent-session-header', () => ({
   AgentSessionHeader: () => null,
 }));
-vi.mock('../views/mobile/agent-session-header', () => ({
-  MobileAgentSessionHeader: () => null,
-}));
+vi.mock(
+  '../views/mobile/redesigned-session-header/redesigned-session-header',
+  () => ({
+    MobileAgentSessionHeader: () => null,
+  })
+);
 vi.mock('./sidepanel/AgentSidePanelSections', () => ({
   AgentSidePanelSections: () => null,
 }));
