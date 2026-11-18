@@ -1901,7 +1901,8 @@ name, e.g. `✳ Sonnet 5.5 ⌄`) and **Send** (right). On touch devices Enter on
 virtual keyboard inserts a newline and never sends; only **Send** submits, the
 same as channel composers. This also applies to the Agents workspace session
 and new-conversation inputs and to the mobile **Ask AI** composer. On desktop
-Enter still sends and Shift+Enter inserts a newline. Tapping the model opens a
+Enter still sends and Shift+Enter inserts a newline; inside a list Enter adds
+an item instead (see the channel composer in `channels.md`). Tapping the model opens a
 bottom sheet listing every model the same way, with a check on the current one
 — pick a row to switch. Models read as names even when the runtime reports
 only ids: Macro Agent's `anthropic/claude-sonnet-5-5` shows as **Sonnet 5.5**. On desktop the
