@@ -7860,6 +7860,7 @@ dependencies = [
  "email_utils",
  "entity_access",
  "entity_access_management",
+ "feature_flags",
  "frecency",
  "futures",
  "generic_email_domains",
