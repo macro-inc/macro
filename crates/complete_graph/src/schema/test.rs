@@ -2560,16 +2560,13 @@ fn notified_document(
     id: Uuid,
     notified_at: Option<&str>,
 ) -> soup::domain::models::EnrichedSoupItem {
-    soup::domain::models::EnrichedSoupItem {
-        item: grouped_document(id),
-        frecency_score: None,
-        touched_at: None,
-        notified_at: notified_at.map(|stamp| {
-            chrono::DateTime::parse_from_rfc3339(stamp)
-                .expect("test stamp")
-                .to_utc()
-        }),
-    }
+    let mut item = soup::domain::models::EnrichedSoupItem::from(grouped_document(id));
+    item.notified_at = notified_at.map(|stamp| {
+        chrono::DateTime::parse_from_rfc3339(stamp)
+            .expect("test stamp")
+            .to_utc()
+    });
+    item
 }
 
 #[tokio::test]
