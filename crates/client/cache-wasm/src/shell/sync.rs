@@ -7,7 +7,7 @@ use super::{
 };
 use cache_core::predicate::ProjectionMutation;
 use cache_core::sync::{
-    SyncApplied, SyncHooks, SyncPageWrite, SyncRun, SyncRunResult, SyncStartArgs, SyncWriteError,
+    SyncApplied, SyncHooks, SyncPageWrite, SyncRunResult, SyncStartArgs, SyncWriteError,
 };
 use cache_core::value::EntityKey;
 use cache_turso::TursoStorageError;
@@ -113,9 +113,10 @@ fn sync_failure_js(kind: &str, message: impl std::fmt::Display) -> JsValue {
 
 #[wasm_bindgen]
 impl CacheEngine {
-    /// Starts a run from a JSON `SyncStartArgs` plan and resolves to the JSON
-    /// request body to POST. One run at a time: a second start rejects with
-    /// `cacheSyncFailure: 'busy'`.
+    /// Starts a run from JSON `SyncStartArgs` and resolves to the JSON request
+    /// body to POST: the pass, every lane's saved state and, when the run
+    /// syncs calendars, the cache's calendar coverage. One run at a time: a
+    /// second start rejects with `cacheSyncFailure: 'busy'`.
     #[wasm_bindgen(js_name = syncBegin)]
     pub fn sync_begin(&self, args_json: String) -> js_sys::Promise {
         let state = self.state.clone();
@@ -126,10 +127,18 @@ impl CacheEngine {
                 return Err(sync_failure_js("busy", "a sync run is already in progress"));
             }
             let args: SyncStartArgs = serde_json::from_str(&args_json).map_err(|error| {
-                sync_failure_js("stream", format!("invalid sync plan: {error}"))
+                sync_failure_js("stream", format!("invalid sync arguments: {error}"))
             })?;
-            let run = SyncRun::new(&args, js_sys::Date::now())
-                .map_err(|error| sync_failure_js("stream", error))?;
+            let begun = state
+                .engine_mut()?
+                .sync_begin(&args, js_sys::Date::now())
+                .await;
+            let run = match begun {
+                Ok(run) => run,
+                Err(SyncWriteError::Stream(error)) => return Err(sync_failure_js("stream", error)),
+                Err(SyncWriteError::Engine(error)) => return Err(state.engine_error(error)),
+                Err(SyncWriteError::Hooks(never)) => match never {},
+            };
             let body = run.request_body().to_string();
             state.sync_run = Some(run);
             Ok(JsValue::from_str(&body))

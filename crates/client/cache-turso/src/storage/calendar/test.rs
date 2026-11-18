@@ -523,3 +523,49 @@ fn invalid_commits_never_open_a_transaction() {
         );
     });
 }
+
+#[test]
+fn coverage_loads_whole_and_merged_per_kind() {
+    block_on(async {
+        let database = TursoMemoryDatabase::new("calendar-coverage.db");
+        let mut storage = database.open("scope").unwrap();
+        assert!(storage.load_calendar_coverage().await.unwrap().is_empty());
+        let span = |kind, start, end| CalendarSpan { kind, start, end };
+        for coverage in [
+            vec![
+                span(CalendarSpanKind::Timed, MONDAY_MS, MONDAY_MS + DAY_MS),
+                span(CalendarSpanKind::AllDay, MONDAY_DAY, MONDAY_DAY + 1),
+            ],
+            vec![span(
+                CalendarSpanKind::Timed,
+                MONDAY_MS + DAY_MS,
+                MONDAY_MS + 2 * DAY_MS,
+            )],
+            vec![span(
+                CalendarSpanKind::Timed,
+                MONDAY_MS + 5 * DAY_MS,
+                MONDAY_MS + 6 * DAY_MS,
+            )],
+        ] {
+            storage
+                .calendar_commit(&CalendarCommit {
+                    coverage,
+                    ..CalendarCommit::default()
+                })
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            storage.load_calendar_coverage().await.unwrap(),
+            [
+                span(CalendarSpanKind::Timed, MONDAY_MS, MONDAY_MS + 2 * DAY_MS),
+                span(
+                    CalendarSpanKind::Timed,
+                    MONDAY_MS + 5 * DAY_MS,
+                    MONDAY_MS + 6 * DAY_MS
+                ),
+                span(CalendarSpanKind::AllDay, MONDAY_DAY, MONDAY_DAY + 1),
+            ]
+        );
+    });
+}

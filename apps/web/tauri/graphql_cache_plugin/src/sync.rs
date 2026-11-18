@@ -25,7 +25,7 @@ use tokio_util::task::TaskTracker;
 #[cfg(test)]
 mod test;
 
-/// Headers the run sets itself, overriding the plan's.
+/// Headers the run sets itself, overriding the app's.
 const CONTENT_TYPE: &str = "content-type";
 const ACCEPT: &str = "accept";
 const ACCEPT_ENCODING: &str = "accept-encoding";
@@ -56,7 +56,7 @@ pub(crate) const STALL_TIMEOUT: Duration = Duration::from_secs(90);
 /// The stream request: `POST url` with a JSON body.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SyncHttpRequest {
-    /// Absolute stream URL from the plan.
+    /// Absolute stream URL from the run's arguments.
     pub url: String,
     /// Plan headers (mail cache profile, bearer token) plus content negotiation.
     pub headers: Vec<(String, String)>,
@@ -228,13 +228,9 @@ impl SyncRuns {
             return SyncRunOutcome::failed(SyncFailure::Unsupported);
         };
         let hooks = NativeSyncHooks::new();
-        let run = match SyncRun::new(&args, hooks.monotonic_ms()) {
+        let run = match engine.sync_begin(&args, hooks.monotonic_ms()).await {
             Ok(run) => run,
-            Err(error) => {
-                return SyncRunOutcome::failed(SyncFailure::Stream {
-                    message: error.to_string(),
-                });
-            }
+            Err(failure) => return SyncRunOutcome::failed(failure),
         };
         let active = ActiveRun::default();
         {
@@ -310,7 +306,7 @@ impl SyncRuns {
     name = "graphql_cache.sync_run",
     skip_all,
     fields(
-        lanes = args.lanes.len(),
+        pass = ?args.pass,
         bytes = tracing::field::Empty,
         outcome = tracing::field::Empty
     )

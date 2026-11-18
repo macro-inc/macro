@@ -1,11 +1,13 @@
-use cache_core::calendar::{CalendarLinkWatermark, CalendarRangeRequest};
+use cache_core::calendar::{
+    CalendarCommit, CalendarLinkWatermark, CalendarRangeRequest, CalendarSpan, CalendarSpanKind,
+};
 use cache_core::engine::Engine;
 use cache_core::predicate::ProjectionMutation;
 use cache_core::record_selection::RecordSelection;
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::sync::{
-    SyncApplied, SyncHooks, SyncPageWrite, SyncRun, SyncRunReason, SyncStartArgs, SyncStreamError,
-    SyncWriteError,
+    SyncApplied, SyncCalendarArgs, SyncHooks, SyncPageWrite, SyncRun, SyncRunReason, SyncStartArgs,
+    SyncStreamError, SyncWriteError,
 };
 use cache_core::value::EntityKey;
 use pollster::block_on;
@@ -70,11 +72,11 @@ fn task_key(n: u128) -> EntityKey<'static> {
     EntityKey::entity("GraphqlSoupDocument", &[&id(n)])
 }
 
+/// A lane as the server declares it (its `lane` line without the type).
 fn lane(id: &str, query: &str, paging: &str, kind: Json) -> Json {
     json!({
-        "id": id,
+        "lane": id,
         "query": query,
-        "variables": {"input": {"initial": {"limit": 2}}},
         "paging": paging,
         "kind": kind,
         "passStartedAt": PASS,
@@ -82,13 +84,43 @@ fn lane(id: &str, query: &str, paging: &str, kind: Json) -> Json {
     })
 }
 
-fn args(lanes: Vec<Json>) -> SyncStartArgs {
-    serde_json::from_value(json!({
-        "url": "https://example.test/items/soup/graphql/stream",
-        "headers": {},
-        "lanes": lanes,
-    }))
-    .unwrap()
+/// A run's arguments and the lanes its stream declares.
+struct Plan {
+    args: SyncStartArgs,
+    lanes: Vec<Json>,
+}
+
+fn args(lanes: Vec<Json>) -> Plan {
+    Plan {
+        args: serde_json::from_value(json!({
+            "url": "https://example.test/items/soup/graphql/stream",
+            "headers": {},
+            "pass": "first",
+        }))
+        .unwrap(),
+        lanes,
+    }
+}
+
+fn declaration(lane: &Json) -> Json {
+    let mut line = lane.clone();
+    line["type"] = json!("lane");
+    line
+}
+
+/// Starts a run whose stream first declares the plan's lanes.
+async fn start(engine: &mut Engine<InMemoryStorage>, plan: &Plan) -> SyncRun {
+    let mut run = engine.sync_begin(&plan.args, 0.0).await.unwrap();
+    let declarations = plan.lanes.iter().map(declaration).collect::<Vec<_>>();
+    let applied = run_stream(engine, &mut run, &ndjson(&declarations))
+        .await
+        .unwrap();
+    assert!(
+        applied
+            .iter()
+            .all(|applied| matches!(applied, SyncApplied::Recorded))
+    );
+    run
 }
 
 fn soup_page(lane: &str, page: u64, ids: &[u128], next: Option<&str>) -> Json {
@@ -103,7 +135,7 @@ fn soup_page(lane: &str, page: u64, ids: &[u128], next: Option<&str>) -> Json {
         "variables": {"input": {"initial": {"limit": 2}}},
         "response": {"data": {"user": {"id": "viewer", "soup": {"items": items, "nextCursor": next}}}},
         "items": ids.len(),
-        "nextVariables": next.map(|cursor| json!({"input": {"continuation": {"cursor": cursor}}})),
+        "resume": next.map(|cursor| json!({"cursor": cursor})),
     })
 }
 
@@ -164,7 +196,8 @@ fn hydrate_lane_writes_pages_saves_resume_state_and_completes() {
             "soup",
             json!({"kind": "hydrate"}),
         )]);
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
+        let declared = run.partial(0.0).bytes;
         let first = ndjson(&[soup_page("tasks", 0, &[1, 2], Some("c1"))]);
         let applied = run_stream(&mut engine, &mut run, &first).await.unwrap();
         assert!(
@@ -180,15 +213,7 @@ fn hydrate_lane_writes_pages_saves_resume_state_and_completes() {
         assert_eq!(state[0].id, "tasks");
         assert_eq!((state[0].pages, state[0].items), (1, 2));
         assert_eq!(state[0].pass_started_at.as_deref(), Some(PASS));
-        assert_eq!(
-            state[0].next_variables,
-            Some(
-                json!({"input": {"continuation": {"cursor": "c1"}}})
-                    .as_object()
-                    .unwrap()
-                    .clone()
-            )
-        );
+        assert_eq!(state[0].resume, Some(json!({"cursor": "c1"})));
         assert_eq!(state[0].completed_at, None);
 
         let rest = ndjson(&[
@@ -199,7 +224,7 @@ fn hydrate_lane_writes_pages_saves_resume_state_and_completes() {
         run_stream(&mut engine, &mut run, &rest).await.unwrap();
         let result = run.finish(100.0).unwrap();
         assert_eq!(result.reason, SyncRunReason::Complete);
-        assert_eq!(result.bytes, (first.len() + rest.len()) as u64);
+        assert_eq!(result.bytes, declared + (first.len() + rest.len()) as u64);
         assert_eq!(result.lanes.len(), 1);
         assert_eq!((result.lanes[0].pages, result.lanes[0].items), (2, 3));
         assert!(result.lanes[0].done);
@@ -207,7 +232,7 @@ fn hydrate_lane_writes_pages_saves_resume_state_and_completes() {
 
         let state = &engine.sync_lane_states().await.unwrap()[0];
         assert_eq!((state.pages, state.items), (2, 3));
-        assert_eq!(state.next_variables, None);
+        assert_eq!(state.resume, None);
         assert_eq!(
             state.completed_at.as_deref(),
             Some("2026-11-02T00:00:00.000Z")
@@ -227,7 +252,7 @@ fn a_line_type_the_engine_does_not_know_is_skipped() {
             "soup",
             json!({"kind": "hydrate"}),
         )]);
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         let stream = ndjson(&[
             soup_page("tasks", 0, &[1], None),
             json!({"type": "progress", "lane": "tasks", "items": 1}),
@@ -257,31 +282,23 @@ fn a_resumed_pass_keeps_counting_and_a_new_pass_restarts_counts() {
             "soup",
             json!({"kind": "hydrate"}),
         )]);
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         let stream = ndjson(&[soup_page("tasks", 0, &[1, 2], Some("c1")), end("maxPages")]);
         run_stream(&mut engine, &mut run, &stream).await.unwrap();
         assert_eq!(run.finish(1.0).unwrap().reason, SyncRunReason::MaxPages);
         assert!(!run.finish(1.0).unwrap().lanes[0].done);
 
-        // A written page whose `nextVariables` is null, in a stream that closes
-        // before `laneDone`, keeps the earlier resume point.
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        // A written page whose `resume` is null, in a stream that closes
+        // before `laneDone`, keeps the earlier checkpoint.
+        let mut run = start(&mut engine, &plan).await;
         let stream = ndjson(&[soup_page("tasks", 0, &[3], None)]);
         run_stream(&mut engine, &mut run, &stream).await.unwrap();
         assert!(matches!(run.finish(1.0), Err(SyncStreamError::Stream(_))));
         let state = &engine.sync_lane_states().await.unwrap()[0];
         assert_eq!((state.pages, state.items), (2, 3));
-        assert_eq!(
-            state.next_variables,
-            Some(
-                json!({"input": {"continuation": {"cursor": "c1"}}})
-                    .as_object()
-                    .unwrap()
-                    .clone()
-            )
-        );
+        assert_eq!(state.resume, Some(json!({"cursor": "c1"})));
 
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         let stream = ndjson(&[
             soup_page("tasks", 0, &[3], None),
             lane_done("tasks", 1, 1),
@@ -290,11 +307,11 @@ fn a_resumed_pass_keeps_counting_and_a_new_pass_restarts_counts() {
         run_stream(&mut engine, &mut run, &stream).await.unwrap();
         let state = &engine.sync_lane_states().await.unwrap()[0];
         assert_eq!((state.pages, state.items), (3, 4));
-        assert_eq!(state.next_variables, None);
+        assert_eq!(state.resume, None);
 
         let mut next = lane("tasks", TASKS, "soup", json!({"kind": "hydrate"}));
         next["passStartedAt"] = json!("2026-11-02T00:00:00.000Z");
-        let mut run = SyncRun::new(&args(vec![next]), 0.0).unwrap();
+        let mut run = start(&mut engine, &args(vec![next])).await;
         let stream = ndjson(&[soup_page("tasks", 0, &[1], Some("c2")), end("maxPages")]);
         run_stream(&mut engine, &mut run, &stream).await.unwrap();
         let state = &engine.sync_lane_states().await.unwrap()[0];
@@ -321,7 +338,7 @@ fn a_complete_membership_listing_deletes_unlisted_members_only() {
                 json!({"kind": "membership", "scopes": ["tasks"]}),
             ),
         ]);
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         let mut ids_page = soup_page("tasks-ids", 0, &[1, 3], None);
         ids_page["response"]["data"]["user"]["soup"]["items"]
             .as_array_mut()
@@ -355,7 +372,7 @@ fn a_complete_membership_listing_deletes_unlisted_members_only() {
         assert_eq!((result.lanes[1].pages, result.lanes[1].items), (1, 2));
         let states = engine.sync_lane_states().await.unwrap();
         let ids = states.iter().find(|state| state.id == "tasks-ids").unwrap();
-        assert_eq!(ids.next_variables, None);
+        assert_eq!(ids.resume, None);
         assert_eq!(
             ids.completed_at.as_deref(),
             Some("2026-11-02T00:00:00.000Z")
@@ -364,16 +381,13 @@ fn a_complete_membership_listing_deletes_unlisted_members_only() {
         // Deleted keys left the lane: a listing without them deletes nothing more,
         // and a record the stream never delivered is never a member.
         let mut engine = engine;
-        let mut run = SyncRun::new(
-            &args(vec![lane(
-                "tasks-ids",
-                TASK_IDS,
-                "soup",
-                json!({"kind": "membership", "scopes": ["tasks"]}),
-            )]),
-            0.0,
-        )
-        .unwrap();
+        let plan = args(vec![lane(
+            "tasks-ids",
+            TASK_IDS,
+            "soup",
+            json!({"kind": "membership", "scopes": ["tasks"]}),
+        )]);
+        let mut run = start(&mut engine, &plan).await;
         let mut ids_page = soup_page("tasks-ids", 0, &[1, 3], None);
         ids_page["response"]["data"]["user"]["soup"]["items"][0]
             .as_object_mut()
@@ -402,7 +416,7 @@ fn an_unfinished_membership_listing_deletes_nothing() {
                 json!({"kind": "membership", "scopes": ["tasks"]}),
             ),
         ]);
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         let stream = ndjson(&[
             soup_page("tasks", 0, &[1, 2], None),
             lane_done("tasks", 1, 2),
@@ -432,7 +446,7 @@ fn calendar_lane_commits_its_coverage_with_the_lowest_watermark() {
             "calendar",
             json!({"kind": "calendar", "coverage": coverage}),
         )]);
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         let occurrence = |n: u128, start_ms: i64| {
             let iso = |ms: i64| {
                 chrono::DateTime::from_timestamp_millis(ms)
@@ -453,7 +467,7 @@ fn calendar_lane_commits_its_coverage_with_the_lowest_watermark() {
                     "nodes": nodes, "hasNextPage": next.is_some(), "endCursor": next, "watermark": watermark,
                 }}}},
                 "items": 1,
-                "nextVariables": next.map(|cursor| json!({"input": {"after": cursor}})),
+                "resume": null,
             })
         };
         let stream = ndjson(&[
@@ -468,7 +482,7 @@ fn calendar_lane_commits_its_coverage_with_the_lowest_watermark() {
         run_stream(&mut engine, &mut run, &stream).await.unwrap();
 
         // The next run resumes the window; the earlier page's watermark still counts.
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         let stream = ndjson(&[
             page(
                 0,
@@ -521,7 +535,7 @@ fn clearing_the_cache_wipes_sync_state_and_members() {
             "soup",
             json!({"kind": "hydrate"}),
         )]);
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         let stream = ndjson(&[
             soup_page("tasks", 0, &[1], None),
             lane_done("tasks", 1, 1),
@@ -566,7 +580,7 @@ fn broken_streams_fail_the_run() {
             vec![end("complete"), end("complete")],
         ] {
             let mut engine = Engine::new(InMemoryStorage::new());
-            let mut run = SyncRun::new(&plan, 0.0).unwrap();
+            let mut run = start(&mut engine, &plan).await;
             let result = match run_stream(&mut engine, &mut run, &ndjson(&frames)).await {
                 Ok(_) => run.finish(1.0).map(|_| ()).map_err(SyncWriteError::Stream),
                 Err(error) => Err(error),
@@ -590,7 +604,7 @@ fn a_failed_lane_keeps_its_resume_point_and_the_other_lanes_finish() {
             lane("docs", TASKS, "soup", json!({"kind": "hydrate"})),
         ]);
         let mut engine = Engine::new(InMemoryStorage::new());
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         let mut refused = soup_page("tasks", 1, &[2], None);
         refused["response"]["errors"] = json!([{"message": "denied"}]);
         let stream = ndjson(&[
@@ -621,12 +635,7 @@ fn a_failed_lane_keeps_its_resume_point_and_the_other_lanes_finish() {
         // The failed lane resumes from its last written page; the other completed.
         let states = engine.sync_lane_states().await.unwrap();
         let state = |id: &str| states.iter().find(|state| state.id == id).unwrap().clone();
-        assert_eq!(
-            state("tasks").next_variables,
-            json!({"input": {"continuation": {"cursor": "c1"}}})
-                .as_object()
-                .cloned()
-        );
+        assert_eq!(state("tasks").resume, Some(json!({"cursor": "c1"})));
         assert_eq!(
             (state("tasks").pages, state("tasks").completed_at),
             (1, None)
@@ -651,7 +660,7 @@ fn a_lane_that_fails_before_any_page_leaves_no_state() {
             json!({"kind": "hydrate"}),
         )]);
         let mut engine = Engine::new(InMemoryStorage::new());
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         let mut unpaged = soup_page("tasks", 0, &[1], None);
         unpaged["response"]["data"]["user"]
             .as_object_mut()
@@ -725,7 +734,7 @@ fn sync_pages_merge_into_records_screens_loaded() {
             "soup",
             json!({"kind": "hydrate"}),
         )]);
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         let applied = run_stream(
             &mut engine,
             &mut run,
@@ -754,7 +763,7 @@ fn sync_pages_merge_into_records_screens_loaded() {
         let mut engine = Engine::new(InMemoryStorage::new());
         screen_load(&mut engine, "viewer").await;
         let mut engine = Engine::new(engine.into_storage());
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         run_stream(
             &mut engine,
             &mut run,
@@ -781,7 +790,7 @@ fn a_sync_page_for_another_viewer_resets_the_cache_and_keeps_its_lane_state() {
             "soup",
             json!({"kind": "hydrate"}),
         )]);
-        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let mut run = start(&mut engine, &plan).await;
         // Pages are tagged `viewer`, not the bound identity.
         let applied = run_stream(
             &mut engine,
@@ -800,6 +809,104 @@ fn a_sync_page_for_another_viewer_resets_the_cache_and_keeps_its_lane_state() {
         );
         let state = engine.sync_lane_states().await.unwrap();
         assert_eq!((state[0].pages, state[0].items), (1, 2));
-        assert!(state[0].next_variables.is_some());
+        assert!(state[0].resume.is_some());
+    });
+}
+
+#[test]
+fn a_run_s_request_carries_every_lane_s_saved_state() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let plan = args(vec![
+            lane("tasks", TASKS, "soup", json!({"kind": "hydrate"})),
+            lane("docs", TASKS, "soup", json!({"kind": "hydrate"})),
+        ]);
+        let mut run = start(&mut engine, &plan).await;
+        let stream = ndjson(&[
+            soup_page("tasks", 0, &[1], None),
+            lane_done("tasks", 1, 1),
+            soup_page("docs", 0, &[2], Some("c7")),
+            end("maxPages"),
+        ]);
+        run_stream(&mut engine, &mut run, &stream).await.unwrap();
+
+        let mut next = args(Vec::new());
+        next.args.max_pages = Some(20);
+        next.args.completed_since = Some(PASS.to_owned());
+        let run = engine.sync_begin(&next.args, 0.0).await.unwrap();
+        assert_eq!(
+            *run.request_body(),
+            json!({
+                "protocol": 1,
+                "pass": "first",
+                "lanes": [
+                    {"id": "docs", "resume": {"cursor": "c7"}},
+                    {"id": "tasks", "watermark": PASS, "completedAt": "2026-11-02T00:00:00.000Z"},
+                ],
+                "completedSince": PASS,
+                "maxPages": 20,
+            })
+        );
+    });
+}
+
+#[test]
+fn a_calendar_run_sends_the_cache_s_coverage_merged() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let span = |start: i64, end: i64| CalendarSpan {
+            kind: CalendarSpanKind::Timed,
+            start,
+            end,
+        };
+        engine
+            .calendar_commit(&CalendarCommit {
+                coverage: vec![span(MONDAY_MS, MONDAY_MS + DAY_MS)],
+                ..CalendarCommit::default()
+            })
+            .await
+            .unwrap();
+        engine
+            .calendar_commit(&CalendarCommit {
+                coverage: vec![span(MONDAY_MS + DAY_MS, MONDAY_MS + 2 * DAY_MS)],
+                ..CalendarCommit::default()
+            })
+            .await
+            .unwrap();
+
+        let mut plan = args(Vec::new());
+        let run = engine.sync_begin(&plan.args, 0.0).await.unwrap();
+        assert!(run.request_body().get("calendar").is_none());
+
+        plan.args.calendar = Some(SyncCalendarArgs {
+            time_zone: "Europe/Berlin".to_owned(),
+        });
+        let run = engine.sync_begin(&plan.args, 0.0).await.unwrap();
+        assert_eq!(
+            run.request_body()["calendar"],
+            json!({
+                "timeZone": "Europe/Berlin",
+                "coverage": [{"kind": "timed", "start": MONDAY_MS, "end": MONDAY_MS + 2 * DAY_MS}],
+            })
+        );
+    });
+}
+
+#[test]
+fn frames_of_a_lane_the_stream_never_declared_break_it() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut run = start(&mut engine, &args(Vec::new())).await;
+        let result = run_stream(
+            &mut engine,
+            &mut run,
+            &ndjson(&[soup_page("tasks", 0, &[1], None)]),
+        )
+        .await;
+        assert!(matches!(
+            result,
+            Err(SyncWriteError::Stream(SyncStreamError::Stream(message))) if message.contains("unknown lane")
+        ));
+        assert_eq!(present(&engine, &[task_key(1)]).await, [false]);
     });
 }

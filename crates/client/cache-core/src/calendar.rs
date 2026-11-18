@@ -556,6 +556,12 @@ pub trait CalendarRangeStorage: Storage {
         &mut self,
         commit: &CalendarCommit,
     ) -> impl Future<Output = Result<CalendarCommitOutcome, Self::Error>> + MaybeSend;
+
+    /// Every fetched span, merged per kind (what a streamed sync's server
+    /// plans calendar windows around).
+    fn load_calendar_coverage(
+        &self,
+    ) -> impl Future<Output = Result<Vec<CalendarSpan>, Self::Error>> + MaybeSend;
 }
 
 #[cfg(test)]

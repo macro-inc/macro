@@ -371,6 +371,12 @@ impl CalendarRangeStorage for BrowserStorage {
     ) -> Result<CalendarCommitOutcome, Self::Error> {
         self.inner.calendar_commit(commit).await
     }
+
+    async fn load_calendar_coverage(
+        &self,
+    ) -> Result<Vec<cache_core::calendar::CalendarSpan>, Self::Error> {
+        self.inner.load_calendar_coverage().await
+    }
 }
 
 impl SyncStorage for BrowserStorage {

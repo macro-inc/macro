@@ -124,24 +124,34 @@ fn task_key(n: u128) -> String {
     format!("GraphqlSoupDocument:{}", id(n))
 }
 
-fn lane(id: &str, query: &str, kind: Json) -> Json {
+/// The `lane` line the server sends before a test lane's first page:
+/// `tasks-ids` lists `tasks`; every other lane hydrates.
+fn declaration(lane: &str) -> Json {
+    let (query, operation, kind) = match lane {
+        "tasks-ids" => (
+            TASK_IDS,
+            "SyncTaskIds",
+            json!({"kind": "membership", "scopes": ["tasks"]}),
+        ),
+        _ => (TASKS, "SyncTasks", json!({"kind": "hydrate"})),
+    };
     json!({
-        "id": id,
+        "type": "lane",
+        "lane": lane,
         "query": query,
-        "operationName": if query == TASKS { "SyncTasks" } else { "SyncTaskIds" },
-        "variables": {"input": {"initial": {"limit": 2}}},
+        "operationName": operation,
         "paging": "soup",
         "kind": kind,
         "passStartedAt": PASS,
     })
 }
 
-fn args(lanes: Vec<Json>) -> SyncStartArgs {
+fn args() -> SyncStartArgs {
     serde_json::from_value(json!({
         "url": URL,
-        // The run's own content negotiation replaces a plan's.
+        // The run's own content negotiation replaces the app's.
         "headers": {"x-macro-mail-cache-profile": "v5", "Accept": "text/plain"},
-        "lanes": lanes,
+        "pass": "first",
     }))
     .unwrap()
 }
@@ -158,7 +168,7 @@ fn soup_page(lane: &str, page: u64, ids: &[u128], next: Option<&str>) -> Json {
         "variables": {"input": {"initial": {"limit": 2}}},
         "response": {"data": {"user": {"id": "viewer", "soup": {"items": items, "nextCursor": next}}}},
         "items": ids.len(),
-        "nextVariables": next.map(|cursor| json!({"input": {"continuation": {"cursor": cursor}}})),
+        "resume": next.map(|cursor| json!({"cursor": cursor})),
     })
 }
 
@@ -170,11 +180,18 @@ fn end() -> Json {
     json!({"type": "end", "reason": "complete"})
 }
 
+/// The frames as NDJSON, each lane's first page in the stream (page 0)
+/// preceded by its `lane` line, as the server sends them.
 fn ndjson(frames: &[Json]) -> Vec<u8> {
     frames
         .iter()
         .flat_map(|frame| {
-            let mut line = serde_json::to_vec(frame).unwrap();
+            let first_page = frame["type"] == "page" && frame["page"] == 0;
+            let declared = first_page.then(|| declaration(frame["lane"].as_str().unwrap()));
+            declared.into_iter().chain([frame.clone()])
+        })
+        .flat_map(|frame| {
+            let mut line = serde_json::to_vec(&frame).unwrap();
             line.push(b'\n');
             line
         })
@@ -247,7 +264,7 @@ fn a_run_writes_every_page_natively_and_publishes_it_like_hydration() {
     ));
     let runs = runs_with(&opener);
     let (published, publish) = recorder();
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
 
     let outcome = block_on(runs.start(handle.downgrade(), plan, publish));
 
@@ -263,9 +280,11 @@ fn a_run_writes_every_page_natively_and_publishes_it_like_hydration() {
     assert_eq!(wire["result"]["reason"], "complete");
     assert_eq!(wire["result"]["lanes"][0]["id"], "tasks");
 
+    // The `lane` line, both pages, `laneDone` and `end`.
     assert_eq!(
         *published.lock().unwrap(),
         [
+            "recorded",
             "hydrated advanced=true reset=false",
             "hydrated advanced=true reset=false",
             "recorded",
@@ -288,13 +307,7 @@ fn a_run_writes_every_page_natively_and_publishes_it_like_hydration() {
     let body: Json = serde_json::from_slice(&requests[0].body).unwrap();
     assert_eq!(
         body,
-        json!({"protocol": cache_core::sync::SYNC_PROTOCOL, "lanes": [{
-            "id": "tasks",
-            "query": TASKS,
-            "operationName": "SyncTasks",
-            "variables": {"input": {"initial": {"limit": 2}}},
-            "paging": "soup",
-        }]})
+        json!({"protocol": cache_core::sync::SYNC_PROTOCOL, "pass": "first", "lanes": []})
     );
 
     // Every page's records are in the native cache.
@@ -321,7 +334,7 @@ fn a_run_writes_every_page_natively_and_publishes_it_like_hydration() {
     assert_eq!((state[0].pages, state[0].items), (2, 3));
     assert_eq!(state[0].watermark.as_deref(), Some(PASS));
     assert!(state[0].completed_at.is_some());
-    assert_eq!(state[0].next_variables, None);
+    assert_eq!(state[0].resume, None);
 }
 
 #[test]
@@ -348,18 +361,14 @@ fn a_membership_lane_deletes_members_the_server_no_longer_lists() {
     ]);
     let runs = runs_with(&opener);
     let (_, publish) = recorder();
-    let hydrate = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let hydrate = args();
     assert!(matches!(
         block_on(runs.start(handle.downgrade(), hydrate, publish)),
         SyncRunOutcome::Completed(_)
     ));
 
     let (published, publish) = recorder();
-    let listing = args(vec![lane(
-        "tasks-ids",
-        TASK_IDS,
-        json!({"kind": "membership", "scopes": ["tasks"]}),
-    )]);
+    let listing = args();
     let outcome = block_on(runs.start(handle.downgrade(), listing, publish));
 
     assert!(
@@ -369,6 +378,7 @@ fn a_membership_lane_deletes_members_the_server_no_longer_lists() {
     assert_eq!(
         *published.lock().unwrap(),
         [
+            "recorded".to_owned(),
             "recorded".to_owned(),
             format!("deleted {}", task_key(2)),
             "recorded".to_owned()
@@ -394,14 +404,15 @@ fn failures_keep_written_pages_and_report_progress() {
         ),
     ]);
     let runs = runs_with(&opener);
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
 
     let (_, publish) = recorder();
     let outcome = block_on(runs.start(handle.downgrade(), plan.clone(), publish));
     let wire = serde_json::to_value(&outcome).unwrap();
     assert_eq!(wire["ok"], false);
     assert_eq!(wire["failure"], json!({"kind": "http", "status": 401}));
-    assert_eq!(wire["partial"]["lanes"][0]["pages"], 0);
+    // Nothing was declared: the server answered before its first line.
+    assert_eq!(wire["partial"]["lanes"], json!([]));
 
     let (_, publish) = recorder();
     let outcome = block_on(runs.start(handle.downgrade(), plan, publish));
@@ -415,12 +426,7 @@ fn failures_keep_written_pages_and_report_progress() {
     assert_eq!(message, "stream closed without an end frame");
     assert_eq!(partial.lanes[0].pages, 1);
     let state = block_on(handle.sync_lane_states()).unwrap();
-    assert_eq!(
-        state[0].next_variables,
-        json!({"input": {"continuation": {"cursor": "c1"}}})
-            .as_object()
-            .cloned()
-    );
+    assert_eq!(state[0].resume, Some(json!({"cursor": "c1"})));
     assert_eq!(state[0].completed_at, None);
 }
 
@@ -438,7 +444,7 @@ fn a_body_that_goes_silent_is_given_up_as_stalled_keeping_written_pages() {
     ));
     let mut runs = runs_with(&opener);
     runs.stall_timeout = Duration::from_millis(50);
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
 
     let (_, publish) = recorder();
     let outcome = block_on(runs.start(handle.downgrade(), plan, publish));
@@ -457,12 +463,7 @@ fn a_body_that_goes_silent_is_given_up_as_stalled_keeping_written_pages() {
     // The connection is closed and the written page is the resume point.
     assert_eq!(opener.bodies.dropped(), 1);
     let state = block_on(handle.sync_lane_states()).unwrap();
-    assert_eq!(
-        state[0].next_variables,
-        json!({"input": {"continuation": {"cursor": "c1"}}})
-            .as_object()
-            .cloned()
-    );
+    assert_eq!(state[0].resume, Some(json!({"cursor": "c1"})));
 }
 
 #[test]
@@ -474,7 +475,7 @@ fn a_request_that_never_answers_is_given_up_as_stalled() {
     });
     let mut runs = runs_with(&opener);
     runs.stall_timeout = Duration::from_millis(50);
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
 
     let (_, publish) = recorder();
     let outcome = block_on(runs.start(handle.downgrade(), plan.clone(), publish));
@@ -513,7 +514,7 @@ fn stop_ends_a_waiting_run_while_reads_proceed_between_pages() {
         (200, vec![Chunk::Bytes(ndjson(&[end()]))]),
     ]);
     let runs = Arc::new(runs_with(&opener));
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
     let (written_tx, written_rx) = std::sync::mpsc::channel();
     let running = tauri::async_runtime::spawn({
         let (runs, weak, plan) = (runs.clone(), handle.downgrade(), plan.clone());
@@ -585,7 +586,7 @@ fn the_body_is_read_ahead_while_pages_are_written() {
             .recv_timeout(WAIT)
             .expect("the body is read while the first page is written");
     });
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
 
     let outcome = block_on(runs.start(handle.downgrade(), plan, publish));
 
@@ -593,7 +594,7 @@ fn the_body_is_read_ahead_while_pages_are_written() {
         matches!(outcome, SyncRunOutcome::Completed(_)),
         "{outcome:?}"
     );
-    assert_eq!(published.lock().unwrap().len(), 5);
+    assert_eq!(published.lock().unwrap().len(), 6);
     assert_eq!(opener.bodies.dropped(), 1);
     let state = block_on(handle.sync_lane_states()).unwrap();
     assert_eq!((state[0].pages, state[0].items), (3, 5));
@@ -627,7 +628,7 @@ fn read_ahead_stops_at_the_byte_budget_until_pages_are_applied() {
         let reads_at_first_write = reads_at_first_write.clone();
         move || reads_at_first_write.store(reads.reads(), Ordering::SeqCst)
     });
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
 
     let outcome = block_on(runs.start(handle.downgrade(), plan, publish));
 
@@ -637,7 +638,7 @@ fn read_ahead_stops_at_the_byte_budget_until_pages_are_applied() {
     );
     assert!(reads_at_first_write.load(Ordering::SeqCst) <= 2);
     assert_eq!(opener.bodies.reads(), 4);
-    assert_eq!(published.lock().unwrap().len(), 5);
+    assert_eq!(published.lock().unwrap().len(), 6);
 }
 
 #[test]
@@ -654,7 +655,7 @@ fn a_broken_frame_closes_the_connection_and_keeps_the_resume_point() {
         ],
     ));
     let runs = runs_with(&opener);
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
 
     let outcome = block_on(runs.start(handle.downgrade(), plan, |_| {}));
 
@@ -670,12 +671,7 @@ fn a_broken_frame_closes_the_connection_and_keeps_the_resume_point() {
     // The reader was waiting on the server; failing closed the connection.
     assert_eq!(opener.bodies.dropped(), 1);
     let state = block_on(handle.sync_lane_states()).unwrap();
-    assert_eq!(
-        state[0].next_variables,
-        json!({"input": {"continuation": {"cursor": "c1"}}})
-            .as_object()
-            .cloned()
-    );
+    assert_eq!(state[0].resume, Some(json!({"cursor": "c1"})));
 }
 
 #[test]
@@ -696,10 +692,7 @@ fn a_failed_lane_is_reported_and_the_other_lanes_finish() {
         ]))],
     ));
     let runs = runs_with(&opener);
-    let plan = args(vec![
-        lane("tasks", TASKS, json!({"kind": "hydrate"})),
-        lane("docs", TASKS, json!({"kind": "hydrate"})),
-    ]);
+    let plan = args();
 
     let outcome = block_on(runs.start(handle.downgrade(), plan, |_| {}));
 
@@ -716,12 +709,7 @@ fn a_failed_lane_is_reported_and_the_other_lanes_finish() {
     // The failed lane resumes from its last written page; the other completed.
     let states = block_on(handle.sync_lane_states()).unwrap();
     let state = |id: &str| states.iter().find(|state| state.id == id).unwrap();
-    assert_eq!(
-        state("tasks").next_variables,
-        json!({"input": {"continuation": {"cursor": "c1"}}})
-            .as_object()
-            .cloned()
-    );
+    assert_eq!(state("tasks").resume, Some(json!({"cursor": "c1"})));
     assert_eq!(state("tasks").completed_at, None);
     assert!(state("docs").completed_at.is_some());
 }
@@ -746,7 +734,7 @@ fn cache_shutdown_stops_the_run_and_still_closes_storage() {
         })),
         sync: runs_with(&opener),
     });
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
     let running = tauri::async_runtime::spawn({
         let state = state.clone();
         async move { state.sync.start(weak, plan, |_| {}).await }
@@ -767,7 +755,7 @@ fn cache_shutdown_stops_the_run_and_still_closes_storage() {
 #[test]
 fn a_host_without_an_opener_cannot_stream() {
     let handle = engine();
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
     let outcome = block_on(SyncRuns::default().start(handle.downgrade(), plan, |_| {}));
     assert_eq!(
         serde_json::to_value(&outcome).unwrap(),
@@ -807,7 +795,7 @@ fn hydrated_pages_coalesce_into_one_publication_per_interval() {
             published.lock().unwrap().push(entry);
         }
     };
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
 
     let outcome = block_on(runs.start(handle.downgrade(), plan, publish));
 
@@ -816,7 +804,10 @@ fn hydrated_pages_coalesce_into_one_publication_per_interval() {
         "{outcome:?}"
     );
     let published = published.lock().unwrap().clone();
-    assert_eq!(published.len(), 4, "{published:?}");
+    assert_eq!(published.len(), 5, "{published:?}");
+    // The `lane` line comes first.
+    assert_eq!(published[0], "recorded");
+    let published = &published[1..];
     assert!(published[0].starts_with("hydrated "));
     // The merged publication carries the last page's revision.
     let revision = |entry: &str| {
@@ -857,7 +848,7 @@ fn a_gzip_body_is_decoded_as_it_streams() {
     });
     opener.responses.lock().unwrap().push_back((200, chunks));
     let runs = runs_with(&opener);
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
 
     let outcome = block_on(runs.start(handle.downgrade(), plan, |_| {}));
 
@@ -890,7 +881,7 @@ fn a_truncated_gzip_body_fails_the_run_and_keeps_written_pages() {
         vec![Chunk::Bytes(compressed[..compressed.len() - 6].to_vec())],
     ));
     let runs = runs_with(&opener);
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
 
     let outcome = block_on(runs.start(handle.downgrade(), plan, |_| {}));
 
@@ -935,7 +926,7 @@ fn an_unknown_content_encoding_fails_before_writing() {
         vec![Chunk::Bytes(ndjson(&[soup_page("tasks", 0, &[1], None)]))],
     ));
     let runs = runs_with(&opener);
-    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+    let plan = args();
 
     let outcome = block_on(runs.start(handle.downgrade(), plan, |_| {}));
 

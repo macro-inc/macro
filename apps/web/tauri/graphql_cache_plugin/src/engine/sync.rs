@@ -8,7 +8,7 @@ use crate::sync::SyncFailure;
 use cache_core::engine::Engine;
 use cache_core::predicate::ProjectionMutation;
 use cache_core::sync::{
-    SyncApplied, SyncHooks, SyncLaneState, SyncPageWrite, SyncRun, SyncWriteError,
+    SyncApplied, SyncHooks, SyncLaneState, SyncPageWrite, SyncRun, SyncStartArgs, SyncWriteError,
 };
 use cache_core::value::EntityKey;
 use cache_turso::{TursoStorage, TursoStorageError};
@@ -112,6 +112,30 @@ pub(crate) enum SyncPublication {
 pub(crate) struct WeakEngineHandle(pub(super) Weak<EngineAccess<EngineState>>);
 
 impl WeakEngineHandle {
+    /// Starts a run at `started_at_ms`: its request carries every lane's saved
+    /// state and, when it syncs calendars, the cache's calendar coverage.
+    pub(crate) async fn sync_begin(
+        &self,
+        args: &SyncStartArgs,
+        started_at_ms: f64,
+    ) -> Result<SyncRun, SyncFailure> {
+        let inner = self.0.upgrade().ok_or(SyncFailure::Aborted)?;
+        let state = inner.lock().await;
+        state
+            .engine
+            .sync_begin(args, started_at_ms)
+            .await
+            .map_err(|error| match error {
+                SyncWriteError::Stream(error) => SyncFailure::Stream {
+                    message: error.to_string(),
+                },
+                SyncWriteError::Engine(error) => SyncFailure::Write {
+                    message: error.to_string(),
+                },
+                SyncWriteError::Hooks(never) => match never {},
+            })
+    }
+
     /// Applies the oldest decoded frame of `run`: at most one engine write.
     /// `None` when no frame is pending.
     pub(crate) async fn sync_apply_next(

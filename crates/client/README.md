@@ -116,11 +116,13 @@ does not depend on observing a notification.
 
 `cache_core::sync` fills the cache from one streamed NDJSON response
 (contract: [streamed cache sync](../../docs/architecture/streamed-cache-sync.md)
-and `apps/web/src/lib/graphql-cache/sync-protocol.ts`). Hosts own the network:
-they build the request with `SyncRun::request_body`, feed response bytes to
-`SyncRun::push_bytes`, and apply each decoded frame with
+and `apps/web/src/lib/graphql-cache/sync-protocol.ts`). The server plans each
+pass's lanes. Hosts own the network: they start a run with
+`Engine::sync_begin`, whose request (`SyncRun::request_body`) carries the pass,
+every lane's saved state and, for calendars, the cache's coverage; they feed
+response bytes to `SyncRun::push_bytes` and apply each decoded frame with
 `Engine::sync_apply_next`, one engine write per frame, so foreground reads can
-go first. The engine stays I/O-free: a host `SyncHooks` supplies the same Soup
+go first. A lane's `lane` line declares its query and kind before its pages. The engine stays I/O-free: a host `SyncHooks` supplies the same Soup
 projection composition it uses for hydration and server deletions, and the
 clocks. Hydrate lanes record delivered keys as lane members; a completed
 membership listing deletes unlisted members like a server deletion; calendar

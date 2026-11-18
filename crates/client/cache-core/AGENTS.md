@@ -41,10 +41,13 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/engine/people/sync.rs`: capture the single-owner engine's contact write fence, optionally scan at most 500 raw contact records by key, and reconcile complete exact-ID evidence. Never delete from scan omissions; reject stale fences, foreign/duplicate evidence and omitted self. Removal clears durable/hot records and invalidates dependent reads; context-only stubs are not membership. Engine replacement, clear and contact invalidation/deletion invalidate admission.
 - `src/page_retention.rs`: shared Soup/database/contact snapshot budget; hydration drops viewer page/lookup wrappers, not normalized descendants. Public profiles do not prove contact membership; only `GraphqlContact` projects into `person`.
 - `src/queue.rs`: the optimistic mutation queue.
-- `src/sync.rs` + `src/engine/sync.rs`: streamed sync plans, the NDJSON frame
-  decoder, and `Engine::sync_apply_next` (host-neutral; hosts open the stream
-  and supply `SyncHooks`). `SYNC_PROTOCOL` is the version every request
-  carries; line types the engine does not know are skipped
+- `src/sync.rs` + `src/engine/sync.rs`: streamed sync runs (`Engine::sync_begin`
+  builds the request from the pass, every lane's saved state and the calendar
+  coverage; the server plans the lanes and declares each on a `lane` line),
+  the NDJSON frame decoder, and `Engine::sync_apply_next` (host-neutral; hosts
+  open the stream and supply `SyncHooks`). A lane's `resume` checkpoint is the
+  server's, stored and sent back unread. `SYNC_PROTOCOL` is the version every
+  request carries; line types the engine does not know are skipped
   (`SyncFrame::Unrecognized`), anything else new needs a new version (see
   `docs/architecture/streamed-cache-sync.md`).
 - `tests/`: the primary spec for engine behavior — one file per concern

@@ -8,7 +8,7 @@ use super::*;
 use crate::mail::ProjectionError;
 use cache_core::engine::Engine;
 use cache_core::predicate::{PredicateQueryResult, ProjectionMutation};
-use cache_core::sync::{SyncHooks, SyncPageWrite, SyncRun, SyncStartArgs};
+use cache_core::sync::{SyncHooks, SyncPageWrite, SyncStartArgs};
 use cache_core::value::EntityKey;
 use cache_turso::{TursoStorage, TursoStorageError};
 use serde_json::{Map, Value, json};
@@ -177,12 +177,13 @@ fn item(n: u128, task: bool, fields: &[(&str, &str)]) -> Value {
     Value::Object(item)
 }
 
+/// The `tasks` lane's `lane` line, as the server declares it.
 fn lane(fields: &[(&str, &str)]) -> Value {
     json!({
-        "id": "tasks",
+        "type": "lane",
+        "lane": "tasks",
         "query": query(fields),
         "operationName": "SoupBackfillSyncTasks",
-        "variables": {"input": {"initial": {"limit": 500}}},
         "paging": "soup",
         "kind": {"kind": "hydrate"},
         "passStartedAt": "2026-11-01T00:00:00.000Z",
@@ -198,9 +199,10 @@ fn stream(fields: &[(&str, &str)]) -> Vec<u8> {
             "nextCursor": null,
         }}}},
         "items": 2,
-        "nextVariables": null,
+        "resume": null,
     });
     let frames = [
+        lane(fields),
         page,
         json!({"type": "laneDone", "lane": "tasks", "pages": 1, "items": 2, "reason": "complete"}),
         json!({"type": "end", "reason": "complete"}),
@@ -305,10 +307,10 @@ async fn sync(fields: &[(&str, &str)]) -> Result<Engine<TursoStorage>, String> {
     let args: SyncStartArgs = serde_json::from_value(json!({
         "url": "https://api.example.test/items/soup/graphql/stream",
         "headers": {},
-        "lanes": [lane(fields)],
+        "pass": "first",
     }))
     .unwrap();
-    let mut run = SyncRun::new(&args, 0.0).unwrap();
+    let mut run = engine.sync_begin(&args, 0.0).await.unwrap();
     run.push_bytes(&stream(fields)).unwrap();
     while engine
         .sync_apply_next(&mut run, &HostHooks)

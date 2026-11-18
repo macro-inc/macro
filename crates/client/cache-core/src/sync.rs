@@ -1,11 +1,15 @@
-//! Streamed cache sync: plan types, NDJSON frame decoding, and per-run progress.
+//! Streamed cache sync: run arguments, NDJSON frame decoding, and per-run
+//! progress.
 //!
-//! A host (browser worker, native plugin) opens one HTTP stream built from a
-//! [`SyncStartArgs`] plan and feeds the response bytes to a [`SyncRun`]. The
-//! run decodes complete lines into frames; the host applies them one at a time
-//! with [`crate::engine::Engine::sync_apply_next`], each application being one
+//! A host (browser worker, native plugin) starts a run with
+//! [`crate::engine::Engine::sync_begin`], which builds the request from the
+//! [`SyncStartArgs`] and the lanes' saved state, opens one HTTP stream, and
+//! feeds the response bytes to the [`SyncRun`]. The server plans the lanes
+//! and declares each one on a `lane` line before its pages. The run decodes
+//! complete lines into frames; the host applies them one at a time with
+//! [`crate::engine::Engine::sync_apply_next`], each application being one
 //! engine write. The run itself never touches the network or a clock: hosts
-//! supply both. Contract: `apps/web/src/lib/graphql-cache/sync-protocol.ts`.
+//! supply both. Contract: `docs/architecture/streamed-cache-sync.md`.
 
 mod decoder;
 
@@ -23,8 +27,8 @@ use thiserror::Error;
 #[cfg(test)]
 mod test;
 
-/// Maximum lanes in one request (the server rejects more).
-pub const MAX_SYNC_LANES: usize = 32;
+/// Most lanes one run accepts from the server's declarations.
+pub const MAX_SYNC_LANES: usize = 256;
 const MAX_LANE_ID_BYTES: usize = 64;
 /// The sync protocol this engine speaks: what it sends and how it reads the
 /// lines it gets. Every request carries it, and a server that does not speak
@@ -63,34 +67,49 @@ pub enum SyncLaneKind {
     },
 }
 
-/// One lane of a sync plan.
+/// One lane as the server declared it on its `lane` line.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SyncLanePlan {
+pub struct SyncLane {
     /// `[a-z0-9-]{1,64}`; also the key of the lane's saved state.
     pub id: String,
-    /// Server-safe query text.
+    /// The query every page of the lane runs.
     pub query: String,
-    /// Selected operation.
+    /// The query's operation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operation_name: Option<String>,
-    /// Variables for the lane's first page.
-    pub variables: Map<String, Json>,
-    /// How the server follows pages.
+    /// Where the pages keep their items.
     pub paging: SyncPaging,
-    /// Stop after at least this many items. Invalid on membership lanes.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_items: Option<u64>,
     /// What the cache does with the lane's pages.
     pub kind: SyncLaneKind,
-    /// ISO time this lane's pass started; stored with the first page.
+    /// ISO time this lane's pass started; stored with the first page, and as
+    /// the watermark once the lane completes.
     pub pass_started_at: String,
     /// Opaque description stored when the lane completes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coverage: Option<Json>,
 }
 
-/// A run request: the stream to open and the lanes it carries.
+/// The sync pass a run streams; the server plans each pass's lanes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SyncPass {
+    /// What the app needs to filter and show lists locally.
+    First,
+    /// Everything else, in streams of limited size.
+    Second,
+}
+
+/// What the server plans calendar windows from, besides the cache's coverage.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncCalendarArgs {
+    /// The app's IANA time zone: the months and local dates it reads
+    /// calendars in.
+    pub time_zone: String,
+}
+
+/// A run request: the stream to open and what the server plans it from.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncStartArgs {
@@ -99,11 +118,21 @@ pub struct SyncStartArgs {
     /// Extra request headers (mail cache profile, bearer token).
     #[serde(default)]
     pub headers: BTreeMap<String, String>,
-    /// Lanes in priority order.
-    pub lanes: Vec<SyncLanePlan>,
+    /// The pass to stream.
+    pub pass: SyncPass,
     /// End the stream after this many pages (0 sends none); the next run resumes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_pages: Option<u64>,
+    /// Sync calendar windows; absent while the app reads calendars elsewhere.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calendar: Option<SyncCalendarArgs>,
+    /// Leave out lanes that completed at or after this ISO time (the
+    /// `completedAt` clock): they are current for this run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_since: Option<String>,
+    /// Lanes the server leaves out of this stream.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skip_lanes: Vec<String>,
 }
 
 /// Saved per-lane state, read from the cache database.
@@ -112,8 +141,9 @@ pub struct SyncStartArgs {
 pub struct SyncLaneState {
     /// Lane id.
     pub id: String,
-    /// Resume point of an unfinished pass; `None` when none is in progress.
-    pub next_variables: Option<Map<String, Json>>,
+    /// The server's checkpoint from the last written page of an unfinished
+    /// pass, sent back to resume it; `None` when no pass is in progress.
+    pub resume: Option<Json>,
     /// Pages written in the current (or last) pass.
     pub pages: u64,
     /// Items written in the current (or last) pass.
@@ -165,13 +195,13 @@ impl StoredSyncLane {
         }
     }
 
-    /// Starts counting a new pass when the plan names a different one.
+    /// Starts counting a new pass when the lane names a different one.
     pub(crate) fn begin_pass(&mut self, pass_started_at: &str) {
         if self.state.pass_started_at.as_deref() != Some(pass_started_at) {
             self.state.pass_started_at = Some(pass_started_at.to_owned());
             self.state.pages = 0;
             self.state.items = 0;
-            self.state.next_variables = None;
+            self.state.resume = None;
             self.pending_watermark.clear();
         }
     }
@@ -216,11 +246,27 @@ pub struct SyncPageResponse {
 /// One decoded NDJSON line.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "nearly every frame is a page, and frames are handled one at a time"
-)]
 pub enum SyncFrame {
+    /// A lane the stream runs, declared before anything else of it.
+    #[serde(rename_all = "camelCase")]
+    Lane {
+        /// Lane id.
+        lane: String,
+        /// The query every page of the lane runs.
+        query: String,
+        /// The query's operation.
+        #[serde(default)]
+        operation_name: Option<String>,
+        /// Where the pages keep their items.
+        paging: SyncPaging,
+        /// What the cache does with the pages.
+        kind: SyncLaneKind,
+        /// When the lane's pass started.
+        pass_started_at: String,
+        /// Stored when the lane completes.
+        #[serde(default)]
+        coverage: Option<Json>,
+    },
     /// One executed page of a lane.
     #[serde(rename_all = "camelCase")]
     Page {
@@ -234,8 +280,10 @@ pub enum SyncFrame {
         response: SyncPageResponse,
         /// Items on the page.
         items: u64,
-        /// What the lane runs next; `None` when the lane is done.
-        next_variables: Option<Map<String, Json>>,
+        /// The checkpoint to send back to continue the lane after this page;
+        /// `None` when the lane does not resume across streams or is done.
+        #[serde(default)]
+        resume: Option<Json>,
     },
     /// A lane finished.
     #[serde(rename_all = "camelCase")]
@@ -314,15 +362,15 @@ pub struct SyncRunResult {
     pub duration_ms: f64,
     /// Response bytes read.
     pub bytes: u64,
-    /// Lanes in plan order.
+    /// Lanes in the order the server declared them.
     pub lanes: Vec<SyncLaneRunSummary>,
 }
 
 /// Failures detected without touching the cache.
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum SyncStreamError {
-    /// The plan breaks the contract.
-    #[error("invalid sync plan: {0}")]
+    /// The run's arguments break the contract.
+    #[error("invalid sync arguments: {0}")]
     Plan(String),
     /// The stream breaks the contract, failed as a whole, or ended early.
     #[error("{0}")]
@@ -346,14 +394,16 @@ pub(crate) struct LaneProgress {
     pub(crate) listed: BTreeSet<EntityKey<'static>>,
 }
 
-/// One run: the plan, the decoder, decoded frames not yet applied, and progress.
+/// One run: the request, the lanes declared so far, the decoder, decoded
+/// frames not yet applied, and progress.
 #[derive(Debug)]
 pub struct SyncRun {
-    pub(crate) lanes: Vec<SyncLanePlan>,
+    /// Lanes in the order the server declared them.
+    pub(crate) lanes: Vec<SyncLane>,
     /// Each lane's parsed operation, parsed once per run (some lane queries
     /// are tens of kilobytes and lanes run thousands of pages).
     pub(crate) operations: BTreeMap<String, std::sync::Arc<crate::document::Operation>>,
-    max_pages: Option<u64>,
+    request: Json,
     decoder: NdjsonDecoder,
     pub(crate) pending: VecDeque<SyncFrame>,
     pub(crate) progress: BTreeMap<String, LaneProgress>,
@@ -363,99 +413,83 @@ pub struct SyncRun {
 }
 
 impl SyncRun {
-    /// Validates a plan and starts a run at `started_at_ms` (the host's
-    /// monotonic clock, the same one later passed to [`Self::summary`]).
-    pub fn new(args: &SyncStartArgs, started_at_ms: f64) -> Result<Self, SyncStreamError> {
-        let plan = |message: String| Err(SyncStreamError::Plan(message));
-        // An empty plan or `maxPages: 0` is valid: the server answers `end` at once.
-        if args.lanes.len() > MAX_SYNC_LANES {
-            return plan(format!("expected at most {MAX_SYNC_LANES} lanes"));
+    /// Builds a run's request from its arguments, every lane's saved state
+    /// and, when the run syncs calendars, the cache's calendar coverage, and
+    /// starts the run at `started_at_ms` (the host's monotonic clock, the same
+    /// one later passed to [`Self::finish`]).
+    pub fn new(
+        args: &SyncStartArgs,
+        saved: &[SyncLaneState],
+        coverage: &[CalendarSpan],
+        started_at_ms: f64,
+    ) -> Result<Self, SyncStreamError> {
+        if let Some(id) = args.skip_lanes.iter().find(|id| !is_lane_id(id)) {
+            return Err(SyncStreamError::Plan(format!(
+                "skipped lane `{id}` is not [a-z0-9-]{{1,64}}"
+            )));
         }
-        let ids = args
-            .lanes
-            .iter()
-            .map(|lane| lane.id.as_str())
-            .collect::<BTreeSet<_>>();
-        if ids.len() != args.lanes.len() {
-            return plan("lane ids must be unique".to_owned());
-        }
-        for lane in &args.lanes {
-            if !is_lane_id(&lane.id) {
-                return plan(format!("lane id `{}` is not [a-z0-9-]{{1,64}}", lane.id));
-            }
-            if lane.max_items == Some(0) {
-                return plan(format!("lane `{}` maxItems must be positive", lane.id));
-            }
-            match &lane.kind {
-                SyncLaneKind::Membership { scopes } => {
-                    if lane.max_items.is_some() {
-                        return plan(format!("membership lane `{}` cannot set maxItems", lane.id));
-                    }
-                    if scopes.is_empty() || scopes.iter().any(|scope| !is_lane_id(scope)) {
-                        return plan(format!(
-                            "membership lane `{}` needs lane-id scopes",
-                            lane.id
-                        ));
-                    }
-                }
-                SyncLaneKind::Calendar { coverage } => {
-                    if lane.paging != SyncPaging::Calendar {
-                        return plan(format!("calendar lane `{}` needs calendar paging", lane.id));
-                    }
-                    if coverage.iter().any(|span| span.start > span.end) {
-                        return plan(format!("calendar lane `{}` has an invalid span", lane.id));
-                    }
-                }
-                SyncLaneKind::Hydrate => {}
-            }
+        if args
+            .calendar
+            .as_ref()
+            .is_some_and(|calendar| calendar.time_zone.is_empty())
+        {
+            return Err(SyncStreamError::Plan(
+                "calendar needs a time zone".to_owned(),
+            ));
         }
         Ok(Self {
-            progress: args
-                .lanes
-                .iter()
-                .map(|lane| (lane.id.clone(), LaneProgress::default()))
-                .collect(),
-            lanes: args.lanes.clone(),
+            lanes: Vec::new(),
             operations: BTreeMap::new(),
-            max_pages: args.max_pages,
+            request: request_body(args, saved, coverage),
             decoder: NdjsonDecoder::default(),
             pending: VecDeque::new(),
+            progress: BTreeMap::new(),
             bytes: 0,
             started_at_ms,
             end: None,
         })
     }
 
-    /// The JSON request body the host sends (section 1 of the contract).
-    pub fn request_body(&self) -> Json {
-        let lanes = self
-            .lanes
-            .iter()
-            .map(|lane| {
-                let mut body = Map::new();
-                body.insert("id".into(), Json::String(lane.id.clone()));
-                body.insert("query".into(), Json::String(lane.query.clone()));
-                if let Some(name) = &lane.operation_name {
-                    body.insert("operationName".into(), Json::String(name.clone()));
-                }
-                body.insert("variables".into(), Json::Object(lane.variables.clone()));
-                body.insert(
-                    "paging".into(),
-                    serde_json::to_value(lane.paging).unwrap_or(Json::Null),
-                );
-                if let Some(max_items) = lane.max_items {
-                    body.insert("maxItems".into(), Json::from(max_items));
-                }
-                Json::Object(body)
-            })
-            .collect();
-        let mut body = Map::new();
-        body.insert("protocol".into(), Json::from(SYNC_PROTOCOL));
-        body.insert("lanes".into(), Json::Array(lanes));
-        if let Some(max_pages) = self.max_pages {
-            body.insert("maxPages".into(), Json::from(max_pages));
+    /// The JSON request body the host sends.
+    pub fn request_body(&self) -> &Json {
+        &self.request
+    }
+
+    /// Adds a lane from its `lane` line.
+    pub(crate) fn declare(&mut self, lane: SyncLane) -> Result<(), SyncStreamError> {
+        let invalid = |message: String| Err(SyncStreamError::Stream(message));
+        if !is_lane_id(&lane.id) {
+            return invalid(format!("lane id `{}` is not [a-z0-9-]{{1,64}}", lane.id));
         }
-        Json::Object(body)
+        if self.progress.contains_key(&lane.id) {
+            return invalid(format!("lane `{}` was declared twice", lane.id));
+        }
+        if self.lanes.len() >= MAX_SYNC_LANES {
+            return invalid(format!("a stream declares at most {MAX_SYNC_LANES} lanes"));
+        }
+        match &lane.kind {
+            SyncLaneKind::Membership { scopes } => {
+                if scopes.is_empty() || scopes.iter().any(|scope| !is_lane_id(scope)) {
+                    return invalid(format!(
+                        "membership lane `{}` needs lane-id scopes",
+                        lane.id
+                    ));
+                }
+            }
+            SyncLaneKind::Calendar { coverage } => {
+                if lane.paging != SyncPaging::Calendar {
+                    return invalid(format!("calendar lane `{}` needs calendar paging", lane.id));
+                }
+                if coverage.iter().any(|span| span.start > span.end) {
+                    return invalid(format!("calendar lane `{}` has an invalid span", lane.id));
+                }
+            }
+            SyncLaneKind::Hydrate => {}
+        }
+        self.progress
+            .insert(lane.id.clone(), LaneProgress::default());
+        self.lanes.push(lane);
+        Ok(())
     }
 
     /// Decodes response bytes. Complete lines become pending frames; a
@@ -480,7 +514,9 @@ impl SyncRun {
     /// not know, or when nothing is pending.
     pub fn peek_frame(&self) -> Option<(&str, bool)> {
         match self.pending.front()? {
-            SyncFrame::Page { lane, .. } | SyncFrame::LaneError { lane, .. } => Some((lane, false)),
+            SyncFrame::Lane { lane, .. }
+            | SyncFrame::Page { lane, .. }
+            | SyncFrame::LaneError { lane, .. } => Some((lane, false)),
             SyncFrame::LaneDone { lane, .. } => Some((lane, true)),
             SyncFrame::Waiting | SyncFrame::Unrecognized | SyncFrame::End { .. } => None,
         }
@@ -546,12 +582,63 @@ impl SyncRun {
         }
     }
 
-    pub(crate) fn lane(&self, id: &str) -> Result<&SyncLanePlan, SyncStreamError> {
+    pub(crate) fn lane(&self, id: &str) -> Result<&SyncLane, SyncStreamError> {
         self.lanes
             .iter()
             .find(|lane| lane.id == id)
             .ok_or_else(|| SyncStreamError::Stream(format!("frame names unknown lane `{id}`")))
     }
+}
+
+/// The request body: the pass, every lane's saved state, and what the server
+/// plans calendar windows from.
+fn request_body(args: &SyncStartArgs, saved: &[SyncLaneState], coverage: &[CalendarSpan]) -> Json {
+    let lanes = saved
+        .iter()
+        .map(|state| {
+            let mut lane = Map::new();
+            lane.insert("id".into(), Json::String(state.id.clone()));
+            if let Some(resume) = &state.resume {
+                lane.insert("resume".into(), resume.clone());
+            }
+            if let Some(watermark) = &state.watermark {
+                lane.insert("watermark".into(), Json::String(watermark.clone()));
+            }
+            if let Some(completed_at) = &state.completed_at {
+                lane.insert("completedAt".into(), Json::String(completed_at.clone()));
+            }
+            Json::Object(lane)
+        })
+        .collect();
+    let mut body = Map::new();
+    body.insert("protocol".into(), Json::from(SYNC_PROTOCOL));
+    body.insert(
+        "pass".into(),
+        serde_json::to_value(args.pass).unwrap_or(Json::Null),
+    );
+    body.insert("lanes".into(), Json::Array(lanes));
+    if let Some(calendar) = &args.calendar {
+        let mut request = Map::new();
+        request.insert("timeZone".into(), Json::String(calendar.time_zone.clone()));
+        request.insert(
+            "coverage".into(),
+            serde_json::to_value(coverage).unwrap_or(Json::Null),
+        );
+        body.insert("calendar".into(), Json::Object(request));
+    }
+    if let Some(since) = &args.completed_since {
+        body.insert("completedSince".into(), Json::String(since.clone()));
+    }
+    if !args.skip_lanes.is_empty() {
+        body.insert(
+            "skipLanes".into(),
+            Json::Array(args.skip_lanes.iter().cloned().map(Json::String).collect()),
+        );
+    }
+    if let Some(max_pages) = args.max_pages {
+        body.insert("maxPages".into(), Json::from(max_pages));
+    }
+    Json::Object(body)
 }
 
 fn is_lane_id(id: &str) -> bool {

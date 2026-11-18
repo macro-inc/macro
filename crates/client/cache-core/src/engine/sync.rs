@@ -11,9 +11,9 @@ use crate::revision::Revisioned;
 use crate::search::{collect_search_changes, snapshot_search_fields};
 use crate::store::{Storage, SyncStorage};
 use crate::sync::{
-    LaneProgress, StoredSyncLane, SyncEndReason, SyncFrame, SyncLaneDoneReason, SyncLaneKind,
-    SyncLanePlan, SyncLaneRow, SyncLaneState, SyncPageResponse, SyncRun, SyncStreamError,
-    item_keys, lowest_watermark, page_items, page_watermark,
+    LaneProgress, StoredSyncLane, SyncEndReason, SyncFrame, SyncLane, SyncLaneDoneReason,
+    SyncLaneKind, SyncLaneRow, SyncLaneState, SyncPageResponse, SyncRun, SyncStartArgs,
+    SyncStreamError, item_keys, lowest_watermark, page_items, page_watermark,
 };
 use crate::value::EntityKey;
 use maybe_send::MaybeSend;
@@ -123,13 +123,17 @@ pub enum SyncApplied {
 struct SyncPageFrame {
     variables: Map<String, Json>,
     response: SyncPageResponse,
-    next_variables: Option<Map<String, Json>>,
+    resume: Option<Json>,
 }
 
 /// How [`Engine::sync_write_page`] handled a page.
-#[expect(
-    clippy::large_enum_variant,
-    reason = "returned once per page and matched at once, never stored"
+// Wasm's 32-bit pointers keep the variants within the lint's threshold.
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    expect(
+        clippy::large_enum_variant,
+        reason = "returned once per page and matched at once, never stored"
+    )
 )]
 enum SyncPageWritten<F> {
     /// Written with its lane state in one transaction.
@@ -140,6 +144,29 @@ enum SyncPageWritten<F> {
         projections: Vec<ProjectionMutation>,
         advance: F,
     },
+}
+
+impl<S: SyncStorage + CalendarRangeStorage> Engine<S> {
+    /// Starts a run at `started_at_ms` (the host's monotonic clock): its
+    /// request carries every lane's saved state and, when the run syncs
+    /// calendars, the cache's calendar coverage, from which the server plans
+    /// the stream.
+    pub async fn sync_begin(
+        &self,
+        args: &SyncStartArgs,
+        started_at_ms: f64,
+    ) -> Result<SyncRun, SyncWriteError<S::Error, Infallible>> {
+        let saved = self.sync_lane_states().await?;
+        let coverage = match args.calendar {
+            Some(_) => self
+                .storage
+                .load_calendar_coverage()
+                .await
+                .map_err(|error| SyncWriteError::Engine(EngineError::Storage(error)))?,
+            None => Vec::new(),
+        };
+        Ok(SyncRun::new(args, &saved, &coverage, started_at_ms)?)
+    }
 }
 
 impl<S: SyncStorage> Engine<S> {
@@ -180,17 +207,37 @@ where
             return Err(stream("frame after the end frame"));
         }
         let applied = match frame {
+            SyncFrame::Lane {
+                lane,
+                query,
+                operation_name,
+                paging,
+                kind,
+                pass_started_at,
+                coverage,
+            } => {
+                run.declare(SyncLane {
+                    id: lane,
+                    query,
+                    operation_name,
+                    paging,
+                    kind,
+                    pass_started_at,
+                    coverage,
+                })?;
+                SyncApplied::Recorded
+            }
             SyncFrame::Page {
                 lane,
                 variables,
                 response,
-                next_variables,
+                resume,
                 ..
             } => {
                 let page = SyncPageFrame {
                     variables,
                     response,
-                    next_variables,
+                    resume,
                 };
                 self.sync_page(run, hooks, &lane, page).await?
             }
@@ -222,7 +269,7 @@ where
         let SyncPageFrame {
             variables,
             response,
-            next_variables,
+            resume,
         } = frame;
         let lane = run.lane(lane_id)?.clone();
         let progress = lane_progress(run, lane_id);
@@ -295,10 +342,11 @@ where
             stored.state.pages += 1;
             stored.state.items += item_count;
             // The server sends `null` whenever no further page of the lane follows
-            // in this stream (done, capped, or failed). Only `laneDone` clears the
-            // resume point, so an interrupted pass resumes from its last good page.
-            if next_variables.is_some() {
-                stored.state.next_variables = next_variables.clone();
+            // in this stream (done, capped, or failed), and on lanes that never
+            // resume. Only `laneDone` clears the checkpoint, so an interrupted
+            // pass resumes from its last good page.
+            if resume.is_some() {
+                stored.state.resume = resume.clone();
             }
             let members = match lane.kind {
                 SyncLaneKind::Hydrate => keys.clone(),
@@ -408,7 +456,7 @@ where
         stored.state.completed_at = iso_time(hooks.wall_clock_ms());
         stored.state.watermark = Some(lane.pass_started_at.clone());
         stored.state.coverage = lane.coverage.clone().unwrap_or(Json::Null);
-        stored.state.next_variables = None;
+        stored.state.resume = None;
         self.storage
             .save_sync_lane(stored.encode(), Vec::new())
             .await
@@ -483,7 +531,7 @@ where
         identity: Option<&str>,
         mut updates: RecordUpdates,
         projections: Vec<ProjectionMutation>,
-        lane: &SyncLanePlan,
+        lane: &SyncLane,
         advance: F,
     ) -> Result<SyncPageWritten<F>, SyncWriteError<S::Error, H>>
     where
@@ -632,10 +680,10 @@ where
         }))
     }
 
-    /// The lane's saved state, counting a new pass when the plan starts one.
+    /// The lane's saved state, counting a new pass when the lane starts one.
     async fn stored_lane<H: std::error::Error + 'static>(
         &self,
-        lane: &SyncLanePlan,
+        lane: &SyncLane,
     ) -> Result<StoredSyncLane, SyncWriteError<S::Error, H>> {
         let rows = self
             .storage
@@ -655,7 +703,7 @@ where
 /// The lane's query operation, parsed on the lane's first page of the run.
 fn lane_operation<E: std::error::Error + 'static, H: std::error::Error + 'static>(
     run: &mut SyncRun,
-    lane: &SyncLanePlan,
+    lane: &SyncLane,
 ) -> Result<std::sync::Arc<Operation>, SyncWriteError<E, H>> {
     if let Some(operation) = run.operations.get(&lane.id) {
         return Ok(operation.clone());

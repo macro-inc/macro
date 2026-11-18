@@ -3,8 +3,8 @@
 use super::InMemoryStorage;
 use crate::calendar::{
     CALENDAR_TYPENAME, CalendarCommit, CalendarCommitOutcome, CalendarRangeRequest,
-    CalendarRangeSnapshot, CalendarRangeStorage, EVENT_TYPENAME, OCCURRENCE_TYPENAME, merge_spans,
-    next_sync_state,
+    CalendarRangeSnapshot, CalendarRangeStorage, CalendarSpan, EVENT_TYPENAME, OCCURRENCE_TYPENAME,
+    merge_spans, next_sync_state,
 };
 use crate::value::{CacheValue, EntityKey};
 use std::collections::BTreeSet;
@@ -36,6 +36,10 @@ impl CalendarRangeStorage for InMemoryStorage {
                 .collect(),
             sync: self.calendar_sync.clone(),
         })
+    }
+
+    async fn load_calendar_coverage(&self) -> Result<Vec<CalendarSpan>, Self::Error> {
+        Ok(merge_spans(self.calendar_coverage.iter().copied()))
     }
 
     async fn calendar_commit(

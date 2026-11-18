@@ -1,25 +1,33 @@
 use super::*;
+use crate::calendar::CalendarSpanKind;
 use serde_json::json;
 
-fn lane(id: &str, kind: Json) -> Json {
-    json!({
-        "id": id,
-        "query": "query Q { user { id } }",
-        "variables": {"input": {"initial": {"limit": 2}}},
-        "paging": "soup",
-        "kind": kind,
-        "passStartedAt": "2026-11-01T00:00:00.000Z",
-    })
-}
-
-fn args(lanes: Vec<Json>) -> SyncStartArgs {
-    serde_json::from_value(json!({
+fn args(extra: Json) -> SyncStartArgs {
+    let mut args = json!({
         "url": "https://example.test/items/soup/graphql/stream",
         "headers": {"x-macro-mail-cache-profile": "v2"},
-        "lanes": lanes,
-        "maxPages": 3,
-    }))
-    .unwrap()
+        "pass": "first",
+    });
+    args.as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
+    serde_json::from_value(args).unwrap()
+}
+
+fn run() -> SyncRun {
+    SyncRun::new(&args(json!({})), &[], &[], 10.0).unwrap()
+}
+
+fn declare(id: &str, paging: SyncPaging, kind: SyncLaneKind) -> SyncLane {
+    SyncLane {
+        id: id.to_owned(),
+        query: "query Q { user { id } }".to_owned(),
+        operation_name: Some("Q".to_owned()),
+        paging,
+        kind,
+        pass_started_at: "2026-11-01T00:00:00.000Z".to_owned(),
+        coverage: None,
+    }
 }
 
 #[test]
@@ -51,10 +59,11 @@ fn decoder_splits_a_byte_at_a_time() {
 
 #[test]
 fn run_decodes_every_frame_type_and_counts_bytes() {
-    let mut run =
-        SyncRun::new(&args(vec![lane("tasks", json!({"kind":"hydrate"}))]), 10.0).unwrap();
+    let mut run = run();
     let stream = concat!(
-        r#"{"type":"page","lane":"tasks","page":0,"variables":{"input":{}},"response":{"data":{"user":{"id":"u"}}},"items":0,"nextVariables":null}"#,
+        r#"{"type":"lane","lane":"tasks","query":"query Q { user { id } }","operationName":"Q","paging":"soup","kind":{"kind":"hydrate"},"passStartedAt":"2026-11-01T00:00:00.000Z","coverage":{"entity":"task","scope":"all"}}"#,
+        "\n",
+        r#"{"type":"page","lane":"tasks","page":0,"variables":{"input":{}},"response":{"data":{"user":{"id":"u"}}},"items":0,"resume":{"cursor":"c1"}}"#,
         "\n",
         r#"{"type":"laneDone","lane":"tasks","pages":1,"items":0,"reason":"complete"}"#,
         "\n",
@@ -69,25 +78,30 @@ fn run_decodes_every_frame_type_and_counts_bytes() {
     );
     let (head, tail) = stream.split_at(40);
     assert_eq!(run.push_bytes(head.as_bytes()).unwrap(), 0);
-    assert_eq!(run.push_bytes(tail.as_bytes()).unwrap(), 6);
+    assert_eq!(run.push_bytes(tail.as_bytes()).unwrap(), 7);
     let frames = run.pending.iter().cloned().collect::<Vec<_>>();
+    assert!(matches!(
+        &frames[0],
+        SyncFrame::Lane { lane, operation_name: Some(name), paging: SyncPaging::Soup, coverage: Some(_), .. }
+            if lane == "tasks" && name == "Q"
+    ));
     assert!(
-        matches!(&frames[0], SyncFrame::Page { lane, next_variables: None, .. } if lane == "tasks")
+        matches!(&frames[1], SyncFrame::Page { lane, resume: Some(resume), .. } if lane == "tasks" && *resume == json!({"cursor": "c1"}))
     );
     assert!(matches!(
-        &frames[1],
+        &frames[2],
         SyncFrame::LaneDone {
             reason: SyncLaneDoneReason::Complete,
             pages: 1,
             ..
         }
     ));
-    assert_eq!(frames[2], SyncFrame::Waiting);
-    assert!(matches!(&frames[3], SyncFrame::LaneError { message, .. } if message == "boom"));
+    assert_eq!(frames[3], SyncFrame::Waiting);
+    assert!(matches!(&frames[4], SyncFrame::LaneError { message, .. } if message == "boom"));
     // A line type this engine does not know is kept as nothing to apply.
-    assert_eq!(frames[4], SyncFrame::Unrecognized);
+    assert_eq!(frames[5], SyncFrame::Unrecognized);
     assert_eq!(
-        frames[5],
+        frames[6],
         SyncFrame::End {
             reason: SyncEndReason::MaxPages
         }
@@ -97,28 +111,44 @@ fn run_decodes_every_frame_type_and_counts_bytes() {
 }
 
 #[test]
+fn a_page_without_a_checkpoint_decodes() {
+    let mut run = run();
+    run.push_bytes(b"{\"type\":\"page\",\"lane\":\"tasks\",\"page\":0,\"variables\":{},\"response\":{},\"items\":0,\"resume\":null}\n")
+        .unwrap();
+    run.push_bytes(
+        b"{\"type\":\"page\",\"lane\":\"tasks\",\"page\":1,\"variables\":{},\"response\":{},\"items\":0}\n",
+    )
+    .unwrap();
+    assert!(
+        run.pending
+            .iter()
+            .all(|frame| matches!(frame, SyncFrame::Page { resume: None, .. }))
+    );
+}
+
+#[test]
 fn malformed_frames_and_unterminated_streams_are_stream_errors() {
     // A known line type must still have its fields; only unknown types skip.
     for line in [
         &b"{\"type\":\"laneDone\",\"lane\":\"tasks\"}\n"[..],
         b"{\"type\":\"end\",\"reason\":\"later\"}\n",
         b"{\"lane\":\"tasks\"}\n",
+        b"{\"type\":\"lane\",\"lane\":\"tasks\",\"query\":\"query Q { user { id } }\",\"paging\":\"grouped\",\"kind\":{\"kind\":\"hydrate\"},\"passStartedAt\":\"x\"}\n",
+        b"{\"type\":\"lane\",\"lane\":\"tasks\",\"query\":\"query Q { user { id } }\",\"paging\":\"soup\",\"kind\":{\"kind\":\"hydrate\"}}\n",
     ] {
-        let mut run =
-            SyncRun::new(&args(vec![lane("tasks", json!({"kind":"hydrate"}))]), 0.0).unwrap();
+        let mut run = run();
         assert!(matches!(
             run.push_bytes(line),
             Err(SyncStreamError::Stream(_))
         ));
     }
 
-    let mut run = SyncRun::new(&args(vec![lane("tasks", json!({"kind":"hydrate"}))]), 0.0).unwrap();
+    let mut run = run();
     run.push_bytes(b"{\"type\":\"end\"").unwrap();
     assert!(matches!(run.finish(1.0), Err(SyncStreamError::Stream(_))));
 
-    let run = SyncRun::new(&args(vec![lane("tasks", json!({"kind":"hydrate"}))]), 0.0).unwrap();
     assert_eq!(
-        run.finish(1.0),
+        self::run().finish(1.0),
         Err(SyncStreamError::Stream(
             "stream closed without an end frame".to_owned()
         ))
@@ -126,81 +156,140 @@ fn malformed_frames_and_unterminated_streams_are_stream_errors() {
 }
 
 #[test]
-fn plans_are_validated_before_any_request() {
-    let invalid = [
-        vec![lane("Tasks", json!({"kind":"hydrate"}))],
-        vec![lane(&"a".repeat(65), json!({"kind":"hydrate"}))],
-        vec![
-            lane("tasks", json!({"kind":"hydrate"})),
-            lane("tasks", json!({"kind":"hydrate"})),
-        ],
-        vec![lane("ids", json!({"kind":"membership","scopes":[]}))],
-        vec![{
-            let mut lane = lane("ids", json!({"kind":"membership","scopes":["tasks"]}));
-            lane["maxItems"] = json!(10);
-            lane
+fn a_lane_line_that_breaks_the_contract_is_refused() {
+    let membership = |scopes: &[&str]| SyncLaneKind::Membership {
+        scopes: scopes.iter().map(|scope| (*scope).to_owned()).collect(),
+    };
+    let calendar = |start, end| SyncLaneKind::Calendar {
+        coverage: vec![CalendarSpan {
+            kind: CalendarSpanKind::Timed,
+            start,
+            end,
         }],
-        vec![lane(
-            "calendar-1",
-            json!({"kind":"calendar","coverage":[{"kind":"timed","start":0,"end":1}]}),
-        )],
-    ];
-    for lanes in invalid {
+    };
+    for lane in [
+        declare("Tasks", SyncPaging::Soup, SyncLaneKind::Hydrate),
+        declare(&"a".repeat(65), SyncPaging::Soup, SyncLaneKind::Hydrate),
+        declare("ids", SyncPaging::Soup, membership(&[])),
+        declare("ids", SyncPaging::Soup, membership(&["Tasks"])),
+        declare("calendar-1", SyncPaging::Soup, calendar(0, 1)),
+        declare("calendar-1", SyncPaging::Calendar, calendar(2, 1)),
+    ] {
+        let mut run = run();
         assert!(
-            matches!(
-                SyncRun::new(&args(lanes.clone()), 0.0),
-                Err(SyncStreamError::Plan(_))
-            ),
-            "{lanes:?}"
+            matches!(run.declare(lane.clone()), Err(SyncStreamError::Stream(_))),
+            "{lane:?}"
         );
+        assert!(run.lanes.is_empty());
     }
-    let mut calendar = lane(
-        "calendar-1",
-        json!({"kind":"calendar","coverage":[{"kind":"timed","start":0,"end":1}]}),
-    );
-    calendar["paging"] = json!("calendar");
-    // Nothing to sync is a valid plan; the server answers `end complete`.
-    let mut empty = args(Vec::new());
-    empty.max_pages = Some(0);
-    let mut run = SyncRun::new(&empty, 0.0).unwrap();
-    assert_eq!(
-        run.request_body(),
-        json!({"protocol": SYNC_PROTOCOL, "lanes": [], "maxPages": 0})
-    );
-    run.push_bytes(b"{\"type\":\"end\",\"reason\":\"maxPages\"}\n")
+
+    let mut run = run();
+    run.declare(declare("tasks", SyncPaging::Soup, SyncLaneKind::Hydrate))
         .unwrap();
-    SyncRun::new(
-        &args(vec![
-            lane("tasks", json!({"kind":"hydrate"})),
-            lane("tasks-ids", json!({"kind":"membership","scopes":["tasks"]})),
-            calendar,
-        ]),
-        0.0,
-    )
+    run.declare(declare(
+        "tasks-ids",
+        SyncPaging::Soup,
+        membership(&["tasks"]),
+    ))
     .unwrap();
+    run.declare(declare("calendar-1", SyncPaging::Calendar, calendar(0, 1)))
+        .unwrap();
+    assert!(matches!(
+        run.declare(declare("tasks", SyncPaging::Soup, SyncLaneKind::Hydrate)),
+        Err(SyncStreamError::Stream(message)) if message.contains("twice")
+    ));
+    let ids = run
+        .lanes
+        .iter()
+        .map(|lane| lane.id.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["tasks", "tasks-ids", "calendar-1"]);
+    // The summary lists lanes in the order they were declared.
+    let summary = run.partial(10.0);
+    let ids = summary
+        .lanes
+        .iter()
+        .map(|lane| lane.id.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["tasks", "tasks-ids", "calendar-1"]);
 }
 
 #[test]
-fn request_body_carries_only_the_server_fields() {
-    let mut tasks = lane("tasks", json!({"kind":"hydrate"}));
-    tasks["operationName"] = json!("SoupBackfillSyncTasks");
-    tasks["maxItems"] = json!(1000);
-    tasks["coverage"] = json!({"entity":"task","scope":"all"});
-    let run = SyncRun::new(&args(vec![tasks]), 0.0).unwrap();
+fn arguments_are_checked_before_any_request() {
+    for extra in [
+        json!({"skipLanes": ["Tasks"]}),
+        json!({"calendar": {"timeZone": ""}}),
+    ] {
+        assert!(
+            matches!(
+                SyncRun::new(&args(extra.clone()), &[], &[], 0.0),
+                Err(SyncStreamError::Plan(_))
+            ),
+            "{extra}"
+        );
+    }
+}
+
+#[test]
+fn the_request_carries_the_pass_and_every_lane_s_saved_state() {
+    let saved = [
+        SyncLaneState {
+            id: "documents-recent".to_owned(),
+            resume: Some(json!({"cursor": "c1", "items": 500})),
+            pages: 1,
+            items: 500,
+            pass_started_at: Some("2026-11-01T00:00:00.000Z".to_owned()),
+            ..SyncLaneState::default()
+        },
+        SyncLaneState {
+            id: "tasks".to_owned(),
+            completed_at: Some("2026-11-01T00:10:00.000Z".to_owned()),
+            watermark: Some("2026-11-01T00:00:00.000Z".to_owned()),
+            coverage: json!({"entity": "task", "scope": "all"}),
+            ..SyncLaneState::default()
+        },
+    ];
+    let coverage = [CalendarSpan {
+        kind: CalendarSpanKind::AllDay,
+        start: 20_758,
+        end: 20_788,
+    }];
+    let run = SyncRun::new(
+        &args(json!({
+            "pass": "second",
+            "maxPages": 20,
+            "calendar": {"timeZone": "Europe/Berlin"},
+            "completedSince": "2026-11-02T00:00:00.000Z",
+            "skipLanes": ["email-older"],
+        })),
+        &saved,
+        &coverage,
+        0.0,
+    )
+    .unwrap();
     assert_eq!(
-        run.request_body(),
+        *run.request_body(),
         json!({
-            "protocol": 1,
-            "lanes": [{
-                "id": "tasks",
-                "query": "query Q { user { id } }",
-                "operationName": "SoupBackfillSyncTasks",
-                "variables": {"input": {"initial": {"limit": 2}}},
-                "paging": "soup",
-                "maxItems": 1000,
-            }],
-            "maxPages": 3,
+            "protocol": SYNC_PROTOCOL,
+            "pass": "second",
+            "lanes": [
+                {"id": "documents-recent", "resume": {"cursor": "c1", "items": 500}},
+                {"id": "tasks", "watermark": "2026-11-01T00:00:00.000Z", "completedAt": "2026-11-01T00:10:00.000Z"},
+            ],
+            "calendar": {
+                "timeZone": "Europe/Berlin",
+                "coverage": [{"kind": "allDay", "start": 20_758, "end": 20_788}],
+            },
+            "completedSince": "2026-11-02T00:00:00.000Z",
+            "skipLanes": ["email-older"],
+            "maxPages": 20,
         })
+    );
+    // Without calendar arguments no coverage goes out, whatever is cached.
+    let run = SyncRun::new(&args(json!({})), &[], &coverage, 0.0).unwrap();
+    assert_eq!(
+        *run.request_body(),
+        json!({"protocol": 1, "pass": "first", "lanes": []})
     );
 }
 
