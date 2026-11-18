@@ -92,7 +92,7 @@ impl StreamCursor {
 struct Retained {
     /// When this process published it.
     at: DateTime<Utc>,
-    candidate: StreamCandidateEvent,
+    candidate: Arc<StreamCandidateEvent>,
 }
 
 /// The process-local feed every stream reads: a broadcast for live
@@ -106,7 +106,7 @@ pub struct StreamFeed {
 }
 
 struct FeedInner {
-    sender: broadcast::Sender<StreamCandidateEvent>,
+    sender: broadcast::Sender<Arc<StreamCandidateEvent>>,
     recent: VecDeque<Retained>,
     replay_capacity: usize,
 }
@@ -134,6 +134,9 @@ impl StreamFeed {
     /// Hand `candidate` to every live subscriber and keep it for resuming
     /// ones.
     pub fn publish(&self, candidate: StreamCandidateEvent) {
+        // Shared, not copied: a resuming subscriber takes its replay under
+        // this lock, and copying envelopes there would stall publishing.
+        let candidate = Arc::new(candidate);
         let now = Utc::now();
         let oldest_kept = now - WEBHOOK_STREAM_REPLAY_RETENTION;
         let mut inner = self.lock();
@@ -145,7 +148,7 @@ impl StreamFeed {
         if inner.replay_capacity > 0 {
             inner.recent.push_back(Retained {
                 at: now,
-                candidate: candidate.clone(),
+                candidate: Arc::clone(&candidate),
             });
         }
         // Having no active subscribers is expected.
@@ -157,8 +160,8 @@ impl StreamFeed {
         &self,
         after: Option<StreamCursor>,
     ) -> (
-        VecDeque<StreamCandidateEvent>,
-        broadcast::Receiver<StreamCandidateEvent>,
+        VecDeque<Arc<StreamCandidateEvent>>,
+        broadcast::Receiver<Arc<StreamCandidateEvent>>,
     ) {
         let inner = self.lock();
         let receiver = inner.sender.subscribe();
@@ -314,8 +317,8 @@ impl<A, R, C> WebhookEventStreamServiceImpl<A, R, C> {
 /// Owned per-stream state advanced by the unfold loop.
 struct StreamState<A, R, C> {
     /// Retained events after the subscriber's cursor, delivered first.
-    replay: VecDeque<StreamCandidateEvent>,
-    receiver: broadcast::Receiver<StreamCandidateEvent>,
+    replay: VecDeque<Arc<StreamCandidateEvent>>,
+    receiver: broadcast::Receiver<Arc<StreamCandidateEvent>>,
     entity_access_service: Arc<A>,
     workspace_resolver: R,
     contact_checker: C,
@@ -451,7 +454,7 @@ where
                 continue;
             }
             match self.subscriber_in_audience(&candidate.audience).await {
-                Ok(true) => return Some(candidate.event),
+                Ok(true) => return Some(candidate.event.clone()),
                 Ok(false) => continue,
                 Err(error) => {
                     tracing::error!(error = ?error, "webhook event stream access check failed; ending stream");
