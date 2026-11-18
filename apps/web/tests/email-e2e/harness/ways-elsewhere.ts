@@ -42,7 +42,9 @@ async function connectedInboxes(mailbox: Mailbox): Promise<string[]> {
  *
  * The mark alone does not hold: a token the provider still grants clears it,
  * and an Outlook inbox's sync fetches tokens just after it is linked. Once the
- * grant is revoked the provider refuses them and the services keep the mark.
+ * grant is revoked the provider refuses them and the services keep the mark;
+ * a token granted just before the revocation can clear it once more, and the
+ * sync that asked for it is then refused and marks the inbox again.
  * It is still written here rather than left to the services: on Gmail nothing
  * fetches a token after the first sync, and the links health check a page
  * sends probes an inbox at most once a quarter hour, so after a page has
