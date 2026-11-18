@@ -572,8 +572,7 @@ pub fn check() -> Result<()> {
     Ok(())
 }
 
-/// The check-name lock over every workflow GitHub runs: the generated ones as
-/// rendered now, and the hand-written ones as committed.
+/// The check-name lock over every workflow GitHub runs.
 fn render_checks_lock() -> Result<String> {
     checks_lock::render(&all_workflows()?)
 }
@@ -583,8 +582,8 @@ fn render_actionlint_config() -> Result<String> {
     actionlint::render(&all_workflows()?)
 }
 
-/// Every workflow GitHub runs, keyed by file name: the generated ones as
-/// rendered now, and the hand-written ones as committed.
+/// Every workflow GitHub runs, keyed by file name, as rendered now. A workflow
+/// file this generator doesn't write is an error: every workflow is generated.
 fn all_workflows() -> Result<BTreeMap<String, String>> {
     let mut workflows = BTreeMap::new();
     for workflow in WORKFLOWS {
@@ -596,12 +595,14 @@ fn all_workflows() -> Result<BTreeMap<String, String>> {
         let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
-        if !file_name.ends_with(".yml") || workflows.contains_key(file_name) {
-            continue;
+        if (file_name.ends_with(".yml") || file_name.ends_with(".yaml"))
+            && !workflows.contains_key(file_name)
+        {
+            bail!(
+                "{} is not generated: write it as a module in src/workflows/ and add it to WORKFLOWS",
+                path.display()
+            );
         }
-        let yaml =
-            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-        workflows.insert(file_name.to_string(), yaml);
     }
     Ok(workflows)
 }
