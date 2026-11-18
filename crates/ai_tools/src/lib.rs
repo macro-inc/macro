@@ -53,7 +53,6 @@ use messages::inbound::toolset::message_toolset;
 use notification::inbound::ai_tool::{item_notification_preference_toolset, notification_toolset};
 use projects::inbound::toolset::project_toolset;
 use properties::inbound::toolset::properties_toolset;
-use schemas::read;
 use search_tools::{LoadTools, SearchTools};
 use self_knowledge::SelfKnowledge;
 use skills::inbound::toolset::skill_toolset;
@@ -425,14 +424,9 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::AgentSession))
         .merge(&agent_code_mode::inbound::toolset::toolset())
-        // Persisted legacy calls still render, but are never executable or advertised.
-        .merge(&chat::inbound::toolset::chat_toolset::<
-            ToolChatService,
-            ToolEntityAccessService,
-        >())
-        .merge(&read::read_thread())
-        .merge(&schemas::subagent::subagent())
-        .merge(&schemas::read_activity::read_activity())
+        // Persisted calls of retired tools still render, but are never
+        // executable or advertised.
+        .merge(&frontend_compat::RetiredTools)
         .merge(&frontend_compat::LegacyConversationSchemas)
         .build()
 }
