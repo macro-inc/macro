@@ -395,14 +395,13 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   trigger raises the hint only when the event's typed `event_type` was or is
   out of office, a revision still waiting keeps the hint of every change it
   carries, and `CalendarProjectionRelay` sends it, after publishing the row to
-  the calendar topic. An edit or deletion of an Outlook event in Macro
-  therefore sends no refresh and no topic event of its own
+  the calendar topic. A Macro write to an Outlook event (create, edit, answer
+  or delete) therefore sends no refresh and no topic event of its own
   (`persist_echo_as`, `announce_retirements`); the Google guest copies it
   aligns still hear it from the mutation, since no relay announces them.
-  Outlook discovery refreshes
-  viewers only when a calendar was added, removed or changed, and raises the
-  hint for the calendar changes Google's calendar list raises it for
-  (`upsert_calendar_tx`).
+  Outlook discovery refreshes viewers only when a calendar was added, removed
+  or changed, and raises the hint for the calendar changes Google's calendar
+  list raises it for (`upsert_calendar_tx`).
 - The Outlook sync (`src/domain/outlook.rs`) refreshes a page's events one
   at a time, first pending id first, and retries that id after any error, so
   one error blocks the calendar. An event the adapter cannot normalize is not
