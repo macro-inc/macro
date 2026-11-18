@@ -133,6 +133,8 @@ export function createSseClient<TData = unknown>({
         const response = await _fetch(request);
 
         if (!response.ok) throw new Error(`SSE failed: ${response.status} ${response.statusText}`);
+        // Connected: a later failure backs off from the first delay again.
+        attempt = 1;
 
         if (!response.body) throw new Error('No body in SSE response');
 
@@ -222,6 +224,9 @@ export function createSseClient<TData = unknown>({
           reader.releaseLock();
         }
 
+        // The server ended the stream (a restart, a deploy). Like EventSource,
+        // reconnect unless the caller stopped it: through the retry below.
+        if (!signal.aborted) throw new Error('SSE stream ended by the server');
         break; // exit loop on normal completion
       } catch (error) {
         // connection failed or aborted; retry after delay

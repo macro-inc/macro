@@ -151,6 +151,73 @@ describe('MacroEvents', () => {
     }
   });
 
+  test('a stream the server closes (a restart) is reopened, and events after it still arrive', async () => {
+    const posted = (id: string) => ({
+      event_type: 'document.created' as const,
+      metadata: {
+        document_id: id,
+        document_name: id,
+        owner: 'macro|o@example.com',
+      },
+    });
+    let connections = 0;
+    // The first connection delivers one event and ends, as a server that is
+    // shutting down does; the next one delivers the event sent after it.
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => {
+        connections += 1;
+        const first = connections === 1;
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  sseBody(posted(first ? 'before' : 'after')),
+                ),
+              );
+              if (first) controller.close();
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        );
+      },
+    });
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      const seen: string[] = [];
+      const after = Promise.withResolvers<void>();
+      macro.events.on('document.created', (event) => {
+        seen.push(event.metadata.document_id);
+        if (event.metadata.document_id === 'after') after.resolve();
+      });
+      const drops: Date[] = [];
+      const stop = await macro.events.listen({
+        onDrop: (at) => drops.push(at),
+      });
+
+      await Promise.race([
+        after.promise,
+        Bun.sleep(8_000).then(() => {
+          throw new Error(
+            `no event after the server closed the stream; saw ${seen.join(', ')}`,
+          );
+        }),
+      ]);
+      stop();
+
+      expect(seen).toEqual(['before', 'after']);
+      expect(connections).toBe(2);
+      // Told once, so a caller can resync what the gap may have missed.
+      expect(drops).toHaveLength(1);
+    } finally {
+      server.stop(true);
+    }
+  }, 15_000);
+
   test('listen() throws when there are no filters or handlers', async () => {
     const macro = new Macro({
       token: 'user-token',

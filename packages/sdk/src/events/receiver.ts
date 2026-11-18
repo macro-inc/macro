@@ -40,6 +40,13 @@ export interface ListenOptions {
   scope?: WebhookScope;
   /** Abort the stream. */
   signal?: AbortSignal;
+  /**
+   * Told each time the stream drops (the server closed it, as a restart or
+   * deploy does, or the connection failed), before it reconnects on its own.
+   * Events published while it was down are not replayed: resync them from
+   * history from `at`, e.g. with a channel's `messagesAfter`.
+   */
+  onDrop?: (at: Date) => void;
 }
 
 /** Attach the entity handles defined for each webhook event. */
@@ -169,6 +176,9 @@ export class MacroEvents {
         filters: JSON.stringify(filters),
       },
       signal: controller.signal,
+      onSseError: () => {
+        if (!controller.signal.aborted) opts.onDrop?.(new Date());
+      },
     });
 
     const consume = (async () => {

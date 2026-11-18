@@ -167,7 +167,9 @@ enforced by the ordinary backend APIs.
   `@hey-api/openapi-ts`'s template in `apps/web/patches/` (root
   `patchedDependencies`; the Nix node_modules build reads patches only there),
   then `bun run generate`. `hey-api-openapi-ts-0.99.0.patch` makes stopping an
-  SSE stream quiet; carry it forward on a generator upgrade.
+  SSE stream quiet and reconnects a stream the server ended (a restart or
+  deploy), like `EventSource`; carry it forward on a generator upgrade.
+  `listen({ onDrop })` tells callers each drop, since the gap is not replayed.
 - Keep the human-session-only Passwords vault endpoints, including batch import
   and name matching and the human review of agent access requests, in coverage
   exclusions; normal human-session authorization and secret disclosure are
