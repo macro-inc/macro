@@ -652,7 +652,9 @@ test("an admin signs the agent's computer in to Claude from its row", async ({
   await claude.getByRole('button', { name: 'Use Macro credits' }).click();
   const confirm = page.getByRole('dialog');
   await expect(confirm).toContainText('Switch Ada to Macro credits?');
-  await confirm.getByRole('button', { name: 'Use Macro credits' }).click();
+  await confirm
+    .getByRole('button', { name: 'Switch to Macro credits' })
+    .click();
   await expect(claude).toContainText('Claude: Macro credits');
   expect(backend.claudeCalls).toContain('harness-ada claude-sign-out');
 });

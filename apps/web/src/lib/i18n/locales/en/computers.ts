@@ -48,6 +48,8 @@ export default {
   claudeTimedOut: "Claude didn't answer in time. Get a new link to try again.",
   claudeFailed: 'Something went wrong signing in.',
   claudeStepDone: 'done',
+  claudeLinkFailed: "Couldn't get a sign-in link from the computer.",
+  claudeChecking: 'Checking with Claude. This can take a minute.',
   claudePreparingLink: 'Preparing the sign-in link…',
   claudeSwitchTitle: 'Switch to Macro credits?',
   claudeSwitchBody:

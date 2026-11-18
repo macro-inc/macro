@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { toast } from '@core/component/Toast/Toast';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
@@ -29,6 +30,7 @@ import {
 
 /** A failure on screen and its way out. */
 type Problem = {
+  phase: 'start' | 'complete';
   failure: ClaudeSignInFailure;
   recovery: ClaudeSignInRecovery;
 };
@@ -46,7 +48,13 @@ export function isHttpsUrl(url: string): boolean {
   }
 }
 
-function failureMessage(failure: ClaudeSignInFailure): string {
+function failureMessage(
+  phase: Problem['phase'],
+  failure: ClaudeSignInFailure
+): string {
+  // No link existed yet: only a reason the computer can't answer says more.
+  if (phase === 'start' && failure !== 'unreachable' && failure !== 'busy')
+    return t('computers.claudeLinkFailed');
   return match(failure)
     .with('expired', () => t('computers.claudeSignInExpired'))
     .with('invalid_code', () => t('computers.claudeInvalidCode'))
@@ -170,9 +178,11 @@ export function ClaudeSignInFlow(props: {
       if (current !== linkGeneration) return;
       forgetWaitingTab();
       setOpened(false);
+      const kind = claudeSignInFailure(failure);
       showProblem({
-        failure: claudeSignInFailure(failure),
-        recovery: claudeSignInRecovery('start', claudeSignInFailure(failure)),
+        phase: 'start',
+        failure: kind,
+        recovery: claudeSignInRecovery('start', kind),
       });
     }
   };
@@ -187,7 +197,9 @@ export function ClaudeSignInFlow(props: {
 
   onCleanup(() => {
     disposed = true;
-    document.title = pageTitle;
+    // Only undo our own title; the page may have set a newer one.
+    if (document.title === t('computers.signInTabTitle'))
+      document.title = pageTitle;
     linkGeneration++;
     linkRequest?.abort();
     forgetWaitingTab();
@@ -242,10 +254,6 @@ export function ClaudeSignInFlow(props: {
       afterOpening();
       return;
     }
-    if (waitingTab && !waitingTab.closed) {
-      waitingTab.focus();
-      return;
-    }
     // A blocked popup opens nothing, so the step stays undone.
     waitingTab = window.open('about:blank', '_blank') ?? undefined;
     if (waitingTab) afterOpening();
@@ -267,11 +275,19 @@ export function ClaudeSignInFlow(props: {
       if (!disposed) markTab(false);
       props.onSignedIn();
     } catch (failure) {
-      if (current !== codeGeneration || disposed) return;
+      if (current !== codeGeneration) return;
       const kind = claudeSignInFailure(failure);
+      // Closed while the computer checked: the dialog can't say it failed.
+      if (disposed) {
+        toast.failure(failureMessage('complete', kind));
+        return;
+      }
       const recovery = claudeSignInRecovery('complete', kind);
-      if (recovery === 'new_link') setCode('');
-      showProblem({ failure: kind, recovery });
+      if (recovery === 'new_link') {
+        setCode('');
+        setOpened(false);
+      }
+      showProblem({ phase: 'complete', failure: kind, recovery });
     }
   };
 
@@ -334,11 +350,13 @@ export function ClaudeSignInFlow(props: {
                 </Match>
               </Switch>
             </div>
-            <Show when={!needsNewLink() && !opened() && start.isPending}>
-              <p class="text-xs text-ink-muted">
+            {/* Always rendered, so the dialog keeps its height as the
+                link arrives. */}
+            <p class="min-h-4 text-xs text-ink-muted" aria-live="polite">
+              <Show when={!needsNewLink() && !opened() && start.isPending}>
                 {t('computers.claudePreparingLink')}
-              </p>
-            </Show>
+              </Show>
+            </p>
           </SignInStep>
           <SignInStep number={2} title={t('computers.claudeStepPaste')}>
             <form
@@ -378,17 +396,21 @@ export function ClaudeSignInFlow(props: {
                 {t('computers.completeSignIn')}
               </Button>
             </form>
+            <Show when={complete.isPending}>
+              <p class="text-xs text-ink-muted" aria-live="polite">
+                {t('computers.claudeChecking')}
+              </p>
+            </Show>
           </SignInStep>
         </ol>
         <Show when={problem()}>
           {(current) => (
             <div
-              id={alertId}
               role="alert"
-              class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-failure/8 px-3 py-2 text-sm text-failure"
+              class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-failure/8 px-3 py-2 text-sm text-failure max-sm:flex-col max-sm:items-stretch"
             >
-              <span class="min-w-0 flex-1">
-                {failureMessage(current().failure)}
+              <span id={alertId} class="min-w-0 flex-1">
+                {failureMessage(current().phase, current().failure)}
               </span>
               <Show when={current().recovery !== 'repaste'}>
                 <Button

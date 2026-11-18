@@ -42,7 +42,8 @@ const claudeSignInError: ErrorResponseHandler<ClaudeSignInErrorCode> = async (
   response
 ) => {
   // The pending sign-in is gone: it timed out, or another tab replaced it.
-  if (response.status === 404 || response.status === 410) {
+  // A 404 is a missing computer, which no new link fixes.
+  if (response.status === 410) {
     return {
       code: 'CLAUDE_SIGN_IN_EXPIRED',
       message: 'The Claude sign-in expired',

@@ -66,7 +66,7 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
     const confirmed = await confirmDialog({
       title: t('teamAgents.useCreditsTitle', { name }),
       body: t('teamAgents.useCreditsBody', { name }),
-      confirmLabel: t('teamAgents.useCredits'),
+      confirmLabel: t('computers.claudeSwitchToCredits'),
     });
     if (!confirmed) return;
     try {
