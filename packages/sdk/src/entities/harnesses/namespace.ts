@@ -9,7 +9,7 @@ import { DevicePairing, HarnessPairing } from './pairing';
 /**
  * Hosts and device pairing. Self operations require host credentials.
  *
- * @routing Use when listing, pairing or removing the machines (hosts) that run the user's agents; not changing an agent persona's setup (`macro.agents`).
+ * @routing Use when listing, pairing, renaming or sharing the machines (agent hosts) that run the user's agents, or the agents living on them; not changing an agent persona's setup (`macro.agents`).
  */
 export class HarnessNamespace {
   constructor(private readonly client: MacroClient) {}

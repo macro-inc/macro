@@ -35,7 +35,6 @@ vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => (type === 'task' ? 'md' : type),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableCalendarUi: false,
   enableReminders: false,
   isFeatureEnabled: vi.fn(),
   USE_MACRO_PR_SUMMARY_BLOCK: true,

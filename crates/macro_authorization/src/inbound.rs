@@ -14,8 +14,9 @@ pub use axum::{
     InternalEntity, InternalOnly, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
     LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationExtractor,
     MacroAuthorizationRejection, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    USER_API_KEY_HEADER, UserBotOrHarness, UserBotOrHarnessAuthorization, UserBotOrHarnessEntity,
-    UserOnly, UserOrBot, UserOrBotAuthorization, UserOrBotEntity, UserOrInternal,
-    UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
-    UserOrInternalServiceAuthorization, is_agent_run,
+    PROGRAM_SIGN_IN_REFUSAL, USER_API_KEY_HEADER, UserBotOrHarness, UserBotOrHarnessAuthorization,
+    UserBotOrHarnessEntity, UserOnly, UserOrBot, UserOrBotAuthorization, UserOrBotEntity,
+    UserOrInternal, UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity,
+    UserOrInternalService, UserOrInternalServiceAuthorization, is_agent_run, is_program_run,
+    request_is_program, rewrite_program_json,
 };

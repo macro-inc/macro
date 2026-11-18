@@ -7066,6 +7066,12 @@ export const postChannelBotWebhookHeader = zod.object({
 export const postChannelBotWebhookBody = zod
   .object({
     content: zod.string().describe('Message body.'),
+    notification_policy: zod
+      .enum(['Default', 'MentionsOnly', 'Silent'])
+      .optional()
+      .describe(
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
+      ),
   })
   .describe('Request to post a channel webhook message.');
 
@@ -7438,17 +7444,17 @@ export const listCrmBlockedDomainsResponse = zod.array(
 );
 
 /**
- * @summary Block a domain: email sync stops creating or updating CRM records for
-it, and the company and contacts the CRM holds for it are hidden.
-Idempotent. Requires an admin/owner team role (403).
+ * @summary Block a domain and its subdomains from email contributions, preserving records.
+Refuses a domain covering any member's connected primary mailbox (400).
+Idempotent for permitted domains. Requires an admin/owner team role (403).
  */
 export const blockCrmDomainParams = zod.object({
   domain: zod.string().describe('A bare domain like acme.com'),
 });
 
 /**
- * @summary Unblock a domain: email sync resumes for it, and what blocking hid is
-shown again. Idempotent. Requires an admin/owner team role (403).
+ * @summary Remove a team domain exclusion and schedule eligible email backfill,
+preserving record visibility. Idempotent. Requires an admin/owner role (403).
  */
 export const unblockCrmDomainParams = zod.object({
   domain: zod.string().describe('A bare domain like acme.com'),
@@ -9074,38 +9080,96 @@ export const setCrmContactNameBody = zod
 /**
  * @summary Read the caller's mailbox consent and both exclusion lists.
  */
+export const getCrmEmailPrivacyQueryParams = zod.object({
+  consent_only: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Return only consent and mailbox fields, without querying domain lists.'
+    ),
+});
+
 export const getCrmEmailPrivacyResponse = zod
-  .object({
-    can_remove_team_domains: zod
-      .boolean()
-      .describe('Whether the caller can remove a team exclusion.'),
-    enabled: zod
-      .boolean()
+  .union([
+    zod
+      .object({
+        can_remove_team_domains: zod
+          .boolean()
+          .describe('Whether the caller can remove a team exclusion.'),
+        enabled: zod
+          .boolean()
+          .describe(
+            'Whether this exact mailbox has explicit contribution consent.'
+          ),
+        mailbox_email: zod
+          .string()
+          .nullish()
+          .describe(
+            'The primary mailbox that would contribute; absent before email connection.'
+          ),
+        mailbox_link_id: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Exact current primary connection; clients bind opt-in to this identifier.'
+          ),
+        personal_domain_warnings: zod
+          .record(
+            zod.string(),
+            zod
+              .enum(['company', 'personal_provider'])
+              .describe(
+                "Why a domain exclusion would hide an affected mailbox's entire history."
+              )
+          )
+          .describe(
+            "Existing personal exclusions that cover the caller's whole mailbox."
+          ),
+        personal_domains: zod
+          .array(zod.string())
+          .describe("Domains excluded only for the caller's contributions."),
+        team_domain_warnings: zod
+          .record(
+            zod.string(),
+            zod
+              .enum(['company', 'personal_provider'])
+              .describe(
+                "Why a domain exclusion would hide an affected mailbox's entire history."
+              )
+          )
+          .describe(
+            "Existing team exclusions that cover a connected member's whole mailbox."
+          ),
+        team_domains: zod
+          .array(zod.string())
+          .describe(
+            'Domains excluded across the team, including legacy company exclusions.'
+          ),
+      })
+      .describe('Current consent and exclusions, readable by any team member.'),
+    zod
+      .object({
+        enabled: zod
+          .boolean()
+          .describe(
+            'Whether this exact mailbox has explicit contribution consent.'
+          ),
+        mailbox_email: zod
+          .string()
+          .nullish()
+          .describe('The primary mailbox that would contribute, if connected.'),
+        mailbox_link_id: zod
+          .uuid()
+          .nullish()
+          .describe('Exact current primary mailbox connection.'),
+      })
       .describe(
-        'Whether this exact mailbox has explicit contribution consent.'
+        'Current mailbox consent without loading domain exclusion lists.'
       ),
-    mailbox_email: zod
-      .string()
-      .nullish()
-      .describe(
-        'The primary mailbox that would contribute; absent before email connection.'
-      ),
-    mailbox_link_id: zod
-      .uuid()
-      .nullish()
-      .describe(
-        'Exact current primary connection; clients bind opt-in to this identifier.'
-      ),
-    personal_domains: zod
-      .array(zod.string())
-      .describe("Domains excluded only for the caller's contributions."),
-    team_domains: zod
-      .array(zod.string())
-      .describe(
-        'Domains excluded across the team, including legacy company exclusions.'
-      ),
-  })
-  .describe('Current consent and exclusions, readable by any team member.');
+  ])
+  .describe(
+    'Full settings by default, or mailbox consent when explicitly requested.'
+  );
 
 /**
  * @summary Apply one consent, domain, or thread exclusion change as the member.
@@ -9192,9 +9256,33 @@ export const updateCrmEmailPrivacyResponse = zod
       .describe(
         'Exact current primary connection; clients bind opt-in to this identifier.'
       ),
+    personal_domain_warnings: zod
+      .record(
+        zod.string(),
+        zod
+          .enum(['company', 'personal_provider'])
+          .describe(
+            "Why a domain exclusion would hide an affected mailbox's entire history."
+          )
+      )
+      .describe(
+        "Existing personal exclusions that cover the caller's whole mailbox."
+      ),
     personal_domains: zod
       .array(zod.string())
       .describe("Domains excluded only for the caller's contributions."),
+    team_domain_warnings: zod
+      .record(
+        zod.string(),
+        zod
+          .enum(['company', 'personal_provider'])
+          .describe(
+            "Why a domain exclusion would hide an affected mailbox's entire history."
+          )
+      )
+      .describe(
+        "Existing team exclusions that cover a connected member's whole mailbox."
+      ),
     team_domains: zod
       .array(zod.string())
       .describe(
@@ -9208,6 +9296,12 @@ export const updateCrmEmailPrivacyResponse = zod
  */
 export const listCrmExcludedEmailThreadsQueryParams = zod.object({
   after: zod.uuid().nullish().describe('Read entries after this thread ID.'),
+  thread_id: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Look up one thread instead of paging. Cannot be combined with `after`.'
+    ),
 });
 
 export const listCrmExcludedEmailThreadsResponse = zod
@@ -25567,7 +25661,15 @@ export const getDocumentByTeamSlugResponse = zod.object({
             }),
           ])
         )
-        .describe('The items returned from the call'),
+        .describe(
+          'The items returned from the call, most recently trashed first'
+        ),
+      next_cursor: zod
+        .string()
+        .nullish()
+        .describe(
+          'Pass as `cursor` to get the next page; absent on the last page'
+        ),
     })
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),
@@ -40725,6 +40827,12 @@ export const externalChatDeliveryResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -41961,6 +42069,12 @@ export const externalChatSendsResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -42046,6 +42160,12 @@ export const externalChatSendBody = zod
       .uuid()
       .nullish()
       .describe('Message being quoted, within this chat.'),
+    userConfirmation: zod
+      .string()
+      .nullish()
+      .describe(
+        "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+      ),
   })
   .describe(
     'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -42123,6 +42243,12 @@ export const externalChatSendResponse = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -54742,6 +54868,18 @@ export const postItemsSoupBody = zod
       ),
     email_filters: zod
       .object({
+        attachments: zod
+          .array(
+            zod
+              .enum(['pdf', 'image', 'document'])
+              .describe(
+                "A kind of attachment a thread's messages carry, by MIME type."
+              )
+          )
+          .optional()
+          .describe(
+            'Only threads with at least one attachment of one of these kinds, by\nMIME type, on any of their messages. Empty applies no constraint.'
+          ),
         bcc: zod
           .array(zod.string())
           .optional()
@@ -54764,13 +54902,19 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`."
+            "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`. Listing email only: search\nrejects a request that sets it with a 400."
           ),
         crm_domains: zod
           .array(zod.string())
           .optional()
           .describe(
-            "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender\/cc\/bcc\/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`."
+            "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender\/cc\/bcc\/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`. Listing email only: search\nrejects a request that sets it with a 400."
+          ),
+        done: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Filter by whether the thread is done: true for threads out of the\ninbox (archived), false for threads still in it. This is the mailbox\nstate the Email view's Done filter uses, independent of notifications."
           ),
         email_thread_ids: zod
           .array(zod.string())
@@ -54829,7 +54973,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            'A list of project ids to search within. Empty to ignore project filtering.'
+            "Drive folder (project) ids to search within: threads filed in any of\nthese folders. Besides the caller's own threads, it reaches every\nthread in a folder shared with the caller, whoever's inbox holds it,\nas the folder's list does. Search takes at most 50 folders and\nrejects more with a 400, and matches the query against at most 10,000\nof their threads in all; threads past that are not searched, unless\n`email_thread_ids` names them, and at most 10,000 named threads are\nsearched in all. Empty to ignore project filtering."
           ),
         recipients: zod
           .array(zod.string())
@@ -54849,6 +54993,16 @@ export const postItemsSoupBody = zod
           .describe(
             'Controls whether shared email threads are included in results.'
           ),
+        view: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['sent', 'drafts'])
+              .describe(
+                'A mailbox view the Email list scopes a search to, as its tabs do.'
+              ),
+          ])
+          .optional(),
       })
       .optional()
       .describe(
@@ -74757,6 +74911,12 @@ export const entityMessageCreateBody = zod
       .string()
       .nullish()
       .describe('Client nonce for optimistic reconciliation.'),
+    notification_policy: zod
+      .enum(['Default', 'MentionsOnly', 'Silent'])
+      .optional()
+      .describe(
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
+      ),
     thread_id: zod
       .uuid()
       .nullish()
@@ -82530,8 +82690,20 @@ export const revertDeleteProjectResponse = zod.object({
 });
 
 /**
- * @summary Gets the users recently deleted items.
+ * @summary Gets one page of the user's trashed documents, chats and folders, most
+recently trashed first.
  */
+export const recentlyDeletedQueryLimitMin = 0;
+
+export const recentlyDeletedQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(recentlyDeletedQueryLimitMin)
+    .optional()
+    .describe('Page size (1-500, default 100)'),
+  cursor: zod.string().optional().describe("The previous page's next_cursor"),
+});
+
 export const recentlyDeletedResponse = zod.object({
   data: zod
     .object({
@@ -82686,7 +82858,15 @@ export const recentlyDeletedResponse = zod.object({
             }),
           ])
         )
-        .describe('The items returned from the call'),
+        .describe(
+          'The items returned from the call, most recently trashed first'
+        ),
+      next_cursor: zod
+        .string()
+        .nullish()
+        .describe(
+          'Pass as `cursor` to get the next page; absent on the last page'
+        ),
     })
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),

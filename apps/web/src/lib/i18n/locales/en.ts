@@ -1,5 +1,6 @@
 import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
+import agentControls from './en/agent-controls';
 import agentNavigation from './en/agent-navigation';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
@@ -31,6 +32,7 @@ import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
 import settingsBilling from './en/settings-billing';
+import settingsEmail from './en/settings-email';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
@@ -49,6 +51,7 @@ import viewMenus from './en/view-menus';
 export default {
   agentAutoArchive,
   appearance,
+  agentControls,
   agentNavigation,
   accountManager,
   agentSetup,
@@ -80,6 +83,7 @@ export default {
   routineMenu,
   routineSuggestions,
   settingsBilling,
+  settingsEmail,
   runtimeSharing,
   settingsLanguage,
   settingsMobileApp,

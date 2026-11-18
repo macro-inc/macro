@@ -3,17 +3,12 @@ import { CALENDAR_ACCOUNTS_PROMOTION as COPY } from '@app/features/sidebar-promo
 import { createLastKnown } from '@app/features/sidebar-promotion/primitives/last-known';
 import {
   allOf,
-  flagVerdict,
   SidebarPromotion,
 } from '@app/features/sidebar-promotion/sidebar-promotion';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  enableMultiInbox,
-  enableSidebarPromotions,
-} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
@@ -38,13 +33,12 @@ const cardStateSchema = z.object({
 type CardState = z.infer<typeof cardStateSchema>;
 
 /**
- * The Calendar sidebar's prompt to connect another Google account. Adding
+ * The Calendar sidebar's prompt to connect another calendar account. Adding
  * accounts follows the multi-inbox flag, like "Connect another account" in
- * the calendar settings menu.
+ * the calendar settings menu. Its logos are the providers the button's
+ * chooser offers: Outlook only while the server offers it to this user.
  */
 export function ConnectCalendarsPromotion(props: { class?: string }) {
-  const promotions = useFeatureFlag(enableSidebarPromotions);
-  const multiInbox = useFeatureFlag(enableMultiInbox);
   const accounts = useLoadedCalendarAccounts();
   const userId = useUserId();
   const startAddInbox = useAddInboxFlow();
@@ -74,6 +68,10 @@ export function ConnectCalendarsPromotion(props: { class?: string }) {
     },
     cardStateSchema
   );
+  const applies = () => state() !== undefined && !state()?.satisfied;
+  const outlookOffered = useOutlookAvailable(applies);
+  const logos = () =>
+    outlookOffered() ? [...COPY.logos, COPY.outlookLogo] : COPY.logos;
   const action = () => {
     const fix = state()?.fix;
     if (!fix)
@@ -104,12 +102,8 @@ export function ConnectCalendarsPromotion(props: { class?: string }) {
   return (
     <SidebarPromotion
       id={COPY.id}
-      applies={allOf(
-        flagVerdict(promotions()),
-        flagVerdict(multiInbox()),
-        state() === undefined ? undefined : !state()?.satisfied
-      )}
-      logos={COPY.logos}
+      applies={allOf(state() === undefined ? undefined : !state()?.satisfied)}
+      logos={logos()}
       headline={COPY.headline}
       pitch={COPY.pitch}
       class={props.class}

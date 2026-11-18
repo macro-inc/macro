@@ -18,6 +18,7 @@ import type { FetchError } from '@core/service';
 import { cache } from '@core/util/cache';
 import {
   type FetchWithTokenErrorCode,
+  type FetchWithTokenInit,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
@@ -30,6 +31,7 @@ import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
 import { createChannelLabelsClient } from './channel-labels';
 import type { ApiChannelListPage } from './channel-list-types';
+import { crmValidationError } from './crm-errors';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
 import type { AccessLevel } from './generated/schemas/accessLevel';
@@ -159,7 +161,6 @@ import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchHarnessRequest } from './generated/schemas/patchHarnessRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
-import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
 import type { PostGroupedSoupAstInitialRequest } from './generated/schemas/postGroupedSoupAstInitialRequest';
 import type { PostGroupedSoupAstRequest } from './generated/schemas/postGroupedSoupAstRequest';
@@ -246,15 +247,15 @@ const syncOrigin =
 
 export function dssFetch(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function dssFetch<T extends Record<string, any>>(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function dssFetch<T extends Record<string, any> = never>(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ):
   | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
@@ -1377,16 +1378,6 @@ export const storageServiceClient = {
     return (
       await dssFetch<Array<ApiActivity>>(`/channels/activity`, {
         method: 'GET',
-      })
-    ).map((result) => result);
-  },
-
-  async postActivity(args: PostActivityRequest) {
-    const { activity_type, channel_id } = args;
-    return (
-      await dssFetch<ApiActivity>(`/channels/activity`, {
-        method: 'POST',
-        body: JSON.stringify({ activity_type, channel_id }),
       })
     ).map((result) => result);
   },
@@ -2980,7 +2971,7 @@ export const storageServiceClient = {
   async blockCrmDomain({ domain }: { domain: string }) {
     return await dssFetch(
       `/crm/blocked-domains/${encodeURIComponent(domain)}`,
-      { method: 'PUT' }
+      { method: 'PUT', errorResponseHandler: crmValidationError }
     );
   },
   async unblockCrmDomain({ domain }: { domain: string }) {
@@ -3121,6 +3112,7 @@ export const storageServiceClient = {
     return await dssFetch(`/crm/companies/${companyId}/hidden`, {
       method: 'PUT',
       body: JSON.stringify({ hidden }),
+      errorResponseHandler: crmValidationError,
     });
   },
   async setEmailSync({
@@ -3133,6 +3125,7 @@ export const storageServiceClient = {
     return await dssFetch(`/crm/companies/${companyId}/email-sync`, {
       method: 'PUT',
       body: JSON.stringify({ email_sync: emailSync }),
+      errorResponseHandler: crmValidationError,
     });
   },
   async getCrmTeamSettings() {

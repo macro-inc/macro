@@ -5,7 +5,7 @@ This service owns the search-event pipeline:
 - **Live calls**: the `search-processing-service` Kafka consumer reads call lifecycle events from `macro.calls` and indexes them into OpenSearch.
 - **Agent sessions**: the same consumer subscribes to `macro.agent_session_lifecycle`, rereads the primary database, and indexes messages produced by `agent_fold`. Both user prompts and agent replies are searchable; raw ACP envelopes are not indexed. Agent-session backfills use this same direct indexing path, not SQS.
 - **Other live entities**: Kafka handlers and legacy SQS workers drain events for the remaining search entities.
-- **Backfills**: internal HTTP endpoints start tracked jobs. Most enqueue records onto SQS; agent sessions and properties index directly.
+- **Backfills**: internal HTTP endpoints start tracked jobs. Most enqueue records onto SQS; agent sessions, properties, and the email attachment status index directly.
 
 ## Architecture
 
@@ -182,7 +182,7 @@ Use `POST /internal/backfill/calls` after a rollback, a dropped upsert, or a sus
 
 ## Backfill HTTP Routes
 
-Every search-indexed entity has a POST endpoint on sps's internal surface. They return `202 Accepted` with `{"job_id": "..."}`, share internal-auth via the `x-internal-auth-key` header, and accept a per-entity JSON filter in the request body. Poll `GET /internal/backfill/{job_id}` for status and the `enqueued` progress count.
+Every search-indexed entity has a POST endpoint on sps's internal surface. They return `202 Accepted` with `{"job_id": "..."}`, share internal-auth via the `x-internal-auth-key` header, and accept a per-entity JSON filter in the request body. Poll `GET /internal/backfill/{job_id}` for status and the `enqueued` progress count; a resumable backfill also reports its `cursor` and update counts.
 
 | Entity | Route | Body (all fields optional) |
 |---|---|---|
@@ -192,6 +192,49 @@ Every search-indexed entity has a POST endpoint on sps's internal surface. They 
 | Channels | `POST /internal/backfill/channels` | `{}` |
 | Documents | `POST /internal/backfill/documents` | `{"file_types": ["pdf"], "sub_type": "task", "created_after": "...", "created_before": "..."}` |
 | Emails | `POST /internal/backfill/emails` | `{"since": "2026-03-16T00:00:00Z", "index_override": "emails_v2", "batch_size": 100}` |
+| Email attachment status | `POST /internal/backfill/email-attachment-status` | `{"after_document_id": "<cursor>", "page_size": 500, "docs_per_second": 100}` — `{}` = every document linked to an email attachment, updated directly; see below |
+
+### Email attachment status
+
+`is_email_attachment` on a `documents` parent is true exactly when a
+`document_email` row links the document to an email attachment. Every full
+index writes it, so this backfill is for documents indexed before the field
+existed. It walks `document_email` in `document_id` order on the backfill pool
+and sets the flag to true on each live (not trashed) document's parent with
+partial `_bulk` updates through the `documents` alias. It neither re-extracts
+content nor goes through SQS.
+
+Before starting it on an environment:
+
+1. Apply the `is_email_attachment` mapping there (`create_indices.ts` in
+   `infra/stacks/opensearch/helpers`) and confirm it with `verify_mappings.ts`.
+2. Check disk headroom on every node with `GET _cat/allocation?v`. At the
+   flood-stage watermark OpenSearch makes every index read-only, and earlier
+   backfills have driven production there.
+3. Run one job per environment at a time; the rates of concurrent jobs add up.
+
+The job writes at most `docs_per_second` (default 100) documents a second, in
+pages of `page_size` (default 500, at most 1000) distinct linked documents.
+The status poll reports `enqueued` (linked documents read), `updated`,
+`missing` (not in the index; their first full index writes the flag), `failed`,
+and `cursor`, the last document id it finished, recorded after every page.
+
+A 429 or a cluster block from OpenSearch stops the job instead of retrying:
+its status becomes `stopped`, `error` holds the reason, and `cursor` the last
+finished page. So does a page in which any document failed to update; resuming
+repeats that page. Pages are read from the primary, not the backfill replica:
+a lagging replica could still show a link that a release already removed, and
+the backfill would write `true` after the release cleared it. Once the cluster recovers (for a flood-stage block, once disk is
+freed and the block is cleared), resume with
+`{"after_document_id": "<cursor>"}`. A failed or cancelled job resumes the same
+way. Shutdown cancels a job on its own pod between pages, not on others.
+
+Each update reindexes the whole parent, even when its `_source` already holds
+the value, so the backfill also repairs parents written before the mapping
+existed. A release that reaches an environment before its mapping therefore
+loses nothing permanently: its full writes leave the flag unindexed in
+`_source`, the backfill reindexes every attachment's parent, and an unindexed
+`false` reads the same as an absent field.
 
 ### Against dev (deployed service)
 

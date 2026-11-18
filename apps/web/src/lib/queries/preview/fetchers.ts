@@ -5,10 +5,6 @@ import {
 import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { itemToSafeName } from '@core/constant/allBlocks';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import type { ResultError } from '@core/util/result';
 import { toSubType } from '@entity/types/entity';
@@ -32,10 +28,7 @@ import { failedReadAccess } from './failed-read';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
 async function fetchSessionPreviews(ids: string[]): Promise<PreviewItem[]> {
-  const previews = await fetchAgentSessionMentionPreviews(
-    ids,
-    isFeatureEnabled(enableGraphqlSoup)
-  );
+  const previews = await fetchAgentSessionMentionPreviews(ids, true);
   return [...previews].map(([id, preview]): PreviewItem => {
     const base = {
       id,
@@ -173,7 +166,7 @@ async function fetchCallPreviews(ids: string[]): Promise<PreviewItem[]> {
 
     switch (call.type) {
       case 'exists': {
-        // Match the call block (CallRecordingSplitHeader / CallRecordingBody):
+        // Match the call block (its header views / CallRecordingBody):
         // prefer the user-supplied / AI-generated `customName`, fall back to
         // the channel the call lives in.
         const displayName = call.customName ?? call.channelName;

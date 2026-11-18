@@ -13,6 +13,7 @@ fn prompt_entry(text: &str) -> QueuedEntry {
         created_at: Utc::now(),
         context: None,
         client: None,
+        prompter: PrompterKind::User,
     }
 }
 
@@ -74,7 +75,13 @@ fn editing_replaces_the_text_and_keeps_the_place() {
     queues.enqueue(session, second.clone()).unwrap();
 
     queues
-        .edit_prompt(session, first.action_id, "rewritten".to_owned(), None)
+        .edit_prompt(
+            session,
+            first.action_id,
+            "rewritten".to_owned(),
+            None,
+            PrompterKind::User,
+        )
         .unwrap();
 
     let claimed = queues.claim_next(session).unwrap();
@@ -97,6 +104,7 @@ fn editing_reattributes_the_entry_to_the_editor() {
             first.action_id,
             "rewritten".to_owned(),
             Some(editor.clone()),
+            PrompterKind::User,
         )
         .unwrap();
 
@@ -114,7 +122,13 @@ fn a_claimed_entry_is_gone_for_editing_and_removal() {
     queues.claim_next(session).unwrap();
 
     assert_eq!(
-        queues.edit_prompt(session, entry.action_id, "late".to_owned(), None),
+        queues.edit_prompt(
+            session,
+            entry.action_id,
+            "late".to_owned(),
+            None,
+            PrompterKind::User
+        ),
         Err(QueueError::NotFound)
     );
     assert_eq!(
@@ -136,11 +150,18 @@ fn only_prompts_are_editable() {
         created_at: Utc::now(),
         context: None,
         client: None,
+        prompter: agent_session::domain::model::PrompterKind::User,
     };
     queues.enqueue(session, compact.clone()).unwrap();
 
     assert_eq!(
-        queues.edit_prompt(session, compact.action_id, "text".to_owned(), None),
+        queues.edit_prompt(
+            session,
+            compact.action_id,
+            "text".to_owned(),
+            None,
+            PrompterKind::User
+        ),
         Err(QueueError::NotEditable)
     );
     // Still removable.
@@ -363,4 +384,113 @@ fn only_a_human_prompt_from_the_session_itself_has_a_direct_prompter() {
     ] {
         assert_eq!(entry.direct_prompter(), None, "{name}");
     }
+}
+
+/// Owner queues a prompt, a program rewrites it: the turn it opens is the
+/// program's, and the owner rewriting it again does not make it theirs.
+#[test]
+fn a_programs_edit_makes_the_entry_a_programs_for_good() {
+    let queues = SessionQueues::new();
+    let session = AgentSessionId::TEST_A;
+    let owner = MacroUserIdStr::try_from_email("owner@example.com").unwrap();
+    let entry = QueuedEntry {
+        actor: Some(owner.clone()),
+        ..prompt_entry("draft the email")
+    };
+    queues.enqueue(session, entry.clone()).unwrap();
+    assert_eq!(
+        queues.snapshot(session)[0].prompter_kind(),
+        PrompterKind::User
+    );
+
+    queues
+        .edit_prompt(
+            session,
+            entry.action_id,
+            "approve the review".to_owned(),
+            Some(owner.clone()),
+            PrompterKind::Program,
+        )
+        .unwrap();
+    assert_eq!(
+        queues.snapshot(session)[0].prompter_kind(),
+        PrompterKind::Program
+    );
+
+    queues
+        .edit_prompt(
+            session,
+            entry.action_id,
+            "approve the review, really".to_owned(),
+            Some(owner),
+            PrompterKind::User,
+        )
+        .unwrap();
+    assert_eq!(
+        queues.snapshot(session)[0].prompter_kind(),
+        PrompterKind::Program
+    );
+}
+
+#[test]
+fn a_programs_prompt_opens_a_programs_turn() {
+    let entry = QueuedEntry {
+        prompter: PrompterKind::Program,
+        ..prompt_entry("approve the review")
+    };
+    assert_eq!(entry.prompter_kind(), PrompterKind::Program);
+    assert_eq!(
+        QueuedEntry::from_stored(entry.to_stored().unwrap())
+            .unwrap()
+            .prompter_kind(),
+        PrompterKind::Program
+    );
+}
+
+/// Entries queued before the prompter was kept are a person's, as they were.
+#[test]
+fn an_entry_stored_without_a_prompter_reads_as_a_persons() {
+    let stored: StoredQueuedAction = serde_json::from_value(serde_json::json!({
+        "actionId": AgentActionId::mint(),
+        "action": AgentAction::prompt("hello"),
+        "createdAt": "2026-11-01T00:00:00Z",
+    }))
+    .unwrap();
+    assert_eq!(stored.prompter, PrompterKind::User);
+    assert_eq!(
+        QueuedEntry::from_stored(stored).unwrap().prompter_kind(),
+        PrompterKind::User
+    );
+}
+
+/// An entry stored with a prompter this build doesn't know is a system
+/// turn's, acting for nobody.
+#[test]
+fn an_entry_stored_with_an_unknown_prompter_reads_as_a_system_turns() {
+    let stored: StoredQueuedAction = serde_json::from_value(serde_json::json!({
+        "actionId": AgentActionId::mint(),
+        "action": AgentAction::prompt("approve the review"),
+        "createdAt": "2026-11-01T00:00:00Z",
+        "prompter": "bogus",
+    }))
+    .unwrap();
+    assert_eq!(stored.prompter, PrompterKind::System);
+    assert_eq!(
+        QueuedEntry::from_stored(stored).unwrap().prompter_kind(),
+        PrompterKind::System
+    );
+}
+
+/// A program's turn spends the owner's access as their own turn does; only
+/// the checks for a person's decision tell the two apart.
+#[test]
+fn a_programs_turn_acts_with_the_owners_access() {
+    let owner = MacroUserIdStr::try_from_email("owner@example.com").unwrap();
+    let prompter = agent_session::domain::model::TurnPrompter {
+        kind: PrompterKind::Program,
+        action_id: AgentActionId::mint(),
+        user: Some(owner.clone()),
+        client: None,
+    };
+    assert_eq!(prompter.acting_user(), Some(&owner));
 }

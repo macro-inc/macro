@@ -13,6 +13,8 @@ const MOVES: &[(LifecycleEvent, SuggestionState, SuggestionState)] = &[
     (E::StartRun, S::Accepted, S::Accepted),
     (E::Complete, S::Proposed, S::Done),
     (E::Complete, S::Accepted, S::Done),
+    (E::Answer, S::Proposed, S::Done),
+    (E::Answer, S::Accepted, S::Done),
     (E::RunFinished, S::Accepted, S::Done),
     (E::Dismiss, S::Proposed, S::Dismissed),
     (E::Dismiss, S::Accepted, S::Dismissed),

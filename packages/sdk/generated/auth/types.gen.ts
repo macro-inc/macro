@@ -5278,7 +5278,7 @@ export type AgentSetupData = {
 export type AgentSetupErrors = {
     401: string;
     /**
-     * The account is not an agent
+     * The account is not an agent, or the caller is an agent's program
      */
     403: ErrorResponse;
     /**

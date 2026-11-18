@@ -3,13 +3,8 @@ import type { ResultError } from '@core/util/result';
 import { updateAgentSessionSharePermissions } from '@queries/agent-session/share-permissions';
 import { updateInitiativeSharePermissions } from '@queries/initiative/share-permissions';
 import { updateDatabaseSharePermissions } from '@queries/storage/databases';
-import {
-  updateEntitySharePolicy,
-  usesGraphqlSharePolicy,
-} from '@queries/storage/entity-mutations';
+import { updateEntitySharePolicy } from '@queries/storage/entity-mutations';
 import { updateFormSharePermissions } from '@queries/storage/forms';
-import { cognitionApiServiceClient } from '@service-cognition/client';
-import { storageServiceClient } from '@service-storage/client';
 import type { UpdateChannelSharePermission } from '@service-storage/generated/schemas/updateChannelSharePermission';
 import { err, type Result, ResultAsync } from 'neverthrow';
 import type {
@@ -29,25 +24,21 @@ type ChannelGrantClient = (
   | ResultAsync<unknown, readonly ResultError[]>;
 
 const CHANNEL_GRANT_CLIENTS = {
-  document: (documentId, operation) =>
-    storageServiceClient.editDocument({
-      documentId,
-      sharePermission: { channelSharePermissions: [operation] },
+  document: (id, operation) =>
+    updateEntitySharePolicy('document', id, {
+      channelSharePermissions: [operation],
     }),
-  chat: (chat_id, operation) =>
-    cognitionApiServiceClient.updateChatPermissions({
-      chat_id,
-      sharePermission: { channelSharePermissions: [operation] },
+  chat: (id, operation) =>
+    updateEntitySharePolicy('chat', id, {
+      channelSharePermissions: [operation],
     }),
   project: (id, operation) =>
-    storageServiceClient.projects.edit({
-      id,
-      sharePermission: { channelSharePermissions: [operation] },
+    updateEntitySharePolicy('project', id, {
+      channelSharePermissions: [operation],
     }),
-  email: (threadId, operation) =>
-    storageServiceClient.editThread({
-      threadId,
-      sharePermission: { channelSharePermissions: [operation] },
+  email: (id, operation) =>
+    updateEntitySharePolicy('email', id, {
+      channelSharePermissions: [operation],
     }),
   agent_session: (id, operation) =>
     updateAgentSessionSharePermissions(id, {
@@ -71,15 +62,6 @@ const CHANNEL_GRANT_CLIENTS = {
   call: undefined,
   foreign: undefined,
 } satisfies Record<ShareKind, ChannelGrantClient | undefined>;
-
-// GraphQL replaces the transport, not the policy: a kind without a REST
-// client stays unsupported even though GraphQL can address it.
-function grantClient(kind: ShareKind): ChannelGrantClient | undefined {
-  const client: ChannelGrantClient | undefined = CHANNEL_GRANT_CLIENTS[kind];
-  if (!client || !usesGraphqlSharePolicy(kind)) return client;
-  return (id, operation) =>
-    updateEntitySharePolicy(kind, id, { channelSharePermissions: [operation] });
-}
 
 function toOperation(
   change: ChannelAccessChange
@@ -115,7 +97,8 @@ export async function changeChannelAccess(
   item: ShareItemRef,
   change: ChannelAccessChange
 ): Promise<Result<void, ChannelAccessError>> {
-  const client = grantClient(item.kind);
+  const client: ChannelGrantClient | undefined =
+    CHANNEL_GRANT_CLIENTS[item.kind];
   if (!client) return err({ kind: 'unsupported' });
 
   return await callClient(client, item.id, toOperation(change)).andThen(

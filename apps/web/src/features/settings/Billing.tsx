@@ -4,11 +4,7 @@ import { t } from '@app/lib/i18n';
 import { TraceFlow } from '@app/observability/flow';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableAiUsageBilling,
-  enableMacroComputers,
-  LOCAL_ONLY,
-} from '@core/constant/featureFlags';
+import { enableMacroComputers, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import {
   useLicenseStatus,
@@ -67,7 +63,6 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const userId = useUserId();
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
-  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const macroComputers = useFeatureFlag(enableMacroComputers);
   const changePlan = useChangePlanMutation();
   const checkout = useCreateCheckoutSessionMutation();
@@ -127,7 +122,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
             canManageBilling: summary.data.can_manage_billing,
           }
         : undefined,
-      aiUsageEnabled: aiUsageBilling().enabled,
+      aiUsageEnabled: true,
       pending: checkout.isPending || changePlan.isPending,
       existingSubscription: queryReadyGate(trialEligibility)
         ? trialEligibility.data.existingSubscription
@@ -168,9 +163,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
         plan === previousTier
           ? `Keeping your ${plan === 'max' ? 'Max' : 'Pro'} plan. Your scheduled downgrade is canceled.`
           : plan === 'max'
-            ? aiUsageBilling().enabled
-              ? 'Upgraded to Max. Your larger AI allowance applies right away.'
-              : 'Upgraded to Max.'
+            ? 'Upgraded to Max. Your larger AI allowance applies right away.'
             : 'Pro will start at your next renewal. You keep Max until then.'
       );
     } catch (error) {

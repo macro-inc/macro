@@ -165,8 +165,11 @@ function DesktopDialog(props: DialogProps) {
             ref={props.contentRef}
             class={cn(
               'portal-scope isolate',
+              // A fullscreen dialog paints the whole screen but keeps its
+              // content between the horizontal safe areas, like the app frame
+              // (the iPhone Duo's clock and camera column is a right safe area).
               props.fullscreen
-                ? 'size-full bg-page'
+                ? 'size-full bg-page pl-(--safe-left) pr-(--safe-right)'
                 : 'w-200 max-w-[calc(100vw-16px)] elevated-surface [&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:bg-transparent [&>[data-layer]>[data-surface]]:rounded-[24px]',
               animateOnOpen() &&
                 (props.fullscreen

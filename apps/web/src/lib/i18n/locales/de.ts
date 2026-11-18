@@ -599,10 +599,6 @@ export default {
       other: '{{accepted}} von {{count}} Elementen als nicht erledigt markiert',
     },
     toastMarkNotDoneFailed: 'Konnte nicht als nicht erledigt markiert werden',
-    toastThreadStaysDone:
-      'Dieser Thread enthält keine empfangenen Nachrichten und bleibt daher erledigt',
-    toastThreadsStayDone:
-      'Diese Threads enthalten keine empfangenen Nachrichten und bleiben daher erledigt',
     toastCountNotRestored: {
       one: '{{count}} konnte nicht wiederhergestellt werden.',
       other: '{{count}} konnten nicht wiederhergestellt werden.',
@@ -703,8 +699,6 @@ export default {
     create: 'Erstellen',
     getMobileApp: 'Mobile App herunterladen',
     signedInAs: 'Angemeldet als {{name}}',
-    commandMenu: 'Befehlsmenü',
-    searchEverything: 'Alles durchsuchen',
     customizeSidebar: 'Seitenleiste anpassen',
     customizeSidebarDescription:
       'Auswählen, welche Apps in der Seitenleiste erscheinen, und per Drag & Drop neu anordnen. Start bleibt immer an erster Stelle.',
