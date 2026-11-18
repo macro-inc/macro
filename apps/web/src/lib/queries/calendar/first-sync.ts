@@ -14,11 +14,12 @@ import { createCalendarOccurrenceQueryRange } from './occurrences';
 
 function calendarFirstSyncOptions(
   owner: QueryAccount | undefined,
-  enabled: boolean
+  linkIds: readonly string[]
 ) {
   return {
-    queryKey: calendarKeys.firstSync(owner?.userId, owner?.session).queryKey,
-    enabled: !!owner && enabled,
+    queryKey: calendarKeys.firstSync(owner?.userId, owner?.session, linkIds)
+      .queryKey,
+    enabled: !!owner && linkIds.length > 0,
     // The invitation card and its open composer share the same sample.
     staleTime: 30_000,
     // Only the response's ingestion state is needed. Ask for one occurrence
@@ -49,7 +50,7 @@ export function useCalendarFirstSync(enabled: Accessor<boolean>) {
   const account = useQueryAccount();
   const links = useEmailLinksQuery(enabled);
   const calendars = useVisibleCalendarsQuery(() => ({ enabled: enabled() }));
-  const needsDiscovery = createMemo(() => {
+  const awaitingDiscovery = createMemo(() => {
     if (
       !enabled() ||
       !queryReadyGate(links) ||
@@ -57,27 +58,31 @@ export function useCalendarFirstSync(enabled: Accessor<boolean>) {
       calendars.isPlaceholderData ||
       calendars.data.some((calendar) => calendar.isWritable)
     ) {
-      return false;
+      return [];
     }
     const discoveredLinks = new Set(
       calendars.data.map((calendar) => calendar.emailLinkId)
     );
-    return links.data.links.some(
-      (link) =>
-        link.is_sync_active &&
-        !link.needs_reauth &&
-        !link.needs_calendar_permission &&
-        !discoveredLinks.has(link.id)
-    );
+    // A newly linked inbox must not reuse the previous grants' status.
+    return links.data.links
+      .filter(
+        (link) =>
+          link.is_sync_active &&
+          !link.needs_reauth &&
+          !link.needs_calendar_permission &&
+          !discoveredLinks.has(link.id)
+      )
+      .map((link) => link.id)
+      .sort();
   });
   const status = useQuery(() =>
-    calendarFirstSyncOptions(account(), needsDiscovery())
+    calendarFirstSyncOptions(account(), awaitingDiscovery())
   );
   usePending('calendar.first_sync.status', () => status.isLoading);
 
   return () =>
     !!account() &&
-    needsDiscovery() &&
+    awaitingDiscovery().length > 0 &&
     queryReadyGate(status) &&
     status.data === CalendarSyncStatus.syncing;
 }
