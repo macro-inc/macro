@@ -2,6 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { channelThreadRootId } from '@notifications/channel-thread-root';
 import type { UnifiedNotification } from '@notifications/types';
 import { match, P } from 'ts-pattern';
+import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
 import {
   bumpSoupEntityNotifiedAt,
   hasSoupEntity,
@@ -48,7 +49,7 @@ function notificationEntityTypeToSoupTag(
     .exhaustive(() => null);
 }
 
-/** Keep REST-backed Home rows live even when notifications use GraphQL. */
+/** Keep Home rows live, on REST and GraphQL lists alike. */
 export function updateSoupForNotification(notification: UnifiedNotification) {
   const soupTag = notificationEntityTypeToSoupTag(notification.entity_type);
   if (!soupTag) return;
@@ -91,4 +92,28 @@ export function updateSoupForNotification(notification: UnifiedNotification) {
       notification.state
     );
   }
+
+  revalidateNotifiedGraphqlSoupLists();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Whether a mounted Soup list's REST-shaped request is ordered by notification. */
+function isNotifiedList(body: unknown): boolean {
+  if (!isRecord(body) || !isRecord(body.params)) return false;
+  return body.params.sort_method === 'notified_at';
+}
+
+/**
+ * GraphQL lists ordered by notification have no local projection: the cache
+ * can neither place a newly notified entity in them nor move a row up. They
+ * read their loaded pages again instead, which carries the new stamps.
+ */
+function revalidateNotifiedGraphqlSoupLists(): void {
+  fireAndForget(
+    refreshActiveGraphqlSoupQueries({ where: isNotifiedList }),
+    'notification-soup'
+  );
 }

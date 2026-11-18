@@ -1,4 +1,5 @@
 import type { UnifiedNotification } from '@notifications/types';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
   bumpSoupEntityNotifiedAt,
   hasSoupEntity,
@@ -17,6 +18,11 @@ vi.mock('@queries/soup/normalized-cache', () => ({
   restoreSoupEntityToDoneFilteredQueries: vi.fn(),
 }));
 
+vi.mock('@queries/soup/graphql/active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: vi.fn(async () => {}),
+}));
+
+const mockRefreshGraphqlLists = vi.mocked(refreshActiveGraphqlSoupQueries);
 const mockBumpNotifiedAt = vi.mocked(bumpSoupEntityNotifiedAt);
 const mockHasSoupEntity = vi.mocked(hasSoupEntity);
 const mockUpdateUpdatedAt = vi.mocked(optimisticUpdateSoupItemUpdatedAt);
@@ -273,4 +279,20 @@ describe('updateSoupForNotification', () => {
       expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
     }
   );
+
+  it('re-reads the GraphQL lists ordered by notification', () => {
+    updateSoupForNotification(createMockNotification());
+
+    expect(mockRefreshGraphqlLists).toHaveBeenCalledTimes(1);
+    const where = mockRefreshGraphqlLists.mock.calls[0]?.[0]?.where;
+    expect(where?.({ params: { sort_method: 'notified_at' } })).toBe(true);
+    expect(where?.({ params: { sort_method: 'updated_at' } })).toBe(false);
+    expect(where?.(undefined)).toBe(false);
+  });
+
+  it('leaves GraphQL lists alone for entities Soup does not list', () => {
+    updateSoupForNotification(createMockNotification({ entity_type: 'team' }));
+
+    expect(mockRefreshGraphqlLists).not.toHaveBeenCalled();
+  });
 });
