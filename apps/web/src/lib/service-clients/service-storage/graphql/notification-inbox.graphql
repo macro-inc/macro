@@ -9,6 +9,7 @@ fragment NotificationInboxEntryFields on NotificationInboxEntry {
 	rows {
 		id
 		rowType
+		alsoListedAs
 		threadId
 		revision
 		latestAt
