@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { typingIndicators } from '@macro-inc/muppet/utilities/macro/chat';
 import { batches } from '../../../context/stream.ts';
 import { join, memoryDisk } from '../../../context/test/fakes.ts';
 import type { Queued } from '../entry.ts';
@@ -74,13 +75,15 @@ test('history keeps what was recorded, and gives back the latest', async () => {
 
 test('typing stops once, with one stop, when the agent answers', async () => {
   const sent: string[] = [];
-  const indicator = typing({
-    send: async (channelId, action, root) => {
-      sent.push(`${channelId}:${action}:${root ?? ''}`);
-    },
-    every: 60_000,
-    most: 60_000,
-  });
+  const indicator = typing(
+    typingIndicators({
+      send: async (channelId, action, root) => {
+        sent.push(`${channelId}:${action}:${root ?? ''}`);
+      },
+      every: 60_000,
+      most: 60_000,
+    })
+  );
   indicator.start('c1', 'root1');
   await indicator.stop('c1');
   await indicator.stop('c1');

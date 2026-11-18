@@ -107,7 +107,7 @@ export const assistant = (
   const secrets = secretsContext(base, scheduled.decorations.schedules);
   const identity = identityContext(base, {
     chat: chat.decorations.chat,
-    typing: chat.decorations.typing,
+    typing: chat.decorations.typingIndicators,
     claude,
     hosted,
     vault: secrets.decorations.secrets.vault,

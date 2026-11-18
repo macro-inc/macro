@@ -4,6 +4,7 @@
  * muppet's (`utilities/greeting`); the words come from `greeting.md` here.
  */
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { codeTools } from '@macro-inc/muppet/agents/code-tools';
 import { behavior, type ContextOf } from '@macro-inc/muppet/core/behavior';
 import type { Catalog } from '@macro-inc/muppet/core/capability';
 import {
@@ -14,6 +15,7 @@ import {
   type Greeter,
   unsayable,
 } from '@macro-inc/muppet/utilities/greeting';
+import type { TypingIndicators } from '@macro-inc/muppet/utilities/macro/chat';
 import { isoText } from '@macro-inc/muppet/utilities/time';
 import type { TraceContext } from '@macro-inc/observability/core';
 import { z } from 'zod';
@@ -21,7 +23,6 @@ import type { Trace } from '../../agent/claude.ts';
 import type { Base } from '../../context/index.ts';
 import { trace } from '../../context/telemetry.ts';
 import type { Chat } from '../chat/macro.ts';
-import type { Typing } from '../chat/typing.ts';
 import type { Ask } from '../people/appraise.ts';
 import { type PeopleClaude, sdkAsk } from '../people/ask.ts';
 import type { Vault } from '../secrets/vault.ts';
@@ -49,7 +50,8 @@ export type GreeterPorts = {
   readonly ask: Ask;
   readonly macro: GreetingMacro;
   readonly chat: Pick<Chat, 'send'>;
-  readonly typing: Pick<Typing, 'start'>;
+  /** The process's typing indicators, shared with replies: see chat's `typing`. */
+  readonly typing: TypingIndicators;
   /** Whether the team's vault is on for the agent. */
   readonly vaultOn: () => Promise<boolean>;
   readonly sleep: (ms: number) => Promise<void>;
@@ -62,10 +64,12 @@ export type GreeterPorts = {
 /** The vault capability's name, which the greeting mentions only when the vault answers. */
 const vaultCapability = 'secrets';
 /**
- * How this agent runs, never shown to its owner: the command a shell calls
- * it with, and Macro's own code-mode tools, which it may be given too.
+ * How this agent runs, never shown to its owner: its Claude Code tools, the
+ * command a shell calls it with, and Macro's own code-mode tools, which it
+ * may be given too.
  */
 const ownMachinery = [
+  ...Object.values(codeTools),
   'bin/agent',
   'ExecuteCode',
   'DescribeCodeTools',
@@ -134,25 +138,29 @@ export const greeterOf = ({
         }),
       cancel: () => {},
     }),
-    ownerName: macro.ownerName,
-    ownerDm: macro.ownerDm,
-    hasMessages: macro.hasMessages,
-    send: chat.send,
-    startTyping: (channelId) => typing.start(channelId),
-    identity: () => readIdentity(context),
-    greeted: () => context.disk.exists(marker),
-    markGreeted: () =>
-      context.disk.write(marker, `${isoText(context.clock.now())}\n`),
-    failures: failed,
-    sleep,
-    after,
-    recordFailure: async (kind: FailureKind) => {
-      const now = await failed();
-      await context.disk.write(
-        failures,
-        `${JSON.stringify({ ...now, [kind]: now[kind] + 1 })}\n`
-      );
+    chat: {
+      ownerName: macro.ownerName,
+      ownerDm: macro.ownerDm,
+      hasMessages: macro.hasMessages,
+      send: chat.send,
+      startTyping: (channelId) => typing.start(channelId),
     },
+    identity: () => readIdentity(context),
+    store: {
+      greeted: () => context.disk.exists(marker),
+      markGreeted: () =>
+        context.disk.write(marker, `${isoText(context.clock.now())}\n`),
+      failures: failed,
+      recordFailure: async (kind: FailureKind) => {
+        const now = await failed();
+        await context.disk.write(
+          failures,
+          `${JSON.stringify({ ...now, [kind]: now[kind] + 1 })}\n`
+        );
+      },
+    },
+    clock: { sleep },
+    after,
     trace,
     sinceStartMs,
   };
@@ -216,7 +224,7 @@ export const identityContext = (
     vault,
   }: {
     readonly chat: Pick<Chat, 'send'>;
-    readonly typing: Pick<Typing, 'start'>;
+    readonly typing: TypingIndicators;
     /** How it runs Claude Code: as the agent's wakes do. */
     readonly claude: PeopleClaude;
     readonly hosted: boolean;

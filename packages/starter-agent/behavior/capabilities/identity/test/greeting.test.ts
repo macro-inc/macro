@@ -7,8 +7,8 @@ import {
   greetingRequest,
   parseGreeting,
   said,
-  unsayable,
 } from '@macro-inc/muppet/utilities/greeting';
+import { typingIndicators } from '@macro-inc/muppet/utilities/macro/chat';
 import { passthrough } from '../../../agent/claude.ts';
 import { capabilityModules } from '../../../index.ts';
 import { typing as typingOf } from '../../chat/typing.ts';
@@ -26,8 +26,11 @@ const catalog: Catalog = Object.fromEntries(
 const everything = [...Object.keys(catalog), computer];
 
 test('the greeting prompt never names how the agent is built', () => {
-  const words = unsayable(catalog);
+  // The words the agent's own wiring bans: the library's, its tools', its catalog's.
+  const words = wiring(true).greeter.unsayable;
   expect(words).toContain('RunCapabilityScript');
+  expect(words).toContain('ExecuteCode');
+  expect(words).toContain('bin/agent');
   expect(words).toContain('dmOwner');
   expect(words).toContain('writeIdentity');
   expect(said(markdown, words)).toEqual([]);
@@ -158,14 +161,14 @@ test('the wiring reads the marker agents wrote when they introduced themselves, 
 test('the wiring counts failed starts by kind in the run bucket', async () => {
   const { greeter, files } = wiring(true);
   const counter = `/state/run/identity/${failuresFile}`;
-  expect(await greeter.failures()).toEqual({ paid: 0, unpaid: 0 });
-  await greeter.recordFailure('paid');
-  await greeter.recordFailure('unpaid');
-  await greeter.recordFailure('unpaid');
+  expect(await greeter.store.failures()).toEqual({ paid: 0, unpaid: 0 });
+  await greeter.store.recordFailure('paid');
+  await greeter.store.recordFailure('unpaid');
+  await greeter.store.recordFailure('unpaid');
   expect(files.get(counter)).toBe('{"paid":1,"unpaid":2}\n');
-  expect(await greeter.failures()).toEqual({ paid: 1, unpaid: 2 });
+  expect(await greeter.store.failures()).toEqual({ paid: 1, unpaid: 2 });
   files.set(counter, '{"paid":"many"}\n');
-  await expect(greeter.failures()).rejects.toThrow('malformed');
+  await expect(greeter.store.failures()).rejects.toThrow('malformed');
 });
 
 test('the wiring asks the quick model, with thinking off, and reads greeting.md', async () => {
@@ -179,30 +182,34 @@ test('the wiring asks the quick model, with thinking off, and reads greeting.md'
 
 test("the greeting's typing never stops a reply's typing in the same DM", async () => {
   const sentTyping: string[] = [];
-  const shared = typingOf({
+  const indicators = typingIndicators({
     send: async (channelId, action) => {
       sentTyping.push(`${action} ${channelId}`);
     },
     every: 60_000,
   });
+  const replies = typingOf(indicators);
   const { greeter } = wiring(true);
   const replying: Greeter = {
     ...greeter,
-    startTyping: (channelId) => shared.start(channelId),
+    chat: {
+      ...greeter.chat,
+      startTyping: (channelId) => indicators.start(channelId),
+    },
     model: () => ({
       answer: async (prompt) => {
         // A reply starts typing in the same DM while the greeting is written.
-        shared.start('dm-1');
+        replies.start('dm-1');
         return greeter.model().answer(prompt);
       },
       cancel: () => {},
     }),
   };
   await greet(replying);
-  // The greeting's own indicator ended when the reply's replaced it; the
-  // reply's is still showing.
-  expect(sentTyping).toEqual(['start dm-1', 'stop dm-1', 'start dm-1']);
-  await shared.stop('dm-1');
+  // The greeting stopped its own indicator; the reply's is still showing.
+  expect(sentTyping).toEqual(['start dm-1']);
+  await replies.stop('dm-1');
+  expect(sentTyping).toEqual(['start dm-1', 'stop dm-1']);
 });
 
 test('the vault is promised only when a one-item search answers', async () => {
