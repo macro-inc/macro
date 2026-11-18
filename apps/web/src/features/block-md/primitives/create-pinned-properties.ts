@@ -1,9 +1,7 @@
 import {
   lexicalPinnedPropertyStore,
-  nativePinnedPropertyStore,
   type PinnedPropertyStore,
-} from '@core/component/LexicalMarkdown/plugins/pinned-properties/native';
-import type { EditorView } from '@macro-inc/lexical-wasm-view';
+} from '@core/component/LexicalMarkdown/plugins/pinned-properties/store';
 import { resolvePinnedPropertyIds } from '@property/core/pinned-property-ids';
 import type { Property } from '@property/types';
 import type { LexicalEditor } from 'lexical';
@@ -15,16 +13,17 @@ import {
   onCleanup,
 } from 'solid-js';
 
-/** The pin store of whichever engine mounted the document body. */
+/**
+ * The pin store of whichever engine mounted the document body. The native
+ * runtime brings its own store, so this shared module imports no native code.
+ */
 export function createDocumentPinnedPropertyStore(body: {
   readonly editor: Accessor<LexicalEditor | undefined>;
-  readonly nativeView: Accessor<EditorView | undefined>;
+  readonly native: Accessor<PinnedPropertyStore | undefined>;
 }): Accessor<PinnedPropertyStore | undefined> {
   return createMemo(() => {
     const editor = body.editor();
-    if (editor) return lexicalPinnedPropertyStore(editor);
-    const view = body.nativeView();
-    return view ? nativePinnedPropertyStore(view) : undefined;
+    return editor ? lexicalPinnedPropertyStore(editor) : body.native();
   });
 }
 

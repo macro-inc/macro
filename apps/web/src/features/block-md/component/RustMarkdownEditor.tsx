@@ -98,6 +98,8 @@ import {
   nativeGoToNodeId,
 } from '@core/component/LexicalMarkdown/plugins/location/native';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
+import { nativePinnedPropertyStore } from '@core/component/LexicalMarkdown/plugins/pinned-properties/native';
+import type { PinnedPropertyStore } from '@core/component/LexicalMarkdown/plugins/pinned-properties/store';
 import { createProgressStatsStore } from '@core/component/LexicalMarkdown/plugins/progress';
 import { registerNativeTextPaste } from '@core/component/LexicalMarkdown/plugins/text-paste/native';
 import { createWordcountStatsStore } from '@core/component/LexicalMarkdown/plugins/wordcount';
@@ -155,7 +157,10 @@ import { nativeCommandTarget } from './useMarkdownCommands';
 
 export type RustMarkdownRuntime = Awaited<
   ReturnType<typeof createRustEditorSession>
->;
+> & {
+  /** Built here so shared document chrome never imports the native store. */
+  readonly pinnedProperties: PinnedPropertyStore;
+};
 
 /** Flagged body engine; document layout and status chrome belong to the host. */
 export default function RustMarkdownEditor(props: {
@@ -502,7 +507,7 @@ export default function RustMarkdownEditor(props: {
             props.context
           );
           await flow.task('state.load', async () => {
-            const mounted = await createRustEditorSession({
+            const session = await createRustEditorSession({
               module,
               root: element,
               codeTokens: {
@@ -667,6 +672,10 @@ export default function RustMarkdownEditor(props: {
                 );
               },
             });
+            const mounted: RustMarkdownRuntime = {
+              ...session,
+              pinnedProperties: nativePinnedPropertyStore(session.view),
+            };
             if (abort.signal.aborted) {
               await mounted.close();
               return;

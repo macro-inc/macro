@@ -1,10 +1,10 @@
-import { lexicalPinnedPropertyStore } from '@core/component/LexicalMarkdown/plugins/pinned-properties/native';
 import {
   $getPinnedProperties,
   $getStoredPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
   pinnedPropertiesPlugin,
 } from '@core/component/LexicalMarkdown/plugins/pinned-properties/pinnedPropertiesPlugin';
+import { lexicalPinnedPropertyStore } from '@core/component/LexicalMarkdown/plugins/pinned-properties/store';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   PropertiesProvider,

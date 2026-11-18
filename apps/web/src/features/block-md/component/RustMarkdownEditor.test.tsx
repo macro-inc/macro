@@ -805,6 +805,14 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
+/** The runtime the editor publishes: the session plus its native pin store. */
+function published(mounted: object) {
+  return {
+    ...mounted,
+    pinnedProperties: expect.objectContaining({ read: expect.any(Function) }),
+  };
+}
+
 it('keeps a pending view private and noneditable until Initialize, then follows live access', async () => {
   const mounted = session();
   control.create.mockResolvedValue(mounted);
@@ -831,7 +839,7 @@ it('keeps a pending view private and noneditable until Initialize, then follows 
   expect(exposed).not.toHaveBeenCalled();
   mounted.initialize();
   await waitFor(() => expect(ready).toHaveBeenCalledOnce());
-  expect(exposed).toHaveBeenCalledWith(mounted);
+  expect(exposed).toHaveBeenCalledWith(published(mounted));
   expect(mounted.view.setEditable).toHaveBeenLastCalledWith(true);
   setCanEdit(false);
   expect(mounted.view.setEditable).toHaveBeenLastCalledWith(false);
@@ -1039,7 +1047,7 @@ it('keeps the view private through the reconnect budget and publishes a late Ini
   mounted.initialize();
   await vi.advanceTimersByTimeAsync(0);
   expect(ready).toHaveBeenCalledOnce();
-  expect(exposed).toHaveBeenCalledWith(mounted);
+  expect(exposed).toHaveBeenCalledWith(published(mounted));
   expect(control.attrs).toHaveBeenCalledWith(
     'editor.open.phase',
     'initialized'
@@ -1133,7 +1141,9 @@ it.each([3, 4])(
         onError={error}
       />
     ));
-    await waitFor(() => expect(exposed).toHaveBeenCalledWith(mounted));
+    await waitFor(() =>
+      expect(exposed).toHaveBeenCalledWith(published(mounted))
+    );
     expect(error).not.toHaveBeenCalled();
     expect(mounted.close).not.toHaveBeenCalled();
     rendered.unmount();
@@ -1156,7 +1166,7 @@ it('retains initialized content when retries end during or after the Initialize 
   await waitFor(() => expect(mounted.view.setEditable).toHaveBeenCalled());
   mounted.initialize();
   control.create.mock.calls[0][0].onStatus({ code: 3 });
-  await waitFor(() => expect(exposed).toHaveBeenCalledWith(mounted));
+  await waitFor(() => expect(exposed).toHaveBeenCalledWith(published(mounted)));
   control.create.mock.calls[0][0].onStatus({ code: 3 });
   expect(error).not.toHaveBeenCalled();
   expect(mounted.close).not.toHaveBeenCalled();

@@ -199,7 +199,7 @@ function PropertiesSectionContent(props: {
   const pins = createPinnedProperties(
     createDocumentPinnedPropertyStore({
       editor: () => mdData.editor,
-      nativeView: () => mdData.nativeRuntime?.view,
+      native: () => mdData.nativeRuntime?.pinnedProperties,
     }),
     defaultTitlePropertyDefinitionIds
   );

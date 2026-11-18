@@ -59,7 +59,7 @@ export function InlineTaskProperties() {
   const pins = createPinnedProperties(
     createDocumentPinnedPropertyStore({
       editor: () => state.editor.md.editor,
-      nativeView: () => state.editor.md.nativeRuntime?.view,
+      native: () => state.editor.md.nativeRuntime?.pinnedProperties,
     }),
     defaultDefinitionIds
   );
