@@ -3,7 +3,11 @@ import type { RootRangeProps } from '@corvu/calendar';
 import { type Accessor, batch } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { withLocalDate } from '../time-options';
-import type { DateTimeRangeValue } from '../time-range';
+import {
+  type DateTimeRangeValue,
+  moveAllDayRange,
+  moveTimedRange,
+} from '../time-range';
 
 type Selection = NonNullable<RootRangeProps['value']>;
 type Endpoint = 'start' | 'end';
@@ -14,15 +18,18 @@ export function createRangeDateSelection(options: {
   startDisabled: Accessor<boolean>;
   endDisabled: Accessor<boolean>;
   onChange: (value: DateTimeRangeValue) => void;
+  moveOnSelect?: boolean;
 }) {
   const [state, setState] = createStore<{
     open: boolean;
     endpoint: Endpoint;
     draft: Selection;
+    rangeMode: boolean;
   }>({
     open: false,
     endpoint: 'start',
     draft: { from: null, to: null },
+    rangeMode: false,
   });
   const dates = () => {
     const value = options.value();
@@ -42,7 +49,7 @@ export function createRangeDateSelection(options: {
     const draft = keepsPendingStart
       ? state.draft
       : { from: current.from, to: endpoint === 'end' ? null : current.to };
-    setState({ open: true, endpoint, draft });
+    setState({ open: true, endpoint, draft, rangeMode: !options.moveOnSelect });
     return true;
   };
   const dateIsDisabled = (date: Date) => {
@@ -55,6 +62,36 @@ export function createRangeDateSelection(options: {
     if (!state.open || disabled(state.endpoint)) return;
     if (next.from && dateIsDisabled(next.from)) return;
     if (next.to && dateIsDisabled(next.to)) return;
+    if (!state.rangeMode) {
+      const selected =
+        state.endpoint === 'end' ? (next.to ?? next.from) : next.from;
+      if (!selected) return;
+      const current = options.value();
+      const value = {
+        allDay: current.allDay,
+        start: current.start,
+        end: current.end,
+      };
+      const date = formatLocalDate(selected);
+      const nextValue = { ...value };
+      if (state.endpoint === 'end') {
+        nextValue.end = value.allDay ? date : withLocalDate(value.end, date);
+      } else {
+        const start = value.allDay ? date : withLocalDate(value.start, date);
+        Object.assign(
+          nextValue,
+          value.allDay
+            ? moveAllDayRange(value, start)
+            : moveTimedRange(value, start)
+        );
+        if (options.endDisabled()) nextValue.end = value.end;
+      }
+      batch(() => {
+        options.onChange(nextValue);
+        close();
+      });
+      return;
+    }
     let from = next.from;
     let to = next.to;
     const current = dates();
@@ -77,5 +114,12 @@ export function createRangeDateSelection(options: {
       close();
     });
   };
-  return { state, open, close, change, dateIsDisabled };
+  return {
+    state,
+    open,
+    close,
+    change,
+    dateIsDisabled,
+    beginRange: () => setState('rangeMode', true),
+  };
 }

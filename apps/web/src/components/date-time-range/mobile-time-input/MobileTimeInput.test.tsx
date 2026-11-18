@@ -1,3 +1,4 @@
+import { installTimeInputResizeObserver } from '@app/components/date-time-range/test-support';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
@@ -6,6 +7,7 @@ import { endTimeOptions, type TimeOption } from '../time-options';
 import { MobileTimeInput } from './MobileTimeInput';
 
 beforeAll(() => {
+  installTimeInputResizeObserver();
   Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(cleanup);
@@ -135,7 +137,7 @@ it('commits keyboard navigation from the resting value', async () => {
   const { change } = setup();
   const trigger = screen.getByRole('combobox', { name: 'Start time' });
   trigger.focus();
-  await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+  await userEvent.keyboard('{ArrowDown}{Enter}');
   expect(change).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({ value: '09:15' })
   );

@@ -3,6 +3,7 @@ import { ScopedPortal } from '@core/component/ScopedPortal';
 import { formatLocalDate } from '@core/util/local-date';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import { Popover } from '@kobalte/core/popover';
+import { Button } from '@ui';
 import { batch, createSignal, Show } from 'solid-js';
 import { CalendarRange } from '../../ui/components/calendar-range/CalendarRange';
 import { useDateTimeRange } from '../date-time-range-context';
@@ -14,6 +15,7 @@ export function RangeDates(props: {
   layout?: 'inline' | 'columns';
   /** Keep both date pills aligned with a host's fixed-width time fields. */
   fieldWidth?: string;
+  moveOnSelect?: boolean;
 }) {
   const range = useDateTimeRange();
   const columns = () => props.layout === 'columns';
@@ -24,6 +26,9 @@ export function RangeDates(props: {
     value: () => range,
     startDisabled: () => range.startDisabled ?? false,
     endDisabled: () => range.endDisabled ?? false,
+    get moveOnSelect() {
+      return props.moveOnSelect;
+    },
     onChange: (value) =>
       batch(() => {
         if (value.start !== range.start) range.onStartChange(value.start);
@@ -33,10 +38,13 @@ export function RangeDates(props: {
   const open = () =>
     picker.state.open && !(range.startDisabled && range.endDisabled);
   const start = () =>
-    open() && picker.state.draft.from
-      ? formatLocalDate(picker.state.draft.from)
-      : range.start.slice(0, 10);
+    props.moveOnSelect
+      ? range.start.slice(0, 10)
+      : open() && picker.state.draft.from
+        ? formatLocalDate(picker.state.draft.from)
+        : range.start.slice(0, 10);
   const end = () => {
+    if (props.moveOnSelect) return range.end.slice(0, 10);
     if (open() && picker.state.draft.from && !picker.state.draft.to) return '';
     return open() && picker.state.draft.to
       ? formatLocalDate(picker.state.draft.to)
@@ -45,7 +53,9 @@ export function RangeDates(props: {
   const choosingEnd = () => open() && picker.state.endpoint === 'end';
   const hasOnlyEndEditable = () => range.startDisabled && !range.endDisabled;
   const showEnd = () =>
-    start() !== end() || choosingEnd() || hasOnlyEndEditable();
+    start() !== end() ||
+    hasOnlyEndEditable() ||
+    (!props.moveOnSelect && choosingEnd());
   const activate = (endpoint: 'start' | 'end', element: HTMLButtonElement) => {
     if (picker.open(endpoint)) setAnchor(element);
   };
@@ -136,6 +146,18 @@ export function RangeDates(props: {
               onValueChange={picker.change}
               disabled={picker.dateIsDisabled}
             />
+            <Show
+              when={
+                props.moveOnSelect &&
+                !picker.state.rangeMode &&
+                !range.startDisabled &&
+                !range.endDisabled
+              }
+            >
+              <Button variant="ghost" size="sm" onClick={picker.beginRange}>
+                {t('common.chooseDateRange')}
+              </Button>
+            </Show>
           </Popover.Content>
         </ScopedPortal>
       </Show>

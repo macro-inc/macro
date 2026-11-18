@@ -31,3 +31,26 @@ export function mobileClockValue(
         ?.value.toLocaleLowerCase(locale) ?? '',
   };
 }
+
+/** Keep the numeric entry and trailing period in separate columns while editing. */
+export function editableClockValue(
+  value: string,
+  text: string | undefined,
+  matchedValue: string | undefined,
+  format?: ClockFormat,
+  locale?: string
+) {
+  const display = mobileClockValue(matchedValue ?? value, format, locale);
+  if (text === undefined) return display;
+  const suffix = /^(\d[\d: h]*?)\s*(am?|pm?)$/i.exec(text.trim());
+  return {
+    time: suffix ? suffix[1].trim() : text,
+    meridiem: suffix
+      ? suffix[2].toLowerCase().startsWith('p')
+        ? 'pm'
+        : 'am'
+      : /^\d{2}/.test(text) && Number(text.slice(0, 2)) > 12
+        ? ''
+        : display.meridiem,
+  };
+}

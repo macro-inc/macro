@@ -1,3 +1,4 @@
+import { installTimeInputResizeObserver } from '@app/components/date-time-range/test-support';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
@@ -6,6 +7,7 @@ import { TimeInput } from './time-input';
 import { endTimeOptions, type TimeOption } from './time-options';
 
 beforeAll(() => {
+  installTimeInputResizeObserver();
   Element.prototype.scrollIntoView = vi.fn();
 });
 
@@ -148,16 +150,22 @@ describe('TimeInput', () => {
 
   it('preserves typing and full accessible values with a split meridiem', async () => {
     const { field, onChange } = renderTime('13:30', undefined, true);
-    expect(field.value).toBe('1:30 PM');
+    expect(field.value).toBe('1:30');
+    expect(
+      document.getElementById(field.getAttribute('aria-describedby') ?? '')
+        ?.textContent
+    ).toBe('pm');
     await userEvent.click(field);
-    await userEvent.keyboard('1230p{Enter}');
+    await userEvent.keyboard('1230p');
+    expect(field.value).toBe('1230');
+    await userEvent.keyboard('{Enter}');
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ value: '12:30' })
     );
-    expect(field.value).toBe('12:30 PM');
+    expect(field.value).toBe('12:30');
     await userEvent.click(field);
     await userEvent.keyboard('8a{Escape}');
-    expect(field.value).toBe('12:30 PM');
+    expect(field.value).toBe('12:30');
     expect(onChange).toHaveBeenCalledOnce();
   });
 });

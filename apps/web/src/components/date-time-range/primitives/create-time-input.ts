@@ -4,6 +4,7 @@ import {
   completedTypedTime,
   matchTypedTime,
   type TimeOption,
+  typedTimeCandidates,
   typedTimeOption,
 } from '../time-options';
 
@@ -13,6 +14,7 @@ interface TimeInputState {
   shown: string | undefined;
   highlightedId: string | undefined;
   navigated: boolean;
+  meridiem: 'am' | 'pm' | undefined;
 }
 
 /** Shared clock selection and typing; each presentation owns focus and scrolling. */
@@ -28,6 +30,7 @@ export function createTimeInput(options: {
     shown: undefined,
     highlightedId: undefined,
     navigated: false,
+    meridiem: undefined,
   });
   const highlighted = () =>
     options.options().find((option) => option.id === state.highlightedId);
@@ -47,6 +50,7 @@ export function createTimeInput(options: {
       typed: undefined,
       shown: undefined,
       navigated: false,
+      meridiem: undefined,
     });
   const choose = (option: TimeOption | undefined) => {
     if (!options.disabled() && option && option.id !== options.selectedId())
@@ -62,14 +66,22 @@ export function createTimeInput(options: {
   };
   const input = (text: string, complete: boolean) => {
     if (options.disabled()) return;
-    const match = matchTypedTime(options.options(), text);
+    const explicit = /^\d[\d: h]*(am?|pm?)$/i.exec(text.trim())?.[1];
+    let meridiem = state.meridiem;
+    if (explicit)
+      meridiem = explicit.toLowerCase().startsWith('p') ? 'pm' : 'am';
+    const ambiguous = typedTimeCandidates(text).length > 1;
+    const effective =
+      !explicit && meridiem && ambiguous ? `${text}${meridiem}` : text;
+    const match = matchTypedTime(options.options(), effective);
     const filled = complete ? completedTypedTime(text, match) : undefined;
     setState({
       mode: 'typing',
-      typed: text,
+      typed: effective,
       shown: filled ?? text,
       highlightedId: match?.id,
       navigated: false,
+      meridiem,
     });
     return filled;
   };

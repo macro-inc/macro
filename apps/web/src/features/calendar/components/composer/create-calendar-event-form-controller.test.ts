@@ -751,13 +751,13 @@ describe('moving the start', () => {
     expect(controller.dateRangeError()).toBeUndefined();
   });
 
-  it('leaves an end the user picked in this edit where they put it', () => {
+  it('keeps the edited length when the start changes after picking an end', () => {
     const controller = controllerFor(timed);
     controller.setEnd('2030-01-01T17:00');
     controller.setStart('2030-01-01T15:00');
     expect(controller.state()).toMatchObject({
       start: '2030-01-01T15:00',
-      end: '2030-01-01T17:00',
+      end: '2030-01-01T22:00',
     });
   });
 
@@ -770,7 +770,7 @@ describe('moving the start', () => {
     const picked = controllerFor(allDay);
     picked.setEnd('2030-01-04');
     picked.setStart('2030-01-03');
-    expect(picked.state().end).toBe('2030-01-04');
+    expect(picked.state().end).toBe('2030-01-06');
   });
 
   it('follows the start again once the times are rewritten', () => {

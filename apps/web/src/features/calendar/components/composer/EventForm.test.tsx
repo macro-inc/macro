@@ -283,7 +283,7 @@ it('returns guest permissions to the stored ones when an edit targets one occurr
   ).toBeNull();
 });
 
-it('moves the end with the start until the end is picked', async () => {
+it('moves the end with the start even after the end is picked', async () => {
   const user = userEvent.setup();
   showForm();
   const start = () =>
@@ -303,7 +303,7 @@ it('moves the end with the start until the end is picked', async () => {
 
   await typeTime(end(), '17:00');
   await typeTime(start(), '15:00');
-  expect(end().value).toBe('5:00 PM');
+  expect(end().value).toBe('6:00 PM');
   expect(
     screen.queryByText('End time must be after the start time.')
   ).toBeNull();

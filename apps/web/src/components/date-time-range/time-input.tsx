@@ -1,20 +1,26 @@
+import { formatLocale } from '@app/lib/i18n';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import { onElementConnect } from '@core/util/onElementConnect';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Dropdown } from '@ui/components/Dropdown';
 import { Input } from '@ui/components/Input';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
-import { createMemo, createUniqueId, For, Show } from 'solid-js';
+import { createMemo, createUniqueId, For, onCleanup, Show } from 'solid-js';
 import type { ClockFormat } from './primitives/clock-format';
 import { createTimeInput } from './primitives/create-time-input';
+import { editableClockValue } from './primitives/mobile-clock-value';
+import {
+  observeTimeOptionViewport,
+  revealTimeOption,
+} from './primitives/reveal-time-option';
 import {
   dayTimeOptions,
   formatTimeValue,
   selectedTimeOptionId,
   type TimeOption,
 } from './time-options';
-import { TimeValue } from './time-value/TimeValue';
 
 export const dateLabelFormatter = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
@@ -52,6 +58,7 @@ interface TimeInputProps {
 export function TimeInput(props: TimeInputProps) {
   const listId = createUniqueId();
   let input!: HTMLInputElement;
+  const periodId = `${listId}-period`;
   let list: HTMLDivElement | undefined;
 
   const options = createMemo(
@@ -65,6 +72,16 @@ export function TimeInput(props: TimeInputProps) {
     disabled: () => props.disabled ?? false,
     onChange: (option) => props.onChange(option),
   });
+  const display = () =>
+    editableClockValue(
+      props.value,
+      model.state.shown,
+      model.state.navigated || model.state.typed !== undefined
+        ? model.highlighted()?.value
+        : undefined,
+      props.timeFormat,
+      formatLocale()
+    );
   const optionDomId = (option: TimeOption) =>
     `${listId}-${option.id.replace('|', '-')}`;
   const activeDescendant = () => {
@@ -72,13 +89,17 @@ export function TimeInput(props: TimeInputProps) {
     return option ? optionDomId(option) : undefined;
   };
 
+  let revealFrame: number | undefined;
   const revealHighlighted = (block: ScrollLogicalPosition) => {
-    requestAnimationFrame(() => {
-      list
-        ?.querySelector<HTMLElement>('[data-highlighted]')
-        ?.scrollIntoView({ block });
+    if (revealFrame !== undefined) cancelAnimationFrame(revealFrame);
+    revealFrame = requestAnimationFrame(() => {
+      revealFrame = undefined;
+      revealTimeOption(list, block === 'center');
     });
   };
+  onCleanup(() => {
+    if (revealFrame !== undefined) cancelAnimationFrame(revealFrame);
+  });
 
   const openList = () => {
     if (props.disabled || model.isOpen()) return;
@@ -94,8 +115,17 @@ export function TimeInput(props: TimeInputProps) {
   const onInput = (event: InputEvent & { currentTarget: HTMLInputElement }) => {
     const text = event.currentTarget.value;
     const filled = model.input(text, event.inputType.startsWith('insert'));
+    // The normalized clock can equal the previous render after typing a period suffix.
+    // Repair the native value too, since Solid then has no changed value to write.
+    if (props.splitMeridiem) event.currentTarget.value = display().time;
     if (model.highlighted()) revealHighlighted('center');
-    if (filled) input.setSelectionRange(text.length, filled.length);
+    if (filled) {
+      const completed = props.splitMeridiem ? display().time : filled;
+      input.setSelectionRange(
+        Math.min(text.length, completed.length),
+        completed.length
+      );
+    }
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
@@ -126,7 +156,7 @@ export function TimeInput(props: TimeInputProps) {
       }}
       placement="bottom-start"
       gutter={4}
-      flip
+      flip={false}
       slide
     >
       <span class="relative inline-flex shrink-0">
@@ -143,19 +173,27 @@ export function TimeInput(props: TimeInputProps) {
           aria-expanded={model.isOpen()}
           aria-activedescendant={activeDescendant()}
           aria-invalid={props.invalid || undefined}
-          aria-describedby={props.describedBy}
+          aria-describedby={
+            [
+              props.describedBy,
+              props.splitMeridiem && display().meridiem ? periodId : undefined,
+            ]
+              .filter(Boolean)
+              .join(' ') || undefined
+          }
           disabled={props.disabled}
           value={
-            model.state.shown ??
-            formatTimeValue(props.value, props.timeFormat) ??
-            ''
+            props.splitMeridiem
+              ? display().time
+              : (model.state.shown ??
+                formatTimeValue(props.value, props.timeFormat) ??
+                '')
           }
           placeholder="Time"
           size="sm"
           class={cn(
             'w-[4.75rem] shrink-0',
-            props.splitMeridiem && 'h-7 text-sm',
-            props.splitMeridiem && !model.isOpen() && 'text-transparent',
+            props.splitMeridiem && 'h-7 pr-10 text-sm',
             props.class
           )}
           variant={props.splitMeridiem ? 'value' : undefined}
@@ -170,74 +208,83 @@ export function TimeInput(props: TimeInputProps) {
           onBlur={model.commit}
           on:keydown={onKeyDown}
         />
-        <Show when={props.splitMeridiem && !model.isOpen()}>
+        <Show when={props.splitMeridiem && display().meridiem}>
           <span
-            aria-hidden="true"
+            id={periodId}
             class={cn(
-              'pointer-events-none absolute inset-0 flex items-center px-2.5 text-sm',
+              'pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-sm text-ink-muted',
               props.disabled && 'opacity-50'
             )}
           >
-            <TimeValue value={props.value} timeFormat={props.timeFormat} />
+            {display().meridiem}
           </span>
         </Show>
       </span>
 
-      <ScopedPortal scope="local">
-        <Layer depth={4}>
-          <Popover.Content
-            as={Dropdown.ContentFrame}
-            class="max-h-64 min-w-36 overflow-y-auto"
-            style={{ 'z-index': 'calc(var(--z-index-action-menu) + 1)' }}
-            onOpenAutoFocus={(event) => event.preventDefault()}
-            onCloseAutoFocus={(event) => event.preventDefault()}
-            onInteractOutside={(event) => {
-              const target = event.detail.originalEvent.target;
-              if (target instanceof Node && input.contains(target)) {
-                event.preventDefault();
-              }
-            }}
-          >
-            <Popover.Title class="sr-only">Choose {props.label}</Popover.Title>
-            <Dropdown.GroupFrame
-              ref={list}
-              id={listId}
-              role="listbox"
-              aria-label={props.label}
+      <Show when={model.isOpen()}>
+        <ScopedPortal scope="local">
+          <Layer depth={4}>
+            <Popover.Content
+              as={Dropdown.ContentFrame}
+              class="max-h-[min(16rem,var(--kb-popper-content-available-height))] min-w-36 overflow-y-auto"
+              style={{ 'z-index': 'calc(var(--z-index-action-menu) + 1)' }}
+              onOpenAutoFocus={(event) => event.preventDefault()}
+              onCloseAutoFocus={(event) => event.preventDefault()}
+              onInteractOutside={(event) => {
+                const target = event.detail.originalEvent.target;
+                if (target instanceof Node && input.contains(target)) {
+                  event.preventDefault();
+                }
+              }}
             >
-              <For each={options()}>
-                {(option) => (
-                  <Dropdown.ItemFrame
-                    id={optionDomId(option)}
-                    role="option"
-                    aria-selected={option.id === selectedId()}
-                    data-highlighted={
-                      option.id === model.state.highlightedId ? '' : undefined
-                    }
-                    // Keep focus in the field, so it stays the one place keys go.
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => model.choose(option)}
-                  >
-                    <span>{option.label}</span>
-                    <span class="flex shrink-0 items-center gap-2">
-                      <Show when={option.detail}>
-                        {(detail) => (
-                          <span class="text-xs text-ink-extra-muted">
-                            {detail()}
-                          </span>
-                        )}
-                      </Show>
-                      <Show when={option.id === selectedId()}>
-                        <CheckIcon class="size-3.5 text-accent" />
-                      </Show>
-                    </span>
-                  </Dropdown.ItemFrame>
-                )}
-              </For>
-            </Dropdown.GroupFrame>
-          </Popover.Content>
-        </Layer>
-      </ScopedPortal>
+              <Popover.Title class="sr-only">
+                Choose {props.label}
+              </Popover.Title>
+              <Dropdown.GroupFrame
+                ref={(element) => {
+                  list = element;
+                  onElementConnect(element, () =>
+                    onCleanup(observeTimeOptionViewport(element))
+                  );
+                }}
+                id={listId}
+                role="listbox"
+                aria-label={props.label}
+              >
+                <For each={options()}>
+                  {(option) => (
+                    <Dropdown.ItemFrame
+                      id={optionDomId(option)}
+                      role="option"
+                      aria-selected={option.id === selectedId()}
+                      data-highlighted={
+                        option.id === model.state.highlightedId ? '' : undefined
+                      }
+                      // Keep focus in the field, so it stays the one place keys go.
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => model.choose(option)}
+                    >
+                      <span>{option.label}</span>
+                      <span class="flex shrink-0 items-center gap-2">
+                        <Show when={option.detail}>
+                          {(detail) => (
+                            <span class="text-xs text-ink-extra-muted">
+                              {detail()}
+                            </span>
+                          )}
+                        </Show>
+                        <Show when={option.id === selectedId()}>
+                          <CheckIcon class="size-3.5 text-accent" />
+                        </Show>
+                      </span>
+                    </Dropdown.ItemFrame>
+                  )}
+                </For>
+              </Dropdown.GroupFrame>
+            </Popover.Content>
+          </Layer>
+        </ScopedPortal>
+      </Show>
     </Popover>
   );
 }

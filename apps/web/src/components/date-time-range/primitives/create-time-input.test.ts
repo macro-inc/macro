@@ -112,3 +112,14 @@ it('blocks a pending typed or picked value when editing becomes disabled', () =>
   expect(input.state.mode).toBe('closed');
   expect(changed).not.toHaveBeenCalled();
 });
+
+it('keeps an explicitly typed meridiem through subsequent numeric editing', () => {
+  const { input, changed } = setup();
+  input.beginTyping();
+  input.input('6:30p', false);
+  input.input('6:45', false);
+  input.commit();
+  expect(changed).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ value: '18:45' })
+  );
+});

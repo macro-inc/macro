@@ -7,7 +7,11 @@ const disposers: (() => void)[] = [];
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();
 });
-function picker(startDisabled = false, endDisabled = false) {
+function picker(
+  startDisabled = false,
+  endDisabled = false,
+  moveOnSelect = false
+) {
   return createRoot((dispose) => {
     disposers.push(dispose);
     const [value, setValue] = createSignal<DateTimeRangeValue>({
@@ -21,6 +25,7 @@ function picker(startDisabled = false, endDisabled = false) {
       onChange: changed,
       startDisabled: () => startDisabled,
       endDisabled: () => endDisabled,
+      moveOnSelect,
     });
     return { source, value, changed };
   });
@@ -88,4 +93,27 @@ it('can move only the start when the end is locked', () => {
     start: '2029-12-31T23:00',
     end: '2030-01-02T01:00',
   });
+});
+
+it('moves an overnight event in one click without changing its length', () => {
+  const { source, value, changed } = picker(false, false, true);
+  source.open('start');
+  source.change({ from: new Date(2030, 1, 3), to: null });
+  expect(value()).toEqual({
+    allDay: false,
+    start: '2030-02-03T23:00',
+    end: '2030-02-04T01:00',
+  });
+  expect(changed).toHaveBeenCalledOnce();
+  expect(source.state.open).toBe(false);
+});
+
+it('only edits a span after explicitly choosing range selection', () => {
+  const { source, value, changed } = picker(false, false, true);
+  source.open('start');
+  source.beginRange();
+  source.change({ from: new Date(2030, 1, 3), to: null });
+  expect(changed).not.toHaveBeenCalled();
+  source.change({ from: new Date(2030, 1, 3), to: new Date(2030, 1, 6) });
+  expect(value().end).toBe('2030-02-06T01:00');
 });

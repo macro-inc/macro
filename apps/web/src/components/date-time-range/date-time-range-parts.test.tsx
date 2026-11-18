@@ -1,9 +1,11 @@
+import { installTimeInputResizeObserver } from '@app/components/date-time-range/test-support';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { DateTimeRange } from './date-time-range-fields';
 
 beforeAll(() => {
+  installTimeInputResizeObserver();
   Element.prototype.scrollIntoView = vi.fn();
 });
 

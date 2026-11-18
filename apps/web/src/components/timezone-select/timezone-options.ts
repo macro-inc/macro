@@ -7,5 +7,11 @@ export function timezoneOptions(
   return [...new Set(['UTC', ...zones])].map((value) => ({
     value,
     label: value.replaceAll('_', ' '),
+    shortName: new Intl.DateTimeFormat(undefined, {
+      timeZone: value,
+      timeZoneName: 'short',
+    })
+      .formatToParts(new Date())
+      .find((part) => part.type === 'timeZoneName')?.value,
   }));
 }

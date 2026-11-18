@@ -428,16 +428,9 @@ export function createCalendarEventFormController(
     replaceState(value);
   };
 
-  // Until the end is picked in this edit it follows the start, keeping the
-  // event's length; once picked, it stays where the user put it.
-  let endChosen = false;
-
+  // Moving a start always preserves the current length, including an edited end.
   const setStart = (start: string) => {
     const current = state();
-    if (endChosen) {
-      replaceState({ ...current, start });
-      return;
-    }
     replaceState(
       current.allDay
         ? moveAllDayRange(current, start)
@@ -449,18 +442,15 @@ export function createCalendarEventFormController(
   const setRange = (start: string, end: string) => {
     const current = state();
     if (current.start === start && current.end === end) return;
-    endChosen = true;
     replaceState({ ...current, start, end });
   };
 
   const setEnd = (end: string) => {
     if (end === state().end) return;
-    endChosen = true;
     setField('end', end);
   };
 
   const setAllDay = (allDay: boolean) => {
-    endChosen = false;
     replaceState(convertTimesForAllDay(state(), allDay));
   };
 
@@ -470,8 +460,6 @@ export function createCalendarEventFormController(
     const range = timeRangeFromValue(current);
     if (!range) return;
 
-    // A duration follows later start edits; an explicitly picked end stays put.
-    endChosen = false;
     replaceState({
       ...current,
       ...dateTimeRangeValue({
@@ -640,7 +628,6 @@ export function createCalendarEventFormController(
    */
   const resetDetails = () => {
     const initial = initialValue();
-    endChosen = false;
     batch(() => {
       setState({
         ...state(),
@@ -663,7 +650,6 @@ export function createCalendarEventFormController(
   const replaceFromExternal = (next: EventEditorInitialValues) => {
     const cloned = cloneValue(next);
     const guests = initialGuestOptions(next.guests, options.guestOptions());
-    endChosen = false;
     batch(() => {
       setInitialValue(cloned);
       setState(cloned);

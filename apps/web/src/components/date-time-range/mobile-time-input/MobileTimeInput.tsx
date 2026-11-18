@@ -1,5 +1,6 @@
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { Popover } from '@kobalte/core/popover';
 import { Button, cn, Dropdown, Input } from '@ui';
 import {
@@ -12,10 +13,14 @@ import {
   Show,
 } from 'solid-js';
 import { createTimeInput } from '../primitives/create-time-input';
+import { editableClockValue } from '../primitives/mobile-clock-value';
+import {
+  observeTimeOptionViewport,
+  revealTimeOption,
+} from '../primitives/reveal-time-option';
 import type { TimeInput } from '../time-input';
 import {
   dayTimeOptions,
-  formatTimeValue,
   selectedTimeOptionId,
   type TimeOption,
 } from '../time-options';
@@ -34,6 +39,7 @@ type MobileTimeInputProps = ComponentProps<typeof TimeInput> & {
  */
 export function MobileTimeInput(props: MobileTimeInputProps) {
   const listId = createUniqueId();
+  const periodId = `${listId}-period`;
   let anchor: HTMLSpanElement | undefined;
   let button: HTMLButtonElement | undefined;
   let input: HTMLInputElement | undefined;
@@ -50,6 +56,16 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
     disabled: () => props.disabled ?? false,
     onChange: (option) => props.onChange(option),
   });
+  const display = () =>
+    editableClockValue(
+      props.value,
+      model.state.shown,
+      model.state.navigated || model.state.typed !== undefined
+        ? model.highlighted()?.value
+        : undefined,
+      props.timeFormat,
+      formatLocale()
+    );
   // Permission loss closes the native typing focus as well as the pending picker draft.
   createEffect(
     on(
@@ -70,9 +86,7 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
     if (revealFrame !== undefined) cancelAnimationFrame(revealFrame);
     revealFrame = requestAnimationFrame(() => {
       revealFrame = undefined;
-      list
-        ?.querySelector<HTMLElement>('[data-highlighted]')
-        ?.scrollIntoView({ block });
+      revealTimeOption(list, block === 'center');
     });
   };
   onCleanup(() => {
@@ -106,10 +120,8 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
       event.preventDefault();
       event.stopPropagation();
       if (!model.isOpen()) openList();
-      else {
-        model.moveHighlight(event.key === 'ArrowDown' ? 1 : -1);
-        reveal('nearest');
-      }
+      model.moveHighlight(event.key === 'ArrowDown' ? 1 : -1);
+      reveal('nearest');
     } else if (event.key === 'Enter' && (typing() || model.state.navigated)) {
       event.preventDefault();
       event.stopPropagation();
@@ -126,7 +138,7 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
       }}
       placement="bottom-start"
       gutter={4}
-      flip
+      flip={false}
       slide
     >
       <span
@@ -147,7 +159,11 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
             aria-expanded={model.isOpen()}
             aria-activedescendant={activeId()}
             aria-invalid={props.invalid || undefined}
-            aria-describedby={props.describedBy}
+            aria-describedby={
+              [props.describedBy, display().meridiem ? periodId : undefined]
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
             disabled={props.disabled}
             onClick={() => (model.isOpen() ? beginTyping() : openList())}
             onKeyDown={onKeyDown}
@@ -155,7 +171,7 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
             <TimeValue value={props.value} timeFormat={props.timeFormat} />
           </Button>
         </span>
-        <span hidden={!typing()} class="w-full">
+        <span hidden={!typing()} class="relative w-full">
           <Input
             ref={input}
             id={`${props.id}-input`}
@@ -167,30 +183,44 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
             aria-expanded={model.isOpen()}
             aria-activedescendant={activeId()}
             aria-invalid={props.invalid || undefined}
-            aria-describedby={props.describedBy}
+            aria-describedby={
+              [props.describedBy, display().meridiem ? periodId : undefined]
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
             disabled={props.disabled}
             autocomplete="off"
             spellcheck={false}
             placeholder={t('common.time')}
             size="field"
             variant="value"
-            value={
-              model.state.shown ??
-              formatTimeValue(props.value, props.timeFormat) ??
-              ''
-            }
+            class="w-full pr-10"
+            value={display().time}
             onInput={(event) => {
               const text = event.currentTarget.value;
               const filled = model.input(
                 text,
                 event.inputType.startsWith('insert')
               );
+              event.currentTarget.value = display().time;
               if (model.highlighted()) reveal('center');
-              if (filled) input?.setSelectionRange(text.length, filled.length);
+              if (filled)
+                input?.setSelectionRange(
+                  Math.min(text.length, display().time.length),
+                  display().time.length
+                );
             }}
             onBlur={model.commit}
             on:keydown={onKeyDown}
           />
+          <Show when={display().meridiem}>
+            <span
+              id={periodId}
+              class="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-sm text-ink-muted"
+            >
+              {display().meridiem}
+            </span>
+          </Show>
         </span>
       </span>
       <Show when={model.isOpen()}>
@@ -198,7 +228,7 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
           <Popover.Content
             as={Dropdown.ContentFrame}
             class={cn(
-              'max-h-[300px] max-w-[90vw] overflow-y-auto outline-none',
+              'max-h-[min(300px,var(--kb-popper-content-available-height))] max-w-[90vw] overflow-y-auto outline-none',
               props.date ? 'w-[196px]' : 'w-44'
             )}
             onOpenAutoFocus={(event) => event.preventDefault()}
@@ -220,6 +250,9 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
             <MobileTimeOptions
               ref={(element) => {
                 list = element;
+                onElementConnect(element, () =>
+                  onCleanup(observeTimeOptionViewport(element))
+                );
               }}
               id={listId}
               label={props.label}

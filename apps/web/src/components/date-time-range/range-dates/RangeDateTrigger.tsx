@@ -30,7 +30,7 @@ export function RangeDateTrigger(props: {
       variant="value"
       size={props.fullWidth ? 'field' : 'sm'}
       fullWidth={props.fullWidth}
-      class={props.fullWidth ? 'justify-start' : undefined}
+      class="justify-start text-left"
       style={{ width: props.width }}
       aria-label={props.label}
       aria-haspopup="dialog"

@@ -34,7 +34,7 @@ describe('TimezoneSelect', () => {
     const trigger = screen.getByRole('button', { name: 'Timezone' });
     expect(trigger.hasAttribute('disabled')).toBe(true);
     await userEvent.click(trigger);
-    expect(screen.queryByPlaceholderText('Search timezones...')).toBeNull();
+    expect(screen.queryByPlaceholderText('Search timezones')).toBeNull();
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -50,15 +50,13 @@ describe('TimezoneSelect', () => {
       />
     ));
     await userEvent.click(screen.getByRole('button', { name: 'Timezone' }));
-    expect(
-      await screen.findByPlaceholderText('Search timezones...')
-    ).toBeTruthy();
+    expect(await screen.findByPlaceholderText('Search timezones')).toBeTruthy();
     setDisabled(true);
     await waitFor(() =>
-      expect(screen.queryByPlaceholderText('Search timezones...')).toBeNull()
+      expect(screen.queryByPlaceholderText('Search timezones')).toBeNull()
     );
     setDisabled(false);
-    expect(screen.queryByPlaceholderText('Search timezones...')).toBeNull();
+    expect(screen.queryByPlaceholderText('Search timezones')).toBeNull();
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -75,7 +73,7 @@ describe('TimezoneSelect', () => {
     expect(trigger.textContent).toContain('US/Eastern');
     expect(onChange).not.toHaveBeenCalled();
     await userEvent.click(trigger);
-    const search = await screen.findByPlaceholderText('Search timezones...');
+    const search = await screen.findByPlaceholderText('Search timezones');
     await userEvent.type(search, 'UTC');
     await userEvent.keyboard('{ArrowDown}{Enter}');
     await waitFor(() => expect(onChange).toHaveBeenCalledWith('UTC'));
@@ -100,10 +98,10 @@ describe('TimezoneSelect', () => {
       </Popover>
     ));
     await userEvent.click(screen.getByRole('button', { name: 'Timezone' }));
-    const search = await screen.findByPlaceholderText('Search timezones...');
+    const search = await screen.findByPlaceholderText('Search timezones');
     await userEvent.click(search);
     await userEvent.keyboard('{Escape}');
-    expect(screen.queryByPlaceholderText('Search timezones...')).toBeNull();
+    expect(screen.queryByPlaceholderText('Search timezones')).toBeNull();
     expect(closeParent).not.toHaveBeenCalled();
     await userEvent.keyboard('{Escape}');
     expect(closeParent).toHaveBeenCalledOnce();

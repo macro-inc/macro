@@ -42,7 +42,7 @@ export default {
   noOptionsInWindow: 'No matches in this page or cached snapshot.',
   settings: 'Settings',
   timezone: 'Timezone',
-  searchTimezones: 'Search timezones...',
+  searchTimezones: 'Search timezones',
   noMatchingTimezones: 'No timezones match "{{query}}"',
   previousMonth: 'Go to previous month',
   nextMonth: 'Go to next month',
