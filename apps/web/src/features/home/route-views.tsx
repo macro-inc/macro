@@ -61,7 +61,7 @@ export const HomeRouteView = withAuth(() => {
   return (
     <AppView
       id="home"
-      detailDesktopOnly
+      detailInlineOnly
       detailRequested={detailRequested}
       detailFallback={<HomeLegacyRouteView />}
     >

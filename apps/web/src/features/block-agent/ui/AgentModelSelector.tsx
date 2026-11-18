@@ -14,7 +14,10 @@ import {
   ModelCatalogPicker,
   type ModelRowProps,
 } from '@core/component/AI/component/input/ModelCatalogPicker';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import {
+  catalogModelLabel,
+  modelLabel,
+} from '@core/component/AI/constant/model-label';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ModelOption } from '@service-agent-fold/generated/types';
 import { type Component, createMemo, Show } from 'solid-js';
@@ -43,10 +46,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
   const shown = () => props.changingTo ?? props.model;
   const label = () =>
     [
-      modelLabel(
-        shown() ?? undefined,
-        props.options.find((option) => option.id === shown())?.name
-      ),
+      catalogModelLabel(shown() ?? undefined, props.options),
       isTouchDevice() ? props.effortLabel : undefined,
     ]
       .filter(Boolean)
@@ -54,7 +54,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
   const options = createMemo(() =>
     withoutRedundantGroups(props.options).map((option) => ({
       id: option.id,
-      label: modelLabel(option.id, option.name),
+      label: modelLabel(option.id, option.name, option.description),
       description: option.description ?? undefined,
       group: option.group ?? undefined,
     }))

@@ -2,14 +2,22 @@ import { formatLocale, t } from '@app/lib/i18n';
 import StarFillIcon from '@icon/system/fill/star-fill.svg';
 import LockIcon from '@icon/system/regular/lock.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
-import { For, type JSX, Show } from 'solid-js';
-import type { PasswordDraft, PasswordItem } from '../core/types';
+import { createMemo, For, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import {
+  groupByKind,
+  type PasswordDraft,
+  type PasswordGroupBy,
+  type PasswordItem,
+} from '../core/types';
 import type {
   PasswordDragSource,
   PasswordFolderDrag,
 } from '../primitives/folder-drag';
 import { ItemLogo } from './item-logo';
+import { KIND_ICONS } from './kind-icon';
 
 function hostname(url: string | null) {
   if (!url) return undefined;
@@ -61,102 +69,137 @@ export function ItemList(props: {
   onSelectDraft: (key: string) => void;
   loadLogo: (domain: string) => Promise<string | undefined>;
   drag?: PasswordFolderDrag;
+  groupBy: PasswordGroupBy;
 }) {
   const date = (value: string) =>
     new Intl.DateTimeFormat(formatLocale(), {
       month: 'short',
       day: 'numeric',
     }).format(new Date(value));
-  return (
-    <ul class="flex min-w-0 flex-col gap-px px-2 py-1">
-      <For each={props.drafts}>
-        {(entry) => (
-          <Row
-            active={props.selectedDraftKey === entry.key}
-            onSelect={() => props.onSelectDraft(entry.key)}
-            logo={
-              <ItemLogo
-                name={entry.draft.name}
-                kind={entry.draft.kind}
-                url={null}
-                loadLogo={props.loadLogo}
-              />
-            }
-            title={entry.draft.name.trim() || t('passwords.untitled')}
-            subtitle={t(`passwords.${entry.draft.kind}`)}
-            trailing={
-              <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xs text-ink-muted">
-                {t('passwords.draft')}
-              </span>
-            }
+  const draftRow = (entry: { key: string; draft: PasswordDraft }) => (
+    <Row
+      active={props.selectedDraftKey === entry.key}
+      onSelect={() => props.onSelectDraft(entry.key)}
+      logo={
+        <ItemLogo
+          name={entry.draft.name}
+          kind={entry.draft.kind}
+          url={null}
+          loadLogo={props.loadLogo}
+        />
+      }
+      title={entry.draft.name.trim() || t('passwords.untitled')}
+      subtitle={t(`passwords.${entry.draft.kind}`)}
+      trailing={
+        <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xs text-ink-muted">
+          {t('passwords.draft')}
+        </span>
+      }
+    />
+  );
+  const itemRow = (item: PasswordItem) => {
+    const source = props.drag?.source('item', item.id, () => (
+      <ItemLogo
+        name={item.name}
+        kind={item.kind}
+        url={item.url}
+        loadLogo={props.loadLogo}
+      />
+    ));
+    return (
+      <Row
+        active={props.selectedItemId === item.id}
+        onSelect={() => props.onSelect(item)}
+        drag={source}
+        logo={
+          <ItemLogo
+            name={item.name}
+            kind={item.kind}
+            url={item.url}
+            loadLogo={props.loadLogo}
           />
-        )}
-      </For>
-      <For each={props.items}>
-        {(item) => {
-          const source = props.drag?.source('item', item.id, () => (
-            <ItemLogo
-              name={item.name}
-              kind={item.kind}
-              url={item.url}
-              loadLogo={props.loadLogo}
-            />
-          ));
-          return (
-            <Row
-              active={props.selectedItemId === item.id}
-              onSelect={() => props.onSelect(item)}
-              drag={source}
-              logo={
-                <ItemLogo
-                  name={item.name}
-                  kind={item.kind}
-                  url={item.url}
-                  loadLogo={props.loadLogo}
+        }
+        title={item.name}
+        subtitle={[t(`passwords.${item.kind}`), hostname(item.url)]
+          .filter(Boolean)
+          .join(' · ')}
+        trailing={
+          <>
+            <span class="w-20 shrink-0 text-right text-xs text-ink-muted max-md:hidden">
+              <Show
+                when={item.sharedWithTeam}
+                fallback={
+                  <span class="inline-flex items-center gap-1">
+                    <LockIcon class="size-3.5 shrink-0" />
+                    {t('passwords.private')}
+                  </span>
+                }
+              >
+                <span class="inline-flex items-center gap-1">
+                  <UsersIcon class="size-3.5 shrink-0" />
+                  {t('passwords.team')}
+                </span>
+              </Show>
+            </span>
+            <span class="w-14 shrink-0 text-right text-xs text-ink-muted max-sm:hidden">
+              {item.lastUsedAt
+                ? date(item.lastUsedAt)
+                : t('passwords.neverUsed')}
+            </span>
+            <span class="flex w-4 shrink-0 justify-center">
+              <Show when={item.favorite}>
+                <StarFillIcon
+                  aria-hidden={false}
+                  aria-label={t('passwords.favorite')}
+                  class="size-3.5 text-warning"
                 />
-              }
-              title={item.name}
-              subtitle={[t(`passwords.${item.kind}`), hostname(item.url)]
-                .filter(Boolean)
-                .join(' · ')}
-              trailing={
-                <>
-                  <span class="w-20 shrink-0 text-right text-xs text-ink-muted max-md:hidden">
-                    <Show
-                      when={item.sharedWithTeam}
-                      fallback={
-                        <span class="inline-flex items-center gap-1">
-                          <LockIcon class="size-3.5 shrink-0" />
-                          {t('passwords.private')}
-                        </span>
-                      }
-                    >
-                      <span class="inline-flex items-center gap-1">
-                        <UsersIcon class="size-3.5 shrink-0" />
-                        {t('passwords.team')}
-                      </span>
-                    </Show>
-                  </span>
-                  <span class="w-14 shrink-0 text-right text-xs text-ink-muted max-sm:hidden">
-                    {item.lastUsedAt
-                      ? date(item.lastUsedAt)
-                      : t('passwords.neverUsed')}
-                  </span>
-                  <span class="flex w-4 shrink-0 justify-center">
-                    <Show when={item.favorite}>
-                      <StarFillIcon
-                        aria-hidden={false}
-                        aria-label={t('passwords.favorite')}
-                        class="size-3.5 text-warning"
-                      />
-                    </Show>
-                  </span>
-                </>
-              }
-            />
-          );
-        }}
-      </For>
-    </ul>
+              </Show>
+            </span>
+          </>
+        }
+      />
+    );
+  };
+  const groups = createMemo(() => groupByKind(props.items));
+  return (
+    <Show
+      when={props.groupBy === 'kind'}
+      fallback={
+        <ul class="flex min-w-0 flex-col gap-px px-2 py-1">
+          <For each={props.drafts}>{draftRow}</For>
+          <For each={props.items}>{itemRow}</For>
+        </ul>
+      }
+    >
+      <div class="flex min-w-0 flex-col gap-1 py-1">
+        <Show when={props.drafts.length > 0}>
+          <ul class="flex min-w-0 flex-col gap-px px-2">
+            <For each={props.drafts}>{draftRow}</For>
+          </ul>
+        </Show>
+        <Key each={groups()} by="kind">
+          {(group) => (
+            <section
+              aria-label={t(`passwords.${group().kind}`)}
+              class="flex min-w-0 flex-col"
+            >
+              <h3 class="flex min-w-0 items-center gap-2 px-4 pt-2 pb-1 text-xs font-semibold tracking-tight text-ink-muted">
+                <Dynamic
+                  component={KIND_ICONS[group().kind]}
+                  class="size-3.5 shrink-0"
+                />
+                <span class="truncate">{t(`passwords.${group().kind}`)}</span>
+                <span class="shrink-0 rounded-full bg-ink/10 px-1.5 py-px text-xs font-medium tabular-nums text-ink-extra-muted">
+                  {group().items.length}
+                </span>
+              </h3>
+              <ul class="flex min-w-0 flex-col gap-px px-2">
+                <For each={group().items}>{itemRow}</For>
+              </ul>
+            </section>
+          )}
+        </Key>
+      </div>
+    </Show>
   );
 }

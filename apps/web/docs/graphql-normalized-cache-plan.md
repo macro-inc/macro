@@ -150,8 +150,8 @@ entire cache in browser memory. With 10s of thousands of cached objects
 - urql usage is imperative-only: `@urql/core` + `fetchExchange`, called via
   `fetchGraphqlSoup()` (`src/lib/service-clients/service-storage/graphql-soup.ts`),
   results mapped to REST `SoupApiItem` shapes and fed into TanStack
-  solid-query infinite queries (`src/lib/queries/soup/items.ts`), gated by
-  `ENABLE_GRAPHQL_SOUP` with REST fallback.
+  solid-query infinite queries (`src/lib/queries/soup/items.ts`), then gated
+  by a feature flag (since removed) with REST fallback.
 - A separate normalization layer exists at the tanstack level:
   `@normy/query-core` (`src/lib/queries/soup/normalized-cache/`).
 - WASM precedent: loro-crdt via `vite-plugin-wasm`; note the documented
@@ -684,7 +684,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
   reads), all four request policies, push-driven re-execution downgraded to
   `cache-first`, write-through of network results, cache errors degrade to
   network. 8 vitest cases against a scripted fake host.
-- Wired into `graphql-soup.ts` behind `ENABLE_GRAPHQL_SOUP` override
+- Wired into `graphql-soup.ts` (then behind a since-removed override)
   (browser: worker host; Tauri: native host): lazily builds the cached
   client; `fetchGraphqlSoup` uses
   `cache-and-network` (`.toPromise()` skips stale emissions → identical
@@ -704,8 +704,8 @@ apps/web/src/lib/graphql-cache/ # JS glue
   `satisfies EntityResolverConfig`; TypeScript `any`/assertions can bypass
   static checks, but malformed values are rejected during exchange
   construction and validated again by the Rust engine.
-- **Manual smoke test pending**: dev-server run with the override enabled
-  (localStorage `ENABLE_GRAPHQL_SOUP=true`), verify hit/miss + offline
+- **Manual smoke test pending**: dev-server run with the cache enabled,
+  verify hit/miss + offline
   behavior in the browser.
 
 **Phase 5 — write path & coexistence**
@@ -790,7 +790,7 @@ Use one default per data shape:
 | Data shape | Default | Notes |
 | --- | --- | --- |
 | GraphQL document | `createLiveQuery` from `@graphql-cache/solid/create-live-query` | Cursor-paginated documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`. |
-| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the GraphQL Soup flag, REST fallback, grouping, and entity mapping. |
+| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the REST fallback for unsupported queries, grouping, and entity mapping. |
 
 `createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
 document and variables are arguments, other options pass through, and the result
@@ -873,11 +873,14 @@ unrelated fields.
 
 Mounted project details, project identity chips, and agent-session mentions use
 this live path as well. Project identity reads are cache-first; the shared
-`GraphqlUser.initiative` entity resolver lets them reuse complete authorized
+`GraphqlUser.visibleInitiative` entity resolver lets them reuse complete authorized
 project records loaded by Soup or detail queries, without fetching on row remount.
 Missing fields still require an authorized network read. Detail reads retain
 cache-and-network behavior, and identity reads retain explicit permission
-revalidation. Mention lookups share stable batches: adding another visible item
+revalidation. A missing or hidden project reads as `null`, and a stored null
+outranks the project's record when it arrives later (a project shared with
+the viewer again), so project reads show a cached null only after the server
+has confirmed it during that read. Mention lookups share stable batches: adding another visible item
 does not clear an existing item's data or restart its request.
 Project creation links the complete server-normalized record to its detail query,
 including when the user root is not cached yet. Async creation stops publishing
@@ -1236,11 +1239,17 @@ Missing matches become durable incomplete projections, not deleted records or
 invented archive/signal facts. Mail retention excludes explicitly invalidated
 (`Dirty`) baseline rows in the same projection scope unless an optimistic shadow
 takes precedence; an older open view cannot restore the revoked evidence.
+While a write to the row is queued, an older view's baseline can still list it,
+until the write settles.
 This differs from missing metadata, which still retains same-query membership.
 Full canonical snapshots restore their proof;
 partial patches cannot. Backfills, cursor pages, incomplete responses,
-unsupported predicates, identity switches, and pending optimistic rows do not
-supply this negative evidence. The existing authoritative-write telemetry covers
+unsupported predicates, and identity switches do not supply this negative
+evidence. A row with queued writes is invalidated only when its authoritative
+facts, and those facts after each prefix of the queue, all still match the page:
+then no queued write explains the omission. A queued mark read cannot keep a
+thread trashed through REST listed, while an archive whose Undo is still queued
+keeps the restored row. The existing authoritative-write telemetry covers
 this preparation/write path; no new worker command or database migration is needed.
 See [cached Mail verification](../../../docs/agent-guide/email.md#cached-mail-filtering).
 
@@ -1321,7 +1330,8 @@ Remaining ranking end-to-end validation and whole-app acceptance are tracked in
 ### Deterministic person-policy foundation
 
 Ordinary entity/name scoring remains corpus-independent. Personal suggestions use
-policy 5: exact names, all-word prefixes, then literal contains, recent-first with
+policy 5: exact names, all-word prefixes, then literal contains, then address
+terms, recent-first with
 identity ties. Complete addresses and Macro IDs cannot match display-name aliases.
 Command keywords keep their separate matcher; reference evidence stays policy 4.
 
@@ -1378,7 +1388,7 @@ with existing DM peers/inboxes; full channel sources are still in memory.
 The web full-list query/hooks, shared recipient pool and manual contacts GET
 wrapper are removed. Message/native-share/websocket invalidations now issue only
 coalesced `requestContactRefresh()` hints; deployed backend and SDK APIs remain
-compatible. Quick Access reads a replaceable person window rather than a global
+compatible. Quick Access reads a bounded, growing person list rather than a global
 contact item index. Commands/mentions forward typed queries; CRM alias matching
 uses exact lookup for only the current 50-row CRM window. Soup facets and property
 pickers preserve selections separately. General Soup creator menus and chips use
@@ -1461,14 +1471,10 @@ subjects take precedence over stale cached copies; sync retires the recovery row
 The backfill leader also warms `MailAccounts` concurrently with paged hydration
 so first-use offline composition can resolve sender ownership and aliases.
 
-Normalized email Quick Access results require the existing `enable-graphql-soup`
-rollout and a healthy normalized cache; local recovery rows remain available while
-that rollout is enabled even if the cache host is unavailable. The legacy REST
-sources do not supply email Quick Access rows.
-Quick Access observes flag loading reactively so a cold launch can attach the cache
-after PostHog responds. For a local native preview without PostHog configuration,
-build with `VITE_ENABLE_GRAPHQL_SOUP=true` to exercise this path; do not change the
-remote rollout or backfill to make a test pass.
+Normalized email Quick Access results require a healthy normalized cache; local
+recovery rows remain available even if the cache host is unavailable. The legacy
+REST sources do not supply email Quick Access rows. Do not change the backfill
+to make a test pass.
 
 Opening an older cache rebuilds search documents through the existing projection
 version mechanism, preserving normalized records, pending mutations, and storage

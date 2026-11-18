@@ -25,3 +25,5 @@ export function subjectLimitChars(
 // Stable id for the compose "To" input so the create gesture can focus it
 // synchronously on iOS (the virtual keyboard only opens within a user gesture).
 export const EMAIL_COMPOSE_TO_INPUT_ID = 'email-compose-to-input';
+// Every composer's To field shares the id, so match all of them.
+export const EMAIL_COMPOSE_TO_INPUT_SELECTOR = `[id="${EMAIL_COMPOSE_TO_INPUT_ID}"]`;

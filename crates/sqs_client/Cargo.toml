@@ -5,11 +5,9 @@ publish = false
 version = "0.1.0"
 
 [features]
-ai_projection = ["dep:models_ai_projection"]
 chat = []
 convert = ["model"]
 default = [
-  "ai_projection",
   "chat",
   "convert",
   "document",
@@ -39,7 +37,6 @@ anyhow = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 chrono = { workspace = true, optional = true }
 model = { path = "../model", optional = true }
-models_ai_projection = { path = "../models_ai_projection", optional = true }
 s3_key = { path = "../s3_key" }
 models_email = { path = "../models_email", optional = true }
 serde = { workspace = true }
@@ -49,3 +46,7 @@ tracing = { workspace = true }
 uuid = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+wiremock = { workspace = true }

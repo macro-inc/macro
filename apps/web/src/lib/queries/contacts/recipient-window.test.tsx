@@ -18,7 +18,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it('replaces pages from a 100k directory and releases them on close without truncating late searches', async () => {
+it('lists pages of a 100k directory below each other up to the bound and releases them on close without truncating late searches', async () => {
   vi.useFakeTimers();
   const client = new QueryClient();
   const [open, setOpen] = createSignal(false);
@@ -89,19 +89,29 @@ it('replaces pages from a 100k directory and releases them on close without trun
     senderDomain: 'example.com',
   });
   const selected = source!.items()[0];
-  for (let page = 1; page <= 20; page++) {
+  for (let page = 1; page < 10; page++) {
     await source!.next();
     await vi.runOnlyPendingTimersAsync();
-    expect(source!.items()).toHaveLength(50);
-    expect(source!.items()[0].id).toBe(`macro|person${page * 50}@example.com`);
+    expect(source!.items()).toHaveLength((page + 1) * 50);
+    expect(source!.items()[0].id).toBe('macro|person0@example.com');
+    expect(source!.items()[page * 50].id).toBe(
+      `macro|person${page * 50}@example.com`
+    );
     expect(client.getQueryCache().getAll()).toHaveLength(1);
   }
+  // The listed rows stop at the bound, however far the directory goes.
+  expect(source!.hasNext()).toBe(false);
+  const reads = reader.mock.calls.length;
+  await source!.next();
+  expect(reader.mock.calls).toHaveLength(reads);
+  expect(new Set(source!.items().map((item) => item.id)).size).toBe(500);
   expect(selected.id).toBe('macro|person0@example.com');
   setOpen(false);
   await vi.runOnlyPendingTimersAsync();
   expect(source!.items()).toEqual([]);
   setOpen(true);
   await vi.runOnlyPendingTimersAsync();
+  expect(source!.items()).toHaveLength(50);
   expect(source!.items()[0].id).toBe('macro|person0@example.com');
   setSearch('last');
   expect(source!.items()).toEqual([]);

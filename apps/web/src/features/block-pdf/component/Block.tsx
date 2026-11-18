@@ -2,6 +2,7 @@ import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SidePanel } from '@components/app/side-panel';
 import { blockDataSignalAs, useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal, blockMetadataSignal } from '@core/signal/load';
 import {
@@ -16,6 +17,8 @@ import { usePdfDocument } from '../context/pdf-document-context';
 import type { PdfBlockData } from '../definition';
 import { createPdfRouteTarget } from '../primitives/create-pdf-route-target';
 import { type LocationSearchParams, URL_PARAMS } from '../signal/location';
+import { MobilePdfHeader } from '../views/mobile/pdf-header';
+import { PdfHeader } from '../views/pdf-header';
 import {
   PdfDocument,
   PdfDocumentContent,
@@ -23,7 +26,6 @@ import {
 } from './PdfDocument';
 import { PdfSidePanelSections } from './sidepanel/PdfSidePanelSections';
 import { Tabs } from './Tabs';
-import { TopBar } from './TopBar';
 
 export default function BlockPdf() {
   useBlockEntityCommands();
@@ -78,7 +80,9 @@ function PdfBlockContent() {
       <SidePanel.Layout floating>
         <PdfSidePanelSections />
         <div class="flex size-full min-w-0 flex-col overflow-hidden">
-          <TopBar />
+          <Show when={isTouchDevice()} fallback={<PdfHeader />}>
+            <MobilePdfHeader />
+          </Show>
           <Show when={pdf.tabs.isVisible()}>
             <div class="flex px-2 justify-between min-h-11 items-center gap-2">
               <div class="overflow-x-auto overflow-y-hidden grow customScrollbar w-0">

@@ -4,7 +4,7 @@
 //! (MODE=development, points at dev services).
 //!
 //! These steps must NOT block a merge, so each continues on error and the
-//! status check doesn't read them. A `[no preview]` marker in the PR title opts
+//! `CI gate` doesn't see them fail. A `[no preview]` marker in the PR title opts
 //! out without skipping CI.
 
 use gh_workflow::{Env, Expression, Run, Step, Use};

@@ -281,6 +281,15 @@ async fn a_run_records_the_attributes_evaluations_read() {
         string_attribute(tool, attr::TOOL_CALL_RESULT).as_deref(),
         Some(r#"{"echo":"a"}"#)
     );
+    // Its size, whatever the content policy, and that the model read it whole.
+    assert_eq!(
+        int_attribute(tool, attr::MACRO_TOOL_RESULT_BYTES),
+        Some(r#"{"echo":"a"}"#.len() as i64)
+    );
+    assert_eq!(
+        attribute(tool, attr::MACRO_TOOL_RESULT_CUT),
+        Some(&Value::Bool(false))
+    );
 
     // Everything is one trace under the agent span: the model calls hang off
     // it directly, and the tool call off the run too (rig opens it from the
@@ -631,6 +640,7 @@ async fn the_run_span_records_how_the_provider_stream_behaved() {
         "every item the driver saw is counted, as a number: {:?}",
         attribute(run, "agent.stream.items")
     );
+    assert_eq!(int_attribute(run, "agent.stream.model_calls"), Some(1));
     assert!(
         int_attribute(run, "agent.stream.first_chunk_ms").is_some_and(|ms| ms >= 0),
         "the provider's time to first chunk is recorded, as a number: {:?}",

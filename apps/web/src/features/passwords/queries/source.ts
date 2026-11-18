@@ -1,6 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { statusError } from '@core/util/safeFetch';
 import { sleep } from '@core/util/sleep';
 import { Telemetry } from '@macro-inc/observability';
@@ -32,7 +32,11 @@ import type {
   PasswordResult,
   PasswordSource,
 } from '../context/passwords-context';
-import type { PasswordFolder, PasswordItem } from '../core/types';
+import type {
+  PasswordFolder,
+  PasswordGrant,
+  PasswordItem,
+} from '../core/types';
 
 function metadata(item: PasswordItemMetadata): PasswordItem {
   return {
@@ -42,6 +46,10 @@ function metadata(item: PasswordItemMetadata): PasswordItem {
     lastUsedAt: item.lastUsedAt ?? null,
   };
 }
+
+/** List and folder reads: an unreachable gateway reads as offline. */
+const readError = async (response: Response) =>
+  gatewayError(response.status) ?? statusError(response.status);
 
 /** A read that finished after the viewer's account or session changed. */
 class PasswordScopeChangedError extends Error {
@@ -58,12 +66,29 @@ function folder(dto: FolderDto): PasswordFolder {
  * Busy retries outlast one vault write holding the team lock (about a second
  * under load): the jittered waits add up to between 1.5 and 4.5 seconds.
  */
-const BUSY_RETRIES = 4;
+export const BUSY_RETRIES = 4;
 const BUSY_BACKOFF_MS = 200;
+/** Jittered exponential wait before busy retry number `retries`. */
+export function busyDelay(retries: number): number {
+  return BUSY_BACKOFF_MS * 2 ** retries * (0.5 + Math.random());
+}
 
 function failure(codes: readonly string[]): PasswordFailure {
   if (codes.includes(PasswordErrorCode.folder_missing)) return 'folderMissing';
+  if (codes.includes('NETWORK_ERROR')) return 'unreachable';
   return 'failed';
+}
+
+/** A gateway that could not reach the service: no answer, as offline. */
+function gatewayError(status: number) {
+  return [502, 503, 504].includes(status)
+    ? { code: 'NETWORK_ERROR' as const, message: 'Unreachable' }
+    : undefined;
+}
+
+/** A thrown list or folder read that got no answer from Macro. */
+export function isUnreachable(error: unknown): boolean {
+  return thrownResultErrorHasCode(error, 'NETWORK_ERROR');
 }
 
 /** The viewer changed: the request was dropped and must not be retried. */
@@ -136,9 +161,8 @@ export function createPasswordSource(
             retry: { maxTries: 1 },
             trace: { parentSpan: span },
             errorResponseHandler: async (response) => {
-              // A gateway that could not reach the service: no answer, as offline.
-              if ([502, 503, 504].includes(response.status))
-                return { code: 'NETWORK_ERROR', message: 'Unreachable' };
+              const gateway = gatewayError(response.status);
+              if (gateway) return gateway;
               if (response.status >= 500)
                 return { code: 'SERVER_ERROR', message: 'Server error' };
               const fallback = statusError(response.status);
@@ -169,7 +193,7 @@ export function createPasswordSource(
             (error) => error.code === PasswordErrorCode.vault_busy
           )
         ) {
-          await sleep(BUSY_BACKOFF_MS * 2 ** retries * (0.5 + Math.random()));
+          await sleep(busyDelay(retries));
           continue;
         }
         return response.mapErr((errors) => errors.map((error) => error.code));
@@ -220,6 +244,7 @@ export function createPasswordSource(
       const items = await throwOnErr(() =>
         fetchWithToken<PasswordItemMetadata[]>(`${root}/items`, {
           signal: scope.signal,
+          errorResponseHandler: readError,
         })
       );
       if (!isCurrent()) throw new PasswordScopeChangedError();
@@ -238,6 +263,7 @@ export function createPasswordSource(
       const folders = await throwOnErr(() =>
         fetchWithToken<FolderDto[]>(`${root}/folders`, {
           signal: scope.signal,
+          errorResponseHandler: readError,
         })
       );
       if (!isCurrent()) throw new PasswordScopeChangedError();
@@ -276,8 +302,17 @@ export function createPasswordSource(
         } satisfies PasswordPatchItem)
       ).map(metadata);
     },
-    grants(id) {
-      return request<GrantDto[]>(`/items/${id}/share`, 'GET');
+    async grants(id) {
+      return (await request<GrantDto[]>(`/items/${id}/share`, 'GET')).map(
+        (grants) =>
+          grants.flatMap((grant): PasswordGrant[] => {
+            // Human sharing excludes agent access, which has its own controls.
+            if (grant.kind !== 'user' && grant.kind !== 'team') return [];
+            return [
+              { kind: grant.kind, id: grant.id, permission: grant.permission },
+            ];
+          })
+      );
     },
     async remove(id) {
       return (await action('passwords.delete', `/items/${id}`, 'DELETE')).map(
@@ -285,11 +320,17 @@ export function createPasswordSource(
       );
     },
     username(id) {
-      return action<PasswordUsername>(
-        'passwords.username',
-        `/items/${id}/username`,
-        'GET'
-      );
+      return Telemetry.span('passwords.username', async (span) => {
+        const result = await requestCodes<PasswordUsername>(
+          `/items/${id}/username`,
+          'GET'
+        );
+        if (result.isErr()) {
+          span.setAttr('passwords.error_code', result.error.join(','));
+          span.error('passwords.username failed');
+        }
+        return result.mapErr(failure);
+      });
     },
     copyUsername(id) {
       return action<PasswordUsername>(

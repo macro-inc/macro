@@ -65,6 +65,7 @@ const SOURCE_NAMES: Record<ImportFormat, string> = {
   one_password_csv: '1Password',
   bitwarden_json: 'Bitwarden',
   bitwarden_csv: 'Bitwarden',
+  bitwarden_zip: 'Bitwarden',
 };
 
 /**

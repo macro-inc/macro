@@ -3,8 +3,10 @@
 //! each send here also accounts for `GenericEventSource` reconnect executions.
 //! No GenAI spans or aggregate analytics are emitted by this adapter; it only
 //! adds the provider's stop reason to Rig's streaming span, which Rig drops,
-//! and logs responses that mean Macro's provider account is suspended or out
-//! of credit ([`genai_telemetry::provider_account`]).
+//! logs responses that mean Macro's provider account is suspended or out of
+//! credit ([`genai_telemetry::provider_account`]), and drops interim usage
+//! from Gemini streams so Rig's span records the final counts
+//! ([`interim_usage`]).
 
 use std::time::Duration;
 
@@ -22,6 +24,7 @@ use serde_json::Value;
 
 use super::metering::{Attempt, MeteringContext, MeteringError, WireProtocol};
 
+mod interim_usage;
 #[cfg(test)]
 mod test;
 
@@ -40,6 +43,33 @@ pub struct MeteredHttpClient<H = http_client::ReqwestClient> {
     /// Whether the key is Macro's own, so a suspended or out-of-credit
     /// response is a Macro outage worth alerting on.
     macro_account: bool,
+}
+
+/// Puts the tier and effort the provider actually receives on the model-call
+/// span (Rig's), so a trace shows what a session's settings turned into.
+fn record_request_settings(span: &tracing::Span, protocol: WireProtocol, body: &Value) {
+    let openai = matches!(
+        protocol,
+        WireProtocol::Responses | WireProtocol::ChatCompletions
+    );
+    if let Some(tier) = body
+        .get("service_tier")
+        .and_then(Value::as_str)
+        .filter(|_| openai)
+    {
+        span.set_str(attr::OPENAI_REQUEST_SERVICE_TIER, tier);
+    }
+    if let Some(speed) = body.get("speed").and_then(Value::as_str) {
+        span.set_str(attr::MACRO_REQUEST_SPEED, speed);
+    }
+    let effort = body
+        .pointer("/reasoning/effort")
+        .or_else(|| body.pointer("/output_config/effort"))
+        .or_else(|| body.get("reasoning_effort"))
+        .and_then(Value::as_str);
+    if let Some(effort) = effort {
+        span.set_str(attr::MACRO_REQUEST_REASONING_EFFORT, effort);
+    }
 }
 
 // Required by Rig's CompletionModel bounds, even for explicitly built clients.
@@ -89,9 +119,13 @@ impl<H> MeteredHttpClient<H> {
         &self,
         mut request: Request<Bytes>,
     ) -> http_client::Result<(Request<Bytes>, Option<Attempt>)> {
+        let sent = serde_json::from_slice::<Value>(request.body()).ok();
+        if let Some(body) = &sent {
+            record_request_settings(&tracing::Span::current(), self.protocol, body);
+        }
         if self.protocol == WireProtocol::Anthropic
-            && serde_json::from_slice::<Value>(request.body())
-                .ok()
+            && sent
+                .as_ref()
                 .is_some_and(|body| body.get("speed").is_some_and(|speed| speed == "fast"))
         {
             let beta = "fast-mode-2026-02-01";
@@ -118,8 +152,7 @@ impl<H> MeteredHttpClient<H> {
             return Ok((request, None));
         };
         let parsed = (|| {
-            let body: Value =
-                serde_json::from_slice(request.body()).map_err(|_| MeteringError::Unsupported)?;
+            let body = sent.ok_or(MeteringError::Unsupported)?;
             let model = if self.protocol == WireProtocol::Gemini {
                 request
                     .uri()
@@ -276,13 +309,31 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
     where
         T: Into<Bytes> + Send,
     {
-        let result = self.send_streaming_metered(request).await;
+        let result = self.send_streaming_without_interim_usage(request).await;
         self.report_account_failure(&result);
         result
     }
 }
 
 impl<H: HttpClientExt + Clone + 'static> MeteredHttpClient<H> {
+    async fn send_streaming_without_interim_usage<T>(
+        &self,
+        request: Request<T>,
+    ) -> http_client::Result<StreamingResponse>
+    where
+        T: Into<Bytes> + Send,
+    {
+        let response = self.send_streaming_metered(request).await?;
+        if self.protocol != WireProtocol::Gemini || !response.status().is_success() {
+            return Ok(response);
+        }
+        let (parts, body) = response.into_parts();
+        Ok(Response::from_parts(
+            parts,
+            interim_usage::without_interim_usage(body),
+        ))
+    }
+
     async fn send_streaming_metered<T>(
         &self,
         request: Request<T>,

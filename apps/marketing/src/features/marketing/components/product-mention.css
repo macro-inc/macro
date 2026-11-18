@@ -20,6 +20,7 @@
 .product-mention > span {
   text-decoration: underline;
   text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
   text-underline-offset: 0.14em;
 }
 

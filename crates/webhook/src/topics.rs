@@ -12,6 +12,7 @@ use call::domain::notification_events::CallNotificationMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
 use messages::outbound::broker::MessageMacroEvent;
+use password_events::PasswordMacroEvent;
 use user_events::UserMacroEvent;
 
 macro_event_broker::declare_topics!(
@@ -23,4 +24,5 @@ macro_event_broker::declare_topics!(
     AgentSessionMacroEvent,
     AgentSessionLifecycleMacroEvent,
     UserMacroEvent,
+    PasswordMacroEvent,
 );

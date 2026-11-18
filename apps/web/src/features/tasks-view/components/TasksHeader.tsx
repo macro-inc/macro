@@ -1,7 +1,6 @@
 import {
   useViewControlHotkeys,
   ViewBreadcrumbs,
-  ViewShell,
   ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import {
@@ -10,6 +9,7 @@ import {
 } from '@app/components/view-shell/ListHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import { Show } from 'solid-js';
 import { TASK_TABS } from '../constants';
@@ -22,7 +22,6 @@ import {
   TaskSaveViewButton,
 } from '../views/task-saved-views';
 import { TasksControls } from './TasksControls';
-import { TasksMobileTabs } from './TasksMobileTabs';
 
 export type TasksHeaderProps = {
   /** Moves the keyboard from the search field into the list. */
@@ -51,6 +50,8 @@ export function TaskViewBreadcrumbItem() {
             <span class="truncate">{tabTitle()}</span>
           </>
         );
+        // A compact (phone) bar keeps its room for the open entity's name, so
+        // the way back is an arrow; the view's name stays its accessible name.
         const button = () => (
           <ViewBreadcrumbs.ReturnButton
             isActive={item.isActive()}
@@ -58,7 +59,16 @@ export function TaskViewBreadcrumbItem() {
             tooltip={tabTitle()}
             class="gap-2"
           >
-            {label()}
+            <span
+              data-compact-back
+              aria-hidden="true"
+              class="hidden group-data-[compact]/location:flex"
+            >
+              <ArrowLeftIcon class="size-4 shrink-0" />
+            </span>
+            <span class="flex min-w-0 items-center gap-2 group-data-[compact]/location:sr-only">
+              {label()}
+            </span>
           </ViewBreadcrumbs.ReturnButton>
         );
         // At the list itself the name switches views; deeper, it returns here.
@@ -74,7 +84,7 @@ export function TaskViewBreadcrumbItem() {
 
 export function TasksHeader(props: TasksHeaderProps) {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, projectsEnabled } = useTasksView();
+  const { state, setState } = useTasksView();
   let focusSearch: (() => void) | undefined;
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -89,41 +99,29 @@ export function TasksHeader(props: TasksHeaderProps) {
   });
 
   return (
-    <Show
-      when={isTouchDevice()}
-      fallback={
-        <ListHeader
-          title={
-            <div class="flex min-w-0 items-center gap-1">
-              <ViewBreadcrumbs.Outlet aria-label="Task location" />
-              <TaskSavedViewMenu />
-            </div>
-          }
-        >
-          <TaskSaveViewButton />
-          <TaskSavedViewActions />
-          <TasksControls />
-          <TasksCreateAction
-            presentation="toolbar"
-            projectsEnabled={projectsEnabled()}
-          />
-          <ListHeaderSearch
-            label="Search tasks"
-            value={state.search}
-            onValueChange={(search) => setState('search', search)}
-            focusResults={props.focusSearchResults}
-            registerFocus={(focus) => {
-              focusSearch = focus;
-            }}
-          />
-        </ListHeader>
-      }
-    >
-      <ViewShell.Header>
-        <div class="flex min-w-0 flex-col">
-          <TasksMobileTabs />
-        </div>
-      </ViewShell.Header>
+    <Show when={!isTouchDevice()}>
+      <ListHeader
+        title={
+          <div class="flex min-w-0 items-center gap-1">
+            <ViewBreadcrumbs.Outlet aria-label="Task location" />
+            <TaskSavedViewMenu />
+          </div>
+        }
+      >
+        <TaskSaveViewButton />
+        <TaskSavedViewActions />
+        <TasksControls />
+        <TasksCreateAction presentation="toolbar" />
+        <ListHeaderSearch
+          label="Search tasks"
+          value={state.search}
+          onValueChange={(search) => setState('search', search)}
+          focusResults={props.focusSearchResults}
+          registerFocus={(focus) => {
+            focusSearch = focus;
+          }}
+        />
+      </ListHeader>
     </Show>
   );
 }

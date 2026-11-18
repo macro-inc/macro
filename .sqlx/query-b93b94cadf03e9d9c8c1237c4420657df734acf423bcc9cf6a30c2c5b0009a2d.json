@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM (\n                   SELECT user_id,link_id,enabled,mode,consent_incarnation\n                   FROM crm_email_consent WHERE team_id=$1 AND user_id=$2 OFFSET 0\n               ) c\n               JOIN email_links l ON l.id = c.link_id AND l.macro_id = c.user_id AND l.is_primary AND l.deleting_at IS NULL\n               WHERE c.enabled AND c.mode = 'all' AND c.consent_incarnation IS NULL) AS \"enabled!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "enabled!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b93b94cadf03e9d9c8c1237c4420657df734acf423bcc9cf6a30c2c5b0009a2d"
+}

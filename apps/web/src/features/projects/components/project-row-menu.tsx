@@ -13,20 +13,22 @@ import {
   MenuSeparator,
   SubTrigger,
 } from '@core/component/ContextMenu';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { InitiativeEntity } from '@entity';
+import { RENAME_FIELD_SELECTOR } from '@entity/utils/rename-field-focus';
 import ShareIcon from '@icon/share.svg';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
-import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import SplitIcon from '@icon/system/regular/columns.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
-import FlagIcon from '@icon/system/regular/flag.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import PaintBrushIcon from '@icon/system/regular/paint-brush.svg';
 import PencilIcon from '@icon/system/regular/pencil-line.svg';
+import TaskInProgressIcon from '@icon/system/regular/task-in-progress.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import PriorityHighIcon from '@icon/wide-priority-high.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import type { Property } from '@property/types';
@@ -127,7 +129,7 @@ function projectMenuEntries(
             id,
             label,
             property,
-            icon: id === 'status' ? CheckCircleIcon : FlagIcon,
+            icon: id === 'status' ? TaskInProgressIcon : PriorityHighIcon,
             options: (property.options ?? []).map((option) => ({
               id: option.id,
               label: formatOptionValue(option),
@@ -174,7 +176,12 @@ function projectMenuEntries(
           action(
             id,
             t('entityActions.rename'),
-            single(props.onRename),
+            () => {
+              triggerFocusNewElement(RENAME_FIELD_SELECTOR, {
+                touchOnly: true,
+              });
+              return single(props.onRename)();
+            },
             PencilIcon
           )
         )

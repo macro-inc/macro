@@ -1,5 +1,4 @@
 import { t } from '@app/lib/i18n';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -48,7 +47,6 @@ type ChannelLabelActionsOptions = {
 
 export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
   const userId = useUserId();
-  const notificationSource = useGlobalNotificationSource();
   const owner = getOwner();
 
   const {
@@ -702,7 +700,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     }
 
     try {
-      await markChannelsAsRead(notificationSource, channelIds);
+      await markChannelsAsRead(channelIds);
     } catch (error) {
       toast.failure(
         errorMessage(error, t('channelSections.markLabelReadFailed'))

@@ -40,6 +40,7 @@ fn test_context() -> ApiContext {
         authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
         environment: Environment::Production,
         http_client: proxy::build_http_client().expect("test HTTP client should build"),
+        jwt_validation_args: JwtValidationArgs::new_testing(),
     }
 }
 
@@ -449,4 +450,128 @@ async fn generic_proxy_http_success_and_ua_retries_preserve_deployed_contract() 
     }
     shutdown_tx.send(()).unwrap();
     server.await.unwrap();
+}
+
+const MACRO_API_PRIVATE_KEY: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.private.pem"
+);
+const MACRO_API_PUBLIC_KEY: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.public.pem"
+);
+
+/// An agent run's Macro API credential, signing `scope` if any.
+fn agent_credential(scope: Option<&str>) -> String {
+    macro_auth::macro_api_token::encode_macro_api_token(
+        macro_auth::macro_api_token::EncodeMacroApiTokenArgs {
+            fusionauth_id: "fixture".into(),
+            macro_user_id: TEST_USER_ID.into(),
+            organization_id: None,
+            issuer: "fixture".into(),
+            private_key: MACRO_API_PRIVATE_KEY.into(),
+            expiry_seconds: 60,
+            agent_id: Some(uuid::Uuid::from_u128(3)),
+            agent_via: None,
+            agent_correlation_id: Some(uuid::Uuid::from_u128(1)),
+            agent_session_id: None,
+            routine_id: None,
+            agent_scope: scope.map(str::to_owned),
+        },
+    )
+    .unwrap()
+}
+
+/// Every route fetches what its caller names, so a scoped agent credential
+/// is refused at the service, on both mounts and whatever else the request
+/// carries; one with no scope reaches the routes as before.
+#[tokio::test]
+async fn a_scoped_credential_is_refused_every_fetch() {
+    let validation = JwtValidationArgs::testing_macro_token("fixture", MACRO_API_PUBLIC_KEY);
+    let context = ApiContext {
+        authorization_state: MacroAuthorizationState::new(Arc::new(
+            MacroAuthorizationServiceImpl::new(
+                MacroAuthJwtValidator::new(validation.clone()),
+                InternalAuthConfig {
+                    api_key: TEST_INTERNAL_API_KEY.to_string(),
+                    default_user_id: None,
+                },
+                macro_authorization::NoBotAuthorizer,
+                macro_authorization::NoUserApiKeyAuthorizer,
+            ),
+        )),
+        jwt_validation_args: validation,
+        ..test_context()
+    };
+    let send = |path: &str, token: String, internal: bool| {
+        let mut request = Request::builder()
+            .uri(path)
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .header("x-macro-code-execution", "1");
+        if internal {
+            request = request.header(INTERNAL_API_KEY_HEADER, TEST_INTERNAL_API_KEY);
+        }
+        app(context.clone()).oneshot(request.body(Body::empty()).unwrap())
+    };
+    for prefix in ["", "/image-proxy"] {
+        for path in [
+            "/proxy?url=https%3A%2F%2Fexample.test%2F%3Fd%3Dsecret",
+            "/logos?domain=secret.example.test",
+        ] {
+            let path = format!("{prefix}{path}");
+            for scope in ["no_send", "generation", "newer"] {
+                for internal in [false, true] {
+                    let response = send(&path, agent_credential(Some(scope)), internal)
+                        .await
+                        .unwrap();
+                    // Beside the internal key the bearer is a second
+                    // explicit credential, refused before its scope is read.
+                    let refused = if internal {
+                        StatusCode::BAD_REQUEST
+                    } else {
+                        StatusCode::FORBIDDEN
+                    };
+                    assert_eq!(
+                        response.status(),
+                        refused,
+                        "{scope} {path} internal={internal}"
+                    );
+                }
+            }
+        }
+        // Without a scope the route answers itself.
+        for path in ["/proxy?url=not-a-url", "/logos?domain=-"] {
+            let path = format!("{prefix}{path}");
+            let response = send(&path, agent_credential(None), false).await.unwrap();
+            assert_ne!(response.status(), StatusCode::FORBIDDEN, "{path}");
+        }
+    }
+    // An unscoped bearer beside a scoped cookie is held to the cookie's scope.
+    let mixed = app(context.clone())
+        .oneshot(
+            Request::builder()
+                .uri("/image-proxy/proxy?url=https%3A%2F%2Fexample.test")
+                .header(AUTHORIZATION, format!("Bearer {}", agent_credential(None)))
+                .header(
+                    COOKIE,
+                    format!(
+                        "{}={}",
+                        macro_auth::credential::access_token_cookie_name(),
+                        agent_credential(Some("no_send"))
+                    ),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(mixed.status(), StatusCode::FORBIDDEN);
+    let health = app(context.clone())
+        .oneshot(
+            Request::builder()
+                .uri("/image-proxy/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(health.status(), StatusCode::OK);
 }

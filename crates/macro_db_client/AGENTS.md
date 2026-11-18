@@ -87,6 +87,35 @@ data checks and explicit vault purge. It does not depend on a successful item.
 
 ## Gotchas
 
+- `document_email` has a statement-level `AFTER DELETE` trigger
+  (`document_email_release`, migration `20261116200143`) that queues each
+  document a statement unlinks in `released_email_attachment_documents`, even
+  one still linked elsewhere or already in the Trash, and notifies
+  `email_attachment_documents_released`;
+  document storage drains it. A document already queued is updated, not
+  skipped, so its row stays locked until the deleting transaction commits. It
+  fires once per outer statement, cascades included. Write a moved link before
+  deleting the old one. `tests/released_email_attachment_documents.rs` covers it.
+- `crm_email_rule_*` and `crm_email_policy_audit` hold private member/mailbox
+  policy history. Selected consent uses its own grant bit and exact revision FK;
+  legacy-write/version triggers and mailbox revocation must survive rollbacks.
+  The eligibility function migration rejects preexisting selected rows because
+  old inline readers remain during deployment. Keep selected activation absent
+  until the scalar function, ingestion and Team reader are compatible.
+  Keep applied migration files immutable and add forward corrections instead.
+
+- `crm_email_consent.consent_incarnation` is nullable for legacy writers;
+  server UUIDv7 initialization preserves existing consent, and an initialized
+  identity cannot be cleared or changed. New policy envelopes carry both that
+  identity and `policy_version`; null outbox generation fields mean legacy work.
+  Keep mailbox/membership cascades and the bounded source-event reverse indexes
+  on rule tables. Interrupted concurrent builds of `crm_email_rule_contacts_source`
+  or `crm_email_rule_companies_source` require inspecting and dropping only the
+  invalid index before retrying the unapplied migration. Modern work also keeps
+  an address cursor and sent/received pass; old thread-cursor columns remain for
+  rolling compatibility. `crm_email_backfill_outbox_due` orders durable recovery
+  signals by `(requested_at, team_id, user_id)`; it adds no email-table index.
+
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
 - `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
 
@@ -102,6 +131,16 @@ data checks and explicit vault purge. It does not depend on a successful item.
   caller with many small sources, because it estimates each at the table's
   average grant count. Keep the fences, and re-measure both paths on a
   production-size seed before changing the limit.
+- `recents::deleted` (the Trash list) pages by `("deletedAt", id)` through the
+  partial trash indexes on `Document`, `Chat` and `Project`. A folder trash or
+  batch move gives thousands of items one `"deletedAt"`, so the id tiebreak must
+  stay in those indexes, and the list must not read without a page limit.
+- `get_accessible_call_ids` (`call_record/get/accessible_call_ids.sql`) reads
+  the caller's call grants by source and looks each granted call up by id;
+  link shares cost one `SharePermission` probe per channel call, since a public
+  call has no grant to start from. Never check a call's grants against the
+  caller's sources row by row: that compares every grant with every source
+  and took seconds for callers in thousands of channels.
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - `call_participants.client` defaults to `person` for older call writers;
@@ -151,6 +190,7 @@ foreign keys; the broker deletes expired rows.
 
 - Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
+- `document::get_all_documents::get_documents_to_delete` pages expired trash in `("deletedAt", id)` order through the partial `idx_document_deleted_at_id`, under a 10 s statement timeout; keep its `ORDER BY` and keyset comparison matching that index, or each page reads the whole Document table.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
 Hosted runtime enrollment generations are additive counters owned by
@@ -166,10 +206,14 @@ identities. Membership or account removal ends access without erasing team data.
 Retain the team closure fence independently of metadata cascades; purge metadata
 only after provider namespace erasure. Keep orphan-discovery candidates durable
 with their cursor advance, and separate retry scheduling from TOTP quarantine.
+If the concurrent `password_activity_agent_requests` build (migration
+`20261116152529`) is interrupted, inspect `pg_index.indisvalid` and drop only its
+invalid index before retrying.
 
 - `activity_events.agent_session_id` is filled only by the `activity_events_agent_session_id` insert trigger from `agent_correlations`; keep it when changing that table or the activity insert.
 
 `crm_email_thread_exclusions` stores one contributor's private thread exceptions;
 its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
 owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
-veto used by the shared eligibility function and mirrored in set-based ingestion.
+veto used by the shared eligibility function and mirrored in set-based ingestion
+and the inline Team reader, including selected contribution.

@@ -4,17 +4,16 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { ComputerSetupMetadata } from './computerSetupMetadata';
 import type { NotifEventOneOfSeventhreeTag } from './notifEventOneOfSeventhreeTag';
-import type { RuntimeAccessRemovedMetadata } from './runtimeAccessRemovedMetadata';
 
 /**
- * A runtime's owner removed the user's access to it, and agents of
-theirs living there stopped.
+ * A Macro computer the user bought finished first-time setup, or
+could not be set up.
  */
 export type NotifEventOneOfSeventhree = {
-  /** A runtime's owner removed the user's access to it, and agents of
-theirs living there stopped. */
-  content: RuntimeAccessRemovedMetadata;
+  /** A Macro computer the user bought finished first-time setup, or
+could not be set up. */
+  content: ComputerSetupMetadata;
   tag: NotifEventOneOfSeventhreeTag;
 };

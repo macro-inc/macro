@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT approved_by IS NOT NULL AS \"approved!\",permission_revision,request_id,request_permission,request_status,request_revision,request_updated_at\n        FROM password_agent_access WHERE team_id=$1 AND item_id=$2 AND agent_user_id=$3 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "approved!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "permission_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "request_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "request_permission",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "request_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "request_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "request_updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "86b5dbb545f31da6ad1f5c9ba5b187c5f3b6628330d881d14fc9a75e7ec8002d"
+}

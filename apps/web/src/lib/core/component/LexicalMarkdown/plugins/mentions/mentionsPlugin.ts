@@ -379,6 +379,9 @@ const blockItemType = (blockName: string): ItemMention['itemType'] => {
     .with('harness', () => {
       throw new Error('runtimes cannot be document mentions');
     })
+    .with('team', () => {
+      throw new Error('teams cannot be document mentions');
+    })
     .with('crm_company', () => 'crm_company')
     .with('crm_contact', () => 'crm_contact')
     .with('crm_pipeline', () => 'crm_pipeline')

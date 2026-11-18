@@ -179,7 +179,8 @@ const previewSelection = (
 ): PreviewPanelSelection | undefined =>
   entity.type === 'calendar_event' ||
   entity.type === 'initiative' ||
-  entity.type === 'harness'
+  entity.type === 'harness' ||
+  entity.type === 'team'
     ? undefined
     : entity;
 

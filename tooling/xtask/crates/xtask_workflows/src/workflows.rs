@@ -25,6 +25,7 @@ mod build_dmg_on_tag;
 mod build_web_app;
 mod cancel_stuck_cloud_storage_deploys;
 mod cargo_deny;
+mod cargo_deny_advisories;
 mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
@@ -44,11 +45,16 @@ mod deploy_fusionauth_instance;
 mod deploy_mcp_chatgpt_worker;
 mod deploy_observability;
 mod deploy_on_push;
+mod deploy_pulumi_stack;
 mod deploy_sdk_docs;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
 mod desktop_qa_macos;
+mod email_e2e;
+mod email_e2e_alert;
+mod email_e2e_browser;
+mod email_e2e_full_stack;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
 mod ios_app_store_publish;
@@ -192,6 +198,21 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(build_desktop_on_tag::build_desktop_on_tag)(),
     },
     WorkflowFile {
+        slug: "email_e2e",
+        file_name: "email_e2e.yml",
+        render_yaml: || email_e2e::render(email_e2e::email_e2e),
+    },
+    WorkflowFile {
+        slug: "email_e2e_browser",
+        file_name: "email_e2e_browser.yml",
+        render_yaml: || email_e2e::render(email_e2e_browser::email_e2e_browser),
+    },
+    WorkflowFile {
+        slug: "email_e2e_full_stack",
+        file_name: "email_e2e_full_stack.yml",
+        render_yaml: || email_e2e::render(email_e2e_full_stack::email_e2e_full_stack),
+    },
+    WorkflowFile {
         slug: "code_check_infra",
         file_name: "code_check_infra.yml",
         render_yaml: || render_gh_workflow(code_check_infra::code_check_infra)(),
@@ -215,6 +236,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "cargo_deny",
         file_name: "cargo_deny.yml",
         render_yaml: || render_gh_workflow(cargo_deny::cargo_deny)(),
+    },
+    WorkflowFile {
+        slug: "cargo_deny_advisories",
+        file_name: "cargo_deny_advisories.yml",
+        render_yaml: || render_gh_workflow(cargo_deny_advisories::cargo_deny_advisories)(),
     },
     WorkflowFile {
         slug: "cargo_workspace_dependency_check",
@@ -298,6 +324,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
             render_patched(
                 deploy_fusionauth_instance::deploy_fusionauth_instance,
                 deploy_fusionauth_instance::patch,
+            )
+        },
+    },
+    WorkflowFile {
+        slug: "deploy_pulumi_stack",
+        file_name: "deploy-pulumi-stack.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_pulumi_stack::deploy_pulumi_stack,
+                deploy_pulumi_stack::patch,
             )
         },
     },
@@ -609,5 +645,89 @@ mod handoff_tests {
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+}
+
+#[cfg(test)]
+mod cargo_target_tests {
+    use std::collections::BTreeMap;
+
+    const REUSE: &str = "Reuse the kept cargo target";
+    const SEAL: &str = "Seal the kept cargo target";
+
+    /// Whether a step mounts a cargo `target` directory on a cache volume.
+    fn mounts_target(step: &serde_yaml::Value) -> bool {
+        step["uses"]
+            .as_str()
+            .is_some_and(|uses| uses.starts_with("namespacelabs/nscloud-cache-action@"))
+            && step["with"]["path"].as_str().is_some_and(|paths| {
+                paths
+                    .lines()
+                    .any(|path| path == "./target" || path == super::vars::CARGO_TARGET_VOLUME_DIR)
+            })
+    }
+
+    /// `steps::reuse_cargo_target` keeps, next to `target`, the times its
+    /// sources' contents first appeared, and cargo trusts units newer than
+    /// them. A job that builds into a `target` without updating those times
+    /// leaves units that look fresh for other contents, so on one cache tag
+    /// either every job that mounts a `target` dates its checkout right after
+    /// mounting it, or none does.
+    #[test]
+    fn every_job_sharing_a_reused_target_dates_its_checkout() {
+        // Cache tag (or the runner's default volume) -> (job, reuses it) for
+        // every job that mounts a `target`.
+        let mut by_volume: BTreeMap<String, Vec<(String, bool)>> = BTreeMap::new();
+        for workflow in super::WORKFLOWS {
+            let yaml = (workflow.render_yaml)().expect("workflow renders");
+            let root: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("workflow parses");
+            for (id, job) in root["jobs"].as_mapping().expect("jobs") {
+                let place = format!(
+                    "{} job {}",
+                    workflow.file_name,
+                    id.as_str().unwrap_or_default()
+                );
+                let steps: Vec<&serde_yaml::Value> =
+                    job["steps"].as_sequence().into_iter().flatten().collect();
+                let Some(mount) = steps.iter().position(|step| mounts_target(step)) else {
+                    assert!(
+                        !steps
+                            .iter()
+                            .any(|step| step["name"].as_str() == Some(REUSE)),
+                        "{place} reuses a target it doesn't mount"
+                    );
+                    continue;
+                };
+                let reuses = steps
+                    .iter()
+                    .any(|step| step["name"].as_str() == Some(REUSE));
+                if reuses {
+                    assert_eq!(
+                        steps.get(mount + 1).and_then(|step| step["name"].as_str()),
+                        Some(REUSE),
+                        "{place} dates its checkout right after mounting its target"
+                    );
+                    assert_eq!(
+                        steps.last().and_then(|step| step["name"].as_str()),
+                        Some(SEAL),
+                        "{place} seals its target last"
+                    );
+                }
+                let runs_on = serde_yaml::to_string(&job["runs-on"]).expect("runs-on serializes");
+                let volume = runs_on
+                    .split_once("cache-tag=")
+                    .map(|(_, tag)| tag.trim().to_owned())
+                    .unwrap_or_else(|| format!("default volume of {}", runs_on.trim()));
+                by_volume.entry(volume).or_default().push((place, reuses));
+            }
+        }
+
+        for (volume, jobs) in by_volume {
+            let reusing: Vec<_> = jobs.iter().filter(|(_, reuses)| *reuses).collect();
+            assert!(
+                reusing.is_empty() || reusing.len() == jobs.len(),
+                "on {volume}, these jobs reuse the kept target: {reusing:?}; all of {jobs:?} must"
+            );
+        }
     }
 }

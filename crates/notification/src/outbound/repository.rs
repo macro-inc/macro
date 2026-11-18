@@ -339,10 +339,13 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl std::future::Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 
-    /// Get users who have unsubscribed from notifications for a specific item.
+    /// Get users who silenced a specific item for this notification: every
+    /// unsubscribed user, minus those who kept direct mentions when
+    /// `is_direct_mention` is set.
     fn get_unsubscribed_users<'a>(
         &self,
         item_id: &str,
+        is_direct_mention: bool,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl std::future::Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 
@@ -559,6 +562,7 @@ impl NotificationDbOps for PgPool {
     async fn get_unsubscribed_users<'a>(
         &self,
         item_id: &str,
+        is_direct_mention: bool,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         let ids: Vec<String> = user_ids.iter().map(|id| id.to_string()).collect();
@@ -568,9 +572,11 @@ impl NotificationDbOps for PgPool {
             SELECT user_id FROM user_notification_item_unsubscribe
             WHERE item_id = $1 AND user_id = ANY($2)
               AND (snoozed_until IS NULL OR snoozed_until > NOW())
+              AND NOT (mentions_only AND $3)
             "#,
             item_id,
-            &ids
+            &ids,
+            is_direct_mention
         )
         .fetch_all(self)
         .await?;
@@ -1571,9 +1577,12 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
     async fn get_unsubscribed_users<'a>(
         &self,
         item_id: &str,
+        is_direct_mention: bool,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        self.db.get_unsubscribed_users(item_id, user_ids).await
+        self.db
+            .get_unsubscribed_users(item_id, is_direct_mention, user_ids)
+            .await
     }
 
     async fn get_device_endpoints<'a>(

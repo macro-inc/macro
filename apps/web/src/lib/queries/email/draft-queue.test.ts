@@ -17,7 +17,6 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { map, pipe } from 'wonka';
 import { queryClient } from '../client';
 import { refetchSoupEntity } from '../soup/cache';
-import { markThreadDraftSaved } from './draft-cache';
 import { emailKeys } from './keys';
 import {
   beginDraftAttempt,
@@ -40,10 +39,6 @@ const mocks = vi.hoisted(() => ({
   assertQueueAvailable: vi.fn(),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: 'graphql-soup',
-  isFeatureEnabled: () => true,
-}));
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: { error: vi.fn(), info: vi.fn() },
 }));
@@ -64,7 +59,6 @@ vi.mock('../soup/cache', () => ({
   invalidateSoupEntity: vi.fn(),
   refetchSoupEntity: vi.fn(),
 }));
-vi.mock('./draft-cache', () => ({ markThreadDraftSaved: vi.fn() }));
 vi.mock('./thread', () => ({ fetchAndCacheThread: vi.fn() }));
 
 import {
@@ -189,7 +183,6 @@ it('keeps active thread messages intact after a committed draft save', async () 
     draftId: serverId,
     threadId: 'server-thread',
   });
-  expect(markThreadDraftSaved).toHaveBeenCalledWith('server-thread');
   expect(queryClient.invalidateQueries).toHaveBeenCalledExactlyOnceWith({
     queryKey: emailKeys.previews._def,
   });
@@ -216,13 +209,12 @@ it.each(['save', 'delete'] as const)(
   }
 );
 
-it('keeps local persistence enabled for GraphQL drafts while the queue is unavailable', () => {
+it('keeps local persistence enabled for drafts while the queue is unavailable', () => {
   mocks.cacheEnabled = false;
   mocks.queueBlocked = true;
-  expect(draftQueueActive('graphql')).toBe(true);
-  expect(draftQueueActive('rest')).toBe(false);
+  expect(draftQueueActive()).toBe(true);
   mocks.queueBlocked = false;
-  expect(draftQueueActive('graphql')).toBe(false);
+  expect(draftQueueActive()).toBe(false);
 });
 
 it('uses resolved IDs for an old-handle save without duplicating the cached draft', async () => {

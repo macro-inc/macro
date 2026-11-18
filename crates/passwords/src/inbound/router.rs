@@ -116,7 +116,7 @@ async fn purge_team_internal<A: MacroAuthorizationService>(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn csrf(request: axum::extract::Request, next: Next) -> Response {
+pub(super) async fn csrf(request: axum::extract::Request, next: Next) -> Response {
     if !matches!(
         *request.method(),
         axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
@@ -197,9 +197,9 @@ impl From<Error> for ApiError {
         Self(error)
     }
 }
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let (status, code) = match self.0 {
+impl ApiError {
+    fn status_and_code(error: &Error) -> (StatusCode, FailureCode) {
+        match error {
             Error::NotFound => (StatusCode::NOT_FOUND, FailureCode::NotFound),
             Error::Forbidden => (StatusCode::FORBIDDEN, FailureCode::Forbidden),
             Error::Invalid => (StatusCode::BAD_REQUEST, FailureCode::InvalidRequest),
@@ -210,7 +210,12 @@ impl IntoResponse for ApiError {
                 StatusCode::SERVICE_UNAVAILABLE,
                 FailureCode::VaultUnavailable,
             ),
-        };
+        }
+    }
+}
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let (status, code) = Self::status_and_code(&self.0);
         (status, Json(Failure { code })).into_response()
     }
 }
@@ -345,7 +350,11 @@ pub async fn username<A: MacroAuthorizationService>(
         state
             .service
             .username(&actor(user)?, TeamId(team), ItemId(item), false)
-            .await?,
+            .await
+            .inspect_err(|error| {
+                let (status, code) = ApiError::status_and_code(error);
+                tracing::warn!(team_id=%team, item_id=%item, error_code=?code, status=status.as_u16(), "Username lookup failed");
+            })?,
     ))
 }
 #[utoipa::path(operation_id = "passwords_copy_username",post,path="/passwords/teams/{team}/items/{item}/username/copy",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),responses((status=200,body=Username),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
@@ -359,7 +368,11 @@ pub async fn copy_username<A: MacroAuthorizationService>(
         state
             .service
             .username(&actor(user)?, TeamId(team), ItemId(item), true)
-            .await?,
+            .await
+            .inspect_err(|error| {
+                let (status, code) = ApiError::status_and_code(error);
+                tracing::warn!(team_id=%team, item_id=%item, error_code=?code, status=status.as_u16(), "Username lookup failed");
+            })?,
     ))
 }
 #[utoipa::path(operation_id = "passwords_update",put,path="/passwords/teams/{team}/items/{item}",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=WriteItem,responses((status=200,body=ItemView),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
@@ -610,4 +623,4 @@ pub async fn move_folder<A: MacroAuthorizationService>(
 }
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;

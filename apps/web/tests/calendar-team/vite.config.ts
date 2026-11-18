@@ -6,7 +6,6 @@ Object.assign(process.env, {
   MODE: 'development',
   VITE_LOCAL_SERVERS: 'ALL',
   VITE_LOCAL_BACKEND_ORIGIN: 'same-origin',
-  VITE_ENABLE_CALENDAR_UI: 'true',
   VITE_ENABLE_CALENDAR_TEAM_SHARING: 'true',
   VITE_ENABLE_CALENDAR_TEAM_OOO: 'true',
   VITE_ENABLE_GRAPHQL_CALENDAR: 'false',

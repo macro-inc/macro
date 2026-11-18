@@ -449,6 +449,9 @@ async fn run_server() -> anyhow::Result<()> {
     )
     .with_thread_exclusion_gate(Arc::new(
         crm::outbound::thread_exclusions::FlaggedThreadExclusions(flags.clone()),
+    ))
+    .with_selective_email_gate(Arc::new(
+        crm::outbound::email_policy::FlaggedSelectiveEmail(flags.clone()),
     ));
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
@@ -938,38 +941,70 @@ async fn run_server() -> anyhow::Result<()> {
             "Passwords requires OPENBAO_ADDRESS, PASSWORDS_JWT_ISSUER and PASSWORDS_JWT_SIGNING_KEY together"
         ),
     };
-    let passwords_availability: Arc<dyn passwords::domain::ports::Availability> = match config
-        .environment
-    {
-        Environment::Local => Arc::new(passwords::outbound::availability::PasswordAvailability {
-            flags: passwords::outbound::availability::LocalPasswordsFlags,
-            provider_configured: config.openbao_address.value().is_some(),
-        }),
-        _ => Arc::new(passwords::outbound::availability::PasswordAvailability {
-            flags: flags.clone(),
-            provider_configured: config.openbao_address.value().is_some(),
-        }),
+    let (passwords_availability, passwords_agent_availability): (
+        Arc<dyn passwords::domain::ports::Availability>,
+        Arc<dyn passwords::domain::agent::ports::AgentAvailability>,
+    ) = match config.environment {
+        Environment::Local => {
+            let availability = Arc::new(passwords::outbound::availability::PasswordAvailability {
+                flags: passwords::outbound::availability::LocalPasswordsFlags,
+                provider_configured: config.openbao_address.value().is_some(),
+            });
+            (availability.clone(), availability)
+        }
+        _ => {
+            let availability = Arc::new(passwords::outbound::availability::PasswordAvailability {
+                flags: flags.clone(),
+                provider_configured: config.openbao_address.value().is_some(),
+            });
+            (availability.clone(), availability)
+        }
     };
+    let passwords_repository = Arc::new(
+        passwords::outbound::postgres::PgRepository::new(db.clone())
+            .map_err(|_| anyhow::anyhow!("invalid Passwords database pool capacity"))?,
+    );
     let passwords_state = passwords::inbound::router::PasswordRouterState {
         service: Arc::new(passwords::domain::service::PasswordService {
-            repository: Arc::new(
-                passwords::outbound::postgres::PgRepository::new(db.clone())
-                    .map_err(|_| anyhow::anyhow!("invalid Passwords database pool capacity"))?,
-            ),
+            repository: passwords_repository.clone(),
             provider: passwords_provider,
             availability: passwords_availability,
         }),
         authorization: authorization_state.clone(),
     };
+    // The agent platform supplies the authoritative directory adapter; until it
+    // is composed, every agent call is `invalid_agent` with the flags on.
+    let passwords_agent_state = passwords::inbound::agent_router::AgentRouterState {
+        service: Arc::new(passwords::domain::agent::service::AgentVaultService {
+            vault: passwords_state.service.clone(),
+            agents: passwords_repository,
+            directory: Arc::new(passwords::outbound::agent_directory::NoAgents),
+            availability: passwords_agent_availability,
+            events: Arc::new(crate::outbound::passwords_access::PasswordAccessDelivery {
+                ingress: notification_ingress_service.clone(),
+                broker: macro_event_broker.clone(),
+            }),
+            clock: Arc::new(chrono::Utc::now),
+        }),
+        authorization: authorization_state.clone(),
+    };
     consumer_tracker.spawn(crate::passwords_cleanup::run(
         passwords_state.service.clone(),
+        passwords_agent_state.service.clone(),
+        consumer_cancellation_token.clone(),
+    ));
+    consumer_tracker.spawn(crate::released_attachments::run(
+        documents_hex::domain::released_attachments::ReleasedAttachmentService::new(
+            documents_hex::outbound::pg_released_attachments::PgReleasedAttachmentRepo::new(
+                db.clone(),
+            ),
+            macro_event_broker.clone(),
+        ),
+        db.clone(),
         consumer_cancellation_token.clone(),
     ));
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
-        call::outbound::channel_threads::FlaggedChannelThreads::new(
-            flags.clone(),
-            call_root_poster.clone(),
-        ),
+        call::outbound::channel_threads::MessageChannelThreads::new(call_root_poster.clone()),
     ));
     let search_term_matching: Arc<dyn search_service::TermMatchingRollout> =
         match config.environment {
@@ -1037,10 +1072,12 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
-    let (webhook_stream_sender, _) =
-        tokio::sync::broadcast::channel(webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY);
+    let webhook_stream_feed = webhook::domain::stream::StreamFeed::new(
+        webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY,
+        webhook::domain::stream::WEBHOOK_STREAM_REPLAY_CAPACITY,
+    );
     let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
-        webhook_stream_sender.clone(),
+        webhook_stream_feed.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
         crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
@@ -1053,7 +1090,7 @@ async fn run_server() -> anyhow::Result<()> {
     );
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
-        let sender = webhook_stream_sender;
+        let feed = webhook_stream_feed;
         let workspace_resolver = webhook_repository.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
@@ -1063,7 +1100,7 @@ async fn run_server() -> anyhow::Result<()> {
                     _ = cancellation_token.cancelled() => break,
                     result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
                         &brokers,
-                        &sender,
+                        &feed,
                         &workspace_resolver,
                     ) => result,
                 };
@@ -1290,6 +1327,50 @@ async fn run_server() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
+
+    // Pushes each created, renamed, re-pictured or deleted bot to the people
+    // who see it, so open views show its current name and picture.
+    let bot_profile_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let consumer = bots::inbound::profile_consumer::BotProfileConsumer::new(
+            bots::domain::profile_fanout::BotProfileFanout::new(
+                PgBotsRepo::new(db.clone()),
+                bots::outbound::connection_gateway_profiles::ConnectionGatewayBotProfilePublisher::new(
+                    conn_gateway_client.clone(),
+                ),
+            ),
+        );
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting bot profile push consumer");
+                let result = consumer
+                    .run(&bot_profile_brokers, cancellation_token.cancelled())
+                    .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("bot profile push consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "bot profile push consumer exited unexpectedly");
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
 
     // MacroConfig reads the shared OPENAI_API_KEY from Doppler's APP_SECRETS_JSON
     // or the local environment. Validate once before constructing consumers.
@@ -1633,9 +1714,6 @@ async fn run_server() -> anyhow::Result<()> {
         worker: editing_worker.clone(),
         admission: admission.clone(),
         recorder: document_ai_usage.clone(),
-        // Off when PostHog isn't configured, as for the agents' Canvas tools.
-        artifacts: ai_tools::canvas_artifacts_rollout_from_env(config.environment)?
-            .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
         images: Arc::new(crate::outbound::canvas_images::StaticFileCanvasImages(
             static_file_service_client::StaticFileServiceClient::new(
                 config.internal_api_key.to_string(),
@@ -2663,6 +2741,15 @@ async fn run_server() -> anyhow::Result<()> {
             db.clone(),
         ),
         graphql_notification_reader,
+        graphql_active_notification_ids_context:
+            complete_graph::ActiveNotificationIdsGraphqlContext::new(
+                notification::domain::active_notification_ids::ActiveNotificationIdService::new(
+                    notification::outbound::active_notification_ids::PgActiveNotificationIdRepository(
+                        readonly_db.clone(),
+                    ),
+                    model_notifications::NotifEvent::EVENT_TYPES,
+                ),
+            ),
         // GraphQL reads the activity log through the readonly pool; the
         // Kafka consumer's writer-pool repo above is separate on purpose.
         activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
@@ -2695,6 +2782,7 @@ async fn run_server() -> anyhow::Result<()> {
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
         passwords_state,
+        passwords_agent_state,
         authorization_state: authorization_state.clone(),
         jwt_validation_args,
         dss_auth_key,

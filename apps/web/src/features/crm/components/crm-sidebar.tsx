@@ -1,10 +1,7 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { enableCrmActivity } from '@core/constant/featureFlags';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import ExportIcon from '@icon/system/regular/download-simple.svg';
 import GearIcon from '@icon/system/regular/gear-six.svg';
@@ -49,20 +46,17 @@ export function CrmSidebar(props: {
   onExport: () => void;
   onSettings: () => void;
 }) {
-  const activityFlag = useFeatureFlag(enableCrmActivity);
   const [recordsOpen, setRecordsOpen] = createSignal(true);
   const [listsOpen, setListsOpen] = createSignal(true);
   return (
     <ViewSidebar.Root aria-label={t('crm.navigation')}>
       <header class="flex shrink-0 flex-col">
-        <Show when={!isTouchDevice()}>
-          <ViewSidebar.Header>
-            <div class="flex min-w-0 items-center gap-1">
-              <ViewSidebar.CloseButton class="shrink-0" />
-              <ViewSidebar.Title>{t('nav.customers')}</ViewSidebar.Title>
-            </div>
-          </ViewSidebar.Header>
-        </Show>
+        <ViewSidebar.Header>
+          <div class="flex min-w-0 items-center gap-1">
+            <ViewSidebar.CloseButton class="shrink-0" />
+            <ViewSidebar.Title>{t('nav.customers')}</ViewSidebar.Title>
+          </div>
+        </ViewSidebar.Header>
         <ViewSidebar.Primary ref={tourTarget(COMPANIES_TOUR.create)}>
           <CrmCreateMenu
             onCreateCompany={props.onCreateCompany}
@@ -86,12 +80,7 @@ export function CrmSidebar(props: {
               aria-label={t('crm.recordsNavigation')}
               ref={tourTarget(COMPANIES_TOUR.records)}
             >
-              <For
-                each={[
-                  ...CRM_RECORDS,
-                  ...(activityFlag().enabled ? CRM_ACTIVITY_TABS : []),
-                ]}
-              >
+              <For each={[...CRM_RECORDS, ...CRM_ACTIVITY_TABS]}>
                 {(record) => (
                   <ViewSidebar.Item
                     active={props.active === record.id}
