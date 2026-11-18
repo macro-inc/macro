@@ -1,6 +1,8 @@
 //! Message-label batch writes and compensation when a provider write cannot be queued.
 
 use super::events::{EmailEventOrigin, EmailMacroEvent, LabelRef};
+use super::models::UserProvider;
+use super::models::mailbox_action::{MailboxAction, MailboxActionMessage, MailboxActionTarget};
 use super::ports::EmailMessageEnqueuer;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -22,7 +24,7 @@ pub const MAX_MESSAGE_LABEL_BATCH: usize = 10;
 /// An authenticated caller's requested label change.
 pub struct MessageLabelChange {
     /// Caller whose own and delegated inboxes may resolve the first message.
-    pub caller_macro_id: String,
+    pub caller: MacroUserIdStr<'static>,
     /// Authentication identity used by the existing message lookup scope.
     pub caller_fusionauth_user_id: String,
     /// Message ids in request order, including any duplicates.
@@ -38,7 +40,9 @@ pub struct MessageLabelChange {
 pub struct MessageLabelOutcome {
     /// Messages whose requested state remains staged.
     pub successful_ids: Vec<Uuid>,
-    /// Messages restored because their provider write could not be queued.
+    /// Messages whose provider write was not queued: on Gmail those restored
+    /// after the queue refused it, on Outlook those the inbox no longer holds
+    /// or all of them when the command was refused.
     pub failed_ids: Vec<Uuid>,
     /// Requested ids absent from the caller's message lookup.
     pub missing_ids: Vec<Uuid>,
@@ -94,6 +98,8 @@ pub struct MessageLabelInbox {
     pub id: Uuid,
     /// Inbox owner attributed in label-change events.
     pub macro_id: MacroUserIdStr<'static>,
+    /// Provider the label change is written to.
+    pub provider: UserProvider,
 }
 
 /// The label definition needed to stage a batch and publish its events.
@@ -175,6 +181,23 @@ pub trait MessageLabelRepository: Send + Sync + 'static {
         provider_message_ids: &[Uuid],
         write_id: Uuid,
     ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+
+    /// Read the organization facts of one thread's messages in the resolved inbox.
+    fn mailbox_action_messages(
+        &self,
+        link_id: Uuid,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MailboxActionMessage>, Self::Err>> + Send;
+
+    /// Accept an Outlook mailbox command for exactly these targets, with their
+    /// pending state, in one transaction.
+    fn enqueue_mailbox_action(
+        &self,
+        link_id: Uuid,
+        actor: MacroUserIdStr<'static>,
+        action: &MailboxAction,
+        targets: &[MailboxActionTarget],
+    ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
 }
 
 /// Orchestrates a message-label batch and its best-effort provider publication.
@@ -209,7 +232,7 @@ where
             .ok_or(MessageLabelError::BatchSize)?;
         let link = self
             .repository
-            .inbox_for_message(&request.caller_macro_id, first_id)
+            .inbox_for_message(request.caller.as_ref(), first_id)
             .await
             .map_err(MessageLabelError::InboxLookup)?
             .ok_or(MessageLabelError::MessageNotFound)?;
@@ -232,6 +255,15 @@ where
             .collect();
         if !missing_ids.is_empty() {
             tracing::warn!(message_ids=?missing_ids, "unable to find messages in db");
+        }
+        if link.provider == UserProvider::Outlook {
+            let action = MailboxAction::Category {
+                name: label.provider_label_id,
+                present: request.add,
+            };
+            return self
+                .queue_outlook_category(link.id, request.caller, action, &db_messages, missing_ids)
+                .await;
         }
         let message_db_ids: Vec<Uuid> = db_messages.iter().map(|m| m.db_id).collect();
         let mut thread_ids: Vec<Uuid> = db_messages.iter().map(|m| m.thread_db_id).collect();
@@ -314,6 +346,55 @@ where
                 .into_iter()
                 .filter(|id| !failed_ids.contains(id))
                 .collect(),
+            failed_ids,
+            missing_ids,
+        })
+    }
+
+    /// Outlook takes a category through a mailbox command, as a thread's
+    /// labels do, never through the Gmail label worker: one command for
+    /// exactly the requested messages the inbox still holds. The command's
+    /// projection publishes the threads' changes, so none are published here.
+    async fn queue_outlook_category(
+        &self,
+        link_id: Uuid,
+        actor: MacroUserIdStr<'static>,
+        action: MailboxAction,
+        messages: &[MessageLabelTarget],
+        missing_ids: Vec<Uuid>,
+    ) -> Result<MessageLabelOutcome, MessageLabelError<R::Err>> {
+        let mut thread_ids: Vec<Uuid> = messages.iter().map(|m| m.thread_db_id).collect();
+        thread_ids.sort_unstable();
+        thread_ids.dedup();
+        let mut requested = Vec::new();
+        for thread_id in thread_ids {
+            let facts = self
+                .repository
+                .mailbox_action_messages(link_id, thread_id)
+                .await
+                .map_err(MessageLabelError::MessagesLookup)?;
+            requested.extend(
+                facts
+                    .into_iter()
+                    .filter(|fact| messages.iter().any(|m| m.db_id == fact.id)),
+            );
+        }
+        let targets = action.targets(&requested);
+        let queued = !targets.is_empty()
+            && self
+                .repository
+                .enqueue_mailbox_action(link_id, actor, &action, &targets)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "Failed to queue the Outlook category change");
+                })
+                .is_ok();
+        let (successful_ids, failed_ids) = messages
+            .iter()
+            .map(|m| m.db_id)
+            .partition(|id| queued && targets.iter().any(|target| target.message_id == *id));
+        Ok(MessageLabelOutcome {
+            successful_ids,
             failed_ids,
             missing_ids,
         })

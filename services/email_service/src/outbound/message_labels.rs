@@ -5,7 +5,14 @@ use email::domain::message_labels::{
     MessageLabelDefinition, MessageLabelInbox, MessageLabelRepository, MessageLabelTarget,
     StageFailure, StagedLabelWrite,
 };
+use email::domain::models::UserProvider;
+use email::domain::models::mailbox_action::{
+    MailboxAction, MailboxActionMessage, MailboxActionTarget,
+};
+use email::domain::ports::EmailRepo;
+use email::outbound::EmailPgRepo;
 use email::outbound::label_state_pg::PgLabelState;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service;
 use uuid::Uuid;
 
@@ -42,6 +49,10 @@ impl MessageLabelRepository for PgMessageLabels {
         Ok(link.map(|link| MessageLabelInbox {
             id: link.id,
             macro_id: link.macro_id,
+            provider: match link.provider {
+                service::link::UserProvider::Gmail => UserProvider::Gmail,
+                service::link::UserProvider::Outlook => UserProvider::Outlook,
+            },
         }))
     }
 
@@ -225,6 +236,30 @@ impl MessageLabelRepository for PgMessageLabels {
                 tracing::error!(error=?e, "Failed to revert label write after enqueue failure");
             })
             .map_err(Into::into)
+    }
+
+    async fn mailbox_action_messages(
+        &self,
+        link_id: Uuid,
+        thread_id: Uuid,
+    ) -> Result<Vec<MailboxActionMessage>, Self::Err> {
+        EmailPgRepo::new(self.0.clone())
+            .mailbox_action_messages(link_id, thread_id)
+            .await
+            .map_err(|e| anyhow::Error::from(e).into())
+    }
+
+    async fn enqueue_mailbox_action(
+        &self,
+        link_id: Uuid,
+        actor: MacroUserIdStr<'static>,
+        action: &MailboxAction,
+        targets: &[MailboxActionTarget],
+    ) -> Result<Uuid, Self::Err> {
+        EmailPgRepo::new(self.0.clone())
+            .enqueue_mailbox_action(link_id, actor, action, targets)
+            .await
+            .map_err(|e| anyhow::Error::from(e).into())
     }
 }
 
