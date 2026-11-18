@@ -500,14 +500,19 @@ const bulkRenameOnSettled = (
   }
 };
 
-/** Supports channel/document/chat/project/call/agent-session/database rename. */
+/**
+ * Supports channel/document/chat/project/call/agent-session/database rename.
+ * Renames made with the same `scope`, from any caller, are sent one at a
+ * time in the order they were made.
+ */
 export function createRenameDssEntityMutation(
   callbacks?: MutationCallbacks<
     RenameDssEntityMutationData,
     Error,
     RenameDssEntityMutationVariables,
     RenameOnMutateResult
-  >
+  >,
+  scope?: string
 ) {
   const account = useQueryAccount();
   return useMutation<
@@ -517,6 +522,7 @@ export function createRenameDssEntityMutation(
     RenameOnMutateResult
   >(() => ({
     meta: { queryAccount: account() },
+    scope: scope === undefined ? undefined : { id: scope },
     mutationFn: async (params, context) =>
       (await bulkRenameMutationFn([params], context))[0],
     ...withCallbacks<

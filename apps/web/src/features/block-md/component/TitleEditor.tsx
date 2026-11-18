@@ -165,7 +165,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const panel = useSplitPanel();
   const canEdit = permissions.canEdit;
   const { md: mdData, setMd: setMdData } = documentState.editor;
-  const renameDocumentMutation = createRenameDssEntityMutation();
   const {
     persistedName: persistedDocumentName,
     editorName: mdDocumentName,
@@ -176,6 +175,12 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const [titlePlaceholder] = createSignal<string>();
 
   const blockId = documentId();
+  // Renames of this document from every editor of it, including one closed
+  // with a save still running, reach the server in the order they were made.
+  const renameDocumentMutation = createRenameDssEntityMutation(
+    undefined,
+    `document-title:${blockId}`
+  );
   const documentKind = kind();
   const entityBlockName = documentKind === 'document' ? 'md' : documentKind;
   const documentTags = useDocTags(
@@ -194,14 +199,9 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   // outside them can only come from a rename made elsewhere; one inside them
   // can be a late copy of an earlier save.
   const ownNames = new Set<string>();
-  // Each rename waits for the one before it, so the server applies them in
-  // the order they were typed.
-  let previousRename: Promise<void> = Promise.resolve();
 
-  const saveTitle = async (next: TitleRename, previous: Promise<void>) => {
-    await previous;
-    // A failed rename leaves the title as typed; the mutation reports it.
-    await ResultAsync.fromPromise(
+  const saveTitle = async (next: TitleRename) => {
+    const saved = await ResultAsync.fromPromise(
       renameDocumentMutation.mutateAsync({
         entity: {
           type: 'document',
@@ -213,6 +213,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       (error) => error
     );
     renamesInFlight -= 1;
+    // A failed rename leaves the title as typed; the mutation reports it.
+    if (saved.isErr() || !saved.value.success) return;
     // A rename made elsewhere while this one was in flight was held back.
     const name = untrack(savedName);
     if (name !== undefined && !ownNames.has(name)) showSavedName();
@@ -225,7 +227,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     renamesInFlight += 1;
     lastSentName = next.newName;
     ownNames.add(next.oldName).add(next.newName);
-    previousRename = saveTitle(next, previousRename);
+    fireAndForget(saveTitle(next), 'block-md-title');
   };
 
   const scheduleRename = (newName: string, oldName: string) => {
@@ -239,8 +241,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   };
 
   const debouncedFlushRename = debounce(flushPendingRename, 400);
-  // Unmount cancels the debounce timer, so save a pending rename now.
-  onCleanup(flushPendingRename);
 
   const [state, setState] = createSignal('');
   const [initialized, setInitialized] = createSignal(false);
@@ -348,15 +348,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   createEffect(on(savedName, showSavedName));
 
-  createEffect(() => {
-    const currentState = state();
-    // Text typed into an open emoji or tag menu is saved once it closes.
-    if (inlineMenuOpen()) return;
-    if (!untrack(initialized)) {
-      setInitialized(true);
-      return;
-    }
-    const nextName = currentState.trim();
+  const saveTitleText = (text: string) => {
+    const nextName = text.trim();
     if (nextName !== untrack(mdDocumentName)) {
       setOptimisticName(nextName);
     }
@@ -368,6 +361,26 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     if (nextName === serverName || canEdit()) {
       scheduleRename(nextName, serverName);
     }
+  };
+
+  createEffect(() => {
+    const currentState = state();
+    // Text typed into an open emoji or tag menu is saved once it closes.
+    if (inlineMenuOpen()) return;
+    if (!untrack(initialized)) {
+      setInitialized(true);
+      return;
+    }
+    saveTitleText(currentState);
+  });
+
+  // Unmount cancels the debounce timer, so save a pending rename now, with
+  // any text still in an open emoji or tag menu.
+  onCleanup(() => {
+    if (untrack(inlineMenuOpen) && untrack(initialized)) {
+      saveTitleText(untrack(state));
+    }
+    flushPendingRename();
   });
 
   createEffect(() => {

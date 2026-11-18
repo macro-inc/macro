@@ -2,6 +2,7 @@ import { CLOSE_EMOJI_SEARCH_COMMAND } from '@core/component/LexicalMarkdown/plug
 import { createNoopLiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import { $createInlineSearchNode } from '@macro-inc/lexical-core';
 import { render } from '@solidjs/testing-library';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -25,12 +26,18 @@ const rename = vi.hoisted(() =>
       Promise.resolve({ success: true })
   )
 );
-vi.mock('@entity', () => ({
-  createRenameDssEntityMutation: () => ({
-    mutate: rename,
-    mutateAsync: rename,
-  }),
-}));
+// The real mutation's ordering: renames made with the same scope run one at a
+// time, in the order they were made (covered for the real one in rename.test).
+vi.mock('@entity', async () => {
+  const { useMutation } = await import('@tanstack/solid-query');
+  return {
+    createRenameDssEntityMutation: (_callbacks: unknown, scope?: string) =>
+      useMutation(() => ({
+        scope: scope === undefined ? undefined : { id: scope },
+        mutationFn: (variables: unknown) => rename(variables),
+      })),
+  };
+});
 vi.mock('@property/tags', () => ({ useDocTags: () => ({}) }));
 vi.mock('@core/component/LexicalMarkdown/component/menu/EmojiMenu', () => ({
   EmojiMenu: () => null,
@@ -44,9 +51,14 @@ const LOADED_SOURCE: MarkdownDocumentSource = {
   source: createNoopLiveSyncSource('document-1'),
 };
 
+let queryClient = new QueryClient();
+
 beforeEach(() => {
   rename.mockReset();
   rename.mockImplementation(() => Promise.resolve({ success: true }));
+  queryClient = new QueryClient({
+    defaultOptions: { mutations: { retry: false } },
+  });
   // The title connects from a ResizeObserver callback, as in the browser.
   const observers: Array<() => void> = [];
   vi.stubGlobal(
@@ -60,13 +72,14 @@ beforeEach(() => {
     }
   );
   connectObservers = () => {
-    for (const connect of observers) connect();
+    for (const connect of observers.splice(0)) connect();
   };
 });
 
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  queryClient.clear();
 });
 
 let connectObservers = () => {};
@@ -96,26 +109,28 @@ function renderTitle(initialName: string) {
   });
   const state = createMarkdownDocumentState();
   const view = render(() => (
-    <MarkdownDocumentProvider
-      context={{
-        documentId: () => 'document-1',
-        kind: () => 'document',
-        documentSource: () => LOADED_SOURCE,
-        permissions: {
-          canComment: () => true,
-          canEdit: () => true,
-          isOwner: () => true,
-        },
-        persistedName: savedName,
-        fallbackName: () => 'New Document',
-        state,
-        element: () => undefined,
-      }}
-    >
-      <MarkdownNameProvider>
-        <TitleEditor />
-      </MarkdownNameProvider>
-    </MarkdownDocumentProvider>
+    <QueryClientProvider client={queryClient}>
+      <MarkdownDocumentProvider
+        context={{
+          documentId: () => 'document-1',
+          kind: () => 'document',
+          documentSource: () => LOADED_SOURCE,
+          permissions: {
+            canComment: () => true,
+            canEdit: () => true,
+            isOwner: () => true,
+          },
+          persistedName: savedName,
+          fallbackName: () => 'New Document',
+          state,
+          element: () => undefined,
+        }}
+      >
+        <MarkdownNameProvider>
+          <TitleEditor />
+        </MarkdownNameProvider>
+      </MarkdownDocumentProvider>
+    </QueryClientProvider>
   ));
   connectObservers();
   const editor = state.editor.md.titleEditor as LexicalEditor;
@@ -151,27 +166,44 @@ it('saves a title edited just before the document closes', async () => {
   );
 });
 
-it('sends a rename only after the one before it settles', async () => {
+it('saves renames in the order typed across a close and reopen', async () => {
   vi.useFakeTimers();
   const renames = holdRenames();
-  const title = renderTitle('');
-  title.type('Weekly');
+  const closed = renderTitle('');
+  closed.type('Weekly');
   await vi.advanceTimersByTimeAsync(400);
   expect(rename).toHaveBeenCalledTimes(1);
 
   // Closing the document saves the rest at once, while the first rename is
   // still in flight; sent together, the server could apply them out of order.
-  title.type('Weekly sync');
-  title.unmount();
-  await vi.advanceTimersByTimeAsync(0);
+  closed.type('Weekly sync');
+  closed.unmount();
+  // The document opens again and its title is edited before either settles.
+  const reopened = renderTitle('Weekly sync');
+  reopened.type('Weekly sync agenda');
+  reopened.blur();
+  await vi.advanceTimersByTimeAsync(400);
   expect(rename).toHaveBeenCalledTimes(1);
 
   renames[0]({ success: true });
   await vi.advanceTimersByTimeAsync(0);
-  expect(rename).toHaveBeenLastCalledWith({
-    entity: { type: 'document', id: 'document-1', name: 'Weekly' },
-    newName: 'Weekly sync',
-  });
+  expect(rename).toHaveBeenCalledTimes(2);
+  renames[1]({ success: true });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(rename.mock.calls.map(([variables]) => variables)).toEqual([
+    {
+      entity: { type: 'document', id: 'document-1', name: '' },
+      newName: 'Weekly',
+    },
+    {
+      entity: { type: 'document', id: 'document-1', name: 'Weekly' },
+      newName: 'Weekly sync',
+    },
+    {
+      entity: { type: 'document', id: 'document-1', name: 'Weekly sync' },
+      newName: 'Weekly sync agenda',
+    },
+  ]);
 });
 
 it('saves a title changed back to its saved name while a rename is in flight', async () => {
@@ -228,6 +260,33 @@ it('saves text left in an emoji search when its menu closes', async () => {
     entity: { type: 'document', id: 'document-1', name: '' },
     newName: ':draft',
   });
+});
+
+it('saves text left in an open emoji search when the document closes', async () => {
+  const title = renderTitle('');
+  title.editor.update(
+    () => {
+      $getRoot()
+        .clear()
+        .append($createParagraphNode().append($createInlineSearchNode(':')));
+    },
+    { discrete: true }
+  );
+  title.editor.update(
+    () => {
+      const search = $getRoot().getFirstDescendant();
+      if ($isTextNode(search)) search.setTextContent(':draft');
+    },
+    { discrete: true }
+  );
+  title.unmount();
+
+  await vi.waitFor(() =>
+    expect(rename).toHaveBeenCalledWith({
+      entity: { type: 'document', id: 'document-1', name: '' },
+      newName: ':draft',
+    })
+  );
 });
 
 it('keeps the characters typed after an earlier save when Enter leaves the title', async () => {
@@ -381,15 +440,32 @@ it('keeps the title while its rename is in flight, and after it fails', async ()
   await vi.advanceTimersByTimeAsync(400);
   expect(rename).toHaveBeenCalledTimes(1);
 
-  // The preview republishes the name the rename replaces.
+  // The preview republishes the name the rename replaces, and then a rename
+  // made elsewhere.
   title.publish('Roadmap');
+  await vi.advanceTimersByTimeAsync(0);
+  title.publish('Q3 roadmap');
   await vi.advanceTimersByTimeAsync(0);
   expect(title.text()).toBe('Roadmap 2027');
 
-  // The mutation reports the failure and rolls the preview back; the text
-  // stays, with its undo history, to try again.
+  // The mutation reports the failure; the text stays, with its undo history,
+  // to try again.
   renames[0](new Error('refused'));
-  title.publish('Roadmap');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(title.text()).toBe('Roadmap 2027');
+});
+
+it('keeps the title when its rename is refused without an error', async () => {
+  vi.useFakeTimers();
+  const renames = holdRenames();
+  const title = renderTitle('Roadmap');
+  title.type('Roadmap 2027');
+  title.blur();
+  await vi.advanceTimersByTimeAsync(400);
+  title.publish('Q3 roadmap');
+  await vi.advanceTimersByTimeAsync(0);
+
+  renames[0]({ success: false });
   await vi.advanceTimersByTimeAsync(0);
   expect(title.text()).toBe('Roadmap 2027');
 });
