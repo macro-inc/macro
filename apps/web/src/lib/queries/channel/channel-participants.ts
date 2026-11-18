@@ -115,11 +115,27 @@ function applyChange(
   return added.length ? [...participants, ...added] : participants;
 }
 
+// A later add or remove of the same people decides what they show as, even once
+// it settles against a record that already matched it.
+function laterChangeTouches(
+  change: ParticipantChange,
+  changes: readonly (ParticipantChange | undefined)[]
+) {
+  const userIds = new Set(change.userIds);
+  return changes.some(
+    (later) =>
+      !!later &&
+      later.id > change.id &&
+      later.channelId === change.channelId &&
+      later.userIds.some((userId) => userIds.has(userId))
+  );
+}
+
 /**
  * Shows the channel's adds and removes over its record: in flight, and once
  * they succeed until the record shows them, the record changes otherwise
- * (someone changed it since), or the change has shown for a while without its
- * soup update arriving.
+ * (someone changed it since), a later change here touches the same people, or
+ * the change has shown for a while without its soup update arriving.
  */
 export function overlayParticipantChanges(
   channelId: string,
@@ -153,6 +169,7 @@ export function overlayParticipantChanges(
       previous.superseded.has(change.id) ||
       seen.roster !== roster ||
       recordShows(change, participants) ||
+      laterChangeTouches(change, changes) ||
       now >= expires
     ) {
       superseded.add(change.id);

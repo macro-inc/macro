@@ -259,4 +259,24 @@ describe('useChannelParticipantsQuery', () => {
     await vi.advanceTimersByTimeAsync(2_000);
     expect(ids()).toEqual(['owner']);
   });
+
+  it('lets a remove win over an earlier add whose soup update has not arrived', async () => {
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const removal = Promise.withResolvers<unknown>();
+    storage.removeParticipantsFromChannel.mockReturnValue(removal.promise);
+    const { add, remove, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['new'] });
+    await waitFor(() => expect(add.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner', 'new']);
+
+    remove.mutate({ channelId: 'channel-1', participants: ['new'] });
+    await waitFor(() => expect(ids()).toEqual(['owner']));
+
+    // The remove succeeds against a record that never showed the add.
+    removal.resolve(ok({}));
+    await waitFor(() => expect(remove.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner']);
+  });
 });
