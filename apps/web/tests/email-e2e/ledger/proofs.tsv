@@ -126,7 +126,6 @@ AC-313	The From menu's alias items in from-inbox-selector.tsx do nothing when ch
 AC-314	on a phone, tapping a new email's folded Subject does not open it for typing
 AC-315	on a phone, a tap beside the Draft options sheet does not close it
 AC-316	on a phone, Back on an untouched new email does not close the composer
-AC-317	the Next options button under the recipient suggestions does not bring the next people
 AC-320	clicking a cloud attachment's chip in the composer does not open the file's page
 AC-321	The Connect Gmail button of the composer's no-account banner in EmailPermissionsBanner.tsx returns from its click handler without starting the inbox link.
 AC-400	the Draft could not be synced banner's Retry discard does not throw the draft away
@@ -141,6 +140,7 @@ AC-912	The compose route in email-compose.tsx ignores the draft named in its URL
 AC-913	A Drafts row opens a standalone draft in the ordinary thread view instead of the composer: the Match in email-thread.tsx that renders EmailComposeView for a draft that replies to nothing is switched off.
 AC-914	A send the provider rejects is not reported to the composer: the 'failed' progress handler of announceQueuedSend in queued-send-notice.ts returns at once (no failure toast, Undo not withdrawn).
 AC-916	The Retry send button of the message-operation notice does nothing: its onClick in message-operation-recovery.tsx returns for the 'retry_send' action (Check again and the other resolutions still work).
+AC-917	scrolling the recipient suggestions to their end does not read the next people into the list
 AL-001	the sidebar's Inbox item does not reopen the Inbox tab that was last open
 AL-002	A press on a desktop sidebar tab returns before setTab in EmailSidebar.tsx, so the sidebar's Favorites (and other tabs) no longer switch the list. Run on touch as well: the sidebar sheet lists the same `Tab` rows, and with setTab skipped the sheet still closes but All leaves Noise open, so the header never names All.
 AL-003	The header's Inbox view tabs (Signal / Noise) ignore a change instead of calling setTab in EmailHeader.tsx.
@@ -742,7 +742,7 @@ STC-309	not shown as the row says (subject shown as one truncated line): its ren
 STC-310	The Create event button in create-event-button.tsx no longer shows itself as suggested: its data-suggested attribute and accent colours are dropped when the draft proposes a meeting.
 STC-311	The signature preview in signature-preview.tsx starts expanded instead of collapsed to its bar.
 STC-312	the phone reply's Send stays enabled with an empty body (src/features/email-compose/views/reply-input.tsx)
-STC-313	not shown as the row says (suggestion menu status: Loading options… / Options unavailable. Selected values are kept. / Cached options or selected names may be incomplete. / No matches in this page or cached snapshot.): its rendering is switched off or changed in src/lib/core/component/RecipientSourceControls.tsx
+STC-313	not shown as the row says (suggestion menu status: Loading options… / Options unavailable. Selected values are kept. / Cached options or selected names may be incomplete. / No matching options.): its rendering is switched off or changed in src/lib/core/component/RecipientSourceControls.tsx
 STC-315	not shown as the row says (Drop file(s) to attach): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
 STC-316	not shown as the row says (no trash button in the toolbar): its rendering is switched off or changed in src/features/email-compose/views/compose-toolbar.tsx
 STC-400	not shown as the row says (loading toast: Cancelling send…): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
