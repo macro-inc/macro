@@ -304,7 +304,10 @@ fn finish(backfills: &mut Backfills, finished: Finished, metrics: &FocusMetrics)
                 since_found_secs = since_found,
                 "focus backfill pass finished"
             );
-            if waiting.new && !report.stopped_early {
+            // Timed only once the whole inbox went through: an inbox that
+            // reads as not enrolled, or a pass with failed threads, is not
+            // filled.
+            if waiting.new && report.inboxes == 1 && report.failed == 0 && !report.stopped_early {
                 let filled = match pass {
                     Pass::First => Metric::BackfillTopFilledSeconds,
                     Pass::Rest => Metric::BackfillFilledSeconds,

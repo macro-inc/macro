@@ -301,7 +301,25 @@ async fn fill_speed(pool: Pool<Postgres>) {
 fn a_completed_pass_times_a_new_inbox_and_not_one_found_at_the_start() {
     let metrics = FocusMetrics::default();
     let mut backfills = Backfills::default();
-    for new in [false, true] {
+    let filled = SweepReport {
+        inboxes: 1,
+        ..SweepReport::default()
+    };
+    let cases = [
+        (false, filled, false),
+        (true, filled, true),
+        // Not enrolled, or a thread failed: not filled.
+        (true, SweepReport::default(), false),
+        (
+            true,
+            SweepReport {
+                failed: 1,
+                ..filled
+            },
+            false,
+        ),
+    ];
+    for (new, report, timed_expected) in cases {
         let now = Instant::now();
         let finished = Finished {
             waiting: Waiting {
@@ -311,7 +329,7 @@ fn a_completed_pass_times_a_new_inbox_and_not_one_found_at_the_start() {
             },
             pass: Pass::First,
             started: now,
-            report: Ok(SweepReport::default()),
+            report: Ok(report),
         };
         finish(&mut backfills, finished, &metrics);
         let timed = metrics
@@ -319,6 +337,6 @@ fn a_completed_pass_times_a_new_inbox_and_not_one_found_at_the_start() {
             .samples
             .get(&Metric::BackfillTopFilledSeconds)
             .map(Vec::len);
-        assert_eq!(timed, new.then_some(1), "new: {new}");
+        assert_eq!(timed, timed_expected.then_some(1), "new: {new}");
     }
 }
