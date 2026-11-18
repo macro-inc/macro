@@ -251,3 +251,44 @@ it('keeps loading instead of showing chips while Soup is paused offline', () => 
   expect(view.queryByText('Chip Offline notes')).toBeNull();
   expect(view.queryByText('No documents in this channel yet.')).toBeNull();
 });
+
+it('adds chips for a new page only once Soup answers for it', () => {
+  const [placeholder, setPlaceholder] = createSignal(true);
+  fixture.query = {
+    isPending: false,
+    data: {
+      pages: [
+        {
+          items: [
+            {
+              entity_type: 'document',
+              entity_id: 'Trashed plan',
+              created_at: '2026-11-18T08:02:00Z',
+            },
+            {
+              entity_type: 'document',
+              entity_id: 'Live notes',
+              created_at: '2026-11-18T08:01:00Z',
+            },
+          ],
+        },
+      ],
+    },
+    hasNextPage: false,
+  };
+  fixture.soupQuery = {
+    isPending: false,
+    isLoading: false,
+    get isPlaceholderData() {
+      return placeholder();
+    },
+    data: { entities: [{ id: 'Live notes' }] },
+  };
+  const view = render(() => (
+    <ChannelAttachmentEntitySection channelId="channel" />
+  ));
+  const documents = view.getByRole('region', { name: 'Documents' });
+  expect(documents.textContent).toBe('Live notes');
+  setPlaceholder(false);
+  expect(documents.textContent).toBe('Chip Trashed planLive notes');
+});

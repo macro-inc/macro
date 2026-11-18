@@ -132,20 +132,28 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
     const entityById = new Map(
       (soupQuery.data?.entities ?? []).map((entity) => [entity.id, entity])
     );
+    // Previous data kept while a new page of attachments loads has not
+    // answered for the new ones yet; they appear once Soup does.
+    const answered = !soupQuery.isPlaceholderData;
 
     return attachments
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
-      .map((attachment): AttachmentEntityListRow => {
+      .flatMap((attachment): AttachmentEntityListRow[] => {
         const entity = entityById.get(attachment.entity_id);
-        if (!entity) return { kind: 'attachment', attachment };
+        if (entity) {
+          return [
+            {
+              kind: 'entity',
+              entity,
+              timestamp: attachment.created_at,
+              senderId: attachment.sender_id,
+              onClick: (event) => handleEntityClick(entity, event),
+            },
+          ];
+        }
 
-        return {
-          kind: 'entity',
-          entity,
-          timestamp: attachment.created_at,
-          senderId: attachment.sender_id,
-          onClick: (event) => handleEntityClick(entity, event),
-        };
+        if (!answered) return [];
+        return [{ kind: 'attachment', attachment }];
       });
   });
 
