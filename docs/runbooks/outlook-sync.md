@@ -69,7 +69,10 @@ folder's import round ends. Its enumerate spans read `@outlook.stream_kind:mail_
   it on for dev with a release condition on the person property
   `environment = dev`; widen it to production after a dev round trip
   (connect a large Outlook mailbox, send it mail during the import, see the
-  mail arrive within a minute).
+  mail arrive within a minute). A round already running when it turns on
+  gets its pass at its next page, still from the round's start
+  (`round_started_at`); a round that began before that column existed is
+  covered only from that page, until a resync or re-import restarts it.
 - Turn it off in PostHog: the workers read it every minute
   (`outlook.live_import_pass.refresh` spans), stop claiming live passes and
   start new import rounds unordered. Open passes are deleted as their rounds

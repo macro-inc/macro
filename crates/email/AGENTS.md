@@ -492,8 +492,10 @@ tools — hexagonal, heavily feature-gated.
   (`open_live_pass`, under the link lock): `initial_complete = true`, so its
   rows queue live and notify, it reads through `provider` and is never paced;
   its first request lists only mail received since five minutes before
-  `import_started_at`, the claim time of the page that opened it (Graph dates
-  mail by Exchange's clock, and mail can land after its date). `enumerate_once` claims a due live
+  `import_started_at`, the round's `round_started_at` (the claim of its
+  first page; a round recorded before that column falls back on the claim of
+  the page that opened the pass), as Graph dates mail by Exchange's clock and
+  mail can land after its date. `enumerate_once` claims a due live
   pass before any folder (`claim_stream` takes the kind). The round's
   checkpoint and `reset_stream` delete the pass in their transaction; resync,
   re-import and a removed folder delete it too, and a webhook wakes it. An
@@ -533,8 +535,9 @@ tools — hexagonal, heavily feature-gated.
   counts what the folder holds at the provider, imported or not, so an import
   is checked against it.
 - `email_sync_streams.reader_revision` is the folder reader revision a mail
-  folder stream's current delta round started at, written by `commit_page` on
-  the round's first page and copied by `rebind_work`. `domain/mailbox/reimport.rs`
+  folder stream's current delta round started at, and `round_started_at` when
+  it started (the claim of its first page); `commit_page` writes both on the
+  round's first page and `rebind_work` copies them. `domain/mailbox/reimport.rs`
   restarts streams whose round started at an older revision (or none), Inbox
   and Sent first, through the Outlook resync's reset limited to those folders;
   a new query that copies or resets streams keeps the column consistent.

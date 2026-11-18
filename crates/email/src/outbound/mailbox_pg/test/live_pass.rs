@@ -302,6 +302,36 @@ async fn the_rounds_checkpoint_retires_its_live_pass_and_completes_the_import(db
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_live_pass_opened_at_a_later_page_lists_mail_from_the_rounds_start(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    let live = Folder::answering(Vec::new());
+    let import = Folder::answering(vec![
+        page(&["old-1"], next("page-2")),
+        page(&["old-2"], next("page-3")),
+    ]);
+    // The round's first page is read with the switch off, so it opens no pass.
+    let switch_off = service(&repo, &live, &import, false);
+    assert!(switch_off.enumerate_once().await.unwrap());
+    assert!(live_pass(&db, link).await.is_none());
+    let round_started = sqlx::query_scalar!(
+        r#"SELECT round_started_at AS "round_started_at!" FROM email_sync_streams WHERE link_id = $1 AND kind = 'mail_folder'"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+
+    let switch_on = service(&repo, &live, &import, true);
+    assert!(switch_on.enumerate_once().await.unwrap());
+
+    assert_eq!(
+        live_pass(&db, link).await.unwrap().received_since,
+        round_started,
+        "the pass covers the round from its first page, not from the page that opened it"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_expired_folder_cursor_retires_its_live_pass(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let live = Folder::answering(Vec::new());

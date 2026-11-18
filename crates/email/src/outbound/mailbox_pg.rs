@@ -202,8 +202,10 @@ impl MailboxSyncRepository for PgMailboxSync {
             r#"
             UPDATE email_sync_streams s SET position = $4,
                 initial_complete = s.initial_complete OR $5,
-                -- A round's first page records the reader revision it started at.
+                -- A round's first page records the reader revision it started at,
+                -- and when: the claim that read it.
                 reader_revision = CASE WHEN s.position IS NULL THEN $7 ELSE s.reader_revision END,
+                round_started_at = CASE WHEN s.position IS NULL THEN s.lease_started_at ELSE s.round_started_at END,
                 last_completed_at = CASE WHEN $5 THEN now() ELSE last_completed_at END,
                 next_run_at = CASE WHEN $5 AND (s.notified_at IS NULL OR s.notified_at <= s.lease_started_at)
                     THEN now() + interval '2 minutes' ELSE now() END,
@@ -301,14 +303,15 @@ impl MailboxSyncRepository for PgMailboxSync {
         // and opens none.
         Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
         // `import_started_at` is when the import round the pass runs beside
-        // started: the claim of the page just read, which for a round's first
-        // page is just before its first request. The pass lists mail
-        // received since a few minutes before then (`live_pass::round_start`);
-        // the round lists everything older.
+        // started: the claim of the round's first page, just before its first
+        // request, whichever page opens the pass (a round recorded before
+        // `round_started_at` existed falls back on this page's claim). The
+        // pass lists mail received since a few minutes before then
+        // (`live_pass::round_start`); the round lists everything older.
         sqlx::query!(
             r#"
             INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,import_started_at)
-            SELECT $2,s.link_id,s.generation,'mail_folder_live',s.scope_id,true,COALESCE(s.lease_started_at,now())
+            SELECT $2,s.link_id,s.generation,'mail_folder_live',s.scope_id,true,COALESCE(s.round_started_at,s.lease_started_at,now())
             FROM email_sync_streams s
             WHERE s.id = $1 AND NOT s.initial_complete
             ON CONFLICT (link_id,generation,kind,scope_id) DO NOTHING
