@@ -59,8 +59,10 @@ import {
   type WriteResult,
 } from '../protocol';
 import {
+  operationResponse,
   rememberResponseAuthority,
   rememberWriteResponse,
+  responseAuthorityGeneration,
 } from '../response-authority';
 import { sourceAuthorityGeneration } from '../source-authority';
 import { cacheAuthorityExchange } from './authority-exchange';
@@ -1587,6 +1589,80 @@ describe('normalizedCacheExchange', () => {
             ({ data }) => JSON.stringify(data) === JSON.stringify(fresh)
           )
         ).toBe(true);
+      } finally {
+        subscription.unsubscribe();
+      }
+    }
+  );
+
+  it.each([true, false])(
+    'retains the response proof and request generation on recovered network reads: admitted=%s',
+    async (admitted) => {
+      const { change, authority } = installAuthority(host);
+      const write = vi.spyOn(host, 'writeQuery');
+      const first = Promise.withResolvers<Response>();
+      const fresh = { soup: { nextCursor: null } };
+      const recovered = Response.json({ data: fresh });
+      const proof = vi.fn(async () => {
+        if (!admitted) throw new StaleCacheAuthorityError();
+      });
+      let capturedGeneration: string | undefined;
+      const fetch = vi.fn(async () => {
+        capturedGeneration = authority.snapshot().generation;
+        rememberResponseAuthority(recovered, capturedGeneration, proof);
+        return recovered;
+      });
+      fetch.mockImplementationOnce(() => first.promise);
+      const client = createClient({
+        url: 'http://test/graphql',
+        fetch,
+        exchanges: [
+          cacheAuthorityExchange,
+          normalizedCacheExchange(host),
+          fetchExchange,
+        ],
+      });
+      const results: OperationResult[] = [];
+      const subscription = client
+        .query(
+          QUERY,
+          { input: { limit: 2 } },
+          { requestPolicy: 'network-only' }
+        )
+        .subscribe((result) => results.push(result));
+      try {
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+        change();
+        const rejected = Response.json({
+          data: { soup: { nextCursor: 'old' } },
+        });
+        rememberResponseAuthority(rejected, 'old-generation', async () => {
+          throw new StaleCacheAuthorityError();
+        });
+        first.resolve(rejected);
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+        await vi.waitFor(() =>
+          expect(operationResponse(results.at(-1)!.operation)).toBe(recovered)
+        );
+        expect(responseAuthorityGeneration(recovered)).toBe(capturedGeneration);
+        if (admitted) {
+          expect(proof).toHaveBeenCalledTimes(3);
+          expect(results.at(-1)?.data).toEqual(fresh);
+          await vi.waitFor(() => expect(host.writes).toHaveLength(1));
+          expect(write.mock.calls[0]?.[0].authorityGeneration).toBe(
+            capturedGeneration
+          );
+          expect(sourceAuthorityGeneration(results.at(-1)?.data)).toBe(
+            capturedGeneration
+          );
+        } else {
+          expect(proof).toHaveBeenCalledOnce();
+          expect(results.at(-1)?.data).toBeUndefined();
+          expect(results.at(-1)?.error?.networkError).toBeInstanceOf(
+            StaleCacheAuthorityError
+          );
+          expect(host.writes).toHaveLength(0);
+        }
       } finally {
         subscription.unsubscribe();
       }

@@ -1202,6 +1202,12 @@ export function normalizedCacheExchange(
       function recoverAuthorityQuery(key: number): void {
         const op = activeOps.get(key);
         if (!op) return;
+        // The wrapped fetch closes over this object. Keep the witness for a
+        // recovered request, but discard the rejected response before reading.
+        const responseWitness = op.context.cacheAuthorityResponse as
+          | { response?: Response }
+          | undefined;
+        if (responseWitness) responseWitness.response = undefined;
         // urql still considers the rejected request dispatched while its
         // result drains. Read current storage here and use the exchange's
         // forwarding queue on a miss, without replaying that stale result.
@@ -1211,7 +1217,6 @@ export function normalizedCacheExchange(
               ...op.context,
               cacheAuthorityGeneration: host.authority?.snapshot()?.generation,
               cacheAuthorizationEpoch: crmSnapshotAuthorization().epoch,
-              cacheAuthorityResponse: undefined,
               requestPolicy:
                 op.context.requestPolicy === 'cache-only'
                   ? 'cache-only'
