@@ -467,6 +467,10 @@ impl SchedulingRuntime {
 }
 
 /// Compose routine scheduling and event workers alongside the harness API.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is a separate resource the composition root shares with scheduling; bundling them only moves the list"
+)]
 pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     config: Config,
     db: sqlx::PgPool,
