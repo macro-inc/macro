@@ -84,6 +84,7 @@ export default {
   failedNotice: "{{name}} couldn't be set up",
   failedNoticeBody: "Retry from {{name}}'s row in Members.",
   messageAgent: 'Message {{name}}',
+  openDirectMessageFailed: "Couldn't open the conversation. Try again.",
   connectClaude: 'Connect Claude plan',
   reconnectClaude: 'Reconnect Claude plan',
   dmSettingUp: "{{name}} is still being set up. It'll answer once it's ready.",

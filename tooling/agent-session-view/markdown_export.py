@@ -432,7 +432,7 @@ def literal_lines(literal):
     commit = literal.get("commit")
     where = (
         f"reconstructed from source at `{commit['sha'][:11]}`, "
-        f"{'exact' if commit['exact'] else '**closest**'}: {commit['reason']}"
+        f"{'exact' if commit['exact'] else '**inferred**'}: {commit['reason']}"
     ) if commit else "no commit"
     if literal.get("error"):
         return [f"- literal prompt parts: **not rebuilt** ({where}): {literal['error'][:300]}"]
