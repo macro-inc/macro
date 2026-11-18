@@ -50,7 +50,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
   forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
   its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6
-  defaults). `messages` is admitted as `AiFeature::AgentSession`
+  defaults and agent teammates’ Sonnet 5.5 calls). `messages` is admitted as `AiFeature::AgentSession`
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
   only under `ENABLE_AI_USAGE_BILLING`. A caller that hangs up mid-stream does
@@ -174,7 +174,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service; a scoped
   session's code is refused it, and its turn calls no remote MCP tool
-  directly either (`ScopedToolGate::refuse_remote_mcp`).
+  directly either (`ScopedToolGate::refuse_remote_mcp`). The actor MCP
+  transport is wrapped in `agent_egress::outbound::budgeted_mcp`, so each
+  account's calls to an app are paced; a call still rate limited answers
+  HTTP 429 to the SDK, which throws.
   Code execution's destination list in `src/code_mode.rs` (`SdkHost`) also
   includes the configured editing worker, whose comment-mark endpoint requires
   a scoped document token; this does not grant permission to edit document

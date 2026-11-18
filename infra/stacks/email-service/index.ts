@@ -432,8 +432,9 @@ new EmailPubSubWorkers('email-pubsub-workers', {
   dopplerEcsEnvironment,
 });
 
-// Classifies signal threads for the Focus view. It reads mail only for
-// inboxes on FOCUS_ENABLED_EMAIL_DOMAINS (Doppler) and idles when that is empty.
+// Classifies signal threads for the Focus view. It reads mail only for inboxes
+// whose owner has the enable-email-focus PostHog flag (POSTHOG_API_KEY in
+// Doppler), and idles while TYPESAFE_API_KEY is unset.
 new EmailFocusWorker('email-focus-worker', {
   vpc: coparse_api_vpc,
   tags,

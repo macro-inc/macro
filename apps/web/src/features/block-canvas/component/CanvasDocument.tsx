@@ -1,9 +1,9 @@
 import { usePending } from '@app/observability/flow';
+import { lazy } from '@core/util/lazy';
 import {
   type Accessor,
   createResource,
   type JSX,
-  lazy,
   Match,
   Show,
   Switch,

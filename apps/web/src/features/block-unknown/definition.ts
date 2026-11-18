@@ -4,9 +4,9 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
+import { lazy } from '@core/util/lazy';
 import { storageServiceClient } from '@service-storage/client';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 export const definition = defineBlock({
   name: 'unknown',

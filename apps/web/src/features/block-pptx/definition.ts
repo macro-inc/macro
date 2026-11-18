@@ -8,10 +8,10 @@ import {
   enablePptxEditor,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { lazy } from '@core/util/lazy';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 export const definition = defineBlock({
   name: 'pptx',

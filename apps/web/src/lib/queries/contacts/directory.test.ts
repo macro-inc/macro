@@ -1,5 +1,8 @@
 import type { CacheHost } from '@graphql-cache/host/types';
-import { PEOPLE_POLICY_VERSION } from '@graphql-cache/people/generated';
+import {
+  PEOPLE_MIN_POLICY_VERSION,
+  PEOPLE_POLICY_VERSION,
+} from '@graphql-cache/people/generated';
 import type { PeopleCache } from '@graphql-cache/people/host';
 import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -113,6 +116,34 @@ it.each([true, false])(
     expect(remote).not.toHaveBeenCalled();
   }
 );
+it('keeps an older native host on its local window down to the policy floor', async () => {
+  const cache = host();
+  cache.people.search.mockResolvedValue({
+    kind: 'page',
+    policyVersion: PEOPLE_MIN_POLICY_VERSION,
+    people: [person],
+    truncated: true,
+    nextCursor: 'position',
+  });
+  const page = await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: 'jo' },
+    signal()
+  );
+  expect(page.source).toBe('cache');
+  expect(page.users.map((user) => user.id)).toEqual([person.userId]);
+  await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: 'jo', cursor: page.nextCursor ?? undefined },
+    signal()
+  );
+  expect(cache.people.search).toHaveBeenLastCalledWith(
+    expect.objectContaining({ cursor: 'position' })
+  );
+  expect(remote).not.toHaveBeenCalled();
+});
 it.each([
   { pages: 0, completedAt: null },
   { pages: 4, completedAt: null },
@@ -180,7 +211,14 @@ it('reads server pages when this tab has no usable local cache', async () => {
     { kind: 'contextPending' },
     {
       kind: 'page',
-      policyVersion: 4,
+      policyVersion: PEOPLE_MIN_POLICY_VERSION - 1,
+      people: [],
+      truncated: false,
+      nextCursor: null,
+    },
+    {
+      kind: 'page',
+      policyVersion: PEOPLE_POLICY_VERSION + 1,
       people: [],
       truncated: false,
       nextCursor: null,

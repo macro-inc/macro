@@ -36,3 +36,29 @@ test('an older load cannot overwrite a completed post-clear read', async () => {
   expect(await lazy.get()).toBe('current');
   expect(loads).toBe(2);
 });
+
+test('listed fields serve reads until a load, set or clear supersedes them', async () => {
+  let loads = 0;
+  const lazy = new Lazy(async () => {
+    loads++;
+    return { name: 'loaded', kind: 'loaded' };
+  });
+
+  lazy.know({ name: 'listed', kind: undefined });
+  expect(lazy.listedField('name')).toBe('listed');
+  expect(lazy.listedField('kind')).toBeUndefined();
+  expect(lazy.peek()).toBeUndefined();
+
+  await lazy.get();
+  expect(loads).toBe(1);
+  expect(lazy.listedField('name')).toBeUndefined();
+
+  lazy.clear();
+  lazy.know({ name: 'listed' });
+  lazy.set({ name: 'written', kind: 'written' });
+  expect(lazy.listedField('name')).toBeUndefined();
+
+  lazy.know({ name: 'listed' });
+  lazy.clear();
+  expect(lazy.listedField('name')).toBeUndefined();
+});
