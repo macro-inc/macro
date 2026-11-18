@@ -1,9 +1,7 @@
 import {
-  excludesCrmContent,
   hasOwnedEmailWitness,
+  restSoupAstExcludesCrmContent,
 } from '@graphql-cache/authority-scope';
-import { makeGraphqlSoupInput } from './soup/graphql/ast';
-import type { SoupAstBody, SoupParams } from './soup/items';
 
 /** Legacy query keys without an entity kind cannot prove a non-CRM scope. */
 export function crmProtectedQueryKey(key: readonly unknown[]): boolean {
@@ -21,17 +19,10 @@ export function crmProtectedQueryKey(key: readonly unknown[]): boolean {
   )
     return true;
   if (kind === 'soup') {
-    if (scope !== 'astItems') return true;
-    try {
-      return !excludesCrmContent(
-        makeGraphqlSoupInput({
-          params: key[2] as SoupParams,
-          body: key[3] as SoupAstBody,
-        }).initial?.filters
-      );
-    } catch {
-      return true;
-    }
+    // Grouped REST responses retain proof until their group cursors have the
+    // same independently scoped parent contract as flat AST pages.
+    if (scope !== 'astItems' || key[4] != null) return true;
+    return !restSoupAstExcludesCrmContent(key[3]);
   }
   if (kind === 'email') {
     // Legacy thread pages use the entity-granted thread endpoint, which can

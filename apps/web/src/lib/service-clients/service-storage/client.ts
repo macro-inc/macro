@@ -32,6 +32,7 @@ import { err, ok, type Result } from 'neverthrow';
 import { createChannelLabelsClient } from './channel-labels';
 import type { ApiChannelListPage } from './channel-list-types';
 import { crmValidationError } from './crm-errors';
+import { beginRestSoupPage } from './crm-soup-scope';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
 import type { AccessLevel } from './generated/schemas/accessLevel';
@@ -739,11 +740,15 @@ export const storageServiceClient = {
       ? `?cursor=${args.params.cursor}`
       : '';
 
-    return await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
+    const body = JSON.stringify(args.body);
+    const acceptPage = beginRestSoupPage(body, args.params.cursor || null);
+    const result = await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
       method: 'POST',
-      body: JSON.stringify(args.body),
+      body,
       signal: args.signal,
     });
+    if (result.isOk()) acceptPage(result.value.next_cursor);
+    return result;
   },
 
   async getGroupedSoupAstItems(args: {

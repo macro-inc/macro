@@ -18,6 +18,7 @@ import {
 } from '@graphql-cache/response-authority';
 import { emailKeys } from '@queries/email/keys';
 import { setupQueryPersistence } from '@queries/persistence';
+import { soupKeys } from '@queries/soup/keys';
 import { QueryObserver } from '@tanstack/query-core';
 import { onlineManager, QueryClient } from '@tanstack/solid-query';
 import { createClient, gql } from '@urql/core';
@@ -52,6 +53,10 @@ import { installCrmCacheHost } from './crm-access-cache';
 import { graphqlSoupSubscriptionExchange } from './crm-subscription-exchange';
 
 const TEAM = '00000000-0000-4000-8000-000000000001';
+const personalFolder = {
+  ccf: { l: { id: '00000000-0000-0000-0000-000000000000' } },
+  emailView: 'spam',
+};
 const proof = (allowed: boolean) => ok({ team_id: TEAM, allowed });
 const responseWithHint = (allowed: boolean) =>
   Response.json(
@@ -134,9 +139,14 @@ afterEach(() => {
 });
 
 describe('CRM HTTP response admission', () => {
-  it.each([false, true])(
-    'restarts mounted independent mailbox metadata after sign-in without proof, after logout=%s',
-    async (logout) => {
+  it.each([
+    [false, 'email'],
+    [true, 'email'],
+    [false, 'soup'],
+    [true, 'soup'],
+  ] as const)(
+    'restarts mounted independent snapshots after sign-in without proof, logout=%s kind=%s',
+    async (logout, kind) => {
       vi.useFakeTimers();
       await verifiedViewer();
       await vi.runOnlyPendingTimersAsync();
@@ -151,7 +161,14 @@ describe('CRM HTTP response admission', () => {
       const fetchInbox = vi.fn(async () => 'current-inbox');
       const fetchCrm = vi.fn(async () => 'protected-data');
       const inbox = new QueryObserver(queryClient, {
-        queryKey: emailKeys.messageInbox('message').queryKey,
+        queryKey:
+          kind === 'email'
+            ? emailKeys.messageInbox('message').queryKey
+            : soupKeys.astItems({
+                params: {},
+                body: personalFolder,
+                transport: 'rest',
+              }).queryKey,
         queryFn: fetchInbox,
         initialData: 'previous-inbox',
         staleTime: Infinity,
@@ -197,6 +214,7 @@ describe('CRM HTTP response admission', () => {
       emailKeys.messageOperation('message').queryKey,
       emailKeys.threadReadReceipts('thread').queryKey,
       emailKeys.messageInbox('message').queryKey,
+      soupKeys.astItems({ params: {}, body: personalFolder }).queryKey,
     ];
     const crmKey = ['crm', 'companies'];
     const visible = new Map<readonly unknown[], string>(
@@ -243,6 +261,10 @@ describe('CRM HTTP response admission', () => {
         ],
         ['http://localhost/email/email/threads/thread/messages', {}],
         [
+          'http://localhost/dss/items/soup/ast',
+          { method: 'POST', body: JSON.stringify(personalFolder) },
+        ],
+        [
           'http://localhost/dss/graphql',
           queuedSettlementRequest({
             method: 'POST',
@@ -273,6 +295,10 @@ describe('CRM HTTP response admission', () => {
         ['http://localhost/email/email/settings', { method: 'PATCH' }],
         ['http://localhost/email/email/threads/thread/read-receipts', {}],
         ['http://localhost/email/email/threads/session-thread', {}],
+        [
+          'http://localhost/dss/items/soup/ast',
+          { method: 'POST', body: JSON.stringify(personalFolder) },
+        ],
         [
           'http://localhost/dss/graphql',
           {

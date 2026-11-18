@@ -61,22 +61,23 @@ async function fetchProof(timeoutMs: number): Promise<string> {
 }
 
 let resumeVisibleSnapshots: (() => void) | undefined;
-let independentEmailRetirement: Promise<void> | undefined;
+let independentSessionRetirement: Promise<void> | undefined;
 
-async function refetchIndependentEmailSnapshots() {
-  const retirement = independentEmailRetirement;
+async function refetchIndependentSessionSnapshots() {
+  const retirement = independentSessionRetirement;
   if (!retirement || !crmAccessAuthority.account()) return;
   await retirement;
   if (
-    retirement !== independentEmailRetirement ||
+    retirement !== independentSessionRetirement ||
     !crmAccessAuthority.account()
   )
     return;
-  independentEmailRetirement = undefined;
+  independentSessionRetirement = undefined;
   await queryClient.refetchQueries({
     type: 'active',
     predicate: (query) =>
-      query.queryKey[0] === 'email' && !crmProtectedQueryKey(query.queryKey),
+      ['email', 'soup'].includes(String(query.queryKey[0])) &&
+      !crmProtectedQueryKey(query.queryKey),
   });
 }
 
@@ -92,15 +93,16 @@ async function retireVisibleSnapshots(scope: CrmRetirementScope) {
     ]);
   const retirement = queryPersistence.retire(
     (key) =>
-      (scope === 'session' && key[0] === 'email') || crmProtectedQueryKey(key)
+      (scope === 'session' && ['email', 'soup'].includes(String(key[0]))) ||
+      crmProtectedQueryKey(key)
   );
-  if (scope === 'session') independentEmailRetirement = retirement;
+  if (scope === 'session') independentSessionRetirement = retirement;
   await retirement;
-  // Persistence rebinds observers without fetching. Personal mailbox readers
-  // resume after session cleanup, even if CRM proof is still unavailable.
+  // Persistence rebinds observers without fetching. Independent mail and flat
+  // Soup readers resume after session cleanup even without CRM proof.
   if (scope === 'session')
     fireAndForget(
-      refetchIndependentEmailSnapshots(),
+      refetchIndependentSessionSnapshots(),
       'crm.access.mail_refetch'
     );
 }
@@ -169,7 +171,7 @@ function install() {
   });
   crmAccessAuthority.onSessionChanged(() => {
     fireAndForget(
-      refetchIndependentEmailSnapshots(),
+      refetchIndependentSessionSnapshots(),
       'crm.access.mail_refetch'
     );
   });
@@ -221,10 +223,16 @@ function install() {
     ): ResponseGuard | undefined | Promise<ResponseGuard> => {
       const queuedMutation = isQueuedSettlementRequest(init);
       if (!scope.protected) {
-        if (!email && !queuedMutation && !path.endsWith('/graphql')) return;
+        if (
+          !email &&
+          !queuedMutation &&
+          !path.endsWith('/graphql') &&
+          path !== '/items/soup/ast'
+        )
+          return;
         assertSession();
         return (response) => {
-          // Mailbox/GraphQL replies retain the login fence without waiting for
+          // Independent replies retain the login fence without waiting for
           // CRM proof or rejecting a same-login permission generation change.
           rememberResponseSession(response, assertSession);
           // Durable commands must settle returned IDs even after login changes;

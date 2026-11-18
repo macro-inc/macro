@@ -1,6 +1,6 @@
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
-import { trashFolder } from './harness/journeys';
+import { deliverToSpam, syncedInView, trashFolder } from './harness/journeys';
 import { focusRow, rowIds } from './harness/list';
 import { anInbox, PROVIDERS } from './harness/providers';
 import { notice } from './harness/send';
@@ -128,6 +128,37 @@ for (const provider of PROVIDERS) {
           .toContain(trashFolder(provider));
         await expect.poll(() => rowIds(page)).not.toContain(ids.Agenda);
         await expect.poll(() => rowIds(page)).toContain(ids.Kept);
+      });
+
+      // Spam and Trash use REST Soup even while ordinary mail uses GraphQL.
+      test('opens Spam and Trash without waiting for CRM access', async ({
+        page,
+        mailbox,
+      }) => {
+        const ids = await deliverAll(mailbox, ['Agenda', 'Kept']);
+        await deliverToSpam(mailbox, {
+          from: 'Person <person@example.com>',
+          subject: 'Filtered message',
+          text: 'A message in spam.',
+        });
+        const spam = await syncedInView(mailbox, 'spam', 'Filtered message');
+        await mailbox.open();
+        await expect.poll(() => rowIds(page)).toContain(ids.Agenda);
+        await rowMenu(page, ids.Agenda, /^Delete/);
+        await expect
+          .poll(async () => (await held(mailbox, 'Agenda'))?.labels)
+          .toContain(trashFolder(provider));
+        const library = page.getByRole('navigation', { name: 'Email library' });
+        await library
+          .getByRole('button', { name: 'Spam', exact: true })
+          .click();
+        did('AL-002', 'F-031');
+        await expect.poll(() => rowIds(page)).toEqual([spam]);
+        saw('STL-924');
+        await library
+          .getByRole('button', { name: 'Trash', exact: true })
+          .click();
+        await expect.poll(() => rowIds(page)).toEqual([ids.Agenda]);
       });
 
       // Folder moves return only the owner-authorized thread and its folders.

@@ -3,6 +3,7 @@ import {
   queryNeedsCrmProof,
   queryOperationKind,
 } from '@graphql-cache/authority-scope';
+import { restSoupNeedsCrmProof } from './crm-soup-scope';
 
 type ResponseScope = { protected: boolean; write: boolean };
 const read: ResponseScope = { protected: true, write: false };
@@ -105,6 +106,28 @@ export function crmResponseScope(
     init.method ?? (input instanceof Request ? input.method : 'GET')
   ).toUpperCase();
   if (service === 'agent') return read;
+  if (
+    service === 'storage' &&
+    path === '/items/soup/ast' &&
+    method === 'POST'
+  ) {
+    const url = new URL(
+      input instanceof Request ? input.url : String(input),
+      document.baseURI
+    );
+    const classify = (body: unknown): ResponseScope => ({
+      protected:
+        typeof body !== 'string' ||
+        restSoupNeedsCrmProof(body, url.searchParams.get('cursor')),
+      write: false,
+    });
+    if (init.body === undefined && input instanceof Request)
+      return input
+        .clone()
+        .text()
+        .then(classify, () => read);
+    return classify(init.body);
+  }
   if (
     service === 'storage' &&
     (path === '/items/soup/graphql' || path === '/graphql')

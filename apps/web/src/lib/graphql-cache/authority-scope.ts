@@ -36,6 +36,35 @@ export function excludesCrmContent(value: unknown): boolean {
   );
 }
 
+function restExcludesCrmRecords(value: unknown, depth = 0): boolean {
+  if (depth > 64) return false;
+  const expression = object(value);
+  if (Object.keys(expression).length !== 1) return false;
+  const literal = object(expression.l);
+  if (Object.keys(literal).length === 1 && literal.id === NIL) return true;
+  const and = expression['&'];
+  return (
+    Array.isArray(and) &&
+    and.length === 2 &&
+    and.some((branch) => restExcludesCrmRecords(branch, depth + 1))
+  );
+}
+
+/** REST folder views cannot be translated to GraphQL, but share its CRM scope.
+ * The router adds CRM mail grants only from eca/ecd, independently of ef. */
+export function restSoupAstExcludesCrmContent(value: unknown): boolean {
+  const body = object(value);
+  return (
+    body.crma == null &&
+    [body.eca, body.ecd].every(
+      (scope) =>
+        scope === undefined || (Array.isArray(scope) && scope.length === 0)
+    ) &&
+    restExcludesCrmRecords(body.ccf) &&
+    (body.crmf == null || restExcludesCrmRecords(body.crmf))
+  );
+}
+
 const unrelatedEntityTypes = new Set([
   'DOCUMENT',
   // Soup rows require a database_entities owner; CRM pipeline rows have
@@ -159,7 +188,7 @@ function protectedKey(key: unknown): boolean {
   );
 }
 
-type CursorField = 'soup' | 'groupSoup';
+type CursorField = 'soup' | 'groupSoup' | 'restSoupAst';
 type CursorWitness = {
   query: string;
   operationName: string | undefined;
@@ -197,8 +226,42 @@ function hasCursorWitness(
     witness.query === query &&
     witness.operationName === operationName &&
     witness.field === field &&
-    (field === 'soup' || witness.groupKey === continuation.groupKey)
+    (field !== 'groupSoup' || witness.groupKey === continuation.groupKey)
   );
+}
+
+function rememberCursor(cursor: unknown, witness: CursorWitness) {
+  if (typeof cursor !== 'string' || !cursor || !witness.isCurrent()) return;
+  const bytes = (cursor.length + witness.query.length) * 2;
+  if (bytes > MAX_SCOPE_TEXT_BYTES) return;
+  forgetCursor(cursor);
+  cursorWitnesses.set(cursor, witness);
+  cursorBytes += bytes;
+  while (
+    cursorWitnesses.size > MAX_CURSOR_WITNESSES ||
+    cursorBytes > MAX_SCOPE_TEXT_BYTES
+  )
+    forgetCursor(cursorWitnesses.keys().next().value!);
+}
+
+/** REST cursors carry their original filter; the next request's body cannot
+ * establish their scope. Reuse only a decoded parent from the same login. */
+export function hasIndependentRestSoupCursor(body: string, cursor: string) {
+  return hasCursorWitness(body, undefined, 'restSoupAst', { cursor });
+}
+
+export function rememberIndependentRestSoupCursor(
+  body: string,
+  cursor: unknown,
+  isCurrent: () => boolean
+) {
+  rememberCursor(cursor, {
+    query: body,
+    operationName: undefined,
+    field: 'restSoupAst',
+    groupKey: undefined,
+    isCurrent,
+  });
 }
 
 type ScopeCheck = (
@@ -449,23 +512,13 @@ export function rememberSoupContinuations(
   const user = object(object(data).user);
   if (user.id !== account) return;
   const remember = (cursor: unknown, field: CursorField, groupKey?: string) => {
-    if (typeof cursor !== 'string' || !cursor) return;
-    const bytes = (cursor.length + request.query.length) * 2;
-    if (bytes > MAX_SCOPE_TEXT_BYTES) return;
-    forgetCursor(cursor);
-    cursorWitnesses.set(cursor, {
+    rememberCursor(cursor, {
       query: request.query,
       operationName: scope.operationName,
       field,
       groupKey,
       isCurrent,
     });
-    cursorBytes += bytes;
-    while (
-      cursorWitnesses.size > MAX_CURSOR_WITNESSES ||
-      cursorBytes > MAX_SCOPE_TEXT_BYTES
-    )
-      forgetCursor(cursorWitnesses.keys().next().value!);
   };
   if (scope.cursorFields?.has('soup'))
     remember(object(user.soup).nextCursor, 'soup');

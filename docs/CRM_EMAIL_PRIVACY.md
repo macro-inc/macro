@@ -89,10 +89,15 @@ proof or lose their successful outcomes when that endpoint is unavailable.
 They retain a synchronous login fence at response arrival and body completion.
 Successful queued responses remain decodable for identity settlement, but a
 replaced login supplies an explicitly rejected content generation before cache
-commit or publication. Independent mailbox query metadata is retired on login
+commit or publication. Independent mailbox and flat Soup query metadata is retired on login
 replacement, including same-account sign-in, rather than on CRM proof changes.
-After that cleanup and sign-in, active independent mailbox observers restart
+After that cleanup and sign-in, active independent mailbox and flat Soup observers restart
 without waiting for CRM proof; protected observers still require verification.
+Personal Spam and Trash lists use flat REST Soup. Their raw AST must exclude
+company/contact records and omit CRM association and email-grant expansion;
+GraphQL's folder-view translation is not used to decide this scope. Their
+response and body completion retain the login fence. Legacy and grouped REST
+Soup remain protected.
 Folder moves are independent for supported non-CRM entity kinds: their effects
 contain only the moved entity and its folders, and the email domain requires
 Owner access before moving a thread or returning its updated snapshot.
@@ -119,10 +124,14 @@ Active chunks hold their witnesses until content and fallback flag reads settle,
 so concurrent lists cannot evict another reader's ownership evidence.
 A missing witness never permits content. Ordinary Soup database rows require an
 independently authorized database entity; CRM pipelines use distinct contracts.
-Opaque Soup continuation cursors inherit scope only from an independently scoped,
+Opaque GraphQL Soup continuation cursors inherit scope only from an independently scoped,
 owner-tagged cached parent. Witnesses retain the exact query, selected operation
-and group, expire with the account or cache owner/generation, and are capped at
-128 entries and 2 MB of query/cursor text. Unknown and CRM-associated cursors
+and group, and expire with the account or cache owner/generation. Flat REST
+continuations instead require a successfully decoded independent parent with
+the same serialized body and login: the server ignores a continuation request's
+replacement filters. Their witnesses survive CRM-only changes, but expire on
+login replacement, including a return to the same account. Both transports share
+a limit of 128 entries and 2 MB of query/cursor text. Unknown and CRM-associated cursors
 still require proof; cursor text itself is never treated as authorization.
 Unrelated fetch observers remain synchronous; stable native
 reads rely on the installed authority event/version fence and do not issue a
