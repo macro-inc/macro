@@ -65,6 +65,9 @@ DMs, and the shared message store other domains discuss things on.
   channel whose `team_id` matches their membership. Membership in a channel or
   the channel creator's team never grants deletion authority on its own. Both
   REST deletion and permanent entity deletion call this policy.
+  It reads the active members before the delete removes them, and
+  `channel.deleted` carries them so `soup_realtime` can drop the channel from
+  their open lists.
 
 - `match_channel_names.sql` starts from the viewer's memberships and looks
   every channel, participant, person and bot up by key behind `OFFSET 0`
