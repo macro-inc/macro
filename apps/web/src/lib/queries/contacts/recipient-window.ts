@@ -1,14 +1,28 @@
 import { isAutomatedAddress } from '@core/user/automated-address';
-import { recipientEntityMapper } from '@core/user/combinedRecipient';
+import {
+  type CombinedRecipientItem,
+  recipientEntityMapper,
+} from '@core/user/combinedRecipient';
 import type {
   RecipientSource,
   RecipientSourceInput,
 } from '@core/user/recipient-source';
+import type { IUser } from '@core/user/types';
+import { matchesTokenSubsequences } from '@core/util/string';
 import { createMemo } from 'solid-js';
 import { readContactDirectory } from './directory';
 import { createContactDirectoryList } from './directory-list';
 import type { createContactDirectoryWindow } from './directory-query';
 import { createContactExclusions } from './exclusions';
+
+/** Whether a listed person can still match text typed since, as the contact
+ * cache matches people: each typed word in order within name and address. */
+const stillMatches =
+  (search: string) => (item: CombinedRecipientItem<'user'>) =>
+    matchesTokenSubsequences(
+      `${item.data.name ?? ''} | ${item.data.email}`,
+      search
+    );
 
 /** A selector's query, exclusions and domain reach the ranker before its limit. */
 export function createContactRecipientSource(
@@ -33,35 +47,57 @@ export function createContactRecipientSource(
     eligible: (user) =>
       !exclusions.ids().has(user.id) && !isSecondaryInbox(user.id),
   });
+  // Normal rosters are excluded before native limiting. A roster larger than
+  // the IPC budget can yield a short or empty page; its continuation remains,
+  // and the picker keeps reading further pages.
+  const listable = (user: Pick<IUser, 'id' | 'email'>) =>
+    !exclusions.ids().has(user.id) &&
+    !isSecondaryInbox(user.id) &&
+    (!isAutomatedAddress(user.email) ||
+      input
+        .search()
+        .trim()
+        .replace(/^macro\|/, '')
+        .toLowerCase() === user.email.toLowerCase());
+  let shownFor: string | undefined;
   return {
-    items: createMemo(() =>
-      (directory.data()?.users ?? [])
-        // Normal rosters are excluded before native limiting. A roster larger
-        // than the IPC budget can yield a short or empty page; its
-        // continuation remains, and the picker keeps reading further pages.
-        .filter(
-          (user) =>
-            !exclusions.ids().has(user.id) &&
-            !isSecondaryInbox(user.id) &&
-            (!isAutomatedAddress(user.email) ||
-              input
-                .search()
-                .trim()
-                .replace(/^macro\|/, '')
-                .toLowerCase() === user.email.toLowerCase())
-        )
-        // Selected chips outlive this query window: retain scalar display data,
-        // not the query-store objects from which it was materialized.
-        .map((user) =>
-          recipientEntityMapper('user')({
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            photoUrl: user.photoUrl,
-            lastInteraction: user.lastInteraction,
-          })
-        )
-    ),
+    items: createMemo<CombinedRecipientItem<'user'>[]>((shown) => {
+      const page = directory.data();
+      const current = scope();
+      const owner = `${current.userId ?? ''}\n${current.host?.clientId ?? ''}`;
+      if (!page) {
+        // The list drops its page from each keystroke until the read for
+        // the new text lands. Keep the people shown who still match that
+        // text rather than emptying the list on every keystroke.
+        const pending =
+          input.enabled() &&
+          shownFor === owner &&
+          directory.loading() &&
+          !directory.error();
+        if (!pending) return shown.length ? [] : shown;
+        const matches = stillMatches(input.search());
+        const kept = shown.filter(
+          (item) => listable(item.data) && matches(item)
+        );
+        return kept.length === shown.length ? shown : kept;
+      }
+      shownFor = owner;
+      return (
+        page.users
+          .filter(listable)
+          // Selected chips outlive this query window: retain scalar display
+          // data, not the query-store objects from which it was materialized.
+          .map((user) =>
+            recipientEntityMapper('user')({
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              photoUrl: user.photoUrl,
+              lastInteraction: user.lastInteraction,
+            })
+          )
+      );
+    }, []),
     loading: directory.loading,
     error: directory.error,
     incomplete: () => {

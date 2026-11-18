@@ -206,3 +206,88 @@ it.each(['secondary', 'notifications'])(
     client.clear();
   }
 );
+
+it('keeps the people still matching typed text until its read lands', async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient();
+  const [search, setSearch] = createSignal('');
+  const [viewer, setViewer] = createSignal('macro|viewer@example.com');
+  const people = [
+    ['Sarah Chen', 'sarah.chen@example.com'],
+    ['Sam Lee', 'sam.lee@example.com'],
+    ['Omar Kim', 'omar.kim@example.com'],
+  ].map(([name, email]) => ({ id: `macro|${email}`, email, name }));
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (request.query === 'fail') throw new Error('read failed');
+      return {
+        query: request.query,
+        source: 'cache',
+        sync: 'snapshot',
+        offline: false,
+        users: people.filter((person) =>
+          `${person.name} ${person.email}`
+            .toLowerCase()
+            .includes(request.query.toLowerCase())
+        ),
+        nextCursor: null,
+      };
+    });
+  let source: ReturnType<typeof createContactRecipientSource> | undefined;
+  function Harness() {
+    source = createContactRecipientSource(
+      () => ({ userId: viewer() }),
+      {
+        search,
+        enabled: () => true,
+        selfId: viewer,
+        senderDomain: () => 'example.com',
+        includeSelf: () => false,
+      },
+      () => false,
+      reader
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const listed = () => source!.items().map((item) => item.data.name);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(listed()).toEqual(['Sarah Chen', 'Sam Lee', 'Omar Kim']);
+
+  // Each keystroke narrows the people already listed; none blink out while
+  // the read for the new text waits out its debounce.
+  setSearch('sa');
+  expect(source!.loading()).toBe(true);
+  expect(listed()).toEqual(['Sarah Chen', 'Sam Lee']);
+  setSearch('sarah.c');
+  expect(listed()).toEqual(['Sarah Chen']);
+  await vi.advanceTimersByTimeAsync(250);
+  expect(source!.loading()).toBe(false);
+  expect(listed()).toEqual(['Sarah Chen']);
+
+  // Text no listed person matches empties the list until results land.
+  setSearch('omar');
+  expect(listed()).toEqual([]);
+  await vi.advanceTimersByTimeAsync(250);
+  expect(listed()).toEqual(['Omar Kim']);
+
+  // A failed read keeps nothing from the earlier text.
+  setSearch('fail');
+  await vi.advanceTimersByTimeAsync(250);
+  expect(source!.error()).toBeTruthy();
+  expect(listed()).toEqual([]);
+
+  // People listed for one account never show for another.
+  setSearch('');
+  await vi.advanceTimersByTimeAsync(250);
+  expect(listed()).toHaveLength(3);
+  setViewer('macro|other@example.com');
+  expect(listed()).toEqual([]);
+  client.clear();
+});
