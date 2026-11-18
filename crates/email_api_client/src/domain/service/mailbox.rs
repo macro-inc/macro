@@ -1,6 +1,8 @@
 //! Generation-bound provider orchestration. Read retries are limited to one
 //! explicit credential refresh after a definitive authentication rejection.
 
+use chrono::{DateTime, Utc};
+
 use crate::domain::{models::*, ports::*};
 
 mod contacts;
@@ -268,6 +270,43 @@ impl<R: FolderChangeReader + ScopedMailboxRepository, T: MailboxTokenSource, L: 
                     )
                     .await?;
                 repository.folder_changes(&fresh, folder, position).await
+            }
+            result => result,
+        }
+    }
+
+    /// List a folder's messages received at or after `since`, newest
+    /// first, at most `limit` of them.
+    pub async fn received_since(
+        &self,
+        mailbox: MailboxAccess,
+        folder: &ProviderId,
+        since: DateTime<Utc>,
+        limit: u16,
+    ) -> Result<ReceivedMessages, EmailApiError> {
+        let token = self
+            .token(
+                mailbox,
+                ApiOperationKind::ListMessages,
+                TokenFreshness::Cached,
+            )
+            .await?;
+        let repository = self.repository.for_mailbox(mailbox);
+        match repository
+            .received_since(&token, folder, since, limit)
+            .await
+        {
+            Err(EmailApiError::AuthRequired) => {
+                let fresh = self
+                    .token(
+                        mailbox,
+                        ApiOperationKind::ListMessages,
+                        TokenFreshness::Fresh,
+                    )
+                    .await?;
+                repository
+                    .received_since(&fresh, folder, since, limit)
+                    .await
             }
             result => result,
         }

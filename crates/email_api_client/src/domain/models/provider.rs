@@ -235,6 +235,15 @@ pub struct MailboxChangePage {
     pub reader_revision: i16,
 }
 
+/// The messages a folder received since a time, newest first.
+#[derive(Debug, Clone, Default)]
+pub struct ReceivedMessages {
+    /// Their identities.
+    pub ids: Vec<ProviderId>,
+    /// Whether the folder received more in that time than were listed.
+    pub truncated: bool,
+}
+
 /// An opaque continuation/checkpoint which must be validated by its adapter.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]

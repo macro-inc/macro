@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use reqwest::Method;
 use serde_json::json;
 
@@ -8,8 +8,8 @@ use super::{
     wire,
 };
 use crate::domain::models::{
-    AccessToken, EmailApiError, MailboxChangePage, MailboxSubscription, ProviderId, StreamPosition,
-    StreamToken,
+    AccessToken, EmailApiError, MailboxChangePage, MailboxSubscription, ProviderId,
+    ReceivedMessages, StreamPosition, StreamToken,
 };
 use crate::domain::ports::{FolderChangeReader, MailboxWatchClient};
 
@@ -66,6 +66,36 @@ impl FolderChangeReader for OutlookApiClientRepository {
             removed,
             position,
             reader_revision: Self::READER_REVISION,
+        })
+    }
+
+    async fn received_since(
+        &self,
+        token: &AccessToken,
+        folder: &ProviderId,
+        since: DateTime<Utc>,
+        limit: u16,
+    ) -> Result<ReceivedMessages, EmailApiError> {
+        let mut url = self.endpoint(&["me", "mailFolders", folder.as_str(), "messages"])?;
+        // Graph refuses an `$orderby` whose property does not lead the
+        // `$filter`; here they are the same one.
+        let filter = format!(
+            "receivedDateTime ge {}",
+            since.to_rfc3339_opts(SecondsFormat::Secs, true)
+        );
+        url.query_pairs_mut()
+            .append_pair("$select", "id")
+            .append_pair("$filter", &filter)
+            .append_pair("$orderby", "receivedDateTime desc")
+            .append_pair("$top", &limit.to_string());
+        let page: wire::Page<wire::Change> = self.get(token, url).await?;
+        Ok(ReceivedMessages {
+            ids: page
+                .value
+                .into_iter()
+                .map(|message| ProviderId::new(message.id))
+                .collect::<Result<_, _>>()?,
+            truncated: page.next.is_some(),
         })
     }
 }

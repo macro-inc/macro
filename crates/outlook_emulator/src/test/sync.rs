@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use email_api_client::domain::models::{
     EmailApiError, FolderRole, MailboxChangePage, ProviderId, StreamPosition, StreamToken,
 };
@@ -361,4 +363,51 @@ mailboxes:
         .map(|m| m.content.message.subject.clone().unwrap())
         .collect();
     assert_eq!(subjects, vec!["Newest".to_string(), "Middle".to_string()]);
+}
+
+#[tokio::test]
+async fn mail_a_round_will_not_report_is_listed_by_when_it_arrived() {
+    let (emulator, api) = start(&seed_with_inbox(150)).await;
+    let token = token(&emulator, ADA);
+    let inbox = id("inbox");
+    let first = api.folder_changes(&token, &inbox, None).await.unwrap();
+    let StreamPosition::Continue(next) = first.position else {
+        panic!("a folder of 150 messages takes two pages");
+    };
+    emulator.advance_clock(Duration::from_secs(60));
+    let since = emulator.now();
+    let deliver = |subject: &str| {
+        emulator
+            .deliver(
+                ADA,
+                &NewMessage {
+                    subject: Some(subject.into()),
+                    ..NewMessage::default()
+                },
+            )
+            .unwrap()
+    };
+    let earlier = id(&deliver("Arrived first").id);
+    emulator.advance_clock(Duration::from_secs(60));
+    let later = id(&deliver("Arrived second").id);
+
+    // The round lists what the folder held when it started.
+    let (rest, _) = round(&api, &token, &inbox, Some(next)).await;
+    assert!(
+        rest.iter()
+            .flat_map(|page| &page.changed)
+            .all(|changed| *changed != earlier && *changed != later)
+    );
+
+    let received = api.received_since(&token, &inbox, since, 10).await.unwrap();
+    assert_eq!(received.ids, vec![later.clone(), earlier]);
+    assert!(!received.truncated);
+    let newest = api.received_since(&token, &inbox, since, 1).await.unwrap();
+    assert_eq!(newest.ids, vec![later]);
+    assert!(newest.truncated);
+    let none = api
+        .received_since(&token, &id("sentitems"), since, 10)
+        .await
+        .unwrap();
+    assert!(none.ids.is_empty());
 }
