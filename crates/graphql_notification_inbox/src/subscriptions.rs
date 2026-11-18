@@ -83,8 +83,8 @@ impl<E: SoupEntityEdges> NotificationInboxSubscriptionRoot<E> {
     /// inbox holds, by kind: the current counts at once, then the counts
     /// again each time they change. Each payload is complete and lists only
     /// kinds with an unread row, so an empty list means nothing is unread.
-    /// The stream ends with an error when its sources end or the first count
-    /// fails, after which the client resubscribes.
+    /// The stream ends with an error when its sources end or a count fails,
+    /// after which the client resubscribes.
     async fn notification_inbox_unread_updates(
         &self,
         ctx: &Context<'_>,
@@ -114,13 +114,12 @@ impl<E: SoupEntityEdges> NotificationInboxSubscriptionRoot<E> {
             let mut sent = GraphqlNotificationInboxUnreadCount::list(&unread);
             yield Ok(sent.clone());
 
-            // After a failed or missed change, the groups that changed are
-            // unknown: count everything again.
-            let mut stale = false;
             let batches = coalesce(triggers, UNREAD_COALESCE_WINDOW);
             futures::pin_mut!(batches);
             while let Some(batch) = batches.next().await {
-                let counted = if stale || batch.invalidated {
+                // After missed changes the groups that changed are unknown:
+                // count everything again.
+                let counted = if batch.invalidated {
                     context.service.unread_rows(viewer.clone()).await
                 } else {
                     context
@@ -129,14 +128,16 @@ impl<E: SoupEntityEdges> NotificationInboxSubscriptionRoot<E> {
                         .await
                 };
                 match counted {
-                    Ok(counted) => {
-                        stale = false;
-                        unread = counted;
-                    }
+                    Ok(counted) => unread = counted,
                     Err(error) => {
+                        // The counts sent are now wrong and nothing says
+                        // when the next change comes: the client counts
+                        // again by resubscribing.
                         tracing::error!(error = ?error, "notification inbox unread recount failed");
-                        stale = true;
-                        continue;
+                        yield Err(async_graphql::Error::new(
+                            "notification inbox unread counts are unavailable; resubscribe",
+                        ));
+                        return;
                     }
                 }
                 let counts = GraphqlNotificationInboxUnreadCount::list(&unread);

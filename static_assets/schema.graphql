@@ -615,8 +615,8 @@ type CompleteSubscriptionRoot {
 	inbox holds, by kind: the current counts at once, then the counts
 	again each time they change. Each payload is complete and lists only
 	kinds with an unread row, so an empty list means nothing is unread.
-	The stream ends with an error when its sources end or the first count
-	fails, after which the client resubscribes.
+	The stream ends with an error when its sources end or a count fails,
+	after which the client resubscribes.
 	"""
 	notificationInboxUnreadUpdates: [NotificationInboxUnreadCount!]!
 	"""

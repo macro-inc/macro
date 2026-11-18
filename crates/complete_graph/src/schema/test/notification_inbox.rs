@@ -947,29 +947,6 @@ async fn notification_inbox_unread_updates_send_counts_first_and_then_only_chang
     assert_eq!(*service.unread_counts.lock().unwrap(), 1);
     service.unread_answered.notified().await;
 
-    // After a failed recount the changed groups are unknown, so the next
-    // change counts everything again.
-    *service.unread_fails.lock().unwrap() = true;
-    sender.send(changed.clone()).await.unwrap();
-    let failed = tokio::spawn({
-        let service = Arc::clone(&service);
-        async move { service.unread_answered.notified().await }
-    });
-    tokio::select! {
-        biased;
-        response = responses.next() => panic!("a failed recount sent counts: {response:?}"),
-        _ = failed => {}
-    }
-    *service.unread_fails.lock().unwrap() = false;
-    *service.unread.lock().unwrap() = UnreadRows::default();
-    sender.send(changed).await.unwrap();
-    let response = responses.next().await.expect("nothing unread");
-    assert_eq!(
-        response.data.into_json().unwrap()["notificationInboxUnreadUpdates"],
-        serde_json::json!([])
-    );
-    assert_eq!(*service.unread_counts.lock().unwrap(), 2);
-
     // Missed changes count everything again too.
     *service.unread.lock().unwrap() = unread_doc(vec![InboxRowType::Task]);
     sender.send(FeedTrigger::Invalidated).await.unwrap();
@@ -978,12 +955,43 @@ async fn notification_inbox_unread_updates_send_counts_first_and_then_only_chang
         response.data.into_json().unwrap()["notificationInboxUnreadUpdates"],
         serde_json::json!([{ "rowType": "TASK", "count": 1 }])
     );
-    assert_eq!(*service.unread_counts.lock().unwrap(), 3);
+    assert_eq!(*service.unread_counts.lock().unwrap(), 2);
 
     drop(sender);
     *triggers.sender.lock().unwrap() = None;
     let response = responses.next().await.expect("closing error");
     assert!(!response.errors.is_empty());
+}
+
+/// The counts already sent are wrong once a recount fails, and no further
+/// change may come to correct them, so the stream ends and the client counts
+/// again.
+#[tokio::test(start_paused = true)]
+async fn notification_inbox_unread_updates_end_when_a_recount_fails() {
+    let harness = harness();
+    let service = Arc::new(RecordingInboxService::default());
+    let triggers = ManualTriggers::default();
+
+    let request = async_graphql::Request::new(
+        "subscription { notificationInboxUnreadUpdates { rowType count } }",
+    )
+    .data(viewer_id())
+    .data(context(&service, &triggers));
+    let responses = harness.schema.execute_stream(request);
+    pin_mut!(responses);
+
+    let response = responses.next().await.expect("the current counts");
+    assert!(response.errors.is_empty());
+
+    let sender = triggers.sender.lock().unwrap().clone().expect("subscribed");
+    *service.unread_fails.lock().unwrap() = true;
+    sender
+        .send(FeedTrigger::Changed(vec![doc_group().into_entity()]))
+        .await
+        .unwrap();
+    let response = responses.next().await.expect("the error");
+    assert!(!response.errors.is_empty());
+    assert!(responses.next().await.is_none());
 }
 
 #[tokio::test]
