@@ -9,13 +9,32 @@ import type { ProjectDetail } from '../../core/project';
 export function ProjectTasksEmptyState(props: {
   project: ProjectDetail;
   onCreateTask?: () => void;
+  /** A populated project whose current list filters return no tasks. */
+  search?: string;
 }) {
+  const copy = () => {
+    if (props.search === undefined)
+      return {
+        title: t('viewMenus.noTasksYet'),
+        description: t('viewMenus.emptyProjectTasks'),
+      };
+    if (props.search.trim())
+      return {
+        title: t('viewMenus.noTaskSearchResults'),
+        description: t('viewMenus.emptyTaskSearch'),
+      };
+    return {
+      title: t('viewMenus.noTasksToShow'),
+      description: t('viewMenus.emptyTaskView'),
+    };
+  };
   return (
     <EmptyStatePanel
       centered
       graphic={EmptyStateTasksGraphic}
-      title={t('viewMenus.noTasksYet')}
-      description={t('viewMenus.emptyProjectTasks')}
+      graphicClass={props.search !== undefined ? 'size-32' : undefined}
+      title={copy().title}
+      description={copy().description}
       documentationUrl={PROJECTS_DOCS_URL}
       documentationIcon={BookOpenIcon}
       primaryActionContent={

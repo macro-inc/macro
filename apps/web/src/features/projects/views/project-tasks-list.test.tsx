@@ -47,9 +47,18 @@ vi.mock('../queries/project-tasks', () => ({
 }));
 vi.mock('./project-task-actions', () => ({ ProjectTaskActions: () => null }));
 vi.mock('./shared/project-tasks-empty-state', () => ({
-  ProjectTasksEmptyState: (props: { onCreateTask?: () => void }) => (
-    <div data-testid="empty-project">
-      <h2>No tasks yet</h2>
+  ProjectTasksEmptyState: (props: {
+    onCreateTask?: () => void;
+    search?: string;
+  }) => (
+    <div
+      data-testid={
+        props.search === undefined ? 'empty-project' : 'empty-task-results'
+      }
+    >
+      <h2>
+        {props.search === undefined ? 'No tasks yet' : 'No tasks to show'}
+      </h2>
       {props.onCreateTask && (
         <button onClick={props.onCreateTask}>New task</button>
       )}
@@ -91,6 +100,24 @@ it('shows both empty-project actions and uses the existing creation callback', (
   ).toBeTruthy();
 });
 
+it('passes project actions to filtered empty task results', () => {
+  const create = vi.fn();
+  render(() => (
+    <ProjectTasksList
+      project={{ ...project, taskIds: ['linked-task'] }}
+      projectId="project"
+      onOpenTask={() => true}
+      onCreateTask={create}
+    />
+  ));
+  expect(screen.getByTestId('empty-task-results')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'New task' }));
+  expect(create).toHaveBeenCalledOnce();
+  expect(
+    screen.getByRole('button', { name: 'Add existing tasks' })
+  ).toBeTruthy();
+});
+
 it('does not show the project empty state for filtered results or read-only access', () => {
   render(() => (
     <ProjectTasksList
@@ -100,7 +127,7 @@ it('does not show the project empty state for filtered results or read-only acce
     />
   ));
   expect(screen.queryByTestId('empty-project')).toBeNull();
-  expect(screen.getByText('No tasks in this view.')).toBeTruthy();
+  expect(screen.getByText('No tasks to show')).toBeTruthy();
   cleanup();
   render(() => (
     <ProjectTasksList

@@ -57,7 +57,17 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           disabled layout query cannot decide whether the project is empty. */}
       <Show
         when={props.project.taskIds.length === 0}
-        fallback={<TasksContent />}
+        fallback={
+          <TasksContent
+            emptyContent={
+              <ProjectTasksEmptyState
+                project={props.project}
+                onCreateTask={props.onCreateTask}
+                search={state.search}
+              />
+            }
+          />
+        }
       >
         <ProjectTasksEmptyState
           project={props.project}

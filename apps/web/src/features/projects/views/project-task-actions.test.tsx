@@ -171,36 +171,49 @@ it('disables assignment when selected tasks become linked while the picker is op
   expect(mock.assignTasks).not.toHaveBeenCalled();
 });
 
-it('shows both actions in the empty state and hides them without edit access', () => {
-  const create = vi.fn();
-  render(() => (
-    <ProjectTasksEmptyState
-      project={{ ...project, taskIds: [] }}
-      onCreateTask={create}
-    />
-  ));
-  expect(screen.getByText('No tasks yet')).toBeTruthy();
-  expect(document.querySelector('svg')).toBeTruthy();
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Add task' }), {
-    key: 'Enter',
-  });
-  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'New task' }), {
-    key: 'Enter',
-  });
-  expect(create).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole('button', { name: 'Documentation' })).toBeTruthy();
-  cleanup();
-  render(() => (
-    <ProjectTasksEmptyState
-      project={{ ...project, access: 'view', taskIds: [] }}
-      onCreateTask={create}
-    />
-  ));
-  expect(screen.queryByRole('button', { name: 'Add task' })).toBeNull();
-  expect(
-    screen.queryByRole('button', { name: 'Add existing tasks' })
-  ).toBeNull();
-});
+it.each([undefined, '', 'unmatched'])(
+  'keeps project actions in empty results (%s) and hides writes without access',
+  (search) => {
+    const create = vi.fn();
+    render(() => (
+      <ProjectTasksEmptyState
+        project={{ ...project, taskIds: [] }}
+        onCreateTask={create}
+        search={search}
+      />
+    ));
+    expect(
+      screen.getByText(
+        search === undefined
+          ? 'No tasks yet'
+          : search
+            ? 'No matching tasks'
+            : 'No tasks to show'
+      )
+    ).toBeTruthy();
+    expect(document.querySelector('svg')).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Add task' }), {
+      key: 'Enter',
+    });
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'New task' }), {
+      key: 'Enter',
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Documentation' })).toBeTruthy();
+    cleanup();
+    render(() => (
+      <ProjectTasksEmptyState
+        project={{ ...project, access: 'view', taskIds: [] }}
+        onCreateTask={create}
+        search={search}
+      />
+    ));
+    expect(screen.queryByRole('button', { name: 'Add task' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Add existing tasks' })
+    ).toBeNull();
+  }
+);
 
 it('keeps the phone stacked create menu before choosing existing tasks', async () => {
   mock.mobile = true;
