@@ -148,10 +148,14 @@ export function createContactDirectoryWindow(
       ...(policy ? { policy } : {}),
     };
   });
+  /** Who the query reads for: nobody until the window is open and its text
+   * has settled. */
+  const queryUserId = () =>
+    enabled() && search() === debouncedSearch() ? scope().userId : undefined;
   const query = useQuery(() =>
     contactWindowOptions(
       owner,
-      enabled() && search() === debouncedSearch() ? scope().userId : undefined,
+      queryUserId(),
       scope().host,
       generation(),
       request(),
@@ -249,7 +253,15 @@ export function createContactDirectoryWindow(
     /** Names the page on screen (query, eligibility, continuation). A refresh
      * of that page keeps its key, so callers reset focus only for a new page. */
     windowKey: () => (data() ? hashKey([request()]) : undefined),
-    loading: () => query.isFetching || search() !== debouncedSearch(),
+    /** From the first keystroke until the page for that text lands, with no
+     * gap: a list that keeps rows while loading drops them in a gap. While
+     * the text settles the query sits on a disabled key, pending and idle,
+     * and a computation that runs before the query takes up the settled
+     * text's key still sees that state. */
+    loading: () =>
+      query.isFetching ||
+      search() !== debouncedSearch() ||
+      (!!queryUserId() && query.isPending),
     error: () => query.error,
     next: () => {
       advance();
