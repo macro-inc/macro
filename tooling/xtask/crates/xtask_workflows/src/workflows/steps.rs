@@ -716,6 +716,20 @@ pub fn upload_release_artifacts(path: RuntimePath<'_>) -> Step<Use> {
         .add_with(("fail_on_unmatched_files", true))
 }
 
+/// After a blobless checkout (`filter: blob:none`):
+/// - older git marks the repository with `extensions.partialclone`, which
+///   Nix's libgit2 refuses to open; `remote.origin.promisor` alone still lets
+///   git fetch missing blobs on demand;
+/// - `git diff` finds renames by reading the merge base's blobs, and `biome
+///   --changed` ignores its exit status, so a failed fetch there would check
+///   no files. Without rename detection, `--name-only` lists the same paths
+///   and reads no blob.
+pub fn prepare_blobless_checkout() -> Step<Run> {
+    Step::new("Prepare the blobless checkout").run(
+        "if git config extensions.partialclone >/dev/null; then git config --unset extensions.partialclone; fi\ngit config diff.renames false\n",
+    )
+}
+
 /// Teardown Nix (always runs).
 pub fn teardown_nix() -> Step<Use> {
     uses_local(
