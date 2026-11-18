@@ -22,9 +22,11 @@ import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
 import {
   type Accessor,
+  children,
   createResource,
   createSignal,
   For,
+  type JSX,
   onMount,
   Show,
 } from 'solid-js';
@@ -82,6 +84,8 @@ type ReplyInputViewProps = Omit<
   onReloadDraft?: () => void;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
   unframed?: boolean;
+  /** The host's own footer for the desktop reply's card, under the composer. */
+  footer?: JSX.Element;
   mobileCompose?: {
     portalMount: Accessor<HTMLDivElement | undefined>;
     onClose: () => void;
@@ -133,6 +137,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
 
 function LoadedReplyInputView(props: ReplyInputViewProps) {
   const composeContext = props.context;
+  const footer = children(() => props.footer);
   const ctx = props.session;
   const [isDragging, setIsDragging] = createSignal<boolean>();
   let composeContainerRef: HTMLDivElement | undefined;
@@ -890,6 +895,12 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           onCheckStatus={checkScheduleStatus}
           class="-mx-4 -mb-4 mt-3 rounded-b-[26.25px] border-t border-edge-muted px-4 py-2 touch:rounded-b-lg mobile:rounded-none"
         />
+        {/* A send time takes the card's footer: the host's is hidden beside it. */}
+        <Show when={footer()}>
+          <div class="-mx-4 -mb-4 mt-3 border-t border-edge-muted [[data-testid=schedule-summary]+&]:hidden">
+            {footer()}
+          </div>
+        </Show>
       </Show>
     </>
   );

@@ -5,6 +5,7 @@ import type { MacroClient } from '../../utils/client';
 import { Document } from '../documents/document';
 import { StaticImage } from '../images/image';
 import { Channel } from './channel';
+import { Message } from './message';
 import { Thread } from './thread';
 
 function recordingClient(): {
@@ -88,5 +89,51 @@ describe('channel.send with documents', () => {
         documents: [Document.byId(client, 'plan')],
       }),
     ).rejects.toBeInstanceOf(MacroError);
+  });
+});
+
+describe('silent posts', () => {
+  test('a send notifies by default and a silent one asks for no notification', async () => {
+    const { client, bodies } = recordingClient();
+    const channel = Channel.byId(client, 'channel');
+
+    await channel.send('build started');
+    await channel.send('build finished', { silent: true });
+    await new Thread(client, 'channel', 'root').reply('log attached', {
+      silent: true,
+    });
+    await Message.byId(client, 'channel', 'root').reply('retrying', {
+      silent: true,
+    });
+
+    expect(bodies.map((body) => body.notification_policy)).toEqual([
+      'Default',
+      'Silent',
+      'Silent',
+      'Silent',
+    ]);
+  });
+
+  test('a user-owned bot on the webhook endpoint posts silently too', async () => {
+    const webhookBodies: unknown[] = [];
+    const client = {
+      authConfig: { type: 'bot' },
+      hasActingUser: () => false,
+      selfBot: async () => ({ owner: { type: 'user' } }),
+      storage: {
+        postChannelBotWebhook: async ({ body }: { body: unknown }) => {
+          webhookBodies.push(body);
+          return { data: { message_id: 'message' } };
+        },
+      },
+    } as unknown as MacroClient;
+
+    await Channel.byId(client, 'channel').send('build finished', {
+      silent: true,
+    });
+
+    expect(webhookBodies).toEqual([
+      { content: 'build finished', notification_policy: 'Silent' },
+    ]);
   });
 });

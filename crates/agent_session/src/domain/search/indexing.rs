@@ -1,6 +1,7 @@
 //! Internal search projection reads. ACP remains the source of every message.
 
 use agent_fold::domain::{model::FoldedMessage, ports::FoldedMessageRepo};
+use chrono::{DateTime, Utc};
 use macro_uuid::Uuid;
 use rootcause::Report;
 
@@ -13,10 +14,24 @@ pub trait SearchIndexingRepo: AgentSessionSearchMetadataRepo {
     type Lease: Send;
 
     /// Serialize a session's live indexing and backfill across all workers.
-    fn lock(&self, id: AgentSessionId) -> impl Future<Output = Result<Self::Lease, Report>> + Send;
+    fn lock(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<GrantedLease<Self::Lease>, Report>> + Send;
 
     /// Walk existing sessions by UUID, returning at most 100 IDs.
     fn page(&self, after: Option<Uuid>) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+}
+
+/// A session's indexing lease and when the database granted it.
+pub struct GrantedLease<L> {
+    /// Held until the index operation finishes.
+    pub lease: L,
+    /// Database time when the lease was granted. One clock serves every
+    /// worker and a session's leases never overlap, so each grant is later
+    /// than the one before it: a version that only grows for the writes made
+    /// under it.
+    pub granted_at: DateTime<Utc>,
 }
 
 /// A session's current metadata and messages derived from its effective ACP log.
@@ -32,7 +47,10 @@ pub trait SearchSnapshotService: Send + Sync + 'static {
     /// Lease kept alive until the index operation finishes.
     type Lease: Send;
     /// Acquire the session's indexing lease before loading its current snapshot.
-    fn lock(&self, id: AgentSessionId) -> impl Future<Output = Result<Self::Lease, Report>> + Send;
+    fn lock(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<GrantedLease<Self::Lease>, Report>> + Send;
     /// Missing/deleted sessions return `None`; storage errors remain errors.
     fn snapshot(
         &self,
@@ -62,7 +80,7 @@ where
 {
     type Lease = R::Lease;
 
-    async fn lock(&self, id: AgentSessionId) -> Result<Self::Lease, Report> {
+    async fn lock(&self, id: AgentSessionId) -> Result<GrantedLease<Self::Lease>, Report> {
         self.repo.lock(id).await
     }
 

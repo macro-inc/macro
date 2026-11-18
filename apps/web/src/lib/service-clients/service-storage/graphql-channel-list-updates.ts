@@ -2,7 +2,15 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheNewChannelUnread } from '@queries/channel/unread-cache';
 import type { Client } from '@urql/core';
 import { channelNotificationRefresh } from '../../queries/channel/notification-refresh';
+import type { SoupUpdatesSubscription } from './graphql/generated/graphql';
 import type { GraphqlNotificationPatch } from './graphql-soup-websocket';
+
+/** A channel this recent is new to its members, allowing for clock skew. */
+const NEW_CHANNEL_AGE_MS = 5 * 60_000;
+
+function isNewChannel(createdAt: string): boolean {
+  return Date.now() - Date.parse(createdAt) < NEW_CHANNEL_AGE_MS;
+}
 
 /** Patch delivered unread evidence locally, then reconcile bounded edges. */
 export function createChannelListUpdatesHandler(
@@ -57,6 +65,21 @@ export function createChannelListUpdatesHandler(
         return pendingPatch;
       }
       coordinator.onPatch(patch, normalized);
+    },
+    /** A new DM, group chat or channel reaches lists that do not show it yet. */
+    onSoupUpdates(patches: SoupUpdatesSubscription['soupUpdates']) {
+      if (disposed) return;
+      for (const patch of patches) {
+        if (patch.__typename !== 'SoupUpdated') continue;
+        const channel = patch.item;
+        if (channel.__typename !== 'GraphqlSoupChannel') continue;
+        if (!channel.isParticipant || !isNewChannel(channel.createdAt))
+          continue;
+        coordinator.expectChannel({
+          id: channel.id,
+          channelType: channel.channelType,
+        });
+      }
     },
     reconnect: () => coordinator.reconnect(),
     dispose() {

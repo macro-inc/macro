@@ -18,6 +18,7 @@ import type { FetchError } from '@core/service';
 import { cache } from '@core/util/cache';
 import {
   type FetchWithTokenErrorCode,
+  type FetchWithTokenInit,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
@@ -30,6 +31,7 @@ import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
 import { createChannelLabelsClient } from './channel-labels';
 import type { ApiChannelListPage } from './channel-list-types';
+import { crmValidationError } from './crm-errors';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
 import type { AccessLevel } from './generated/schemas/accessLevel';
@@ -245,15 +247,15 @@ const syncOrigin =
 
 export function dssFetch(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
 export function dssFetch<T extends Record<string, any>>(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
 export function dssFetch<T extends Record<string, any> = never>(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ):
   | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
@@ -2969,7 +2971,7 @@ export const storageServiceClient = {
   async blockCrmDomain({ domain }: { domain: string }) {
     return await dssFetch(
       `/crm/blocked-domains/${encodeURIComponent(domain)}`,
-      { method: 'PUT' }
+      { method: 'PUT', errorResponseHandler: crmValidationError }
     );
   },
   async unblockCrmDomain({ domain }: { domain: string }) {
@@ -3110,6 +3112,7 @@ export const storageServiceClient = {
     return await dssFetch(`/crm/companies/${companyId}/hidden`, {
       method: 'PUT',
       body: JSON.stringify({ hidden }),
+      errorResponseHandler: crmValidationError,
     });
   },
   async setEmailSync({
@@ -3122,6 +3125,7 @@ export const storageServiceClient = {
     return await dssFetch(`/crm/companies/${companyId}/email-sync`, {
       method: 'PUT',
       body: JSON.stringify({ email_sync: emailSync }),
+      errorResponseHandler: crmValidationError,
     });
   },
   async getCrmTeamSettings() {

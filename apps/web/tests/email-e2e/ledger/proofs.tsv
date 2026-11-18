@@ -126,7 +126,6 @@ AC-313	The From menu's alias items in from-inbox-selector.tsx do nothing when ch
 AC-314	on a phone, tapping a new email's folded Subject does not open it for typing
 AC-315	on a phone, a tap beside the Draft options sheet does not close it
 AC-316	on a phone, Back on an untouched new email does not close the composer
-AC-317	the Next options button under the recipient suggestions does not bring the next people
 AC-320	clicking a cloud attachment's chip in the composer does not open the file's page
 AC-321	The Connect Gmail button of the composer's no-account banner in EmailPermissionsBanner.tsx returns from its click handler without starting the inbox link.
 AC-400	the Draft could not be synced banner's Retry discard does not throw the draft away
@@ -141,11 +140,11 @@ AC-912	The compose route in email-compose.tsx ignores the draft named in its URL
 AC-913	A Drafts row opens a standalone draft in the ordinary thread view instead of the composer: the Match in email-thread.tsx that renders EmailComposeView for a draft that replies to nothing is switched off.
 AC-914	A send the provider rejects is not reported to the composer: the 'failed' progress handler of announceQueuedSend in queued-send-notice.ts returns at once (no failure toast, Undo not withdrawn).
 AC-916	The Retry send button of the message-operation notice does nothing: its onClick in message-operation-recovery.tsx returns for the 'retry_send' action (Check again and the other resolutions still work).
+AC-917	scrolling the recipient suggestions to their end does not read the next people into the list
 AL-001	the sidebar's Inbox item does not reopen the Inbox tab that was last open
-AL-002	A press on a desktop sidebar tab returns before setTab in EmailSidebar.tsx, so the sidebar's Favorites (and other tabs) no longer switch the list.
+AL-002	A press on a desktop sidebar tab returns before setTab in EmailSidebar.tsx, so the sidebar's Favorites (and other tabs) no longer switch the list. Run on touch as well: the sidebar sheet lists the same `Tab` rows, and with setTab skipped the sheet still closes but All leaves Noise open, so the header never names All.
 AL-003	The header's Inbox view tabs (Signal / Noise) ignore a change instead of calling setTab in EmailHeader.tsx.
-AL-004	the phone's tab pills do not switch tabs
-AL-005	pressing g and a letter opens no tab
+AL-004	The touch header's Inbox pills (the PillTabs onChange in email-view.tsx) return before setTab, so a tap on Noise leaves Signal open.
 AL-006	the number keys do not switch tabs
 AL-007	pressing Tab or Shift+Tab does not move between the Inbox tabs
 AL-008	pressing Escape does not go back to the Signal tab
@@ -237,8 +236,8 @@ AL-101	The tutorial row's button (TutorialRowView in TutorialEntries.tsx) loses 
 AL-102	The tutorial row's Dismiss button (TutorialRowView in TutorialEntries.tsx) gets a handler that does nothing instead of onDismiss.
 AL-103	The ? hotkey's handler in GlobalHotkeys.tsx returns before toggling the keyboard shortcuts sheet.
 AL-104	the breadcrumb name at the list opens no menu of views
-AL-105	The email saved-view row (EmailSavedViewRow in email-saved-views.tsx) no longer calls selectSavedView when clicked.
-AL-106	The Saved views header's "New saved view" button in email-saved-views.tsx no longer opens the empty builder; the empty state's "Create view" button is untouched.
+AL-105	The email saved-view row (EmailSavedViewRow in email-saved-views.tsx) no longer calls selectSavedView when clicked. The touch sidebar sheet lists the same rows: with the same break a tapped view closes the sheet but does not open.
+AL-106	The Saved views header's "New saved view" button in email-saved-views.tsx no longer opens the empty builder; the empty state's "Create view" button is untouched. The sheet's New saved view is that same header button, and with the break it opens no builder there either.
 AL-107	the changed view's Save view opens no dialog to name the view
 AL-108	the changed view's Revert keeps the changed filters
 AL-109	The saved-view builder's Name field in saved-view-dialog.tsx ignores what is typed into it, so the view is saved under the name the builder opened with.
@@ -246,14 +245,12 @@ AL-110	The saved-view builder's submit (SavedViewDialog in saved-view-dialogs.ts
 AL-111	The email saved-view menu's "Edit" entry (EmailSavedViewMenuItems in email-saved-views.tsx) returns without opening the builder.
 AL-112	The email saved-view menu's "Duplicate" entry (EmailSavedViewMenuItems in email-saved-views.tsx) returns without opening the builder named "<name> (copy)".
 AL-113	The delete confirmation's "Delete view" button (DeleteSavedViewDialog in saved-view-dialogs.tsx) no longer calls the delete mutation; the menu entry that opens the confirmation is untouched.
-AL-114	The desktop saved-views list in email-saved-views.tsx ignores a dropped drag, so dragging a row past another no longer reorders; the phone picker's Move up and Move down are untouched.
-AL-115	Move up in the phone picker's row menu moves nothing
+AL-114	The desktop saved-views list in email-saved-views.tsx ignores a dropped drag, so dragging a row past another no longer reorders; nothing else in the list changes.
 AL-116	Save changes on an edited saved view saves nothing
 AL-117	Reset on an edited saved view keeps the edits
 AL-118	Reload saved view after a refused save reloads nothing
 AL-119	Return to Email on a missing saved view goes nowhere
 AL-120	Retry loading views asks for nothing
-AL-121	the phone's views pill opens no drawer
 AL-122	the open thread's Back does not return to the list
 AL-123	Escape in an inline thread is swallowed: the escape hotkey EmailDetailView.tsx registers returns true before unwinding the thread or going back to the list.
 AL-124	j / ArrowRight and k / ArrowLeft in an open thread do nothing: the keyDownHandlers in use-list-navigation-hotkeys.ts still report the key handled but no longer call navigation.next() or previous().
@@ -370,8 +367,6 @@ AL-621	Enter in the Remind me input in email-reminder-form.tsx no longer selects
 AL-622	The Remind me form's Retry button (email-reminder-form.tsx) no longer calls onRetry, so the reminder is not read again in the quiet between the form's own reads.
 AL-700	Load more views loads nothing
 AL-701	the Saved views header does not fold the section
-AL-702	a view chosen in the phone drawer is not opened
-AL-703	Create view in the empty phone drawer opens nothing
 AL-704	a tag picked in the view builder is not added to the view
 AL-705	Advanced settings in the view builder shows nothing
 AL-706	Cancel in the view builder leaves it open
@@ -384,6 +379,8 @@ AL-903	Request access on a thread taken back sends no request
 AL-904	The Undo button of the "Sender block queued" toast in thread.ts returns before calling emailClient.unblockSender, so the sender stays blocked.
 AL-905	The "Grant access" button of a permission request in PermissionRequestsView.tsx no longer calls resolve with the chosen level.
 AL-910	opening a thread from its address loads no thread
+AL-911	The touch header's Show sidebar pill (ViewSidebarToggle in ViewNavigationControls.tsx) returns before expanding when the aside is a sheet, so no sheet opens; the desktop's Show navigation is untouched.
+AL-912	The Sent go-to link's handler in GoToHotkeys (sidebar.tsx) returns before navigating, so g then s leaves Email on the tab it was on. The AL-400 test goes to Sent the same way before it leaves for Tasks, so it fails at that step too.
 AX-001	Connect on the Google Workspace row of Settings › Email does nothing: its onClick no longer calls onConnectEmail('GMAIL') in Email.tsx.
 AX-002	Connect on the Outlook row of Settings › Email does nothing: its onClick no longer calls onConnectEmail('OUTLOOK') in Email.tsx.
 AX-003	Enable on the disabled primary inbox row does nothing: the button in DisabledPrimaryRow no longer calls props.onEnable in Email.tsx.
@@ -586,6 +583,7 @@ F-132	Send on a reply does nothing
 F-133	send and mark done does not mark the thread done
 F-134	Undo send does nothing
 F-135	a failed send does not offer what was written
+F-136	the draft of a cancelled send is never given back: restoreCancelledEmailSend in send-queue.ts returns at once, so a refused reply cancelled from its row leaves the composer empty, and a send cancelled from the panel (Cancel, then Restore draft after another device's Cancel and restore) keeps its row
 F-137	a retried send is submitted again without asking what became of the first
 F-138	choosing an alias in From keeps the main address
 F-139	a send made offline is not queued on the device
@@ -638,7 +636,6 @@ F-196	unblocking a sender does nothing
 STC-001	not shown as the row says (Loading draft…): its rendering is switched off or changed in src/features/email-compose/views/email-compose.tsx, src/features/email-compose/views/reply-input.tsx
 STC-002	not shown as the row says (Unable to load this draft. Retry): its rendering is switched off or changed in src/features/email-compose/views/email-compose.tsx
 STC-003	not shown as the row says (Unable to load local draft. Retry): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
-STC-004	not shown as the row says (header label (subject, else Draft email) with badge draft / scheduled / sent / missing and its tooltip): its rendering is switched off or changed in src/features/email-compose/views/email-compose.tsx
 STC-005	not shown as the row says (Macro users or email addresses): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
 STC-006	not shown as the row says (From control reads Select sending inbox): its rendering is switched off or changed in src/features/email-compose/components/from-inbox-selector.tsx
 STC-007	not shown as the row says (Use `@` to reference files): its rendering is switched off or changed in src/features/email-compose/views/compose-body.tsx
@@ -705,6 +702,7 @@ STC-072	not shown as the row says (toast: Email scheduled for <time>. Cancel the
 STC-073	not shown as the row says (toast: Cancel the schedule before deleting this draft.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-074	not shown as the row says (toast: This email was scheduled in another tab. Your newer text was kept as a new draft.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-075	not shown as the row says (toast: Scheduled email sent): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-076	not shown as the row says (toast: This scheduled email was sent. Your composer has been updated.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-persistence.ts
 STC-078	not shown as the row says (toast: <reason> with action Retry inbox change (Could not change inbox. Retry the same inbox to recover. when there is no reason)): its rendering is switched off or changed in src/lib/queries/email/draft.ts
 STC-079	not shown as the row says (toast: Retry the previous inbox change before choosing another inbox.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
 STC-080	not shown as the row says (toast: Previously saved attachments could not be copied to the new draft. Please attach those files again.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
@@ -745,7 +743,7 @@ STC-309	not shown as the row says (subject shown as one truncated line): its ren
 STC-310	The Create event button in create-event-button.tsx no longer shows itself as suggested: its data-suggested attribute and accent colours are dropped when the draft proposes a meeting.
 STC-311	The signature preview in signature-preview.tsx starts expanded instead of collapsed to its bar.
 STC-312	the phone reply's Send stays enabled with an empty body (src/features/email-compose/views/reply-input.tsx)
-STC-313	not shown as the row says (suggestion menu status: Loading options… / Options unavailable. Selected values are kept. / Cached options or selected names may be incomplete. / No matches in this page or cached snapshot.): its rendering is switched off or changed in src/lib/core/component/RecipientSourceControls.tsx
+STC-313	not shown as the row says (suggestion menu status: Loading options… / Options unavailable. Selected values are kept. / Cached options or selected names may be incomplete. / No matching options.): its rendering is switched off or changed in src/lib/core/component/RecipientSourceControls.tsx
 STC-315	not shown as the row says (Drop file(s) to attach): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
 STC-316	not shown as the row says (no trash button in the toolbar): its rendering is switched off or changed in src/features/email-compose/views/compose-toolbar.tsx
 STC-400	not shown as the row says (loading toast: Cancelling send…): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
@@ -758,6 +756,7 @@ STC-406	not shown as the row says (toast: This email is scheduled for <time>. Ch
 STC-407	not shown as the row says (toast: These attachments exceed the destination inbox’s size limit.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
 STC-408	not shown as the row says (toast: Reconnect and let the draft finish saving before changing inboxes.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
 STC-409	not shown as the row says (toast: The draft changed elsewhere. Your newer text was kept as a new draft.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-411	not shown as the row says (toast: This email was already sent. Your newer text was kept as a new draft and was not sent.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-412	not shown as the row says (toast: This draft is no longer available.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
 STC-413	not shown as the row says (toast: Draft could not be synced): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-415	not shown as the row says (No dates match "<query>"): its rendering is switched off or changed in src/features/email-compose/components/date-selector.tsx
@@ -968,14 +967,13 @@ STL-700	not shown as the row says (toast with the reason the edits cannot be sav
 STL-701	The email saved-view row in email-saved-views.tsx is never marked selected, so the open view's row has no aria-current="page".
 STL-702	The desktop saved-views list in email-saved-views.tsx keeps showing its rows in the order they first loaded, ignoring both the pending move and the reordered list the server returns.
 STL-703	not shown as the row says ("Load more views" button, disabled while loading more): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
-STL-704	not shown as the row says (pill reads "Saved views"; active and named after the view while one is open): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
 STL-705	The saved-view builder's default title in saved-view-dialogs.tsx reads "View builder" instead of "Save view" or "Edit “<name>”".
 STL-706	not shown as the row says (submit disabled with an empty name or a definition that does not decode; "Saving…" while pending): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
 STL-707	not shown as the row says (alert with the save error inside the dialog): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
 STL-708	not shown as the row says (Advanced settings start open when the view sets one; Inboxes shown with two or more inboxes; Tags shown when tags exist): its rendering is switched off or changed in src/features/email-view/components/EmailSavedViewFields.tsx
 STL-709	not shown as the row says (alert with the delete error inside the confirmation): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
 STL-710	Deleting the open saved view in email-saved-views.tsx no longer calls leaveSavedView, so the list does not return to the tab it was opened from.
-STL-711	not shown as the row says (desktop row menus have no Move items; picker row menus have Move up / Move down (absent at either end)): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-711	email-saved-views.tsx passes Move up / Move down to the draggable desktop rows too, so a desktop row menu shows Move items. The touch half of the row is the known bug touch-saved-views-reorder: the sheet's menus have none to break.
 STL-712	The email list header in EmailHeader.tsx no longer shows the open saved view's "Saved view actions" menu beside its name.
 STL-713	not shown as the row says ("Save changes" disabled while saving or when the view has skipped settings): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
 STL-900	The open list's live updates are cut off: graphql-soup-websocket.ts no longer subscribes to SoupUpdates and use-notification-updates.ts no longer refetches the thread of a new_email notification.
@@ -1036,6 +1034,7 @@ STL-985	The Noise tab's slice in email-query.ts asks for important mail (the Sig
 STL-986	The Reminders row's clock label in email-row-schedule.tsx keeps the first schedule it showed for the thread, so it does not name the time the reminder was moved to.
 STL-987	The mail list's rows while searching (`rawEntities` in use-email-query.ts) leave out what the search service found, so the list shows none of the threads the search matched.
 STL-988	The event composer opened from a thread with b gets an empty subject instead of the thread's title, in EmailThreadHostView.tsx.
+STL-989	The touch list header in email-view.tsx shows an empty name outside the Inbox, so it does not name All once All is open.
 STX-001	the text of "Loading accounts…" in the Read receipts list is changed in src/features/settings/email-settings.tsx
 STX-002	The Read receipts section's load error says "Accounts unavailable" instead of "Couldn't load accounts" in email-settings.tsx.
 STX-003	not shown as the row says ("Loading signatures…" / "Loading signature…"): its rendering is switched off or changed in src/features/settings/email-settings.tsx

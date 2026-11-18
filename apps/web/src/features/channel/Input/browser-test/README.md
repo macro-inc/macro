@@ -21,6 +21,12 @@ and compares the message's rendered line spacing with the draft's. The composer
 used to flatten its paragraphs, so lines the draft showed together were spaced
 out on send.
 
+The two-tab regression (`draft.html?tabs`) mounts the channel twice at once, as
+two desktop tabs on it do. Text typed in either, and a file attached in one and
+removed in the other, show in both; the draft comes back once after a reload,
+and a send from one clears both. Each composer used to keep its own copy, so
+the one typed in last overwrote the other.
+
 The send regression checks desktop and phone: a pending send clears the editor,
 a rejected send restores its draft, and a rejection preserves a newer draft
 typed while delivery was pending. The fixture controls completion locally.

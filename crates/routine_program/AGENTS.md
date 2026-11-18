@@ -31,10 +31,11 @@ no I/O.
 - `src/plan.rs`: `StepRecord`, what each step of a run did.
 - `src/catalog.rs` + `src/catalog/*.ts`: the routine catalog, Macro's checked
   routines: surface, title, trigger (cron without a zone), a code step and/or
-  Ask AI instructions, and authored `affects_others`, `safe_default` and
-  `template` marks. The new-routine flow offers its templates, the drafter
-  sees its code routines as worked examples, and suggestions may only pick
-  from it. The harness's real-Deno test type-checks every code step.
+  Ask AI instructions, and authored `affects_others`, `safe_default`,
+  `template`, `suggest` and `example` marks. The new-routine flow offers
+  its templates, the drafter sees the code routines marked `example` as
+  worked examples (each lengthens its prompt: run the drafting eval before
+  marking one), and suggestions may only pick from it. The harness's real-Deno test type-checks every code step.
 - `src/validate.rs`: save-time rules and `limits`, including that every
   knob fits its type and is read by the code, and every sentence slot names
   one of the step's knobs.

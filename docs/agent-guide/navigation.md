@@ -274,7 +274,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/for-you` | For you: the person's suggestions as cards (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` shows that suggestion first, ringed |
+| `/app/for-you` | For you: the person's suggestions as cards, Suggestions (work Macro can do), To do, Running and Done today (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` scrolls to that suggestion |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -630,7 +630,9 @@ other splits remain intact.
 Ordinary rail, More-menu, and Go To shortcut navigation resumes opted-in apps'
 last locations during the current session, including nested details, tabs,
 filters, and local state registered with the split entry (such as scroll or
-selection). Views opt in with `useViewRestoration()`; views without the hook keep
+selection). A Go To shortcut that names a tab opens that tab
+instead: `g e` lands on Email's Signal and `g s` on Sent, as do their command
+menu entries. Views opt in with `useViewRestoration()`; views without the hook keep
 ordinary navigation behavior. The mobile dock uses the same memory; Search taps
 still start a fresh search. Memory is account-scoped and clears on reload,
 sign-out, or account changes. A leave guard stages each snapshot, but only a
@@ -760,14 +762,22 @@ lists, Routines' Discover tab), or the search found no rows, `ArrowDown` and
 search loads counts as having no rows until they arrive. `Enter` on one of Email's recent
 searches still moves to the list, which lands on the first row once that
 search's rows arrive.
-Home's and Chat's sidebar search fields follow the same rules, landing on the
-first matching row of the sidebar list; emptying the field from the list
+Home's, Chat's and Agents' sidebar search fields follow the same rules, landing
+on the first matching row of the sidebar list; emptying the field from the list
 collapses it back to the Search icon. An `Escape` pressed in the preview or
-conversation beside the sidebar leaves the search alone. Home's field stays
-open while its query filters the list, including after the sidebar remounts
-(a window narrowed and widened again), and its Search icon then closes the
-field and clears the query, as the field's X does in a list header. Agents' sidebar field does not yet: its
-conversation list has no keyboard navigation.
+conversation beside the sidebar leaves the search alone. Home's and Agents'
+fields stay open while their query filters the list, including after the
+sidebar remounts (a window narrowed and widened again), and the Search icon
+then closes the field and clears the query, as the field's X does in a list
+header.
+The Agents conversation list moves with `j`/`k` and the arrows through the rows
+of its open sections (Open PRs, the conversation groups, Archived), with `Home`
+and `End` for the ends; the row under the keyboard takes the hover fill.
+`Enter` opens it as a click does and `Shift+Enter` opens it in a new split.
+These keys belong to the sidebar only while focus is in it: pressed in the
+conversation beside it, they stay with the conversation. As in every list view,
+`Shift+Up`/`Shift+Down` belong to the list in that split, so moving to a split
+above or below takes `Shift+K`/`Shift+J` there.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including
@@ -1689,7 +1699,10 @@ recency weights and type boosts live in `MENTION_RANKING_CONFIG` in the mention
 menu's `utils/mention-ranking.ts`.
 Broader entity matches remain reachable even when the local fuzzy matcher would
 omit them. Personal contacts preserve their local exact/word-prefix/contains and
-recent-first window order among equally good name matches; mixed menu scoring never
+recent-first window order among equally good name matches. People you have a direct
+message with lead every match at a word start, ahead of strangers whose whole name
+equals the query, and an exact first name counts as an exact name: `@rhea` lists
+the Rhea Okafor you message above accounts named just "Rhea" you never messaged; mixed menu scoring never
 drops reverse-word matches. In menus, further pages of people are listed below the
 earlier ones. Partial local contacts never trigger a remote suggestion search. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
@@ -1709,12 +1722,15 @@ person has no interaction history and other recently contacted participants matc
 only scattered letters: the named person must lead and be selected by Enter or tap.
 The controlled composer regression is `people-ranking.browser.e2e.ts` in
 `apps/web/src/features/channel/Input/browser-test/`.
-People rows follow the assignee menus' rule (`@core/user/people-before-agents`):
-browsing lists you, then other people, then agents with Macro first; while
-searching, an agent is listed only when its name or handle holds the typed words,
-not just their letters scattered, and never above a person whose name matches as
-well; bots get no score boost. Phone rows keep that People order in the slots the
-blended ranking gives people.
+People rows follow the assignee menus' rule (`@core/user/people-before-agents`)
+with Macro lifted to the top: browsing lists Macro, then you, then other people,
+then the other agents. While searching, Macro stays first while its name starts
+with the query (`m`, `ma`, `mac`); otherwise, and for every other agent, an agent
+is listed only when its name or handle holds the typed words, not just their
+letters scattered, and never above a person whose name matches as well; bots get
+no score boost. Channel and DM composers still list `@here` above Macro while
+browsing. Phone rows keep that People order in the slots the blended ranking
+gives people, so Macro is the first pinned row (after `@here` in a channel or DM).
 
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
@@ -1784,11 +1800,25 @@ after typing stops and pages 100 contacts at a time, so contacts beyond the firs
 usual recency lists without contacts. A contact whose email belongs to a Macro user
 appears as that person instead, even when only the CRM name matched: their existing
 direct message when you have one, otherwise the person, and selecting them opens a
-direct message. Matching direct messages and Macro users rank ahead of CRM contacts,
-even when the conversation is old or has no recorded activity. Relevance and recency
-still order results within each group; other result types keep their positions.
+direct message. Matching direct messages rank ahead of CRM contacts that match as
+well, even when the conversation is old, and Macro users lead CRM contacts listed
+next to them that match as well. Relevance and recency still order results within
+each group.
 Verify this in both People and All with a recent CRM contact and a matching DM last
 viewed more than 30 days ago, including when server contacts arrive after the DM.
+
+People you never messaged (not a teammate, no direct message), CRM contacts and
+email-only correspondents included, rank after your own projects, channels,
+documents, agents and commands and after the people you know, among names with
+a word starting with what you typed, however exactly their name matches: typing
+`lee` lists Jordan Lee, whom you message, above a stranger named Leela. Rows
+that only contain the query mid-word come last, strangers last among them. The
+People tab ranks the same way over people only.
+To verify on dev as gab@, type `macro` and `rand` in All: your `macro`-named
+channels, companies, tasks and files, and the tasks and files with a word
+starting with `rand`, list before the email-only accounts whose names start
+with those letters; then type the first name of a teammate you DM and check
+they lead the never-messaged accounts with the same first name.
 Other contacts show their email and open the contact page; Enter and
 click open in place, Shift+Enter in a new split. A server match that arrives after
 typing takes the default selection from the Search for… row. Global Search does not
@@ -1871,9 +1901,14 @@ restart rules still apply.
 - `#` — move email to Trash, with an Undo toast. Works on the selected or focused
   rows in a mail list and on the thread open in an email detail or block. Email
   only; other entity types keep Delete/Backspace and do not answer `#`.
-- `g` then `h` — Home; `g` then `i` remains an alias. While Email is focused,
-  `g i`/`o`/`s`/`t`/`d`/`e`/`a` open its tabs instead (`g i` Signal, `g t` Sent;
-  see `email.md`); `g h` still goes Home.
+- `g` then a letter goes to a view, the same from every view (no view takes
+  over an app-wide letter) and never while an editor or input has focus:
+  `h` Home (`i` too unless Notifications is on the rail), `a` Agents, `e` Email
+  on Signal, `s` Email on Sent, `f` Files, `d` Documents, `t` Tasks, `r`
+  Calendar, `c` Channels, `o` Customers, and with their flags `i`
+  Notifications, `n` Recent, `y` Activity, `l` Calls, `v` Reviews, `x`
+  External. A view may add letters the app doesn't use (`g g` jumps to the top
+  of a list).
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+Esc` maximize. `Shift+H`/`J`/`K`/`L` and
@@ -1915,6 +1950,13 @@ message input; `C Shift+A` requests a new split. It does not open a modal or
 create a session before the user sends. Repeating it focuses the existing draft.
 
 ### Content already open
+
+From Customers' Sales Calls, Sales Tasks, and Sales Notes tabs, open Calls through
+the rail (or More) and confirm that the Calls list replaces CRM and remains
+interactive. Repeat at phone width through the dock. Return to Customers and
+confirm its selected tab resumes. On desktop, also open Calls in another split:
+ordinary navigation reuses and focuses that split. Shift-click opens and focuses
+a Calls split beside CRM without changing the CRM tab.
 
 Splits navigate independently. The retired Preview Pair mode no longer creates
 an adjacent viewer, redirects list navigation, or links split sizes and history.

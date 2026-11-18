@@ -75,8 +75,8 @@ each run.
   how to use found and left items (`finding/items.md`: a trigger filter by
   id, a code step's text knob by exact name, Ask AI instructions or a
   condition by name and id; a new item the request asks for is created
-  once and used by id), the code-step guide, Macro's catalog code
-  routines as examples, and the reference of the routines and `ai` areas.
+  once and used by id), the code-step guide, the catalog's code
+  routines marked `example`, and the reference of the routines and `ai` areas.
   They are the same for every draft on one model with the same mix of
   code and conditions, so the agent puts them in its cached prompt prefix
   (`PrepareRoutineSession::instructions`). A code step never messages or

@@ -25,6 +25,7 @@ import { EmailMessageOperation } from '../email-message/email-message-operation'
 import { createEmailRenderingContext } from '../email-message/rendering-adapter';
 import { EmailSenderIcon } from '../email-message/sender-icon-adapter';
 import type { InvitationRenderOptions } from '../email-message/views/email-message';
+import { SuggestionDraftOrigin } from '../suggestions/draft-origin';
 import {
   type CalendarInvitationOpenTarget,
   EmailCalendarInvitation,
@@ -96,6 +97,12 @@ export function EmailThread(props: EmailThreadProps) {
         message.operation && !operationSettled(message.operation) ? (
           <EmailMessageOperation message={message} />
         ) : undefined,
+      renderDraftOrigin: (draftId: string) => (
+        <SuggestionDraftOrigin
+          draftId={draftId}
+          thread={{ id: props.threadId(), name: props.title }}
+        />
+      ),
       renderTags: () => (
         <Suspense
           fallback={

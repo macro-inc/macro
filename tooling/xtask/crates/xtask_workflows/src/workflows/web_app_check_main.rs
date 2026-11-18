@@ -47,11 +47,10 @@ pub fn web_app_check_main() -> Workflow {
         .add_job("cycles", cycles())
         .add_job("build", build())
         .add_job(ios_native_check::JOB_ID, ios_native_check::job())
-        .add_job("status-check", status_check())
 }
 
-/// Always run so the required collector can distinguish a successful native
-/// check from a cancelled or skipped one, including frontend/backend-only PRs.
+/// Always runs, on frontend- and backend-only PRs too, so `CI gate` sees the
+/// native check pass rather than skip.
 fn android_native_check() -> Job {
     android_native_check::job()
 }
@@ -97,7 +96,7 @@ fn typescript() -> Job {
         .runs_on(mid_web_runner())
         // Entity icon permanence checks compare every committed name list.
         .add_step(checkout("Checkout Repo", true))
-        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::mount_web_check_cache_volume(false))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
         .add_step(
@@ -260,7 +259,7 @@ fn generated_code() -> Job {
         // the same reason: RUSTFLAGS is part of every unit's fingerprint.
         .add_env(("RUSTFLAGS", "-C link-arg=-fuse-ld=mold"))
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_cache_volume(true))
+        .add_step(steps::mount_web_check_cache_volume(true))
         .add_step(steps::setup_nix_with_seed())
         .add_step(
             steps::setup_reqs_web("Setup Prereqs", false)
@@ -323,7 +322,7 @@ fn functional() -> Job {
         .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::mount_web_build_check_cache_volume(true))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
@@ -380,7 +379,7 @@ fn build() -> Job {
                 .pull_requests(Level::Write),
         )
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::mount_web_build_check_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
@@ -392,32 +391,6 @@ fn build() -> Job {
         .into_iter()
         .fold(job, Job::add_step)
         .add_step(steps::teardown_nix())
-}
-
-/// Always-run collector used as the required status check. Its name must stay
-/// stable because branch protection can reference it. New gates join the
-/// `needs` list (and [`check_job_results`]) rather than the ruleset: the
-/// [`ios_native_check`] job is required this way.
-fn status_check() -> Job {
-    Job::default()
-        .name("Web App Status Check")
-        .timeout_minutes(5u32)
-        .cond(Expression::new("always()"))
-        .needs(vec![
-            "path-check".to_string(),
-            android_native_check::JOB_ID.to_string(),
-            "typescript".to_string(),
-            "generated-code".to_string(),
-            "biome-check".to_string(),
-            "test".to_string(),
-            "functional".to_string(),
-            "browser".to_string(),
-            "cycles".to_string(),
-            "build".to_string(),
-            ios_native_check::JOB_ID.to_string(),
-        ])
-        .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_step(check_job_results())
 }
 
 fn gated_web_job(name: &str) -> Job {
@@ -759,46 +732,4 @@ fn run_build() -> Step<Run> {
         ),
         Step::add_env,
     )
-}
-
-fn check_job_results() -> Step<Run> {
-    Step::new("Check job results").run(indoc::indoc! {r#"
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "android-native-check: ${{ needs.android-native-check.result }}"
-        echo "typescript: ${{ needs.typescript.result }}"
-        echo "generated-code: ${{ needs.generated-code.result }}"
-        echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "test: ${{ needs.test.result }}"
-        echo "functional: ${{ needs.functional.result }}"
-        echo "browser: ${{ needs.browser.result }}"
-        echo "cycles: ${{ needs.cycles.result }}"
-        echo "build: ${{ needs.build.result }}"
-        echo "ios-native-check: ${{ needs.ios-native-check.result }}"
-
-        # The Android check always runs, so it must succeed. For the rest only
-        # success and skipped are OK: a job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose checks never ran.
-        if [[ "${{ needs.android-native-check.result }}" != "success" ]]; then
-          echo "Android Native Check did not succeed"
-          exit 1
-        fi
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.typescript.result }}" \
-          "${{ needs.generated-code.result }}" \
-          "${{ needs.biome-check.result }}" \
-          "${{ needs.test.result }}" \
-          "${{ needs.functional.result }}" \
-          "${{ needs.browser.result }}" \
-          "${{ needs.cycles.result }}" \
-          "${{ needs.build.result }}" \
-          "${{ needs.ios-native-check.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "All jobs passed or were skipped"
-    "#})
 }
