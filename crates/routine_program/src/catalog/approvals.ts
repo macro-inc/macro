@@ -15,6 +15,7 @@ export async function main({ macro, trigger, knobs }: StepContext) {
   const firstLine = String(message.text).split('\n')[0];
   const ask = (myEmail ? firstLine.replaceAll(`@${myEmail}`, '').replaceAll(myEmail, '') : firstLine)
     .replace(/^[\s,:]+/, '')
+    .replace(/\s+([,:])/g, '$1')
     .replace(/\s+/g, ' ')
     .trim();
   const task = await macro.tasks.create({
