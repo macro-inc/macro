@@ -9,8 +9,9 @@ file never leaves the device.
 ## Start here
 
 - `src/draft.rs`: vault limits applied per item; every parser ends here.
-- `src/vault.rs`: the vault's limits as public constants, for `crates/passwords` to share.
-- `src/zip_archive.rs`: the only zip reading; bounds and entry-name rules.
+- `src/vault.rs`: the vault's limits (item, folders, list, import batch and match) and login URL rule, as public constants and functions `crates/passwords` validates with.
+- `src/zip_archive.rs`: the only zip reading (`.1pux` `export.data`, Bitwarden zip
+  `data.json`); bounds and entry-name rules. Bitwarden attachments are counted, never inflated.
 - Each parser's `//!` doc lists the source format it reads.
 
 ## Scope
@@ -23,7 +24,8 @@ file never leaves the device.
 ## Boundaries
 
 - Depends on: nothing Macro-specific. Pure: no I/O, async, logging or tracing.
-- Used by: the browser import adapter (opts into `reveal-secrets`).
+- Used by: `password_import_wasm`, the browser adapter (opts into `reveal-secrets`),
+  and `crates/passwords` for `vault` (no features: it never serializes secrets).
 
 ## Checks
 
@@ -31,7 +33,7 @@ file never leaves the device.
   rules are in `src/draft/test.rs` and `tests/import/security.rs`).
 - `cargo check -p password_import --target wasm32-unknown-unknown`.
 - Fuzz: from `fuzz/`, `cargo +nightly fuzz run <target> corpus/<target> ../tests/fixtures`;
-  targets: `detect`, `one_password_pux`, `one_password_csv`, `bitwarden_json`, `bitwarden_csv`.
+  targets: `detect`, `one_password_pux`, `one_password_csv`, `bitwarden_json`, `bitwarden_csv`, `bitwarden_zip`.
 
 ## Gotchas
 
@@ -40,9 +42,10 @@ file never leaves the device.
 - `Debug` on every public type prints only kinds, counts and source keys; names,
   URLs, labels and folders are content too. `tests/import/redaction.rs` enforces it.
 - `Serialize` exists only under the `reveal-secrets` feature and reveals
-  secrets; only the browser adapter enables it.
+  secrets; only `password_import_wasm` enables it.
 - Over-limit values skip the item (`TooLarge`); never truncate. The limits are
-  `vault::*`; the vault's own write checks in `crates/passwords` must match them.
+  `vault::*`, which `crates/passwords` validates with; `password_import_wasm`
+  checks the web copy (`apps/web/src/lib/core/password-import/limits.json`).
 - Hostile input stays bounded by counts, not just bytes: JSON lists are
   counted before they're kept (`bounded.rs`), per-item lists stop at 256
   entries, CSV records at 256 cells, URLs per item at 51, folders at 32 levels. Keep new lists behind
@@ -58,6 +61,16 @@ file never leaves the device.
   row), else `item:<n>`. They must stay unique within one export.
 - `ParsedExport::folders` holds only folders used by imported items, ancestors
   included; empty source folders are not carried over.
+- Every loss on an imported item is a `Dropped` part, so the preview can say
+  so: attachments, passkeys, history, reprompt, URL match rules, empty and
+  linked fields, non-default TOTP. Only boolean fields turning into text are silent.
+- Bitwarden CSV writes a field without a value, linked fields included, as
+  `name: null`; such fields are dropped as `EmptyField`, never imported as `null`.
+- Fixtures are synthetic. `bitwarden_zip_data.json` and `bitwarden_vaultwarden.csv`
+  are trimmed from real `bw` 2026.4.2 exports of a local Vaultwarden 1.37.5
+  vault seeded only with generated data, with ids rewritten and password-like
+  values replaced; the CSV keeps `bw`'s exact text. `support::bitwarden_zip`
+  rebuilds that zip export's layout around them. The other fixtures are hand-written.
 
 ## Format references
 

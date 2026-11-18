@@ -55,6 +55,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "SDK Check",
     "Test macrod update",
     "Web App Pr Checks",
+    "cargo deny advisories",
     "cargo deny check",
     "cargo workspace dependency check",
     "check generated workflows",

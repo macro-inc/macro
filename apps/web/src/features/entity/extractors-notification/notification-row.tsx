@@ -5,6 +5,9 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import type { NotificationType } from '@core/types';
 import CheckIcon from '@icon/system/regular/check.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
+import EnvelopeOpenIcon from '@icon/system/regular/envelope-open.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { openNotification, type UnifiedNotification } from '@notifications';
 import { Button, cn } from '@ui';
@@ -383,15 +386,18 @@ export function NotificationRow(props: NotificationRowProps) {
             <Show when={canMarkDone()}>
               <MenuItem
                 text={t('entityActions.markDone')}
+                icon={CheckCircleIcon}
                 onClick={() => handleMarkAsDone()}
               />
             </Show>
             <MenuItem
               text={t('entityActions.markRead')}
+              icon={EnvelopeOpenIcon}
               onClick={handleMarkAsRead}
             />
             <MenuItem
               text={t('entityActions.copyLink')}
+              icon={LinkIcon}
               onClick={handleCopyLink}
             />
           </ContextMenuContent>

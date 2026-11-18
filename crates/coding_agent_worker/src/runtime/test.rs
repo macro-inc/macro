@@ -110,6 +110,7 @@ async fn dispatch_does_not_wait_forever_for_a_connection() {
     let (_sender, connected) = watch::channel(false);
     let runtime = Runtime {
         connected,
+        agents_changed: Arc::default(),
         _task: AbortOnDropHandle::new(tokio::spawn(std::future::pending())),
     };
     let error = runtime.ensure_connected().await.unwrap_err();

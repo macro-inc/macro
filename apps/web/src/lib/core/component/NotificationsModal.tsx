@@ -5,7 +5,7 @@ import type { Entity } from '@core/types';
 import Bell from '@icon/system/regular/bell.svg';
 import {
   type NotificationSource,
-  useNotificationsForEntity,
+  useOpenEntityNotifications,
 } from '@notifications';
 import { Button, cn } from '@ui';
 import { createMemo, Show, Suspense } from 'solid-js';
@@ -21,7 +21,7 @@ function _NotificationsButton(props: {
   onOpenChange?: (open: boolean) => void;
 }) {
   const drawerControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
-  const notifications = useNotificationsForEntity(
+  const notifications = useOpenEntityNotifications(
     props.notificationSource,
     props.entity
   );
@@ -61,7 +61,7 @@ export function NotificationsDrawer(props: {
   entity: Entity;
   notificationSource: NotificationSource;
 }) {
-  const notifications = useNotificationsForEntity(
+  const notifications = useOpenEntityNotifications(
     props.notificationSource,
     props.entity
   );
@@ -90,10 +90,7 @@ export function NotificationsDrawer(props: {
           </div>
         }
       >
-        <Notifications
-          entity={props.entity}
-          notificationSource={props.notificationSource}
-        />
+        <Notifications notifications={notifications()} />
       </Suspense>
     </SplitDrawer>
   );

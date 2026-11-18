@@ -199,6 +199,65 @@ describe('mobile channel activation', () => {
     );
   });
 
+  it('opens both recent rows and pins in an admitted inline preview without creating a split', () => {
+    const openPreview = vi.fn(() => true);
+    const pinned = { ...channel, id: 'pinned', name: 'Pinned' };
+    render(() => (
+      <ChannelsMobileView
+        source={source}
+        pinned={[pinned]}
+        searchQuery=""
+        onClearSearch={() => {}}
+        openPreview={openPreview}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'One' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
+    expect(openPreview).toHaveBeenNthCalledWith(1, channel);
+    expect(openPreview).toHaveBeenNthCalledWith(2, pinned);
+    expect(mocks.openSplit).not.toHaveBeenCalled();
+    expect(mocks.hydrate).not.toHaveBeenCalled();
+  });
+
+  it('keeps explicit new-split activation available beside the inline preview', async () => {
+    const openPreview = vi.fn(() => true);
+    render(() => (
+      <ChannelsMobileView
+        source={source}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+        openPreview={openPreview}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'One' }), {
+      shiftKey: true,
+    });
+    await waitFor(() =>
+      expect(mocks.openSplit).toHaveBeenCalledWith(
+        channel,
+        expect.objectContaining({ openInNewSplit: true })
+      )
+    );
+    expect(openPreview).not.toHaveBeenCalled();
+  });
+
+  it('falls back to standalone navigation when the host cannot admit the preview', async () => {
+    const openPreview = vi.fn(() => false);
+    render(() => (
+      <ChannelsMobileView
+        source={source}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+        openPreview={openPreview}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'One' }));
+    await waitFor(() => expect(mocks.openSplit).toHaveBeenCalledOnce());
+    expect(openPreview).toHaveBeenCalledWith(channel);
+  });
+
   it('still reports a navigation failure while the list is mounted', async () => {
     const error = new Error('Navigation failed');
     mocks.openSplit.mockRejectedValueOnce(error);

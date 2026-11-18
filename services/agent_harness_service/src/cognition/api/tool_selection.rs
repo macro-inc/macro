@@ -21,10 +21,10 @@ static DATABASE_TOOL_USE_PROMPT: LazyLock<String> = LazyLock::new(|| {
 });
 
 /// Whether the request asks for tools from a scoped hidden session (a
-/// generation, or a run that sends nothing) or from a channel-mention bot's
-/// program. Their chats and completions take none: tools run here with the
-/// person's full access, past the scope or the email refusal their credential
-/// carries.
+/// generation, a run that sends nothing, or a routine dry run) or from a
+/// channel-mention bot's program. Their chats and completions take none: tools
+/// run here with the person's full access, past the scope or the email refusal
+/// their credential carries.
 pub(crate) fn tools_refused_to_current_session(selection: &ToolSet) -> bool {
     let restricted = agent_correlation::context::current_scope().is_some()
         || agent_correlation::context::current_channel_mention().is_some();

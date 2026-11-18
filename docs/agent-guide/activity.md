@@ -31,7 +31,7 @@ the top; switching back shows the pages already loaded. Team needs a backend tha
 accepts `scope: TEAM` on `user.activity`; against an older one only that tab
 fails, with the feed's unavailable copy.
 
-When checking Activity, enable GraphQL Soup as well as the activity flag. Verify
+When checking Activity, enable the activity flag. Verify
 that an initial visit resolves entity names in both the feed and Most active,
 then reload and scroll through another page. Preview loading and live name
 updates should keep the page responsive without repeatedly fetching previews.

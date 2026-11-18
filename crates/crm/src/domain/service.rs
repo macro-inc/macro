@@ -3,6 +3,9 @@
 #[cfg(test)]
 mod test;
 
+mod email_policy_api;
+mod email_policy_preview;
+mod email_policy_work;
 mod email_privacy;
 
 use crate::domain::{
@@ -466,9 +469,9 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
     ) -> impl Future<Output = Result<Vec<CrmBlockedDomain>, CrmError>> + Send;
 
     /// Adds a domain to (`blocked = true`) or removes it from the
-    /// caller's team blocklist. Blocking stops email sync for the domain
-    /// and hides the company and contacts the CRM holds for it;
-    /// unblocking un-hides them. Requires an admin/owner role
+    /// caller's team blocklist. Blocking excludes matching email contributions
+    /// without changing record visibility. A domain covering a member's connected
+    /// primary mailbox is refused. Requires an admin/owner role
     /// ([`CrmError::SettingsAdminRequired`] otherwise); the domain must
     /// be a bare domain like "acme.com" ([`CrmError::InvalidRequest`]).
     /// Returns the normalized domain.
@@ -626,6 +629,10 @@ where
     /// [`CrmServiceImpl::enrich_pending_domains`]. The resolver itself is
     /// best-effort — when it is unavailable the entry stays pending.
     metadata_resolver: R,
+    /// Absent means thread-exclusion writes are unavailable.
+    thread_exclusion_gate: Option<std::sync::Arc<dyn super::email_privacy::ThreadExclusionGate>>,
+    /// Absent or failed evaluation refuses new policy grants.
+    selective_email_gate: Option<std::sync::Arc<dyn super::email_policy_api::SelectiveEmailGate>>,
 }
 
 impl<CR, R> Clone for CrmServiceImpl<CR, R>
@@ -637,6 +644,8 @@ where
         Self {
             companies_repository: self.companies_repository.clone(),
             metadata_resolver: self.metadata_resolver.clone(),
+            thread_exclusion_gate: self.thread_exclusion_gate.clone(),
+            selective_email_gate: self.selective_email_gate.clone(),
         }
     }
 }
@@ -651,7 +660,27 @@ where
         Self {
             companies_repository,
             metadata_resolver,
+            thread_exclusion_gate: None,
+            selective_email_gate: None,
         }
+    }
+
+    /// Supply the rollout gate for rule authoring; stored restrictions are unconditional.
+    pub fn with_selective_email_gate(
+        mut self,
+        gate: std::sync::Arc<dyn super::email_policy_api::SelectiveEmailGate>,
+    ) -> Self {
+        self.selective_email_gate = Some(gate);
+        self
+    }
+
+    /// Supply the rollout gate for thread-exclusion writes; otherwise they stay off.
+    pub fn with_thread_exclusion_gate(
+        mut self,
+        gate: std::sync::Arc<dyn super::email_privacy::ThreadExclusionGate>,
+    ) -> Self {
+        self.thread_exclusion_gate = Some(gate);
+        self
     }
 
     /// Resolves one batch of pending `crm_domain_directory` entries

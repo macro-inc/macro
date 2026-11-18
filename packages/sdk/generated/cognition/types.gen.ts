@@ -675,11 +675,6 @@ export type ErrorResponse = {
 };
 
 /**
- * How long a projection remains active without being requested.
- */
-export type Expiry = 'day' | 'week' | 'month';
-
-/**
  * A private explicit memory document and its optimistic concurrency token.
  */
 export type ExplicitMemory = {
@@ -1042,6 +1037,10 @@ export type ImportRun = {
      * presented while it is still `running`; rows staged after that take it.
      */
     review_id?: string | null;
+    /**
+     * The agent session presenting that review.
+     */
+    review_session_id?: string | null;
     scanned?: null | ScanCounts;
     /**
      * The source this run discovered from.
@@ -1184,7 +1183,7 @@ export type MessageWithAttachments = {
 /**
  * The requested inference speed. Standard is backward compatible with old clients.
  */
-export type ModelSpeed = 'standard' | 'fast' | 'ultrafast';
+export type ModelSpeed = 'standard' | 'priority' | 'fast' | 'ultrafast';
 
 export type NewAttachment = {
     attachment_id: string;
@@ -1768,42 +1767,6 @@ export type Price = {
 };
 
 /**
- * The current state of a user's projection instance.
- */
-export type ProjectionStateResponse = {
-    /**
-     * The cached result, if any. JSON-encoded when the projection defines an
-     * `output_schema`.
-     */
-    data?: string | null;
-    /**
-     * The most recent materialization error, if any.
-     */
-    error?: string | null;
-    /**
-     * When the result was generated.
-     */
-    generated_at?: string | null;
-    /**
-     * The projection id.
-     */
-    id: string;
-    /**
-     * When the result becomes stale.
-     */
-    stale_at?: string | null;
-    /**
-     * The materialization status.
-     */
-    status: ProjectionStatus;
-};
-
-/**
- * The materialization status of a user's projection instance.
- */
-export type ProjectionStatus = 'loading' | 'cold' | 'ready' | 'refreshing' | 'error';
-
-/**
  * Response from [`ReadActivity`].
  */
 export type ReadActivityResponse = {
@@ -1816,11 +1779,6 @@ export type ReadActivityResponse = {
      */
     truncated: boolean;
 };
-
-/**
- * How frequently an active projection is regenerated.
- */
-export type RefreshCadence = 'high' | 'medium' | 'low';
 
 /**
  * Request body for rejecting a pending tool call.
@@ -2261,11 +2219,6 @@ export type StructuredToolActivity = {
 };
 
 /**
- * The kind of entity a projection is materialized for.
- */
-export type TargetType = 'user' | 'team';
-
-/**
  * One activity action returned to the AI.
  */
 export type ToolActivityAction = {
@@ -2537,57 +2490,6 @@ export type UpdateToolResponseRequest = {
      * The tool call ID whose response should be updated.
      */
     toolCallId: string;
-};
-
-/**
- * Request body for getting or creating an ai projection. The concrete target
- * id is resolved from the authenticated user, so only the target type is sent.
- */
-export type UpsertProjectionRequest = {
-    /**
-     * When `true` and generation is needed (cold instance or `regenerate`),
-     * the server generates inline and responds with the finished result
-     * instead of returning immediately and pushing an update through the
-     * connection gateway.
-     */
-    await?: boolean;
-    /**
-     * How long the projection remains active without being requested.
-     */
-    expiry: Expiry;
-    /**
-     * The frontend-defined projection id (e.g. `notification_important_widget`).
-     */
-    id: string;
-    /**
-     * Optional `provider/model` id used for generation (e.g.
-     * `cerebras/llama-3.3-70b`). The default model is used when absent.
-     */
-    model?: string | null;
-    /**
-     * Optional JSON schema the generated result must conform to. When set,
-     * `data` holds the JSON serialization of a conforming value. Enforcement
-     * is prompted (non-strict), so it works across providers.
-     */
-    output_schema?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * The prompt used to materialize the projection.
-     */
-    prompt: string;
-    /**
-     * How frequently the projection should be regenerated.
-     */
-    refresh_cadence: RefreshCadence;
-    /**
-     * When `true`, regenerate even if a cached result exists.
-     */
-    regenerate?: boolean;
-    /**
-     * Whether the projection is materialized for the requesting user or their team.
-     */
-    target_type: TargetType;
 };
 
 /**
@@ -2939,27 +2841,6 @@ export type GetUsageHandlerResponses = {
 };
 
 export type GetUsageHandlerResponse = GetUsageHandlerResponses[keyof GetUsageHandlerResponses];
-
-export type UpsertAiProjectionData = {
-    body: UpsertProjectionRequest;
-    path?: never;
-    query?: never;
-    url: '/ai-projections';
-};
-
-export type UpsertAiProjectionErrors = {
-    400: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpsertAiProjectionError = UpsertAiProjectionErrors[keyof UpsertAiProjectionErrors];
-
-export type UpsertAiProjectionResponses = {
-    200: ProjectionStateResponse;
-};
-
-export type UpsertAiProjectionResponse = UpsertAiProjectionResponses[keyof UpsertAiProjectionResponses];
 
 export type GetChatsForAttachmentHandlerData = {
     body?: never;
@@ -4176,6 +4057,10 @@ export type EditExplicitMemoryErrors = {
      * Internal server error
      */
     500: MemoryErrorBody;
+    /**
+     * Privacy review is unavailable; nothing was saved
+     */
+    503: MemoryErrorBody;
 };
 
 export type EditExplicitMemoryError = EditExplicitMemoryErrors[keyof EditExplicitMemoryErrors];

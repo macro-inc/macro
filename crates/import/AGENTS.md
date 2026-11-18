@@ -82,6 +82,11 @@ from this import's other databases into it are not linked.
   `macro.imports`: `GET|POST /import/entities` (list, stage or record),
   `DELETE /import/entities/{id}` (decline) and `POST /import/notion/pages`
   (one page), with typed outcomes in place of the tools' prose.
+  Recording an entity as imported (`record_imported`, shared by
+  `CreateImportEntity` and this route) needs the caller to view it
+  (`EntityCreator::can_view`, the entity-access view receipt; else
+  `EntityNotAccessible`, 403), and never overwrites a row a running import
+  holds (`importing`; `ImportRunning`, 409).
 
 ## Scope
 
@@ -172,7 +177,8 @@ from this import's other databases into it are not linked.
   projects and tasks, including a resumed write and a stalled
   one given up on. A cancel from another process keeps the run `dismissed`,
   so the write's end reports it cancelled. `attach_review` records the
-  session (`import_run.review_session_id`); hosts that run Notion imports
+  session (`import_run.review_session_id`, returned on the run by
+  `/import/state` so the web's import tray can open it); hosts that run Notion imports
   build the ledger with `ai_tools::build_import_repo`, which wires the
   writer. Left open: a writer whose process dies after a cancel never ends,
   so that cancel is not reported.

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_agent_access_events SET attempts=attempts+1,retry_after=now()+LEAST(interval '1 hour',interval '1 second'*power(2,LEAST(attempts,12))) WHERE id=$1 AND delivered_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4d7df64ba696d092401e97e7af80624c1294417341b80e22a2eaf25f93d001b5"
+}

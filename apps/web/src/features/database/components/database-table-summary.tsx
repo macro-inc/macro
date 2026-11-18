@@ -8,7 +8,7 @@ import {
   summarizeMoney,
 } from '../core/column-summary';
 import type { DatabaseViewColumn } from '../core/database-view';
-import type { DatabaseRow } from '../core/table';
+import { type DatabaseRow, formatCellValue } from '../core/table';
 
 const calculations: {
   value: ColumnCalculation;
@@ -89,6 +89,10 @@ function SummaryCell(props: {
     )
   );
   const displayed = () => {
+    if (props.column.percentage && calculation().numeric) {
+      const current = value();
+      return current === null ? '—' : formatCellValue(props.column, current);
+    }
     if (props.column.currencyColumnId && calculation().numeric) {
       return (
         summarizeMoney(props.column, props.rows, calculation().value)

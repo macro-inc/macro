@@ -50,6 +50,56 @@ async fn sdk_verb_survives_activity_storage_and_read(pool: PgPool) {
     );
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn presence_counts_touches_inside_the_range_but_not_views(pool: PgPool) {
+    let subject = user("macro|presence@example.com");
+    let day = chrono::DateTime::parse_from_rfc3339("2026-06-17T00:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    let next = day + chrono::Duration::days(1);
+    let act = |action, at| {
+        Activity::common(
+            Uuid::now_v7(),
+            0,
+            Actor::new_from_user(subject.clone()),
+            None,
+            EntityType::Document,
+            "presence-document",
+            action,
+            at,
+        )
+    };
+    let repo = PgActivityRepo::new(pool);
+    repo.insert_activities(&[
+        act(CommonAction::Opened, day + chrono::Duration::hours(9)),
+        act(CommonAction::Edited, next),
+        act(CommonAction::Edited, day - chrono::Duration::seconds(1)),
+    ])
+    .await
+    .unwrap();
+    assert!(
+        !repo
+            .touched_between(subject.as_ref(), day, next)
+            .await
+            .unwrap(),
+        "views and edits outside the day do not count"
+    );
+    repo.insert_activities(&[act(CommonAction::Edited, day)])
+        .await
+        .unwrap();
+    assert!(
+        repo.touched_between(subject.as_ref(), day, next)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .touched_between("macro|other@example.com", day, next)
+            .await
+            .unwrap()
+    );
+}
+
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
 }

@@ -22,8 +22,10 @@ threads, pins, recents, notifications, folders, activity.
 - Personal contact pages use `graphql_contacts` and the contacts directory service.
   Compose primary-backed graph and name readers in `server.rs`, and insert the
   context through the shared GraphQL HTTP/websocket request-data function.
-- `src/api/graphql_soup.rs`: the `/soup/graphql` (+ `/soup/graphql/ws`
-  subscriptions) GraphQL API — the frontend's main read path for Home/Recent/
+- `src/api/graphql_soup.rs`: the `/items/soup/graphql` (+
+  `/items/soup/graphql/ws` subscriptions; mounted under `ITEMS_PATH`, and
+  `no_scope_reaches_graphql_where_it_is_mounted` holds `agent_correlation`'s
+  `ANY_WRITE` to that mount) GraphQL API — the frontend's main read path for Home/Recent/
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
@@ -63,8 +65,15 @@ threads, pins, recents, notifications, folders, activity.
   bounded shutdown drain with event broker publishes.
 - `src/service/delete_document_worker.rs`: background worker handling document
   deletion side effects (feature-gated: `delete_document_worker`).
+- `src/released_attachments.rs`: drains `released_email_attachment_documents`
+  on LISTEN `email_attachment_documents_released` and a one-minute sweep,
+  through the documents domain's `ReleasedAttachmentService`, which trashes
+  email attachments whose mail is gone. Runs on the consumer tracker.
 - `src/service/conn_gateway.rs`: pushes realtime updates through
   `connection_gateway` (feature-gated: `connection_gateway`).
+- `src/server.rs` also runs `bots::inbound::profile_consumer`, which pushes a
+  changed bot's current profile to the people who see it (see
+  `crates/bots/README.md`).
 - `README.md`: local setup (`just run_dbs`, `.env` from `.env.sample`).
 
 ## Scope
@@ -96,13 +105,22 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- The REST `/items` routes and `/search` hide Macro's own sign-in emails from a program (`hide_sign_in_emails_from_programs` in `src/api.rs`), so a code-mode run cannot read a sign-in code from workspace previews or search hits. GraphQL (`/items/soup/graphql` and its websocket) refuses programs outright: a query picks its own fields, so no rewrite can find the email. Nothing program-side calls it.
+- Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
+  failed `enable-crm-thread-exclusions` evaluation must refuse API writes.
+- Inject the same client into CRM's selective contribution gate. The owner-only
+  policy API stays default-off for grants; GET never initializes identity,
+  including when the flag is on. Keep its OpenAPI contract and generated storage
+  SDK current; public SDK wrappers are deferred to the next phase.
+  Keep the email-policy enum closure modifier in `api/swagger/email_policy.rs`
+  until schema generation propagates `deny_unknown_fields` to variant objects.
+
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.
 
-- Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
-  evaluation has a 300 ms timeout and keeps the call's own chat on failure.
-- The same flag client evaluates `enable-programmatic-calls` per caller for the
-  explicit call start, join, and leave routes; failures disable those routes.
+- Provision required `POSTHOG_API_KEY` before startup; the flag client
+  evaluates `enable-programmatic-calls` per caller for the explicit call start,
+  join, and leave routes; failures disable those routes.
 - Channel-mention replies run code mode; their programs run on the agent
   harness through `HarnessUserExecutions` with the internal key.
 
@@ -165,6 +183,9 @@ together. Partial configuration fails startup; absent configuration denies vault
 Human requests evaluate `enable-passwords-v1` for their authenticated user only;
 missing, disabled or failed evaluations fail closed. Local explicitly enables it.
 Cleanup, reconciliation and internal team purge do not evaluate rollout flags.
+The session-only `/passwords/teams/{team}/imports/{import_id}/items` route accepts
+normalized import batches up to 4 MiB; its domain service reuses ordinary creation
+and TOTP enrollment and records counts-only batch activity.
 Postgres stores metadata; values stay in OpenBao. Admission checks current human
 account classification and membership, including session-shaped agent accounts.
 

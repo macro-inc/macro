@@ -17,6 +17,7 @@ export type ProjectAccess = 'view' | 'comment' | 'edit' | 'owner';
 
 /** What chips and previews may read; counts and membership stay on the project view. */
 export type ProjectIdentity = Pick<Project, 'id' | 'name' | 'appearance'> & {
+  ownerId: string;
   access: ProjectAccess;
 };
 

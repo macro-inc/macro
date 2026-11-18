@@ -67,7 +67,6 @@ const SOMEONE_ELSE = 'macro|someone-else@example.com';
 const mocks = vi.hoisted(() => ({
   sendToChannel: vi.fn(),
   sendToUsers: vi.fn(),
-  graphql: false,
   graphqlShare: vi.fn(),
   mobile: false,
   hasTeam: false,
@@ -84,7 +83,6 @@ const mocks = vi.hoisted(() => ({
   updatePipelinePermissions: vi.fn(),
   updatePipelineTeamShare: vi.fn(),
   getChatPermissions: vi.fn(),
-  updateChatPermissions: vi.fn(),
   fetchCallSharePermission: vi.fn(),
   updateCallTeamShare: vi.fn(),
   setCallRecordTeamShareCache: vi.fn(),
@@ -107,7 +105,6 @@ vi.mock('@app/features/crm/sharing-adapter', () => ({
 }));
 vi.mock('@queries/storage/entity-mutations', () => ({
   usesGraphqlSharePolicy: (type: string) =>
-    mocks.graphql &&
     ['document', 'chat', 'project', 'email', 'call'].includes(type),
   updateEntitySharePolicy: mocks.graphqlShare,
 }));
@@ -271,7 +268,6 @@ vi.mock('@core/util/url', () => ({
 vi.mock('@service-cognition/client', () => ({
   cognitionApiServiceClient: {
     getChatPermissions: mocks.getChatPermissions,
-    updateChatPermissions: mocks.updateChatPermissions,
   },
 }));
 vi.mock('@queries/call/call', () => ({
@@ -428,7 +424,6 @@ beforeEach(() => {
   mocks.blockEditPermissionEnabled = true;
   mocks.mobile = false;
   mocks.hasTeam = false;
-  mocks.graphql = false;
   mocks.graphqlShare.mockResolvedValue(ok(undefined));
   mocks.callRecordShared = true;
   mocks.callRecordChannelId = 'channel-1';
@@ -445,7 +440,6 @@ beforeEach(() => {
     ok({ id: 'project-permissions', owner: ME })
   );
   mocks.updateInitiativePermissions.mockResolvedValue(ok({}));
-  mocks.updateChatPermissions.mockResolvedValue({ isErr: () => false });
   mocks.updateCallTeamShare.mockResolvedValue({ isErr: () => false });
   mocks.editProject.mockResolvedValue({ isErr: () => false });
   mocks.updateDatabasePermissions.mockResolvedValue({ isErr: () => false });
@@ -685,7 +679,6 @@ describe('agent session sharing', () => {
         )
       );
       expect(mocks.editDocument).not.toHaveBeenCalled();
-      expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
     }
   );
 
@@ -1069,7 +1062,6 @@ describe('call team sharing', () => {
       'call-1',
       true
     );
-    expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
     expect(mocks.editDocument).not.toHaveBeenCalled();
     expect(mocks.editProject).not.toHaveBeenCalled();
   });
@@ -1132,7 +1124,6 @@ describe('chat team sharing', () => {
   it.each([false, true])(
     'uses GraphQL for team and link changes on mobile=%s',
     async (mobile) => {
-      mocks.graphql = true;
       mocks.mobile = mobile;
       mocks.hasTeam = true;
       mountChatShare();
@@ -1152,11 +1143,10 @@ describe('chat team sharing', () => {
           linkShareAccessLevel: 'view',
         })
       );
-      expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
     }
   );
 
-  it('lets the owner share the chat with their team through the chat permissions endpoint', async () => {
+  it('lets the owner share the chat with their team', async () => {
     mocks.hasTeam = true;
     mountChatShare();
 
@@ -1178,9 +1168,8 @@ describe('chat team sharing', () => {
     );
 
     await vi.waitFor(() =>
-      expect(mocks.updateChatPermissions).toHaveBeenCalledWith({
-        chat_id: 'chat-1',
-        sharePermission: { teamShareAccessLevel: 'edit' },
+      expect(mocks.graphqlShare).toHaveBeenCalledWith('chat', 'chat-1', {
+        teamShareAccessLevel: 'edit',
       })
     );
     expect(mocks.getDocumentPermissions).not.toHaveBeenCalled();
@@ -1195,9 +1184,8 @@ describe('chat team sharing', () => {
     );
 
     await vi.waitFor(() =>
-      expect(mocks.updateChatPermissions).toHaveBeenCalledWith({
-        chat_id: 'chat-1',
-        sharePermission: { teamShareAccessLevel: null },
+      expect(mocks.graphqlShare).toHaveBeenCalledWith('chat', 'chat-1', {
+        teamShareAccessLevel: null,
       })
     );
   });
@@ -1210,7 +1198,6 @@ describe('chat team sharing', () => {
     expect(
       screen.queryByRole('group', { name: 'Team access level' })
     ).toBeNull();
-    expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
   });
 });
 
@@ -1265,12 +1252,10 @@ describe('project team sharing', () => {
     );
 
     await vi.waitFor(() =>
-      expect(mocks.editProject).toHaveBeenCalledWith({
-        id: 'project-1',
-        sharePermission: { teamShareAccessLevel: 'edit' },
+      expect(mocks.graphqlShare).toHaveBeenCalledWith('project', 'project-1', {
+        teamShareAccessLevel: 'edit',
       })
     );
-    expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
     expect(mocks.editDocument).not.toHaveBeenCalled();
   });
 
@@ -1283,9 +1268,8 @@ describe('project team sharing', () => {
     );
 
     await vi.waitFor(() =>
-      expect(mocks.editProject).toHaveBeenCalledWith({
-        id: 'project-1',
-        sharePermission: { teamShareAccessLevel: null },
+      expect(mocks.graphqlShare).toHaveBeenCalledWith('project', 'project-1', {
+        teamShareAccessLevel: null,
       })
     );
   });

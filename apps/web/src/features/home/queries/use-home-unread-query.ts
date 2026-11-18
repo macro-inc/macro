@@ -1,5 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableInboxNotifiedSort } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
 import { registerActivityRevalidator } from '@queries/activity/push-registry';
@@ -26,25 +24,29 @@ import { useHomeEntitiesQuery } from './use-home-query';
 const selectItems = (data: HomeUnreadPresenceQuery) => data.user.soup.items;
 
 /** Home's existing membership, with bounded state-only edges rather than history. */
-export function useHomeUnreadQuery(
-  graphqlEnabled: Accessor<boolean>
-): Accessor<boolean> {
-  // Notified-at sorting is REST-only. Keep that rollout's existing candidate
-  // page rather than silently changing its order/bounds or building an invalid
-  // GraphQL input. Disabled queries must not compile an unsupported AST either.
-  const notifiedSort = useFeatureFlag(enableInboxNotifiedSort);
+export function useHomeUnreadQuery(): Accessor<boolean> {
   const userId = useUserId();
-  const enabled = () =>
-    graphqlEnabled() && !notifiedSort().enabled && Boolean(userId());
+  const enabled = () => Boolean(userId());
   const legacy = useHomeEntitiesQuery(
     { tab: 'signal', facets: { read: ['unread'] } },
     { enabled: () => !enabled() }
   );
-  const variables = createMemo(() =>
-    enabled()
-      ? { input: makeGraphqlSoupInput(buildHomeQuery(legacy.viewContext())) }
-      : undefined
-  );
+  // Notified-at sorting is REST-only, and presence does not depend on order:
+  // the witness keeps the updated-at candidate page whatever Home's list sorts
+  // by, instead of the REST list, whose rows read the notification feed.
+  // Disabled queries must not compile an unsupported AST either.
+  const variables = createMemo(() => {
+    if (!enabled()) return undefined;
+    const context = legacy.viewContext();
+    return {
+      input: makeGraphqlSoupInput(
+        buildHomeQuery({
+          ...context,
+          capabilities: { ...context.capabilities, notifiedSort: false },
+        })
+      ),
+    };
+  });
   const query = createLiveQuery(HomeUnreadPresenceDocument, variables, () => ({
     client: getGraphqlSoupClient(),
     enabled: enabled(),

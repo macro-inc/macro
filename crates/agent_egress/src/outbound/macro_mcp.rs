@@ -322,23 +322,18 @@ impl MacroApiTokenSigner {
     /// Mint an owner credential for one run of `routine_id`, signed with that
     /// routine so the events its writes produce never trigger routines.
     /// `agent_id` attributes writes to an agent; `None` writes as the owner.
-    #[tracing::instrument(skip_all, err, fields(?agent_id, %routine_id))]
+    /// `scope` narrows it, as for a dry run (`SessionScope::DryRun`), which
+    /// every service that accepts it then enforces.
+    #[tracing::instrument(skip_all, err, fields(?agent_id, %routine_id, ?scope))]
     pub async fn mint_for_routine(
         &self,
         owner: &MacroUserIdStr<'static>,
         lifetime_seconds: usize,
         agent_id: Option<macro_uuid::Uuid>,
         routine_id: macro_uuid::Uuid,
+        scope: Option<agent_correlation::scope::SessionScope>,
     ) -> Result<String, EgressError> {
-        let claims = SignedClaims {
-            agent_id,
-            agent_via: None,
-            agent_session_id: None,
-            agent_correlation_id: None,
-            agent_scope: None,
-            routine_id: Some(routine_id),
-            channel_mention_id: None,
-        };
+        let claims = SignedClaims::routine(agent_id, routine_id, scope);
         self.sign(owner, lifetime_seconds, claims).await
     }
 
@@ -423,6 +418,7 @@ pub struct SignedCorrelation {
 }
 
 /// The optional claims a minted token signs besides the owner.
+#[derive(Debug, PartialEq)]
 struct SignedClaims {
     agent_id: Option<macro_uuid::Uuid>,
     agent_via: Option<String>,
@@ -431,6 +427,26 @@ struct SignedClaims {
     agent_scope: Option<agent_correlation::scope::SessionScope>,
     routine_id: Option<macro_uuid::Uuid>,
     channel_mention_id: Option<uuid::Uuid>,
+}
+
+impl SignedClaims {
+    /// What a routine run's token signs: its routine, its agent if any, and
+    /// its scope if narrower.
+    fn routine(
+        agent_id: Option<macro_uuid::Uuid>,
+        routine_id: macro_uuid::Uuid,
+        scope: Option<agent_correlation::scope::SessionScope>,
+    ) -> Self {
+        Self {
+            agent_id,
+            agent_via: None,
+            agent_session_id: None,
+            agent_correlation_id: None,
+            agent_scope: scope,
+            routine_id: Some(routine_id),
+            channel_mention_id: None,
+        }
+    }
 }
 
 impl MacroApiTokens for MacroApiTokenSigner {

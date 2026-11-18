@@ -510,12 +510,6 @@ queue! {
             dev: "search-event-queue-dev",
             prod: "search-event-queue-prod",
         },
-        /// Queue for AI projection materialization jobs.
-        pub AiProjectionQueue {
-            local: "ai-projection-queue",
-            dev: "ai-projection-queue-dev",
-            prod: "ai-projection-queue-prod",
-        },
         /// Queue for document conversion jobs.
         pub ConvertQueue {
             local: "convert-service-queue",

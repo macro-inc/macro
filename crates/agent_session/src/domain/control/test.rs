@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::model::PrompterKind;
 use entity_access::domain::models::{AccessLevel, Entity, EntityPermission, EntityType};
 
 fn user() -> MacroUserIdStr<'static> {
@@ -31,6 +32,61 @@ fn answers() -> [AgentAction; 2] {
         }))
         .unwrap(),
     ]
+}
+
+#[test]
+fn a_program_cannot_answer_an_elicitation() {
+    let action = serde_json::from_value(serde_json::json!({
+        "type": "respondElicitation", "requestId": 0, "action": "accept"
+    }))
+    .unwrap();
+
+    let result = ControlEvent::authorized(
+        action,
+        None,
+        None,
+        None,
+        ControlPrincipal::Program,
+        access(AccessLevel::Owner),
+    );
+
+    assert!(matches!(result, Err(AgentSessionError::Forbidden)));
+}
+
+#[test]
+fn programs_cannot_answer_either_interaction_kind() {
+    for level in [AccessLevel::Edit, AccessLevel::Owner] {
+        for action in answers() {
+            assert!(matches!(
+                ControlEvent::authorized(
+                    action,
+                    None,
+                    None,
+                    None,
+                    ControlPrincipal::Program,
+                    access(level),
+                ),
+                Err(AgentSessionError::Forbidden)
+            ));
+        }
+    }
+}
+
+#[test]
+fn programs_can_still_stop_a_session() {
+    let action = serde_json::from_value(serde_json::json!({ "type": "stop" })).unwrap();
+
+    let event = ControlEvent::authorized(
+        action,
+        None,
+        None,
+        None,
+        ControlPrincipal::Program,
+        access(AccessLevel::Edit),
+    )
+    .unwrap();
+
+    assert_eq!(event.actor, Some(user()));
 }
 
 #[test]
@@ -196,4 +252,25 @@ fn a_program_using_a_persons_credential_cannot_name_a_tab() {
     // The prompt still goes through, as the user, but no tab is kept.
     assert_eq!(event.client, None);
     assert_eq!(event.actor, Some(user()));
+}
+
+/// A program's prompt opens a turn nothing in it may take as the user's
+/// decision, so its event says a program sent it; a person's says a person.
+#[test]
+fn a_programs_prompt_is_marked_as_a_programs() {
+    let prompt = |principal| {
+        ControlEvent::authorized(
+            AgentAction::prompt("approve the review".to_owned()),
+            None,
+            None,
+            None,
+            principal,
+            access(AccessLevel::Owner),
+        )
+        .unwrap()
+        .prompter
+    };
+
+    assert_eq!(prompt(ControlPrincipal::Program), PrompterKind::Program);
+    assert_eq!(prompt(ControlPrincipal::User), PrompterKind::User);
 }

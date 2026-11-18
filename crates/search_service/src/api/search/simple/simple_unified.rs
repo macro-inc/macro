@@ -1,4 +1,7 @@
-use crate::api::search::simple::filter::{FilterVariantToSearchArgs, ScopedCalendarEventFilters};
+use crate::api::search::simple::filter::{
+    EmailSearch, FilterVariantToSearchArgs, ScopedCalendarEventFilters, email_search,
+};
+use crate::domain::email_search::ThreadStates;
 
 use crate::api::search::caller::caller_label;
 use crate::api::search::crm_company;
@@ -14,8 +17,9 @@ use axum::{
 use crm::domain::auth::CrmTeamReceipt;
 use entity_access::domain::models::MemberTeamRole;
 use macro_authorization::{MacroAuthorizationExtractor, MacroUserAuthentication, UserOrInternal};
-use macro_user_id::user_id::MacroUserId;
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model::{response::ErrorResponse, user::UserContext};
+use models_opensearch::SearchEntityType;
 use models_search::unified::SearchEntityFilters;
 use models_search::{
     MatchType, SearchOn, SimpleSearchResponse, TermMatching, unified::UnifiedSearchRequest,
@@ -28,7 +32,9 @@ use opensearch_client::search::documents::{
 };
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
+use std::collections::HashSet;
 use tracing::Instrument as _;
+use uuid::Uuid;
 
 /// Whether calendar events may appear in this search.
 ///
@@ -101,7 +107,7 @@ fn take_first_n_entities(combined: Vec<TaggedSearchHit>, page_size: usize) -> Ve
 fn distinct_entity_count<'a>(hits: impl IntoIterator<Item = &'a SearchHit>) -> usize {
     hits.into_iter()
         .map(|h| h.entity_id)
-        .collect::<std::collections::HashSet<_>>()
+        .collect::<HashSet<_>>()
         .len()
 }
 
@@ -132,6 +138,31 @@ fn compute_next_cursor(
         }
     } else {
         SearchCursorOption::Done
+    }
+}
+
+/// Where the content source resumes. Email hits that failed the thread state
+/// check were read but not kept, so when the merge kept every content hit the
+/// next page starts after the last hit read, which can lie past the last hit
+/// kept; a page that kept none still moves on.
+fn next_content_cursor(
+    email_states_checked: bool,
+    next_cursor_from_search: &SearchCursorOption,
+    included_count: usize,
+    original_count: usize,
+    last_included_hit: Option<&TaggedSearchHit>,
+    original_cursor: &SearchCursorOption,
+) -> SearchCursorOption {
+    if email_states_checked && included_count == original_count {
+        next_cursor_from_search.clone()
+    } else {
+        compute_next_cursor(
+            next_cursor_from_search,
+            included_count,
+            original_count,
+            last_included_hit,
+            original_cursor,
+        )
     }
 }
 
@@ -200,6 +231,129 @@ fn to_property_filter_args(filters: &[item_filters::PropertyFilter]) -> Vec<Prop
 
 const DEFAULT_PAGE_SIZE: u32 = 10;
 
+/// Most OpenSearch pages one request reads to fill a page whose email hits
+/// must meet thread states checked in Postgres. A request that reaches it
+/// returns what it kept with a cursor past the last hit it read.
+pub(super) const MAX_EMAIL_STATE_ROUNDS: u8 = 5;
+
+/// The content hits of one request and where the next request resumes.
+struct ContentHits {
+    hits: Vec<SearchHit>,
+    cursor: SearchCursorOption,
+    /// Email hits were checked against thread states, so `cursor` can lie
+    /// past hits that were read and dropped.
+    email_states_checked: bool,
+}
+
+/// Searches OpenSearch from `args.cursor`, keeping only email hits whose
+/// thread meets `states` (see [`read_until_page_kept`]).
+async fn search_content(
+    ctx: &SearchHandlerState,
+    user_id: &MacroUserId<Lowercase<'_>>,
+    args: UnifiedSearchArgs,
+    states: &ThreadStates,
+) -> Result<ContentHits, SearchError> {
+    if states.is_empty()
+        || !args
+            .search_indices
+            .contains(&models_opensearch::OpenSearchEntityType::Emails)
+    {
+        let (hits, cursor) = ctx.opensearch_client.search_unified(args).await?;
+        return Ok(ContentHits {
+            hits,
+            cursor,
+            email_states_checked: false,
+        });
+    }
+
+    let email_search = &ctx.email_search();
+    let (content, rounds) = read_until_page_kept(
+        args,
+        |args| async move { Ok(ctx.opensearch_client.search_unified(args).await?) },
+        |thread_ids| async move {
+            email_search
+                .matching_threads(user_id, &thread_ids, states)
+                .await
+                .map_err(|error| SearchError::InternalError(anyhow::anyhow!("{error}")))
+        },
+    )
+    .await?;
+
+    let span = tracing::Span::current();
+    span.record("search.email_state_rounds", rounds.rounds);
+    span.record("search.email_state_threads_checked", rounds.threads_checked);
+    span.record("search.email_state_threads_kept", rounds.threads_kept);
+    span.record("search.email_state_bound_reached", rounds.bound_reached);
+    Ok(content)
+}
+
+/// What [`read_until_page_kept`] read to fill its page.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct StateCheckRounds {
+    rounds: u8,
+    threads_checked: usize,
+    threads_kept: usize,
+    /// It stopped at [`MAX_EMAIL_STATE_ROUNDS`] with results left and the
+    /// page short.
+    bound_reached: bool,
+}
+
+/// Reads pages from `args.cursor`, keeping every hit but the email hits whose
+/// thread `matching` leaves out, until `args.page_size` hits are kept (a page
+/// counts hits, one per email message, as an unfiltered page does),
+/// the results end, or [`MAX_EMAIL_STATE_ROUNDS`] pages have been read. The
+/// cursor returned is the last page's, past every hit read.
+async fn read_until_page_kept<Search, Page, Matching, Matched>(
+    mut args: UnifiedSearchArgs,
+    mut search: Search,
+    mut matching: Matching,
+) -> Result<(ContentHits, StateCheckRounds), SearchError>
+where
+    Search: FnMut(UnifiedSearchArgs) -> Page,
+    Page: Future<Output = Result<(Vec<SearchHit>, SearchCursorOption), SearchError>>,
+    Matching: FnMut(Vec<Uuid>) -> Matched,
+    Matched: Future<Output = Result<HashSet<Uuid>, SearchError>>,
+{
+    let page_size = args.page_size as usize;
+    let mut kept: Vec<SearchHit> = Vec::new();
+    let mut stats = StateCheckRounds::default();
+    let cursor = loop {
+        stats.rounds += 1;
+        let (hits, cursor) = search(args.clone()).await?;
+        let thread_ids: Vec<Uuid> = hits
+            .iter()
+            .filter(|hit| hit.entity_type == SearchEntityType::Emails)
+            .map(|hit| hit.entity_id)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        stats.threads_checked += thread_ids.len();
+        let matching = if thread_ids.is_empty() {
+            HashSet::new()
+        } else {
+            matching(thread_ids).await?
+        };
+        stats.threads_kept += matching.len();
+        kept.extend(hits.into_iter().filter(|hit| {
+            hit.entity_type != SearchEntityType::Emails || matching.contains(&hit.entity_id)
+        }));
+        if cursor.is_done() || kept.len() >= page_size || stats.rounds >= MAX_EMAIL_STATE_ROUNDS {
+            break cursor;
+        }
+        args.cursor = cursor;
+    };
+    stats.bound_reached =
+        stats.rounds >= MAX_EMAIL_STATE_ROUNDS && cursor.has_more() && kept.len() < page_size;
+    Ok((
+        ContentHits {
+            hits: kept,
+            cursor,
+            email_states_checked: true,
+        },
+        stats,
+    ))
+}
+
 /// The span of one unified search. It carries what a slow search is filtered
 /// by: who called, the mode, and sizes. The request itself stays off it, since
 /// the query and the filter values are whatever the user typed or picked.
@@ -221,6 +375,12 @@ fn unified_search_span(
         search.dropped_terms = tracing::field::Empty,
         search.term_matching = tracing::field::Empty,
         search.term_matching_from_cursor = tracing::field::Empty,
+        search.email_shared_capped = tracing::field::Empty,
+        search.email_project_capped = tracing::field::Empty,
+        search.email_state_rounds = tracing::field::Empty,
+        search.email_state_threads_checked = tracing::field::Empty,
+        search.email_state_threads_kept = tracing::field::Empty,
+        search.email_state_bound_reached = tracing::field::Empty,
     )
 }
 
@@ -438,12 +598,7 @@ async fn search_unified_sources(
                     user_organization_id,
                     should_include_chats,
                 ),
-                email_filters.filter_to_search_args(
-                    ctx,
-                    user_id.as_ref(),
-                    user_organization_id,
-                    should_include_emails,
-                ),
+                email_search(ctx, &user_id, &email_filters, should_include_emails),
                 project_filters.filter_to_search_args(
                     ctx,
                     user_id.as_ref(),
@@ -480,12 +635,11 @@ async fn search_unified_sources(
         mut filter_document_response,
         mut filter_channel_response,
         mut filter_chat_response,
-        mut filter_email_response,
+        email,
         mut filter_project_response,
         mut filter_call_record_response,
         mut filter_calendar_event_response,
-    ) = filter_responses
-        .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
+    ) = filter_responses?;
 
     // Set terms on each index's search args.
     //
@@ -505,6 +659,20 @@ async fn search_unified_sources(
     filter_chat_response.terms = search_terms.clone();
     filter_chat_response.tag_option_ids = tag_option_ids.clone();
     filter_chat_response.match_all_tags = match_all_tags;
+    let email_searchable = email.is_some();
+    let (mut filter_email_response, email_hit_states) = match email {
+        Some(EmailSearch {
+            args,
+            hit_states,
+            shared_capped,
+            project_capped,
+        }) => {
+            tracing::Span::current().record("search.email_shared_capped", shared_capped);
+            tracing::Span::current().record("search.email_project_capped", project_capped);
+            (args, hit_states)
+        }
+        None => Default::default(),
+    };
     filter_email_response.terms = email_terms.clone();
     filter_email_response.tag_option_ids = tag_option_ids.clone();
     filter_email_response.match_all_tags = match_all_tags;
@@ -517,22 +685,6 @@ async fn search_unified_sources(
     filter_calendar_event_response.terms = search_terms.clone();
     filter_calendar_event_response.tag_option_ids = tag_option_ids;
     filter_calendar_event_response.match_all_tags = match_all_tags;
-
-    // Widen the email access filter to every inbox the caller can reach (their
-    // own plus delegated). Connected secondary inboxes share the owner's
-    // user_id; delegated inboxes index under their own, so collect the
-    // distinct macro_ids the caller can search.
-    if should_include_emails {
-        let inboxes =
-            email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, user_id.as_ref())
-                .await
-                .map_err(SearchError::InternalError)?;
-        let mut email_user_ids: Vec<String> =
-            inboxes.iter().map(|l| l.macro_id.to_string()).collect();
-        email_user_ids.sort();
-        email_user_ids.dedup();
-        filter_email_response.user_ids = email_user_ids;
-    }
 
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();
@@ -600,7 +752,7 @@ async fn search_unified_sources(
             {
                 indices.insert(models_opensearch::OpenSearchEntityType::Chats);
             }
-            if should_include_emails {
+            if email_searchable {
                 indices.insert(models_opensearch::OpenSearchEntityType::Emails);
             }
             if should_search_channel_messages && !filter_channel_response.channel_ids.is_empty() {
@@ -732,12 +884,14 @@ async fn search_unified_sources(
         },
         async {
             let args = unified_search_args;
-            if args.search_indices.is_empty() {
-                Ok((vec![], SearchCursorOption::Done))
-            } else if let SearchCursorOption::Done = args.cursor {
-                Ok((vec![], SearchCursorOption::Done))
+            if args.search_indices.is_empty() || args.cursor.is_done() {
+                Ok(ContentHits {
+                    hits: vec![],
+                    cursor: SearchCursorOption::Done,
+                    email_states_checked: false,
+                })
             } else {
-                ctx.opensearch_client.search_unified(args).await
+                search_content(ctx, &user_id, args, &email_hit_states).await
             }
         },
         async {
@@ -763,7 +917,11 @@ async fn search_unified_sources(
     // Extract results and next cursors
     let (chat_hits, chat_next_cursor) = chat_results?;
     let (channel_hits, channel_next_cursor) = channel_results?;
-    let (content_hits, content_next_cursor) = content_results?;
+    let ContentHits {
+        hits: content_hits,
+        cursor: content_next_cursor,
+        email_states_checked,
+    } = content_results?;
     let (crm_hits, crm_next_cursor) = crm_results?;
 
     // Track original counts before combining
@@ -849,7 +1007,8 @@ async fn search_unified_sources(
             &channel_name_cursor,
         );
 
-        let new_content_cursor = compute_next_cursor(
+        let new_content_cursor = next_content_cursor(
+            email_states_checked,
             &content_next_cursor,
             included_content,
             content_count,

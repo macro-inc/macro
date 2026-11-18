@@ -316,7 +316,7 @@ struct SshKeyMetadata {
 }
 
 pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError> {
-    let data = zip_archive::read_export_data(bytes, limits)?;
+    let data = zip_archive::read_data(bytes, limits, zip_archive::EXPORT_DATA)?;
     let data = crate::strip_byte_order_mark(&data);
 
     // Count first: an empty vault or a `0` item costs two bytes of input but

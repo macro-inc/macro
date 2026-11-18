@@ -144,6 +144,9 @@ pub trait InboxLifecycleRepository: Send + Sync + 'static {
     /// Includes consenting participants whose delegation edge was removed by
     /// account deletion. This input comes only from the internal deletion queue.
     /// Returns relationship facts; the service decides their processing order.
+    /// An owner binding is returned only for an inbox of the deleted user's own
+    /// account: holding the credentials another account's inbox syncs with is a
+    /// custodian binding, so deleting that user cannot disconnect the inbox.
     fn bindings_for_deleted_user(
         &self,
         owner: &str,

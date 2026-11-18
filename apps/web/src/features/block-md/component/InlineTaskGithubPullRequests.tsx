@@ -189,9 +189,8 @@ function InlineTaskGithubPullRequestsContent(props: {
           onClick={() =>
             copyBranchNameToClipboard(props.blockId, { silent: true })
           }
-        >
-          <GitBranch class="size-3 shrink-0" />
-        </CopyButton>
+          icon={<GitBranch class="size-3 shrink-0" />}
+        ></CopyButton>
       </Show>
     </>
   );

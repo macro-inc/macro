@@ -11,7 +11,6 @@ import { Popover } from '@kobalte/core/popover';
 import { useLiveCallRecordQuery } from '@queries/call/call';
 import { Button, Dropdown, Hotkey } from '@ui';
 import { Show } from 'solid-js';
-import { useQuickCallsFlag } from '../../../meetings/use-quick-calls-flag';
 import { ActiveCallLink } from '../ActiveCallLink';
 import { useCallContext } from '../CallContext';
 import { CallParticipantsList } from '../CallParticipantsList';
@@ -26,7 +25,6 @@ export function ActiveCallPopover(props: {
 }) {
   const call = useCallContext();
   const reactions = createCallReactions(call.room);
-  const quickCalls = useQuickCallsFlag();
   const fullscreen = useCallFullscreenOptional()?.fullscreen;
   const record = useLiveCallRecordQuery(() => call.activeCallId() ?? '');
   return (
@@ -45,67 +43,59 @@ export function ActiveCallPopover(props: {
             startedAt={record.isSuccess ? record.data.startedAt : undefined}
           />
         </div>
-        <Show
-          when={
-            fullscreen?.available() ||
-            props.onShowPlayer ||
-            (!quickCalls().loading && quickCalls().enabled)
-          }
-        >
-          <Dropdown placement="bottom-end">
-            <Dropdown.Trigger
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t('calls.more')}
-              tooltip={t('calls.more')}
-            >
-              <DotsThree class="size-4 shrink-0 pointer-events-none" />
-            </Dropdown.Trigger>
-            <Dropdown.Content class="min-w-56">
-              <Dropdown.Group>
-                <Show when={props.onShowPlayer}>
-                  <Dropdown.Item onSelect={props.onShowPlayer}>
-                    <PictureInPicture class="size-4 shrink-0" />
-                    <span class="flex-1 truncate">{t('calls.showPlayer')}</span>
-                  </Dropdown.Item>
-                </Show>
-                <ActiveCallLink menuItem />
-                <Show when={fullscreen}>
-                  {(control) => (
-                    <Dropdown.Item
-                      disabled={!control().available()}
-                      onSelect={() => {
-                        if (control().active())
-                          fireAndForget(control().exit(), 'call-fullscreen');
-                        else {
-                          const entering = control().enter();
-                          props.onOpenCall();
-                          fireAndForget(entering, 'call-fullscreen');
-                        }
-                      }}
+        <Dropdown placement="bottom-end">
+          <Dropdown.Trigger
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t('calls.more')}
+            tooltip={t('calls.more')}
+          >
+            <DotsThree class="size-4 shrink-0 pointer-events-none" />
+          </Dropdown.Trigger>
+          <Dropdown.Content class="min-w-56">
+            <Dropdown.Group>
+              <Show when={props.onShowPlayer}>
+                <Dropdown.Item onSelect={props.onShowPlayer}>
+                  <PictureInPicture class="size-4 shrink-0" />
+                  <span class="flex-1 truncate">{t('calls.showPlayer')}</span>
+                </Dropdown.Item>
+              </Show>
+              <ActiveCallLink menuItem />
+              <Show when={fullscreen}>
+                {(control) => (
+                  <Dropdown.Item
+                    disabled={!control().available()}
+                    onSelect={() => {
+                      if (control().active())
+                        fireAndForget(control().exit(), 'call-fullscreen');
+                      else {
+                        const entering = control().enter();
+                        props.onOpenCall();
+                        fireAndForget(entering, 'call-fullscreen');
+                      }
+                    }}
+                  >
+                    <Show
+                      when={control().active()}
+                      fallback={<CornersOut class="size-4" />}
                     >
-                      <Show
-                        when={control().active()}
-                        fallback={<CornersOut class="size-4" />}
-                      >
-                        <CornersIn class="size-4" />
-                      </Show>
-                      <span class="flex-1">
-                        {control().active()
-                          ? t('calls.exitFullscreen')
-                          : t('calls.fullscreen')}
-                      </span>
-                      <Hotkey
-                        shortcut={IS_MAC ? 'ctrl+cmd+f' : 'f11'}
-                        theme="subtle"
-                      />
-                    </Dropdown.Item>
-                  )}
-                </Show>
-              </Dropdown.Group>
-            </Dropdown.Content>
-          </Dropdown>
-        </Show>
+                      <CornersIn class="size-4" />
+                    </Show>
+                    <span class="flex-1">
+                      {control().active()
+                        ? t('calls.exitFullscreen')
+                        : t('calls.fullscreen')}
+                    </span>
+                    <Hotkey
+                      shortcut={IS_MAC ? 'ctrl+cmd+f' : 'f11'}
+                      theme="subtle"
+                    />
+                  </Dropdown.Item>
+                )}
+              </Show>
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Dropdown>
         <Button
           variant="ghost"
           size="icon-sm"

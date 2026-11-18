@@ -1,8 +1,6 @@
 import { MobileFilterDrawer, ViewSidebar } from '@app/components/view-shell';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon, type UserIconSize } from '@core/component/UserIcon';
-import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -46,7 +44,6 @@ type InboxOption = {
 function useInboxSelection() {
   const { state, setInboxIds, setAliasFilter } = useEmailView();
   const linksQuery = useMailAccountsQuery();
-  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const addInbox = useAddInboxFlow();
 
   const options = createMemo((): InboxOption[] => {
@@ -95,10 +92,7 @@ function useInboxSelection() {
   return {
     options,
     soleInbox,
-    /** Keep the connected account visible even when there is no choice to make. */
-    visible: () => multiInboxFlag().enabled || options().length > 0,
     hasMultipleInboxes,
-    canAddInbox: () => multiInboxFlag().enabled,
     addInbox: () => fireAndForget(addInbox(), 'add-inbox'),
     isAll,
     isSelected,
@@ -286,19 +280,17 @@ function InboxAccountGroup(props: {
           </Dropdown.Group>
         </Dropdown.Content>
       </Dropdown>
-      <Show when={selection.canAddInbox()}>
-        <div class="mt-1 border-t border-edge-divider pt-1">
-          <Button
-            variant="ghost"
-            size="md"
-            class="w-full justify-start gap-2 rounded-lg px-2 text-xs"
-            onClick={selection.addInbox}
-          >
-            <PlusIcon class="size-4" />
-            Connect another account
-          </Button>
-        </div>
-      </Show>
+      <div class="mt-1 border-t border-edge-divider pt-1">
+        <Button
+          variant="ghost"
+          size="md"
+          class="w-full justify-start gap-2 rounded-lg px-2 text-xs"
+          onClick={selection.addInbox}
+        >
+          <PlusIcon class="size-4" />
+          Connect another account
+        </Button>
+      </div>
     </section>
   );
 }
@@ -357,14 +349,12 @@ function InboxAccountList(props: {
           )}
         </For>
       </ViewSidebar.Nav>
-      <Show when={selection.canAddInbox()}>
-        <ViewSidebar.Item {...pressHandlers(selection.addInbox)}>
-          <ViewSidebar.Icon>
-            <PlusIcon class="size-4" />
-          </ViewSidebar.Icon>
-          <span class="truncate">Connect another account</span>
-        </ViewSidebar.Item>
-      </Show>
+      <ViewSidebar.Item {...pressHandlers(selection.addInbox)}>
+        <ViewSidebar.Icon>
+          <PlusIcon class="size-4" />
+        </ViewSidebar.Icon>
+        <span class="truncate">Connect another account</span>
+      </ViewSidebar.Item>
     </div>
   );
 }
@@ -374,15 +364,11 @@ export function EmailInboxList(props: { class?: string }) {
   const selection = useInboxSelection();
 
   return (
-    <Show when={selection.visible()}>
-      <Show
-        when={!isTouchDevice()}
-        fallback={
-          <InboxAccountList selection={selection} class={props.class} />
-        }
-      >
-        <InboxAccountGroup selection={selection} class={props.class} />
-      </Show>
+    <Show
+      when={!isTouchDevice()}
+      fallback={<InboxAccountList selection={selection} class={props.class} />}
+    >
+      <InboxAccountGroup selection={selection} class={props.class} />
     </Show>
   );
 }
@@ -507,19 +493,17 @@ export function EmailInboxMenu(props: { class?: string; grouped?: boolean }) {
               </For>
             </Dropdown.RadioGroup>
           </Dropdown.Group>
-          <Show when={selection.canAddInbox()}>
-            <Dropdown.Group>
-              <Dropdown.Item closeOnSelect onSelect={selection.addInbox}>
-                <span
-                  aria-hidden="true"
-                  class="flex size-4 shrink-0 items-center justify-center"
-                >
-                  <PlusIcon class="size-4" />
-                </span>
-                <span class="flex-1">Connect another account</span>
-              </Dropdown.Item>
-            </Dropdown.Group>
-          </Show>
+          <Dropdown.Group>
+            <Dropdown.Item closeOnSelect onSelect={selection.addInbox}>
+              <span
+                aria-hidden="true"
+                class="flex size-4 shrink-0 items-center justify-center"
+              >
+                <PlusIcon class="size-4" />
+              </span>
+              <span class="flex-1">Connect another account</span>
+            </Dropdown.Item>
+          </Dropdown.Group>
         </Dropdown.Content>
       </Dropdown>
     </Show>

@@ -34,6 +34,7 @@ claims a credential once. The managed account revokes it from settings.
 
 ## Gotchas
 
+- Asking for, approving (not declining) and claiming a grant refuse an agent's program (`macro_authorization::is_program_run`, 403): approving hands another account a lasting credential, and the claim returns it. An agent account asks and claims with its own API key, which signs no agent; declining and revoking stay open to programs.
 - The manager is always an agent and the managed account is always a person, so
   there are no chains. An agent acts on what it reads, so a message could talk it
   into approving a request and giving up its account. Whichever side didn't ask

@@ -433,7 +433,13 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
         .unwrap();
     assert_eq!(booting.state.phase, Phase::Booting);
 
-    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    assert!(
+        operator
+            .macrod_connected(HARNESS)
+            .await
+            .unwrap()
+            .is_computer()
+    );
     let ready = operator
         .repo
         .get(id)
@@ -456,9 +462,17 @@ async fn the_first_connection_gives_the_team_a_default_agent_once() {
     let id = paid_computer(&operator).await;
     operator.run_fleet_effects().await.unwrap();
 
-    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    // Only the connection that bound the agent says so: it is what tells the
+    // runtime to re-read its agents.
+    assert_eq!(
+        operator.macrod_connected(HARNESS).await.unwrap(),
+        MacrodConnected::AgentBound
+    );
     operator.macrod_disconnected(HARNESS).await.unwrap();
-    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    assert_eq!(
+        operator.macrod_connected(HARNESS).await.unwrap(),
+        MacrodConnected::Computer
+    );
 
     assert_eq!(
         *operator.harnesses.default_agents.lock().unwrap(),
@@ -492,7 +506,10 @@ async fn an_agent_teammates_computer_gets_no_default_coding_agent() {
     );
     operator.run_fleet_effects().await.unwrap();
 
-    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    assert_eq!(
+        operator.macrod_connected(HARNESS).await.unwrap(),
+        MacrodConnected::Computer
+    );
 
     assert!(operator.harnesses.default_agents.lock().unwrap().is_empty());
     let ready = operator
@@ -519,7 +536,13 @@ async fn a_failed_default_agent_still_makes_the_computer_ready() {
         .fail_default_agent
         .store(true, Ordering::SeqCst);
 
-    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    assert!(
+        operator
+            .macrod_connected(HARNESS)
+            .await
+            .unwrap()
+            .is_computer()
+    );
     let ready = operator
         .repo
         .get(id)
@@ -536,7 +559,13 @@ async fn a_failed_default_agent_still_makes_the_computer_ready() {
     );
 
     operator.macrod_disconnected(HARNESS).await.unwrap();
-    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    assert!(
+        operator
+            .macrod_connected(HARNESS)
+            .await
+            .unwrap()
+            .is_computer()
+    );
     assert_eq!(
         *operator.harnesses.default_agents.lock().unwrap(),
         vec![(id, HARNESS)]

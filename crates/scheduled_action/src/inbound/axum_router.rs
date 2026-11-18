@@ -9,7 +9,7 @@ use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
     AlreadyRunningError, CreatedItem, CreatedRoutine, InProgressExecution, ListScope, ListedAction,
-    ListedRun, OwnerNotUserError, RoutineCheck, RunCaller, Schedule, ScheduledAction,
+    ListedRun, OwnerNotUserError, Requester, RoutineCheck, RunCaller, Schedule, ScheduledAction,
     SubRoutineKey,
 };
 use crate::domain::ports::{SavedAction, ScheduledActionService};
@@ -29,7 +29,7 @@ use entity_access::inbound::axum_extractors::ScheduledActionAccessExtractor;
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners, OwnedPurgeOutcome};
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOnly, UserOrInternal,
+    UserOnly, UserOrInternal, UserOrInternalAuthorization, UserOrInternalCaller, is_program_run,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -396,6 +396,11 @@ where
 pub async fn create_action<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    user: Result<
+        MacroAuthorizationExtractor<Auth, UserOrInternal>,
+        macro_authorization::MacroAuthorizationRejection,
+    >,
+    headers: axum::http::HeaderMap,
     Query(query): Query<CreateActionQuery>,
     body: Result<Json<ActionConfiguration>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
@@ -409,7 +414,12 @@ where
         Some(suggestion_id) => {
             state
                 .service
-                .create_action_from_suggestion(&principal, req, suggestion_id)
+                .create_action_from_suggestion(
+                    &principal,
+                    req,
+                    suggestion_id,
+                    requester(user.as_ref().ok().map(|user| &user.authorization), &headers),
+                )
                 .await?
         }
         None => {
@@ -419,6 +429,7 @@ where
             let caller = RunCaller {
                 routine: agent_correlation::context::current_routine(),
                 correlation: agent_correlation::context::current(),
+                requester: requester(user.as_ref().ok().map(|user| &user.authorization), &headers),
             };
             let key = query
                 .key
@@ -539,6 +550,11 @@ pub async fn update_action<S, Svc, Auth>(
         entity_access_receipt,
         ..
     }: ScheduledActionAccessExtractor<EditAccessLevel, Svc, Auth>,
+    user: Result<
+        MacroAuthorizationExtractor<Auth, UserOrInternal>,
+        macro_authorization::MacroAuthorizationRejection,
+    >,
+    headers: axum::http::HeaderMap,
     body: Result<Json<ActionConfigurationUpdate>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
@@ -549,9 +565,31 @@ where
     let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
     let updated = state
         .service
-        .update_action(entity_access_receipt, req)
+        .update_action(
+            entity_access_receipt,
+            req,
+            requester(user.as_ref().ok().map(|user| &user.authorization), &headers),
+        )
         .await?;
     Ok(Json(ScheduledActionResponse::from(updated)))
+}
+
+/// A person in the app, or a program acting for them: an agent's or a
+/// routine's run (signed claims or the code-execution mark), a bot, or an
+/// internal service.
+pub(crate) fn requester(
+    user: Option<&UserOrInternalAuthorization>,
+    headers: &axum::http::HeaderMap,
+) -> Requester {
+    match user {
+        Some(user)
+            if matches!(user.caller, UserOrInternalCaller::User)
+                && !is_program_run(user.user.attribution(), headers) =>
+        {
+            Requester::Person
+        }
+        Some(_) | None => Requester::Program,
+    }
 }
 
 #[utoipa::path(
@@ -607,6 +645,11 @@ pub async fn set_action_enabled<S, Svc, Auth>(
         entity_access_receipt,
         ..
     }: ScheduledActionAccessExtractor<EditAccessLevel, Svc, Auth>,
+    user: Result<
+        MacroAuthorizationExtractor<Auth, UserOrInternal>,
+        macro_authorization::MacroAuthorizationRejection,
+    >,
+    headers: axum::http::HeaderMap,
     body: Result<Json<SetScheduledActionEnabled>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
@@ -617,7 +660,11 @@ where
     let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
     let action = state
         .service
-        .set_enabled(entity_access_receipt, req.enabled)
+        .set_enabled(
+            entity_access_receipt,
+            req.enabled,
+            requester(user.as_ref().ok().map(|user| &user.authorization), &headers),
+        )
         .await?;
     Ok(Json(ScheduledActionResponse::from(action)))
 }
@@ -853,10 +900,12 @@ impl IntoResponse for ScheduledActionApiError {
         if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
             let status = match policy {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
-                ActionPolicyError::UpdateConflict | ActionPolicyError::TooManySubRoutines => {
-                    StatusCode::CONFLICT
+                ActionPolicyError::UpdateConflict
+                | ActionPolicyError::TooManySubRoutines
+                | ActionPolicyError::UnreviewedRewrite => StatusCode::CONFLICT,
+                ActionPolicyError::NotSuggesting | ActionPolicyError::OwnerIdentityNeedsPerson => {
+                    StatusCode::FORBIDDEN
                 }
-                ActionPolicyError::NotSuggesting => StatusCode::FORBIDDEN,
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
                 | ActionPolicyError::ConditionsDisabled

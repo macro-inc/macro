@@ -19,6 +19,8 @@ export function SettingsSidebar(props: {
   results: SettingsSearchResult[];
   selectedResultId?: string;
   onSelectResult: (result: SettingsSearchResult) => void;
+  /** Off on touch, which searches from the dock as other sidebars do. */
+  searchable: boolean;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
   isItemActive: (tab: SettingsTab) => boolean;
@@ -39,27 +41,29 @@ export function SettingsSidebar(props: {
         </div>
       </ViewSidebar.Header>
 
-      <ViewSidebar.Primary>
-        <SearchBar
-          label={t('settingsNav.searchSettings')}
-          placeholder={t('settingsNav.searchSettings')}
-          autocomplete="off"
-          value={props.searchQuery}
-          onValueChange={props.onSearchQueryChange}
-          size="sm"
-          onEscape={() => props.onSearchQueryChange('')}
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowDown') {
-              const first =
-                root?.querySelector<HTMLButtonElement>('nav button');
-              if (first) {
-                event.preventDefault();
-                first.focus();
+      <Show when={props.searchable}>
+        <ViewSidebar.Primary>
+          <SearchBar
+            label={t('settingsNav.searchSettings')}
+            placeholder={t('settingsNav.searchSettings')}
+            autocomplete="off"
+            value={props.searchQuery}
+            onValueChange={props.onSearchQueryChange}
+            size="sm"
+            onEscape={() => props.onSearchQueryChange('')}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
+                const first =
+                  root?.querySelector<HTMLButtonElement>('nav button');
+                if (first) {
+                  event.preventDefault();
+                  first.focus();
+                }
               }
-            }
-          }}
-        />
-      </ViewSidebar.Primary>
+            }}
+          />
+        </ViewSidebar.Primary>
+      </Show>
 
       <ViewSidebar.Content>
         {/* Search results replace the pills, so they replace the action too. */}

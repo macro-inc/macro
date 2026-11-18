@@ -81,6 +81,7 @@ mint it a token without the mention.
 
 ## Gotchas
 
+- Every OAuth broker route refuses a request carrying `x-macro-code-execution` (403): a program that drives the email sign-in and reads the code from the user's inbox would hold an MCP grant for the account.
 - Never refuse an unrecognized `resource`: deployed clients send whatever they
   derive from their configured URL, and refusing it breaks live grants on
   refresh.
@@ -128,7 +129,7 @@ mint it a token without the mention.
 - Skill: `new-service` (for how this is wired as a dependency, not a deploy)
 
 - Only verified Macro JWT session provenance becomes `ManagedAgentSession`; external MCP callers remain uncorrelated.
-- `validate_bearer` refuses (403) a Macro API token that signs `agent_scope`: a scoped code-mode session reaches no MCP tools, whose own credentials would carry no scope.
+- `validate_bearer` refuses (403) a Macro API token that signs `agent_scope`: a scoped code-mode session or a routine dry run reaches no MCP tools, whose own credentials would carry no scope.
 
 Public MCP may additionally receive the existing `UserApiKeyAuthorizer` through
 `mounted_mcp_router`. `x-macro-user-api-key` resolves only the key owner and is

@@ -77,13 +77,46 @@ function humanizeModelId(id: string): string {
 }
 
 /**
+ * The model a harness's `default` choice stands for. Claude Code lists
+ * `default` first and names the model it resolves to in the description
+ * ("Opus 4.8", `claude-opus-4-8`, or, from older SDKs, "Use the default
+ * model (currently Sonnet 4.5) · …"). A `default` whose runtime gave it its
+ * own name (Cursor's "Auto") keeps that name.
+ */
+function defaultModelName(
+  id: string,
+  name: string | undefined,
+  description: string | null | undefined
+): string | undefined {
+  if (id.trim().replace(/^[\w.-]+\//, '') !== 'default') return undefined;
+  const reported = name?.trim();
+  if (reported && reported !== id.trim() && !/^default\b/i.test(reported))
+    return undefined;
+  const text = description?.trim();
+  if (!text) return undefined;
+  const resolved = (
+    /\bcurrently ([^)·]+)/i.exec(text)?.[1] ?? text.split(' · ')[0]
+  )?.trim();
+  if (!resolved || /^default\b/i.test(resolved)) return undefined;
+  return resolved;
+}
+
+/**
  * What to call a model: the house name when the app knows the id, otherwise
  * the runtime's own display name, otherwise the id read as a name. `name` is
  * ignored when it is just the id again, which is how a runtime says it has
- * no name for the model.
+ * no name for the model. A runtime's `default` choice reads as the model its
+ * `description` names, "Opus 4.8 (default)".
  */
-export function modelLabel(id: string | undefined, name?: string): string {
+export function modelLabel(
+  id: string | undefined,
+  name?: string,
+  description?: string | null
+): string {
   if (!id) return 'Model';
+  const resolvedDefault = defaultModelName(id, name, description);
+  if (resolvedDefault)
+    return `${modelLabel(resolvedDefault, resolvedDefault)} (default)`;
   const pretty =
     MODEL_PRETTYNAME[id as Model] ??
     MODEL_PRETTYNAME[`anthropic/${id}` as Model] ??
@@ -95,4 +128,19 @@ export function modelLabel(id: string | undefined, name?: string): string {
       .replace(/^(anthropic|openai|google|fireworks)\//, '')
       .replace(/^Claude /, '');
   return humanizeModelId(id);
+}
+
+/** {@link modelLabel} for a model picked from a runtime's own catalog. */
+export function catalogModelLabel(
+  id: string | undefined,
+  options: readonly {
+    id: string;
+    name?: string;
+    description?: string | null;
+  }[]
+): string {
+  const option = id
+    ? options.find((candidate) => candidate.id === id)
+    : undefined;
+  return modelLabel(id, option?.name, option?.description);
 }

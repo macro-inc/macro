@@ -82,6 +82,32 @@ fn every_job_the_gate_waits_for_has_a_timeout() {
     }
 }
 
+/// The gate reads each call's result, which fails or cancels when any of its
+/// jobs does, so the called workflows need no roll-up job of their own. A job
+/// that continues on error, or an always-run job, could hide a failed job from
+/// that result, and a roll-up costs every run a runner and a queue wait.
+#[test]
+fn every_called_job_reaches_the_gate() {
+    for call in CALLS {
+        let workflow = called(call);
+        let jobs = workflow["jobs"].as_mapping().expect("jobs");
+        for (id, job) in jobs {
+            let id = id.as_str().unwrap_or_default();
+            assert!(
+                job.get("continue-on-error").is_none(),
+                "{} job {id} continues on error, so the gate can't see it fail",
+                call.file
+            );
+            let condition = job.get("if").and_then(serde_yaml::Value::as_str);
+            assert!(
+                !condition.is_some_and(|condition| condition.contains("always()")),
+                "{} job {id} is a roll-up; the gate reads the call's result instead",
+                call.file
+            );
+        }
+    }
+}
+
 /// Runs for other labels must neither share a group with a request (and
 /// cancel it) nor reach a called workflow.
 #[test]

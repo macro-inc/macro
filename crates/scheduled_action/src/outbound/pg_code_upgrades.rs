@@ -118,7 +118,7 @@ impl CodeUpgrades for PgCodeUpgrades {
         let mut transaction = self.pool.begin().await?;
         // Equivalent code under the same configuration: the revision stays,
         // and an edit the owner saved meanwhile wins.
-        sqlx::query!(
+        let saved = sqlx::query!(
             r#"
             UPDATE scheduled_action SET task = $3
             WHERE id = $1 AND configuration_revision = $2
@@ -129,6 +129,23 @@ impl CodeUpgrades for PgCodeUpgrades {
         )
         .execute(&mut *transaction)
         .await?;
+        if saved.rows_affected() == 0 {
+            // The owner's edit won, checked against the current SDK when it
+            // was saved: this run's rewrite was never applied, so it leaves
+            // no record of one.
+            sqlx::query!(
+                r#"
+                DELETE FROM scheduled_action_code_upgrade
+                WHERE action_id = $1 AND to_sdk = $2 AND outcome = 'running'
+                "#,
+                id,
+                sdk.as_str(),
+            )
+            .execute(&mut *transaction)
+            .await?;
+            transaction.commit().await?;
+            return Ok(());
+        }
         sqlx::query!(
             r#"
             UPDATE scheduled_action_code_upgrade

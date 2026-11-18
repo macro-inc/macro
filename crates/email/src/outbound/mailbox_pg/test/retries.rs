@@ -13,7 +13,7 @@ use email_api_client::domain::models::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -33,7 +33,7 @@ impl Provider {
     }
 }
 
-impl MailboxGateway for Provider {
+impl MailboxGateway for Arc<Provider> {
     async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
         Ok(Vec::new())
     }
@@ -58,11 +58,13 @@ impl MailboxGateway for Provider {
     }
 }
 
+/// Live and import reads answer from the same queues.
 fn sync(
     repo: &PgMailboxSync,
     provider: Provider,
-) -> MailboxSyncService<PgMailboxSync, Provider, PgMailboxSync> {
-    MailboxSyncService::new(repo.clone(), provider, repo.clone())
+) -> MailboxSyncService<PgMailboxSync, Arc<Provider>, PgMailboxSync> {
+    let provider = Arc::new(provider);
+    MailboxSyncService::new(repo.clone(), provider.clone(), provider, repo.clone())
 }
 
 /// `attempts` is what the row had before its next claim adds one.
@@ -344,6 +346,50 @@ async fn mailbox_wide_refusals_do_not_bring_a_message_closer_to_abandonment(db: 
 
     let throttled = row(&db, link, "throttled").await;
     assert_eq!((throttled.abandoned, throttled.attempts), (false, 49));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn new_mail_on_a_message_an_import_was_reading_waits_for_no_import_delay(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    queue(&db, link, "both", 0).await;
+    let import = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    assert!(import.is_import);
+    // While the import reads it, a synced folder's page lists the message.
+    sqlx::query!(
+        "UPDATE email_sync_streams SET initial_complete = true, position = 'checkpoint' WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let stream = repo.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
+    repo.commit_page(
+        &stream,
+        &MailboxChangePage {
+            changed: vec![ProviderId::new("both").unwrap()],
+            removed: Vec::new(),
+            position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
+            reader_revision: 1,
+        },
+    )
+    .await
+    .unwrap();
+
+    // The import's share of the request window refuses the read; live
+    // reads still have room.
+    repo.release_message(
+        &import,
+        MessageRetry::After {
+            seconds: 590,
+            counted: false,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(row(&db, link, "both").await.delay_seconds <= 0);
+    let live = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    assert!(!live.is_import);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
