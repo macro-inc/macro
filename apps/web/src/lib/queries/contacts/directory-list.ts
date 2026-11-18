@@ -68,7 +68,11 @@ export function createContactDirectoryList(
       options.resetKey?.(),
     ]);
   };
-  let listed: { key: string; first: IUser[]; later: IUser[] } | undefined;
+  // `readIn` is the generation of the oldest listed row: a re-read of the
+  // first page after a change keeps the rows read below it before.
+  let listed:
+    | { key: string; first: IUser[]; later: IUser[]; readIn: number }
+    | undefined;
   const data = createMemo<ContactDirectoryPage | undefined>((shown) => {
     const page = window.data();
     const key = listKey();
@@ -86,8 +90,9 @@ export function createContactDirectoryList(
     }
 
     const fresh = eligible(page.users);
+    const generation = window.generation();
     if (listed?.key !== key) {
-      listed = { key, first: fresh, later: [] };
+      listed = { key, first: fresh, later: [], readIn: generation };
     } else if (window.continued()) {
       const known = new Set(
         [...listed.first, ...listed.later].map((user) => user.id)
@@ -103,10 +108,12 @@ export function createContactDirectoryList(
     } else {
       // A re-read of the first page keeps the pages already listed below it.
       const first = new Set(fresh.map((user) => user.id));
+      const later = listed.later.filter((user) => !first.has(user.id));
       listed = {
         key,
         first: fresh,
-        later: listed.later.filter((user) => !first.has(user.id)),
+        later,
+        readIn: later.length ? listed.readIn : generation,
       };
     }
 
@@ -143,6 +150,9 @@ export function createContactDirectoryList(
     data,
     /** Names the growing list on screen; appending a page keeps it. */
     windowKey: () => (data() ? listKey() : undefined),
+    /** Whether every row listed was read in the current generation. Read
+     * after `data`, which it describes. */
+    readNow: () => !!listed && listed.readIn === window.generation(),
     loadingMore,
     loadNext,
     next: () => fireAndForget(loadNext(), 'contacts'),

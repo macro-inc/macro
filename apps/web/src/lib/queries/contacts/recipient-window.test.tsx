@@ -460,3 +460,94 @@ it('keeps nobody listed before a new cache generation while the list reads on', 
   await nextPage;
   client.clear();
 });
+
+it('keeps nobody listed below a first page read again in a new cache generation', async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient();
+  const [search, setSearch] = createSignal('');
+  let changeGeneration = () => {};
+  let changed = false;
+  const host = {
+    clientId: 'client',
+    onCacheChanged: () => () => {},
+    onCacheGenerationChanged: (listener: () => void) => {
+      changeGeneration = listener;
+      return () => {};
+    },
+  } as unknown as NonNullable<
+    ReturnType<Parameters<typeof createContactRecipientSource>[0]>['host']
+  >;
+  // Page one lists First, page two Sam Lee; page three is slow. After the
+  // generation changes, page one lists Fresh and nothing follows.
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (viewer, _host, request) => {
+      const after = request.cursor?.after;
+      if (after === 'third')
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      if (changed) await new Promise((resolve) => setTimeout(resolve, 50));
+      const name = after === 'second' ? 'Sam Lee' : changed ? 'Fresh' : 'First';
+      const email = `${name.split(' ')[0].toLowerCase()}@example.com`;
+      return {
+        query: request.query,
+        source: 'cache',
+        sync: 'snapshot',
+        offline: false,
+        users:
+          after === 'third' || request.query
+            ? []
+            : [{ id: `macro|${email}`, email, name }],
+        nextCursor:
+          changed || after === 'third'
+            ? null
+            : {
+                source: 'people',
+                generation: 'fixture',
+                after: after === 'second' ? 'third' : 'second',
+                userId: viewer,
+                query: request.query,
+                policyKey: hashKey([request.policy]),
+              },
+      };
+    });
+  let source: ReturnType<typeof createContactRecipientSource> | undefined;
+  function Harness() {
+    source = createContactRecipientSource(
+      () => ({ userId: 'macro|viewer@example.com', host }),
+      {
+        search,
+        enabled: () => true,
+        selfId: () => undefined,
+        senderDomain: () => undefined,
+        includeSelf: () => true,
+      },
+      () => false,
+      reader
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const listed = () => source!.items().map((item) => item.data.name);
+  await vi.advanceTimersByTimeAsync(0);
+  await source!.next();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(listed()).toEqual(['First', 'Sam Lee']);
+
+  // The list keeps Sam Lee below the first page read in the new generation,
+  // but typing keeps nobody read before it.
+  const third = Promise.allSettled([source!.next()]);
+  await vi.advanceTimersByTimeAsync(0);
+  changed = true;
+  changeGeneration();
+  await vi.advanceTimersByTimeAsync(60);
+  expect(listed()).toEqual(['Fresh', 'Sam Lee']);
+  setSearch('sam');
+  expect(listed()).toEqual([]);
+  await vi.advanceTimersByTimeAsync(800);
+  await third;
+  client.clear();
+});
