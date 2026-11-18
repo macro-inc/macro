@@ -35,6 +35,11 @@ mod statistics;
 const UNGROUPED_GROUP_PREFIX: &str = "macro-event-broker-independent";
 const MESSAGE_TIMEOUT_MS: &str = "5000";
 const SEND_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long librdkafka waits to check again a partition it found over a
+/// [`Prefetch::Bounded`] queue. Its 1 s default holds every partition back that
+/// long, and caps how fast a partition of quick records drains to one fetch a
+/// second.
+const BOUNDED_FETCH_QUEUE_BACKOFF_MS: &str = "10";
 
 #[derive(Default)]
 struct TraceHeaderInjector(HashMap<String, String>);
@@ -177,6 +182,32 @@ pub trait GroupName {
     /// `Earliest` replays everything the topic still retains there; `Latest`
     /// starts at the next record published.
     const INITIAL_OFFSET: InitialOffset = InitialOffset::Earliest;
+
+    /// How far ahead of the application the consumer fetches.
+    ///
+    /// A grouped consumer reads every assigned partition from one local queue,
+    /// in the order fetches return, so a record on a quiet partition waits
+    /// behind every record already fetched from a backlogged one.
+    const PREFETCH: Prefetch = Prefetch::Default;
+}
+
+/// How many records a grouped consumer keeps fetched ahead of the application,
+/// across all of its partitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Prefetch {
+    /// librdkafka's defaults: fetch until 100,000 records or 64 MiB are
+    /// queued, up to 1 MiB per partition per fetch.
+    Default,
+    /// Fetch a partition again only once fewer than `records` are queued, at
+    /// most `partition_bytes` from it per fetch, so the queue holds about
+    /// `records` plus one fetch per partition. A record batch larger than
+    /// `partition_bytes` is still fetched whole.
+    Bounded {
+        /// Queued records below which partitions are fetched again.
+        records: u32,
+        /// Most bytes one fetch takes from one partition.
+        partition_bytes: u32,
+    },
 }
 
 /// Marker type for a consumer that does not subscribe or persist offsets.
@@ -239,6 +270,16 @@ fn grouped_config<T: GroupName>(brokers: &str) -> ClientConfig {
             InitialOffset::Latest => "latest",
         },
     );
+    if let Prefetch::Bounded {
+        records,
+        partition_bytes,
+    } = T::PREFETCH
+    {
+        config
+            .set("queued.min.messages", records.to_string())
+            .set("fetch.message.max.bytes", partition_bytes.to_string())
+            .set("fetch.queue.backoff.ms", BOUNDED_FETCH_QUEUE_BACKOFF_MS);
+    }
     config
 }
 
