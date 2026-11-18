@@ -1791,11 +1791,11 @@ People outside the viewer's team (email and CRM contacts, Macro users on other
 teams, and one-to-one DMs with them) list after every row from the team in
 Cmd+K and mobile name search, typed or not: after teammates, channels,
 documents and group DMs, even rows that only contain the query (before typing,
-ahead of the never-used command catalog). Among themselves they keep the usual
-order, people the viewer messages first. Typing such a person's exact email
-address, or a full name of two or more words, ranks them among the team's
-results as someone never messaged, after the team's rows whose words start
-with the query, even when the viewer messages them. Verify with a team member and
+ahead of the command catalog that ends the list). Among themselves they keep the
+usual order, people the viewer messages first. Typing such a person's exact
+email address, or a full name of two or more words, ranks them among the team's
+results where someone never messaged would rank, even when the viewer messages
+them. Verify with a team member and
 outside contacts sharing a first name, a one-letter query, the empty **All**
 list, a full name a teammate and an outside contact share, and an outside email.
 

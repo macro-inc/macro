@@ -357,18 +357,40 @@ describe('command menu contact discovery', () => {
       ...directMessage('dm-adams', 'Jacob Adams', adams.id),
       sortTimestamp: 0,
     };
+    // Only contains the query mid-word, so it ranks below a DM whose name
+    // starts with it unless that DM is with someone outside the team.
+    const pair = directMessage('group-plan', 'Ajacobs plan', adams.id);
+    const groupDm: EntityItem = {
+      ...pair,
+      sortTimestamp: 0,
+      data: {
+        ...pair.data,
+        participantIds: [VIEWER, adams.id, rivera.id],
+      } as EntityItem['data'],
+    };
     t.setUsers([adams, rivera]);
-    t.setDms([riveraDm, adamsDm]);
+    t.setDms([riveraDm, adamsDm, groupDm]);
     t.setQuery('jacob');
     // While the roster loads nobody is outside the team.
-    expect(t.ids()).toEqual(['search:all:jacob', 'dm-rivera', 'dm-adams']);
-    t.setQuery('');
-    expect(t.ids()).toEqual(['dm-rivera', 'dm-adams']);
+    expect(t.ids()).toEqual([
+      'search:all:jacob',
+      'dm-rivera',
+      'dm-adams',
+      'group-plan',
+    ]);
 
+    // The roster arriving mid-search reorders the typed results.
     t.setTeam([VIEWER, adams.id]);
-    expect(t.ids()).toEqual(['dm-adams', 'dm-rivera']);
-    t.setQuery('jacob');
-    expect(t.ids()).toEqual(['search:all:jacob', 'dm-adams', 'dm-rivera']);
+    expect(t.ids()).toEqual([
+      'search:all:jacob',
+      'dm-adams',
+      'group-plan',
+      'dm-rivera',
+    ]);
+    t.setQuery('');
+    expect(t.ids()).toEqual(['dm-adams', 'group-plan', 'dm-rivera']);
+    t.setTeam([]);
+    expect(t.ids()).toEqual(['dm-rivera', 'dm-adams', 'group-plan']);
   });
 
   it('keeps contacts out of unrelated categories', () => {

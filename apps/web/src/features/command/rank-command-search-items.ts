@@ -157,23 +157,27 @@ function isNamedExactly(item: CommandMenuItem, term: string) {
 }
 
 /** With no query, rows keep their order, except that people outside the
- * viewer's team follow all of the team's rows, commands the viewer used
- * included. The never-used commands that end the list stay last, so these
- * people are not buried under the whole command catalog. */
+ * viewer's team follow the team's rows and the commands the viewer used
+ * among them. The command catalog that ends the list stays last, so these
+ * people are not buried under it. */
 export function listOutsidePeopleLast<T extends CommandMenuItem>(
   items: T[],
   team: TeamScope
 ): T[] {
   const outside = (item: T) => isOutsidePerson(item, team);
   const teamRows = items.filter((item) => !outside(item));
-  const catalogStart =
-    teamRows.findLastIndex(
-      (item) => item.kind !== 'command' || item.sortTimestamp > 0
-    ) + 1;
+  // The catalog starts at the first never-used command after the team's last
+  // other row. Go To commands follow it whether used or not, as without
+  // people outside the team.
+  const lastOther = teamRows.findLastIndex((item) => item.kind !== 'command');
+  const catalogStart = teamRows.findIndex(
+    (item, index) => index > lastOther && !(item.sortTimestamp > 0)
+  );
+  const at = catalogStart === -1 ? teamRows.length : catalogStart;
   return [
-    ...teamRows.slice(0, catalogStart),
+    ...teamRows.slice(0, at),
     ...items.filter(outside),
-    ...teamRows.slice(catalogStart),
+    ...teamRows.slice(at),
   ];
 }
 

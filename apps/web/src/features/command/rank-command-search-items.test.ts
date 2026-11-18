@@ -1061,9 +1061,11 @@ describe('people outside the team', () => {
       // A command used before the last DM is still one of the team's rows.
       command('older-command', 'Open settings', NOW - 2 * DAY),
       dm('older-outside-dm', 'Jordan Lee', [VIEWER, 'lee']),
-      // The command catalog follows the recent rows.
-      command('catalog-a', 'Go to Home', 0),
-      command('catalog-b', 'Go to Tasks', 0),
+      // The command catalog follows the recent rows. Go To commands are
+      // listed after the others, so a used one can follow never-used ones.
+      command('catalog-a', 'Create task', 0),
+      command('catalog-go-to', 'Go to Tasks', NOW - 3 * DAY),
+      command('catalog-b', 'Go to Home', 0),
     ];
     const team = { teammateIds: TEAM, viewerId: VIEWER };
 
@@ -1078,6 +1080,7 @@ describe('people outside the team', () => {
       'outside-crm',
       'older-outside-dm',
       'catalog-a',
+      'catalog-go-to',
       'catalog-b',
     ]);
     expect(
