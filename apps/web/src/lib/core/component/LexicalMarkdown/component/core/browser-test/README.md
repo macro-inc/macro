@@ -89,8 +89,10 @@ items in three editors (`list-enter.html?surface=`): the document editor's
 plugins, a Markdown editor with no Enter handler of its own, and a composer
 whose Enter sends. In each, Enter on an item with text adds an item, Enter on
 an empty top-level item leaves the list, and Enter on an empty nested item
-outdents it one level. The composer keeps Enter for the list while the caret
-is in one, sends once it is outside every list, and still sends on Cmd/Ctrl+Enter.
+outdents it one level. The composer keeps Enter for the list while the caret,
+or either end of a selection, is in one, sends once it is outside every list,
+and still sends on Cmd/Ctrl+Enter. A fourth surface, a single-line field like
+the list search bar, submits on Enter even in a pasted list.
 Run just this case by adding `list-enter.browser.e2e.ts` to the command above;
 on a machine with many network interfaces, run it under
 `bwrap --dev-bind / / --unshare-net` (see `apps/web/AGENTS.md`).

@@ -131,6 +131,36 @@ describe('$enterContinuesList', () => {
   });
 
   test.each([
+    ['forward', 'one', 'after'],
+    ['backward', 'after', 'one'],
+  ])(
+    'is true for a %s selection from a list into the paragraph after it',
+    (_name, from, to) => {
+      const editor = createEditor({ nodes: [ListNode, ListItemNode] });
+      let result = false;
+      editor.update(
+        () => {
+          $getRoot().append(
+            $createListNode('bullet').append($item('one')),
+            $createParagraphNode().append($createTextNode('after'))
+          );
+          const [anchor, focus] = [from, to].map((text) =>
+            $getRoot()
+              .getAllTextNodes()
+              .find((node) => node.getTextContent() === text)
+          );
+          if (!anchor || !focus) throw new Error('missing text');
+          const selection = anchor.select(1, 1);
+          selection.focus.set(focus.getKey(), 1, 'text');
+          result = $enterContinuesList(PLAIN);
+        },
+        { discrete: true }
+      );
+      expect(result).toBe(true);
+    }
+  );
+
+  test.each([
     ['Cmd', { metaKey: true, ctrlKey: false }],
     ['Ctrl', { metaKey: false, ctrlKey: true }],
   ])('is false with %s held, so the composer sends', (_name, event) => {

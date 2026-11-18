@@ -46,6 +46,8 @@ import { ComposerEditor } from '../../ComposerEditor';
  *   prompts, the document composer).
  * - `chat`: a composer whose Enter sends, as channels, comments and AI inputs
  *   do; `sent()` lists what it sent.
+ * - `search`: a single-line field whose Enter submits, as the list search bar
+ *   does; `sent()` lists what it submitted.
  * The page offers `ListEnterApi` as `window.listEnter`.
  */
 export type ListEnterApi = {
@@ -62,6 +64,8 @@ export type ListEnterApi = {
   caretAt: (text: string, edge: 'start' | 'end') => boolean;
   /** The outline line of the block holding the caret. */
   caretLine: () => string | null;
+  /** The text the editor holds selected, empty for a caret. */
+  selectedText: () => string;
 };
 export type ListEnterWindow = Window & { listEnter?: ListEnterApi };
 
@@ -151,6 +155,8 @@ function publish(
       editor.focus();
       return found;
     },
+    selectedText: () =>
+      editor.read(() => $getSelection()?.getTextContent() ?? ''),
     caretLine: () =>
       editor.read(() => {
         const selection = $getSelection();
@@ -232,15 +238,15 @@ function MarkdownSurface() {
   );
 }
 
-function ChatSurface() {
+/** An editor whose Enter sends what it holds, published as `window.listEnter`. */
+function createSendingEditor(namespace: string, singleLine: boolean) {
   const [sent, setSent] = createSignal<string[]>([]);
-  const editor = buildConfig('chat')
-    .namespace('list-enter-chat')
-    .withHistory()
-    .onEnter((_event, markdown) => {
-      setSent((previous) => [...previous, markdown]);
-      return true;
-    });
+  const config = buildConfig('chat').namespace(namespace).withHistory();
+  if (singleLine) config.singleLine();
+  const editor = config.onEnter((_event, markdown) => {
+    setSent((previous) => [...previous, markdown]);
+    return true;
+  });
   onMount(() =>
     publish(
       editor.lexical,
@@ -252,8 +258,20 @@ function ChatSurface() {
       sent
     )
   );
+  return editor;
+}
+
+function ChatSurface() {
+  const editor = createSendingEditor('list-enter-chat', false);
   return (
     <ComposerEditor config={editor} initialValue={initial} ariaLabel="Editor" />
+  );
+}
+
+function SearchSurface() {
+  const editor = createSendingEditor('list-enter-search', true);
+  return (
+    <MarkdownShell config={editor} initialValue={initial} ariaLabel="Editor" />
   );
 }
 
@@ -278,6 +296,9 @@ function Fixture() {
                 </Show>
                 <Show when={surface === 'chat'}>
                   <ChatSurface />
+                </Show>
+                <Show when={surface === 'search'}>
+                  <SearchSurface />
                 </Show>
               </main>
             </DragDropProvider>

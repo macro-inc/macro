@@ -162,7 +162,9 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
           Object.defineProperty(e, 'shiftKey', { value: false });
           return false;
         }
-        if ($enterContinuesList(e)) return false;
+        // Single-line editors have no list handling: a pasted list there
+        // keeps the field's own Enter.
+        if (!builderConfig.singleLine && $enterContinuesList(e)) return false;
         const captured = onEnter(e, markdownState());
         if (captured) {
           e.preventDefault();

@@ -6,7 +6,9 @@ import type { ListEnterWindow } from './list-enter';
  * text adds an item, Enter on an empty top-level item leaves the list, and
  * Enter on an empty nested item outdents it one level. In a composer whose
  * Enter sends, Enter inside a list belongs to the list; it sends once the
- * caret is outside every list, and Cmd/Ctrl+Enter sends from anywhere.
+ * caret is outside every list, and Cmd/Ctrl+Enter sends from anywhere. A
+ * single-line field (the list search bar) has no lists: its Enter submits
+ * even when a pasted list put the caret in one.
  */
 
 type Case = {
@@ -156,7 +158,10 @@ const CASES: Case[] = [
 const FIXTURE =
   '/src/lib/core/component/LexicalMarkdown/component/core/browser-test/list-enter.html';
 
-function read<T>(page: Page, key: 'outline' | 'caretLine' | 'sent') {
+function read<T>(
+  page: Page,
+  key: 'outline' | 'caretLine' | 'sent' | 'selectedText'
+) {
   return page.evaluate((name) => {
     const listEnter = (window as ListEnterWindow).listEnter;
     if (!listEnter) throw new Error('list-enter fixture is not ready');
@@ -167,6 +172,7 @@ function read<T>(page: Page, key: 'outline' | 'caretLine' | 'sent') {
 const outline = (page: Page) => read<string[]>(page, 'outline');
 const caretLine = (page: Page) => read<string | null>(page, 'caretLine');
 const sent = (page: Page) => read<string[]>(page, 'sent');
+const selectedText = (page: Page) => read<string>(page, 'selectedText');
 
 async function open(page: Page, surface: string) {
   await page.route('**/*', async (route) => {
@@ -192,6 +198,21 @@ async function load(page: Page, markdown: string, expected: string[]) {
   await expect.poll(() => outline(page)).toEqual(expected);
 }
 
+/** Pastes `text` as plain text into the focused editor. */
+async function pastePlainText(page: Page, text: string) {
+  await page.evaluate((value) => {
+    const data = new DataTransfer();
+    data.setData('text/plain', value);
+    document.activeElement?.dispatchEvent(
+      new ClipboardEvent('paste', {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  }, text);
+}
+
 async function placeCaret(page: Page, text: string, edge: 'start' | 'end') {
   const found = await page.evaluate(
     ([value, side]) =>
@@ -204,7 +225,7 @@ async function placeCaret(page: Page, text: string, edge: 'start' | 'end') {
     .toBe('Editor');
 }
 
-for (const surface of ['document', 'markdown', 'chat']) {
+for (const surface of ['document', 'markdown', 'chat', 'search']) {
   test.describe(`${surface} editor`, () => {
     let page: Page;
     const errors: string[] = [];
@@ -231,6 +252,19 @@ for (const surface of ['document', 'markdown', 'chat']) {
     });
     test.afterAll(() => page.close());
     test.afterEach(() => expect(errors.splice(0)).toEqual([]));
+
+    if (surface === 'search') {
+      test('Enter in a pasted list submits the field', async () => {
+        await load(page, '', ['¶ ']);
+        await placeCaret(page, '', 'end');
+        await pastePlainText(page, '- one');
+        await expect.poll(() => outline(page)).toEqual(['- one']);
+        await page.keyboard.press('Enter');
+        expect(await sent(page)).toEqual(['- one']);
+        expect(await outline(page)).toEqual(['- one']);
+      });
+      return;
+    }
 
     for (const testCase of CASES) {
       test(testCase.name, async () => {
@@ -265,6 +299,26 @@ for (const surface of ['document', 'markdown', 'chat']) {
       const [message] = await sent(page);
       expect(message?.trim()).toBe('- one\n- two');
     });
+
+    for (const [direction, from, key] of [
+      ['forward', 'two', 'Shift+ArrowDown'],
+      ['backward', 'after', 'Shift+ArrowUp'],
+    ] as const) {
+      test(`Enter on a ${direction} selection from a list into the paragraph after stays in the list`, async () => {
+        await load(page, '- one\n- two\n\nafter', [
+          '- one',
+          '- two',
+          '¶ after',
+        ]);
+        await placeCaret(page, from, 'end');
+        await page.keyboard.press(key);
+        // Lexical takes the new selection from the browser's selectionchange.
+        await expect.poll(() => selectedText(page)).not.toBe('');
+        await page.keyboard.press('Enter');
+        expect(await sent(page)).toEqual([]);
+        expect(await caretLine(page)).toMatch(/^- /);
+      });
+    }
 
     test('Cmd/Ctrl+Enter inside a list sends', async () => {
       await load(page, '- one\n- two', ['- one', '- two']);
