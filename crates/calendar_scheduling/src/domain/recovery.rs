@@ -3,6 +3,11 @@ use super::{models::*, ports::*, service::Service};
 use chrono::{Duration, Utc};
 use uuid::Uuid;
 
+/// Recovery claims an operation gets before a calendar that keeps failing
+/// leaves its booking failed. Retries back off to an hour, so this is about a
+/// day of attempts.
+pub const MAX_RECOVERY_ATTEMPTS: u32 = 24;
+
 impl CalendarOperation {
     /// Start a recoverable operation; the grace period exceeds provider request timeouts.
     pub fn new(kind: CalendarOperationKind) -> Self {
@@ -11,6 +16,7 @@ impl CalendarOperation {
             attempt: 0,
             retry_at: Utc::now() + Duration::minutes(5),
             kind,
+            abandoned_at: None,
         }
     }
 }
@@ -23,9 +29,6 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         };
         let id = record.booking.id;
         let attempt = record.operation.as_ref().map_or(0, |op| op.attempt);
-        if attempt >= 3 {
-            tracing::error!(booking_id = %id, attempt, "scheduling recovery requires operator attention");
-        }
         let result = self.finish_operation(record).await?;
         if matches!(
             result.booking.status,
@@ -70,6 +73,15 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         };
         if let Err(error) = result {
             record.booking.status = BookingStatus::Failed;
+            if matches!(error, Error::CalendarRejected)
+                || operation.attempt >= MAX_RECOVERY_ATTEMPTS
+            {
+                if let Some(op) = &mut record.operation {
+                    op.abandoned_at = Some(Utc::now());
+                }
+                tracing::error!(booking_id = %record.booking.id, attempt = operation.attempt, error = ?error, "scheduling operation abandoned; booking left failed");
+                return self.persist_completion(record).await;
+            }
             // Keep both reservations after an uncertain move. Never expose an occupied slot.
             let minutes = 5_i64 * 2_i64.pow(operation.attempt.min(4));
             if let Some(op) = &mut record.operation {

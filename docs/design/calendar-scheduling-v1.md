@@ -42,7 +42,7 @@ current-period bookings and escapes spreadsheet formulas.
 - Provider writes have durable, version-fenced recovery. Create uses a stable organizer-scoped
   provider ID; cancellation can replay after the canonical calendar record disappears.
   Uncertain writes retain reservations, return a private receipt, and retry automatically.
-  Repeated failures require operator attention; see the release checklist below.
+  A calendar refusal or exhausted retries leave the booking failed; see recovery below.
 - Hosted activation still requires both scheduling migrations and the updated calendar
   service. The isolated browser fixture uses explicitly labelled sample data and
   the real UI components; its mutations do not send invitations or change Cal.com.
@@ -102,13 +102,20 @@ tests do not verify real invitations, OAuth, or Meet creation.
 The calendar service polls every 15 seconds, at most 25 operations per pass. Each claim has a
 five-minute lease, an incremented operation attempt, and a booking revision. All edits use the
 revision, protecting against confirmed → processing → confirmed races. Provider errors back off
-from five minutes to one hour; the third recovery attempt emits an operator-attention error.
-Completed claims clear their due timestamp. Disconnected/inaccessible calendars keep reservations
-until access is restored; recovery never interprets lost permission as a successful deletion.
+from five minutes to one hour. A refusal decided before anything reaches the provider (no writable
+calendar, a read-only calendar, an event the host can no longer see) abandons the operation at once.
+Anything else, including a provider rejection, which also reports a write that landed but could not
+be read back, abandons it after 24 recovery attempts (`MAX_RECOVERY_ATTEMPTS`, about a day). The
+booking stays failed, its due timestamp is cleared, and it is never claimed again. Completed claims
+clear their due timestamp. An abandoned booking keeps its reservations; recovery never interprets
+lost permission as a successful deletion. Cancelling it, which a failed booking otherwise refuses
+while recovery owns it, releases them once the calendar accepts the cancellation. An abandoned move
+stays at the requested time with both intervals held, while the calendar keeps the original time.
 
 Use the calendar-service logs for `scheduling operation queued for recovery`, `scheduling operation
-recovered`, `scheduling recovery requires operator attention`, and `scheduling completion persistence
-unavailable`. Alert on operator-attention/persistence errors and sustained scheduling 5xx. During
+recovered`, `scheduling operation abandoned; booking left failed`, and `scheduling completion
+persistence unavailable`. Alert on abandoned operations, persistence errors and sustained scheduling
+5xx. During
 rollout, also check overdue rows so a stopped worker cannot hide behind missing logs:
 
 ```sql
