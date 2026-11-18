@@ -6082,6 +6082,12 @@ export interface Booking {
    */
   rescheduledAt?: string | null;
   /**
+   * When Macro stopped trying to update the host's calendar for the
+   * booking's latest change. A failed booking with this set is not being
+   * retried, and cancelling it is the way to release its time.
+   */
+  abandonedAt?: string | null;
+  /**
    * Final location or conference URL.
    */
   location: string;
