@@ -6,6 +6,7 @@ import type { Bot } from '@service-storage/generated/schemas/bot';
 import type { CreateChannelScopedBotRequest } from '@service-storage/generated/schemas/createChannelScopedBotRequest';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { channelKeys } from './keys';
+import { refreshChannelParticipants } from './participants';
 
 type AddBotToChannelParams = {
   channelId: string;
@@ -70,9 +71,7 @@ async function invalidateBotChannelViews(botId: string, channelIds: string[]) {
     invalidateBotChannels(botId),
     ...[...new Set(channelIds)].flatMap((channelId) => [
       invalidateChannelBots(channelId),
-      queryClient.invalidateQueries({
-        queryKey: channelKeys.participants(channelId).queryKey,
-      }),
+      refreshChannelParticipants(channelId),
     ]),
   ]);
 }

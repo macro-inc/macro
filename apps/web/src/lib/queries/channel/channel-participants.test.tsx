@@ -1,0 +1,206 @@
+/**
+ * @vitest-environment jsdom
+ */
+import type { ChannelEntity } from '@entity/types/entity';
+import type { ChannelParticipant } from '@service-storage/generated/schemas/channelParticipant';
+import { cleanup, render, waitFor } from '@solidjs/testing-library';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { err, ok } from 'neverthrow';
+import { createSignal } from 'solid-js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const testQueryClient = vi.hoisted(() => ({ current: undefined as unknown }));
+vi.mock('../client', () => ({
+  get queryClient() {
+    return testQueryClient.current;
+  },
+}));
+
+const detail = vi.hoisted(() => ({
+  pending: true,
+  entities: [] as unknown[],
+  listeners: new Set<() => void>(),
+}));
+vi.mock('./detail', async () => {
+  const { createSignal } = await import('solid-js');
+  const [version, setVersion] = createSignal(0);
+  detail.listeners.add(() => setVersion((value) => value + 1));
+  return {
+    createChannelDetailQuery: vi.fn(() => ({
+      get isPending() {
+        version();
+        return detail.pending;
+      },
+      isLoading: false,
+      get data() {
+        version();
+        return detail.pending ? undefined : { entities: detail.entities };
+      },
+    })),
+  };
+});
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: () => ({}),
+}));
+
+const storage = vi.hoisted(() => ({
+  addParticipantsToChannel: vi.fn(),
+  removeParticipantsFromChannel: vi.fn(),
+}));
+vi.mock('@service-storage/client', () => ({ storageServiceClient: storage }));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: vi.fn() },
+}));
+
+import { useChannelParticipantsQuery } from './channel-participants';
+import {
+  useAddParticipantsMutation,
+  useRemoveParticipantsMutation,
+} from './participants';
+
+function participant(
+  userId: string,
+  joinedAt: string,
+  role: ChannelParticipant['role'] = 'member'
+): ChannelParticipant {
+  return {
+    channel_id: 'channel-1',
+    user_id: userId,
+    role,
+    joined_at: joinedAt,
+    left_at: null,
+  };
+}
+
+function setDetail(participants: ChannelParticipant[] | undefined) {
+  detail.pending = participants === undefined;
+  detail.entities = participants
+    ? [
+        {
+          id: 'channel-1',
+          type: 'channel',
+          participants,
+        } as Partial<ChannelEntity>,
+      ]
+    : [];
+  for (const listener of detail.listeners) listener();
+}
+
+function mount() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  testQueryClient.current = client;
+  let query!: ReturnType<typeof useChannelParticipantsQuery>;
+  let add!: ReturnType<typeof useAddParticipantsMutation>;
+  let remove!: ReturnType<typeof useRemoveParticipantsMutation>;
+  const [channelId] = createSignal('channel-1');
+  render(() => (
+    <QueryClientProvider client={client}>
+      {(() => {
+        query = useChannelParticipantsQuery(channelId);
+        add = useAddParticipantsMutation();
+        remove = useRemoveParticipantsMutation();
+        return null;
+      })()}
+    </QueryClientProvider>
+  ));
+  const ids = () => query.data?.map((participant) => participant.user_id);
+  return { query, add, remove, ids };
+}
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+  setDetail(undefined);
+});
+
+describe('useChannelParticipantsQuery', () => {
+  it('reads the participants from the channel record', () => {
+    const { query, ids } = mount();
+    expect(query.isPending).toBe(true);
+    expect(query.data).toBeUndefined();
+
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'owner'),
+      participant('member', '2026-01-02T00:00:00Z'),
+    ]);
+
+    expect(query.isSuccess).toBe(true);
+    expect(ids()).toEqual(['owner', 'member']);
+    expect(query.data?.[0]?.role).toBe('owner');
+  });
+
+  it('has no participants for a channel the viewer cannot read', () => {
+    const { query } = mount();
+    detail.pending = false;
+    detail.entities = [];
+    for (const listener of detail.listeners) listener();
+
+    expect(query.isPending).toBe(false);
+    expect(query.isSuccess).toBe(false);
+    expect(query.data).toBeUndefined();
+  });
+
+  it('shows an add while it is pending and keeps it once it succeeds', async () => {
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    const response = Promise.withResolvers<unknown>();
+    storage.addParticipantsToChannel.mockReturnValue(response.promise);
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['new', 'owner'] });
+    await waitFor(() => expect(ids()).toEqual(['owner', 'new']));
+
+    response.resolve(ok({}));
+    await waitFor(() => expect(add.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner', 'new']);
+
+    // The channel's soup update arrives; nothing is shown twice.
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'owner'),
+      participant('new', '2026-01-03T00:00:00Z'),
+    ]);
+    expect(ids()).toEqual(['owner', 'new']);
+  });
+
+  it('rolls an add back when it fails', async () => {
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    const response = Promise.withResolvers<unknown>();
+    storage.addParticipantsToChannel.mockReturnValue(response.promise);
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['new'] });
+    await waitFor(() => expect(ids()).toEqual(['owner', 'new']));
+
+    response.resolve(err([{ code: 'HTTP_ERROR', message: 'refused' }]));
+    await waitFor(() => expect(add.isError).toBe(true));
+    expect(ids()).toEqual(['owner']);
+  });
+
+  it('hides a removed participant until the record drops them, and restores them on failure', async () => {
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'owner'),
+      participant('member', '2026-01-02T00:00:00Z'),
+    ]);
+    const response = Promise.withResolvers<unknown>();
+    storage.removeParticipantsFromChannel.mockReturnValue(response.promise);
+    const { remove, ids } = mount();
+
+    remove.mutate({ channelId: 'channel-1', participants: ['member'] });
+    await waitFor(() => expect(ids()).toEqual(['owner']));
+
+    response.resolve(err([{ code: 'HTTP_ERROR', message: 'refused' }]));
+    await waitFor(() => expect(remove.isError).toBe(true));
+    expect(ids()).toEqual(['owner', 'member']);
+  });
+
+  it('ignores changes made to another channel', async () => {
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockReturnValue(new Promise(() => {}));
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-2', participants: ['other'] });
+    await waitFor(() => expect(add.isPending).toBe(true));
+    expect(ids()).toEqual(['owner']);
+  });
+});

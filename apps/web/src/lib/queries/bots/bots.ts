@@ -4,6 +4,7 @@ import { storageServiceClient } from '@service-storage/client';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { channelKeys } from '../channel/keys';
+import { refreshChannelParticipants } from '../channel/participants';
 import { botKeys, botProfileKeys } from './keys';
 
 type CreateBotParams = {
@@ -132,9 +133,7 @@ export function useDeleteBotMutation() {
           queryClient.invalidateQueries({
             queryKey: channelKeys.channelBots(channelId).queryKey,
           }),
-          queryClient.invalidateQueries({
-            queryKey: channelKeys.participants(channelId).queryKey,
-          }),
+          refreshChannelParticipants(channelId),
         ]),
       ]);
     },

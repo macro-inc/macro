@@ -7,8 +7,8 @@ import type { ChannelAccessRequest } from '@service-storage/generated/schemas/ch
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
-import { invalidateChannelParticipants } from './channel-participants';
 import { channelKeys } from './keys';
+import { refreshChannelParticipants } from './participants';
 
 /** The viewer's own latest request to join a channel they cannot read. */
 export function myChannelAccessRequestQueryOptions(channelId: string) {
@@ -132,7 +132,7 @@ export function useResolveChannelAccessRequestMutation() {
         request
       );
       if (request.status === 'approved')
-        return invalidateChannelParticipants(channelId);
+        return refreshChannelParticipants(channelId);
     },
     onError(_error, { channelId, requestId }) {
       toast.failure(t('entityActions.toastChannelAccessResolveFailed'));

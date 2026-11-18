@@ -4,6 +4,7 @@
 
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { uploadFile } from '@core/util/upload';
+import { refreshChannelParticipants } from '@queries/channel/participants';
 import { storageServiceClient } from '@service-storage/client';
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -33,6 +34,10 @@ vi.mock('@service-storage/client', () => ({
 
 vi.mock('@core/util/upload', () => ({
   uploadFile: vi.fn(),
+}));
+
+vi.mock('@queries/channel/participants', () => ({
+  refreshChannelParticipants: vi.fn(async () => {}),
 }));
 
 import {
@@ -236,9 +241,7 @@ describe('agent channel-bot cache invalidation', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: channelKeys.channelBots('channel-old').queryKey,
     });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: channelKeys.participants('channel-old').queryKey,
-    });
+    expect(refreshChannelParticipants).toHaveBeenCalledWith('channel-old');
   });
 });
 

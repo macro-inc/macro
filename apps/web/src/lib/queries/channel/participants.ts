@@ -1,168 +1,69 @@
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
+import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   type MessageResponse,
   storageServiceClient,
 } from '@service-storage/client';
+import { ChannelDetailSoupDocument } from '@service-storage/graphql/generated/graphql';
 import { useMutation } from '@tanstack/solid-query';
-import { queryClient } from '../client';
-import { softInvalidateChannelParticipants } from './channel-participants';
-import { channelKeys } from './keys';
-import type { ChannelParticipant } from './types';
+import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
+import { channelNotificationRefresh } from './notification-refresh';
 
-type WithChannelId<T> = T & { channelId: string };
-
-type AddParticipantsContext = {
-  addedUserIds: string[];
-};
-
-type RemoveParticipantsContext = {
-  removedParticipants: ChannelParticipant[];
-};
-
-/**
- * Optimistically add participants to a channel.
- * Returns minimal context for rollback.
- */
-function optimisticAddParticipants(
-  vars: WithChannelId<{ participants: string[] }>
-): AddParticipantsContext | undefined {
-  const participantsQueryKey = channelKeys.participants(
-    vars.channelId
-  ).queryKey;
-  queryClient.cancelQueries({ queryKey: participantsQueryKey });
-
-  let context: AddParticipantsContext | undefined;
-  queryClient.setQueryData(
-    participantsQueryKey,
-    (prev: ChannelParticipant[] | undefined) => {
-      if (!prev) return prev;
-
-      const existingUserIds = new Set(
-        prev.map((participant) => participant.user_id)
-      );
-      const addedUserIds = vars.participants.filter(
-        (userId) => !existingUserIds.has(userId)
-      );
-
-      if (addedUserIds.length === 0) return prev;
-      context = { addedUserIds };
-
-      const addedParticipants: ChannelParticipant[] = addedUserIds.map(
-        (userId) => ({
-          user_id: userId,
-          role: 'member',
-          left_at: null,
-          joined_at: new Date().toISOString(),
-          channel_id: vars.channelId,
-        })
-      );
-
-      return [...prev, ...addedParticipants];
-    }
-  );
-
-  return context;
-}
+export const CHANNEL_PARTICIPANTS_MUTATION_KEY = [
+  'channel-participants',
+] as const;
+export const ADD_CHANNEL_PARTICIPANTS_MUTATION_KEY = [
+  ...CHANNEL_PARTICIPANTS_MUTATION_KEY,
+  'add',
+] as const;
+export const REMOVE_CHANNEL_PARTICIPANTS_MUTATION_KEY = [
+  ...CHANNEL_PARTICIPANTS_MUTATION_KEY,
+  'remove',
+] as const;
 
 /**
- * Rollback an optimistic add participants by removing them.
+ * How long a finished add or remove keeps showing after its last observer
+ * leaves, so a reader opened meanwhile does not show the old roster before
+ * the channel's soup update arrives.
  */
-function rollbackAddParticipants(
-  channelId: string,
-  context: AddParticipantsContext
-): void {
-  const participantsQueryKey = channelKeys.participants(channelId).queryKey;
+export const CHANNEL_PARTICIPANTS_MUTATION_GC_MS = 30_000;
 
-  queryClient.setQueryData(
-    participantsQueryKey,
-    (prev: ChannelParticipant[] | undefined) => {
-      if (!prev) return prev;
-
-      const addedSet = new Set(context.addedUserIds);
-      return prev.filter((participant) => !addedSet.has(participant.user_id));
-    }
-  );
-}
-
-/**
- * Optimistically remove participants from a channel.
- * Returns minimal context for rollback.
- */
-function optimisticRemoveParticipants(
-  vars: WithChannelId<{ participants: string[] }>
-): RemoveParticipantsContext | undefined {
-  const participantsQueryKey = channelKeys.participants(
-    vars.channelId
-  ).queryKey;
-  queryClient.cancelQueries({ queryKey: participantsQueryKey });
-
-  let context: RemoveParticipantsContext | undefined;
-
-  queryClient.setQueryData(
-    participantsQueryKey,
-    (prev: ChannelParticipant[] | undefined) => {
-      if (!prev) return prev;
-
-      const toRemoveSet = new Set(vars.participants);
-      const removedParticipants = prev.filter((participant) =>
-        toRemoveSet.has(participant.user_id)
-      );
-
-      if (removedParticipants.length === 0) return prev;
-      if (!context) {
-        context = { removedParticipants };
-      }
-
-      return prev.filter(
-        (participant) => !toRemoveSet.has(participant.user_id)
-      );
-    }
-  );
-
-  return context;
-}
-
-/**
- * Rollback an optimistic remove participants by re-adding them.
- */
-function rollbackRemoveParticipants(
-  channelId: string,
-  context: RemoveParticipantsContext
-): void {
-  const participantsQueryKey = channelKeys.participants(channelId).queryKey;
-
-  queryClient.setQueryData(
-    participantsQueryKey,
-    (prev: ChannelParticipant[] | undefined) => {
-      if (!prev) return prev;
-
-      const existingUserIds = new Set(
-        prev.map((participant) => participant.user_id)
-      );
-      const restoredParticipants = context.removedParticipants.filter(
-        (participant) => !existingUserIds.has(participant.user_id)
-      );
-
-      if (restoredParticipants.length === 0) return prev;
-      return [...prev, ...restoredParticipants];
-    }
-  );
-}
-
-type AddParticipantsParams = {
+export type ChannelParticipantsMutationVariables = {
   channelId: string;
   participants: string[];
 };
 
-type RemoveParticipantsParams = {
-  channelId: string;
-  participants: string[];
-};
+/**
+ * Re-reads the channel's GraphQL record for mounted participant readers after
+ * a write the normalized cache cannot apply itself (a bot or agent joining,
+ * an approved request, auto-join). Resolves without a request when nothing
+ * reads the channel, and never fails the write that asked for it.
+ */
+export async function refreshChannelParticipants(channelId: string) {
+  const input = buildGraphqlEntitySoupInput('CHANNEL', channelId);
+  if (!input) return;
+  await Promise.allSettled([
+    refreshChannelDetail({
+      document: ChannelDetailSoupDocument,
+      variables: { input },
+    }),
+  ]);
+}
 
-type AddParticipantsMutationContext = AddParticipantsContext | undefined;
-type RemoveParticipantsMutationContext = RemoveParticipantsContext | undefined;
+// The soup client module sets up the GraphQL cache; load it only when a write
+// needs a refresh, so mutation modules stay light to import.
+async function refreshChannelDetail(query: QueryRevalidation) {
+  const { getGraphqlSoupClient } = await import(
+    '@service-storage/graphql-soup'
+  );
+  await channelNotificationRefresh(getGraphqlSoupClient()).refresh([query]);
+}
+
+// Readers show these mutations over the channel's participants while they are
+// pending and until the channel's soup update confirms them
+// (`useChannelParticipantsQuery`); a failed one drops out, which rolls it back.
 
 /**
  * Mutation to add participants to a channel.
@@ -171,13 +72,14 @@ export function useAddParticipantsMutation(
   callbacks?: MutationCallbacks<
     MessageResponse,
     Error,
-    AddParticipantsParams,
-    AddParticipantsMutationContext
+    ChannelParticipantsMutationVariables,
+    unknown
   >
 ) {
   return useMutation(() => ({
-    gcTime: 0,
-    mutationFn: async (vars: AddParticipantsParams) => {
+    mutationKey: ADD_CHANNEL_PARTICIPANTS_MUTATION_KEY,
+    gcTime: CHANNEL_PARTICIPANTS_MUTATION_GC_MS,
+    mutationFn: async (vars: ChannelParticipantsMutationVariables) => {
       return await throwOnErr(
         async () =>
           await storageServiceClient.addParticipantsToChannel({
@@ -189,24 +91,14 @@ export function useAddParticipantsMutation(
     ...withCallbacks<
       MessageResponse,
       Error,
-      AddParticipantsParams,
-      AddParticipantsMutationContext
+      ChannelParticipantsMutationVariables,
+      unknown
     >(
       {
-        onMutate: (vars) =>
-          optimisticAddParticipants({
-            channelId: vars.channelId,
-            participants: vars.participants,
-          }),
-        onError(error, vars, context) {
+        onError(error) {
           console.error('failed to add participants', error);
           toast.failure('Failed to add participants to channel');
-          if (context) {
-            rollbackAddParticipants(vars.channelId, context);
-          }
         },
-        onSettled: (_, __, vars) =>
-          softInvalidateChannelParticipants(vars.channelId),
       },
       callbacks
     ),
@@ -220,13 +112,14 @@ export function useRemoveParticipantsMutation(
   callbacks?: MutationCallbacks<
     MessageResponse,
     Error,
-    RemoveParticipantsParams,
-    RemoveParticipantsMutationContext
+    ChannelParticipantsMutationVariables,
+    unknown
   >
 ) {
   return useMutation(() => ({
-    gcTime: 0,
-    mutationFn: async (vars: RemoveParticipantsParams) => {
+    mutationKey: REMOVE_CHANNEL_PARTICIPANTS_MUTATION_KEY,
+    gcTime: CHANNEL_PARTICIPANTS_MUTATION_GC_MS,
+    mutationFn: async (vars: ChannelParticipantsMutationVariables) => {
       return await throwOnErr(
         async () =>
           await storageServiceClient.removeParticipantsFromChannel({
@@ -238,24 +131,14 @@ export function useRemoveParticipantsMutation(
     ...withCallbacks<
       MessageResponse,
       Error,
-      RemoveParticipantsParams,
-      RemoveParticipantsMutationContext
+      ChannelParticipantsMutationVariables,
+      unknown
     >(
       {
-        onMutate: (vars) =>
-          optimisticRemoveParticipants({
-            channelId: vars.channelId,
-            participants: vars.participants,
-          }),
-        onError(error, vars, context) {
+        onError(error) {
           console.error('failed to remove participants', error);
           toast.failure('Failed to remove participants from channel');
-          if (context) {
-            rollbackRemoveParticipants(vars.channelId, context);
-          }
         },
-        onSettled: (_, __, vars) =>
-          softInvalidateChannelParticipants(vars.channelId),
       },
       callbacks
     ),

@@ -1,31 +1,57 @@
-import { storageServiceClient } from '@service-storage/client';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { ok } from 'neverthrow';
 import { Suspense } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useChannelParticipants } from './use-channel-participants';
 
+const detail = vi.hoisted(() => ({
+  pending: true,
+  entities: [] as unknown[],
+  listeners: new Set<() => void>(),
+  enabled: [] as boolean[],
+}));
+vi.mock('@queries/channel/detail', async () => {
+  const { createSignal } = await import('solid-js');
+  const [version, setVersion] = createSignal(0);
+  detail.listeners.add(() => setVersion((value) => value + 1));
+  return {
+    createChannelDetailQuery: (
+      _channelId: () => string,
+      enabled: () => boolean
+    ) => {
+      detail.enabled.push(enabled());
+      return {
+        get isPending() {
+          version();
+          return detail.pending;
+        },
+        isLoading: false,
+        get data() {
+          version();
+          return detail.pending ? undefined : { entities: detail.entities };
+        },
+      };
+    },
+  };
+});
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
 });
-vi.mock('@service-storage/client', () => ({
-  storageServiceClient: { getChannelParticipants: vi.fn() },
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: () => ({}),
 }));
 
-const clients: QueryClient[] = [];
+import { useChannelParticipants } from './use-channel-participants';
+
 afterEach(() => {
   cleanup();
-  for (const client of clients.splice(0)) client.clear();
-  vi.clearAllMocks();
+  detail.pending = true;
+  detail.entities = [];
+  detail.enabled = [];
 });
 
 function mount(channelId: string) {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  clients.push(client);
+  const client = new QueryClient();
   function View() {
     const participants = useChannelParticipants(() => channelId);
     return (
@@ -53,32 +79,33 @@ function expectContent(text: string) {
 }
 
 describe('useChannelParticipants', () => {
-  it('does not suspend without a channel, as on a document composer', () => {
+  it('does not suspend or read without a channel, as on a document composer', () => {
     mount('');
     expectContent('|');
-    expect(storageServiceClient.getChannelParticipants).not.toHaveBeenCalled();
+    expect(detail.enabled).toEqual([false]);
   });
 
-  it('lists the participants once they load, without suspending', async () => {
-    const response =
-      Promise.withResolvers<
-        Awaited<ReturnType<typeof storageServiceClient.getChannelParticipants>>
-      >();
-    vi.mocked(storageServiceClient.getChannelParticipants).mockReturnValue(
-      response.promise
-    );
+  it('lists the participants once the channel record loads, without suspending', () => {
     mount('channel-1');
     expectContent('|');
-    response.resolve(
-      ok([
-        {
-          channel_id: 'channel-1',
-          joined_at: '2026-09-24T12:00:00Z',
-          role: 'member',
-          user_id: 'macro|a@macro.com',
-        },
-      ])
-    );
-    await waitFor(() => expectContent('macro|a@macro.com|macro|a@macro.com'));
+
+    detail.pending = false;
+    detail.entities = [
+      {
+        id: 'channel-1',
+        type: 'channel',
+        participants: [
+          {
+            channel_id: 'channel-1',
+            joined_at: '2026-09-24T12:00:00Z',
+            role: 'member',
+            user_id: 'macro|a@macro.com',
+          },
+        ],
+      },
+    ];
+    for (const listener of detail.listeners) listener();
+
+    expectContent('macro|a@macro.com|macro|a@macro.com');
   });
 });

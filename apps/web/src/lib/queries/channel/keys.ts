@@ -11,9 +11,6 @@ export const channelKeys = createQueryKeys('channel', {
   attachments: (channelID: string, attachmentType?: string) => ({
     queryKey: attachmentType ? [channelID, { attachmentType }] : [channelID],
   }),
-  participants: (channelID: string) => ({
-    queryKey: [channelID],
-  }),
   myAccessRequest: (channelID: string) => ({
     queryKey: [channelID],
   }),

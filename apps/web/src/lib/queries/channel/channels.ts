@@ -29,12 +29,12 @@ import {
   readContactCacheScope,
 } from '../contacts/cache-scope';
 import { createContactQueryEpoch } from '../contacts/query-epoch';
-import { invalidateChannelParticipants } from './channel-participants';
 import {
   type CachedGraphqlChannel,
   readCachedGraphqlChannels,
 } from './graphql';
 import { channelKeys } from './keys';
+import { refreshChannelParticipants } from './participants';
 
 const CHANNEL_LIST_PAGE_SIZE = 100;
 
@@ -254,7 +254,7 @@ export function usePatchChannelMutation(callbacks?: PatchChannelCallbacks) {
             (channels) => updateCachedChannel(channels, vars)
           );
           if (typeof vars.auto_join_team === 'boolean') {
-            await invalidateChannelParticipants(vars.channelId);
+            await refreshChannelParticipants(vars.channelId);
           }
           toast.success(
             vars.convert_to_team_channel === true

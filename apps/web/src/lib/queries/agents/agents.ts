@@ -1,6 +1,7 @@
 import { throwOnErr } from '@core/util/result';
 import { botKeys, botProfileKeys } from '@queries/bots/keys';
 import { channelKeys } from '@queries/channel/keys';
+import { refreshChannelParticipants } from '@queries/channel/participants';
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { Agent } from '@service-storage/generated/schemas/agent';
@@ -211,9 +212,7 @@ export function useDeleteAgentMutation() {
           queryClient.invalidateQueries({
             queryKey: channelKeys.channelBots(channelId).queryKey,
           }),
-          queryClient.invalidateQueries({
-            queryKey: channelKeys.participants(channelId).queryKey,
-          }),
+          refreshChannelParticipants(channelId),
         ]),
       ]);
     },
