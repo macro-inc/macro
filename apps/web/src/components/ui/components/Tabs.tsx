@@ -149,7 +149,11 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
             class={cn(
               'flex min-w-0 items-center',
               props.wrap && 'flex-wrap',
-              props.size === 'xs' || props.size === 'sm' ? 'gap-1' : 'gap-1.5',
+              props.variant === 'choices' && 'gap-1 touch:gap-1.5',
+              props.variant !== 'choices' &&
+                (props.size === 'xs' || props.size === 'sm'
+                  ? 'gap-1'
+                  : 'gap-1.5'),
               props.fullWidth && 'w-full'
             )}
           >
@@ -266,7 +270,7 @@ function PillOption<T extends string>(props: {
       class={cn(
         'relative inline-flex min-w-0 shrink-0 rounded-full border text-ink-muted transition-colors duration-120 motion-reduce:transition-none',
         props.choices
-          ? 'min-h-9 bg-control border-edge-button text-ink-muted data-checked:bg-accent/24 data-checked:border-accent/50 data-checked:text-accent'
+          ? 'group/choice h-6 touch:h-11 border-transparent text-ink-muted'
           : cn(
               props.joined
                 ? 'self-stretch border-transparent data-checked:border-edge-button'
@@ -293,10 +297,10 @@ function PillOption<T extends string>(props: {
       />
       <KSegmentedControl.ItemLabel
         class={cn(
-          'flex min-w-0 flex-1 self-stretch items-center justify-center gap-2 font-medium whitespace-nowrap select-none',
+          'flex min-w-0 flex-1 items-center justify-center gap-2 font-medium whitespace-nowrap select-none',
           props.choices
-            ? 'px-3.5 py-1.5 text-[15px] leading-5'
-            : !square() && tabContentClasses(props.size),
+            ? 'h-6 self-center rounded-full border border-edge-button bg-control px-2.5 text-xs leading-4 touch:h-7 touch:px-3 touch:text-[13px] touch:leading-[18px] group-data-checked/choice:bg-accent/24 group-data-checked/choice:border-accent/50 group-data-checked/choice:text-accent'
+            : cn('self-stretch', !square() && tabContentClasses(props.size)),
           props.joined && 'py-0'
         )}
       >

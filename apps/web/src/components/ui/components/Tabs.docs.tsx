@@ -156,6 +156,7 @@ function TrackDemo() {
 function ChoicesDemo() {
   const [value, setValue] = createSignal<'event' | 'away'>('event');
   return (
+    // Choice faces are 24px on desktop and 28px inside 44px touch targets.
     <Tabs
       aria-label="Event type"
       variant="choices"

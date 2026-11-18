@@ -108,7 +108,7 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
         >
           <ComposerTitle />
           <Show when={!model.isEdit()}>
-            <div class="mt-2">
+            <div class="mt-1.5">
               <ComposerKind />
             </div>
           </Show>

@@ -84,8 +84,10 @@ host lives in `../block-calendar/`.
 - `primitives/create-agent-composer.ts` keeps one validated review decision; the
   agent host selects `DesktopComposer` or `MobileAgentComposer` over that model.
   Both layouts use creation-only Event/Out of office choices below the title,
-  with the agent mark in the title icon column. Pass explicit time-zone metadata
-  through the tool adapter and keep unsupported visibility read-only; the tool accepts one time, not alternatives.
+  with the agent mark in the title icon column. Creation choices use 24px faces
+  with 12px text on desktop and 28px faces with 13px text inside 44px touch
+  targets; leave 6px below the title. Pass explicit time-zone metadata through
+  the tool adapter and keep unsupported visibility read-only; the tool accepts one time, not alternatives.
   Feed the same validated time and recurrence snapshot to the preview and submission.
 - Visibility offers Calendar default/Public/Private, displays synced confidential
   as Private, and preserves the original value until an explicit change.
