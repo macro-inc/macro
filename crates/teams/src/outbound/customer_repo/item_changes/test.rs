@@ -459,3 +459,39 @@ async fn a_key_stripe_refuses_as_reused_is_given_up_and_blocks_nothing(pool: sql
     .await
     .unwrap();
 }
+
+/// A release's item removal that Stripe confirms is settled the moment it
+/// answers, so a purchase right after on the same subscription goes ahead
+/// at once instead of waiting on it as a change in flight.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_change_stripe_confirms_is_settled_at_once_and_blocks_nothing(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let sub = subscription();
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+    let repo = repo(&server, pool.clone());
+
+    repo.change_item_quantities(
+        &sub.id,
+        vec![computer(1)],
+        ItemProration::NoProration,
+        "computer-remove:released:0",
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        repo.item_change_status("computer-remove:released:0")
+            .await
+            .unwrap(),
+        Some(ItemChangeStatus::Applied)
+    );
+
+    repo.change_item_quantities(
+        &sub.id,
+        vec![computer(2)],
+        ItemProration::InvoiceNow,
+        "computer-add:bought-next",
+    )
+    .await
+    .unwrap();
+}
