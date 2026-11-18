@@ -12,7 +12,7 @@
 
 use gh_workflow::expr::typed::{Bool, StepHandle, StepOutput, Str, input};
 use gh_workflow::{
-    Event, Job, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
+    Event, Job, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput, ZizmorRule,
 };
 
 use crate::workflows::actions::{
@@ -107,7 +107,10 @@ fn preview() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    ActionsCheckout::new("Checkout Repo").step()
+    ActionsCheckout::new("Checkout Repo").step().zizmor_ignore(
+        ZizmorRule::Artipacked,
+        "Pulumi previews run from the checkout",
+    )
 }
 
 fn get_project_name() -> Step<Use> {

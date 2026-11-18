@@ -9,7 +9,7 @@
 use gh_workflow::expr::typed::{Bool, Expr, JobHandle, github};
 use gh_workflow::{
     CallJob, Concurrency, Event, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use,
-    Workflow,
+    Workflow, ZizmorRule,
 };
 
 use crate::workflows::actions::{
@@ -155,7 +155,10 @@ fn deploy() -> Job {
             DEPLOY_SYNC_SERVICE.to_string(),
         ])
         .add_env(("CI", "true"))
-        .add_step(build_web_app::checkout())
+        .add_step(build_web_app::checkout().zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "release scripts run from the checkout",
+        ))
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
@@ -175,7 +178,10 @@ fn upload() -> Job {
         .name("Upload Release Artifacts")
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .needs(vec![BUILD.to_string(), DEPLOY.to_string()])
-        .add_step(build_web_app::checkout())
+        .add_step(build_web_app::checkout().zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "release scripts run from the checkout",
+        ))
         .add_step(deploy_web_app::download_dist(&build_web_app::artifact(
             ENVIRONMENT,
         )))

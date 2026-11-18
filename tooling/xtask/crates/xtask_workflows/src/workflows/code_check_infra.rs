@@ -5,7 +5,7 @@
 //! unaffected by the file rename).
 
 use gh_workflow::expr::typed::{Flag, JobHandle, JobOutput, StepHandle, StepOutput, always};
-use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall, ZizmorRule};
 
 use crate::workflows::actions::{ActionsCheckout, DornyPathsFilter};
 use crate::workflows::{runners, steps, vars};
@@ -117,7 +117,10 @@ fn checkout(full_history: bool) -> Step<Use> {
     } else {
         checkout
     };
-    checkout.step()
+    checkout.step().zizmor_ignore(
+        ZizmorRule::Artipacked,
+        "bun and Pulumi tooling run from the checkout",
+    )
 }
 
 fn paths_filter() -> Step<Use> {

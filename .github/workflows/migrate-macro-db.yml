@@ -16,7 +16,7 @@ jobs:
     name: Run Database Migrations (${{ inputs.environment }})
     runs-on: db-migrator
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # zizmor: ignore[artipacked] the migration action that runs next may use the persisted token
         with:
           sparse-checkout: |
             .github/

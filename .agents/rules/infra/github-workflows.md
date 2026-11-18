@@ -54,8 +54,9 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   finding when the fix leaves what the job runs unchanged; otherwise allowlist
   it with its reason, one rule and file per entry: shellcheck in the
   `SHELLCHECK_IGNORES` table in `src/workflows/actionlint.rs` (which generates
-  `.github/actionlint.yaml`), zizmor in `.github/zizmor.yml` (composite
-  actions under `action.yml`). A new runner label goes in `runners.rs`; the
+  `.github/actionlint.yaml`), a zizmor finding on one step with
+  `Step::zizmor_ignore` on that step, and any other zizmor finding in
+  `.github/zizmor.yml`. A new runner label goes in `runners.rs`; the
   generated config picks it up from the workflows' `runs-on`.
 
 Check: `cargo x workflows --check` passes, no `.github/workflows/*.yml` lacks

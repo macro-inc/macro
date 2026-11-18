@@ -15,7 +15,7 @@ jobs:
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
     timeout-minutes: 10
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repo # zizmor: ignore[artipacked] path-check runs git over the PR's commits
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           filter: blob:none
@@ -142,7 +142,7 @@ jobs:
       statuses: read
     timeout-minutes: 10
     steps:
-      - name: Checkout PR merge commit
+      - name: Checkout PR merge commit # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
@@ -344,7 +344,7 @@ jobs:
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     timeout-minutes: 15
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           fetch-depth: '0'
@@ -420,7 +420,7 @@ jobs:
       RUSTFLAGS: -C link-arg=-fuse-ld=mold
     timeout-minutes: 25
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - name: Mount Namespace cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -584,7 +584,7 @@ jobs:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 20
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           fetch-depth: '0'
@@ -628,7 +628,7 @@ jobs:
           - 6
       fail-fast: false
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - name: Mount Namespace cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -712,7 +712,7 @@ jobs:
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     timeout-minutes: 15
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - name: Mount Namespace cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -799,7 +799,7 @@ jobs:
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     timeout-minutes: 20
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - name: Mount Namespace cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -893,7 +893,7 @@ jobs:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 15
     steps:
-      - name: Checkout
+      - name: Checkout # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - name: Mount /nix cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -926,7 +926,7 @@ jobs:
       pull-requests: write
     timeout-minutes: 15
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - name: Mount Namespace cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -1075,7 +1075,7 @@ jobs:
       pull-requests: write
     timeout-minutes: 10
     steps:
-      - id: checkout
+      - id: checkout # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
         name: Checkout Repo
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - id: native-filter

@@ -10,6 +10,7 @@ use std::fmt::Display;
 use gh_workflow::expr::typed::{Expr, Num, StepHandle, StepOutput, Str, github, input};
 use gh_workflow::{
     Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
+    ZizmorRule,
 };
 
 use crate::workflows::actions::{
@@ -73,7 +74,10 @@ fn build_job() -> Job {
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_env(("CI", "true"))
         .add_env(("WASM_PKG_CACHE_DIR", vars::DEPLOY_WASM_PKG_CACHE_DIR))
-        .add_step(checkout())
+        .add_step(checkout().zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "`just build-*` runs the web build scripts",
+        ))
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))

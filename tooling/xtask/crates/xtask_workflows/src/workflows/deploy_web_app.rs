@@ -11,7 +11,7 @@ use std::fmt::Display;
 use gh_workflow::expr::typed::{Bool, JobHandle, cancelled, input};
 use gh_workflow::{
     CallJob, Concurrency, Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall,
-    WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
+    WorkflowCallSecret, WorkflowDispatch, WorkflowInput, ZizmorRule,
 };
 
 use crate::workflows::actions::{
@@ -124,7 +124,10 @@ fn deploy() -> Job {
         )
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_env(("CI", "true"))
-        .add_step(build_web_app::checkout())
+        .add_step(build_web_app::checkout().zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "deploy scripts run from the checkout",
+        ))
         // It compiles nothing, so like the build it mounts only Nix and Bun.
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())

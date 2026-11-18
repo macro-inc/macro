@@ -3,7 +3,7 @@
 //! `migrate-cloud-storage-db` composite action.
 
 use gh_workflow::expr::typed::{Str, input};
-use gh_workflow::{Event, Job, Workflow, WorkflowDispatch, WorkflowInput};
+use gh_workflow::{Event, Job, Workflow, WorkflowDispatch, WorkflowInput, ZizmorRule};
 
 use crate::workflows::actions::{ActionsCheckout, LocalMigrateCloudStorageDb};
 use crate::workflows::runners;
@@ -34,7 +34,11 @@ fn migrate() -> Job {
             ActionsCheckout::new("")
                 .sparse_checkout(".github/\n")
                 .step()
-                .without_name(),
+                .without_name()
+                .zizmor_ignore(
+                    ZizmorRule::Artipacked,
+                    "the migration action that runs next may use the persisted token",
+                ),
         )
         .add_step(
             LocalMigrateCloudStorageDb::new("Run migrations", input::<Str>("environment")).step(),

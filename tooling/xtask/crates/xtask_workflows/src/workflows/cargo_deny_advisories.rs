@@ -10,7 +10,7 @@
 
 use gh_workflow::expr::typed::failure;
 use gh_workflow::{
-    Event, Job, Level, Permissions, Run, Schedule, Step, Workflow, WorkflowDispatch,
+    Event, Job, Level, Permissions, Run, Schedule, Step, Workflow, WorkflowDispatch, ZizmorRule,
 };
 
 use crate::workflows::{cargo_deny, runners, steps, vars};
@@ -30,7 +30,10 @@ fn advisories_job() -> Job {
         .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.to_string())
         .permissions(Permissions::default().contents(Level::Read))
-        .add_step(cargo_deny::checkout())
+        .add_step(cargo_deny::checkout().step().zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "cargo deny fetches git dependencies",
+        ))
         .add_step(steps::setup_rust_light())
         .add_step(cargo_deny::install_cargo_deny())
         .add_step(cargo_deny::deny("advisories"))

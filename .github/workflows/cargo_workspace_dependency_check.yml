@@ -8,7 +8,7 @@ jobs:
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     timeout-minutes: 15
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repo # zizmor: ignore[artipacked] cargo metadata fetches git dependencies
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - name: Mount Namespace cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -74,7 +74,7 @@ jobs:
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     timeout-minutes: 15
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repo # zizmor: ignore[artipacked] cargo metadata fetches git dependencies
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - name: Mount Namespace cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0

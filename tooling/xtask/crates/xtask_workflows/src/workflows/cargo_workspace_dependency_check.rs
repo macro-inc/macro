@@ -9,7 +9,7 @@
 //! (which drifted from the workspace toolchain) and gives the `cargo install`
 //! and xtask builds warm caches instead of compiling cold on every run.
 
-use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall, ZizmorRule};
 use xtask_paths::RepoGlob;
 
 use crate::workflows::actions::ActionsCheckout;
@@ -73,7 +73,10 @@ fn hakari_and_dep_closures() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    ActionsCheckout::new("Checkout Repo").step()
+    ActionsCheckout::new("Checkout Repo").step().zizmor_ignore(
+        ZizmorRule::Artipacked,
+        "cargo metadata fetches git dependencies",
+    )
 }
 
 /// `cargo install` skips the build when the same version is already present

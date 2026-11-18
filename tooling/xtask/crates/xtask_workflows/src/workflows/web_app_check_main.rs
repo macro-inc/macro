@@ -5,7 +5,7 @@ use gh_workflow::expr::typed::{
     Flag, JobHandle, JobOutput, Num, StepHandle, StepOutput, always, github, matrix,
 };
 use gh_workflow::{
-    Event, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow, WorkflowCall,
+    Event, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow, WorkflowCall, ZizmorRule,
 };
 
 use crate::workflows::actions::{ActionsCheckout, DornyPathsFilter};
@@ -512,7 +512,10 @@ fn checkout(name: &str, full_history: bool) -> Step<Use> {
     } else {
         checkout
     };
-    checkout.step()
+    checkout.step().zizmor_ignore(
+        ZizmorRule::Artipacked,
+        "check and preview steps run git and scripts from the checkout",
+    )
 }
 
 /// The filter reads the PR's files from the API and [`detect_schema_changes`]
@@ -523,6 +526,10 @@ fn path_check_checkout() -> Step<Use> {
         .filter("blob:none")
         .sparse_checkout(".github")
         .step()
+        .zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "path-check runs git over the PR's commits",
+        )
 }
 
 /// Whether a pull request can change generated output. Schemas come from

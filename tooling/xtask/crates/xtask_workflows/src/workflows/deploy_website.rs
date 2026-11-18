@@ -14,7 +14,7 @@
 use gh_workflow::expr::typed::{Bool, Expr, Json, Str, format, from_json, input, matrix};
 use gh_workflow::{
     Concurrency, Env, Event, Job, Push, Run, Step, Strategy, Use, Workflow, WorkflowCall,
-    WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
+    WorkflowCallSecret, WorkflowDispatch, WorkflowInput, ZizmorRule,
 };
 
 use crate::workflows::actions::{
@@ -132,7 +132,13 @@ fn build_deploy() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    ActionsCheckout::new("Checkout Repo").lfs(true).step()
+    ActionsCheckout::new("Checkout Repo")
+        .lfs(true)
+        .step()
+        .zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "deploy scripts run from the checkout",
+        )
 }
 
 /// Without LFS content the site would publish pointer files as its videos.

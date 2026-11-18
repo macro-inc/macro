@@ -17,7 +17,9 @@
 //! does not start another workflow run, so the two never double-publish.
 
 use gh_workflow::expr::typed::{Flag, StepHandle, StepOutput, Str, always, github};
-use gh_workflow::{Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Use, Workflow};
+use gh_workflow::{
+    Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Use, Workflow, ZizmorRule,
+};
 
 use crate::workflows::actions::ActionsSetupNode;
 use crate::workflows::steps;
@@ -56,7 +58,10 @@ fn release() -> Job {
                 .contents(Level::Write)
                 .id_token(Level::Write),
         )
-        .add_step(steps::checkout(true, true))
+        .add_step(steps::checkout(true, true).zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "pushes the release tag with the persisted token",
+        ))
         .add_step(steps::setup_bun_action().bun_version(steps::SDK_BUN_VERSION))
         .add_step(setup_node())
         .add_step(setup_npm())

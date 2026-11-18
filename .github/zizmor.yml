@@ -3,28 +3,10 @@
 # changing what a job runs, so it lands as its own reviewed change. Entries cover
 # whole files because generated line numbers move with every generator change.
 # Step-level findings in generated YAML are kept inline instead, with
-# `Step::zizmor_ignore`, so they cover one step.
+# `Step::zizmor_ignore`, so they cover one step. Checkouts that keep their token
+# (artipacked) are kept that way: later steps may use the persisted token, and
+# dropping it needs each job audited.
 rules:
-  artipacked:
-    ignore:
-      # Later steps run scripts, cargo and nix, which may use the persisted
-      # checkout token (private git dependencies, `gh`); dropping it needs each
-      # job audited.
-      - build-rust-ci-image.yml # snapshots a runner image built from the checkout
-      - build_web_app.yml # `just build-*` runs the web build scripts
-      - cargo_deny.yml # cargo deny fetches git dependencies
-      - cargo_deny_advisories.yml # cargo deny fetches git dependencies
-      - cargo_workspace_dependency_check.yml # cargo metadata fetches git dependencies
-      - cleanup_preview.yml # preview scripts call the GitHub API
-      - code_check_infra.yml # bun and Pulumi tooling run from the checkout
-      - deploy_web_app.yml # deploy scripts run from the checkout
-      - deploy_website.yml # deploy scripts run from the checkout
-      - migrate-macro-db.yml # cargo sqlx builds from the checkout
-      - pulumi_preview_pr.yml # Pulumi previews run from the checkout
-      - release-production.yml # release scripts run from the checkout
-      - release-sdk.yml # pushes the release tag with the persisted token
-      - reusable_preview_service.yml # Pulumi previews run from the checkout
-      - web-app-check-main.yml # 11 jobs; path-check and preview steps run git
   cache-poisoning:
     ignore:
       # Runs only for `sdk-v*` tags; setup-bun/setup-node caches are keyed by

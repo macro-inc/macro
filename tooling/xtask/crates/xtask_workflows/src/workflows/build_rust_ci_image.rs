@@ -6,7 +6,7 @@
 //! exist in GitHub before this runs.
 
 use gh_workflow::expr::typed::github;
-use gh_workflow::{Event, Job, Snapshot, Step, Workflow, WorkflowDispatch};
+use gh_workflow::{Event, Job, Snapshot, Step, Workflow, WorkflowDispatch, ZizmorRule};
 
 use crate::workflows::actions::ActionsCheckout;
 use crate::workflows::runners;
@@ -22,7 +22,15 @@ fn build() -> Job {
     Job::default()
         .runs_on(runners::RUST_CI_IMAGE_GENERATION)
         .snapshot(Snapshot::new("macro-rust-ci-small").version("1.*"))
-        .add_step(ActionsCheckout::new("").step().without_name())
+        .add_step(
+            ActionsCheckout::new("")
+                .step()
+                .without_name()
+                .zizmor_ignore(
+                    ZizmorRule::Artipacked,
+                    "snapshots a runner image built from the checkout",
+                ),
+        )
         .add_step(
             Step::new("Install system packages")
                 .run(include_str!("scripts/rust_ci_image_install_packages.sh"))

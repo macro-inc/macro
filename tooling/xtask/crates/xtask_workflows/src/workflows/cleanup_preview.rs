@@ -5,6 +5,7 @@
 use gh_workflow::expr::typed::{StepHandle, StepOutput, Str, github};
 use gh_workflow::{
     Env, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use, Workflow,
+    ZizmorRule,
 };
 
 use crate::workflows::actions::{
@@ -51,7 +52,10 @@ fn cleanup() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    ActionsCheckout::new("Checkout Repo").step()
+    ActionsCheckout::new("Checkout Repo").step().zizmor_ignore(
+        ZizmorRule::Artipacked,
+        "preview scripts call the GitHub API",
+    )
 }
 
 fn setup_bun() -> Step<Use> {
