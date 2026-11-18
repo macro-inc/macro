@@ -185,7 +185,7 @@ test('newer text is kept as a new draft when its draft is sent elsewhere', async
       'This email was already sent. Your newer text was kept as a new draft and was not sent.'
     )
   ).toBeVisible();
-  saw('STC-411');
+  saw('STC-411', 'F-120');
   await expect
     .poll(() => savedDraft(mailbox, { subject: 'Last numbers' }, NEWER))
     .toBeTruthy();
