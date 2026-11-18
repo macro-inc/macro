@@ -1379,6 +1379,26 @@ External coding harnesses keep their own tool selection. A runner that fails
 after its tools were advertised still produces an execution failure, not an
 automatic retry through a direct tool.
 
+CRM contribution rules use `macro.crm.emailPrivacy`, discovered under the
+`crmEmailPrivacy` code-mode category. The agent reads `get()`,
+validates selectors with `validateRules`, then directly activates an intended
+replacement with `replaceRules` and that exact policy token plus a unique
+idempotency key. No separate member confirmation is required. The server still
+refuses restricted credentials and unavailable rollout gates; CRM viewing
+permission is separate from these own-member controls. A conflict requires
+inspection and a new decision, never an automatic refresh and retry.
+
+The agent explains that a matching participant shares the whole past/future
+thread; contact/company selectors follow live records, all exclusions win, and
+narrowing leaves CRM records in place. Another member's eligible copy remains
+independent. `settings()` / `excludedThreads()` inspect exclusions. Count previews
+are optional and bounded: only complete counts are exact, partial counts are
+lower bounds, and stale/cancelled results are not current estimates. `history()`
+shows verified provenance and saved definitions. `withdraw` uses the current
+policy observation; legacy members without a token retain `setConsent(false)`.
+These SDK methods do not imply that the rollout is enabled or a rule editor is
+available in Settings.
+
 Team and referral invites exist only in the SDK: `team.invite(emails)` on
 `macro.teams.current()` (resolves `false` when every address was already a
 member or invited), `team.invites()` and `invite.revoke()` for team admins, and

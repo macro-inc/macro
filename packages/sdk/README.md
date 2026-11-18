@@ -640,6 +640,67 @@ fails with a 409 conflict instead of being overwritten, and `view.refresh()`
 picks up the current revision. Order is personal; `reorder` sets yours for one
 kind.
 
+### CRM email contribution
+
+`macro.crm.emailPrivacy` manages only the authenticated member's contribution,
+including when their CRM viewing permission is off. `get()` is read-only and
+returns the current mode, selectors, mailbox handle and observed-state token.
+`settings()` reads domain exclusions; `excludedThreads()` lazily lists private
+thread exceptions. Existing team-wide domain methods remain on `macro.crm`;
+`emailPrivacy.blockDomain` and `unblockDomain` edit personal exclusions.
+
+Rules use `{ schemaVersion: 1, include: [...] }`. Selectors are `thread` with an
+`EmailThread`, `contact` with a `Contact`, `company` with a `Company`, or
+`address` / `domain` with the corresponding string. A participant match includes
+the whole thread, across eligible past and future mail. Contact/company rules
+follow live records. Private-thread, domain and personal-email exclusions always
+win. Narrowing or withdrawal leaves CRM records in place; a teammate's eligible
+copy remains independent.
+
+```ts
+const privacy = macro.crm.emailPrivacy;
+const state = await privacy.get();
+if (!state.authoringAvailable || !state.token) {
+  throw new Error('Selective contribution is unavailable.');
+}
+const checked = await privacy.validateRules({
+  schemaVersion: 1,
+  include: [{ kind: 'domain', domain: 'example.com' }],
+});
+const idempotencyKey = crypto.randomUUID();
+const result = await privacy.replaceRules(checked.rules, {
+  ifPolicy: state.token,
+  idempotencyKey,
+});
+```
+
+`replaceRules` directly activates the replacement; member-authorized agents need
+no separate human confirmation. `enableAll` and `withdraw` take the same options.
+Keep the exact token, key and command for retries. A 409 requires fresh inspection
+and a new decision; the SDK never refreshes or retries automatically. A result
+with `replayed: true` describes the original commit, not current sharing. Server
+rollout and credential restrictions remain authoritative.
+
+Optional counts use `preview()` to inspect the current slot, then
+`previewRules(rules, { ifPolicy: state.token, ifPreview: previousPreview })`.
+A preview handle's `get()` refreshes only that preview and `cancel()` names that
+exact identity. Superseded handles cannot read or cancel newer work. Only
+`status: 'complete'` means exact counts; running/partial counts are lower bounds,
+and stale/cancelled results are not current estimates. Counts are mailbox-local,
+limited to 10,000 scanned raw threads and five minutes. Previewing does not grant
+contribution or schedule mail backfill.
+
+`history()` iterates owner-only audit events in pages of fifty. Revision handles
+on current state, mutation outcomes and history read immutable definitions with
+`get()`; they never fetch target content or reapply rules. Verified agent/session
+provenance is read from history, never supplied by the caller.
+
+Legacy members without a policy token retain `setConsent(false)` for withdrawal.
+`setConsent(true, inbox)` uses the existing all-mail opt-in, bound to the chosen
+primary inbox; members with a policy token use `enableAll` / `withdraw` instead.
+`setThreadExcluded(thread, excluded)` reuses the existing thread-exclusion API and
+its rollout gate. The SDK changes no flags and adds no settings UI.
+
 ### CRM member access
 
 `macro.crm.access()` reads the caller's current team and effective CRM access,

@@ -85,6 +85,28 @@ export {
 } from './entities/connected-apps/connected-app';
 export { Connector } from './entities/connected-apps/connector';
 export { ConnectedAppNamespace } from './entities/connected-apps/namespace';
+export type {
+  CrmEmailPolicy,
+  CrmEmailPolicyHistoryEvent,
+  CrmEmailPolicyResult,
+  CrmEmailPolicyToken,
+  CrmEmailPolicyWriteOptions,
+  CrmEmailPrivacySettings,
+  CrmEmailRuleValidation,
+  CrmExcludedEmailThread,
+} from './entities/crm-email-privacy/email-privacy';
+export {
+  type CrmEmailPreviewState,
+  CrmEmailRulePreview,
+} from './entities/crm-email-privacy/email-rule-preview';
+export {
+  type CrmEmailRuleDefinition,
+  CrmEmailRuleRevision,
+} from './entities/crm-email-privacy/email-rule-revision';
+export type {
+  CrmEmailRule,
+  CrmEmailRuleSet,
+} from './entities/crm-email-privacy/email-rules';
 export {
   type AddColumnOptions,
   type ApplyOpsOptions,
