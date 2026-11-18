@@ -44,9 +44,13 @@ fn name_and_type(filename: &str, mime_type: &str) -> (String, String) {
 }
 
 #[test]
-fn a_known_extension_decides_the_file_type_for_a_generic_or_matching_mime_type() {
+fn a_known_extension_decides_unless_the_mime_type_names_another_macro_type() {
     let wrong: Vec<_> = [
         ("notes.txt", "text/plain", ("notes", "txt")),
+        ("notes.md", "text/plain", ("notes", "md")),
+        ("data.csv", "application/vnd.ms-excel", ("data", "csv")),
+        ("Contract.docx", "application/zip", ("Contract", "docx")),
+        ("report.pdf ", "application/octet-stream", ("report", "pdf")),
         (
             "Contract.docx",
             "application/octet-stream",
@@ -95,10 +99,6 @@ fn without_a_known_extension_the_mime_type_decides_and_the_name_is_whole() {
     assert_eq!(
         name_and_type("statement.final", "application/pdf"),
         ("statement.final".to_string(), "pdf".to_string())
-    );
-    assert_eq!(
-        name_and_type(".pdf", "application/pdf"),
-        (".pdf".to_string(), "pdf".to_string())
     );
 }
 

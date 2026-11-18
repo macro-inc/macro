@@ -166,10 +166,11 @@ the gateway `/email` prefix.
 - Long attachment names are truncated to the DSS limit before upload (#7893);
   don't remove that truncation when touching `util/upload_attachment.rs`.
 - An attachment's file type comes from a Macro file type's extension on its
-  filename first (`FileType::split_suffix_match`, as uploads use) and from its
-  MIME type only without one: mail clients send many files as
-  `application/octet-stream`. The Gmail attachment backfill calls the same
-  `determine_file_metadata`; keep the two on it.
+  filename (`FileType::split_suffix_match`, as uploads use) unless its MIME
+  type names a different Macro file type, and from the MIME type without such
+  an extension: mail clients send many files as `application/octet-stream`.
+  The Gmail attachment backfill calls the same `determine_file_metadata`; keep
+  the two on it.
 - Scheduled Gmail sends recheck forwarded source inbox access before resolving
   attachment bytes through the provider-aware reader.
 - Preserve the calendar domain's `team_ooo_changed` hint when forwarding a

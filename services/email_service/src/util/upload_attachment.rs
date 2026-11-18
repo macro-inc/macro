@@ -259,11 +259,12 @@ fn calculate_hashes(data: &[u8]) -> (String, String) {
 ///
 /// The name is the filename without a Macro file type's extension, as uploads
 /// name documents, or the whole filename without one. That extension is also
-/// the file type unless the MIME type names a different format: mail clients
-/// send many files as `application/octet-stream`, and the first extension
-/// `mime_guess` lists for a broad MIME type is arbitrary (`text/plain` gives
-/// `asm`), but a specific MIME type such as `application/pdf` describes the
-/// content better than a mismatched name. Otherwise the MIME type decides.
+/// the file type unless the MIME type names a different Macro file type: mail
+/// clients send many files as `application/octet-stream`, and the first
+/// extension `mime_guess` lists for a broad MIME type is often not a Macro
+/// type at all (`text/plain` gives `asm`), but a specific MIME type such as
+/// `application/pdf` describes the content better than a mismatched name.
+/// Without such an extension the MIME type decides.
 pub fn determine_file_metadata(
     p: &AttachmentUploadMetadata,
 ) -> Result<(String, String), UploadAttachmentError> {
@@ -272,14 +273,17 @@ pub fn determine_file_metadata(
         .filename
         .as_deref()
         .ok_or(UploadAttachmentError::FilenameMissing)?;
+    let trimmed_file_name = original_file_name.trim();
 
-    let known = FileType::split_suffix_match(original_file_name)
+    let known = FileType::split_suffix_match(trimmed_file_name)
         .filter(|(name, _)| !name.trim().is_empty())
         .and_then(|(name, extension)| Some((name, FileType::from_str(extension).ok()?)));
-    let file_name = known.map_or(original_file_name, |(name, _)| name);
+    let file_name = known.map_or(trimmed_file_name, |(name, _)| name);
 
     let file_type = match known {
-        Some((_, file_type)) if sent_as(file_type, &p.mime_type) => file_type.as_str().to_string(),
+        Some((_, file_type)) if !names_another_type(file_type, &p.mime_type) => {
+            file_type.as_str().to_string()
+        }
         _ => mime_guess::get_mime_extensions_str(&p.mime_type)
             .and_then(|exts| exts.first().map(|s| s.to_string()))
             .or_else(|| {
@@ -299,21 +303,36 @@ pub fn determine_file_metadata(
     Ok((truncate_document_name(file_name).to_string(), file_type))
 }
 
-/// Whether a file of `file_type` can arrive as `mime_type`: a generic or
-/// unknown MIME type, the file type's own, or one `mime_guess` gives that
-/// extension for.
-fn sent_as(file_type: FileType, mime_type: &str) -> bool {
+/// MIME types that say nothing about a file's format: a byte stream, or a zip
+/// container such as every Office document is.
+const GENERIC_MIME_TYPES: [&str; 3] = [
+    "application/octet-stream",
+    "application/zip",
+    "application/x-zip-compressed",
+];
+
+/// Whether `mime_type` names a Macro file type other than `file_type`: its
+/// first `mime_guess` extension is one, the MIME type is not generic or
+/// `file_type`'s own, and `mime_guess` does not list `file_type`'s extension
+/// for it.
+fn names_another_type(file_type: FileType, mime_type: &str) -> bool {
     // if it's a heic, the mime_type can sometimes be heif. hardcode file_type to match file name
-    if file_type == FileType::Heic {
-        return true;
+    if file_type == FileType::Heic
+        || GENERIC_MIME_TYPES
+            .iter()
+            .any(|generic| generic.eq_ignore_ascii_case(mime_type))
+        || file_type.mime_type().eq_ignore_ascii_case(mime_type)
+    {
+        return false;
     }
     let extensions = mime_guess::get_mime_extensions_str(mime_type).unwrap_or_default();
-    mime_type.eq_ignore_ascii_case("application/octet-stream")
-        || extensions.is_empty()
-        || file_type.mime_type().eq_ignore_ascii_case(mime_type)
-        || extensions
-            .iter()
-            .any(|extension| extension.eq_ignore_ascii_case(file_type.as_str()))
+    !extensions
+        .iter()
+        .any(|extension| extension.eq_ignore_ascii_case(file_type.as_str()))
+        && extensions
+            .first()
+            .and_then(|extension| FileType::from_str(extension).ok())
+            .is_some_and(|named| named != file_type)
 }
 
 /// DSS rejects longer names, so keep only the leading graphemes rather than drop the attachment.
