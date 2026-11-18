@@ -775,6 +775,11 @@ on desktop and mobile. Tool results render through
 `lib/core/component/AI/component/tool/Canvas.tsx`; edits arrive through live sync.
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
+## Notifications inbox filters
+
+Read `src/features/notifications-inbox/AGENTS.md` for the selected-category filter
+contract, legacy storage conversion, and focused checks.
+
 ## Group chats in the notifications inbox
 
 A group chat's message row shows the chat (its picture or the channel kind)
