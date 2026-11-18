@@ -1,0 +1,19 @@
+apps/web/src/features/agent-permissions/views/show-permissions-card.tsx
+  s_661bd9a2a08729::t_0cec6797b8ea0d 362-366
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "bf38681d76b584b67a8403c0adc54957cf900d4b",
+  "prompts": {},
+  "sessions": {
+    "s_661bd9a2a08729": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d2d88736-ecda-463f-806d-69cacb50e672",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
