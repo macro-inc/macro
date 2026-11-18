@@ -1,6 +1,6 @@
 import ShieldCheck from '@icon/system/regular/shield-check.svg';
 import { Button } from '@ui';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 
 export type ToolApprovalCardProps = {
   /** What the agent wants to do, e.g. `read your email`. */
@@ -26,6 +26,26 @@ export type ToolApprovalCardProps = {
   onApproveAlways: () => void;
   onDeny: () => void;
   onCancel: () => void;
+  /** The section's accessible name; defaults to "Tool approval request". */
+  ariaLabel?: string;
+  /** Replaces the computed heading ("Approval needed", "Waiting for …"). */
+  title?: string;
+  /** Replaces the computed sentence about what the agent wants to do. */
+  description?: string;
+  /** Rendered under the sentence: what exactly is asked, notes, the code. */
+  details?: JSX.Element;
+  /**
+   * Replaces the computed "Always allow lets …" note; `null` shows none even
+   * where approving for good is offered.
+   */
+  standingNote?: JSX.Element | null;
+  /** Button labels, for a caller whose surface is translated. */
+  labels?: {
+    decline?: string;
+    approveAlways?: string;
+    approve?: string;
+    cancel?: string;
+  };
 };
 
 /**
@@ -37,8 +57,8 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
     props.ownTurn ? 'the agent' : (props.requester ?? 'A bot');
   return (
     <section
-      aria-label="Tool approval request"
-      class="min-w-0 overflow-hidden rounded-xl border border-edge-muted bg-panel text-ink"
+      aria-label={props.ariaLabel ?? 'Tool approval request'}
+      class="@container/card min-w-0 overflow-hidden rounded-xl border border-edge-muted bg-panel text-ink"
     >
       <div class="flex items-start gap-3 px-4 pt-4">
         <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-bg text-accent">
@@ -46,22 +66,30 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
         </div>
         <div class="min-w-0 flex-1">
           <div class="text-sm font-medium">
-            {props.canApprove
-              ? 'Approval needed'
-              : `Waiting for ${props.owner} to approve`}
+            {props.title ??
+              (props.canApprove
+                ? 'Approval needed'
+                : `Waiting for ${props.owner} to approve`)}
           </div>
           <p class="mt-0.5 text-sm leading-5 text-ink-muted [overflow-wrap:anywhere]">
-            {props.ownTurn
-              ? `The agent wants to ${props.action}.`
-              : `${asker()} asked the agent to ${props.action}.`}
+            {props.description ??
+              (props.ownTurn
+                ? `The agent wants to ${props.action}.`
+                : `${asker()} asked the agent to ${props.action}.`)}
           </p>
-          <Show when={props.canApprove && props.standing}>
-            {(standing) => (
-              <p class="mt-1 text-xs leading-4 text-ink-muted [overflow-wrap:anywhere]">
-                Always allow lets {asker()} {standing()} in this session without
-                asking you.
-              </p>
-            )}
+          {props.details}
+          <Show
+            when={props.standingNote === undefined}
+            fallback={props.standingNote}
+          >
+            <Show when={props.canApprove && props.standing}>
+              {(standing) => (
+                <p class="mt-1 text-xs leading-4 text-ink-muted [overflow-wrap:anywhere]">
+                  Always allow lets {asker()} {standing()} in this session
+                  without asking you.
+                </p>
+              )}
+            </Show>
           </Show>
         </div>
       </div>
@@ -77,7 +105,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
                 disabled={props.disabled}
                 onClick={() => props.onCancel()}
               >
-                Cancel
+                {props.labels?.cancel ?? 'Cancel'}
               </Button>
             </Show>
           }
@@ -90,7 +118,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
             disabled={props.disabled}
             onClick={() => props.onDeny()}
           >
-            Decline
+            {props.labels?.decline ?? 'Decline'}
           </Button>
           <Show when={props.standing}>
             <Button
@@ -100,7 +128,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
               disabled={props.disabled}
               onClick={() => props.onApproveAlways()}
             >
-              Always allow
+              {props.labels?.approveAlways ?? 'Always allow'}
             </Button>
           </Show>
           <Button
@@ -110,7 +138,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
             disabled={props.disabled}
             onClick={() => props.onApprove()}
           >
-            Approve
+            {props.labels?.approve ?? 'Approve'}
           </Button>
         </Show>
       </div>

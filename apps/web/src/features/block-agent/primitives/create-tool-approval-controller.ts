@@ -37,8 +37,11 @@ export type ToolApprovalSource = {
 
 export type ToolApprovalController = {
   pending: Accessor<readonly HeldToolApproval[]>;
-  /** The viewer owns the session, so approves or declines. */
-  canApprove: Accessor<boolean>;
+  /**
+   * The viewer may approve or decline: the session's owner, or, for a hold
+   * on the agent's permissions, the approver it names.
+   */
+  canApprove: (request?: HeldToolApproval) => boolean;
   /** The viewer may give up waiting on the owner. */
   canCancel: Accessor<boolean>;
   answering: (approvalId: string) => boolean;
@@ -66,9 +69,10 @@ export function createToolApprovalController(
         (request): request is HeldToolApproval =>
           request.kind === 'tool_approval'
       );
-  const canApprove = () => {
-    const owner = source.ownerId();
-    return owner !== undefined && owner === source.userId();
+  const canApprove = (request?: HeldToolApproval) => {
+    // A permission hold names its approver; others answer to the owner.
+    const approver = request?.approver ?? source.ownerId();
+    return approver !== undefined && approver === source.userId();
   };
   const canCancel = () => source.canEdit() === true;
 
@@ -77,9 +81,12 @@ export function createToolApprovalController(
     answer: ToolApprovalAnswerDto
   ): Promise<boolean> => {
     const sessionId = source.sessionId();
-    const allowed = answer === 'cancel' ? canCancel() : canApprove();
-    const live = pending().some((request) => request.approvalId === approvalId);
-    if (!sessionId || !allowed || !live || answering[approvalId]) return false;
+    const request = pending().find(
+      (candidate) => candidate.approvalId === approvalId
+    );
+    const allowed = answer === 'cancel' ? canCancel() : canApprove(request);
+    if (!sessionId || !request || !allowed || answering[approvalId])
+      return false;
 
     setAnswering(approvalId, true);
     try {
