@@ -69,6 +69,12 @@ original item references. No document snapshots are retained by the stacks.
 Validation still checks scene-wide containment, ordering and connector invariants.
 The optional backend owns its own history; Loro continues using its UndoManager.
 
+A surface inside a scrolling page can leave one finger and the plain wheel to
+that page with the `yieldToPage` input option: it then sets
+`touch-action: pan-x pan-y` and ignores single touches, while two fingers, a
+pinch and Ctrl/Cmd-wheel still navigate. The host switches it off while the
+person interacts with the canvas.
+
 The surface never stays scrolled. A browser scrolls it to reveal a caret that
 left it (hosted text typed past an edge, or behind an on-screen keyboard), after
 which the camera and the pixels disagree; `attachCameraControls` takes the scroll

@@ -36,7 +36,9 @@ account, Docker, sudo, or local backend stack is required.
 Both suites must pass. The full suite checks native Soup predicate evaluation via
 `graphql_cache_entity_filter`, including filter combinations never fetched online,
 then reloads the webview with the API still down and expects All mail to render
-from the native cache (identity comes from the persisted user-info query).
+from the native cache (identity comes from the persisted user-info query), with
+the rail avatar still showing the user's initials (`OF`), not the email's first
+letter.
 Neither IPC nor cache results are replaced. Establish a passing smoke run first
 when diagnosing an environment/startup failure.
 

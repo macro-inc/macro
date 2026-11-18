@@ -731,6 +731,12 @@ impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
         // DSS requires a project key at boot; real flag evaluation needs Doppler.
         env.insert("POSTHOG_API_KEY".into(), "local-posthog-project-key".into());
+        // The email focus worker polls its flag with this; a placeholder fails
+        // each poll, so a local worker classifies nothing without Doppler.
+        env.insert(
+            "POSTHOG_FEATURE_FLAGS_SECURE_API_KEY".into(),
+            "local-posthog-feature-flags-key".into(),
+        );
         // The worker is opt-in and ships paused; an explicit env-file can enable it.
         env.insert("SLACK_IMPORT_ENABLED".into(), "false".into());
         env.insert("SLACK_IMPORT_CONCURRENCY".into(), "1".into());

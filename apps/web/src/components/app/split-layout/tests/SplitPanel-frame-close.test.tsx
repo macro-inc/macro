@@ -22,6 +22,12 @@ vi.mock('@app/features/next-soup/soup-view/soup-view-context', () => ({
 vi.mock('@app/features/next-soup/utils', () => ({
   openEntityInSplitFromUnifiedList: vi.fn(),
 }));
+vi.mock('../componentRegistry', () => ({
+  resolveComponent: () => ({ initialMeta: {} }),
+}));
+vi.mock('../split-router/legacy-route', () => ({
+  splitContentFromLocation: () => ({ type: 'component', id: 'mail' }),
+}));
 vi.mock('@app/lib/split-router', () => ({
   useOptionalSplitRouter: () => undefined,
   SplitRouter: {

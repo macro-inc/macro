@@ -1194,6 +1194,9 @@ impl CalendarRepository for PgCalendarRepository {
         let cursor_starts_at = cursor.as_ref().map(|cursor| cursor.starts_at);
         let cursor_event_id = cursor.as_ref().map(|cursor| cursor.event_id);
         let cursor_occurrence_key = cursor.as_ref().map(|cursor| cursor.occurrence_key.as_str());
+
+        // Materialize the owner set so Postgres can use owner_id in each
+        // occurrence index condition alongside the time window.
         let rows = sqlx::query_as!(
             OccurrenceJoinRow,
             r#"
@@ -1248,13 +1251,13 @@ impl CalendarRepository for PgCalendarRepository {
             LEFT JOIN calendar_event_overrides override
                 ON override.event_id = occurrence.event_id
                AND override.recurrence_id = occurrence.recurrence_id
-            WHERE occurrence.owner_id IN (
+            WHERE occurrence.owner_id = ANY(ARRAY(
                     SELECT $1::text
                     UNION
                     SELECT link.child_macro_id
                     FROM macro_user_links link
                     WHERE link.primary_macro_id = $1
-              )
+              ))
               AND event.status <> 'cancelled'
               AND NOT occurrence.is_cancelled
               AND (
