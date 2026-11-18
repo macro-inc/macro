@@ -196,6 +196,7 @@ vi.mock('./agents-sidebar/agents-sidebar', async () => ({
   DesktopAgentsSidebar: (await import('../components/AgentsSidebar'))
     .AgentsSidebar,
 }));
+vi.mock('../phone-list', () => ({ PhoneAgentsList: () => null }));
 vi.mock('./archived-conversations/archived-conversations', () => ({
   ArchivedConversations: () => null,
 }));

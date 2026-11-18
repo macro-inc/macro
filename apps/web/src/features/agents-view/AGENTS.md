@@ -1,6 +1,6 @@
 # Agents workspace
 
-Status: migrating to new desktop and phone compositions.
+Status: redesigned desktop and phone lists; composer and session header migration remains.
 
 ## What it is
 
@@ -9,6 +9,9 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 ## Start here
 
 - `views/AgentsView.tsx`: production query, selection, draft, and navigation ownership.
+- `phone-list.tsx`: phone list, archive, header menu, favorites, bubbles, and existing entity actions.
+- `core/phone-list.ts`: waiting/favorite partition and startable agent selection.
+- `primitives/mobile-agent-request.ts`: selection handoff to the mounted accessory composer.
 - `views/agents-sidebar/agents-sidebar.tsx`: redesigned desktop list composition.
 - `views/archived-conversations/archived-conversations.tsx`: archived conversations in the main pane.
 - `core/conversation-list.ts` and `primitives/conversation-list-view.ts`: sorting, waiting partition, and user-scoped preferences.
@@ -18,7 +21,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 ## Boundaries
 
 - Keep original agent/model/effort/speed pickers for unrelated consumers; new-chat and Agents running sessions share selector behavior without moving their preference or session mutations.
-- Keep `components/AgentsSidebar.tsx`, `AgentSessionRow.tsx`, and `views/AgentSessionListItem.tsx` for the legacy phone and Home consumers until their own migration.
+- Keep `components/AgentsSidebar.tsx`, `AgentSessionRow.tsx`, and `views/AgentSessionListItem.tsx` for reference and Home consumers.
 - Preserve Home row geometry and activity rendering when extracting shared behavior.
 - Reuse Soup entity actions and session archive mutations; do not add another action or cache path.
 - Fetch PR metadata only for an open preview, never eagerly for every conversation row.

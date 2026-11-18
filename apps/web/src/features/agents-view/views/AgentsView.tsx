@@ -77,8 +77,10 @@ import {
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
+import { PhoneAgentsList } from '../phone-list';
 import { createPersistedComposerDraft } from '../primitives/composer-draft';
 import { createConversationListView } from '../primitives/conversation-list-view';
+import { mobileAgentRequest } from '../primitives/mobile-agent-request';
 import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { agentConversationsQuery } from '../queries/agent-conversations-query';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
@@ -116,7 +118,7 @@ function AgentsMobileList(props: { children: JSX.Element }) {
   return (
     <Show when={!shell.aside.isOverlay()}>
       <div
-        class="size-full min-h-0 pt-2"
+        class="size-full min-h-0 pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)]"
         style={{ 'padding-bottom': `${FloatRegions.hostHeight()}px` }}
       >
         {props.children}
@@ -200,6 +202,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   );
   const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const [search, setSearch] = createSignal('');
+  const [archivedSearch, setArchivedSearch] = createSignal('');
   // Routines that run often leave their runs unlisted; those stay a click
   // away instead of in the list.
   const [showUnlistedRuns, setShowUnlistedRuns] = createSignal(false);
@@ -579,27 +582,44 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           asidePreferenceKey="agents"
           class="bg-panel"
           resizable
-          aside={{ min: 224, max: 380, preserveDuringResize: false }}
+          aside={
+            isTouchDevice() && mobileLayout()
+              ? false
+              : { min: 224, max: 380, preserveDuringResize: false }
+          }
           main={{ min: 280, preferredWidth: 640 }}
         >
           <ViewShell.Aside>
-            <Show when={isTouchDevice()} fallback={desktopSidebar()}>
-              {sidebar()}
-            </Show>
+            <Switch>
+              <Match when={mobileLayout()}>{null}</Match>
+              <Match when={isTouchDevice()}>{sidebar()}</Match>
+              <Match when={true}>{desktopSidebar()}</Match>
+            </Switch>
           </ViewShell.Aside>
 
           <ViewShell.Main class="overflow-hidden">
             <ViewTour tour={agentsTour} />
             <main
               class="main touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:[&>*]:[--mobile-content-inset-top:0px]"
-              classList={{ hidden: mobileLayout() && mobileList() }}
+              classList={{
+                hidden:
+                  mobileLayout() && (mobileList() || page() === 'archived'),
+              }}
             >
               <Show
                 when={selected()?.conversation}
                 keyed
                 fallback={
                   <>
-                    <Show when={page() !== 'routines'}>
+                    <Show
+                      when={
+                        page() !== 'routines' &&
+                        !(
+                          mobileLayout() &&
+                          (mobileList() || page() === 'archived')
+                        )
+                      }
+                    >
                       <Topbar
                         title={pageTitle()}
                         onBack={
@@ -617,34 +637,36 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                             <IntegrationsPage />
                           </Match>
                           <Match when={page() === 'archived'}>
-                            <TraceFlow name="agents.archived">
-                              <ArchivedConversations
-                                conversations={allArchived()}
-                                ownerId={userId()}
-                                sort={conversationSort()}
-                                modeForConversation={modeForConversation}
-                                loading={query.isPending}
-                                error={Boolean(query.error)}
-                                hasNextPage={Boolean(query.hasNextPage)}
-                                loadingNextPage={query.isFetchingNextPage}
-                                onLoadMore={() =>
-                                  fireAndForget(
-                                    query.fetchNextPage(),
-                                    'agents-view'
-                                  )
-                                }
-                                onRetry={() =>
-                                  fireAndForget(
-                                    query.isFetchNextPageError
-                                      ? query.fetchNextPage()
-                                      : query.refetch(),
-                                    'agents-view'
-                                  )
-                                }
-                                onOpenConversation={openListedConversation}
-                                actions={actions}
-                              />
-                            </TraceFlow>
+                            <Show when={!mobileLayout()}>
+                              <TraceFlow name="agents.archived">
+                                <ArchivedConversations
+                                  conversations={allArchived()}
+                                  ownerId={userId()}
+                                  sort={conversationSort()}
+                                  modeForConversation={modeForConversation}
+                                  loading={query.isPending}
+                                  error={Boolean(query.error)}
+                                  hasNextPage={Boolean(query.hasNextPage)}
+                                  loadingNextPage={query.isFetchingNextPage}
+                                  onLoadMore={() =>
+                                    fireAndForget(
+                                      query.fetchNextPage(),
+                                      'agents-view'
+                                    )
+                                  }
+                                  onRetry={() =>
+                                    fireAndForget(
+                                      query.isFetchNextPageError
+                                        ? query.fetchNextPage()
+                                        : query.refetch(),
+                                      'agents-view'
+                                    )
+                                  }
+                                  onOpenConversation={openListedConversation}
+                                  actions={actions}
+                                />
+                              </TraceFlow>
+                            </Show>
                           </Match>
                           <Match when={page() === 'agents'}>
                             <AgentSettings
@@ -743,8 +765,68 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                 )}
               </Show>
             </main>
-            <Show when={mobileLayout() && mobileList()}>
-              <AgentsMobileList>{sidebar()}</AgentsMobileList>
+            <Show
+              when={mobileLayout() && (mobileList() || page() === 'archived')}
+            >
+              <AgentsMobileList>
+                <PhoneAgentsList
+                  archived={page() === 'archived'}
+                  conversations={
+                    search() ? conversations() : partitioned().conversations
+                  }
+                  archivedRows={selectRecentAgentConversations(
+                    allArchived(),
+                    userId(),
+                    archivedSearch(),
+                    'updated'
+                  )}
+                  archivedTotalCount={allArchived().length}
+                  roster={rosterSource.roster()}
+                  rosterLoading={rosterSource.loading()}
+                  search={page() === 'archived' ? archivedSearch() : search()}
+                  onSearchChange={
+                    page() === 'archived' ? setArchivedSearch : setSearch
+                  }
+                  filters={listView.filters()}
+                  onFilterChange={listView.setSelected}
+                  onClearFilters={listView.clear}
+                  showUnlistedRuns={showUnlistedRuns()}
+                  onShowUnlistedRunsChange={setShowUnlistedRuns}
+                  modeForConversation={modeForConversation}
+                  loading={query.isPending}
+                  error={Boolean(query.error)}
+                  hasNextPage={Boolean(query.hasNextPage)}
+                  loadingNextPage={query.isFetchingNextPage}
+                  onLoadMore={() =>
+                    fireAndForget(query.fetchNextPage(), 'agents-view')
+                  }
+                  onRetry={() =>
+                    fireAndForget(
+                      query.isFetchNextPageError
+                        ? query.fetchNextPage()
+                        : query.refetch(),
+                      'agents-view'
+                    )
+                  }
+                  onOpenPage={(next) =>
+                    next === 'new' ? setMobileList(true) : openSidebarPage(next)
+                  }
+                  onBack={() => {
+                    setPage('new');
+                    setMobileList(true);
+                    setArchivedSearch('');
+                  }}
+                  onOpenConversation={openListedConversation}
+                  onSelectAgent={(agent) =>
+                    mobileAgentRequest.select(userId(), agent.id, agent.kind)
+                  }
+                  onCreateAgent={() => {
+                    openPage('agents');
+                    setCreatingKind('agent');
+                  }}
+                  actions={actions}
+                />
+              </AgentsMobileList>
             </Show>
           </ViewShell.Main>
         </ViewShell.Root>
