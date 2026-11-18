@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   openWithSplit: vi.fn(),
   getOrCreate: vi.fn(),
+  toastFailure: vi.fn(),
 }));
 
 // The notice code this module also holds is not under test here.
@@ -21,7 +22,9 @@ vi.mock('@app/features/settings/primitives/team-agent-setup-notice', () => ({
 vi.mock('@app/features/settings/primitives/team-agent-status', () => ({
   retryTeamAgentComputer: vi.fn(),
 }));
-vi.mock('@core/component/Toast/Toast', () => ({ toast: {} }));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.toastFailure },
+}));
 vi.mock('@queries/harnesses/harnesses', () => ({ fetchHarnesses: vi.fn() }));
 vi.mock('./notification-navigation', () => ({
   openBillingSettings: vi.fn(),
@@ -42,12 +45,13 @@ vi.mock('@queries/channel/channels', () => ({
   loadChannelList: () => Promise.resolve([]),
 }));
 
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { openAgentDirectMessage } from './computer-setup-toast';
 
 beforeEach(() => {
   mocks.openWithSplit.mockReset();
   mocks.getOrCreate.mockReset();
+  mocks.toastFailure.mockReset();
 });
 
 describe('openAgentDirectMessage', () => {
@@ -65,5 +69,20 @@ describe('openAgentDirectMessage', () => {
     expect(mocks.getOrCreate).toHaveBeenCalledWith({
       recipient_id: 'macro|ada@agents.macro.invalid',
     });
+  });
+
+  it('says so when the DM cannot be opened, and opens nothing', async () => {
+    mocks.getOrCreate.mockResolvedValue(
+      err([{ name: 'ResultError', code: 'HTTP_500', message: 'boom' }])
+    );
+
+    openAgentDirectMessage('macro|ada@agents.macro.invalid');
+
+    await vi.waitFor(() =>
+      expect(mocks.toastFailure).toHaveBeenCalledWith(
+        "Couldn't open the conversation. Try again."
+      )
+    );
+    expect(mocks.openWithSplit).not.toHaveBeenCalled();
   });
 });

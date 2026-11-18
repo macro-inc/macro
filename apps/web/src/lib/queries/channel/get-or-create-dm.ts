@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
+import { type ResultError, throwOnErr } from '@core/util/result';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
@@ -87,17 +87,12 @@ function findDirectMessage(
  */
 export function getOrCreateDirectMessageChannel(
   recipientId: string
-): ResultAsync<string, unknown> {
-  return ResultAsync.fromPromise(
-    throwOnErr(() =>
-      storageServiceClient.getOrCreateDirectMessage({
-        recipient_id: recipientId,
-      })
-    ),
-    (error) => error
-  ).map((response) => {
+): ResultAsync<string, ResultError[]> {
+  return new ResultAsync(
+    storageServiceClient.getOrCreateDirectMessage({ recipient_id: recipientId })
+  ).map(({ channel_id }) => {
     fireAndForget(invalidateListChannels(), 'channel-list');
-    return response.channel_id;
+    return channel_id;
   });
 }
 
