@@ -136,8 +136,8 @@ export function ShowPermissionsCard(props: {
           <ShieldCheckIcon aria-hidden="true" class="size-4" />
         </div>
         <div class="min-w-0 flex-1">
-          <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0">
+          <div class="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+            <div class="min-w-0 flex-1 basis-60">
               <div class="text-sm font-medium">{title()}</div>
               <p class="mt-0.5 text-sm leading-5 text-ink-muted [overflow-wrap:anywhere]">
                 {t('agentPermissionsChat.cardBody', {
