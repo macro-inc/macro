@@ -740,6 +740,97 @@ async fn a_clear_of_a_kind_takes_the_rows_listed_under_it_whole() {
 }
 
 #[tokio::test]
+async fn a_clear_of_mentions_takes_pull_requests_and_agent_sessions_that_mention_you() {
+    const MENTIONED_PR: u128 = 0xF1;
+    const OTHER_PR: u128 = 0xF2;
+    const SESSION: u128 = 0x5E;
+    let pull_request = |id: u128, pr: u128, tag: &str, minute: u32| {
+        notification(
+            id,
+            entity(EntityType::ForeignEntity, pr),
+            tag,
+            json!({
+                "foreignEntityId": uuid(pr),
+                "githubKey": "macro-inc/macro#1",
+                "owner": "macro-inc",
+                "repo": "macro",
+                "number": 1,
+                "url": "https://github.com/macro-inc/macro/pull/1",
+                "displayName": "macro-inc/macro#1",
+                "title": "Fix the inbox",
+                "location": "comment",
+                "textSnippet": "can you take a look?",
+            }),
+            minute,
+            NotificationState::Unseen,
+        )
+    };
+    let session_mention = notification(
+        3,
+        entity(EntityType::AgentSession, SESSION),
+        "agent_session_mentioned",
+        json!({
+            "sessionId": uuid(SESSION),
+            "sessionName": "Inbox triage",
+            "botId": uuid(0xB07),
+            "botName": "Scout",
+            "mentionedBy": "macro|colleague@example.com",
+            "actionId": uuid(0xAC),
+        }),
+        7,
+        NotificationState::Unseen,
+    );
+    let harness = harness(
+        vec![
+            candidate(
+                "mentioned",
+                entity(EntityType::ForeignEntity, MENTIONED_PR),
+                Some(9),
+                None,
+            ),
+            candidate(
+                "session",
+                entity(EntityType::AgentSession, SESSION),
+                Some(7),
+                None,
+            ),
+            candidate(
+                "other",
+                entity(EntityType::ForeignEntity, OTHER_PR),
+                Some(5),
+                None,
+            ),
+        ],
+        vec![
+            pull_request(1, MENTIONED_PR, "github_pr_mention", 9),
+            pull_request(2, MENTIONED_PR, "github_review_requested", 8),
+            session_mention,
+            pull_request(4, OTHER_PR, "github_review_requested", 5),
+        ],
+    );
+
+    let cleared = clear(
+        &harness,
+        clear_request(InboxScope {
+            row_types: vec![
+                InboxRowType::ChannelMention,
+                InboxRowType::DiscussionMention,
+            ],
+            ..Default::default()
+        }),
+    )
+    .await;
+
+    // Both mentioning rows go whole; the pull request that only asks for a
+    // review stays.
+    assert_eq!(cleared.rows, 2);
+    for id in [1, 2, 3] {
+        assert_eq!(state(&harness, id), NotificationState::Done, "{id}");
+    }
+    assert_eq!(state(&harness, 4), NotificationState::Unseen);
+}
+
+#[tokio::test]
 async fn clear_of_unread_rows_leaves_read_ones() {
     let harness = harness(
         vec![
