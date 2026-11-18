@@ -305,7 +305,9 @@ tabs and devices. Meeting invitations share the same stack, below the channel
 calls, which stack newest first. Banners sit below the macOS title bar and the top safe area,
 take no focus, and span the width minus 16px gutters on phones, with the buttons
 below the caller. Ring one locally with `window.macroDebugIncomingCall({ channelId,
-createdBy })` in a dev build (`macroClearDebugIncomingCalls()` clears them).
+createdBy })` in a dev build (`macroClearDebugIncomingCalls()` clears them),
+and a meeting invitation with `window.macroDebugMeetingInvitation({ createdBy })`.
+A new call is announced to screen readers; many calls scroll within the stack.
 
 Only the current call's desktop Chat sidebar row, channel-header duration pill
 and app-rail item use live waveforms; all other call and phone surfaces use the

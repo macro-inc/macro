@@ -22,74 +22,91 @@ export function IncomingCallNotifications() {
   const hasCalls = () =>
     channelCalls.calls().length > 0 || incoming.invitations().length > 0;
 
+  const callerNames = () => [
+    ...channelCalls
+      .calls()
+      .map((call) => call.callerName || t('calls.someone')),
+    ...incoming.invitations().map((invitation) => invitation.callerName),
+  ];
+
   return (
-    <Show when={hasCalls()}>
-      <Portal>
-        <div
-          role="region"
-          aria-label={t('calls.incomingCalls')}
-          class={cn(
-            // Not a scroller: clipping would cut off the cards' shadows.
-            'pointer-events-none fixed left-(--safe-left) right-(--safe-right) z-toast-region mx-auto flex max-w-[32rem] flex-col gap-3 px-4',
-            // The macOS app's title bar overlays the page's top 40px.
-            hasOverlayTitleBar()
-              ? 'top-12'
-              : 'top-[calc(var(--safe-top,0px)+12px)]'
-          )}
-        >
-          <For each={channelCalls.calls()}>
-            {(call) => (
-              <IncomingChannelCallNotification
-                call={call}
-                onJoin={() => channelCalls.join(call)}
-                onDecline={() => channelCalls.decline(call)}
-              />
+    <>
+      {/* Always mounted, so screen readers announce each call as it rings;
+          a live region added together with its content is not announced. */}
+      <div class="sr-only" aria-live="polite">
+        <For each={callerNames()}>
+          {(name) => <p>{t('calls.incomingCallFrom', { name })}</p>}
+        </For>
+      </div>
+      <Show when={hasCalls()}>
+        <Portal>
+          <div
+            role="region"
+            aria-label={t('calls.incomingCalls')}
+            class={cn(
+              // Scrolls when many calls ring on a short screen; the padding
+              // keeps the cards' shadows inside the scroll box.
+              'pointer-events-none fixed left-(--safe-left) right-(--safe-right) z-toast-region mx-auto flex max-w-[32rem] flex-col gap-3 overflow-y-auto overscroll-contain px-4 pt-2 pb-6',
+              // The macOS app's title bar overlays the page's top 40px.
+              hasOverlayTitleBar()
+                ? 'top-10 max-h-[calc(100dvh-2.5rem)]'
+                : 'top-[calc(var(--safe-top,0px)+4px)] max-h-[calc(100dvh-var(--safe-top,0px)-var(--safe-bottom,0px)-4px)]'
             )}
-          </For>
-          <For each={incoming.invitations().map((item) => item.meetingId)}>
-            {(meetingId) => {
-              const invitation = () =>
-                incoming
-                  .invitations()
-                  .find((item) => item.meetingId === meetingId);
-              const remainingMs = createRingCountdown(
-                () => invitation()?.expiresAt ?? new Date(0).toISOString(),
-                MEETING_INVITATION_RING_MS
-              );
-              return (
-                <Show when={invitation()}>
-                  {(current) => (
-                    <IncomingCallNotification
-                      avatar={
-                        <UserIcon
-                          id={current().createdBy}
-                          name={current().callerName}
-                          size="lg"
-                          class="size-12"
-                          suppressClick
-                          showTooltip={false}
-                        />
-                      }
-                      callerName={current().callerName}
-                      detail={
-                        current().title
-                          ? t('calls.callingYouAbout', {
-                              title: current().title,
-                            })
-                          : t('calls.callingYou')
-                      }
-                      remainingMs={remainingMs()}
-                      ringDurationMs={MEETING_INVITATION_RING_MS}
-                      onJoin={() => incoming.answer(current())}
-                      onDecline={() => incoming.dismiss(current())}
-                    />
-                  )}
-                </Show>
-              );
-            }}
-          </For>
-        </div>
-      </Portal>
-    </Show>
+          >
+            <For each={channelCalls.calls()}>
+              {(call) => (
+                <IncomingChannelCallNotification
+                  call={call}
+                  onJoin={() => channelCalls.join(call)}
+                  onDecline={() => channelCalls.decline(call)}
+                />
+              )}
+            </For>
+            <For each={incoming.invitations().map((item) => item.meetingId)}>
+              {(meetingId) => {
+                const invitation = () =>
+                  incoming
+                    .invitations()
+                    .find((item) => item.meetingId === meetingId);
+                const remainingMs = createRingCountdown(
+                  () => invitation()?.expiresAt ?? new Date(0).toISOString(),
+                  MEETING_INVITATION_RING_MS
+                );
+                return (
+                  <Show when={invitation()}>
+                    {(current) => (
+                      <IncomingCallNotification
+                        avatar={
+                          <UserIcon
+                            id={current().createdBy}
+                            name={current().callerName}
+                            size="lg"
+                            class="size-12"
+                            suppressClick
+                            showTooltip={false}
+                          />
+                        }
+                        callerName={current().callerName}
+                        detail={
+                          current().title
+                            ? t('calls.callingYouAbout', {
+                                title: current().title,
+                              })
+                            : t('calls.callingYou')
+                        }
+                        remainingMs={remainingMs()}
+                        ringDurationMs={MEETING_INVITATION_RING_MS}
+                        onJoin={() => incoming.answer(current())}
+                        onDecline={() => incoming.dismiss(current())}
+                      />
+                    )}
+                  </Show>
+                );
+              }}
+            </For>
+          </div>
+        </Portal>
+      </Show>
+    </>
   );
 }

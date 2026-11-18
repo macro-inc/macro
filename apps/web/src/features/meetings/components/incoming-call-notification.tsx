@@ -51,7 +51,7 @@ export function IncomingCallNotification(props: {
           <div class="flex size-12 shrink-0 items-center justify-center rounded-full ring-2 ring-accent/40 ring-offset-2 ring-offset-menu">
             {props.avatar}
           </div>
-          <div class="min-w-0 flex-1" role="status">
+          <div class="min-w-0 flex-1">
             <div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-accent">
               <PhoneIncomingIcon
                 aria-hidden="true"
