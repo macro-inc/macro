@@ -73,10 +73,14 @@ fn push_job() -> Job {
                 )))
                 .shell("bash")
                 .id("commit")
+                // Without a pick (no Node, an API outage), build main's head.
+                .continue_on_error(true)
                 .add_env(("GH_TOKEN", "${{ github.token }}"))
                 .add_env(("MAIN_SHA", "${{ github.sha }}")),
         )
-        .add_step(steps::checkout_ref("${{ steps.commit.outputs.sha }}"))
+        .add_step(steps::checkout_ref(
+            "${{ steps.commit.outputs.sha || github.sha }}",
+        ))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_cache())
         .add_step(steps::nix_build(

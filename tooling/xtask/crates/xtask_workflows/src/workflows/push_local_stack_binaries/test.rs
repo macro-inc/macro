@@ -7,7 +7,11 @@ fn builds_the_commit_deploy_on_push_built() {
     assert_eq!(workflow["permissions"]["actions"], "read");
     let steps = workflow["jobs"]["push"]["steps"].as_sequence().unwrap();
     assert_eq!(steps[0]["id"], "commit");
-    assert_eq!(steps[1]["with"]["ref"], "${{ steps.commit.outputs.sha }}");
+    assert_eq!(steps[0]["continue-on-error"], true);
+    assert_eq!(
+        steps[1]["with"]["ref"],
+        "${{ steps.commit.outputs.sha || github.sha }}"
+    );
     let build = steps
         .iter()
         .find(|step| step["name"] == "Build local stack binaries")

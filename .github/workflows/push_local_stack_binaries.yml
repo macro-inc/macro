@@ -105,10 +105,11 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         MAIN_SHA: ${{ github.sha }}
+      continue-on-error: true
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
-        ref: ${{ steps.commit.outputs.sha }}
+        ref: ${{ steps.commit.outputs.sha || github.sha }}
         persist-credentials: 'false'
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
