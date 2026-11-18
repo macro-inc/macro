@@ -185,6 +185,8 @@ test('documents.recent() handles read listed metadata without a detail request',
   );
 
   expect(document?.webUrl()).toEndWith('/app/canvas/doc-1');
+  expect(document?.toMention().tag).toContain('"documentName":"Launch plan"');
+  expect(document?.toMention().tag).toContain('"blockName":"canvas"');
   expect(await document?.name()).toBe('Launch plan');
   expect(await document?.fileType()).toBe('canvas');
   expect(await document?.updatedAt()).toBe('2026-01-02T00:00:00Z');

@@ -1231,8 +1231,10 @@ export class Document
     return {
       tag: wrapXml('m-document-mention', {
         documentId: this.id,
-        documentName: loaded?.documentName ?? '',
-        blockName: loaded?.fileType ?? 'md',
+        documentName:
+          loaded?.documentName ?? this.detail.listedField('documentName') ?? '',
+        blockName:
+          loaded?.fileType ?? this.detail.listedField('fileType') ?? 'md',
       }),
       mention: { entity_type: 'document', entity_id: this.id },
     };
