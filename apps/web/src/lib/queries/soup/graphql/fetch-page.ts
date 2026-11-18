@@ -6,6 +6,10 @@ import {
 } from '@service-storage/graphql-soup';
 import type { SoupAstBody, SoupParams } from '../items';
 import { makeGraphqlSoupInput } from './ast';
+import {
+  buildGraphqlEntitiesSoupInput,
+  type SoupEntityRef,
+} from './entity-input';
 
 /**
  * Reads one page of a Soup list over GraphQL, for imperative callers (exports,
@@ -25,4 +29,17 @@ export async function fetchGraphqlSoupPage(
     { input: makeGraphqlSoupInput(args) },
     options
   );
+}
+
+/**
+ * Reads exactly `entities` over GraphQL. An entity missing from the page is
+ * one the viewer cannot see.
+ */
+export async function fetchGraphqlSoupEntities(
+  entities: readonly SoupEntityRef[],
+  options: FetchGraphqlSoupOptions = {}
+): Promise<SoupPage> {
+  const input = buildGraphqlEntitiesSoupInput(entities);
+  if (!input) return { items: [] };
+  return await fetchGraphqlSoup(SoupDocument, { input }, options);
 }
