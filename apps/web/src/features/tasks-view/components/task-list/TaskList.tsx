@@ -11,6 +11,7 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { t } from '@app/lib/i18n';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   addUnique,
@@ -25,6 +26,7 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
+import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import {
   type EntityData,
   EntitySelectionToolbar,
@@ -39,7 +41,7 @@ import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button } from '@ui';
+import { Button, EmptyStatePanel } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -450,12 +452,6 @@ export function TaskList(props: TaskListProps) {
     fireAndForget(source.loadMore(), 'tasks-view');
   }
 
-  const emptyMessage = () => {
-    if (state.search.trim()) return 'No tasks match this search.';
-
-    return 'No tasks in this view.';
-  };
-
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
@@ -538,7 +534,31 @@ export function TaskList(props: TaskListProps) {
                   <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
                     <Show
                       when={props.emptyContent !== undefined}
-                      fallback={<span>{emptyMessage()}</span>}
+                      fallback={
+                        <EmptyStatePanel
+                          centered
+                          graphic={EmptyStateTasksGraphic}
+                          graphicClass="size-32"
+                          title={
+                            state.search.trim()
+                              ? t('viewMenus.noTaskSearchResults')
+                              : t('viewMenus.noTasksToShow')
+                          }
+                          description={
+                            state.search.trim()
+                              ? t('viewMenus.emptyTaskSearch')
+                              : t('viewMenus.emptyTaskView')
+                          }
+                          class={
+                            props.scrollContainer
+                              ? 'h-auto min-h-72 overflow-visible px-4 py-8 touch:pt-8'
+                              : undefined
+                          }
+                          topSpacerClass={
+                            props.scrollContainer ? 'basis-0' : undefined
+                          }
+                        />
+                      }
                     >
                       {props.emptyContent}
                     </Show>

@@ -1266,8 +1266,9 @@ pending. It says “No tasks yet” and “Add tasks to plan and track this proj
 work.” Editors get a filled Add task menu; everyone gets Documentation with a
 book icon, opening https://docs.macro.com/product/projects in a new tab. On phones,
 use the floating Task menu; do not add a second inline action. If linked tasks exist
-but search, filters, or hidden completed tasks remove them from the view, keep the filtered-empty
-message instead; no project-empty illustration is shown.
+but search, filters, or hidden completed tasks remove them from the view, show the
+shared illustrated task-results state: “No tasks to show” with filter guidance,
+or “No matching tasks” with search guidance. Do not describe the project as empty.
 
 ### Saved project views
 
