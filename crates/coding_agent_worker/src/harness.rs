@@ -288,8 +288,8 @@ async fn relay(
                         // Read by the guest's agent units; outside a Macro
                         // computer nothing installs it, so it does nothing.
                         match apply_agent(&environment.0) {
-                            Ok(()) => tracing::info!("staged the agent teammate's environment"),
-                            Err(error) => tracing::error!(error = %error, "could not stage the agent teammate's environment"),
+                            Ok(staged) => tracing::info!(?staged, "handled the agent teammate's environment"),
+                            Err(error) => tracing::error!(error = ?error, "could not stage the agent teammate's environment"),
                         }
                     }
                     Some(other) => tracing::debug!(message = ?other, "ignoring an unknown runtime message"),
@@ -358,12 +358,12 @@ async fn hand_off(
         Ok(running) => match running.hand_off(active_prompts) {
             Ok(handed) => Some(handed),
             Err(error) => {
-                tracing::warn!(error = %error, "could not hand the agent off");
+                tracing::warn!(error = ?error, "could not hand the agent off");
                 None
             }
         },
         Err(error) => {
-            tracing::warn!(error = %error, "could not detach the agent");
+            tracing::warn!(error = ?error, "could not detach the agent");
             None
         }
     }
@@ -372,12 +372,20 @@ async fn hand_off(
 /// Relay one agent line, letting `self_knowledge` learn which session a
 /// `session/new` answer created.
 #[cfg(unix)]
-fn apply_agent(environment: &std::collections::BTreeMap<String, String>) -> rootcause::Result<()> {
-    crate::agent_env::stage_agent_env(Path::new(crate::agent_env::AGENT_ENV_INBOX), environment)
+fn apply_agent(
+    environment: &std::collections::BTreeMap<String, String>,
+) -> rootcause::Result<crate::agent_env::Staged> {
+    crate::agent_env::stage_agent_env(
+        Path::new(crate::agent_env::AGENT_ENV_INBOX),
+        Path::new(crate::agent_env::AGENT_ENV_INSTALLED),
+        environment,
+    )
 }
 
 #[cfg(not(unix))]
-fn apply_agent(_environment: &std::collections::BTreeMap<String, String>) -> rootcause::Result<()> {
+fn apply_agent(
+    _environment: &std::collections::BTreeMap<String, String>,
+) -> rootcause::Result<crate::agent_env::Staged> {
     Err(rootcause::report!(
         "agent teammates run only on Macro computers"
     ))

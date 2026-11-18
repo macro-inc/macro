@@ -172,6 +172,15 @@ pub struct AgentEnvironment(
     pub  std::collections::BTreeMap<String, String>,
 );
 
+/// The values are credentials: wiped from memory when dropped.
+impl Drop for AgentEnvironment {
+    fn drop(&mut self) {
+        for value in self.0.values_mut() {
+            zeroize::Zeroize::zeroize(value);
+        }
+    }
+}
+
 impl std::fmt::Debug for AgentEnvironment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AgentEnvironment")

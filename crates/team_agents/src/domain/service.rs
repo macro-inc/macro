@@ -468,6 +468,9 @@ where
         self.ensure_enabled(&created_by).await?;
         let request = validate(request)?;
         let team_id = team_id(&receipt)?;
+        // A buyer the computers rollout doesn't include is refused before an
+        // account, seat or repository exists to take back.
+        self.computers.require_purchase_rollout(&created_by).await?;
 
         let mut undo = Undo::default();
         let (user_id, seed) = match self

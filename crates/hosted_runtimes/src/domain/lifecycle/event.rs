@@ -110,6 +110,9 @@ pub enum Event {
     /// Timer: [`AGENT_START_DEADLINE`] after macrod connected; an agent that
     /// still hasn't reported online failed its start.
     AgentStartDue,
+    /// Timer: hand the agent over again, every [`AGENT_REDELIVERY`] until it
+    /// reports online.
+    AgentRedeliver,
     /// The purchase of a computer released after failing its first start
     /// was refunded.
     PurchaseRefunded {
@@ -209,6 +212,8 @@ pub enum TimerKind {
     AgentStartDue,
     /// The purchase request's time to answer its charge is up.
     ChargeUnsettled,
+    /// Send the agent teammate's hand-off again.
+    AgentRedeliver,
 }
 
 impl TimerKind {
@@ -224,6 +229,7 @@ impl TimerKind {
             Self::RetentionExpired => Event::RetentionExpired,
             Self::AgentStartDue => Event::AgentStartDue,
             Self::ChargeUnsettled => Event::ChargeUnsettled,
+            Self::AgentRedeliver => Event::AgentRedeliver,
         }
     }
 }

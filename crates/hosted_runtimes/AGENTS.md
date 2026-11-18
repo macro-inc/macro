@@ -123,7 +123,9 @@ read it before changing behaviour.
   authentication_service with team_agents as `ports::AgentInvites`) retries
   with `BILLING_BACKOFF` and gives up after `MAX_AGENT_ATTEMPTS` with the error
   log `agent invite undo abandoned`; a refund that exhausts its attempts logs
-  `computer purchase refund abandoned`. Alerts key on both
+  `computer purchase refund abandoned`, and one that finds no paid purchase for
+  a billed computer logs `computer purchase refund found no paid purchase`.
+  Alerts key on all three
   (`infra/stacks/monitoring/monitors/computers.ts`).
 - A charged purchase converts before it charges: the request holds the
   computer's billing guard and runs the charge while the fleet creates the

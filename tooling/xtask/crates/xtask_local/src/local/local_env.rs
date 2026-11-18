@@ -791,6 +791,9 @@ impl BootStubEnv {
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME".into(),
             "local-cloudfront-signer-private-key".into(),
         );
+        // Local stacks run a computer fleet, so the agents worker that takes
+        // back agent teammates of released computers is on.
+        env.insert("COMPUTERS_AGENT_EFFECTS".into(), "true".into());
         // authentication_service's third-party OAuth/Stripe config. The Google
         // pair is the client the stack's Gmail emulator is given (see
         // google_emulator.rs); the FusionAuth kickstart only creates the

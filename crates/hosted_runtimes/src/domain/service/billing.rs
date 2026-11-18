@@ -891,6 +891,12 @@ impl<
             Err(error) => return Err(error.into()),
         };
         tracing::Span::current().record("refunded", refund.is_some());
+        if refund.is_none() {
+            // The computer was billed on an item, so a purchase invoice
+            // should exist: it may still be open, or older than the invoices
+            // searched. Alerting keys on this event; see the crate's AGENTS.md.
+            tracing::error!(%computer_id, "computer purchase refund found no paid purchase");
+        }
         if let Some(refund) = refund {
             self.repo
                 .apply(

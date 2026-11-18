@@ -288,3 +288,30 @@ fn a_state_row_written_before_first_start_tracking_still_decodes() {
     assert_eq!(state.first_start_failures, 0);
     assert_eq!(state.refund, None);
 }
+
+/// The hand-off carries no acknowledgement, so it is sent again on a timer
+/// until the agent reports online; a lost one can't fail the agent's start.
+#[test]
+fn an_agent_is_handed_over_again_until_it_reports_online() {
+    let (connected, effects) = apply(&agent_setting_up(), Event::MacrodConnected);
+    assert!(effects.contains(&Effect::ScheduleTimer {
+        kind: TimerKind::AgentRedeliver,
+        at: now() + AGENT_REDELIVERY,
+    }));
+
+    let (again, effects) = apply(&connected, Event::AgentRedeliver);
+    assert_eq!(
+        effects,
+        vec![
+            Effect::DeliverAgent,
+            Effect::ScheduleTimer {
+                kind: TimerKind::AgentRedeliver,
+                at: now() + AGENT_REDELIVERY,
+            },
+        ]
+    );
+
+    let (online, _) = apply(&again, Event::AgentOnline);
+    let (_, effects) = apply(&online, Event::AgentRedeliver);
+    assert_eq!(effects, vec![]);
+}

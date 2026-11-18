@@ -285,7 +285,7 @@ type Sent = Arc<std::sync::Mutex<Vec<(HarnessId, std::collections::BTreeMap<Stri
 
 fn recording_send(sent: Sent) -> SendAgent {
     Arc::new(move |harness, environment| {
-        sent.lock().unwrap().push((harness, environment.0));
+        sent.lock().unwrap().push((harness, environment.0.clone()));
         Box::pin(async { true })
     })
 }
@@ -306,6 +306,7 @@ async fn the_replica_holding_the_socket_issues_the_agent_and_sends_it_down() {
     deliver_agent_to_runtime(
         hand_off(),
         agents.clone(),
+        Arc::default(),
         Arc::new(|harness| harness == AGENT_HARNESS),
         recording_send(Arc::clone(&sent)),
     )
@@ -339,6 +340,7 @@ async fn a_replica_without_the_socket_issues_nothing() {
     deliver_agent_to_runtime(
         hand_off(),
         agents.clone(),
+        Arc::default(),
         Arc::new(|_| false),
         recording_send(Arc::clone(&sent)),
     )
@@ -372,4 +374,30 @@ fn a_hand_off_on_the_bus_carries_no_credential_and_reads_back_as_one() {
 
     let read: RuntimeBusEvent = serde_json::from_value(wire).unwrap();
     assert!(matches!(read, RuntimeBusEvent::DeliverAgent(request) if request == hand_off()));
+}
+
+/// A hand-off sent again (the lifecycle repeats it until the agent reports
+/// online) re-sends what this replica issued: issuing again would rotate the
+/// key the starting agent already holds.
+#[tokio::test]
+async fn a_repeated_hand_off_sends_the_same_environment_without_issuing_again() {
+    let agents = Arc::new(AdaAgent::default());
+    let issued = Arc::new(IssuedAgents::default());
+    let sent = Sent::default();
+
+    for _ in 0..2 {
+        deliver_agent_to_runtime(
+            hand_off(),
+            agents.clone(),
+            Arc::clone(&issued),
+            Arc::new(|harness| harness == AGENT_HARNESS),
+            recording_send(Arc::clone(&sent)),
+        )
+        .await;
+    }
+
+    assert_eq!(agents.issued.lock().unwrap().len(), 1);
+    let sent = sent.lock().unwrap();
+    assert_eq!(sent.len(), 2);
+    assert_eq!(sent[0], sent[1]);
 }

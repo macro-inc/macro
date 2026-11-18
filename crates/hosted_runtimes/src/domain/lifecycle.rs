@@ -41,6 +41,10 @@ pub type SubscriptionItemId = stripe::SubscriptionItemId;
 /// How long an agent teammate has to report itself online after its
 /// computer's macrod connects, before its start counts as failed.
 pub const AGENT_START_DEADLINE: Duration = Duration::minutes(3);
+/// How often an agent's hand-off is sent again while it hasn't reported
+/// online: the runtime bus carries no acknowledgement, so a lost hand-off
+/// must not cost the agent its start.
+pub const AGENT_REDELIVERY: Duration = Duration::seconds(20);
 /// Failed first starts after which a computer is released and its purchase
 /// refunded: one failure leaves it for the team to retry.
 pub const MAX_FIRST_START_FAILURES: u8 = 2;
@@ -676,6 +680,20 @@ pub fn transition(
             next.awaiting_agent = false;
         }
 
+        Event::AgentRedeliver => {
+            if state.awaiting_agent
+                && state.macrod_connected
+                && !gave_up(&state.phase)
+                && !state.billing.is_charging()
+            {
+                effects.push(Effect::DeliverAgent);
+                effects.push(Effect::ScheduleTimer {
+                    kind: TimerKind::AgentRedeliver,
+                    at: now + AGENT_REDELIVERY,
+                });
+            }
+        }
+
         Event::AgentStartDue => {
             if state.awaiting_agent && state.macrod_connected && !gave_up(&state.phase) {
                 give_up(
@@ -1045,6 +1063,10 @@ fn deliver_agent(effects: &mut Vec<Effect>, now: DateTime<Utc>) {
     effects.push(Effect::ScheduleTimer {
         kind: TimerKind::AgentStartDue,
         at: now + AGENT_START_DEADLINE,
+    });
+    effects.push(Effect::ScheduleTimer {
+        kind: TimerKind::AgentRedeliver,
+        at: now + AGENT_REDELIVERY,
     });
 }
 
