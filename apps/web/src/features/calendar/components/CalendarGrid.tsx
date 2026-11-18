@@ -402,14 +402,10 @@ export function CalendarGrid(props: CalendarGridProps) {
       <FullCalendar.DayHeaderContent>
         {({ date, text, view }) => {
           if (view.type === 'timeGridWeek' || view.type === 'timeGridDay') {
-            const isSingleDayView =
-              view.type === 'timeGridDay' &&
-              (props.settings.dayCount ?? 1) === 1;
-            const weekday = isSingleDayView
-              ? formatWeekdayHeader.short(date)
-              : formatWeekdayHeader[
-                  props.settings.useNarrowDayHeaders ? 'narrow' : 'short'
-                ](date);
+            const weekday =
+              formatWeekdayHeader[
+                props.settings.useNarrowDayHeaders ? 'narrow' : 'short'
+              ](date);
 
             return (
               <>

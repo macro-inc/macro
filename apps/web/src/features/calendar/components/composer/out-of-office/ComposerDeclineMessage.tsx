@@ -16,6 +16,7 @@ export function ComposerDeclineMessage() {
     >
       <TextField.TextArea
         autoResize
+        class="focus-visible:ring-[1.5px] focus-visible:ring-accent"
         rows={2}
         aria-label={t('calendar.declineMessage')}
         placeholder={t('calendar.declineMessage')}

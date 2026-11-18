@@ -8,6 +8,25 @@ import { agendaDay, agendaWindowIndices } from './agenda-window';
 
 const DAY_SELECTOR = '[data-agenda-day]';
 
+/** A requested empty date belongs to its visible collapsed group, not a zero-height marker. */
+export function findAgendaDayAnchor(
+  viewport: HTMLElement,
+  date: Date
+): HTMLElement | undefined {
+  const requested = agendaDay(date).getTime();
+  return Array.from(viewport.querySelectorAll<HTMLElement>(DAY_SELECTOR)).find(
+    (day) => {
+      if (day.dataset.agendaDay === date.toDateString()) return true;
+      const end = day.dataset.agendaGroupEnd;
+      if (!end || !day.dataset.agendaDay) return false;
+      return (
+        requested >= new Date(day.dataset.agendaDay).getTime() &&
+        requested <= new Date(end).getTime()
+      );
+    }
+  );
+}
+
 function visibleDay(viewport: HTMLElement): HTMLElement | undefined {
   const top = viewport.getBoundingClientRect().top;
   return Array.from(viewport.querySelectorAll<HTMLElement>(DAY_SELECTOR)).find(
@@ -84,9 +103,7 @@ export function createAgendaPaging(
   const positionInitial = () => {
     const element = viewport();
     if (!element) return;
-    const day = Array.from(
-      element.querySelectorAll<HTMLElement>(DAY_SELECTOR)
-    ).find((item) => item.dataset.agendaDay === agendaDay(date).toDateString());
+    const day = findAgendaDayAnchor(element, date);
     if (day)
       element.scrollTop +=
         day.getBoundingClientRect().top - element.getBoundingClientRect().top;

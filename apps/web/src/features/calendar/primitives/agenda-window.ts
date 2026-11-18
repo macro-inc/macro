@@ -34,7 +34,7 @@ export function agendaWindowIndices(first: number): number[] {
   return Array.from({ length: AGENDA_MOUNTED_WINDOWS }, (_, i) => first + i);
 }
 
-type AgendaEvent = Pick<
+export type AgendaEvent = Pick<
   CalendarEvent,
   'id' | 'start' | 'end' | 'allDay' | 'isCancelled'
 >;
@@ -46,15 +46,13 @@ export interface AgendaDay<T extends AgendaEvent> {
 /** Event spans local dates; all-day ends are exclusive date strings. */
 export function agendaEventsByDay<T extends AgendaEvent>(
   events: readonly T[],
-  start: Date
+  start: Date,
+  dayCount = AGENDA_WINDOW_DAYS
 ): AgendaDay<T>[] {
-  const days: AgendaDay<T>[] = Array.from(
-    { length: AGENDA_WINDOW_DAYS },
-    (_, i) => ({
-      date: agendaShift(start, i),
-      events: [],
-    })
-  );
+  const days: AgendaDay<T>[] = Array.from({ length: dayCount }, (_, i) => ({
+    date: agendaShift(start, i),
+    events: [],
+  }));
   for (const event of events) {
     if (event.isCancelled) continue;
     const beginning = event.allDay
@@ -92,4 +90,35 @@ export function agendaEventsByDay<T extends AgendaEvent>(
     );
   }
   return days;
+}
+
+export interface AgendaDayGroup<T extends AgendaEvent> {
+  start: Date;
+  end: Date;
+  events: T[];
+}
+
+/** Merge only adjacent empty days; today remains a distinct landmark. */
+export function groupAgendaDays<T extends AgendaEvent>(
+  days: readonly AgendaDay<T>[],
+  today: Date = new Date(),
+  canGroup: (previous: Date, next: Date) => boolean = () => true
+): AgendaDayGroup<T>[] {
+  const groups: AgendaDayGroup<T>[] = [];
+  const todayKey = agendaDay(today).getTime();
+  for (const day of days) {
+    const previous = groups[groups.length - 1];
+    if (
+      day.events.length === 0 &&
+      previous?.events.length === 0 &&
+      previous.end.getTime() !== todayKey &&
+      day.date.getTime() !== todayKey &&
+      canGroup(previous.end, day.date)
+    ) {
+      previous.end = day.date;
+    } else {
+      groups.push({ start: day.date, end: day.date, events: day.events });
+    }
+  }
+  return groups;
 }

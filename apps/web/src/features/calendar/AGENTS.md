@@ -69,9 +69,11 @@ host lives in `../block-calendar/`.
   selected-end intent, range validation, and day-specific end options; detail
   resets invalidate intent through the controller's `detailsRevision`.
   `WhenMonth` keeps six-week Corvu keyboard semantics at two sizes. Phone dates
-  always include the end; desktop summaries include it only across days. Phone
-  pickers expand inline and reveal within the host scroller. Keep current Repeat
-  options until its replacement is designed; do not add a stacked Repeat sheet.
+  always include the end while timed. All-day phone ranges use one row and hide
+  a same-day end. Phone date/time pickers expand inline. Other phone controls use
+  `PhoneComposerMenuRoot`: fixed lists up to five non-wrapping choices expand inline;
+  searchable, longer, and multi-step choices use pages inside the same sheet.
+  Repeat uses a page with Custom one level deeper, never a second drawer.
   Old `ComposerWhen` and `MobileComposerWhen` stay unwired for reference.
   `PhoneSheetComposer` owns the sheet's footer, header, and sole scroll viewport.
   New-menu sheets use 92% height; timed phone Day slot taps request a low 42%
@@ -83,7 +85,8 @@ host lives in `../block-calendar/`.
   collapse only through the empty-field remove action. Add-field visibility and
   scroll-driven compact-title progress live in composer primitives. Keep the compact title absolutely overlaid in the
   zero-height header outlet; it never changes the scroll body's geometry.
-  Guest selection stages changes in `PickerSheet` and applies only on Done.
+  Guest selection stages changes on a People page and applies only on Done;
+  Back or permission loss discards the page draft. Keep source-backed suggestions.
 - `primitives/create-agent-composer.ts` keeps one validated review decision; the
   agent host selects `AgentComposer` or `MobileAgentComposer` over that model.
   `create-calendar-composer-setup.ts` constructs the shared controller/model;
@@ -98,8 +101,11 @@ host lives in `../block-calendar/`.
   Feed the same validated time and recurrence snapshot to the preview and submission.
 - Visibility offers Calendar default/Public/Private, displays synced confidential
   as Private, and preserves the original value until an explicit change.
-- Stage custom recurrence in the shared Dialog (MobileDrawer on phones); Cancel
-  leaves the current rule intact. Keep newly revealed options after existing fields.
+- Stage custom recurrence in the shared Dialog on desktop and the Custom page
+  on phones; Back/Cancel leaves the current rule intact. Keep newly revealed
+  options after existing fields. Phone time zone belongs above Repeat in When;
+  reminder/visibility rows follow Calendar in the Call/Calendar group.
+- Use `inset-ring-*` for inset focus rings; `ring-inset` also selects the theme's inset color and overrides accent.
 - Pass the calendar clock preference into shared date/time controls from their
   host; generic fields must not import calendar preferences.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,
@@ -117,11 +123,14 @@ host lives in `../block-calendar/`.
   depth. Keep navigation outside and the opening hour label inside the viewport.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
+- Keep the phone Month overlay's device switch in `../calendar-view/calendar-month.tsx`; reuse each FullCalendar page's bounded six-week occurrence source, honor hidden weekends, and anchor focus requests to visible phone rows.
 - Keep Agenda on the navigation context, with five fourteen-day windows clipped
   to supported occurrence bounds; never pass Agenda to a FullCalendar API.
 - Keep the visible Agenda day anchored through late data and window rotation;
   `create-agenda-paging.ts` owns resize observation, and each explicit date request
-  starts a fresh list even when its calendar day is unchanged.
+  starts a fresh list even when its calendar day is unchanged. `create-agenda-grouping.ts`
+  merges confirmed empty ranges across window boundaries without merging today;
+  group-end metadata lets paging anchor requested dates inside collapsed ranges.
 - Reuse `../../lib/queries/calendar/` for account-scoped reads, optimistic writes,
   and REST/GraphQL handoff; never add a parallel event cache.
 

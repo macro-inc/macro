@@ -3,7 +3,10 @@ import { TextField } from '@ui';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 
 export function ComposerLocation(
-  props: { inputRef?: (element: HTMLTextAreaElement) => void } = {}
+  props: {
+    inputRef?: (element: HTMLTextAreaElement) => void;
+    rows?: number;
+  } = {}
 ) {
   const model = useCalendarComposer();
   return (
@@ -13,10 +16,10 @@ export function ComposerLocation(
       disabled={model.fieldIsDisabled('location')}
       class="w-full"
     >
-      <TextField.Surface>
+      <TextField.Surface class="focus-within:border-accent focus-within:ring-[1.5px] focus-within:ring-accent">
         <TextField.TextArea
           variant="embedded"
-          rows={1}
+          rows={props.rows ?? 1}
           autoResize
           ref={props.inputRef}
           aria-label={t('calendar.location')}

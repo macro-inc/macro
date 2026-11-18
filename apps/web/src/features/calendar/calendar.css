@@ -1,4 +1,5 @@
 @reference "../../index.css";
+@import "./calendar-month.css";
 
 .calendar-view {
 	container-name: calendar-view;
@@ -509,8 +510,8 @@
 }
 
 .calendar-view .fc .calendar-event-response-dot {
-	width: 0.5rem;
-	height: 0.5rem;
+	width: 0.375rem;
+	height: 0.375rem;
 	flex: none;
 	border: 1px solid var(--event-calendar-color, var(--color-calendar));
 	border-radius: 9999px;
@@ -620,7 +621,49 @@
 }
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-top {
-	justify-content: center;
+	flex-direction: row;
+	justify-content: flex-start;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-number {
+	padding-left: 0.625rem;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-top:has(.fc-daygrid-day-number) {
+	min-height: 2rem;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-events {
+	margin-inline: 0.25rem;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-dot-event {
+	padding-inline: 0.375rem;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-dot-event .calendar-event-content-layout {
+	flex-direction: row;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-more-link {
+	margin-left: 0.375rem;
+	font-size: 0.75rem;
+	font-weight: 600;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-day-other .fc-daygrid-day-frame {
+	opacity: 0.5;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-day-sat,
+.calendar-view .fc .fc-dayGridMonth-view .fc-day-sun {
+	background: color-mix(in oklch, var(--color-ink) 2%, transparent);
+}
+
+.phone-month-page > .calendar-view {
+	visibility: hidden;
 }
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-number {
@@ -964,7 +1007,12 @@
 @media (max-width: 639px) {
 	html[data-touch-device="true"] .calendar-view-content {
 		padding-top: calc(var(--mobile-content-inset-top, 0px) + 0.5rem);
-		padding-bottom: calc(var(--mobile-content-inset-bottom, 0px) + 0.5rem);
+		padding-bottom: 0.5rem;
+	}
+
+	/* Keep the grid full height; scroll content above the floating dock and New button. */
+	.calendar-view .fc-timegrid-slots table {
+		margin-bottom: calc(var(--mobile-content-inset-bottom, 0px) + 6rem);
 	}
 
 	/* The modal owns editing; the range ends remain visible behind its low sheet. */

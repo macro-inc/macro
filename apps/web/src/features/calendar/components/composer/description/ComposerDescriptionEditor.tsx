@@ -9,7 +9,11 @@ import { exportCalendarDescription } from '../../../utils/calendar-description';
 export type ComposerDescriptionEditorProps = Pick<
   ComponentProps<typeof MarkdownTextarea>,
   'resolveAppLink'
-> & { initialValue: string; inputRef?: (element: HTMLDivElement) => void };
+> & {
+  initialValue: string;
+  inputRef?: (element: HTMLDivElement) => void;
+  minLines?: number;
+};
 
 export function ComposerDescriptionEditor(
   props: ComposerDescriptionEditorProps
@@ -19,7 +23,14 @@ export function ComposerDescriptionEditor(
     model.controller.setField('description', value)
   );
   return (
-    <TextField.Surface class="max-h-52 overflow-y-auto">
+    <TextField.Surface
+      class="focus-within:border-accent focus-within:ring-[1.5px] focus-within:ring-accent"
+      style={{
+        '--composer-description-min-height': props.minLines
+          ? `${props.minLines * 1.25 + 0.75}rem`
+          : '2.5rem',
+      }}
+    >
       <MarkdownTextarea
         type="calendar"
         initialHtml={description.initialHtml}
@@ -37,7 +48,7 @@ export function ComposerDescriptionEditor(
           element.setAttribute('aria-label', t('calendar.description'));
           props.inputRef?.(element);
         }}
-        class="min-h-10 w-full bg-transparent text-sm text-ink outline-none"
+        class="min-h-(--composer-description-min-height) [&>[contenteditable]]:min-h-(--composer-description-min-height) w-full bg-transparent text-sm text-ink outline-none"
       />
     </TextField.Surface>
   );

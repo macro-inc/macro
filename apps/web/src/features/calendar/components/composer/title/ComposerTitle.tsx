@@ -21,6 +21,7 @@ export function ComposerTitle(
       <TextField.TextArea
         ref={props.inputRef}
         variant="title"
+        class="rounded-md focus-visible:ring-[1.5px] focus-visible:ring-accent"
         rows={1}
         autoResize
         submitOnEnter={props.submitOnEnter ?? true}

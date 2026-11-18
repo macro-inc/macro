@@ -118,6 +118,8 @@ export interface EventEditorCalendarOption {
   capabilities?: CalendarCapabilities;
   id: string;
   label: string;
+  name?: string;
+  accountLabel?: string;
   color: string;
   /** Provider defaults shown until the event's reminders are customized. */
   defaultReminders?: EventReminderOverride[];
@@ -426,7 +428,7 @@ export function convertTimesForAllDay(
     ...state,
     allDay,
     start: format(start, DATETIME_VALUE),
-    end: format(end, DATETIME_VALUE),
+    end: `${state.end.slice(0, 10)}T${format(end, 'HH:mm')}`,
   };
 }
 

@@ -44,7 +44,7 @@ export function AgendaOccurrence(props: { event: CalendarEvent }) {
         onSelect={(row) => view.selectEvent(props.event, row, 'agenda')}
       >
         <Show when={props.event.viewerCan.rsvp}>
-          <EventRsvpSection event={props.event} buttonSize="sm" />
+          <EventRsvpSection event={props.event} buttonSize="sm" agenda />
         </Show>
       </AgendaEventRow>
     </div>

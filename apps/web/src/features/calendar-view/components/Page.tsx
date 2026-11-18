@@ -21,7 +21,10 @@ import {
   type CalendarEvent,
   DEFAULT_CALENDAR_SOURCE,
 } from '@app/features/calendar/types';
-import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
+import {
+  clipCalendarDisplayRange,
+  isCalendarRangeSupported,
+} from '@app/features/calendar/utils/calendar-supported-range';
 import { GUEST_EDITS_RESTRICTED } from '@app/features/calendar/utils/event-guest-editing';
 import {
   type CalendarEventTimeChange,
@@ -53,6 +56,7 @@ import {
   createCalendarOccurrenceQueryRange,
 } from '@queries/calendar/occurrences';
 import { Button } from '@ui';
+import { addDays } from 'date-fns';
 import {
   type Accessor,
   createDeferred,
@@ -70,6 +74,7 @@ import {
   calendarFocusTargetId,
   useCalendarFocus,
 } from '../calendar-focus-target';
+import { CalendarMonth } from '../calendar-month';
 import { CalendarLoadingSkeleton } from './CalendarLoadingSkeleton';
 
 interface CalendarScrollTarget {
@@ -208,6 +213,7 @@ export function Page(props: {
   useNarrowDayHeaders: boolean;
 }) {
   const pager = useCalendarPager();
+  const calendarFocus = useCalendarFocus();
   const calendarView = useCalendarView();
   const [loadingDecorationBlocking, setLoadingDecorationBlocking] =
     createSignal(false);
@@ -232,8 +238,7 @@ export function Page(props: {
     firstWritableCalendar()?.color ??
     DEFAULT_CALENDAR_SOURCE.color;
   const isActive = () => pager.isActive(props.id);
-  const useNarrowWeekdayHeaders = () =>
-    props.useNarrowDayHeaders && !isMobile();
+  const useNarrowWeekdayHeaders = () => isMobile() || props.useNarrowDayHeaders;
   // Let the checkbox update before remapping occurrences and redrawing the grid.
   // Each page has its own deferred update, so the scheduler can yield between
   // the three FullCalendar instances.
@@ -347,8 +352,17 @@ export function Page(props: {
     });
   };
 
-  const handleDatesSet = ({ end, start }: DatesSetArg) => {
-    const nextRange = createCalendarOccurrenceQueryRange(start, end);
+  const handleDatesSet = ({ end, start, view }: DatesSetArg) => {
+    // The phone card shows six weeks using the configured first weekday.
+    const phoneMonth = isMobile() && view.type === 'dayGridMonth';
+    const requestedEnd = phoneMonth ? addDays(start, 42) : end;
+    const clipped = phoneMonth
+      ? clipCalendarDisplayRange(start, requestedEnd)
+      : undefined;
+    const nextRange = createCalendarOccurrenceQueryRange(
+      clipped?.start ?? start,
+      clipped?.end ?? requestedEnd
+    );
     const currentRange = range();
     if (
       currentRange?.start === nextRange.start &&
@@ -401,6 +415,9 @@ export function Page(props: {
   return (
     <div
       class="relative size-full min-w-0 min-h-0"
+      classList={{
+        'phone-month-page': isMobile() && pager.periodView() === 'dayGridMonth',
+      }}
       aria-busy={
         data.isLoading() ||
         (isActive() && pager.isChangingView()) ||
@@ -442,14 +459,35 @@ export function Page(props: {
         onEventTimeChange={handleEventTimeChange}
       >
         {(grid) => (
-          <CalendarPageHost
-            id={props.id}
-            data={data}
-            teamEvents={teamOoo.events}
-            eventsById={eventsById}
-            grid={grid}
-            onLoadingBlockingChange={setLoadingDecorationBlocking}
-          />
+          <>
+            <CalendarPageHost
+              id={props.id}
+              data={data}
+              teamEvents={teamOoo.events}
+              eventsById={eventsById}
+              grid={grid}
+              onLoadingBlockingChange={setLoadingDecorationBlocking}
+              focusInOverlay={
+                isMobile() && pager.periodView() === 'dayGridMonth'
+              }
+            />
+            <Show when={pager.periodView() === 'dayGridMonth'}>
+              <CalendarMonth
+                range={grid.dateInfo()}
+                initialDate={props.initialDate}
+                events={visibleEvents()}
+                timeFormat={calendarView.displaySettings.timeFormat}
+                showWeekends={calendarView.displaySettings.showWeekends}
+                focusTarget={
+                  isActive() ? calendarFocus.pendingTarget() : undefined
+                }
+                onFocusHandled={(requestId) => calendarFocus.consume(requestId)}
+                onSelect={(event, element) => {
+                  if (isActive()) calendarView.selectEvent(event, element);
+                }}
+              />
+            </Show>
+          </>
         )}
       </CalendarGrid>
     </div>
@@ -465,6 +503,7 @@ function CalendarPageHost(props: {
   eventsById: Accessor<Map<string, CalendarEvent>>;
   grid: CalendarGridHandle;
   onLoadingBlockingChange: (blocking: boolean) => void;
+  focusInOverlay?: boolean;
 }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
@@ -492,6 +531,7 @@ function CalendarPageHost(props: {
       }
       return;
     }
+    if (props.focusInOverlay) return;
     const targetId = calendarFocusTargetId(target);
     const event = props.eventsById().get(targetId);
     const chip = props.grid.eventElements.get(targetId);

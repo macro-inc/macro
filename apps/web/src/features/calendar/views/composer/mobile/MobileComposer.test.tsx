@@ -19,6 +19,7 @@ vi.mock('@core/component/LexicalMarkdown/component/menu/SnippetsMenu', () => ({
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
   Range.prototype.getBoundingClientRect = () => new DOMRect();
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
     new DOMRect(0, 0, 100, 44)
@@ -27,8 +28,15 @@ beforeEach(() => {
     'ResizeObserver',
     class {
       constructor(private readonly callback: ResizeObserverCallback) {}
-      observe() {
-        queueMicrotask(() => this.callback([], this));
+      observe(target: Element) {
+        const entry = {
+          target,
+          contentRect: target.getBoundingClientRect(),
+          borderBoxSize: [],
+          contentBoxSize: [],
+          devicePixelContentBoxSize: [],
+        };
+        queueMicrotask(() => this.callback([entry], this));
       }
       unobserve() {}
       disconnect() {}
@@ -152,4 +160,83 @@ it('does not restore removed initial description content when re-added', async (
     screen.getByRole('button', { name: 'Add description' })
   );
   expect((await screen.findByLabelText('Description')).textContent).toBe('');
+});
+
+it('collapses all-day dates and restores the timed fields without losing the range', async () => {
+  const { controller } = setup();
+  controller.setRange('2030-11-11T20:00', '2030-11-13T21:00');
+  await userEvent.click(screen.getByText('All day', { exact: true }));
+  expect(
+    screen.queryByRole('combobox', { name: 'event start time' })
+  ).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Edit event end date' })
+  ).toBeTruthy();
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Edit event end date' })
+  );
+  expect(screen.getByRole('gridcell', { name: /^10$/ })).toHaveProperty(
+    'disabled',
+    true
+  );
+  await userEvent.click(screen.getByRole('gridcell', { name: /^14$/ }));
+  expect(controller.state().end).toBe('2030-11-14');
+  await userEvent.click(screen.getByText('All day', { exact: true }));
+  expect(
+    screen.getByRole('combobox', { name: 'event start time' })
+  ).toBeTruthy();
+  expect(controller.state().start).toBe('2030-11-11T20:00');
+  expect(controller.state().end).toBe('2030-11-14T21:00');
+});
+
+it('keeps search Enter inside the menu instead of submitting the composer', async () => {
+  const { submit } = setup();
+  await userEvent.click(screen.getByRole('button', { name: /^Time zone$/ }));
+  await userEvent.type(
+    screen.getByRole('textbox', { name: /^Time zone$/ }),
+    'UTC{Enter}'
+  );
+  expect(submit).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button', { name: /^Back$/ }));
+  expect(screen.getByRole('textbox', { name: 'Title' })).toBeTruthy();
+});
+
+it('edits one reminder through its page without changing another reminder', async () => {
+  const { controller } = setup();
+  controller.setReminderMinutes([10, 30]);
+  await userEvent.click(
+    screen.getByRole('button', { name: '10 minutes before' })
+  );
+  await userEvent.click(
+    screen.getByRole('button', { name: '5 minutes before' })
+  );
+  expect(controller.reminderMinutes()).toEqual([5, 30]);
+  expect(screen.getByRole('button', { name: 'Add reminder' })).toBeTruthy();
+});
+
+it('closes a menu when loaded details replace the draft', async () => {
+  const { controller } = setup();
+  await userEvent.click(screen.getByRole('button', { name: 'Time zone' }));
+  controller.resetDetails();
+  expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+  expect(screen.getByRole('textbox', { name: 'Title' })).toBeTruthy();
+});
+
+it('extends a single-day all-day draft with the inline range calendar', async () => {
+  const { controller } = setup();
+  controller.setRange('2030-11-11T20:00', '2030-11-11T21:00');
+  await userEvent.click(screen.getByText('All day', { exact: true }));
+  expect(
+    screen.queryByRole('button', { name: 'Edit event end date' })
+  ).toBeNull();
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Edit event start date' })
+  );
+  await userEvent.click(screen.getByRole('gridcell', { name: /^12$/ }));
+  await userEvent.click(screen.getByRole('gridcell', { name: /^15$/ }));
+  expect(controller.state().start).toBe('2030-11-12');
+  expect(controller.state().end).toBe('2030-11-15');
+  expect(
+    screen.getByRole('button', { name: 'Edit event end date' })
+  ).toBeTruthy();
 });

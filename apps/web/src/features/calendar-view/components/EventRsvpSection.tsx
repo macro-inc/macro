@@ -13,10 +13,17 @@ import type { CalendarEvent } from '@app/features/calendar/types';
 export function EventRsvpSection(props: {
   event: CalendarEvent;
   buttonSize?: 'sm' | 'md';
+  agenda?: boolean;
 }) {
   return (
     <EventRsvpRoot event={props.event}>
-      <EventRsvpRow class="border-edge-muted border-t bg-active px-4 py-2.5 text-sm text-ink-muted sm:text-xs mobile:border-0 mobile:bg-transparent mobile:px-6 mobile:pt-4 mobile:pb-2">
+      <EventRsvpRow
+        class={
+          props.agenda
+            ? 'border-edge-muted border-t bg-surface px-4 py-2.5 text-sm text-ink sm:text-xs mobile:border-0 mobile:px-6 mobile:pt-4 mobile:pb-2'
+            : 'border-edge-muted border-t bg-active px-4 py-2.5 text-sm text-ink-muted sm:text-xs mobile:border-0 mobile:bg-transparent mobile:px-6 mobile:pt-4 mobile:pb-2'
+        }
+      >
         <span class="flex shrink-0 items-center gap-2">
           Going?
           <EventRsvpStatus />

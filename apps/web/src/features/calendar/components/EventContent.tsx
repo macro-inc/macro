@@ -93,6 +93,13 @@ export function EventContent(props: EventContentProps) {
         <Show when={showsMonthDot()}>
           <span class="calendar-event-response-dot" aria-hidden="true" />
         </Show>
+        <Show when={isMonthView() && timeText()}>
+          {(text) => (
+            <span class="calendar-event-time shrink-0 text-ink-extra-muted tabular-nums">
+              {text()}
+            </span>
+          )}
+        </Show>
         <span class="calendar-event-title-row flex max-w-full min-w-0 shrink-0 items-center gap-0.5">
           <Show when={everyoneElseDeclined()}>
             <span
@@ -113,7 +120,7 @@ export function EventContent(props: EventContentProps) {
             {props.event.title}
           </span>
         </span>
-        <Show when={timeText()}>
+        <Show when={!isMonthView() && timeText()}>
           {(text) => (
             <span class="calendar-event-time mt-0.5 shrink-0 truncate leading-tight opacity-85 tabular-nums">
               {text()}

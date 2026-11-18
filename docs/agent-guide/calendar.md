@@ -25,7 +25,13 @@ Day, Week, Month, and Agenda use the same `Layer`-raised `bg-surface` card on
 desktop, with 12px outer gaps and rounded, clipped corners. Navigation controls
 and the month title stay outside; day headers, all-day events, and the grid stay
 inside. Pinning a left panel preserves the gap. In Day and Week, the opening
-7am label remains fully readable below the all-day lane.
+7am label remains fully readable below the all-day lane. Phone content extends
+behind floating creation and dock controls, with scroll clearance for the last row.
+Phone weekdays use single-letter labels. Phone Month shows a six-week date card,
+up to three event-color dots per day, a separate picked-day highlight and Today
+marker, and the picked day's event list below. Week-start and hidden-weekend
+preferences apply to this card. Event links focus its visible row, not a hidden
+grid chip. Dates outside the supported occurrence range are disabled.
 Desktop event creation and editing use one 384px composer, not a second split.
 Anchored, pinned, and agent-draft placements have separate view components over
 shared fields and setup; pinning retains the field tree. The registered legacy
@@ -43,7 +49,10 @@ navigation starts collapsed. A drop there opens the left panel; an outside drop
 or Escape restores navigation. Pinned cards follow both axes when lifted. Floating
 cards cap their height to the available calendar/viewport space; fixed headers
 and footers frame the scrolling body. Agenda day headers are opaque at the card's
-layer depth, and RSVP choices sit on solid surfaces with accent-selected replies.
+layer depth, and both the Going? label and RSVP choices sit on solid surfaces with accent-selected replies.
+Agenda day groups have a 24px gap. Adjacent confirmed empty days, including across
+loaded windows, share a date-range row with one quiet No events line; Today stays
+separate. Navigating to a date inside an empty range anchors that range header.
 While pinned, selecting another editable occurrence replaces the editor after
 discard confirmation when needed. Selecting the same occurrence preserves the
 draft. Read-only occurrences retain details and never gain edit access. Pinned
@@ -58,8 +67,9 @@ shared between desktop and phone. Editing hides these choices. Agent drafts keep
 their mark in the title's icon column, not inside a kind selector.
 Location and Description share the same filled, rounded surface and first-line
 padding; a long location wraps. Clearing Description leaves its placeholder at the
-same first-line position. Add people is a filled value pill. Desktop guest removal
-overlays the trailing end on hover or keyboard focus without changing pill width;
+same first-line position. Phone Description starts at three lines and Location
+at two, and both grow. Focus uses the accent ring. Add people is a full-width phone row.
+Desktop guest removal overlays the trailing end on hover or keyboard focus without changing pill width;
 phone guest rows keep their visible removal control.
 **More options** appends extra fields after the existing ones, above the footer.
 It never inserts a newly revealed description between existing fields.
@@ -71,10 +81,10 @@ Desktop **When** is one summary pill plus a ghost time-zone control, followed by
 its own Repeat row. Open the summary for a six-week date grid, start/end clock
 fields, and All day. Date picks keep the popup open; All day uses range selection.
 The summary includes the end date only across days. Phone When shows All day,
-stacked start and end date/time rows, then Repeat. Both date pills remain visible,
-including same-day events. Date/time pickers expand below their own row; only one
-stays open. The current Repeat menu remains until its replacement is designed;
-there is no stacked Repeat sheet.
+stacked start and end date/time rows, then Time zone and Repeat. All-day dates
+collapse to one row: one same-day pill or start/arrow/end across days. Turning
+All day off keeps the chosen dates and restores clock rows. Date/time pickers
+expand inline, and only one picker or menu stays open.
 Start changes keep duration until an end is explicitly chosen. A later valid
 start keeps that chosen end; crossing it preserves the last duration instead.
 Locked ends cannot move, and loaded-detail resets clear chosen-end intent.
@@ -84,15 +94,18 @@ reverts. Escape closes a time list before the desktop When popup. Phone's first
 time tap opens a keyboard-free inline list; its second tap starts typing.
 End lists show lengths and valid choices on the selected date. All day hides
 clock and time-zone fields. Time-zone menus retain full and short names.
-Custom repeat opens the shared desktop Dialog or phone drawer. Edits are staged:
-Done applies and Cancel leaves the original rule unchanged. Reminder pills keep
-their remove control inside the frame. Empty labels and placeholders use tertiary
+Custom repeat opens the shared desktop Dialog or a deeper page inside the same
+phone sheet. Edits are staged: Done applies; Back/Cancel leaves the original rule.
+Reminder rows keep their remove control beside the value. Empty labels use tertiary
 ink, and action copy has no trailing ellipsis unless opening a dialog.
 
-The phone composer orders title and creation-only kind choices, When, people,
-call/calendar, optional-field add rows, time zone, reminders, guest permissions,
-and visibility. Adding Description or Location replaces that same add row and focuses the
-field without moving it to another group. Empty added fields stay open on blur;
+The phone composer orders title and creation-only kind choices, When (including
+Time zone above Repeat), people, Call/Calendar/Reminders/Visibility, optional-field
+add rows, and guest permissions. Every menu row is a full-width 44px tap target.
+Call, Visibility, and up to five non-wrapping calendars expand inline. Longer calendar
+lists group by account on a page; Time zone, Reminders, Repeat, and People use pages.
+Back returns without stacking drawers. Adding Description or Location replaces
+that same add row and focuses the field without moving it. Empty fields stay open on blur;
 their trailing remove button restores the add row in place. The compact title overlays the scroller below
 the grabber without consuming height. Its left-aligned 20/26 semibold text and
 12px swatch align with the full title. Once the first title line clears the
@@ -100,8 +113,9 @@ grabber, a reversible 24px scroll ramp fades/slides it and its 24px bottom fade
 into view. Reduced motion removes the slide. The footer stays outside the single scroll viewport;
 its fade disappears at the bottom. First tap on a time pill opens the
 keyboard-free list, a second tap enters typing, and choosing an overnight end
-advances the end date. People selection opens a staged picker: Done applies;
-Cancel or lost permission drops the draft. Verify both ordinary and recurring
+advances the end date. The People page uses the existing contact suggestions,
+search, selected chips, and a literal-address Invite option. Done applies;
+Back or lost permission drops the draft. Verify both ordinary and recurring
 edits, keyboard dismissal, and save-failure retry on a physical phone. Phone Day
 slot taps open the same composer low enough to retain calendar context; timed
 slots show a separate unsaved one-hour dashed draft with native start and end
@@ -147,8 +161,10 @@ The sheet example keeps its
 footer outside the scroller and removes the footer fade at the end. Shared
 sheet handles use 12px above and 16px below the 36×4px grabber.
 The busy-indicator example distinguishes a confirmed conflict from free and
-unknown availability. Live guest indicators remain absent until the existing
-authorized team-availability source is adapted; external guests have no source.
+unknown availability. The phone People page reads bounded authorized team availability and marks only
+reported busy intervals. Missing, failed, and external-guest coverage stays unknown;
+no free indicator is inferred. The local stack must expose the team-availability
+endpoint to verify live busy markers.
 
 On desktop, click the month title to open the month/year picker. Year arrows
 only browse; choosing a month navigates to its first day. Arrow keys move among

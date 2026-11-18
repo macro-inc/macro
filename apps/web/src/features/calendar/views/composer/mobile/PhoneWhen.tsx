@@ -1,9 +1,9 @@
 import { t } from '@app/lib/i18n';
 import { SheetGroup } from '@components/app/mobile/sheet-group/SheetGroup';
 import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
-import { parseLocalDate } from '@core/util/local-date';
+import { formatLocalDate, parseLocalDate } from '@core/util/local-date';
+import ArrowIcon from '@icon/system/regular/arrow-right.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import RepeatIcon from '@icon/system/regular/repeat.svg';
 import { ToggleSwitch } from '@ui';
 import {
   type Accessor,
@@ -13,7 +13,6 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { ComposerRecurrence } from '../../../components/composer/recurrence/ComposerRecurrence';
 import { ComposerRangeFeedback } from '../../../components/composer/when/ComposerRangeFeedback';
 import { WhenDate } from '../../../components/composer/when/WhenDate';
 import { WhenMonth } from '../../../components/composer/when/WhenMonth';
@@ -21,6 +20,8 @@ import { WhenTime } from '../../../components/composer/when/WhenTime';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { useComposerWhen } from '../../../context/composer-when-context';
 import { revealWhenPicker } from '../../../primitives/reveal-when-picker';
+import { MobileComposerRecurrence } from './MobileComposerRecurrence';
+import { MobileComposerTimeZone } from './MobileComposerTimeZone';
 
 export function PhoneWhen(props: {
   scrollElement: Accessor<HTMLElement | undefined>;
@@ -41,7 +42,7 @@ export function PhoneWhen(props: {
     if (frame !== undefined) cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
       frame = undefined;
-      const row = inlineStart() ? startRow : endRow,
+      const row = inlineStart() || model.state().allDay ? startRow : endRow,
         picker = inlineStart() ? startMount() : endMount();
       if (row && picker) revealWhenPicker(props.scrollElement(), row, picker);
     });
@@ -80,6 +81,16 @@ export function PhoneWhen(props: {
             <SheetRow>
               <div class="flex items-center gap-2">
                 <WhenDate endpoint="start" />
+                <Show
+                  when={
+                    model.state().allDay &&
+                    model.state().start.slice(0, 10) !==
+                      model.state().end.slice(0, 10)
+                  }
+                >
+                  <ArrowIcon class="size-4 shrink-0 text-ink-subtle" />
+                  <WhenDate endpoint="end" />
+                </Show>
                 <Show when={!model.state().allDay}>
                   <WhenTime
                     endpoint="start"
@@ -101,9 +112,13 @@ export function PhoneWhen(props: {
                       parseLocalDate(model.state().start.slice(0, 10)) ??
                       new Date()
                     }
+                    end={parseLocalDate(model.state().end.slice(0, 10))}
+                    range={model.state().allDay && !model.range.endDisabled}
                     disabled={model.range.startDisabled}
-                    onChange={(date) => {
-                      when.chooseDate('start', date);
+                    onChange={(date, end) => {
+                      if (end)
+                        when.range(formatLocalDate(date), formatLocalDate(end));
+                      else when.chooseDate('start', date);
                       when.close();
                     }}
                   />
@@ -111,21 +126,23 @@ export function PhoneWhen(props: {
               </Show>
             </div>
           </Show>
-          <div ref={endRow}>
-            <SheetRow>
-              <div class="flex items-center gap-2">
-                <WhenDate endpoint="end" />
-                <Show when={!model.state().allDay}>
-                  <WhenTime
-                    endpoint="end"
-                    inline
-                    listMount={endMount()}
-                    onReveal={reveal}
-                  />
-                </Show>
-              </div>
-            </SheetRow>
-          </div>
+          <Show when={!model.state().allDay}>
+            <div ref={endRow}>
+              <SheetRow>
+                <div class="flex items-center gap-2">
+                  <WhenDate endpoint="end" />
+                  <Show when={!model.state().allDay}>
+                    <WhenTime
+                      endpoint="end"
+                      inline
+                      listMount={endMount()}
+                      onReveal={reveal}
+                    />
+                  </Show>
+                </div>
+              </SheetRow>
+            </div>
+          </Show>
           <Show when={inlineEnd()}>
             <div ref={setEndMount} data-when-inline="end">
               <Show when={when.state.active === 'end-date'}>
@@ -147,9 +164,10 @@ export function PhoneWhen(props: {
               </Show>
             </div>
           </Show>
-          <SheetRow icon={<RepeatIcon class="size-[18px]" />}>
-            <ComposerRecurrence />
-          </SheetRow>
+          <Show when={!model.state().allDay}>
+            <MobileComposerTimeZone />
+          </Show>
+          <MobileComposerRecurrence />
         </SheetGroup>
       </div>
       <Show when={model.recurrenceScopeReason()}>

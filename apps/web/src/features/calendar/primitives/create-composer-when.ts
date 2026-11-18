@@ -12,6 +12,7 @@ import { beginInteraction } from '@app/observability/flow';
 import { formatLocalDate, parseLocalDate } from '@core/util/local-date';
 import { differenceInCalendarDays } from 'date-fns';
 import { createStore } from 'solid-js/store';
+import type { PhoneMenuId } from './phone-menu-pattern';
 
 export type WhenPicker =
   | 'when'
@@ -19,8 +20,7 @@ export type WhenPicker =
   | 'end-date'
   | 'start-time'
   | 'end-time'
-  | 'time-zone'
-  | 'repeat';
+  | PhoneMenuId;
 
 /** One owner for menu exclusion and range edits in both When compositions. */
 export function createComposerWhen(options: {
@@ -33,6 +33,7 @@ export function createComposerWhen(options: {
     active?: WhenPicker;
     endChosen: boolean;
     chosenRevision?: number;
+    timedClock?: { start: string; end: string; revision?: number };
   }>({ endChosen: false });
   let cleanup: (() => void) | undefined;
   const close = (picker?: WhenPicker) => {
@@ -140,8 +141,22 @@ export function createComposerWhen(options: {
   };
   const allDay = (value: boolean) => {
     close();
+    if (options.range.allDay === value) return;
+    if (value)
+      setState('timedClock', {
+        start: splitLocalDateTime(options.range.start).time,
+        end: splitLocalDateTime(options.range.end).time,
+        revision: options.detailsRevision?.(),
+      });
     setState('endChosen', false);
     options.setAllDay(value);
+    const clock = state.timedClock;
+    if (value || !clock || clock.revision !== options.detailsRevision?.())
+      return;
+    const start = withLocalTime(options.range.start, clock.start);
+    const end = withLocalTime(options.range.end, clock.end);
+    // A shortened all-day range cannot restore a reversed overnight clock pair.
+    if (end > start) options.setRange(start, end);
   };
   return {
     state,

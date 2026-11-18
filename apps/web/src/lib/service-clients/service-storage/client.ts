@@ -191,6 +191,8 @@ import type { StorageRowsQuery } from './generated/schemas/storageRowsQuery';
 import type { StoredGithubPullRequest } from './generated/schemas/storedGithubPullRequest';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { TableDetail } from './generated/schemas/tableDetail';
+import type { TeamAvailability } from './generated/schemas/teamAvailability';
+import type { TeamAvailabilityRequest } from './generated/schemas/teamAvailabilityRequest';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
 import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
@@ -658,6 +660,20 @@ export const storageServiceClient = {
         { method: 'GET', signal }
       )
     ).map((result) => result);
+  },
+
+  async getTeamAvailability(
+    body: TeamAvailabilityRequest,
+    signal?: AbortSignal
+  ) {
+    return await dssFetch<TeamAvailability>(
+      '/calendar-events/team/availability',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        signal,
+      }
+    );
   },
 
   async listTeamOutOfOffice(

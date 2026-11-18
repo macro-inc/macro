@@ -1,70 +1,103 @@
 import { t } from '@app/lib/i18n';
-import { SheetGroup } from '@components/app/mobile/sheet-group/SheetGroup';
-import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
 import BellIcon from '@icon/system/regular/bell-simple.svg';
-import { Dropdown } from '@ui';
-import { For, Show } from 'solid-js';
-import { ComposerReminderPill } from '../../../components/composer/reminders/ComposerReminderPill';
+import CloseIcon from '@icon/system/regular/x.svg';
+import { Button } from '@ui';
+import { createSignal, For, Show } from 'solid-js';
+import { PhoneMenuChoice } from '../../../components/composer/phone-menu/PhoneMenuChoice';
+import { PhoneMenuPage } from '../../../components/composer/phone-menu/PhoneMenuPage';
+import { PhoneMenuTrigger } from '../../../components/composer/phone-menu/PhoneMenuTrigger';
+import { usePhoneComposerMenu } from '../../../context/phone-composer-menu-context';
 import type { ComposerReminderOptions } from '../../../core/composer-reminders';
 import { createComposerReminders } from '../../../primitives/create-composer-reminders';
 import { formatReminderOffset } from '../../../utils/event-reminders';
 
 export function MobileComposerReminders(props: ComposerReminderOptions) {
+  const menus = usePhoneComposerMenu();
   const reminders = createComposerReminders(props);
+  const [editing, setEditing] = createSignal<number>();
+  const selected = () => {
+    const index = editing();
+    return index === undefined ? undefined : props.minutes[index];
+  };
+  const choices = () => (
+    <For each={reminders.offsets()}>
+      {(offset) => (
+        <PhoneMenuChoice
+          label={formatReminderOffset(offset)}
+          selected={offset === selected()}
+          disabled={props.minutes.includes(offset) && offset !== selected()}
+          onChoose={() => {
+            const index = editing();
+            if (index === undefined) reminders.add(offset);
+            else reminders.replace(index, String(offset));
+            menus.close();
+          }}
+        />
+      )}
+    </For>
+  );
   return (
-    <SheetGroup>
+    <>
       <For each={props.minutes}>
         {(minutes, index) => (
-          <SheetRow
-            icon={
-              <Show when={index() === 0}>
-                <BellIcon class="size-4" />
-              </Show>
-            }
-          >
-            <ComposerReminderPill
-              minutes={minutes}
-              offsets={reminders.offsets()}
+          <div class="flex min-h-11 items-center pr-1">
+            <div class="min-w-0 flex-1">
+              <PhoneMenuTrigger
+                menu="reminders"
+                title={formatReminderOffset(minutes)}
+                value={formatReminderOffset(minutes)}
+                disabled={props.disabled}
+                icon={
+                  <Show when={index() === 0}>
+                    <BellIcon class="size-4" />
+                  </Show>
+                }
+                onOpen={() => setEditing(index())}
+              />
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              aria-label={t('calendar.removeNotification', {
+                offset: formatReminderOffset(minutes),
+              })}
               disabled={props.disabled}
-              onChange={(value) => reminders.replace(index(), value)}
-              onRemove={() => reminders.remove(index())}
-            />
-          </SheetRow>
+              onClick={() => reminders.remove(index())}
+            >
+              <CloseIcon class="size-4" />
+            </Button>
+          </div>
         )}
       </For>
-      <SheetRow
+      <PhoneMenuTrigger
+        menu="reminders"
+        title={t('calendar.addReminder')}
+        value={t('calendar.addReminder')}
         icon={
           <Show when={props.minutes.length === 0}>
             <BellIcon class="size-4" />
           </Show>
         }
-      >
-        <Dropdown placement="bottom-start">
-          <Dropdown.Trigger
-            variant="ghost"
-            size="sheet-row"
-            fullWidth
-            class="justify-start text-ink-subtle"
-            disabled={props.disabled || !props.canAdd}
+        placeholder
+        disabled={props.disabled || !props.canAdd}
+        onOpen={() => setEditing(undefined)}
+      />
+      <Show when={menus.when.state.active === 'reminders' && !props.disabled}>
+        <Show
+          when={menus.pattern('reminders') === 'page'}
+          fallback={<div class="pb-2 pl-[42px] pr-3">{choices()}</div>}
+        >
+          <PhoneMenuPage
+            title={
+              editing() === undefined
+                ? t('calendar.addReminder')
+                : t('calendar.reminder')
+            }
           >
-            {t('calendar.addReminder')}
-          </Dropdown.Trigger>
-          <Dropdown.Content portalScope="local">
-            <Dropdown.Group>
-              <For each={reminders.offsets()}>
-                {(offset) => (
-                  <Dropdown.Item
-                    disabled={props.minutes.includes(offset)}
-                    onSelect={() => reminders.add(offset)}
-                  >
-                    {formatReminderOffset(offset)}
-                  </Dropdown.Item>
-                )}
-              </For>
-            </Dropdown.Group>
-          </Dropdown.Content>
-        </Dropdown>
-      </SheetRow>
+            {choices()}
+          </PhoneMenuPage>
+        </Show>
+      </Show>
       <Show when={props.preservedCount > 0}>
         <p class="px-3 pb-2 text-[13px] text-ink-muted">
           {t('calendar.otherNotificationsPreserved', {
@@ -72,6 +105,6 @@ export function MobileComposerReminders(props: ComposerReminderOptions) {
           })}
         </p>
       </Show>
-    </SheetGroup>
+    </>
   );
 }

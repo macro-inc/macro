@@ -2,7 +2,10 @@
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { agendaShift } from './agenda-window';
-import { createAgendaPaging } from './create-agenda-paging';
+import {
+  createAgendaPaging,
+  findAgendaDayAnchor,
+} from './create-agenda-paging';
 
 const end = vi.fn();
 vi.mock('@app/observability/flow', () => ({
@@ -197,4 +200,16 @@ describe('agenda paging', () => {
     dispose();
     expect(disconnect).toHaveBeenCalled();
   });
+});
+
+it('anchors a date inside a collapsed empty range to the visible group', () => {
+  const viewport = document.createElement('div');
+  const group = document.createElement('section');
+  group.dataset.agendaDay = new Date(2030, 10, 21).toDateString();
+  group.dataset.agendaGroupEnd = new Date(2030, 10, 23).toDateString();
+  const marker = document.createElement('section');
+  marker.dataset.agendaDay = new Date(2030, 10, 22).toDateString();
+  viewport.append(group, marker);
+  expect(findAgendaDayAnchor(viewport, new Date(2030, 10, 22))).toBe(group);
+  expect(findAgendaDayAnchor(viewport, new Date(2030, 10, 24))).toBeUndefined();
 });

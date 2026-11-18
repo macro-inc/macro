@@ -148,11 +148,11 @@ export function WhenTime(props: {
       <div
         ref={anchor}
         class={cn(
-          'relative shrink-0 bg-ink/6',
+          'relative shrink-0 bg-ink/6 focus-within:inset-ring-[1.5px] focus-within:inset-ring-accent',
           props.inline
             ? 'h-9 w-[110px] rounded-full text-[15px]'
             : 'h-[30px] min-w-0 flex-1 rounded-lg text-sm',
-          open() && 'ring-[1.5px] ring-inset ring-accent'
+          open() && 'inset-ring-[1.5px] inset-ring-accent'
         )}
       >
         <Show when={props.inline && !typing()}>

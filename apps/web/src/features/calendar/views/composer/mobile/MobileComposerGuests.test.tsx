@@ -1,54 +1,63 @@
 import { recipientEntityMapper } from '@core/user';
-import type { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
-import { type ComponentProps, createSignal, type JSX, Show } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createCalendarEventFormController } from '../../../components/composer/create-calendar-event-form-controller';
 import {
   defaultEditorInitialValues,
   guestEmail,
 } from '../../../components/composer/event-form-model';
+import { PhoneComposerMenuRoot } from '../../../components/composer/phone-menu/PhoneComposerMenuRoot';
 import { ComposerRoot } from '../../../components/composer/root/ComposerRoot';
+import { ComposerWhenRoot } from '../../../components/composer/when/ComposerWhenRoot';
 import { createCalendarComposer } from '../../../primitives/create-calendar-composer';
 import { MobileComposerGuests } from './MobileComposerGuests';
 
-type SelectorProps = ComponentProps<typeof PropertyEntitySelector>;
-const selector = vi.hoisted((): { props?: SelectorProps } => ({}));
-vi.mock('@property/editors/selectors/PropertyEntitySelector', () => ({
-  PropertyEntitySelector: (props: SelectorProps) => {
-    selector.props = props;
-    return null;
-  },
+const availability = vi.hoisted(() => ({ confirmed: false }));
+vi.mock('@property/editors/selectors/entityUtils', () => ({
+  useQuickAccessEntities: () => ({
+    items: () => [],
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    error: () => undefined,
+    hasMore: () => false,
+    loadMore: async () => {},
+  }),
+}));
+vi.mock('@queries/calendar/team-availability', () => ({
+  useTeamAvailabilityQuery: () => ({
+    isLoading: false,
+    isSuccess: availability.confirmed,
+    data: {
+      members: [
+        {
+          userId: 'macro|added@example.com',
+          busy: [{ start: '2030-11-11T20:00Z', end: '2030-11-11T21:00Z' }],
+          coverage: 'unknown',
+        },
+      ],
+    },
+  }),
 }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
-vi.mock('@components/app/mobile/PickerSheet', () => ({
-  PickerSheet: {
-    Root: (props: {
-      children: JSX.Element;
-      open: boolean;
-      onCancel: () => void;
-    }) => (
-      <Show when={props.open}>
-        <button type="button" onClick={props.onCancel}>
-          Cancel
-        </button>
-        {props.children}
-      </Show>
-    ),
-    Header: (props: { onDone: () => void; title: string }) => (
-      <button type="button" onClick={props.onDone}>
-        Done
-      </button>
-    ),
-    Body: (props: { children: JSX.Element }) => <div>{props.children}</div>,
-  },
-}));
+beforeEach(() => {
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 afterEach(() => {
   cleanup();
-  selector.props = undefined;
+  availability.confirmed = false;
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
-
 const invited = recipientEntityMapper('user')({
   id: 'macro|invited@example.com',
   email: 'invited@example.com',
@@ -60,26 +69,29 @@ const added = recipientEntityMapper('user')({
   name: 'Added',
 });
 
-function setup(addOnly = true) {
+function setup() {
   const [locked, setLocked] = createSignal(false);
-  let controller!: ReturnType<typeof createCalendarEventFormController>;
+  let controller:
+    | ReturnType<typeof createCalendarEventFormController>
+    | undefined;
   render(() => {
-    controller = createCalendarEventFormController({
+    const current = createCalendarEventFormController({
       initialValue: {
         ...defaultEditorInitialValues(new Date('2030-11-11T20:00'), false),
         calendarId: 'calendar',
-        guests: addOnly ? 'invited@example.com' : '',
+        guests: 'invited@example.com',
       },
       calendarOptions: () => [
         { id: 'calendar', label: 'Calendar', color: 'var(--color-blue-ink)' },
       ],
       guestOptions: () => [invited, added],
     });
+    controller = current;
     const model = createCalendarComposer({
-      controller,
+      controller: current,
       pending: false,
-      isEdit: addOnly,
-      addOnlyGuests: addOnly,
+      isEdit: true,
+      addOnlyGuests: true,
       get disabledFields() {
         return locked() ? { guests: true } : {};
       },
@@ -88,83 +100,86 @@ function setup(addOnly = true) {
     });
     return (
       <ComposerRoot model={model}>
-        <MobileComposerGuests />
+        <ComposerWhenRoot>
+          <PhoneComposerMenuRoot scrollElement={() => undefined}>
+            <MobileComposerGuests />
+          </PhoneComposerMenuRoot>
+        </ComposerWhenRoot>
       </ComposerRoot>
     );
   });
+  if (!controller) throw new Error('Missing controller');
   return { controller, setLocked };
 }
 
-function picker() {
-  if (!selector.props) throw new Error('Guest picker did not mount');
-  return selector.props;
-}
-
-it('stages guests until Done, discards Cancel, and protects invited guests', async () => {
+it('stages people until Done and cancels with Back while preserving protected guests', async () => {
   const user = userEvent.setup();
   const { controller } = setup();
-  expect(screen.queryByRole('button', { name: 'Remove Invited' })).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Add people' }));
-  expect(picker().config.excludedIds?.().has('macro|invited@example.com')).toBe(
-    true
+  await user.click(
+    screen.getByRole('button', { name: /Added added@example.com/ })
   );
-  picker().onUserSelected?.(
-    { id: 'macro|new@example.com', email: 'new@example.com', name: 'New' },
-    true
-  );
-  picker().setSelectedOptions(new Set(['macro|new@example.com']));
   expect(controller.selectedGuests().map(guestEmail)).toEqual([
     'invited@example.com',
   ]);
-  await user.click(screen.getByRole('button', { name: 'Cancel' }));
-  expect(controller.selectedGuests().map(guestEmail)).toEqual([
-    'invited@example.com',
-  ]);
+  await user.click(screen.getByRole('button', { name: 'Back' }));
   await user.click(screen.getByRole('button', { name: 'Add people' }));
-  expect(picker().selectedOptions()).toEqual(new Set());
-  picker().onUserSelected?.(
-    { id: 'macro|new@example.com', email: 'new@example.com', name: 'New' },
-    true
+  expect(screen.queryByRole('button', { name: 'Remove Added' })).toBeNull();
+  await user.click(
+    screen.getByRole('button', { name: /Added added@example.com/ })
   );
-  picker().setSelectedOptions(new Set(['macro|new@example.com']));
   await user.click(screen.getByRole('button', { name: 'Done' }));
   expect(controller.selectedGuests().map(guestEmail)).toEqual([
     'invited@example.com',
-    'new@example.com',
+    'added@example.com',
   ]);
   expect(screen.queryByRole('button', { name: 'Remove Invited' })).toBeNull();
-  await user.click(
-    screen.getByRole('button', { name: 'Remove new@example.com' })
-  );
+  await user.click(screen.getByRole('button', { name: 'Remove Added' }));
   expect(controller.selectedGuests().map(guestEmail)).toEqual([
     'invited@example.com',
   ]);
 });
 
-it('drops an open draft on permission loss and does not reopen it on restoration', async () => {
+it('drops the staged page on permission loss without reopening it', async () => {
   const user = userEvent.setup();
   const { controller, setLocked } = setup();
   await user.click(screen.getByRole('button', { name: 'Add people' }));
-  picker().setSelectedOptions(new Set(['macro|added@example.com']));
+  await user.click(
+    screen.getByRole('button', { name: /Added added@example.com/ })
+  );
   setLocked(true);
   expect(screen.queryByRole('button', { name: 'Done' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Add people' })).toBeNull();
   setLocked(false);
   expect(screen.queryByRole('button', { name: 'Done' })).toBeNull();
   expect(controller.selectedGuests().map(guestEmail)).toEqual([
     'invited@example.com',
   ]);
-  await user.click(screen.getByRole('button', { name: 'Add people' }));
-  expect(picker().selectedOptions()).toEqual(new Set());
 });
 
-it('allows removing an already added guest before inviting them', async () => {
+it('offers a literal address without redirecting to a fuzzy contact', async () => {
   const user = userEvent.setup();
   const { controller } = setup();
-  controller.setSelectedGuests([invited, added]);
-  expect(screen.getByRole('button', { name: 'Remove Added' })).toBeTruthy();
-  await user.click(screen.getByRole('button', { name: 'Remove Added' }));
+  await user.click(screen.getByRole('button', { name: 'Add people' }));
+  await user.type(screen.getByRole('textbox'), 'new@example.com');
+  await user.click(
+    screen.getByRole('button', { name: 'Invite new@example.com' })
+  );
+  await user.click(screen.getByRole('button', { name: 'Done' }));
   expect(controller.selectedGuests().map(guestEmail)).toEqual([
     'invited@example.com',
+    'new@example.com',
   ]);
+});
+
+it('renders only a reported busy interval, even when other coverage is unknown', async () => {
+  availability.confirmed = true;
+  setup();
+  await userEvent.click(screen.getByRole('button', { name: 'Add people' }));
+  expect(screen.getAllByRole('img', { name: 'Busy' })).toHaveLength(1);
+});
+
+it('does not turn failed availability into a busy or free assertion', async () => {
+  setup();
+  await userEvent.click(screen.getByRole('button', { name: 'Add people' }));
+  expect(screen.queryByRole('img', { name: 'Busy' })).toBeNull();
 });
