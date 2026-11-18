@@ -15,6 +15,10 @@ export type ImportTaskFields = {
 
 /** One Notion object in an import plan. */
 export type ImportPlanEntry = {
+  /** Titles of planned objects requiring this linked source. */
+  linkedFrom?: string[];
+  /** Titles of planned objects displaying this source inline. */
+  inlineOn?: string[];
   id: string;
   parentId: string | null;
   kind: 'page' | 'database' | 'task' | 'project';

@@ -123,14 +123,30 @@ decided` as the decisions fill in, with **Import** disabled until the plan is
 ready. The card shows totals (Documents, Databases with rows, Task lists with
 tasks, Skipped, Already in Macro), a **Team** / **Only you** badge on every
 written row (the owner clicks it to flip it, and a folder flips what is below
-it; databases stay **Only you**, and the card says "Databases can't be shared
-with the team yet, so they stay with you."), a sharing summary line (without
+it; each database keeps its own reviewed sharing choice), a sharing summary line (without
 a team: `N only you — you're not on a team, so nothing is shared`), and a
 collapsed **Already in Macro** section linking to copies teammates already
 imported and shared, which are not imported again. A database or task-list
 row's caret (**Show rows of …**) shows its row count with a few sample row
 titles and, for a task list, which Notion columns become status, priority,
-due date and assignee. **Open full review** shows the whole plan in a dialog
+due date and assignee. Linked sources outside the selected roots appear as
+**Linked from <page title>** dependencies, included when readable. Sources already
+inside the selection show **Shown inline on <page title>**. Every source shown
+inline defaults to a database copy; an approved task-list choice or exclusion
+keeps Notion links in its cards and reports why. Excluding one
+keeps a named Notion link in the page; unreadable dependencies show the reason
+and cannot be included. The same source is copied once across repeated inline
+and linked placements. Each placement becomes an editable database card at its
+original position, including in row bodies, with its translated saved view.
+A dependency reached only from rows uses the Notion folder when safe, with a
+placement note naming those rows' source.
+A missing selected-tab hint uses the first Notion tab and reports that assumption.
+Unsupported filter clauses broaden the view rather than hide source rows; its
+name says **filter approximated** and the report lists every translation loss.
+Formula and rollup columns are labelled snapshots. Database sharing is separate
+from page sharing; a personal database uses a safe personal folder or stays at
+top level with a report warning. A resumed run reuses reserved databases and
+saved views. **Open full review** shows the whole plan in a dialog
 (a full-height sheet on phones). **Import …** approves straight from the
 card, with no confirmation step. The agent ends that
 message with "Should I kick it off?"; when the owner answers yes in chat, it

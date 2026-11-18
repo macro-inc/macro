@@ -1717,6 +1717,11 @@ stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
+Import review metadata decodes `plan.dependencyOf` into **Linked from** and
+`plan.inlineOn` into **Shown inline on** labels on existing rows. Readable sources
+shown inline default to Copy, with ordinary inclusion and sharing controls;
+unavailable by-hand rows stay disabled and show their reason. Desktop and touch
+use the same row layout.
 Desktop shows every import run in the corner's import tray
 (`features/import-jobs`, in `ToastRegion`), independent of the import dialog
 and never on phones. Its backend-free check is

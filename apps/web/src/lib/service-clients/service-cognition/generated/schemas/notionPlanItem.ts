@@ -17,6 +17,10 @@ import type { NotionPlanItemTaskFields } from './notionPlanItemTaskFields';
 export interface NotionPlanItem {
   alreadyImported?: NotionPlanItemAlreadyImported;
   decision?: NotionPlanItemDecision;
+  /** Notion objects whose bodies require this external data source. */
+  dependencyOf?: string[];
+  /** Planned objects whose bodies display this source inline. */
+  inlineOn?: string[];
   /** Titles of the pages above it, outermost first. */
   path?: string[];
   /** Why, in a short sentence, when the decision model gave one. */

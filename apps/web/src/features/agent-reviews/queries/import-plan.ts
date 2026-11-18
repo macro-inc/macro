@@ -10,6 +10,8 @@ import type {
 const planMetadataSchema = z.object({
   title: z.string(),
   plan: z.object({
+    dependencyOf: z.array(z.string()).optional(),
+    inlineOn: z.array(z.string()).optional(),
     // Absent while planning has not decided the object yet.
     decision: z.enum(['copy', 'tasks', 'skip', 'hand']).nullish(),
     reason: z.string().nullish(),
@@ -41,6 +43,16 @@ export function decodePlanEntries(
   entities: ImportEntity[],
   reviewId: string
 ): ImportPlanEntry[] {
+  const titles = new Map(
+    entities
+      .filter((entity) => entity.review_id === reviewId)
+      .flatMap((entity) => {
+        const metadata = planMetadataSchema.safeParse(entity.metadata);
+        return metadata.success
+          ? [[entity.foreign_id, metadata.data.title] as const]
+          : [];
+      })
+  );
   return entities.flatMap((entity): ImportPlanEntry[] => {
     if (
       !['notion', 'linear', 'jira'].includes(entity.source) ||
@@ -50,8 +62,16 @@ export function decodePlanEntries(
     const metadata = planMetadataSchema.safeParse(entity.metadata);
     if (!metadata.success) return [];
     const plan = metadata.data.plan;
+    const linkedFrom =
+      plan.dependencyOf?.map((id) => titles.get(id) ?? 'a row page') ?? [];
+    const dependency = linkedFrom.length > 0 ? { linkedFrom } : {};
+    const inlineOn =
+      plan.inlineOn?.map((id) => titles.get(id) ?? 'a row page') ?? [];
+    const placement = inlineOn.length > 0 ? { inlineOn } : {};
     return [
       {
+        ...dependency,
+        ...placement,
         id: entity.id,
         parentId: entity.parent_id ?? null,
         kind: match(entity.kind)
