@@ -13,7 +13,7 @@ first.
 | --- | --- | --- | --- |
 | 0. Base migration (#7462) | nothing: table, read index, functions | none | none needed |
 | 1. Read indexes (this PR, first two migrations) | `"Document"(owner, "updatedAt" DESC, id DESC)`, `"UserHistory"("userId", "itemType", "updatedAt" DESC, "itemId" DESC)` | one index build each, then one index insert per write | `DROP INDEX CONCURRENTLY` |
-| 2. Enable migration (this PR, third) | triggers: every write maintains the rows of the items it touches | about +2 ms per item write, more WAL, commit-time locks | `SELECT source_items_remove_triggers()` |
+| 2. Enable migration (this PR, third) | triggers: every write maintains the rows of the items it touches | about +2 ms per item write, more WAL, commit-time locks | `SELECT source_items_remove_triggers()` (disables them) |
 | 3. Backfill | rows for items untouched since step 2 | 10–40 min at production scale, load and WAL | rerun; or remove triggers and `TRUNCATE source_items` |
 | 4. Audit | nothing | one long read snapshot | none |
 | 5. Read flag | soup reads `source_items` | none on writes | `SOUP_SOURCE_ITEMS_ENABLED=false`, restart |
@@ -60,11 +60,13 @@ takes a new migration.
 ## 2. Install the triggers
 
 Ships as a migration that calls `source_items_install_triggers()` under
-`SET LOCAL lock_timeout = '5s'`. The function takes SHARE ROW EXCLUSIVE on all
+`SET LOCAL lock_timeout = '2s'`. The function takes SHARE ROW EXCLUSIVE on all
 five tables in one `LOCK TABLE` statement and creates the triggers with
-`CREATE OR REPLACE TRIGGER`, so it waits for writers but never for readers, and
-writes to all five wait at most one lock timeout (5 s) and the migration either gets every lock or fails
-and rolls back; a failed deploy is safe to retry. It installs 20 triggers and
+`CREATE OR REPLACE TRIGGER`, so it waits for writers but never for readers.
+`LOCK TABLE` locks the tables one after another and the timeout bounds each
+wait, so writes to a table it already holds can wait for up to four more
+timeouts (8 s); it either gets every lock or fails and rolls back, and a failed
+deploy is safe to retry. It installs 20 triggers and
 holds the locks only for those catalog changes (27 ms on the synthetic copy
 under write load). It also sets autovacuum on `source_items` to 2% of its rows.
 
@@ -72,7 +74,7 @@ To run it by hand instead (e.g. to retry outside a deploy):
 
 ```sql
 BEGIN;
-SET LOCAL lock_timeout = '5s';
+SET LOCAL lock_timeout = '2s';
 SELECT source_items_install_triggers();
 COMMIT;
 ```
@@ -90,11 +92,12 @@ Watch for 15 minutes:
 - proxy session pinning for the poller and the text extractor: the first write
   of each session creates temporary tables.
 
-Undo: `SELECT source_items_remove_triggers();` under `SET LOCAL lock_timeout = '5s'`.
-`DROP TRIGGER` needs ACCESS EXCLUSIVE, so it takes that on all five tables in one
-statement: it waits for open readers and writers and blocks both until it commits,
-which takes milliseconds. Writes return to their old cost at once. The table is
-now stale; reads must stay off, and re-enabling means repeating steps 2–4.
+Undo: `SELECT source_items_remove_triggers();` under `SET LOCAL lock_timeout = '2s'`.
+It disables the triggers, with the same SHARE ROW EXCLUSIVE locks as install, so
+readers keep going. Writes return to their old cost at once. Reads stop trusting
+the table in the same commit (`source_items_exact()` turns false), so even with
+the read flag on soup goes back to the item tables; re-enabling means repeating
+steps 2–4.
 
 Writers that change many items in one transaction (migrations, scripts,
 `UPDATE "Document" ...` over many rows, a large team share) now rewrite those
@@ -116,7 +119,9 @@ handling:
 cargo run --release -p source_items --features cli --bin source_items -- backfill
 ```
 
-It rewrites every document, chat and project in 500-item batches through
+When it finishes with the triggers on throughout, it records the table as
+backfilled, and only then do projected reads use it; otherwise it exits non-zero
+and reads keep using the item tables. It rewrites every document, chat and project in 500-item batches through
 `source_items_refresh`, which locks each batch's buckets as a commit does, so it
 runs safely alongside writers. Each batch has a 200 ms lock timeout and retries
 after a second; 30 failures on one batch stop the run. It does not keep a
@@ -162,4 +167,5 @@ restart it. Compare soup list latency (`soup.sql.fetch_decode` spans,
 a day, then roll out to the rest.
 
 Undo: `SOUP_SOURCE_ITEMS_ENABLED=false` and restart. The triggers keep running;
-remove them (step 2's undo) to drop the write cost as well.
+remove them (step 2's undo) to drop the write cost as well. Removing them alone
+also stops projected reads at once, without a restart: reads fail closed.

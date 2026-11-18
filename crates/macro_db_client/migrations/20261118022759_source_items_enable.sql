@@ -5,9 +5,11 @@
 -- has the order, what to watch and how to undo each step.
 --
 -- source_items_install_triggers() takes SHARE ROW EXCLUSIVE on the five tables in one LOCK TABLE
--- statement, so writes to them wait at most this lock_timeout and the migration either gets every
--- lock or rolls back, safe to retry.
-SET LOCAL lock_timeout = '5s';
+-- statement. Readers never wait. LOCK TABLE takes the tables one after another and lock_timeout
+-- bounds each wait, so writes to a table already locked can wait up to four more timeouts (8 s
+-- here); the migration either gets every lock or rolls back, safe to retry. Reads keep using the
+-- item tables until a backfill finishes (source_items_exact()).
+SET LOCAL lock_timeout = '2s';
 
 SELECT public.source_items_install_triggers();
 
