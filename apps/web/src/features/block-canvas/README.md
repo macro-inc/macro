@@ -109,8 +109,15 @@ render: `CanvasViewParts` (the root that wires the viewport, the scene, the
 insert menu, the presentation and the empty state), `CanvasInspectorSections`,
 `CanvasReadOnlyParts`, and `CANVAS_TOOLS`, which names and draws each tool
 while every view lists the tools it offers. A canvas embedded in a document
-keeps the desktop read-only view on every device, so its controls stay inside
-the embed.
+keeps its controls inside the embed: the desktop read-only view on desktop, and
+on touch `views/mobile/canvas-embedded-view.tsx`, which lets the document
+scroll. There one finger or a pen over the canvas scrolls the document and the
+plain wheel does too (`yieldToPage` on the surface: `touch-action: pan-x pan-y`,
+and presses other than a mouse's ignored), while two fingers, a trackpad pinch
+and Ctrl/Cmd-wheel still move the canvas. **Interact** gives the canvas every
+gesture, with the Hand tool, until **Done** or a press elsewhere in the
+document. Zoom to fit and Done then sit at the bottom of the screen, above the
+dock, because the embed's own corner may be out of reach.
 
 On touch the canvas's controls are islands in the app's bottom chrome, in the
 `accessory` float region above the dock, so the dock, the home indicator and
@@ -181,6 +188,8 @@ already pressed keeps its gesture, and fingers landing meanwhile (a resting palm
 are ignored. A flick glides only when the fingers were travelling together as
 they lifted: a pinch, whose midpoint also drifts, does not, and neither does a
 gesture the system cancelled.
+Each finger reports its own moves, so the camera is moved once per animation
+frame, to where both fingers are by then, rather than once per event.
 `attachTouchNavigation` in `packages/graphics/src/browser` owns this for every
 `GraphicsSurface`; the glide and the pinch math are `@macro-inc/graphics/pan-zoom`,
 which the lightbox and opened images also use for their momentum.

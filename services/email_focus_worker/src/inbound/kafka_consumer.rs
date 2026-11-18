@@ -1,10 +1,11 @@
 //! Classify a thread whenever mail arrives in it or its owner sends a reply.
 //!
 //! Every email event on the platform passes through here, so the consumer
-//! hands each thread to the Focus service, which drops inboxes off the
-//! allowlist after a single-row read. Up to [`MAX_CONCURRENT_CLASSIFICATIONS`]
-//! threads run side by side, so a slow classifier call delays only its own
-//! thread; with every slot taken the consumer stops reading until one frees.
+//! hands each thread to the Focus service, which drops inboxes whose owner is
+//! outside the Focus rollout after a single-row read and a cached flag check.
+//! Up to [`MAX_CONCURRENT_CLASSIFICATIONS`] threads run side by side, so a slow
+//! classifier call delays only its own thread; with every slot taken the
+//! consumer stops reading until one frees.
 //!
 //! An event's offset is committed when it is handed off, in the order received,
 //! not when its classification ends. So an event is never replayed, and one in
@@ -17,8 +18,8 @@ use chrono::Utc;
 use email::domain::{
     events::{EmailMacroEvent, EmailTopicEvent},
     focus::{
-        ClassifyOutcome, DueDateExtractor, FocusClassifier, FocusNotifier, FocusService,
-        FocusStore, ProfileSource,
+        ClassifyOutcome, DueDateExtractor, FocusClassifier, FocusEnrollment, FocusNotifier,
+        FocusService, FocusStore, ProfileSource,
     },
 };
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
@@ -81,8 +82,8 @@ fn outcome_name(outcome: &ClassifyOutcome) -> &'static str {
     }
 }
 
-async fn classify<S, P, C, N, D>(
-    service: &FocusService<S, P, C, N, D>,
+async fn classify<S, P, C, N, D, E>(
+    service: &FocusService<S, P, C, N, D, E>,
     thread_id: Uuid,
     published_at_ms: Option<i64>,
 ) where
@@ -91,6 +92,7 @@ async fn classify<S, P, C, N, D>(
     C: FocusClassifier,
     N: FocusNotifier,
     D: DueDateExtractor,
+    E: FocusEnrollment,
 {
     let span = tracing::info_span!(
         "email_focus.classify",
@@ -135,8 +137,8 @@ async fn classify<S, P, C, N, D>(
 
 /// The work for one event: waiting for a slot, then classifying, in the event's
 /// trace. Nothing happens until it runs.
-fn classification<S, P, C, N, D>(
-    service: Arc<FocusService<S, P, C, N, D>>,
+fn classification<S, P, C, N, D, E>(
+    service: Arc<FocusService<S, P, C, N, D, E>>,
     thread_id: Uuid,
     published_at_ms: Option<i64>,
     event_span: tracing::Span,
@@ -147,6 +149,7 @@ where
     C: FocusClassifier,
     N: FocusNotifier,
     D: DueDateExtractor,
+    E: FocusEnrollment,
 {
     let queued = tracing::info_span!(
         parent: &event_span,
@@ -165,9 +168,9 @@ where
 /// drops the classifications in flight. Receive and commit failures are logged
 /// and skipped, as in the activity consumer: a restart would only re-run the
 /// startup sweep.
-pub async fn run_focus_consumer<S, P, C, N, D>(
+pub async fn run_focus_consumer<S, P, C, N, D, E>(
     brokers: &str,
-    service: Arc<FocusService<S, P, C, N, D>>,
+    service: Arc<FocusService<S, P, C, N, D, E>>,
     shutdown: CancellationToken,
 ) -> Result<(), Report>
 where
@@ -176,6 +179,7 @@ where
     C: FocusClassifier,
     N: FocusNotifier,
     D: DueDateExtractor,
+    E: FocusEnrollment,
 {
     let consumer = KafkaEventConsumer::<EmailFocusGroup>::from_env(brokers)?;
     let consumer =
