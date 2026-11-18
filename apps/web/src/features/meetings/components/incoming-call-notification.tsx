@@ -26,7 +26,7 @@ export function IncomingCallNotification(props: {
   return (
     <section
       aria-label={t('calls.incomingCallFrom', { name: props.callerName })}
-      class="@container pointer-events-auto relative overflow-hidden rounded-2xl p-3 pt-4 shadow-menu menu-surface light-mode:composer-shadow motion-safe:animate-incoming-call-in"
+      class="@container pointer-events-auto relative overflow-hidden rounded-2xl p-3 pt-4 menu-surface motion-safe:animate-incoming-call-in"
     >
       <div
         role="progressbar"

@@ -293,14 +293,16 @@ use the real incoming-call signal rather than treating every active call as ring
 ### Incoming call banners
 
 A ringing channel or DM call also appears as a rounded banner centered at the top
-of the window on every app route, so it can be answered without opening Chat. It
-shows the caller's profile picture (initials when there is none) and name, where
+of the window on every page of the app's split layout (not a meeting page, where
+Join could not open the channel), so it can be answered without opening Chat. It
+shows the caller's profile picture (initials when there is none, `?` when the
+caller is unknown) and name, where
 they are calling (`Calling you` for a DM, `Calling in #channel` for a channel, the
 people for an unnamed group chat), a 30-second countdown, and `Decline` and
 `Join`. These run the same actions as the Chat sidebar row: `Join` opens the
 channel and joins that call ID, and `Decline` stops the ring on the user's other
-tabs and devices. Meeting invitations share the same stack; several ringing calls
-stack newest first. Banners sit below the macOS title bar and the top safe area,
+tabs and devices. Meeting invitations share the same stack, below the channel
+calls, which stack newest first. Banners sit below the macOS title bar and the top safe area,
 take no focus, and span the width minus 16px gutters on phones, with the buttons
 below the caller. Ring one locally with `window.macroDebugIncomingCall({ channelId,
 createdBy })` in a dev build (`macroClearDebugIncomingCalls()` clears them).
