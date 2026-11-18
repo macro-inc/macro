@@ -33,6 +33,8 @@ const LATENCY_MS = Number(process.env.LATENCY_MS ?? 60);
 // whose list is not final within SETTLE_LIMIT_MS is reported incomplete.
 const QUIET_MS = 500;
 const SETTLE_LIMIT_MS = 30_000 + LATENCY_MS;
+// Polls run every 50 ms; a longer gap means the page was busy.
+const STALL_MS = 150;
 
 const TYPES = {
   '.html': 'text/html',
@@ -76,6 +78,7 @@ function instrument() {
     changes: [],
     frames: [],
     recording: false,
+    keydowns: 0,
     lastActivity: 0,
   };
   window.__share = m;
@@ -88,7 +91,11 @@ function instrument() {
   document.addEventListener(
     'keydown',
     (event) => {
-      if (m.recording) pending = { key: event.key, t0: event.timeStamp };
+      // The combobox sends its listbox an ArrowDown of its own after each
+      // input. Each press sends one trusted keydown, so this numbers keys in
+      // typing order.
+      if (!m.recording || !event.isTrusted) return;
+      pending = { key: event.key, index: m.keydowns++, t0: event.timeStamp };
     },
     true
   );
@@ -163,22 +170,32 @@ const quantile = (values, p) => {
 };
 const round = (value) => (value == null ? null : Math.round(value * 10) / 10);
 
+let settles = 0;
 /** Waits until `keys` keystrokes have painted, no contact read is pending and
- * nothing has changed for QUIET_MS. Returns false if that takes too long. */
+ * nothing has changed for QUIET_MS while the page kept answering. Returns
+ * false if that takes too long. */
 async function settle(page, keys) {
+  const id = ++settles;
   try {
     await page.waitForFunction(
-      ({ keys, quiet }) => {
+      ({ id, keys, quiet, stall }) => {
         const m = window.__share;
         const pending = document.querySelector('[data-testid="pending-reads"]');
         if (!pending) throw new Error('This build has no pending read count');
+        // After a gap between polls the page was busy, and the timers it held
+        // back (the contact window's debounce among them) run only now: the
+        // quiet time starts again.
+        const now = performance.now();
+        if (m.settle !== id || now - m.lastPoll > stall) m.quietFrom = now;
+        m.settle = id;
+        m.lastPoll = now;
         return (
           m.keys.length >= keys &&
           pending.textContent === '0' &&
-          performance.now() - m.lastActivity >= quiet
+          now - Math.max(m.lastActivity, m.quietFrom) >= quiet
         );
       },
-      { keys, quiet: QUIET_MS },
+      { id, keys, quiet: QUIET_MS, stall: STALL_MS },
       { polling: 50, timeout: SETTLE_LIMIT_MS }
     );
     return true;
@@ -221,6 +238,7 @@ async function type(session, query, profilePath) {
     m.keys = [];
     m.changes = [];
     m.frames = [];
+    m.keydowns = 0;
     m.recording = true;
   });
   const start = performance.now();
@@ -244,7 +262,11 @@ async function type(session, query, profilePath) {
     const { profile } = await cdp.send('Profiler.stop');
     fs.writeFileSync(profilePath, JSON.stringify(profile));
   }
-  if (complete && run.keys.length !== late.length)
+  if (
+    complete &&
+    (run.keys.length !== late.length ||
+      run.keys.some((key, index) => key.index !== index))
+  )
     throw new Error(`Timed ${run.keys.length} of ${late.length} keys`);
   const last = run.keys.at(-1);
   const final = run.changes.at(-1);
@@ -257,33 +279,39 @@ async function type(session, query, profilePath) {
     // An incomplete run's list was still changing or reading when the wait
     // ended, so it has no final list or settled time.
     complete,
-    keys: run.keys.map((key, index) => ({
+    keys: run.keys.map((key) => ({
       key: key.key,
-      late: late[index],
-      toPaint: late[index] + key.painted - key.t0,
-      queued: late[index] + key.handled - key.t0,
+      index: key.index,
+      late: late[key.index],
+      toPaint: late[key.index] + key.painted - key.t0,
+      queued: late[key.index] + key.handled - key.t0,
       people: key.rows.filter((row) => row.person).length,
       rows: key.rows.length,
     })),
     settledAfterLastKey:
       complete && settledAt != null && last
-        ? late.at(-1) + settledAt - last.t0
+        ? late[last.index] + settledAt - last.t0
         : null,
     finalRows: complete ? (final?.rows ?? last?.rows ?? []) : null,
     longFrames: run.frames,
   });
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.press('Backspace');
+  // A list still busy here would spill into the next query's timings, so
+  // this page types no more.
   if (!(await settle(page, 0)))
-    throw new Error(`The list never settled after clearing "${query}"`);
+    session.stuck = `the list never settled after clearing "${query}"`;
 }
 
+const max = (values) => (values.length ? Math.max(...values) : null);
+
 function summarize(label, groups, throttle, runs) {
-  const keys = runs.flatMap((run) => run.keys);
+  // An incomplete run can lack its slowest keys and its final list, so only
+  // complete runs count.
+  const complete = runs.filter((run) => run.complete);
+  const keys = complete.flatMap((run) => run.keys);
   const toPaint = keys.map((key) => key.toPaint);
-  const settled = runs
-    .map((run) => run.settledAfterLastKey)
-    .filter((value) => value != null);
+  const settled = complete.map((run) => run.settledAfterLastKey);
   return {
     build: label,
     groups,
@@ -291,21 +319,23 @@ function summarize(label, groups, throttle, runs) {
     keystrokes: keys.length,
     toPaintP50: round(quantile(toPaint, 0.5)),
     toPaintP95: round(quantile(toPaint, 0.95)),
-    toPaintMax: round(Math.max(...toPaint)),
+    toPaintMax: round(max(toPaint)),
     settledP50: round(quantile(settled, 0.5)),
-    settledMax: round(Math.max(...settled)),
+    settledMax: round(max(settled)),
     // Keystrokes after which the list painted empty although the query ends
     // with results: no listed row matched the text until its read landed.
-    emptyKeys: runs
-      .filter((run) => run.complete && run.finalRows.length > 0)
+    emptyKeys: complete
+      .filter((run) => run.finalRows.length > 0)
       .flatMap((run) => run.keys)
       .filter((key) => key.rows === 0).length,
-    incompleteRuns: runs.filter((run) => !run.complete).length,
-    longFrameMsPerQuery: round(
-      runs
-        .flatMap((run) => run.longFrames)
-        .reduce((sum, frame) => sum + frame.duration, 0) / runs.length
-    ),
+    incompleteRuns: runs.length - complete.length,
+    longFrameMsPerQuery: complete.length
+      ? round(
+          complete
+            .flatMap((run) => run.longFrames)
+            .reduce((sum, frame) => sum + frame.duration, 0) / complete.length
+        )
+      : null,
   };
 }
 
@@ -315,6 +345,7 @@ const browser = await chromium.launch({
   executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
 });
 const summary = [];
+const failures = [];
 try {
   for (const groups of SIZES)
     for (const throttle of THROTTLES) {
@@ -330,6 +361,7 @@ try {
         if (rep % 2) order.reverse();
         for (const index of order)
           for (const query of QUERIES) {
+            if (sessions[index].stuck) break;
             const profile =
               rep === 0 &&
               query === QUERIES[0] &&
@@ -346,7 +378,9 @@ try {
       for (const [index, build] of builds.entries()) {
         const session = sessions[index];
         await session.context.close();
-        if (session.errors.length) throw new Error(session.errors.join('\n'));
+        const cell = `${build.label}, ${groups} groups, ${throttle}x`;
+        if (session.stuck) failures.push(`${cell}: ${session.stuck}`);
+        for (const error of session.errors) failures.push(`${cell}: ${error}`);
         fs.writeFileSync(
           `${out}/${build.label}-groups-${groups}-x${throttle}.json`,
           JSON.stringify({ label: build.label, groups, throttle, runs: session.runs })
@@ -359,5 +393,6 @@ try {
 } finally {
   await browser.close();
   for (const server of servers) server.close();
+  fs.writeFileSync(`${out}/summary.json`, JSON.stringify(summary, null, 2));
 }
-fs.writeFileSync(`${out}/summary.json`, JSON.stringify(summary, null, 2));
+if (failures.length) throw new Error(failures.join('\n'));

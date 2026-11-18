@@ -156,11 +156,14 @@ It types each query in `QUERIES` at `CADENCE_MS` per key, for every size in
 `SIZES` and CPU slowdown in `THROTTLES`, `REPS` times, alternating the builds.
 Each keystroke is timed from when it was due to the next paint, so a key the
 busy page held back counts from its slot. After each query it waits until no
-contact read is pending and the list has not changed for 500 ms; settled is
-the time from the last keystroke to that final list. A query still changing
-after 30 s plus `LATENCY_MS` (the fixture's read time) counts in
-`incompleteRuns` and has no settled time. `emptyKeys` counts keystrokes
-that painted an empty list although results followed. It prints one summary
+contact read is pending and the list has not changed for 500 ms while the
+page kept answering; settled is the time from the last keystroke to that
+final list. A query still changing after 30 s plus `LATENCY_MS` (the
+fixture's read time) counts in `incompleteRuns` and is left out of the other
+columns; a page whose list never settles after clearing types no more, and
+the script exits with an error once it has written what it measured.
+`emptyKeys` counts keystrokes that painted an empty list although results
+followed. It prints one summary
 row per build and configuration, and writes per-keystroke runs and a CPU
 profile of the first query at the largest slowdown to `OUT`.
 
