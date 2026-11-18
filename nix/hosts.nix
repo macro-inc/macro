@@ -13,6 +13,7 @@ _: {
         firecracker-host = import ./hosts/_nixos/firecracker-host-test.nix {
           inherit pkgs;
           package = self'.packages.firecracker-host;
+          guestAgent = self'.packages.firecracker-guest-agent;
         };
       };
     };

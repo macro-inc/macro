@@ -20,6 +20,9 @@
     "virtio_pci"
     "virtio_net"
     "gve"
+    # Bare-metal shapes (C3, C4): Hyperdisk is NVMe, the NIC is IDPF.
+    "nvme"
+    "idpf"
   ];
   boot.loader.timeout = lib.mkDefault 1;
 

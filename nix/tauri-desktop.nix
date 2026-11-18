@@ -314,10 +314,13 @@
       };
 
       # The agent of Firecracker hosts (nix/hosts/_nixos/firecracker-host.nix).
-      firecrackerHostBinary = workspaceBinary {
-        pname = "firecracker-host";
-        package = "firecracker_host";
-      };
+      # GET /v1/host reports the commit it was built from (`agentVersion`).
+      firecrackerHostBinary =
+        (workspaceBinary {
+          pname = "firecracker-host";
+          package = "firecracker_host";
+        }).overrideAttrs
+          { FIRECRACKER_HOST_COMMIT = gitRev; };
 
       # The vsock agent the Firecracker host runs programs through, baked into
       # the Firecracker computer image (nix/macro-box/_firecracker.nix).
