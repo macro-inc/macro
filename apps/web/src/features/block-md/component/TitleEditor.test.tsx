@@ -1,4 +1,5 @@
 import { CLOSE_EMOJI_SEARCH_COMMAND } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
+import { createNoopLiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import { $createInlineSearchNode } from '@macro-inc/lexical-core';
 import { render } from '@solidjs/testing-library';
 import {
@@ -38,10 +39,10 @@ vi.mock('@core/component/LexicalMarkdown/component/menu/TagsMenu', () => ({
   TagsMenu: () => null,
 }));
 
-const LOADED_SOURCE = {
+const LOADED_SOURCE: MarkdownDocumentSource = {
   type: 'sync',
-  source: {},
-} as unknown as MarkdownDocumentSource;
+  source: createNoopLiveSyncSource('document-1'),
+};
 
 beforeEach(() => {
   rename.mockReset();
@@ -322,6 +323,55 @@ it('shows a rename made elsewhere when the title has no unsaved edits', async ()
   expect(rename).not.toHaveBeenCalled();
 });
 
+it('shows a rename made elsewhere once its own rename settles', async () => {
+  vi.useFakeTimers();
+  const renames = holdRenames();
+  const title = renderTitle('Roadmap');
+  title.type('Roadmap 2027');
+  title.blur();
+  await vi.advanceTimersByTimeAsync(400);
+  expect(rename).toHaveBeenCalledTimes(1);
+
+  // Someone else renames the document while this rename is in flight.
+  title.publish('Q3 roadmap');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(title.text()).toBe('Roadmap 2027');
+
+  renames[0]({ success: true });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(title.text()).toBe('Q3 roadmap');
+  // Showing it saves nothing.
+  await vi.advanceTimersByTimeAsync(400);
+  expect(rename).toHaveBeenCalledTimes(1);
+});
+
+it('keeps the title when a late copy of an earlier name arrives during its rename', async () => {
+  vi.useFakeTimers();
+  const renames = holdRenames();
+  const title = renderTitle('');
+  title.type('Weekly');
+  await vi.advanceTimersByTimeAsync(400);
+  title.type('Weekly sync');
+  title.blur();
+  await vi.advanceTimersByTimeAsync(400);
+
+  // A preview read from before either rename lands while they are in flight.
+  title.publish('');
+  await vi.advanceTimersByTimeAsync(0);
+  title.publish('Weekly');
+  await vi.advanceTimersByTimeAsync(0);
+  renames[0]({ success: true });
+  await vi.advanceTimersByTimeAsync(0);
+  renames[1]({ success: true });
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(title.text()).toBe('Weekly sync');
+  expect(rename).toHaveBeenLastCalledWith({
+    entity: { type: 'document', id: 'document-1', name: 'Weekly' },
+    newName: 'Weekly sync',
+  });
+});
+
 it('keeps the title while its rename is in flight, and after it fails', async () => {
   vi.useFakeTimers();
   const renames = holdRenames();
@@ -331,15 +381,15 @@ it('keeps the title while its rename is in flight, and after it fails', async ()
   await vi.advanceTimersByTimeAsync(400);
   expect(rename).toHaveBeenCalledTimes(1);
 
-  // The preview republishes a name that lags behind the rename.
-  title.publish('Q3 roadmap');
-  await vi.advanceTimersByTimeAsync(0);
-  title.publish('Q3 roadmap');
+  // The preview republishes the name the rename replaces.
+  title.publish('Roadmap');
   await vi.advanceTimersByTimeAsync(0);
   expect(title.text()).toBe('Roadmap 2027');
 
-  // The mutation reports the failure; the text stays to try again.
+  // The mutation reports the failure and rolls the preview back; the text
+  // stays, with its undo history, to try again.
   renames[0](new Error('refused'));
+  title.publish('Roadmap');
   await vi.advanceTimersByTimeAsync(0);
   expect(title.text()).toBe('Roadmap 2027');
 });

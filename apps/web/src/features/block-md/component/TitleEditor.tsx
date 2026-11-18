@@ -190,6 +190,10 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   // document ends with is the last one sent.
   let renamesInFlight = 0;
   let lastSentName = '';
+  // The names this title has sent and the names they replaced. A saved name
+  // outside them can only come from a rename made elsewhere; one inside them
+  // can be a late copy of an earlier save.
+  const ownNames = new Set<string>();
   // Each rename waits for the one before it, so the server applies them in
   // the order they were typed.
   let previousRename: Promise<void> = Promise.resolve();
@@ -209,6 +213,9 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       (error) => error
     );
     renamesInFlight -= 1;
+    // A rename made elsewhere while this one was in flight was held back.
+    const name = untrack(savedName);
+    if (name !== undefined && !ownNames.has(name)) showSavedName();
   };
 
   const flushPendingRename = () => {
@@ -217,6 +224,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     if (!next || !canEdit()) return;
     renamesInFlight += 1;
     lastSentName = next.newName;
+    ownNames.add(next.oldName).add(next.newName);
     previousRename = saveTitle(next, previousRename);
   };
 
