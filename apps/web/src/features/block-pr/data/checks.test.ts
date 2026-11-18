@@ -14,13 +14,13 @@ const check = (
 });
 
 const CHECKS = [
-  check('lint', 'completed', 'success'),
+  check('typecheck', 'completed', 'success'),
   check('preview', 'completed', 'skipped'),
   check('unit tests', 'completed', 'failure'),
-  check('browser tests', 'in_progress'),
-  check('typecheck', 'completed', 'success'),
-  check('deploy', 'completed', 'timed_out'),
   check('queued', 'queued'),
+  check('lint', 'completed', 'success'),
+  check('deploy', 'completed', 'timed_out'),
+  check('browser tests', 'in_progress'),
 ];
 
 describe('summarizeChecks', () => {
@@ -61,11 +61,11 @@ describe('orderChecks', () => {
     expect(orderChecks(CHECKS).map((c) => c.name)).toEqual([
       'unit tests',
       'deploy',
-      'browser tests',
       'queued',
-      'lint',
-      'preview',
+      'browser tests',
       'typecheck',
+      'preview',
+      'lint',
     ]);
   });
 

@@ -166,7 +166,7 @@ function GithubCommentMessage(props: {
           class="flex items-center gap-1 min-w-0 w-full"
         >
           <Message.SenderName
-            class={cn(headerBadge() && 'max-w-[60%] shrink-0')}
+            class={cn(headerBadge()?.isAnchor && 'max-w-[60%] shrink-0')}
           />
           <Show when={headerBadge()}>
             {(badge) => (
