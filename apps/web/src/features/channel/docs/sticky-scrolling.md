@@ -12,7 +12,12 @@ from the bottom; returning to the end resumes it.
 Acknowledging a send replaces the optimistic message ID, temporarily replacing its
 measured height with an estimate. The core patch also allows bottom following when
 the last key changes without increasing the row count (`nextCount >= prevCount`),
-so acknowledgement keeps the end anchor through remeasurement. Following still
+so acknowledgement keeps the end anchor through remeasurement. It also keeps
+following when a second row arrives before the scroll to the first has reported
+back (its intended offset is still pending and is the end scroll's target):
+the reported offset trails the end, and a 1px threshold would otherwise stop
+following for good. A user scroll reports back and clears that intent, and a
+reader holding a disclosure turns `followOnAppend` off. Following still
 requires an existing bottom pin and `followOnAppend`; readers in history retain
 their position. A loose end threshold treats that intermediate
 layout as pinned and applies the estimate-to-measurement delta as a backward scroll.

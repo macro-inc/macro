@@ -15,7 +15,7 @@ index e470032a9572b3ced764ca02238a8c6be435a9d4..29006e6bf44bdfa02fb32de5f789ad16
            }
            const behavior = merged.followOnAppend === true ? "auto" : merged.followOnAppend || null;
 -          if (behavior && nextCount > prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
-+          if (behavior && nextCount >= prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
++          if (behavior && nextCount >= prevCount && (this.isAtEnd(prevOptions.scrollEndThreshold) || this._intendedScrollOffset !== null && this.scrollState !== null && this.scrollState.align === "end" && this.scrollState.index === prevCount - 1 && Math.abs(this._intendedScrollOffset - this.scrollState.lastTargetOffset) < 1.5) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
              followOnAppend = behavior;
            }
          }
@@ -100,7 +100,7 @@ index 2495b26cf2c3589213546b3958eaadf2eb6b751d..d4a250db1b57b7025a3e4c29ca40372b
            }
            const behavior = merged.followOnAppend === true ? "auto" : merged.followOnAppend || null;
 -          if (behavior && nextCount > prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
-+          if (behavior && nextCount >= prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
++          if (behavior && nextCount >= prevCount && (this.isAtEnd(prevOptions.scrollEndThreshold) || this._intendedScrollOffset !== null && this.scrollState !== null && this.scrollState.align === "end" && this.scrollState.index === prevCount - 1 && Math.abs(this._intendedScrollOffset - this.scrollState.lastTargetOffset) < 1.5) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
              followOnAppend = behavior;
            }
          }
@@ -157,17 +157,26 @@ index dc6f1010c4d4758de9c46fb8d69209e582e47171..4fd68cc54f16ba0a715a12f5d745236e
        useScrollendEvent: false,
        useAnimationFrameWithResizeObserver: false,
        laneAssignmentMode: 'estimate',
-@@ -617,7 +626,8 @@ export class Virtualizer<
+@@ -617,7 +626,16 @@ export class Virtualizer<
  
          if (
            behavior &&
 -          nextCount > prevCount &&
+-          this.isAtEnd(prevOptions.scrollEndThreshold) &&
 +          // Server acknowledgements can replace the last key without adding a row.
 +          nextCount >= prevCount &&
-           this.isAtEnd(prevOptions.scrollEndThreshold) &&
++          // Our scroll to the previous last row has not reported back yet: the
++          // offset trails it, but the list is following the end. A user scroll
++          // reports back and clears the intended offset; other writes (size
++          // adjustments) target a different offset than the end scroll.
++          (this.isAtEnd(prevOptions.scrollEndThreshold) ||
++            (this._intendedScrollOffset !== null &&
++              this.scrollState?.align === 'end' &&
++              this.scrollState.index === prevCount - 1 &&
++              Math.abs(this._intendedScrollOffset - this.scrollState.lastTargetOffset) < 1.5)) &&
            (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)
          ) {
-@@ -700,6 +710,7 @@ export class Virtualizer<
+@@ -700,6 +718,7 @@ export class Virtualizer<
      }
  
      if (
@@ -175,7 +184,7 @@ index dc6f1010c4d4758de9c46fb8d69209e582e47171..4fd68cc54f16ba0a715a12f5d745236e
        isIOSWebKit() &&
        (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)
      ) {
-@@ -962,6 +973,7 @@ export class Virtualizer<
+@@ -962,6 +981,7 @@ export class Virtualizer<
          // applyScrollAdjustment does — accumulate the delta and let
          // _flushIosDeferredIfReady handle it once the scroll settles.
          if (
@@ -183,7 +192,7 @@ index dc6f1010c4d4758de9c46fb8d69209e582e47171..4fd68cc54f16ba0a715a12f5d745236e
            isIOSWebKit() &&
            (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)
          ) {
-@@ -1692,6 +1704,7 @@ export class Virtualizer<
+@@ -1692,6 +1712,7 @@ export class Virtualizer<
  
    private getMaxScrollOffset = () => {
      if (!this.scrollElement) return 0

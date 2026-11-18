@@ -373,8 +373,12 @@ export function ThreadList(props: ThreadListProps) {
     // The patched core delegates iOS deferral to our visual compensation.
     useIOSScrollDeferral: !scrollCompensation,
     anchorTo: 'end',
+    // A reader holding a disclosure is not following, even while a scroll to
+    // the end is still settling.
     get followOnAppend() {
-      return lifecycle.isReady() && (props.followOnAppend ?? true);
+      return (
+        lifecycle.isReady() && !holding() && (props.followOnAppend ?? true)
+      );
     },
     // Use the same end tolerance for append, resize, navigation, and snapshots.
     // A loose tolerance also mistakes optimistic row estimates for a pin.
@@ -837,11 +841,16 @@ export function ThreadList(props: ThreadListProps) {
     if (!element || !props.holdOnDisclosure) return;
     const holdOnDisclosure = (target: EventTarget | null) => {
       if (
-        target instanceof Element &&
-        contentRef?.contains(target) &&
-        target.closest('[aria-expanded]')
+        !(target instanceof Element) ||
+        !contentRef?.contains(target) ||
+        !target.closest('[aria-expanded]')
       )
-        setHolding(true);
+        return;
+      setHolding(true);
+      // A scroll to the end may still be settling (a message just arrived).
+      // Retarget it to where the reader is, or its reconciliation would
+      // follow the row as it is measured and carry the disclosure away.
+      virtualizer.scrollToOffset(logicalScrollOffset(element.scrollTop));
     };
     const onPointerDown = (event: PointerEvent) =>
       holdOnDisclosure(event.target);
