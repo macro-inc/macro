@@ -133,6 +133,10 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- Personal data stays off spans and logs (`.agents/rules/observability.md`);
+  here that also means a `MacroUserIdStr` parse error, which quotes the
+  address. `draft_save_and_delete_spans_record_no_personal_data` reads the
+  draft spans back.
 - Moving a thread into a folder (`update_thread_project`) calls
   `entity_access_db_utils::project_grants::refuse_filing_in` in the
   transaction that writes `project_id`, so a scoped agent session can't file

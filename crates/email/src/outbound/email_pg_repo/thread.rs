@@ -60,7 +60,7 @@ pub(super) async fn thread_metadata_by_ids(
     .await
 }
 
-#[tracing::instrument(err, skip(pool, thread_ids))]
+#[tracing::instrument(err, skip(pool, viewer, thread_ids))]
 pub(super) async fn thread_mail_projections_by_ids(
     pool: &PgPool,
     viewer: macro_user_id::user_id::MacroUserIdStr<'_>,
