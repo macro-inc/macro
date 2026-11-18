@@ -179,6 +179,10 @@ the gateway `/email` prefix.
   started at an older reader revision ([runbook](../../docs/runbooks/outlook-folder-reimport.md)).
 - Spawn `run_transfers` regardless of the Outlook flags. Gmail inbox moves
   finish there; with writes off it pauses only the Outlook retire step.
+- Every Graph call takes a permit from `RedisMicrosoftRequestGate`
+  (`email_api_client`). `pubsub_workers` builds the Outlook sync's import
+  gateway with `RequestBudget::Import`; every other Microsoft caller,
+  calendar_service included, uses `RequestBudget::Live`.
 - Every `GmailApi` call takes a permit from `RedisGmailRequestGate`
   (`outbound/email_api/gmail_gate.rs`): per mailbox it caps requests in
   flight and quota units per window, and pauses after a Gmail 429 (live work

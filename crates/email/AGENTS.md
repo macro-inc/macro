@@ -455,6 +455,11 @@ tools — hexagonal, heavily feature-gated.
   Its `EffectFailure` names the effect (`outlook.effect`) and, for attachment
   uploads, the attachment (`outlook.attachment_id`); never return one without
   a cause.
+- `MailboxSyncService` reads through two gateways: `import_provider` for a
+  folder page claimed before the folder's first round completes and for
+  import reconciliation rows, `provider` for everything else. email-service
+  gives them the Microsoft gate's `Import` and `Live` budgets, so an import
+  cannot take the slot live mail and calendar need.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no
