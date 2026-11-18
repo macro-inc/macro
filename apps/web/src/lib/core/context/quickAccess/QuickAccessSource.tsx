@@ -42,7 +42,10 @@ import {
 } from '@queries/email/quick-access';
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
-import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
+import {
+  type HistoryItem,
+  useHistoryQueryWhileRead,
+} from '@queries/history/history';
 import { materializeCachedGraphqlInitiatives } from '@queries/soup/graphql/initiatives';
 import { useQuickAccessAgentSessionsQuery } from '@queries/soup/quick-access-agent-sessions';
 import { useQuickAccessInitiativesQuery } from '@queries/soup/quick-access-initiatives';
@@ -60,6 +63,7 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createRenderEffect,
@@ -393,8 +397,16 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
+  // History and the recent channel list reread the cache only while some list
+  // here reads it (an open menu, a typed search); otherwise every cache change
+  // in a busy workspace would reread them with nothing on screen.
+  const [cacheReaders, setCacheReaders] = createSignal<Accessor<boolean>[]>([]);
+  const listsReadCache = createMemo(() =>
+    cacheReaders().some((reading) => reading())
+  );
+
   // queries
-  const historyQuery = useHistoryQuery();
+  const historyQuery = useHistoryQueryWhileRead(listsReadCache);
   const { channels, isLoading: channelsLoading } = useChannelsContext();
   const directoryScope = useContactDirectoryScope();
   const rawDmActivityByUserId = useDmActivityByUserId();
@@ -423,6 +435,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         {
           searchBuckets: () => ['channel', 'dm'],
           intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+          live: listsReadCache,
         }
       )
     );
@@ -544,7 +557,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         : [];
 
     // A partial cache must not hide channels already available in the complete
-    // channel list. Cached metadata wins for duplicates, retaining newer views.
+    // channel list. Cached metadata wins for duplicates, retaining newer views,
+    // unless the complete list changed later: the cached list rereads only
+    // while a list here reads the cache.
     const channelData = new Map(
       completeChannels.map((channel) => [
         channel.id,
@@ -552,6 +567,18 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       ])
     );
     for (const channel of cachedChannels) {
+      const known = channelData.get(channel.id);
+      if (
+        known &&
+        toTimestamp(known.updatedAt) > toTimestamp(channel.updatedAt)
+      ) {
+        channelData.set(channel.id, {
+          ...known,
+          viewedAt: latestDate(known.viewedAt, channel.viewedAt),
+          interactedAt: latestDate(known.interactedAt, channel.interactedAt),
+        });
+        continue;
+      }
       channelData.set(channel.id, {
         ...channel,
         viewedAt: latestDate(
@@ -1178,6 +1205,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const projectionHost = options ? cacheHost() : undefined;
     const readsCache = () =>
       options?.enabled?.() !== false && options?.readsCache?.() !== false;
+    if (projectionHost) {
+      const reading = () => cacheHost() === projectionHost && readsCache();
+      setCacheReaders((readers) => [...readers, reading]);
+      onCleanup(() =>
+        setCacheReaders((readers) =>
+          readers.filter((entry) => entry !== reading)
+        )
+      );
+    }
     const [cacheRevision, setCacheRevision] = createSignal(0);
     createEffect(() => {
       if (!projectionHost || cacheHost() !== projectionHost) return;

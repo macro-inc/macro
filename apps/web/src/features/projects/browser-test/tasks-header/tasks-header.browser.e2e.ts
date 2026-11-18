@@ -93,6 +93,39 @@ test('Add existing tasks opens its picker and cancels without adding', async ({
   await expect(page.getByTestId('assignments')).toHaveText('0');
 });
 
+test('Add existing tasks adds the picked tasks, from a sheet on touch', async ({
+  page,
+}, info) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Add existing tasks' }).click();
+  await page.getByRole('button', { name: 'Select tasks' }).click();
+  if (info.project.name === 'desktop') {
+    await expect(page.getByRole('menu')).toBeVisible();
+    await page.getByRole('button', { name: 'Add 1 task' }).click();
+  } else {
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.getByRole('button', { name: 'Done' }).click();
+  }
+  await expect(page.getByTestId('assignments')).toHaveText('1');
+  await expect(
+    page.getByRole('textbox', { name: 'Search tasks' })
+  ).toBeHidden();
+});
+
+test('header icon buttons share one size on phones', async ({ page }, info) => {
+  test.skip(!info.project.name.startsWith('phone'), 'Phones show icons');
+  await open(page);
+  const boxes = await Promise.all(
+    [
+      page.getByRole('button', { name: 'Search in Launch' }),
+      filters(page, info.project.name),
+      page.getByRole('button', { name: 'Add existing tasks' }),
+    ].map((button) => button.boundingBox())
+  );
+  const sizes = boxes.map((box) => `${box?.width}x${box?.height}`);
+  expect(new Set(sizes).size, sizes.join(', ')).toBe(1);
+});
+
 test('the one New task control creates the task in the project', async ({
   page,
 }) => {

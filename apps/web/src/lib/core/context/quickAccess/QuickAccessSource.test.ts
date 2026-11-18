@@ -86,6 +86,7 @@ const mocks = vi.hoisted(() => ({
   schedules: [] as ScheduledAction[],
   crmAllowed: (): boolean => true,
   cacheEnabled: true,
+  historyReading: undefined as (() => boolean) | undefined,
   queries: {} as Partial<
     Record<
       'history' | 'channels' | 'recently-viewed',
@@ -157,13 +158,17 @@ vi.mock('@queries/channel/graphql', () => ({
     ),
 }));
 vi.mock('@queries/history/history', () => ({
-  useHistoryQuery: () =>
-    mocks.queries.history?.() ?? {
-      data: mocks.history,
-      isSuccess: true,
-      isLoading: false,
-      refetch: vi.fn(),
-    },
+  useHistoryQueryWhileRead: (reading: () => boolean) => {
+    mocks.historyReading = reading;
+    return (
+      mocks.queries.history?.() ?? {
+        data: mocks.history,
+        isSuccess: true,
+        isLoading: false,
+        refetch: vi.fn(),
+      }
+    );
+  },
 }));
 vi.mock('@queries/history/graphql', () => ({
   materializeCachedGraphqlHistoryItems: async (
@@ -595,7 +600,7 @@ describe('Quick Access source integration', () => {
         retry: false,
       })));
     const client = new QueryClient();
-    const rendered = renderRetainedList(client);
+    const rendered = renderRetainedList(client, { buckets: ['channel', 'dm'] });
     try {
       await vi.waitFor(() => expect(query?.isSuccess).toBe(true));
       vi.useFakeTimers();
@@ -1507,6 +1512,57 @@ describe('Quick Access source integration', () => {
     expect(list.totalCount()).toBe(81);
     expect(list.hasMore()).toBe(false);
     expect(mocks.search).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('Quick Access shared sources', () => {
+  it('rereads history and recent channels only while a list reads the cache', () => {
+    const [first, setFirst] = createSignal(false);
+    const [second, setSecond] = createSignal(false);
+    setup((source) => [
+      source.useList('channel', 'dm'),
+      source.useList({ buckets: ['channel', 'dm', 'note'], enabled: first }),
+      source.useList({ buckets: ['note'], enabled: second }),
+    ]);
+
+    mocks.changed?.();
+    expect(mocks.historyReading?.()).toBe(false);
+    expect(mocks.channelRefetch).not.toHaveBeenCalled();
+
+    setFirst(true);
+    expect(mocks.historyReading?.()).toBe(true);
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+
+    setSecond(true);
+    setFirst(false);
+    expect(mocks.historyReading?.()).toBe(true);
+
+    setSecond(false);
+    mocks.changed?.();
+    expect(mocks.historyReading?.()).toBe(false);
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a channel renamed after the cached list was read', async () => {
+    const channel = cachedChannel('renamed-channel');
+    mocks.cachedChannels = () => [channel];
+    mocks.channels.mockReturnValue([
+      {
+        id: channel.id,
+        name: 'New name',
+        channel_type: 'public',
+        owner_id: 'owner',
+        participants: [],
+        auto_join_team: false,
+        is_participant: true,
+        created_at: channel.createdAt,
+        updated_at: '2030-01-01T00:00:00.000Z',
+      },
+    ]);
+    const list = setup((source) => source.useList('channel'));
+    await vi.waitFor(() =>
+      expect(list.items().map((item) => item.searchText)).toEqual(['New name'])
+    );
   });
 });
 
