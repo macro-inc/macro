@@ -523,3 +523,235 @@ async fn deleting_a_moved_message_s_old_copies_forces_no_refresh() {
         outside_thread_query("message-1", "thread-2")
     );
 }
+
+#[test]
+fn a_running_delete_task_reports_its_progress() {
+    let task = parse_email_delete_task(
+        r#"{"completed":false,"task":{"status":{"total":40,"deleted":5}}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        task,
+        EmailDeleteTask {
+            deleted: 5,
+            total: 40,
+            state: EmailDeleteState::Running,
+        }
+    );
+}
+
+#[test]
+fn a_completed_delete_task_reports_its_response_counts() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"task":{"status":{"total":40,"deleted":39}},"response":{"total":40,"deleted":40,"failures":[],"timed_out":false,"canceled":""}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        task,
+        EmailDeleteTask {
+            deleted: 40,
+            total: 40,
+            state: EmailDeleteState::Completed,
+        }
+    );
+}
+
+#[test]
+fn per_document_failures_fail_the_task_with_a_short_description() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"response":{"total":40,"deleted":3,"failures":[{"cause":{"type":"es_rejected_execution_exception","reason":"rejected","caused_by":{"type":"nested"}}},{"cause":{"type":"other"}}]}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        task.state,
+        EmailDeleteState::Failed(
+            "2 failures, first: es_rejected_execution_exception: rejected".into()
+        )
+    );
+    assert_eq!((task.deleted, task.total), (3, 40));
+}
+
+#[test]
+fn a_task_error_fails_the_task() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"error":{"type":"search_phase_execution_exception","reason":"all shards failed"}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        task.state,
+        EmailDeleteState::Failed("search_phase_execution_exception: all shards failed".into())
+    );
+}
+
+#[test]
+fn a_cancelled_task_is_not_completed() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"response":{"total":40,"deleted":10,"failures":[],"canceled":"by user request"}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        task.state,
+        EmailDeleteState::Canceled("by user request".into())
+    );
+}
+
+#[test]
+fn a_timed_out_task_is_not_completed() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"response":{"total":40,"deleted":10,"failures":[],"timed_out":true}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(task.state, EmailDeleteState::Failed("timed out".into()));
+}
+
+#[test]
+fn a_started_task_returns_its_id() {
+    assert_eq!(
+        parse_started_task(r#"{"task":"oTUltX4IQMOUUVeiohTt8A:12345"}"#)
+            .unwrap()
+            .as_str(),
+        "oTUltX4IQMOUUVeiohTt8A:12345"
+    );
+    assert!(parse_started_task(r#"{"deleted":0}"#).is_err());
+    assert!(parse_started_task(r#"{"task":"not-a-task"}"#).is_err());
+}
+
+#[test]
+fn task_ids_need_a_node_and_a_number() {
+    assert!(EmailDeleteTaskId::try_from("node:1".to_owned()).is_ok());
+    for bad in ["node", ":1", "node:", "node:x1"] {
+        assert!(
+            EmailDeleteTaskId::try_from(bad.to_owned()).is_err(),
+            "{bad}"
+        );
+    }
+}
+
+#[test]
+fn a_task_that_skipped_changed_documents_is_not_completed() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"response":{"total":40,"deleted":39,"version_conflicts":1,"failures":[]}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        task.state,
+        EmailDeleteState::Failed("1 documents changed while being deleted and were skipped".into())
+    );
+}
+
+#[test]
+fn the_running_delete_for_an_inbox_is_found_by_its_opaque_id() {
+    let listing = r#"{"tasks":[
+        {"node":"n1","id":7,"parent_task_id":null,"headers":{"X-Opaque-Id":"email-link-delete:other"}},
+        {"node":"n1","id":8,"parent_task_id":"n1:9","headers":{"X-Opaque-Id":"email-link-delete:inbox"}},
+        {"node":"n1","id":9,"parent_task_id":null,"headers":{"X-Opaque-Id":"email-link-delete:inbox"}}
+    ]}"#;
+
+    assert_eq!(
+        parse_running_email_link_delete(listing, "inbox")
+            .unwrap()
+            .map(|id| id.as_str().to_owned()),
+        Some("n1:9".to_owned()),
+        "the parent, not its slice"
+    );
+    assert_eq!(
+        parse_running_email_link_delete(listing, "missing").unwrap(),
+        None
+    );
+    assert_eq!(
+        parse_running_email_link_delete(r#"{"tasks":[]}"#, "inbox").unwrap(),
+        None
+    );
+}
+
+const RUNNING_FOR_INBOX: &str = r#"{"tasks":[{"node":"n1","id":9,"parent_task_id":null,"headers":{"X-Opaque-Id":"email-link-delete:inbox"}}]}"#;
+
+#[tokio::test]
+async fn an_inbox_with_a_running_delete_adopts_it_without_starting_another() {
+    use crate::test_support::{Reply, serve_script};
+    let (url, server) = serve_script(vec![Reply::Respond("200 OK", RUNNING_FOR_INBOX)]);
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let task = client
+        .start_email_link_delete("inbox", 1_000)
+        .await
+        .unwrap();
+
+    assert_eq!(task.as_str(), "n1:9");
+    let requests = server.join().unwrap();
+    assert_eq!(requests.len(), 1, "{requests:?}");
+    for part in [
+        "GET /_tasks?",
+        "actions=indices%3Adata%2Fwrite%2Fdelete%2Fbyquery",
+        "detailed=true",
+        "group_by=none",
+        "timeout=10s",
+    ] {
+        assert!(requests[0].contains(part), "{part} in {}", requests[0]);
+    }
+}
+
+#[tokio::test]
+async fn an_inbox_without_a_running_delete_starts_one_tagged_with_its_opaque_id() {
+    use crate::test_support::{Reply, serve_script};
+    let (url, server) = serve_script(vec![
+        Reply::Respond("200 OK", r#"{"tasks":[]}"#),
+        Reply::Respond("200 OK", r#"{"task":"n1:5"}"#),
+    ]);
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let task = client
+        .start_email_link_delete("inbox", 1_000)
+        .await
+        .unwrap();
+
+    assert_eq!(task.as_str(), "n1:5");
+    let requests = server.join().unwrap();
+    assert!(
+        requests[1].starts_with("POST /emails/_delete_by_query?"),
+        "{}",
+        requests[1]
+    );
+    assert!(
+        requests[1].ends_with(" x-opaque-id=email-link-delete:inbox"),
+        "{}",
+        requests[1]
+    );
+}
+
+#[tokio::test]
+async fn a_start_lost_in_flight_is_adopted_from_a_second_listing() {
+    use crate::test_support::{Reply, serve_script};
+    let (url, server) = serve_script(vec![
+        Reply::Respond("200 OK", r#"{"tasks":[]}"#),
+        Reply::Close,
+        Reply::Respond("200 OK", RUNNING_FOR_INBOX),
+    ]);
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let task = client
+        .start_email_link_delete("inbox", 1_000)
+        .await
+        .unwrap();
+
+    assert_eq!(task.as_str(), "n1:9");
+    assert_eq!(server.join().unwrap().len(), 3);
+}
+
+#[test]
+fn a_listing_some_node_failed_to_answer_is_an_error() {
+    assert!(
+        parse_running_email_link_delete(
+            r#"{"node_failures":[{"type":"failed_node_exception"}],"tasks":[]}"#,
+            "inbox"
+        )
+        .is_err()
+    );
+}

@@ -58,12 +58,18 @@ projects.
   fails them all at once. Wrap each public `OpensearchClient` method's request
   in `retry::resend_on_lost_connection`, which resends twice on a connection
   closed or refused before a complete response, never on a timeout or an
-  error status. Every request must stay safe to resend: write by explicit id
-  or by query.
+  error status. Every resent request must be safe to resend: a read, or a
+  write by explicit id or by query. Starting a background task is not, so
+  `start_email_link_delete` sends it once and, when the connection drops,
+  looks for the task by its `X-Opaque-Id` instead.
 - Put `instrument(err)` on the public method, not the inner function it
   retries, so a recovered attempt does not record an error span.
-- Requests time out after five minutes (`REQUEST_TIMEOUT`); delete-by-query
-  across a large mailbox runs for minutes.
+- Requests time out after five minutes (`REQUEST_TIMEOUT`). A delete that can
+  run that long, such as a whole mailbox, starts a background task
+  (`start_email_link_delete`) and reads its progress from `_tasks`
+  (`email_delete_task`, a raw request because the typed tasks API is behind
+  the `opensearch` crate's `experimental-apis` feature). The task's throttle
+  applies to that task alone; callers bound how many run at once.
 - A single-message email delete forces no refresh: it deletes the event
   thread's document by id, then delete-by-queries the message's copies under
   other threads with that thread left out, since the query sees only

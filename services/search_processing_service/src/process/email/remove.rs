@@ -17,14 +17,3 @@ pub async fn process_remove_message(
 
     Ok(())
 }
-
-pub async fn process_remove_messages_by_link_id(
-    opensearch_client: &OpensearchClient,
-    link_id: Uuid,
-) -> anyhow::Result<()> {
-    opensearch_client
-        .delete_email_messages_by_link_id(&link_id.to_string())
-        .await?;
-
-    Ok(())
-}

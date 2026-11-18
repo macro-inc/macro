@@ -727,6 +727,9 @@ describe('channel selection loading and recovery', () => {
       networkError: new Error('HTTP 503'),
       response: { status: 503 },
     }),
+    new CombinedError({
+      graphQLErrors: [{ message: 'A comms error has occured' }],
+    }),
   ])(
     'renders an empty unread projection after a transient failure without marking read: %s',
     (error) => {
