@@ -5,6 +5,10 @@ set -euo pipefail
 # version each bundle reports, and select it for every later step: the iOS
 # toolchain split (ios-native-env.sh, build_ios_simulator_app.sh) reads
 # `xcode-select -p` because nix develop overrides DEVELOPER_DIR.
+#
+# An image-level DEVELOPER_DIR would outrank that selection for xcodebuild,
+# xcrun and `xcode-select -p` alike, so drop it here and pin it for later steps.
+unset DEVELOPER_DIR
 plist_value() {
   /usr/libexec/PlistBuddy -c "Print :$2" "$1/Contents/version.plist" 2>/dev/null
 }
@@ -41,6 +45,7 @@ echo "Installed Xcodes:"
 printf '%s' "$installed"
 echo "Selecting $best (Xcode $best_version)."
 sudo xcode-select --switch "$best/Contents/Developer"
+echo "DEVELOPER_DIR=$best/Contents/Developer" >> "$GITHUB_ENV"
 # Installs the system components a non-default Xcode may still lack; a no-op
 # once they match.
 sudo xcodebuild -runFirstLaunch

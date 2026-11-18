@@ -336,9 +336,10 @@ CI pins it in `IOS_XCODE_VERSION` (`xtask_workflows/src/workflows/steps.rs`).
 The `ios-update` release and the `ios-preview` build run on Namespace's macOS
 Tahoe slim image (`Runner::MacOsTahoeArm`), which installs several Xcodes
 side by side; their first step, **Select Xcode 27.1**, selects that version
-system-wide and fails with the installed list if the image lacks it. Inside
-`nix develop`, `DEVELOPER_DIR` points at Nix's macOS SDK, so the iOS toolchain
-split reads the `xcode-select` choice instead. To move to a newer Xcode,
+with `xcode-select`, sets `DEVELOPER_DIR` to it for later steps, and fails
+with the installed list if the image lacks it. Inside `nix develop`,
+`DEVELOPER_DIR` points at Nix's macOS SDK, so the iOS toolchain split reads
+the `xcode-select` choice instead. To move to a newer Xcode,
 check Namespace's image feed for an image that ships it, then change the
 constant (and the runner, if needed) and run `cargo x workflows`.
 
