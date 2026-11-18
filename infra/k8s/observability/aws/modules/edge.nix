@@ -1,19 +1,14 @@
 # The cluster behind the existing ALB: one IP target group per hostname (the
 # cluster's AWS Load Balancer Controller registers the edge nginx pods through
-# TargetGroupBinding), the -next listener rules, a certificate for the -next
-# names added to the listener, their DNS records, and the security group rules
-# that let the ALB reach the pods. Cutover to the plain hostnames is a later
-# change (PR 7); nothing here touches today's grafana., otlp. or oncall. rules.
+# TargetGroupBinding) and the security group rules that let the ALB reach the
+# pods. With `settings.switched`, a listener rule per hostname too; the Pulumi
+# stack's rule (priority 1) wins until it drops those names (README "The
+# switch"). The hostnames' DNS records and certificate stay the stack's.
 { lib, settings, ... }:
 let
   inherit (lib.tf) ref;
   inherit (settings) edge hosts;
-  hostnames = lib.mapAttrsToList (_: host: host.hostname) hosts;
   forHosts = f: lib.mapAttrs f hosts;
-  # The validation record ACM asks for, for one hostname.
-  validation =
-    hostname: attr:
-    ref "one([for o in aws_acm_certificate.next.domain_validation_options : o.${attr} if o.domain_name == \"${hostname}\"])";
 in
 {
   resource = {
@@ -35,64 +30,21 @@ in
       }
     );
 
-    aws_lb_listener_rule = forHosts (
-      name: host: {
-        listener_arn = ref "data.aws_lb_listener.https.arn";
-        inherit (host) priority;
-        condition = [ { host_header.values = [ host.hostname ]; } ];
-        action = [
-          {
-            type = "forward";
-            target_group_arn = ref "aws_lb_target_group.${name}.arn";
-          }
-        ];
-      }
+    aws_lb_listener_rule = lib.optionalAttrs settings.switched (
+      forHosts (
+        name: host: {
+          listener_arn = ref "data.aws_lb_listener.https.arn";
+          inherit (host) priority;
+          condition = [ { host_header.values = [ host.hostname ]; } ];
+          action = [
+            {
+              type = "forward";
+              target_group_arn = ref "aws_lb_target_group.${name}.arn";
+            }
+          ];
+        }
+      )
     );
-
-    aws_acm_certificate.next = {
-      domain_name = builtins.head hostnames;
-      subject_alternative_names = builtins.tail hostnames;
-      validation_method = "DNS";
-      lifecycle.create_before_destroy = true;
-    };
-
-    aws_route53_record =
-      lib.mapAttrs' (
-        name: host:
-        lib.nameValuePair "validation_${name}" {
-          zone_id = ref "data.aws_route53_zone.public.zone_id";
-          name = validation host.hostname "resource_record_name";
-          type = validation host.hostname "resource_record_type";
-          records = [ (validation host.hostname "resource_record_value") ];
-          ttl = 300;
-          allow_overwrite = false;
-        }
-      ) hosts
-      // forHosts (
-        _: host: {
-          zone_id = ref "data.aws_route53_zone.public.zone_id";
-          name = host.hostname;
-          type = "A";
-          alias = {
-            name = ref "data.aws_lb.observability.dns_name";
-            zone_id = ref "data.aws_lb.observability.zone_id";
-            evaluate_target_health = true;
-          };
-        }
-      );
-
-    aws_acm_certificate_validation.next = {
-      certificate_arn = ref "aws_acm_certificate.next.arn";
-      validation_record_fqdns = lib.mapAttrsToList (
-        name: _: ref "aws_route53_record.validation_${name}.fqdn"
-      ) hosts;
-    };
-
-    # Served by SNI next to the stack's own certificate.
-    aws_lb_listener_certificate.next = {
-      listener_arn = ref "data.aws_lb_listener.https.arn";
-      certificate_arn = ref "aws_acm_certificate_validation.next.certificate_arn";
-    };
 
     # The ALB's security group allows egress only to what is listed; this adds
     # the cluster on the edge port, as the stack does for the host on 8080.

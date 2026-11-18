@@ -1,7 +1,6 @@
 # CloudWatch alarms on the cluster's target groups, to the stack's alarm topic:
-# the outside check that doesn't depend on anything in the cluster. They notify
-# only when `settings.alarms.notify` is on (at cutover); before that they still
-# change state and show in the console.
+# the outside check that doesn't depend on anything in the cluster. Created at
+# the switch (`settings.switched`), when the target groups start serving.
 { lib, settings, ... }:
 let
   inherit (lib.tf) ref;
@@ -12,7 +11,6 @@ let
       namespace = "AWS/ApplicationELB";
       period = 60;
       evaluation_periods = 2;
-      actions_enabled = settings.alarms.notify;
       alarm_actions = [ topic ];
       ok_actions = [ topic ];
       dimensions = {
@@ -26,7 +24,7 @@ let
     lib.mapAttrs' (name: host: lib.nameValuePair "${name}_${suffix}" (f name host)) settings.hosts;
 in
 {
-  resource.aws_cloudwatch_metric_alarm =
+  resource.aws_cloudwatch_metric_alarm = lib.optionalAttrs settings.switched (
     perHost "healthy" (
       name: host:
       alarm name {
@@ -52,5 +50,6 @@ in
         threshold = settings.alarms.target5xxPer5Min;
         treat_missing_data = "notBreaching";
       }
-    );
+    )
+  );
 }

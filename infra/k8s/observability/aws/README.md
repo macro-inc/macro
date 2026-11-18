@@ -18,10 +18,10 @@ approval, with the steps under [First apply](#first-apply).
 | `modules/network.nix` | Private subnets in us-east-2b (`10.88.16.0/20`) and 2c (`10.88.32.0/20`), on the stack's private route table (its single NAT and S3 gateway endpoint). |
 | `modules/eks.nix` | EKS cluster `observability` (API access entries only, public endpoint limited to given CIDRs, control-plane logs 30 days, standard support only), a managed node group of 3 × m7g.large on AL2023 across 2a/2b/2c, add-ons VPC CNI (network policy on), kube-proxy, Pod Identity agent, CoreDNS, EBS CSI, and cluster-admin access entries. |
 | `modules/pod-identity.nix` | One role per service account (below), bound with Pod Identity. |
-| `modules/buckets.nix` | Buckets `macro-observability-k8s-{loki,tempo,mimir}`, configured as the host's buckets. |
+| `modules/buckets.nix` | Buckets `macro-observability-k8s-{loki,tempo,mimir}`, configured as the host's buckets. Loki and Tempo use theirs while the cluster is tested and move to the host's at the switch; Mimir keeps its own. |
 | `modules/rds.nix` | Grafana's Postgres 17, db.t4g.micro, Multi-AZ, 20 GiB gp3, reachable only from the cluster security group; its RDS-managed password rotates once a year (first Sunday of January, 05:00–06:00 UTC) instead of every 7 days. |
-| `modules/edge.nix` | IP target groups `obs-k8s-grafana` and `obs-k8s-otlp`, listener rules for `grafana-next.` / `otlp-next.macro-internal.com`, an ACM certificate for both added to the listener, their DNS records, and the security group rules ALB → pods on port 8080. |
-| `modules/alarms.nix` | Per target group: no healthy target, and target 5xx. To the stack's alarm topic, with notifications off until cutover (`settings.alarms.notify`). |
+| `modules/edge.nix` | IP target groups `obs-k8s-grafana` and `obs-k8s-otlp` and the security group rules ALB → pods on port 8080. At the switch (`settings.switched`), listener rules for `grafana.` and `otlp.macro-internal.com` (priorities 10 and 11). |
+| `modules/alarms.nix` | At the switch (`settings.switched`), per target group: no healthy target, and target 5xx, to the stack's alarm topic. |
 | `modules/outputs.nix` | Names and ARNs the cluster layer needs; `nix run .#tofu -- main output`. |
 
 `settings.nix` holds every value; change it there, not in the modules.
@@ -32,11 +32,14 @@ approval, with the steps under [First apply](#first-apply).
 `project`/`environment` tags), the 2a private subnet (by CIDR), the NAT and
 the private route table, the HTTPS listener, the `macro-internal.com` zone, the
 `observability-prod-alerts` topic and the `observability/prod` secret
-(metadata only). OpenTofu only adds resources next to them: route table
-associations, two listener rules (priorities 10 and 11; Pulumi has 1 and 2), a
-listener certificate, DNS records, and one egress rule on the ALB's security
+(metadata only), and the host's Loki and Tempo buckets (by name prefix among the
+stack's tagged buckets). OpenTofu only adds resources next to them: route table
+associations, one egress rule on the ALB's security
 group, which, like the stack's own `observability-alb-to-host` rule, Pulumi
-does not manage inline. Nothing in this layer changes how the host is served.
+does not manage inline, and at the switch two listener rules (priorities 10
+and 11; Pulumi has 1 and 2). Before the switch nothing in this layer changes
+how the host is served. The Loki and Tempo roles may read and write the host's
+buckets from the first apply, but nothing uses that until the switch.
 The cluster security group's ingress rule references the ALB's security
 group, so a Pulumi change that replaces that group fails until this rule is
 removed first.
@@ -57,6 +60,11 @@ removed first.
   for every AWS client in the cluster: give Loki, Tempo, Mimir and External
   Secrets the region explicitly; if the EBS CSI controller can't find it, set it
   in the add-on's configuration.
+- Buckets: `buckets` has each backend's own; `host_buckets` the host's Loki
+  (`logs`) and Tempo (`traces`) buckets, which the Loki and Tempo roles may also
+  use. Point Loki and Tempo at `host_buckets` only at the switch, after the
+  host's Loki and Tempo have stopped: two compactors on one bucket delete each
+  other's blocks.
 - The edge nginx Service is the only ALB target: IP targets, port 8080, health
   check `GET /healthz` → 200, one TargetGroupBinding per target group.
   The ALB is enabled only in us-east-2a and 2b (`edge_zones` output) and sends
@@ -119,7 +127,7 @@ Multi-AZ database up to 20.
    export TF_VAR_admin_principal_arns='["arn:aws:iam::569036502058:role/<path>/<role>"]'
    export TF_VAR_public_access_cidrs='["<your public IP>/32"]'
    ```
-4. Plan and review. Expect only additions (82) and no change or
+4. Plan and review. Expect only additions (69) and no change or
    destroy:
    ```sh
    nix run .#tofu -- main init
@@ -136,13 +144,28 @@ Multi-AZ database up to 20.
    kubectl get pods -n kube-system                     # aws-node, kube-proxy, coredns, ebs-csi, pod identity agent Running
    nix run .#tofu -- main output
    ```
-   `grafana-next` and `otlp-next` answer 503 until the cluster layer's edge
-   nginx registers targets, and their alarms sit in `ALARM` without notifying.
+   Nothing is served from the cluster yet: its target groups have no listener
+   rule until the switch.
 
 Later applies are steps 3 to 5. To upgrade Kubernetes, raise
 `settings.cluster.version` by one minor version: one apply upgrades the
 control plane, then the add-ons to that version's defaults and the nodes, one
 at a time.
+
+## The switch
+
+The cluster takes over `grafana.` and `otlp.macro-internal.com` once it has been
+tested through `kubectl port-forward`. The full runbook, with the host and
+cluster steps, is in `infra/k8s/observability/cluster/README.md`. This layer's part:
+
+1. Set `switched = true` in `settings.nix` and apply (steps 3 to 5). The plan
+   adds two listener rules (priorities 10 and 11) and four alarms, nothing
+   else. No traffic moves: the Pulumi stack's priority-1 rule still matches
+   both hostnames.
+2. The Pulumi stack drops `grafana.` and `otlp.` from its priority-1 rule (a
+   reviewed manual `pulumi up`); from then on the ALB sends them here.
+
+To go back, restore the Pulumi rule; this layer can stay switched.
 
 ## Removing it
 

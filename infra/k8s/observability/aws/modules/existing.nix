@@ -1,7 +1,8 @@
 # Resources the Pulumi `observability` stack owns, read as data sources. This
 # layer never imports or changes them; it only adds resources next to them
-# (subnets, route table associations, listener rules, a listener certificate,
-# DNS records and security group rules).
+# (subnets, route table associations, security group rules, and at the switch
+# listener rules); the cluster's Loki and Tempo roles get access to the host's
+# buckets.
 { lib, settings, ... }:
 let
   inherit (lib.tf) ref;
@@ -53,9 +54,28 @@ in
 
     # Metadata only: a data source on the secret never reads its value.
     aws_secretsmanager_secret.observability.name = existing.secret;
+
+    # The stack's tagged buckets, for the host's Loki and Tempo buckets (their
+    # names end in a random suffix). Exactly one of each must match.
+    aws_resourcegroupstaggingapi_resources.host_buckets = {
+      resource_type_filters = [ "s3" ];
+      tag_filter = lib.mapAttrsToList (key: value: {
+        inherit key;
+        values = [ value ];
+      }) existing.tags;
+      lifecycle.postcondition = lib.mapAttrsToList (kind: prefix: {
+        condition = "\${length([for r in self.resource_tag_mapping_list : r if startswith(r.resource_arn, \"arn:aws:s3:::${prefix}\")]) == 1}";
+        error_message = "Expected exactly one bucket of the observability stack named ${prefix}*, for the host's ${kind}.";
+      }) existing.bucketPrefixes;
+    };
   };
 
   locals = {
+    # The host's bucket ARNs by kind (`logs`, `traces`).
+    host_bucket_arns = lib.mapAttrs (
+      _: prefix:
+      ref "one([for r in data.aws_resourcegroupstaggingapi_resources.host_buckets.resource_tag_mapping_list : r.resource_arn if startswith(r.resource_arn, \"arn:aws:s3:::${prefix}\")])"
+    ) existing.bucketPrefixes;
     alb_security_group_id = ref "one(data.aws_lb.observability.security_groups)";
     private_subnet_ids = [
       (ref "data.aws_subnet.private_a.id")

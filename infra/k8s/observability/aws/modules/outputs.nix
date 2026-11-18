@@ -21,9 +21,17 @@ in
     target_group_arns = out "TargetGroupBinding targets, by host." (
       lib.mapAttrs (name: _: ref "aws_lb_target_group.${name}.arn") settings.hosts
     );
-    buckets = out "Object storage bucket per backend." (
+    buckets = out "Object storage bucket per backend, used until the switch (Mimir's for good)." (
       lib.mapAttrs (name: _: ref "aws_s3_bucket.${name}.bucket") settings.buckets
     );
+    host_buckets =
+      out
+        "The host's Loki (`logs`) and Tempo (`traces`) buckets, which Loki and Tempo take over at the switch."
+        (
+          lib.mapAttrs (
+            kind: _: ref "trimprefix(local.host_bucket_arns.${kind}, \"arn:aws:s3:::\")"
+          ) settings.existing.bucketPrefixes
+        );
     pod_identity_role_arns = out "Role bound to each service account." (
       lib.mapAttrs' (
         key: account:

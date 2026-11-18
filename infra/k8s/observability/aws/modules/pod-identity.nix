@@ -1,13 +1,16 @@
 # One IAM role per service account, bound with EKS Pod Identity. The same
 # least-privilege split as the host's systemd units: each backend reaches only
-# its own bucket.
+# its own bucket. Loki and Tempo may also use the host's bucket of their kind,
+# which they take over at the switch.
 { lib, settings, ... }:
 let
   inherit (lib.tf) ref;
   iam = import ./iam.nix;
   sa = settings.serviceAccounts;
 
-  bucketAccess = bucket: [
+  newBucket = name: ref "aws_s3_bucket.${name}.arn";
+  hostBucket = kind: ref "local.host_bucket_arns.${kind}";
+  bucketAccess = arns: [
     {
       Effect = "Allow";
       Action = [
@@ -15,7 +18,7 @@ let
         "s3:GetBucketLocation"
         "s3:ListBucketMultipartUploads"
       ];
-      Resource = ref "aws_s3_bucket.${bucket}.arn";
+      Resource = arns;
     }
     {
       Effect = "Allow";
@@ -26,15 +29,21 @@ let
         "s3:AbortMultipartUpload"
         "s3:ListMultipartUploadParts"
       ];
-      Resource = "${ref "aws_s3_bucket.${bucket}.arn"}/*";
+      Resource = map (arn: "${arn}/*") arns;
     }
   ];
 
   # Inline policy per role; `null` for a role that only takes a managed policy.
   policies = {
-    loki = bucketAccess "loki";
-    tempo = bucketAccess "tempo";
-    mimir = bucketAccess "mimir";
+    loki = bucketAccess [
+      (newBucket "loki")
+      (hostBucket "logs")
+    ];
+    tempo = bucketAccess [
+      (newBucket "tempo")
+      (hostBucket "traces")
+    ];
+    mimir = bucketAccess [ (newBucket "mimir") ];
 
     # As the host's Grafana: CloudWatch reads for the prod alert rules and
     # dashboards (prod is us-east-1), and the team email contact point.

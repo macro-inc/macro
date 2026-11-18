@@ -41,6 +41,13 @@ rec {
     zone = "macro-internal.com";
     alarmTopic = "observability-prod-alerts";
     secret = "observability/prod";
+    # The host's Loki and Tempo buckets. Pulumi names them with a random
+    # suffix, so they are found by these prefixes among the stack's tagged
+    # buckets (modules/existing.nix).
+    bucketPrefixes = {
+      logs = "observability-logs-";
+      traces = "observability-traces-";
+    };
   };
 
   # New private subnets; with the existing 2a subnet the cluster spans 3 AZs.
@@ -96,8 +103,11 @@ rec {
     };
   };
 
-  # One new bucket per backend: two Loki or Tempo compactors on one bucket
-  # would delete each other's blocks, so the host's buckets are not shared.
+  # One new bucket per backend, used while the cluster is tested. At the switch
+  # (README "The switch") Loki and Tempo move to the host's buckets below,
+  # which keeps their history; Mimir keeps its own and gets the host's
+  # Prometheus history uploaded. Two Loki or Tempo compactors on one bucket
+  # delete each other's blocks, so the host's must be stopped first.
   buckets = {
     loki = "macro-observability-k8s-loki";
     tempo = "macro-observability-k8s-tempo";
@@ -136,26 +146,26 @@ rec {
     healthPath = "/healthz";
   };
 
-  # Hostnames served by the cluster before cutover. Listener rule priorities
-  # stay clear of the Pulumi stack's 1 and 2.
+  # The hostnames the cluster takes over at the switch. Their DNS records and
+  # certificate are the Pulumi stack's and don't change. Until then only the
+  # target groups exist; the cluster is tested through `kubectl port-forward`.
   hosts = {
     grafana = {
-      hostname = "grafana-next.macro-internal.com";
+      hostname = "grafana.macro-internal.com";
       targetGroup = "obs-k8s-grafana";
       priority = 10;
     };
     otlp = {
-      hostname = "otlp-next.macro-internal.com";
+      hostname = "otlp.macro-internal.com";
       targetGroup = "obs-k8s-otlp";
       priority = 11;
     };
   };
 
-  alarms = {
-    # Off until cutover: the alarms exist and change state, but don't publish
-    # to the alarm topic (its subscribers are people) while the cluster is an
-    # experiment with nothing behind its target groups yet.
-    notify = false;
-    target5xxPer5Min = 25;
-  };
+  # The switch (README "The switch"). True adds a listener rule per host and
+  # the target-group alarms. The Pulumi stack's rule (priority 1) still wins
+  # until it drops these hostnames, so applying this alone moves no traffic.
+  switched = false;
+
+  alarms.target5xxPer5Min = 25;
 }

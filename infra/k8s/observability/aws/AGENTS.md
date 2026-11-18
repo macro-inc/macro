@@ -3,8 +3,8 @@
 ## What it is
 
 The AWS side of the observability EKS cluster (us-east-2): subnets, EKS, nodes,
-add-ons, Pod Identity roles, buckets, Grafana's RDS, ALB target groups and
-`-next` listener rules, alarms. OpenTofu written in Nix with terranix, in its own
+add-ons, Pod Identity roles, buckets, Grafana's RDS, ALB target groups, and the listener rules and alarms that the
+switch adds. OpenTofu written in Nix with terranix, in its own
 flake. `README.md` has what each module creates and the apply steps.
 
 ## Start here
@@ -50,8 +50,8 @@ From this directory:
 - Default tags use `project = observability-k8s`. Never tag a resource
   `project = observability`: `existing.nix` finds the Pulumi VPC and ALB by
   that tag and a second match breaks every plan.
-- Listener rule priorities 1 and 2 belong to Pulumi. Cutover of the plain
-  hostnames needs that stack's rule moved, not a lower priority here.
+- Listener rule priorities 1 and 2 belong to Pulumi. The switch needs that
+  stack's rule to drop the hostnames, not a lower priority here.
 - Pod Identity roles trust session tags (cluster, namespace, service account);
   don't disable session tags on an association.
 - Buckets and RDS have `prevent_destroy`; a plan that replaces one is an error
