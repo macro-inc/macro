@@ -1,5 +1,4 @@
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
-import { globalAttachableHistory } from '@core/component/AI/signal/globalAttachments';
 import type { Attachment, Attachments } from '@core/component/AI/types';
 import { asFileType } from '@core/component/AI/util';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions';
@@ -36,10 +35,6 @@ export function useAttachments(initial?: Attachment[]): Attachments {
     removeAttachment,
   };
 }
-
-export const useChatAttachableHistory = () => {
-  return globalAttachableHistory;
-};
 
 export const useGetChatAttachmentInfo = () => {
   const resolveDocumentFileType = async (
