@@ -20,9 +20,10 @@ Per run (one JSON line in <out>/e2e-<label>.jsonl, devbox epoch seconds):
   client_load     /proc/loadavg where e2e.py runs (not the control plane's)
 
 With --agent it invites an agent teammate instead (see agent_run). Against a
-deployed environment, pass every service URL (--auth-url, --harness-url,
---storage-url) instead of --stack; --host-cmd and Tempo are optional there
-(--tempo-url none skips the span lookup).
+deployed environment, pass the service URLs instead of --stack (--auth-url
+and --storage-url with --agent, --auth-url and --harness-url without);
+--host-cmd and Tempo are optional with --agent (--tempo-url none skips the
+span lookup).
 """
 
 import argparse
@@ -399,7 +400,7 @@ def main():
     parser.add_argument("--token-file", required=True)
     parser.add_argument("--auth-url", help="authentication_service base; default from portmap")
     parser.add_argument("--harness-url", help="agent_harness_service base; default from portmap")
-    parser.add_argument("--tempo-url", default="http://localhost:3200", help="'none' skips span lookups (--agent)")
+    parser.add_argument("--tempo-url", default="http://localhost:3200", help="'none' skips span lookups (--agent only)")
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--size", default="standard")
     parser.add_argument("--label", required=True)
@@ -420,7 +421,7 @@ def main():
         action="store_true",
         help="invite an agent teammate instead of buying a computer: online, DM greeting, reply",
     )
-    parser.add_argument("--storage-url", help="document_storage_service base, for --agent's DM")
+    parser.add_argument("--storage-url", help="document_storage_service base, for --agent's DM; default from portmap")
     parser.add_argument("--out", required=True)
     parser.add_argument(
         "--host-cmd",
@@ -429,10 +430,13 @@ def main():
     args = parser.parse_args()
     if not args.host_cmd and not args.agent:
         parser.error("--host-cmd is required without --agent")
-    if not args.stack and not (args.auth_url and args.harness_url):
-        parser.error("pass --stack, or --auth-url and --harness-url")
-    if args.agent and not args.storage_url:
-        parser.error("--agent needs --storage-url")
+    if args.tempo_url == "none" and not args.agent:
+        parser.error("--tempo-url none needs --agent")
+    if not args.stack:
+        needed = ["--auth-url", "--storage-url"] if args.agent else ["--auth-url", "--harness-url"]
+        missing = [flag for flag in needed if not getattr(args, flag[2:].replace("-", "_"))]
+        if missing:
+            parser.error(f"pass --stack, or {' and '.join(missing)}")
     if args.host_cmd:
         HOST_CMD[:] = args.host_cmd.split()
 
@@ -443,16 +447,20 @@ def main():
     auth = Api(
         args.auth_url or f"http://localhost:{host_port(args.stack, 'authentication-service', '8080/tcp')}", token
     )
-    harness = Api(
-        args.harness_url or f"http://localhost:{host_port(args.stack, 'agent_harness_service', '8080/tcp')}", token
-    )
+    def service(url: str | None, name: str) -> "Api":
+        return Api(url or f"http://localhost:{host_port(args.stack, name, '8080/tcp')}", token)
+
+    if args.agent:
+        storage = service(args.storage_url, "document_storage_service")
+    else:
+        harness = service(args.harness_url, "agent_harness_service")
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     with (out / f"e2e-{args.label}.jsonl").open("a") as file:
         for run in range(1, args.runs + 1):
             load_before = host_load()
             if args.agent:
-                record = agent_run(args, auth, Api(args.storage_url, token), run)
+                record = agent_run(args, auth, storage, run)
             else:
                 record = one_run(args, auth, harness, args.tempo_url, run)
             record["host_load_before"] = load_before
