@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE \"Project\"\n            SET \"updatedAt\" = GREATEST(\"updatedAt\", clock_timestamp()::timestamp(3))\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4dfdc731343248bf0196932ef186d348c379e95de688fcf14c701cf48d6045e8"
+}

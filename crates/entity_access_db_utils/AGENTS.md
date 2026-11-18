@@ -27,10 +27,13 @@ top of it.
   share, a grant that adds access (a grantee without an equal or stronger row
   on the entity); the helpers that revoke a direct user, team or channel grant
   refuse to remove one.
+- `src/project_modified.rs`: `bump_projects_modified`, which marks the folders
+  an item left and joined edited in that same transaction.
 
 ## Scope
 
-- Owns: writes to the `entity_access` table.
+- Owns: writes to the `entity_access` table, and the folder `updatedAt` bump
+  that goes with filing an item in a folder.
 - Not here: read-side access-level checks → `crates/entity_access`; the
   owner-grant policy that decides *which* grants to write on creation →
   `crates/entity_access_management`.

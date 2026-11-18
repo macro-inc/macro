@@ -62,7 +62,8 @@ service.
 - A form is filed in a folder on its own (`forms.project_id`, `MoveEntity`,
   owner only); its database stays where it is. The move checks the new folder
   with `project_grants::refuse_filing` before it swaps the inherited grants,
-  which reach the database through form access, like any form grant.
+  which reach the database through form access, like any form grant. The move
+  bumps the old and new folder's `updatedAt`, as document and chat moves do.
   Trashing the folder returns the form to the root without those grants
   (`PgFormsRepo::unfile_from_projects`, through projects' `FiledItemsUnfiler`).
 - `POST /forms` attributes the creation to the SDK token's `agent_id` (code
