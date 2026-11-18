@@ -215,17 +215,21 @@ vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
   MarkdownShell: (props: {
     placeholder?: string;
     initialValue?: string;
+    value?: string;
     onConnect?: () => void;
   }) => {
     onMount(() => {
-      editorMocks.emitChange?.(props.initialValue ?? '');
+      // Like the real shell, only an uncontrolled editor reports its initial
+      // value; a controlled one already holds it.
+      if (props.value === undefined)
+        editorMocks.emitChange?.(props.initialValue ?? '');
       props.onConnect?.();
     });
     return (
       <>
         <div
           data-testid="markdown-shell"
-          data-initial-value={props.initialValue ?? ''}
+          data-initial-value={props.value ?? props.initialValue ?? ''}
         >
           {props.placeholder}
         </div>
