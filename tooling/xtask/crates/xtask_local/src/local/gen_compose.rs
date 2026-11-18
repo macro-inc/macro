@@ -26,7 +26,7 @@ use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{OPENBAO_IMAGE, RustService, services_for_mode};
-use super::{Mode, google_emulator, microsoft_emulator, model_emulator, repo_root};
+use super::{Mode, google_emulator, microsoft_emulator, model_emulator, openbao, repo_root};
 
 #[cfg(test)]
 mod test;
@@ -505,17 +505,18 @@ fn add_local_infra(
                 "/openbao/config/start.sh".to_string(),
             ])),
             command: Some(dct::Command::Args(vec![])),
-            volumes: vec![
-                dct::Volumes::Simple(format!(
-                    "{}:/openbao/config/macro-local.hcl:ro,z",
-                    repo_root().join("infra/local/openbao/local.hcl").display()
-                )),
-                dct::Volumes::Simple(format!(
-                    "{}:/openbao/config/start.sh:ro,z",
-                    repo_root().join("infra/local/openbao/start.sh").display()
-                )),
-                dct::Volumes::Simple("openbao_data:/openbao/file".to_string()),
-            ],
+            volumes: openbao::MOUNTS
+                .iter()
+                .map(|(path, target)| {
+                    dct::Volumes::Simple(format!(
+                        "{}:{target}:ro,z",
+                        repo_root().join(path).display()
+                    ))
+                })
+                .chain([dct::Volumes::Simple(
+                    "openbao_data:/openbao/file".to_string(),
+                )])
+                .collect(),
             environment: kv(&[("BAO_ADDR", "http://127.0.0.1:8200")]),
             restart: Some("unless-stopped".to_string()),
             ports: dct::Ports::Short(vec![format!(
@@ -531,6 +532,8 @@ fn add_local_infra(
                 interval: Some("5s".to_string()),
                 timeout: Some("3s".to_string()),
                 retries: 10,
+                // `start.sh` allows its first initialization 60 seconds.
+                start_period: Some("60s".to_string()),
                 ..Default::default()
             }),
             networks: net_aliases(&[("services", &["openbao"])]),

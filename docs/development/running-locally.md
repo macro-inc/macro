@@ -321,12 +321,12 @@ To touch only the affected services, keep the instance's generated env/Compose f
 and recreate them with the same Compose project/files and
 `up -d --no-deps --no-build <service>`.
 
-If a local debug service aborts with `tokio-rt-worker` stack overflow, give only
-that service `RUST_MIN_STACK=16777216` in an additional local Compose override,
-then recreate it with the same project, generated environment, and volumes.
-Keep this runtime override outside feature commits. Verify the request that
-triggered the crash, not just the health endpoint: document storage can start
-successfully and then exhaust the default worker stack on a Soup request.
+The generated env gives every local service `RUST_MIN_STACK=67108864`, because
+the debug builds' deep requests (document storage's first Soup query after a
+login, an agent harness turn) overflow tokio's 2 MiB worker stack. If a service
+still aborts with `tokio-rt-worker` stack overflow, its container predates that
+env: recreate the instance, or the service with the same project and generated
+environment, and check `docker exec <container> printenv RUST_MIN_STACK`.
 
 On SELinux hosts, FusionAuth can become healthy while silently skipping an
 unreadable kickstart. The generated per-instance kickstart directory uses

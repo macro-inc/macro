@@ -41,6 +41,7 @@ pub mod localstack;
 pub mod mailpit;
 pub mod microsoft_emulator;
 pub mod model_emulator;
+pub mod openbao;
 pub mod opensearch;
 pub mod portmap;
 pub mod proxy;
@@ -1022,6 +1023,7 @@ fn prepare(
         let microsoft =
             microsoft_emulator::stands_in(mode, &env.merged).then(microsoft_emulator::idp);
         fusionauth::write_kickstart(instance, Some(&google), github.as_ref(), microsoft.as_ref())?;
+        openbao::make_mounts_readable()?;
     }
     if args.build.build_aux_services {
         build_aux_service_images(stage, instance, &env)?;
@@ -1213,6 +1215,11 @@ fn bring_up_infra(
     infra?;
     fusionauth_started.transpose()?;
     localstack_ready?;
+    if spec.runs_local_infra {
+        // Passwords needs an initialized vault. Without this gate a crash-looping
+        // OpenBao still lets the bring-up report success.
+        openbao::wait_ready(stage, instance, env)?;
+    }
 
     if spec.migrates_db && init == InfraInit::Full {
         // Postgres is ready (`--wait`); create + migrate the freshly-wiped DB.

@@ -14,7 +14,8 @@ stack generator owns the container, instance volumes, and generated credentials.
   namespace, mount, policy, and JWT role setup lives in
   `../../openbao/openbao_provisioning.py`, which the hosted dev provisioning shares.
 - `../../../tooling/xtask/crates/xtask_local/src/local/gen_compose.rs`: container
-  and named-volume wiring; `local_env.rs` owns the service JWT signing identity.
+  and named-volume wiring; `openbao.rs` owns the bind-mount modes and readiness
+  gate; `local_env.rs` owns the service JWT signing identity.
 
 ## Scope
 
@@ -34,8 +35,10 @@ stack generator owns the container, instance volumes, and generated credentials.
 
 ## Gotchas
 
-- Make the bind-mounted public `start.sh` and `local.hcl` readable by the
-  container's `openbao` user; private checkouts may need temporary read permission.
+- The container's non-root `openbao` user must read the bind-mounted `start.sh`
+  and `local.hcl`; xtask adds group/other read before each bring-up because a
+  `umask 077` checkout makes them 0600, and `stack up` fails if OpenBao never
+  becomes healthy.
 
 - Preserve `/openbao/file/data`, `seal.key`, and `bootstrap.json` together on the
   named volume; Postgres stores metadata only and cannot reconstruct lost
