@@ -173,36 +173,91 @@ export function createCrmAccessAuthority(options: {
   };
   observe();
 
-  async function prepare(): Promise<CrmRequestAuthority> {
+  async function prepare(retryStaleRead = true): Promise<CrmRequestAuthority> {
     const context = Telemetry.captureContext();
     const capturedSession = session;
     const capturedOwner = owner;
-    if (!account) throw new StaleCacheAuthorityError();
-    let state = await capturedOwner.current();
-    if (capturedSession !== session || capturedOwner !== owner)
-      throw new StaleCacheAuthorityError();
-    const bindAccount = options.bindAccount;
     const expectedAccount = account;
-    if (state.account && state.account !== expectedAccount)
-      retire(state.generation, 'session');
-    if (state.account !== expectedAccount && bindAccount) {
-      await context.run(() =>
-        bindAccount(capturedOwner, state.generation, expectedAccount)
-      );
-      state = await capturedOwner.current();
-    }
-    if (
-      capturedSession !== session ||
-      capturedOwner !== owner ||
-      (state.account && state.account !== account)
-    )
-      throw new StaleCacheAuthorityError();
-    observeAuthority(state);
-    return {
-      owner: capturedOwner,
-      generation: state.generation,
-      session: capturedSession,
+    if (!expectedAccount) throw new StaleCacheAuthorityError();
+    const sameSession = () =>
+      capturedSession === session &&
+      capturedOwner === owner &&
+      expectedAccount === account;
+    let previousAccount = capturedOwner.snapshot()?.account;
+    let accountChanged =
+      previousAccount != null && previousAccount !== expectedAccount;
+    // A null -> expected account binding is recoverable. Any other observed
+    // account replacement closes recovery, including an A -> B -> A sequence.
+    const stopWatchingAccount = retryStaleRead
+      ? capturedOwner.onChanged((next) => {
+          accountChanged ||=
+            (previousAccount != null && previousAccount !== next.account) ||
+            (next.account != null && next.account !== expectedAccount);
+          previousAccount = next.account;
+        })
+      : undefined;
+    let retried = false;
+    const current = async () => {
+      try {
+        return await context.run(() => capturedOwner.current());
+      } catch (error) {
+        if (
+          !retryStaleRead ||
+          retried ||
+          accountChanged ||
+          !sameSession() ||
+          !(error instanceof StaleCacheAuthorityError)
+        )
+          throw error;
+        retried = true;
+        // An IPC reply can lose to a newer notification before any HTTP
+        // dispatch. Discard it and read once more; never replay a command.
+        return context.run(() =>
+          Telemetry.span(
+            'crm.access.owner_read_retry',
+            { sampling: 'perf' },
+            async () => {
+              const fresh = await capturedOwner.current();
+              if (
+                !sameSession() ||
+                accountChanged ||
+                (fresh.account != null && fresh.account !== expectedAccount)
+              )
+                throw new StaleCacheAuthorityError();
+              return fresh;
+            }
+          )
+        );
+      }
     };
+    try {
+      let state = await current();
+      if (!sameSession() || (retried && accountChanged))
+        throw new StaleCacheAuthorityError();
+      const bindAccount = options.bindAccount;
+      if (state.account && state.account !== expectedAccount)
+        retire(state.generation, 'session');
+      if (state.account !== expectedAccount && bindAccount) {
+        await context.run(() =>
+          bindAccount(capturedOwner, state.generation, expectedAccount)
+        );
+        state = await current();
+      }
+      if (
+        !sameSession() ||
+        (retried && accountChanged) ||
+        (state.account && state.account !== expectedAccount)
+      )
+        throw new StaleCacheAuthorityError();
+      observeAuthority(state);
+      return {
+        owner: capturedOwner,
+        generation: state.generation,
+        session: capturedSession,
+      };
+    } finally {
+      stopWatchingAccount?.();
+    }
   }
   async function assertCurrent(captured: CrmRequestAuthority): Promise<void> {
     if (captured.session !== session || captured.owner !== owner || !account)
@@ -283,7 +338,8 @@ export function createCrmAccessAuthority(options: {
           let networkFailure = false;
           try {
             const captured = await span.span('crm.access.prepare', async () =>
-              prepare()
+              // This loop already owns the single stale-generation retry.
+              prepare(false)
             );
             const policy = await span.span('crm.access.proof', async () => {
               try {
@@ -353,7 +409,7 @@ export function createCrmAccessAuthority(options: {
           throw new StaleCacheAuthorityError();
       };
     },
-    prepare,
+    prepare: () => prepare(),
     accept,
     refresh,
     assertCurrent,

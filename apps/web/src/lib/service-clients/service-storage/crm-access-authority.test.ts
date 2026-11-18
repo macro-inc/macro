@@ -53,7 +53,14 @@ function sharedOwner(account: string | null = 'viewer') {
       },
     };
   };
-  return { port, state: () => state };
+  return {
+    port,
+    state: () => state,
+    bind(account: string | null) {
+      state = { ...state, account, generation: crypto.randomUUID() };
+      for (const listener of listeners) listener(state);
+    },
+  };
 }
 function client(
   owner: CacheAuthorityHost,
@@ -174,6 +181,214 @@ describe('CRM authority across cache clients', () => {
       await expect(refreshing).rejects.toBeInstanceOf(StaleCacheAuthorityError);
       expect(fetchProof).not.toHaveBeenCalled();
       expect(authority.allowed()).toBe(false);
+    }
+  );
+
+  it.each(['initial', 'after binding'] as const)(
+    'retries one overtaken %s authority read before preparing a request',
+    async (stage) => {
+      const storage = sharedOwner(stage === 'initial' ? 'viewer' : null);
+      const port = storage.port();
+      const observer = createAuthorityObserver(storage.state().identity);
+      observer.observe(storage.state());
+      const started = Promise.withResolvers<void>();
+      const delayed = Promise.withResolvers<CacheAuthority>();
+      const heldRead = stage === 'initial' ? 1 : 2;
+      let reads = 0;
+      const owner: CacheAuthorityHost = {
+        ...port,
+        current: async () => {
+          const version = observer.version();
+          const pending = ++reads === heldRead;
+          if (pending) started.resolve();
+          const state = pending ? await delayed.promise : await port.current();
+          return observer.observe(state, version);
+        },
+        onChanged: (callback) =>
+          port.onChanged((state) => {
+            observer.observe(state);
+            callback(state);
+          }),
+      };
+      const fetchProof = vi.fn(async () => `${team}:allowed`);
+      const bindAccount = vi.fn(async () => storage.bind('viewer'));
+      const authority = createCrmAccessAuthority({
+        fetchProof,
+        bindAccount,
+        retire: async () => {},
+      });
+      authority.setSession('viewer');
+      authority.setHost(owner);
+      const preparing = authority.prepare();
+      await started.promise;
+      const old = storage.state();
+      await port.transition(old.generation, `${team}:allowed`);
+      delayed.resolve(old);
+      await expect(preparing).resolves.toMatchObject({
+        generation: storage.state().generation,
+      });
+      expect(reads).toBe(heldRead + 1);
+      expect(bindAccount).toHaveBeenCalledTimes(stage === 'initial' ? 0 : 1);
+      expect(fetchProof).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['session', 'host', 'account', 'account ABA'] as const)(
+    'does not recover a stale preparation across %s replacement',
+    async (replacement) => {
+      const storage = sharedOwner();
+      const owner = storage.port();
+      const delayed = Promise.withResolvers<CacheAuthority>();
+      const current = vi
+        .spyOn(owner, 'current')
+        .mockReturnValueOnce(delayed.promise);
+      const { authority, fetchProof } = client(owner);
+      const preparing = authority.prepare();
+      const rejected = expect(preparing).rejects.toBeInstanceOf(
+        StaleCacheAuthorityError
+      );
+      if (replacement === 'session') authority.setSession('viewer', 1);
+      else if (replacement === 'host') authority.setHost(sharedOwner().port());
+      else {
+        storage.bind('another-account');
+        if (replacement === 'account ABA') storage.bind('viewer');
+      }
+      delayed.reject(new StaleCacheAuthorityError());
+      await rejected;
+      expect(current).toHaveBeenCalledOnce();
+      expect(fetchProof).not.toHaveBeenCalled();
+    }
+  );
+
+  it('shares one preparation retry between the initial and post-binding reads', async () => {
+    const storage = sharedOwner(null);
+    const owner = storage.port();
+    const current = vi
+      .spyOn(owner, 'current')
+      .mockRejectedValueOnce(new StaleCacheAuthorityError())
+      .mockResolvedValueOnce(storage.state())
+      .mockRejectedValueOnce(new StaleCacheAuthorityError());
+    const bindAccount = vi.fn(async () => storage.bind('viewer'));
+    const fetchProof = vi.fn(async () => `${team}:allowed`);
+    const authority = createCrmAccessAuthority({
+      fetchProof,
+      bindAccount,
+      retire: async () => {},
+    });
+    authority.setSession('viewer');
+    authority.setHost(owner);
+    await expect(authority.prepare()).rejects.toBeInstanceOf(
+      StaleCacheAuthorityError
+    );
+    expect(current).toHaveBeenCalledTimes(3);
+    expect(bindAccount).toHaveBeenCalledOnce();
+    expect(fetchProof).not.toHaveBeenCalled();
+  });
+
+  it.each(['login', 'owner account'] as const)(
+    'rejects a fresh retry reply after its %s returns to the same account',
+    async (replacement) => {
+      const storage = sharedOwner();
+      const owner = storage.port();
+      const started = Promise.withResolvers<void>();
+      const delayed = Promise.withResolvers<CacheAuthority>();
+      const current = vi
+        .spyOn(owner, 'current')
+        .mockRejectedValueOnce(new StaleCacheAuthorityError())
+        .mockImplementationOnce(() => {
+          started.resolve();
+          return delayed.promise;
+        });
+      const { authority, fetchProof } = client(owner);
+      const preparing = authority.prepare();
+      const rejected = expect(preparing).rejects.toBeInstanceOf(
+        StaleCacheAuthorityError
+      );
+      await started.promise;
+      if (replacement === 'login') {
+        authority.setSession(undefined);
+        authority.setSession('viewer');
+      } else {
+        storage.bind('another-account');
+        storage.bind('viewer');
+      }
+      delayed.resolve(storage.state());
+      await rejected;
+      expect(current).toHaveBeenCalledTimes(2);
+      expect(fetchProof).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not retry a rejected account binding during direct preparation', async () => {
+    const owner = sharedOwner(null).port();
+    const current = vi.spyOn(owner, 'current');
+    const bindAccount = vi
+      .fn()
+      .mockRejectedValue(new StaleCacheAuthorityError());
+    const fetchProof = vi.fn(async () => `${team}:allowed`);
+    const authority = createCrmAccessAuthority({
+      fetchProof,
+      bindAccount,
+      retire: async () => {},
+    });
+    authority.setSession('viewer');
+    authority.setHost(owner);
+    await expect(authority.prepare()).rejects.toBeInstanceOf(
+      StaleCacheAuthorityError
+    );
+    expect(current).toHaveBeenCalledOnce();
+    expect(bindAccount).toHaveBeenCalledOnce();
+    expect(fetchProof).not.toHaveBeenCalled();
+  });
+
+  it('retains replacement history through the post-binding read after a retry', async () => {
+    const storage = sharedOwner(null);
+    const owner = storage.port();
+    const current = vi
+      .spyOn(owner, 'current')
+      .mockRejectedValueOnce(new StaleCacheAuthorityError())
+      .mockResolvedValueOnce(storage.state())
+      .mockImplementationOnce(async () => {
+        storage.bind('another-account');
+        storage.bind('viewer');
+        return storage.state();
+      });
+    const bindAccount = vi.fn(async () => storage.bind('viewer'));
+    const fetchProof = vi.fn(async () => `${team}:allowed`);
+    const authority = createCrmAccessAuthority({
+      fetchProof,
+      bindAccount,
+      retire: async () => {},
+    });
+    authority.setSession('viewer');
+    authority.setHost(owner);
+    await expect(authority.prepare()).rejects.toBeInstanceOf(
+      StaleCacheAuthorityError
+    );
+    expect(current).toHaveBeenCalledTimes(3);
+    expect(bindAccount).toHaveBeenCalledOnce();
+    expect(fetchProof).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['prepare', 'stale', 2],
+    ['prepare', 'terminal', 1],
+    ['refresh', 'stale', 2],
+    ['ensureCurrent', 'stale', 4],
+  ] as const)(
+    'bounds %s %s failures without dispatching a proof',
+    async (method, failure, reads) => {
+      const owner = sharedOwner().port();
+      const error =
+        failure === 'terminal'
+          ? new Error('storage unavailable')
+          : new StaleCacheAuthorityError();
+      const current = vi.spyOn(owner, 'current').mockRejectedValue(error);
+      const { authority, fetchProof } = client(owner);
+      await expect(authority[method]()).rejects.toBe(error);
+      // A read guard can exhaust preparation, then the separate proof refresh.
+      expect(current).toHaveBeenCalledTimes(reads);
+      expect(fetchProof).not.toHaveBeenCalled();
     }
   );
   it('does not confuse the anonymous profile with the account, or reuse a prior login proof', async () => {

@@ -76,6 +76,11 @@ Network failures back off once before a short second attempt; stale generations
 retry once, while terminal errors do not retry automatically. Initial CRM routes
 show loading, then the existing retry state if proof fails. Manual retry and
 reconnect both restart verification without reporting a denial.
+Before HTTP dispatch, a local authority reply overtaken by a newer notification
+can be discarded and read again once. Initial and post-binding reads share that
+budget; the binding and command are not replayed. Login/host replacement and
+observed account changes, including a return to the same account, close recovery.
+The proof-refresh loop owns its own stale retry and disables the nested read retry.
 Email and Soup snapshots remain persisted; CRM-bearing snapshots require proof
 before restoration and are retired on a proven denial or account replacement.
 Legacy persisted thread pages use the entity-granted thread endpoint and remain

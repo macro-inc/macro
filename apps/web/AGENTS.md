@@ -52,6 +52,7 @@ Treat the memoized response header only as a retirement
 hint: changed or missing hints require fresh JSON proof, and never relabel an
 in-flight response with the resulting generation.
 Keep initial access pending until proof succeeds or bounded retries fail; then show the existing retry state and retry on reconnect. Retry only stale generations or network failures, with one short second attempt, and retain the last proven state across transient failures; show denial and tear down CRM dialogs only after a proven denial.
+Retry an overtaken local authority read once before HTTP dispatch, sharing that budget across initial and post-binding reads; never replay binding or commands, and reject recovery across observed account replacement, login or host changes. Keep proof refresh's existing retry budget separate rather than multiplying it inside preparation.
 Recover protected queries rejected during initial proof with a fresh cache read and an internal network fallback on a miss; clear the old response witness and preserve the mounted observer.
 Limit authority-change invalidation to queries needing CRM proof; preserve independent live-query cursors and reads. Keep the account-generation fence, and recover an independent response rejected across first identity binding with one fresh read, never by restamping its payload.
 Retry a rejected independent local read once under the same login/account, retaining its mounted view; cache-only recovery stays local and repeated admission failure must not start a refetch loop.
