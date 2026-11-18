@@ -930,13 +930,15 @@ async fn a_request_published_before_the_runtime_streams_reaches_it_when_it_resum
 }
 
 #[tokio::test]
-async fn a_resumed_stream_replays_what_followed_its_cursor_then_continues_live() {
+async fn a_resumed_stream_replays_around_its_cursor_but_never_the_cursor_itself() {
     let (service, feed) = service(FakeAccessService::allowing(&[DOCUMENT_ID]));
+    let before = document_candidate("document.updated", DOCUMENT_ID);
+    let before_id = before.event.event_id.clone();
     let seen = document_candidate("document.updated", DOCUMENT_ID);
     let cursor = cursor_of(&seen);
     let missed = document_candidate("document.updated", DOCUMENT_ID);
     let missed_id = missed.event.event_id.clone();
-    feed.publish(document_candidate("document.updated", DOCUMENT_ID));
+    feed.publish(before);
     feed.publish(seen);
     feed.publish(missed);
 
@@ -953,9 +955,38 @@ async fn a_resumed_stream_replays_what_followed_its_cursor_then_continues_live()
     let live_id = live.event.event_id.clone();
     feed.publish(live);
 
-    // Nothing at or before the cursor, nothing twice, nothing skipped.
+    // Events minted just before the cursor come again (the client drops
+    // what it already saw); the cursor's own event does not.
+    assert_eq!(next_within(&mut stream).await.event_id, before_id);
     assert_eq!(next_within(&mut stream).await.event_id, missed_id);
     assert_eq!(next_within(&mut stream).await.event_id, live_id);
+}
+
+/// Replicas consume the topics in their own order, so the event after a
+/// cursor on one replica can sit before it on the next. Resuming on that
+/// replica must still deliver it.
+#[tokio::test]
+async fn a_cursor_from_another_replicas_order_still_replays_what_followed_it() {
+    let (service, feed) = service(FakeAccessService::allowing(&[DOCUMENT_ID]));
+    let seen = document_candidate("document.updated", DOCUMENT_ID);
+    let cursor = cursor_of(&seen);
+    let next = document_candidate("document.updated", DOCUMENT_ID);
+    let next_id = next.event.event_id.clone();
+    // This replica received `next` first.
+    feed.publish(next);
+    feed.publish(seen);
+
+    let mut stream = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::User,
+            filter(&["document.updated"]),
+            Some(cursor),
+        )
+        .await
+        .expect("stream opens");
+
+    assert_eq!(next_within(&mut stream).await.event_id, next_id);
 }
 
 #[tokio::test]

@@ -36,7 +36,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   the 10 s poll. Every open sends `Last-Event-ID` (the last event seen, or a
   floor minted before the runtime first dials), so the storage service
   replays what was published while the stream did not cover an agent; a
-  session requested the instant a computer is ready is not lost.
+  session requested the instant a computer is ready is not lost. The opens ask
+  `resume=true`; the service repeats a few seconds before the cursor, and
+  `src/daemon/position.rs` drops repeats by event id.
 - Pass `macrod service --ignore-stdin-eof` under system service managers;
   embedded services keep the default shutdown when their parent's stdin closes.
 - `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge

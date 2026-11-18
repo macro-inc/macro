@@ -46,12 +46,24 @@ pub const WEBHOOK_STREAM_REPLAY_CAPACITY: usize = 4_096;
 /// newly bound agent and its stream covering that agent.
 pub const WEBHOOK_STREAM_REPLAY_RETENTION: Duration = Duration::from_secs(120);
 
+/// How far before its cursor a resumed stream starts: events minted that
+/// close before it may still reach this replica after it.
+pub const WEBHOOK_STREAM_REPLAY_LOOKBACK: Duration = Duration::from_secs(5);
+
+/// When an event was minted, from its UUIDv7 id.
+fn minted(candidate: &StreamCandidateEvent) -> Option<DateTime<Utc>> {
+    StreamCursor::parse(&candidate.event.event_id)
+        .ok()
+        .and_then(StreamCursor::time)
+}
+
 /// Where a subscriber resumes: the id of the last event it saw, sent back as
 /// SSE `Last-Event-ID`.
 ///
-/// Broker event ids are UUIDv7. A cursor this process still retains resumes
-/// exactly after that event. Any other cursor (an event another process
-/// delivered, or one minted from a timestamp) resumes at the time it encodes.
+/// Broker event ids are UUIDv7. A stream resumed from one replays every
+/// retained event minted from a few seconds before it on, except the cursor's
+/// own event, so the subscriber drops repeats by id. A cursor minted from a
+/// timestamp works the same way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StreamCursor(Uuid);
 
@@ -156,27 +168,25 @@ impl StreamFeed {
         // Pruning happens on publish, so a quiet feed can still hold events
         // past the retention; never replay those.
         let oldest_kept = Utc::now() - WEBHOOK_STREAM_REPLAY_RETENTION;
+        let Some(since) = after
+            .time()
+            .map(|minted| minted - WEBHOOK_STREAM_REPLAY_LOOKBACK)
+        else {
+            return (VecDeque::new(), receiver);
+        };
+        // By when each event was minted, not where it sits here: replicas
+        // consume the topics in their own order, so the events after a cursor
+        // on one can sit before it on another. Looking back a little more
+        // repeats some the subscriber saw, which it drops by id.
         let cursor = after.0.to_string();
-        let seen = inner
+        let replay = inner
             .recent
             .iter()
-            .position(|retained| retained.candidate.event.event_id == cursor);
-        let replay = match (seen, after.time()) {
-            (Some(seen), _) => inner
-                .recent
-                .iter()
-                .skip(seen + 1)
-                .filter(|retained| retained.at >= oldest_kept)
-                .map(|retained| retained.candidate.clone())
-                .collect(),
-            (None, Some(since)) => inner
-                .recent
-                .iter()
-                .filter(|retained| retained.at >= since.max(oldest_kept))
-                .map(|retained| retained.candidate.clone())
-                .collect(),
-            (None, None) => VecDeque::new(),
-        };
+            .filter(|retained| retained.at >= oldest_kept)
+            .filter(|retained| retained.candidate.event.event_id != cursor)
+            .filter(|retained| minted(&retained.candidate).unwrap_or(retained.at) >= since)
+            .map(|retained| retained.candidate.clone())
+            .collect();
         (replay, receiver)
     }
 }

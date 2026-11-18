@@ -16,13 +16,16 @@ use crate::dispatch::Dispatcher;
 use crate::harness::{HandoffSender, Handoffs};
 use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::agent_session::HarnessApi;
-use crate::outbound::stream::{EventStreamClient, cursor_at};
+use crate::outbound::stream::EventStreamClient;
 use crate::runtime::Runtime;
 use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
 use crate::turns::ActiveTurns;
 
+mod position;
 #[cfg(test)]
 mod test;
+
+use position::StreamPosition;
 
 /// How often the bound-agent set is re-read without being told it changed.
 /// The service says when it binds an agent on connect
@@ -110,7 +113,7 @@ impl Daemon {
         // Taken before the runtime dials: connecting can bind an agent and
         // let someone ask it for a session, and the stream must replay that
         // request however late it opens.
-        let mut cursor = cursor_at(std::time::SystemTime::now());
+        let mut position = StreamPosition::new(std::time::SystemTime::now());
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
@@ -153,7 +156,14 @@ impl Daemon {
                 if shutdown.is_cancelled() {
                     return Ok(());
                 }
-                match serve_once(&client, &executor, &shutdown, &agents_changed, &mut cursor).await
+                match serve_once(
+                    &client,
+                    &executor,
+                    &shutdown,
+                    &agents_changed,
+                    &mut position,
+                )
+                .await
                 {
                     ServeOutcome::Stopped => return Ok(()),
                     ServeOutcome::Idle => {
@@ -331,15 +341,15 @@ enum ServeOutcome {
 
 /// Open the stream (or wait for bound agents) until it ends or is cancelled.
 ///
-/// The stream resumes after `cursor`, which advances past every event it
-/// delivers, so reopening it for a changed agent set or after an error
-/// replays what was published in between.
+/// The stream resumes after `position`'s cursor, which advances past every
+/// event it delivers, so reopening it for a changed agent set or after an
+/// error replays what was published in between; `position` drops repeats.
 async fn serve_once<Executor: crate::trigger::WorkExecutor>(
     client: &EventStreamClient,
     executor: &Executor,
     cancel: &CancellationToken,
     agents_changed: &Notify,
-    cursor: &mut String,
+    position: &mut StreamPosition,
 ) -> ServeOutcome {
     let bots = match client.bound_bot_ids().await {
         Ok(bots) => bots,
@@ -356,7 +366,7 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
 
     let filters = trigger_filters(bots.iter());
     let mut stream = match client
-        .connect::<TriggerEvent>(&filters, Some(cursor.as_str()))
+        .connect::<TriggerEvent>(&filters, Some(position.cursor()))
         .await
     {
         Ok(stream) => stream,
@@ -382,11 +392,13 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
             }
             next = stream.next_event() => {
                 if let Some(id) = stream.last_event_id() {
-                    id.clone_into(cursor);
+                    position.delivered(id);
                 }
                 match next {
                     Ok(Some(event)) => {
-                        let _ = handle_event(event, executor).await;
+                        if position.admits(&event) {
+                            let _ = handle_event(event, executor).await;
+                        }
                     }
                     Ok(None) => {
                         return ServeOutcome::Ended(rootcause::report!(

@@ -198,10 +198,12 @@ from the moment it starts and fans it out to its open streams. Each SSE event's
 `id` is the broker event id (a UUIDv7). The process also keeps the last two
 minutes of events, up to 4,096 (`StreamFeed`). A client that opens the stream
 with `resume=true` and the standard SSE `Last-Event-ID` header first receives the retained events
-after it, through the same filters and access checks, then live events, with no
-event twice and none skipped. An id this process retains resumes exactly after
-that event; any other UUIDv7 (an event another replica delivered, or one minted
-from a timestamp) resumes at the time it encodes. A `Last-Event-ID` that is not
+minted from five seconds before it on (except the cursor's own event), through
+the same filters and access checks, then live events. Replicas consume the
+topics in their own order, so replay goes by when an event was minted rather
+than where it sits in this replica's feed, and the lookback repeats some events
+the client saw: the client drops repeats by id (macrod remembers its last 4,096, as many as the service retains).
+A cursor minted from a timestamp works the same way. A `Last-Event-ID` that is not
 a UUIDv7 is ignored and the stream opens live, never refused. Events older than the
 retention, or published while the process was not consuming, are still missed.
 macrod sends its last seen id on every reconnect, and a floor minted when it

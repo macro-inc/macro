@@ -238,8 +238,10 @@ async fn serve_gateway(listener: TcpListener, plane: Arc<ControlPlane>, ready: A
     }
 }
 
-#[tokio::test]
-async fn a_session_requested_the_instant_the_computer_is_ready_reaches_macrod() {
+/// A daemon whose computer has just reported Ready: its agent is bound and
+/// it has been told so. Returns the control plane and the session creates
+/// the daemon sends.
+async fn computer_ready() -> (Daemon, Arc<ControlPlane>, mpsc::UnboundedReceiver<String>) {
     let gateway = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let storage = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut config: Config = toml::from_str(include_str!("../../../config.example.toml")).unwrap();
@@ -255,7 +257,7 @@ async fn a_session_requested_the_instant_the_computer_is_ready_reaches_macrod() 
         pairing_id: None,
     };
 
-    let (creates, mut created) = mpsc::unbounded_channel();
+    let (creates, created) = mpsc::unbounded_channel();
     let plane = Arc::new(ControlPlane {
         bound: std::sync::atomic::AtomicBool::new(false),
         agents_read: Notify::new(),
@@ -278,20 +280,29 @@ async fn a_session_requested_the_instant_the_computer_is_ready_reaches_macrod() 
     tokio::time::timeout(Duration::from_secs(5), ready.notified())
         .await
         .expect("the runtime connects");
+    (daemon, plane, created)
+}
+
+/// The composer asking `AGENT` for a new session.
+fn session_request(session: AgentSessionId) -> macro_event_broker::Event<AgentTriggerTopicEvent> {
+    macro_event_broker::Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::Requested(AgentSessionRequestedEvent {
+            repo_url: None,
+            bot_id: AGENT,
+            session_id: session,
+            owner: REQUESTER.to_owned(),
+            origin: trigger_context::TriggerOrigin::Unknown,
+            context: None,
+            runtime_user: Some("macro|buyer@example.com".to_owned()),
+        }),
+    ))
+}
+
+#[tokio::test]
+async fn a_session_requested_the_instant_the_computer_is_ready_reaches_macrod() {
+    let (daemon, plane, mut created) = computer_ready().await;
     let session = AgentSessionId::new_from_uuid(Uuid::now_v7());
-    plane.publish(&macro_event_broker::Event::new(
-        AgentTriggerTopicEvent::New(NewAgentSessionEvent::Requested(
-            AgentSessionRequestedEvent {
-                repo_url: None,
-                bot_id: AGENT,
-                session_id: session,
-                owner: REQUESTER.to_owned(),
-                origin: trigger_context::TriggerOrigin::Unknown,
-                context: None,
-                runtime_user: Some("macro|buyer@example.com".to_owned()),
-            },
-        )),
-    ));
+    plane.publish(&session_request(session));
 
     // Well inside the 10 s bound-agent poll: the requester is watching.
     let body = tokio::time::timeout(Duration::from_secs(5), created.recv())
@@ -301,6 +312,38 @@ async fn a_session_requested_the_instant_the_computer_is_ready_reaches_macrod() 
     let create: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(create["id"], session.to_string());
     assert_eq!(create["botId"], AGENT.as_uuid().to_string());
+
+    daemon.stop().await;
+}
+
+/// A resumed stream may repeat events around its cursor, and one served by
+/// another replica may repeat what the last one delivered. Each event is
+/// still handled once.
+#[tokio::test]
+async fn an_event_delivered_twice_is_handled_once() {
+    let (daemon, plane, mut created) = computer_ready().await;
+    let request = session_request(AgentSessionId::new_from_uuid(Uuid::now_v7()));
+    plane.publish(&request);
+    tokio::time::timeout(Duration::from_secs(5), created.recv())
+        .await
+        .expect("the first delivery creates the session")
+        .unwrap();
+
+    plane.publish(&request);
+    let later = AgentSessionId::new_from_uuid(Uuid::now_v7());
+    plane.publish(&session_request(later));
+
+    // In order on one stream: the next create is the later request's.
+    let body = tokio::time::timeout(Duration::from_secs(5), created.recv())
+        .await
+        .expect("the later request creates its session")
+        .unwrap();
+    let create: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        create["id"],
+        later.to_string(),
+        "the repeat was handled again"
+    );
 
     daemon.stop().await;
 }
