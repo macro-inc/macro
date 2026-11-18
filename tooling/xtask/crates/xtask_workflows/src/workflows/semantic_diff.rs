@@ -8,6 +8,12 @@
 //! formatting-only change (a new emitter, reordered keys, re-spelled
 //! expressions) must print `no semantic changes`; anything else is listed by
 //! its YAML path.
+//!
+//! Two more spellings are the same value to GitHub. An action step's `with:`
+//! input is always a string, so `false` and `'false'` there are equal; a
+//! reusable workflow's `with:` stays strict, since its boolean and number
+//! inputs are typed. A trigger under `on:` with no settings reads the same as
+//! `null` or `{}`.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -59,21 +65,43 @@ pub fn diff_file(path: &str, before: Option<&str>, after: Option<&str>) -> Resul
         (Some(before), Some(after)) => {
             let before = parse("base", before)?;
             let after = parse("working tree", after)?;
-            diff_value(path, &before, &after, &mut changes);
+            diff_value(path, &before, &after, Scalars::Typed, &mut changes);
         }
     }
     Ok(changes)
 }
 
+/// How scalars of different YAML types compare.
+#[derive(Clone, Copy)]
+enum Scalars {
+    /// `false`, `'false'` and `0` are all different values.
+    Typed,
+    /// A boolean or number equals its string spelling: an action input,
+    /// which GitHub passes to the action as a string.
+    ActionInput,
+}
+
 /// Walk both trees and record each path where they differ. Mappings compare by
 /// key, so order never counts; sequences compare by position.
-fn diff_value(at: &str, before: &Value, after: &Value, changes: &mut Vec<String>) {
+fn diff_value(
+    at: &str,
+    before: &Value,
+    after: &Value,
+    scalars: Scalars,
+    changes: &mut Vec<String>,
+) {
     match (before, after) {
         (Value::Mapping(before), Value::Mapping(after)) => {
+            let action_step = is_step(at) && (is_action(before) || is_action(after));
             for (key, value) in before {
                 let child = format!("{at}.{}", key_label(key));
+                let scalars = if action_step && key.as_str() == Some("with") {
+                    Scalars::ActionInput
+                } else {
+                    scalars
+                };
                 match after.get(key) {
-                    Some(other) => diff_value(&child, value, other, changes),
+                    Some(other) => diff_value(&child, value, other, scalars, changes),
                     None => changes.push(format!("{child}: removed")),
                 }
             }
@@ -84,7 +112,7 @@ fn diff_value(at: &str, before: &Value, after: &Value, changes: &mut Vec<String>
 
         (Value::Sequence(before), Value::Sequence(after)) => {
             for (index, (left, right)) in before.iter().zip(after).enumerate() {
-                diff_value(&format!("{at}[{index}]"), left, right, changes);
+                diff_value(&format!("{at}[{index}]"), left, right, scalars, changes);
             }
             if before.len() != after.len() {
                 changes.push(format!(
@@ -100,11 +128,54 @@ fn diff_value(at: &str, before: &Value, after: &Value, changes: &mut Vec<String>
         (Value::String(before), Value::String(after))
             if same_expressions(before, after, at.ends_with(".if")) => {}
 
+        _ if matches!(scalars, Scalars::ActionInput)
+            && input_text(before).is_some_and(|text| input_text(after) == Some(text)) => {}
+
+        _ if is_trigger(at) && is_empty_trigger(before) && is_empty_trigger(after) => {}
+
         _ => changes.push(format!(
             "{at}: {} -> {}",
             scalar_label(before),
             scalar_label(after)
         )),
+    }
+}
+
+/// Whether `at` is a step: an item of a job's or composite action's `steps`.
+fn is_step(at: &str) -> bool {
+    at.rsplit_once('.')
+        .is_some_and(|(_, last)| last.starts_with("steps[") && last.ends_with(']'))
+}
+
+/// Whether a step runs an action, published (`owner/repo@ref`) or local
+/// (`./path`), whose `with:` inputs GitHub hands over as strings.
+fn is_action(step: &serde_yaml::Mapping) -> bool {
+    step.get("uses")
+        .and_then(Value::as_str)
+        .is_some_and(|uses| !uses.starts_with("docker://"))
+}
+
+/// The string GitHub passes an action for a scalar input.
+fn input_text(value: &Value) -> Option<String> {
+    match value {
+        Value::String(text) => Some(text.clone()),
+        Value::Bool(flag) => Some(flag.to_string()),
+        Value::Number(number) => Some(number.to_string()),
+        _ => None,
+    }
+}
+
+/// Whether `at` is an event directly under a workflow's `on:`.
+fn is_trigger(at: &str) -> bool {
+    at.rsplit_once('.')
+        .is_some_and(|(parent, _)| parent.ends_with(".on"))
+}
+
+fn is_empty_trigger(value: &Value) -> bool {
+    match value {
+        Value::Null => true,
+        Value::Mapping(settings) => settings.is_empty(),
+        _ => false,
     }
 }
 

@@ -30,12 +30,67 @@ fn changed_added_and_removed_values_are_listed_by_path() {
 
 #[test]
 fn a_string_and_a_boolean_are_different_values() {
-    let before = "with:\n  clean: false\n";
-    let after = "with:\n  clean: 'false'\n";
+    let before = "jobs:\n  a:\n    timeout-minutes: 5\n    env:\n      CLEAN: false\n";
+    let after = "jobs:\n  a:\n    timeout-minutes: '5'\n    env:\n      CLEAN: 'false'\n";
 
     assert_eq!(
         diff_file("w.yml", Some(before), Some(after)).unwrap(),
-        vec!["w.yml.with.clean: false -> \"false\""]
+        vec![
+            "w.yml.jobs.a.timeout-minutes: 5 -> \"5\"",
+            "w.yml.jobs.a.env.CLEAN: false -> \"false\"",
+        ]
+    );
+}
+
+#[test]
+fn an_action_input_equals_its_string_spelling() {
+    let before = "jobs:\n  a:\n    steps:\n    - uses: actions/checkout@abc\n      with:\n        persist-credentials: false\n        fetch-depth: 0\n    - uses: ./.github/actions/setup-rust\n      with:\n        rust-cache: true\n";
+    let same = "jobs:\n  a:\n    steps:\n    - uses: actions/checkout@abc\n      with:\n        persist-credentials: 'false'\n        fetch-depth: '0'\n    - uses: ./.github/actions/setup-rust\n      with:\n        rust-cache: 'true'\n";
+    let changed = "jobs:\n  a:\n    steps:\n    - uses: actions/checkout@abc\n      with:\n        persist-credentials: 'true'\n        fetch-depth: '1'\n    - uses: ./.github/actions/setup-rust\n      with:\n        rust-cache: 'false'\n";
+
+    assert_eq!(
+        diff_file("w.yml", Some(before), Some(same)).unwrap(),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        diff_file("w.yml", Some(before), Some(changed)).unwrap(),
+        vec![
+            "w.yml.jobs.a.steps[0].with.persist-credentials: false -> \"true\"",
+            "w.yml.jobs.a.steps[0].with.fetch-depth: 0 -> \"1\"",
+            "w.yml.jobs.a.steps[1].with.rust-cache: true -> \"false\"",
+        ]
+    );
+}
+
+#[test]
+fn a_reusable_workflow_input_keeps_its_type() {
+    let before =
+        "jobs:\n  a:\n    uses: ./.github/workflows/deploy.yml\n    with:\n      notify: true\n";
+    let after =
+        "jobs:\n  a:\n    uses: ./.github/workflows/deploy.yml\n    with:\n      notify: 'true'\n";
+
+    assert_eq!(
+        diff_file("w.yml", Some(before), Some(after)).unwrap(),
+        vec!["w.yml.jobs.a.with.notify: true -> \"true\""]
+    );
+}
+
+#[test]
+fn an_empty_trigger_is_null_or_an_empty_mapping() {
+    let before = "on:\n  workflow_dispatch:\n  push:\n    branches: [main]\n";
+    let same = "on:\n  workflow_dispatch: {}\n  push:\n    branches: [main]\n";
+    let changed = "on:\n  workflow_dispatch:\n    inputs: {}\n  push: {}\n";
+
+    assert_eq!(
+        diff_file("w.yml", Some(before), Some(same)).unwrap(),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        diff_file("w.yml", Some(before), Some(changed)).unwrap(),
+        vec![
+            "w.yml.on.workflow_dispatch: null -> {\"inputs\":{}}",
+            "w.yml.on.push.branches: removed",
+        ]
     );
 }
 
