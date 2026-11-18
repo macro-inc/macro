@@ -443,14 +443,14 @@ Use entity handles for thread/contact/company selectors in public SDK methods;
 UUIDs belong to the wire transport. Follow operation-category and generated-verb
 registration conventions. Do not add a separate code-mode toolset.
 
-| Proposed method | Contract |
+| SDK method | Contract |
 | --- | --- |
-| `get()` | Caller-only consent/mode, exact mailbox, active definition and observed-state token. Always read-only; compose applicable exclusions from the existing privacy API and resolve live record details only when record access permits. |
+| `get()` | Caller-only consent/mode, exact mailbox, active definition and observed-state token. Always read-only. Read domain exclusions separately with `settings()` and private exceptions with `excludedThreads()`; creating target handles fetches no record details. |
 | `validateRules(input)` | Authorize and canonicalize; return current live resolution, warnings and field errors. No grant and no mailbox content. |
 | `replaceRules(input, {ifPolicy, idempotencyKey})` | Directly activate a validated replacement for the authenticated member using the exact opaque observation. Initialize legacy identity only in this mutation; return the new token, revision, audit event and whole-thread/live effects. No human approval token. |
 | `previewRules(input, {ifPolicy, ifPreview})` | Start a bounded asynchronous comparison for the caller's mailbox, including before consent exists. Compare the observed policy and current preview slot; return a handle without initializing contribution. Repeat validation at activation. |
 | `preview.get()` | Status, as-of time/context and distinct counts: current, proposed, added, removed, retained and denied; no IDs, subjects, participants or bodies. |
-| `history({cursor})` / `revision.get()` | Owner-only fifty-event keyset history of actor, revision references, live-source events and resulting state; fetch one immutable definition separately. |
+| `history()` / `revision.get()` | Owner-only fifty-event keyset history of actor, revision references, live-source events and resulting state; fetch one immutable definition separately. |
 | Existing consent/domain/thread methods | Reuse the privacy-settings/exclusion APIs; modern mode transitions use the same CAS/audit domain path. |
 
 Counts concern only the caller's mailbox-local copies. Denied counts are proposed
@@ -610,10 +610,15 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    compatibility. The unmatched discovery bound and million-thread mailbox tier
    remain required PR 5 activation gates, not substitutes for these contracts.
 
-4. **SDK and member settings.** Read/validate/replace/preview/history methods,
-   code-mode guidance, readable rules/JSON edit/history/withdrawal UI, default-off
-   registry entry and responsive presentation. Coordinate with the existing
-   privacy SDK task. Depends on PR 3; regenerate storage SDK conflicts.
+4. **SDK and member settings.** Split delivery into SDK wrappers and an approved
+   UI change. The SDK exposes read/validate/replace/preview/history/withdrawal,
+   existing consent/domain/thread controls, generated contracts and code-mode
+   guidance in `macro.crm.emailPrivacy`; existing team-domain methods stay on
+   `macro.crm`. Policy writes carry exact tokens and caller-owned retry keys.
+   Prepare readable rules, JSON edit, counts, history and withdrawal as a desktop
+   and phone proposal grounded in the existing privacy rows; implement the UI
+   only after approval. Keep the server gate unchanged and default-off. Depends
+   on PR 3; regenerate storage SDK conflicts.
 5. **Rollout hardening and readiness.** Integration/parity/performance tests,
    mixed-version drills, mixed sparse/dense policies across contributors,
    concurrent source edits/backfill recovery, flag-off and
@@ -644,7 +649,7 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
 
 No further product decision is required to begin the foundation. Verify actual
 mailbox/rule/live-target distributions before setting rollout budgets; the sizes
-above are assumptions. Confirm credential provenance available for agent audit
-and the privacy SDK task's final names. None requires a member-only approval
+above are assumptions. Credential provenance and SDK names are now defined by the own-member API
+and `macro.crm.emailPrivacy`. None requires a member-only approval
 capability. The separate cutoff and CRM-access projects retain ownership of
 their product boundaries.
