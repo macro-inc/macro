@@ -728,17 +728,19 @@ where
             return Ok(());
         };
 
-        // An explicit, validated identity must never be retargeted to a newer
-        // reply draft by a delayed save from an obsolete composer.
+        // A resolved identity already identifies the reply being saved.
         if input.db_id.is_some() {
             return Ok(());
         }
-        // The draft replying to this message lives in the inbox being sent from.
-        if let Some(existing_draft) = self
-            .email_repo
-            .get_draft_replying_to(link_id, reply_target.db_id)
-            .await
-            .map_err(anyhow::Error::from)?
+        // Only callers without a handle use the reply target to find their
+        // draft. A handle identifies its own working copy, even if Undo
+        // has just restored a different draft for the same target.
+        if input.draft_client_binding.is_none()
+            && let Some(existing_draft) = self
+                .email_repo
+                .get_draft_replying_to(link_id, reply_target.db_id)
+                .await
+                .map_err(anyhow::Error::from)?
         {
             self.apply_existing_draft(input, existing_draft);
         } else {
