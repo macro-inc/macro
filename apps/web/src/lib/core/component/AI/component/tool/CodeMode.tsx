@@ -21,14 +21,17 @@ export const readCodeDocsHandler = createToolRenderer({
 export const executeCodeHandler = createToolRenderer({
   name: 'ExecuteCode',
   render: (ctx) => {
+    // Nothing names what the run does, so the row says only how far it got.
     // A failed or stopped run has no response but has still ended.
-    const ended = () =>
-      ctx.response !== undefined || useToolError() !== undefined;
+    const label = () => {
+      const error = useToolError();
+      if (error?.kind === 'failed') return 'A step failed';
+      if (ctx.response !== undefined || error) return 'Finished a step';
+      return 'Working on it';
+    };
     return (
       <BaseTool icon={Sparkle} renderContext={ctx.renderContext} type="call">
-        <span class="flex-1">
-          {ended() ? 'Worked in your workspace' : 'Working in your workspace'}
-        </span>
+        <span class="flex-1">{label()}</span>
       </BaseTool>
     );
   },

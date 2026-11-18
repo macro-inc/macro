@@ -423,7 +423,7 @@ export function AssistantMessageParts(props: {
       if (part.type === 'mcpToolCall') {
         return part.display_name ?? `${part.service} / ${part.name}`;
       }
-      if (part.name === 'ExecuteCode') return 'Working in your workspace';
+      if (part.name === 'ExecuteCode') return 'Working on it';
       return part.name;
     });
 

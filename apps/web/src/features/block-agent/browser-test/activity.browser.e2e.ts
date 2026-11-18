@@ -86,6 +86,8 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
   expect(seen.said).toContain('Thinking');
   expect(seen.said).toContain('Searching documents hosting invoice');
   expect(seen.said).toContain('Read spreadsheet');
+  // A program before the record poll saw any operation says only that it runs.
+  expect(seen.said).toContain('Working on it');
   expect(seen.said.length).toBeGreaterThan(5);
 
   // Settled: each run is one row, with the long run's failures counted.

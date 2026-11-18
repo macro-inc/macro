@@ -3,7 +3,7 @@ import type { Component, JSX, ParentProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
 import { executeCodeHandler } from './CodeMode';
-import { ToolErrorContext } from './ToolRenderer';
+import { type ToolEnding, ToolErrorContext } from './ToolRenderer';
 
 vi.mock('@ui', () => ({
   Layer: (props: ParentProps) => props.children,
@@ -16,16 +16,15 @@ vi.mock('@ui', () => ({
 
 afterEach(cleanup);
 
-it('settles a failed workspace run that has no response', () => {
+function renderRun(props: { response?: unknown; ending?: ToolEnding }) {
   render(() => (
-    <ToolErrorContext.Provider
-      value={() => ({ kind: 'failed', reason: 'The program threw' })}
-    >
+    <ToolErrorContext.Provider value={() => props.ending}>
       <Dynamic
         component={
           executeCodeHandler.render as Component<Record<string, unknown>>
         }
         tool={{ name: 'ExecuteCode', data: { source: 'main' } }}
+        response={props.response}
         renderContext={{
           isStreaming: false,
           grouped: false,
@@ -34,6 +33,25 @@ it('settles a failed workspace run that has no response', () => {
       />
     </ToolErrorContext.Provider>
   ));
-  expect(screen.getByText('Worked in your workspace')).toBeTruthy();
-  expect(screen.queryByText('Working in your workspace')).toBeNull();
+}
+
+it('reads a workspace run that has not ended as working', () => {
+  renderRun({});
+  expect(screen.getByText('Working on it')).toBeTruthy();
+});
+
+it('reads a workspace run with a response as a finished step', () => {
+  renderRun({ response: { status: 'succeeded' } });
+  expect(screen.getByText('Finished a step')).toBeTruthy();
+});
+
+it('reads a stopped workspace run as a finished step', () => {
+  renderRun({ ending: { kind: 'stopped' } });
+  expect(screen.getByText('Finished a step')).toBeTruthy();
+});
+
+it('settles a failed workspace run that has no response', () => {
+  renderRun({ ending: { kind: 'failed', reason: 'The program threw' } });
+  expect(screen.getByText('A step failed')).toBeTruthy();
+  expect(screen.queryByText('Working on it')).toBeNull();
 });

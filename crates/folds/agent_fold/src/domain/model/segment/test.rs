@@ -161,7 +161,7 @@ fn code_without_observed_requests_reads_as_workspace_work() {
         segments(&[part], true)[0].rows,
         [ActivityRow {
             id: "code-2".to_owned(),
-            label: "Worked in your workspace".to_owned(),
+            label: "Finished a step".to_owned(),
             detail: None,
             status: ActivityStatus::Completed,
             card: None,
@@ -186,10 +186,7 @@ fn code_through_the_public_server_reads_as_workspace_work() {
             error: None,
         },
     };
-    assert_eq!(
-        segments(&[part], true)[0].rows[0].label,
-        "Worked in your workspace"
-    );
+    assert_eq!(segments(&[part], true)[0].rows[0].label, "Finished a step");
 }
 
 #[test]
@@ -247,7 +244,7 @@ fn code_mode_lookups_are_not_steps() {
 }
 
 #[test]
-fn an_unfinished_or_failed_code_run_still_reads_as_workspace_work() {
+fn a_code_run_with_no_steps_says_only_how_far_it_got() {
     let code = |status: ToolStatus| MessagePart::ToolUse {
         id: ToolUseId("code-3".into()),
         name: ToolName::Mcp {
@@ -267,21 +264,15 @@ fn an_unfinished_or_failed_code_run_still_reads_as_workspace_work() {
     };
     assert_eq!(
         row(ToolStatus::Running, false),
-        (
-            "Working in your workspace".to_owned(),
-            ActivityStatus::Running
-        )
+        ("Working on it".to_owned(), ActivityStatus::Running)
     );
     assert_eq!(
         row(ToolStatus::Running, true),
-        (
-            "Worked in your workspace".to_owned(),
-            ActivityStatus::Interrupted
-        )
+        ("Finished a step".to_owned(), ActivityStatus::Interrupted)
     );
     assert_eq!(
         row(ToolStatus::Failed, true),
-        ("Workspace step failed".to_owned(), ActivityStatus::Failed)
+        ("A step failed".to_owned(), ActivityStatus::Failed)
     );
 }
 

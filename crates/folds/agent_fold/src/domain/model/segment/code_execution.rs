@@ -8,6 +8,17 @@ use serde::Deserialize;
 
 use super::{ActivityRow, ActivityStatus, ToolDetail, ToolName, ToolStatus};
 
+/// The row of a code execution with no workspace steps to show, while it runs.
+const WORKING: &str = "Working on it";
+/// The same row once the execution ended without failing.
+const FINISHED: &str = "Finished a step";
+/// The same row once the execution failed.
+const FAILED: &str = "A step failed";
+
+/// Labels of a code-execution row that names no workspace step. They say
+/// nothing about the work, and the live status line is told so.
+pub const UNNAMED_STEP_LABELS: [&str; 3] = [WORKING, FINISHED, FAILED];
+
 /// The agent looking up its own tools: code-mode discovery and deferred-tool
 /// search. Like a thought, it belongs to no segment and makes no row.
 const LOOKUP_TOOLS: [&str; 4] = [
@@ -98,16 +109,15 @@ fn operations(detail: &ToolDetail) -> Option<Vec<Operation>> {
 }
 
 /// A code execution with no workspace steps to show yet, or none at all.
+/// Nothing names what it does, so the row only says how far it got.
 fn workspace_row(id: &str, status: ToolStatus, closed: bool) -> ActivityRow {
     let (label, status) = match status {
         ToolStatus::Pending | ToolStatus::Running if closed => {
-            ("Worked in your workspace", ActivityStatus::Interrupted)
+            (FINISHED, ActivityStatus::Interrupted)
         }
-        ToolStatus::Pending | ToolStatus::Running => {
-            ("Working in your workspace", ActivityStatus::Running)
-        }
-        ToolStatus::Completed => ("Worked in your workspace", ActivityStatus::Completed),
-        ToolStatus::Failed => ("Workspace step failed", ActivityStatus::Failed),
+        ToolStatus::Pending | ToolStatus::Running => (WORKING, ActivityStatus::Running),
+        ToolStatus::Completed => (FINISHED, ActivityStatus::Completed),
+        ToolStatus::Failed => (FAILED, ActivityStatus::Failed),
     };
     ActivityRow {
         id: id.to_owned(),
