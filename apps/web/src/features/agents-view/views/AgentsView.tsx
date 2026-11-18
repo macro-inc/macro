@@ -253,6 +253,10 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   let composerFocus: (() => void) | undefined;
   const showComposer = () => {
     setMobileList(false);
+    if (mobileLayout() && page() !== 'new') {
+      panel.handle.replace({ next: { type: 'component', id: 'agents' } });
+      return;
+    }
     if (panel.handle.content().id !== 'agents') {
       panel.handle.replace({ next: { type: 'component', id: 'agents' } });
       return;
@@ -299,7 +303,12 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           // this entry, which is when entry state is otherwise captured.
           panel.handle.captureEntryState();
         }
-        showComposer();
+        if (mobileLayout() && content.id === 'agents') {
+          setSelected(undefined);
+          setPage('new');
+          setMobileList(false);
+          composerFocus?.();
+        } else showComposer();
       }
     )
   );
@@ -311,6 +320,17 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
         handle: panel.handle,
         activate: true,
         search: {},
+      });
+      return;
+    }
+    if (mobileLayout()) {
+      panel.handle.replace({
+        next: {
+          type: 'component',
+          id: 'agents',
+          preserveParams: true,
+          params: { agentPage: next, agentPageRequest: crypto.randomUUID() },
+        },
       });
       return;
     }
@@ -329,6 +349,37 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     setSelected(undefined);
     setPage(next);
   };
+  // A history entry owns the mobile page. Restoring it never opens a new entry.
+  createEffect(
+    on(
+      () => panel.handle.content(),
+      (content) => {
+        if (!mobileLayout()) return;
+        const next =
+          content.type === 'component' && content.id === 'routines'
+            ? 'routines'
+            : content.type === 'component' && content.id === 'agents'
+              ? (parseAgentsPage(content.params?.agentPage) ?? 'new')
+              : 'new';
+        setSelected(undefined);
+        setPage(next);
+        setMobileList(
+          next === 'new' &&
+            !(content.type === 'component' && content.params?.focusComposer)
+        );
+        setCreatingKind(undefined);
+        if (next === 'new' && content.type === 'component') {
+          const agent = content.params?.composerAgentId;
+          const request = content.params?.agentPageRequest;
+          if (typeof agent === 'string' && typeof request === 'string') {
+            workspace.setMode('code');
+            setRequestedAgent({ agentId: agent, request });
+            setMobileList(false);
+          }
+        }
+      }
+    )
+  );
   createEffect(
     on(
       () => {
@@ -338,6 +389,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           : undefined;
       },
       () => {
+        if (mobileLayout()) return;
         const content = panel.handle.content();
         if (content.type !== 'component') return;
         const next = parseAgentsPage(content.params?.agentPage);
@@ -424,6 +476,14 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       });
       return { ...current, activeConversationId: sessionId };
     });
+  };
+  const backToPreviousPage = () => {
+    if (panel.handle.canGoBack()) panel.handle.goBack();
+    else
+      panel.handle.replace({
+        next: { type: 'component', id: 'agents' },
+        mergeHistory: true,
+      });
   };
   const pageTitle = () => {
     if (page() === 'routines') return 'Routines';
@@ -633,9 +693,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                     >
                       <Topbar
                         title={pageTitle()}
-                        onBack={
-                          mobileLayout() ? () => setMobileList(true) : undefined
-                        }
+                        onBack={mobileLayout() ? backToPreviousPage : undefined}
                       />
                     </Show>
                     <div class="body">
@@ -823,8 +881,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                     next === 'new' ? setMobileList(true) : openSidebarPage(next)
                   }
                   onBack={() => {
-                    setPage('new');
-                    setMobileList(true);
+                    backToPreviousPage();
                     setArchivedSearch('');
                   }}
                   onOpenConversation={openListedConversation}

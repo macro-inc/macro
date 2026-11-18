@@ -53,6 +53,12 @@ const state = vi.hoisted(() => ({
   },
   draft: { read: (): string => '', write: (_draft: string) => {} },
   navigate: { current: (_id: string) => {} },
+  replace: { current: (_next: FakeEntry['content']) => {} },
+  back: { current: () => {} },
+  canGoBack: { current: (): boolean => false },
+  open: {
+    current: (_next: { id: string; params?: Record<string, unknown> }) => {},
+  },
   loads: new Map<string, (name: string) => void>(),
   mounts: [] as string[],
   pass: (props: ParentProps) => props.children,
@@ -95,7 +101,8 @@ vi.mock('@components/app/previewTarget', () => ({
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({
-    openWithSplit: (next: { id: string }) => {
+    openWithSplit: (next: { id: string; params?: Record<string, unknown> }) => {
+      state.open.current(next);
       state.navigate.current(next.id);
       return { status: 'replaced' };
     },
@@ -117,6 +124,10 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
         return () => state.captors.delete(key);
       },
       setDisplayName: () => {},
+      replace: ({ next }: { next: FakeEntry['content'] }) =>
+        state.replace.current(next),
+      goBack: () => state.back.current(),
+      canGoBack: () => state.canGoBack.current(),
     },
   }),
 }));
@@ -150,9 +161,6 @@ vi.mock('@queries/agent-session/warm', () => ({
 }));
 vi.mock('@queries/soup/items', () => ({
   useSoupAstItemsQuery: () => ({ isPending: true }),
-}));
-vi.mock('../../routines/routine-navigation', () => ({
-  routineContent: () => ({}),
 }));
 vi.mock('../../routines/routines-page', () => ({ RoutinesPage: () => null }));
 vi.mock('../agents-view.css', () => ({}));
@@ -196,7 +204,32 @@ vi.mock('./agents-sidebar/agents-sidebar', async () => ({
   DesktopAgentsSidebar: (await import('../components/AgentsSidebar'))
     .AgentsSidebar,
 }));
-vi.mock('../phone-list', () => ({ PhoneAgentsList: () => null }));
+vi.mock('../phone-list', () => ({
+  PhoneAgentsList: (props: {
+    archived: boolean;
+    onOpenPage: (page: 'archived' | 'agents' | 'routines') => void;
+    onBack: () => void;
+    onOpenConversation: (conversation: {
+      id: string;
+      type: 'agent_session';
+    }) => void;
+  }) => (
+    <div>
+      <span>{props.archived ? 'Archived page' : 'Agents list'}</span>
+      <button onClick={() => props.onOpenPage('archived')}>Archived</button>
+      <button onClick={() => props.onOpenPage('agents')}>Roster</button>
+      <button onClick={() => props.onOpenPage('routines')}>Routines</button>
+      <button
+        onClick={() =>
+          props.onOpenConversation({ id: 'session', type: 'agent_session' })
+        }
+      >
+        Session
+      </button>
+      <button onClick={props.onBack}>List back</button>
+    </div>
+  ),
+}));
 vi.mock('./archived-conversations/archived-conversations', () => ({
   ArchivedConversations: () => null,
 }));
@@ -316,6 +349,10 @@ beforeEach(() => {
   state.contentId.current = 'agents';
   state.entry.current = undefined;
   state.captors.clear();
+  state.replace.current = () => {};
+  state.back.current = () => {};
+  state.canGoBack.current = () => false;
+  state.open.current = () => {};
   setComposerDraft('');
   state.loads.clear();
   state.mounts.length = 0;
@@ -476,4 +513,138 @@ it('asks the composer for the agent a Try it opened it with, once per request', 
 
   setCurrent(tryIt('request-2'));
   expect(composer().dataset.requestedAgent).toBe('computer-agent@request-2');
+});
+
+it.each([
+  ['Archived', 'Archived page'],
+  ['Roster', 'Agents'],
+  ['Routines', 'Routines'],
+] as const)(
+  'returns from %s to the previous Agents list entry',
+  (label, page) => {
+    state.touch = true;
+    state.width = () => 390;
+    const first: FakeEntry = { content: { type: 'component', id: 'agents' } };
+    const [entry, setEntry] = createSignal(first);
+    state.entry.current = entry;
+    const history = [first];
+    state.replace.current = (next) => {
+      const item = { content: next };
+      history.push(item);
+      setEntry(item);
+    };
+    state.open.current = (next) => {
+      const item = { content: { type: 'component' as const, ...next } };
+      history.push(item);
+      setEntry(item);
+    };
+    state.canGoBack.current = () => history.length > 1;
+    state.back.current = () => {
+      history.pop();
+      setEntry(history.at(-1)!);
+    };
+    render(() => <AgentsView />);
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    if (label === 'Archived') expect(screen.getByText(page)).toBeTruthy();
+    else
+      expect(entry().content.id).toBe(
+        label === 'Routines' ? 'routines' : 'agents'
+      );
+    expect(history).toHaveLength(2);
+    if (label === 'Archived')
+      fireEvent.click(screen.getByRole('button', { name: 'List back' }));
+    else state.back.current();
+    expect(screen.getByText('Agents list')).toBeTruthy();
+    expect(history).toHaveLength(1);
+  }
+);
+
+it('returns from an agent page to Archived without pushing a restoration entry', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const [entry, setEntry] = createSignal<FakeEntry>({
+    content: { type: 'component', id: 'agents' },
+  });
+  state.entry.current = entry;
+  const history: FakeEntry[] = [entry()];
+  state.replace.current = (next) => {
+    const item = { content: next };
+    history.push(item);
+    setEntry(item);
+  };
+  state.back.current = () => {
+    history.pop();
+    setEntry(history.at(-1)!);
+  };
+  state.canGoBack.current = () => history.length > 1;
+  render(() => <AgentsView />);
+  fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Roster' }));
+  state.back.current();
+  expect(screen.getByText('Archived page')).toBeTruthy();
+  expect(history).toHaveLength(2);
+});
+
+it('opens a session from Archived with its previous page still in the stack', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const [entry, setEntry] = createSignal<FakeEntry>({
+    content: { type: 'component', id: 'agents' },
+  });
+  state.entry.current = entry;
+  const history: FakeEntry[] = [entry()];
+  state.replace.current = (next) => {
+    const item = { content: next };
+    history.push(item);
+    setEntry(item);
+  };
+  state.open.current = (next) => {
+    const item = { content: { type: 'component' as const, ...next } };
+    history.push(item);
+  };
+  render(() => <AgentsView />);
+  fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Session' }));
+  expect(history.map((item) => item.content.id)).toEqual([
+    'agents',
+    'agents',
+    'session',
+  ]);
+  // The phone stack returns to the still-mounted Archived pane.
+  expect(screen.getByText('Archived page')).toBeTruthy();
+});
+
+it('restores a phone composer request without replacing its history entry', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const asked = composerEntry('phone-request', '@message ');
+  state.entry.current = () => asked;
+  const replace = vi.fn();
+  state.replace.current = replace;
+  render(() => <AgentsView />);
+  expect(composer().value).toBe('@message ');
+  expect(screen.queryByText('Agents list')).toBeNull();
+  expect(replace).not.toHaveBeenCalled();
+});
+
+it('replaces a direct Archived entry with the list when no earlier page exists', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const [entry, setEntry] = createSignal<FakeEntry>({
+    content: {
+      type: 'component',
+      id: 'agents',
+      params: { agentPage: 'archived' },
+    },
+  });
+  state.entry.current = entry;
+  const replace = vi.fn((next: FakeEntry['content']) =>
+    setEntry({ content: next })
+  );
+  state.replace.current = replace;
+  render(() => <AgentsView />);
+  expect(screen.getByText('Archived page')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'List back' }));
+  expect(screen.getByText('Agents list')).toBeTruthy();
+  expect(replace).toHaveBeenCalledWith({ type: 'component', id: 'agents' });
 });

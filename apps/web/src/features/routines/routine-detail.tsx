@@ -16,6 +16,7 @@ import {
   enableRoutineSharing,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
@@ -69,8 +70,11 @@ export function RoutineDetail(props: {
   const hasPaidAccess = useHasPaidAccess();
   const sharing = useFeatureFlag(enableRoutineSharing);
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
-  const back = () =>
-    props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
+  const back = () => {
+    if (props.onBack) props.onBack();
+    else if (isTouchDevice() && panel.handle.canGoBack()) panel.handle.goBack();
+    else openAgentsPage(layout, 'routines');
+  };
   const open = (id: string) =>
     props.onOpen
       ? props.onOpen(id)

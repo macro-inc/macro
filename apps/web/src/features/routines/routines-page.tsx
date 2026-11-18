@@ -98,7 +98,11 @@ function RoutinesContent() {
         <RoutinesListView
           mobileHeader={(focusSearch) => (
             <MobileRoutinesListHeader
-              onBack={() => openAgentsPage(layout, 'new')}
+              onBack={() =>
+                panel.handle.canGoBack()
+                  ? panel.handle.goBack()
+                  : openAgentsPage(layout, 'new')
+              }
               onSearch={focusSearch}
               onCreate={create}
             />
@@ -121,12 +125,30 @@ function RoutinesContent() {
         <Show
           when={id !== 'new'}
           fallback={
-            <RoutineNew onCreated={(id) => open(id)} onCancel={() => open()} />
+            <RoutineNew
+              onCreated={(id) =>
+                layout.openWithSplit(routineContent(id), {
+                  handle: panel.handle,
+                  activate: true,
+                  search: {},
+                  mergeHistory: isTouchDevice(),
+                })
+              }
+              onCancel={() =>
+                isTouchDevice() && panel.handle.canGoBack()
+                  ? panel.handle.goBack()
+                  : open()
+              }
+            />
           }
         >
           <RoutineDetail
             scheduleId={id}
-            onBack={() => open()}
+            onBack={() =>
+              isTouchDevice() && panel.handle.canGoBack()
+                ? panel.handle.goBack()
+                : open()
+            }
             onOpen={(id) => open(id)}
           />
         </Show>
