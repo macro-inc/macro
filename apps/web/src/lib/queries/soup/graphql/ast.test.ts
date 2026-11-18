@@ -595,6 +595,46 @@ describe('makeGraphqlSoupInput', () => {
     ).toThrow('Unsupported GraphQL Soup AST');
   });
 
+  it('maps the notified_at sort to NOTIFIED_AT, newest first only', () => {
+    const body = compileToAst(queryStateFrom({}));
+    expect(
+      makeGraphqlSoupInput({
+        params: {
+          limit: 100,
+          sort_method: 'notified_at',
+          sort_direction: 'desc',
+        },
+        body,
+      })
+    ).toMatchObject({
+      initial: { sortMethod: 'NOTIFIED_AT', sortDirection: 'DESC' },
+    });
+    expect(() =>
+      makeGraphqlSoupInput({
+        params: {
+          limit: 100,
+          sort_method: 'notified_at',
+          sort_direction: 'asc',
+        },
+        body,
+      })
+    ).toThrow('Unsupported GraphQL Soup AST');
+  });
+
+  it('groups a notified_at feed by update time, as the REST grouped endpoint does', () => {
+    expect(
+      makeGraphqlGroupedSoupInput({
+        params: {
+          limit: 25,
+          sort_method: 'notified_at',
+          sort_direction: 'desc',
+        },
+        body: compileToAst(queryStateFrom({})),
+        groupBy: { type: 'entity_type' },
+      }).initial?.sortMethod
+    ).toBe('UPDATED_AT');
+  });
+
   it('throws for invalid call statuses so callers can fall back', () => {
     expect(() =>
       makeGraphqlSoupInput({

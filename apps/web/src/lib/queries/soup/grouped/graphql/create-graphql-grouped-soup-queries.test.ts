@@ -16,6 +16,7 @@ const mapGraphqlGroupedSoupPageMock = vi.hoisted(() =>
 );
 
 vi.mock('@queries/soup/grouped/api', () => ({
+  groupedSortMethod: (sort: string | undefined) => sort,
   makeGroupComparator: () => (left: { key: string }, right: { key: string }) =>
     left.key.localeCompare(right.key),
   resolveGroupMetaForKey: (_field: unknown, key: string) => ({

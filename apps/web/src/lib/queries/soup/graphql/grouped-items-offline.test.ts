@@ -32,6 +32,7 @@ vi.mock('../transform-utils', () => ({
   mapSoupPageToEntityList: (page: { items: unknown[] }) => page.items,
 }));
 vi.mock('../grouped/api', () => ({
+  groupedSortMethod: (sort: string | undefined) => sort,
   makeGroupComparator: () => () => 0,
   resolveGroupMetaForKey: () => undefined,
 }));
