@@ -24144,6 +24144,7 @@ dependencies = [
  "indicatif",
  "indoc",
  "jsonwebtoken 10.3.0",
+ "lazy-regex",
  "libc",
  "macro_aws_config",
  "macro_env_var",
