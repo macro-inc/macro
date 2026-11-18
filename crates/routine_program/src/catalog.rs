@@ -93,6 +93,10 @@ pub struct CatalogRoutine {
     /// Offered as a suggestion from Macro, unpicked, to fill a surface's
     /// suggestions; otherwise only AI may suggest it, with its knobs filled.
     pub suggest: bool,
+    /// Its code step is one of the drafter's worked examples. Each one
+    /// lengthens the drafter's prompt, so mark one only with the drafting
+    /// eval run (`crates/scheduled_action/bench`).
+    pub example: bool,
 }
 
 /// Every catalog routine, in the order templates are offered.
@@ -119,6 +123,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: true,
             template: true,
             suggest: true,
+            example: true,
         },
         CatalogRoutine {
             key: "triage",
@@ -141,6 +146,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: true,
             template: true,
             suggest: true,
+            example: true,
         },
         CatalogRoutine {
             key: "brief",
@@ -157,6 +163,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "updates",
@@ -187,6 +194,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: false,
+            example: true,
         },
         CatalogRoutine {
             key: "stuck",
@@ -203,6 +211,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "email_tags",
@@ -235,6 +244,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: true,
             template: true,
             suggest: true,
+            example: true,
         },
         CatalogRoutine {
             key: "document_tags",
@@ -257,6 +267,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: true,
             template: true,
             suggest: true,
+            example: true,
         },
         CatalogRoutine {
             key: "call_tasks",
@@ -273,6 +284,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "pipeline",
@@ -289,6 +301,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "mentions",
@@ -305,6 +318,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "pull_requests",
@@ -327,6 +341,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "agent_digest",
@@ -343,6 +358,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "task_routing",
@@ -359,6 +375,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: false,
+            example: false,
         },
         CatalogRoutine {
             key: "project_hygiene",
@@ -375,6 +392,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "weekly_wrap",
@@ -391,6 +409,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "project_update",
@@ -407,6 +426,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "date_changes",
@@ -429,6 +449,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: false,
+            example: false,
         },
         CatalogRoutine {
             key: "prd_tasks",
@@ -451,6 +472,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: false,
+            example: false,
         },
         CatalogRoutine {
             key: "recurring_task",
@@ -476,6 +498,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: false,
+            example: false,
         },
         CatalogRoutine {
             key: "team_progress",
@@ -492,6 +515,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "blockers",
@@ -508,6 +532,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: false,
+            example: false,
         },
         CatalogRoutine {
             key: "reply_drafts",
@@ -533,6 +558,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "archive_noise",
@@ -558,6 +584,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: false,
+            example: false,
         },
         CatalogRoutine {
             key: "cold_outreach",
@@ -583,6 +610,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "email_tasks",
@@ -607,6 +635,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "needs_reply",
@@ -623,6 +652,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "end_of_day",
@@ -639,6 +669,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "delegated",
@@ -655,6 +686,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "promises",
@@ -671,6 +703,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "newsletters",
@@ -687,6 +720,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "reconnect",
@@ -703,6 +737,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "meeting_brief",
@@ -719,6 +754,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "one_on_one_prep",
@@ -735,6 +771,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "meeting_agenda",
@@ -751,6 +788,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "week_ahead",
@@ -767,6 +805,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "focus_time",
@@ -783,6 +822,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "call_followups",
@@ -808,6 +848,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "call_recap",
@@ -830,6 +871,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "decision_log",
@@ -854,6 +896,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: false,
+            example: false,
         },
         CatalogRoutine {
             key: "channel_answers",
@@ -876,6 +919,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: false,
+            example: false,
         },
         CatalogRoutine {
             key: "approvals",
@@ -900,6 +944,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "channel_digest",
@@ -916,6 +961,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "customer_followups",
@@ -938,6 +984,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: true,
+            example: false,
         },
         CatalogRoutine {
             key: "questionnaire",
@@ -960,6 +1007,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: true,
             suggest: false,
+            example: false,
         },
         // Offered to the drafter only, as the example of question knobs.
         CatalogRoutine {
@@ -987,6 +1035,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             safe_default: false,
             template: false,
             suggest: true,
+            example: true,
         },
     ]
 });

@@ -1128,7 +1128,7 @@ fn task(request: &DraftRequest, program: &[Step], code: bool) -> Result<String, 
     })
 }
 
-/// Macro's catalog routines that are code, as worked examples of whole
+/// Macro's catalog routines marked `example`, as worked examples of whole
 /// routines: what someone asked for, and the trigger and step that do it.
 /// Their code type-checks against the SDK (the harness's real-Deno tests).
 fn catalog_examples(conditions: bool) -> String {
@@ -1136,6 +1136,7 @@ fn catalog_examples(conditions: bool) -> String {
         .iter()
         // A routine whose trigger asks a condition is no example where
         // triggers can't.
+        .filter(|routine| routine.example)
         .filter(|routine| conditions || !asks_condition(&routine.trigger))
         .filter_map(|routine| {
             let step = serde_json::to_value(Step::Code(routine.code.clone()?)).ok()?;

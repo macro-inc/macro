@@ -513,6 +513,15 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         prompt.contains(&format!("<request>{}</request>", inbox.request)),
         "{prompt}"
     );
+    // Only the ones marked as examples: the rest would lengthen the prompt.
+    for routine in routine_program::CATALOG.iter() {
+        assert_eq!(
+            prompt.contains(&format!("<request>{}</request>", routine.request)),
+            routine.example,
+            "{}",
+            routine.key
+        );
+    }
     assert!(drafted.created.is_empty());
     // The session and its row are gone once the draft is back.
     let session = prepared.session_id;
