@@ -54,6 +54,7 @@ pub enum OpensearchOperation {
     EmailDeleteTask,
     RunningEmailLinkDeletes,
     DeleteEmailMessages,
+    DeleteEmailMessageById,
     DeleteEmailMessageOutsideThread,
     RefreshEmailIndex,
     DeleteEmailByUserId,
