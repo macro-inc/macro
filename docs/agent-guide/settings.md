@@ -308,7 +308,9 @@ once used), then the code field with **Complete sign-in**, which is primary
 only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
 A failure shows one inline alert with its way out: **Get a new link** (link
 expired, code rejected, timed out), **Try again** (couldn't get a link), or
-paste again (malformed code, computer busy). The footer's one action is
+paste again (malformed code, computer busy). A 403 from the computer's
+runtime reads "You don't have access to computers on this team yet." with
+**Try again**. The footer's one action is
 **Keep using Macro credits** (closes), or **Switch to Macro credits** (a
 confirmation, then sign-out) when the agent is on its plan; closing while a
 code is checked lets it finish, with a toast either way. Owners and admins
@@ -1122,7 +1124,9 @@ sign-out (Macro credits only), setup-complete and a status refresh in order,
 each with a 20-second deadline and its own span under
 `computers.setup.finish` (`setup.finish.step`, `setup.finish.outcome`). A step
 that fails or runs out stops there: "Couldn't finish setting up <agent>" with
-**Retry**, which runs the steps again. Ready has one action:
+the reason when it has one (a 403 from the computer's runtime reads "You don't
+have access to computers on this team yet.") and **Retry**, which runs the
+steps again and reads **Retrying…** while it does. Ready has one action:
 
 - **Chat with <agent>** opens the DM with the computer's agent
   (`useOpenAgentDm`, `bot|<botId>`), like an agent's **Message**. With

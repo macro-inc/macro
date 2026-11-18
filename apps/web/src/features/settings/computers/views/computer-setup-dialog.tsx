@@ -293,7 +293,11 @@ export function ComputerSetupSteps(props: {
   // With the user's own account, the sign-in step completes it instead. Each
   // step has a deadline; one that fails or runs out stops here with Try
   // again, instead of leaving the dialog waiting.
-  const [finishFailed, setFinishFailed] = createSignal(false);
+  // Why the last attempt stopped, while it is the latest; and whether one
+  // is running, so Retry shows it tried.
+  const [finishError, setFinishError] = createSignal<{ error: unknown }>();
+  const finishFailed = () => !!finishError();
+  const [finishing, setFinishing] = createSignal(false);
   // A deadline stops the wait, not the request: Retry can send a step again
   // while the first is still in flight. Each step is idempotent (the same
   // name, an already signed-out Claude, setup already complete), so a repeat
@@ -308,13 +312,11 @@ export function ComputerSetupSteps(props: {
       withinDeadline(run(), FINISH_STEP_TIMEOUT_MS)
     );
   };
-  let finishing = false;
   const finish = async () => {
     const current = agent();
     const id = harnessId();
-    if (finishing || !current || !id || done()) return;
-    finishing = true;
-    setFinishFailed(false);
+    if (finishing() || !current || !id || done()) return;
+    setFinishing(true);
     await Telemetry.span('computers.setup.finish', async (span) => {
       span.setAttr('computer.id', props.computer.id);
       span.setAttr('setup.claude_mode', props.choice ?? 'undecided');
@@ -331,13 +333,14 @@ export function ComputerSetupSteps(props: {
         // Claude.
         await finishStep(span, 'refresh', () => invalidateHarnesses());
         span.setAttr('setup.finish.outcome', 'done');
-        finishing = false;
+        setFinishError(undefined);
+        setFinishing(false);
       } catch (error) {
         span.setAttr('setup.finish.outcome', 'failed');
         span.error(error);
         // Free before Retry shows, so it can start the next attempt.
-        finishing = false;
-        setFinishFailed(true);
+        setFinishError({ error });
+        setFinishing(false);
       }
     });
   };
@@ -610,9 +613,12 @@ export function ComputerSetupSteps(props: {
                   )
                 )
                 .with([false, true], () =>
-                  t('computers.finishFailedBody', {
-                    computer: props.computer.name,
-                  })
+                  computerFailureMessage(
+                    finishError()?.error,
+                    t('computers.finishFailedBody', {
+                      computer: props.computer.name,
+                    })
+                  )
                 )
                 .with([false, false], () => t('computers.settingUpAgentBody'))
                 .exhaustive()}
@@ -647,8 +653,17 @@ export function ComputerSetupSteps(props: {
               {null}
             </Match>
             <Match when={finishFailed() && !done()}>
-              <Button type="button" variant="primary" onClick={runFinish}>
-                {t('computers.retry')}
+              <Button
+                type="button"
+                variant="primary"
+                disabled={finishing()}
+                aria-busy={finishing() || undefined}
+                onClick={runFinish}
+              >
+                <Show when={finishing()} fallback={t('computers.retry')}>
+                  <Spinner size="sm" decorative />
+                  {t('computers.retrying')}
+                </Show>
               </Button>
             </Match>
             <Match when={!done()}>

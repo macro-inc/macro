@@ -15,6 +15,8 @@ export type ClaudeSignInFailure =
   | 'busy'
   /** The computer took too long. */
   | 'timeout'
+  /** The computer's runtime refused this account (403). */
+  | 'forbidden'
   | 'failed';
 
 /** Which way out a failure offers. */
@@ -37,6 +39,7 @@ export function claudeSignInFailure(error: unknown): ClaudeSignInFailure {
     return 'unreachable';
   if (thrownResultErrorHasCode(error, 'CLAUDE_COMPUTER_BUSY')) return 'busy';
   if (thrownResultErrorHasCode(error, 'CLAUDE_TIMEOUT')) return 'timeout';
+  if (thrownResultErrorHasCode(error, 'FORBIDDEN')) return 'forbidden';
   return 'failed';
 }
 
@@ -50,9 +53,18 @@ export function claudeSignInRecovery(
   failure: ClaudeSignInFailure
 ): ClaudeSignInRecovery {
   if (phase === 'start') return 'retry';
-  return match(failure)
-    .returnType<ClaudeSignInRecovery>()
-    .with('malformed_code', 'busy', 'unreachable', () => 'repaste')
-    .with('expired', 'invalid_code', 'timeout', 'failed', () => 'new_link')
-    .exhaustive();
+  return (
+    match(failure)
+      .returnType<ClaudeSignInRecovery>()
+      // Refused: the sign-in still waits, for when access arrives.
+      .with(
+        'malformed_code',
+        'busy',
+        'unreachable',
+        'forbidden',
+        () => 'repaste'
+      )
+      .with('expired', 'invalid_code', 'timeout', 'failed', () => 'new_link')
+      .exhaustive()
+  );
 }

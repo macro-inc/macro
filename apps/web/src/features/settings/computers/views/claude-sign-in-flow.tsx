@@ -54,8 +54,14 @@ function failureMessage(
   phase: Problem['phase'],
   failure: ClaudeSignInFailure
 ): string {
-  // No link existed yet: only a reason the computer can't answer says more.
-  if (phase === 'start' && failure !== 'unreachable' && failure !== 'busy')
+  // No link existed yet: only a reason the computer can't answer, or won't
+  // for this account, says more.
+  if (
+    phase === 'start' &&
+    failure !== 'unreachable' &&
+    failure !== 'busy' &&
+    failure !== 'forbidden'
+  )
     return t('computers.claudeLinkFailed');
   return match(failure)
     .with('expired', () => t('computers.claudeSignInExpired'))
@@ -64,6 +70,7 @@ function failureMessage(
     .with('unreachable', () => t('computers.claudeUnreachable'))
     .with('busy', () => t('computers.claudeBusy'))
     .with('timeout', () => t('computers.claudeTimedOut'))
+    .with('forbidden', () => t('computers.errorForbidden'))
     .with('failed', () => t('computers.claudeFailed'))
     .exhaustive();
 }

@@ -24,6 +24,7 @@ describe('claudeSignInFailure', () => {
     );
     expect(claudeSignInFailure(thrown('CLAUDE_COMPUTER_BUSY'))).toBe('busy');
     expect(claudeSignInFailure(thrown('CLAUDE_TIMEOUT'))).toBe('timeout');
+    expect(claudeSignInFailure(thrown('FORBIDDEN'))).toBe('forbidden');
     expect(claudeSignInFailure(thrown('SERVER_ERROR'))).toBe('failed');
     expect(claudeSignInFailure(new Error('network'))).toBe('failed');
   });
@@ -46,5 +47,6 @@ describe('claudeSignInRecovery', () => {
     expect(claudeSignInRecovery('complete', 'malformed_code')).toBe('repaste');
     expect(claudeSignInRecovery('complete', 'busy')).toBe('repaste');
     expect(claudeSignInRecovery('complete', 'unreachable')).toBe('repaste');
+    expect(claudeSignInRecovery('complete', 'forbidden')).toBe('repaste');
   });
 });
