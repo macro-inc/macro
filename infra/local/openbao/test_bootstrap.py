@@ -36,7 +36,7 @@ class BootstrapIntegration(unittest.TestCase):
                 "openssl", "pkey", "-in", str(private_key), "-pubout",
             ]).decode()
             for team in (first_team, second_team):
-                bootstrap(root, team, public_key, "local-integration")
+                bootstrap(root, team, [public_key], "local-integration", ["RS256"])
             auditing = root.request("GET", "sys/config/auditing/request-headers/x-macro-audit-id")
             self.assertFalse(auditing["x-macro-audit-id"]["hmac"])
 
@@ -101,7 +101,7 @@ class BootstrapIntegration(unittest.TestCase):
                     service.request(method, path, body, first_namespace)
             history = service.request("GET", "passwords/data/item?version=1", namespace=first_namespace)
             self.assertEqual(history["data"]["data"]["password"], "synthetic-version-one")
-            bootstrap(root, first_team, public_key, "local-integration")
+            bootstrap(root, first_team, [public_key], "local-integration", ["RS256"])
             current = service.request("GET", "passwords/data/item", namespace=first_namespace)
             self.assertEqual(current["data"]["metadata"]["version"], 2)
             service.request("POST", "totp/keys/item", {

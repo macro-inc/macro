@@ -12,6 +12,7 @@ import threading
 import unittest
 from urllib.error import URLError
 
+from openbao_provisioning import provision_team
 from provision import HOSTNAME, HostedOpenBao, parse_connect
 
 
@@ -99,6 +100,96 @@ class SharedProvisioning(unittest.TestCase):
             sys.path.remove(local)
         import provision
         self.assertIs(bootstrap.provision_team, provision.provision_team)
+
+
+class RecordingVault:
+    """In-memory stand-in for the provisioning API: keeps what was created and
+    records every write, so a second run's writes can be compared to the first's."""
+
+    def __init__(self):
+        self.namespaces = set()
+        self.mounts = {}
+        self.auth = {"": {}}
+        self.writes = []
+
+    def request(self, method, path, data=None, namespace=None, missing=False):
+        scope = namespace or ""
+        if method == "GET" and path == "sys/audit":
+            return {"data": {"passwords/": {"options": {"log_raw": "false"}}}}
+        if method == "GET" and path.startswith("sys/namespaces/"):
+            name = path.removeprefix("sys/namespaces/")
+            return {"data": {"path": name}} if name in self.namespaces else None
+        if method == "GET" and path == "sys/mounts":
+            return {"data": self.mounts.setdefault(scope, {})}
+        if method == "GET" and path == "sys/auth":
+            return {"data": self.auth.setdefault(scope, {})}
+        self.writes.append((method, scope, path, data))
+        if path.startswith("sys/namespaces/"):
+            self.namespaces.add(path.removeprefix("sys/namespaces/"))
+        elif path.startswith("sys/mounts/"):
+            self.mounts.setdefault(scope, {})[path.removeprefix("sys/mounts/") + "/"] = {
+                "type": data["type"], "options": data["options"],
+            }
+        elif path.startswith("sys/auth/"):
+            self.auth.setdefault(scope, {})[path.removeprefix("sys/auth/") + "/"] = {"type": data["type"]}
+        return {}
+
+
+class ProvisionTeam(unittest.TestCase):
+    TEAM = "0195f6a4-1f6e-7c1a-8d55-0a0b0c0d0e0f"
+    RSA = "-----BEGIN PUBLIC KEY-----\nsynthetic-rsa\n-----END PUBLIC KEY-----\n"
+    EC = "-----BEGIN PUBLIC KEY-----\nsynthetic-ec\n-----END PUBLIC KEY-----\n"
+
+    def test_both_keys_and_algorithms_are_trusted_during_a_switch(self):
+        vault = RecordingVault()
+        provision_team(vault, self.TEAM, [self.RSA, self.EC], "macro-dev-passwords", ["RS256", "ES256"])
+        configs = [(scope, path, data) for method, scope, path, data in vault.writes if path.endswith("/config")
+                   and path.startswith("auth/")]
+        self.assertEqual(configs, [
+            (f"team-{self.TEAM}", "auth/macro/config", {
+                "jwt_validation_pubkeys": [self.RSA, self.EC],
+                "bound_issuer": "macro-dev-passwords",
+                "jwt_supported_algs": ["RS256", "ES256"],
+            }),
+            ("", "auth/macro-lifecycle/config", {
+                "jwt_validation_pubkeys": [self.RSA, self.EC],
+                "bound_issuer": "macro-dev-passwords",
+                "jwt_supported_algs": ["RS256", "ES256"],
+            }),
+        ])
+
+    def test_a_second_run_creates_nothing_and_rewrites_the_same_configuration(self):
+        vault = RecordingVault()
+        provision_team(vault, self.TEAM, [self.EC], "macro-dev-passwords", ["ES256"])
+        first = list(vault.writes)
+        vault.writes.clear()
+        provision_team(vault, self.TEAM, [self.EC], "macro-dev-passwords", ["ES256"])
+        second = list(vault.writes)
+
+        created = ("sys/namespaces/", "sys/mounts/", "sys/auth/")
+        self.assertEqual([write for write in second if write[2].startswith(created)], [])
+        self.assertEqual(second, [write for write in first if not write[2].startswith(created)])
+
+    def test_a_switch_to_es256_only_drops_the_old_key(self):
+        vault = RecordingVault()
+        provision_team(vault, self.TEAM, [self.RSA, self.EC], "macro-dev-passwords", ["RS256", "ES256"])
+        vault.writes.clear()
+        provision_team(vault, self.TEAM, [self.EC], "macro-dev-passwords", ["ES256"])
+        team_config = [data for _, scope, path, data in vault.writes
+                       if scope == f"team-{self.TEAM}" and path == "auth/macro/config"]
+        self.assertEqual(team_config, [{
+            "jwt_validation_pubkeys": [self.EC],
+            "bound_issuer": "macro-dev-passwords",
+            "jwt_supported_algs": ["ES256"],
+        }])
+
+    def test_missing_keys_or_unknown_algorithms_are_refused_before_any_request(self):
+        for keys, algorithms in (([], ["ES256"]), ([self.EC], []), ([self.EC], ["HS256"])):
+            with self.subTest(keys=keys, algorithms=algorithms):
+                vault = RecordingVault()
+                with self.assertRaises(ValueError):
+                    provision_team(vault, self.TEAM, keys, "macro-dev-passwords", algorithms)
+                self.assertEqual(vault.writes, [])
 
 
 if __name__ == "__main__":

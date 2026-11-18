@@ -143,6 +143,11 @@ impl LocalEnv {
             "PASSWORDS_JWT_ISSUER".into(),
             "macro-local-passwords".into(),
         );
+        // LocalStack's signing key, by alias: its key id changes every run.
+        env.insert(
+            "PASSWORDS_JWT_KMS_KEY_ID".into(),
+            resources::PASSWORDS_JWT_KMS_ALIAS.into(),
+        );
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());

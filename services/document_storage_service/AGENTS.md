@@ -176,8 +176,8 @@ threads, pins, recents, notifications, folders, activity.
 ## Passwords vault
 
 `/passwords` hosts human-only team vault routes, with policy in `passwords`.
-Provision `OPENBAO_ADDRESS`, `PASSWORDS_JWT_ISSUER` and `PASSWORDS_JWT_SIGNING_KEY`
-together. Partial configuration fails startup; absent configuration denies vault work.
+Provision `OPENBAO_ADDRESS`, `PASSWORDS_JWT_ISSUER` and `PASSWORDS_JWT_KMS_KEY_ID`
+(a KMS key ARN; local stacks use a LocalStack alias) together. Partial configuration fails startup; absent configuration denies vault work.
 Human requests evaluate `enable-passwords-v1` for their authenticated user only;
 missing, disabled or failed evaluations fail closed. Local explicitly enables it.
 Cleanup, reconciliation and internal team purge do not evaluate rollout flags.

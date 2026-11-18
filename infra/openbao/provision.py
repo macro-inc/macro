@@ -19,7 +19,7 @@ import sys
 from urllib.request import HTTPSHandler, ProxyHandler, build_opener
 from uuid import UUID
 
-from openbao_provisioning import NoRedirect, OpenBaoClient, provision_team
+from openbao_provisioning import JWT_ALGORITHMS, NoRedirect, OpenBaoClient, provision_team
 
 HOSTNAME = "openbao-dev.macro-internal.com"
 ORIGIN = f"https://{HOSTNAME}"
@@ -72,7 +72,10 @@ class HostedOpenBao(OpenBaoClient):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--team-id", required=True, type=UUID)
-    parser.add_argument("--jwt-public-key", required=True, type=Path)
+    parser.add_argument("--jwt-public-key", required=True, type=Path, action="append",
+                        help="PEM public key to trust; repeat to trust the old and new key during a switch")
+    parser.add_argument("--jwt-alg", required=True, action="append", choices=JWT_ALGORITHMS,
+                        help="JWT algorithm to accept; repeat for both during a switch")
     parser.add_argument("--jwt-issuer", required=True)
     parser.add_argument("--connect", type=parse_connect, help="loopback host:port of the operator tunnel")
     arguments = parser.parse_args()
@@ -82,8 +85,9 @@ def main():
     namespace = provision_team(
         HostedOpenBao(token, arguments.connect),
         arguments.team_id,
-        arguments.jwt_public_key.read_text(),
+        [path.read_text() for path in arguments.jwt_public_key],
         arguments.jwt_issuer,
+        arguments.jwt_alg,
     )
     print(f"Provisioned hosted Passwords namespace {namespace}")
 

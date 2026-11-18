@@ -97,8 +97,32 @@ leeway, so DSS and the vault must keep synchronized clocks (Fargate uses Amazon
 Time Sync).
 
 The document storage service's dev Doppler config holds `OPENBAO_ADDRESS`,
-`PASSWORDS_JWT_ISSUER`, and `PASSWORDS_JWT_SIGNING_KEY` together; it refuses a
+`PASSWORDS_JWT_ISSUER`, and `PASSWORDS_JWT_KMS_KEY_ID` together; it refuses a
 partial set.
+
+## JWT signing key
+
+The document storage service signs its ES256 login JWTs with the asymmetric KMS
+key `alias/passwords-jwt-dev` (`ECC_NIST_P256`, `SIGN_VERIFY`;
+`jwt-signing-key.ts`, output `passwordsJwtKmsKeyArn`). It lives in the
+dedicated OpenBao AWS account (`macro-openbao`, 169344408001), which holds dev
+and prod as separate stacks; this stack reaches it by assuming the role in
+`openbao:deployRoleArn` (`account.ts`; `Pulumi.dev.yaml` names
+`openbao-deploy-dev`). That role comes from the account bootstrap and must
+exist before any `pulumi up`.
+
+The private half never leaves KMS. The key policy gives the OpenBao account's
+root administration only: no `kms:Sign` and no `kms:CreateGrant`. Only the
+document storage task role in the main account may sign, and only with `ECDSA_SHA_256`; it may also
+read the public key. Cross-account use needs the matching IAM statement on that
+role, which this stack adds in the main account. DSS names the key by ARN
+(`PASSWORDS_JWT_KMS_KEY_ID`), because aliases don't resolve across accounts.
+Each JWT mount trusts the key's public half, the stack output
+`passwordsJwtPublicKeyPem`. Pulumi reads it through the deploy role, because the
+operators' view-only access lacks `kms:GetPublicKey`. The key is `protect` +
+`retainOnDelete`: replacing it changes the key every namespace trusts. A main-account administrator can
+still assume or change the DSS role, so CloudTrail `Sign` events in the OpenBao
+account are the record of who signed.
 
 ## Backups
 
@@ -149,8 +173,9 @@ Not built. A separate design decides:
   config; the root token revoked after provisioning; recovery keys split across
   operators; a scoped provisioner identity; automatic namespace provisioning on
   team creation.
-- **Key rotation:** roles that trust the old and new signing keys together
-  (`jwt_validation_pubkeys` takes a list), so rotation needs no outage.
+- **Account:** the vault and its seal key join the JWT signing key in the
+  OpenBao account, with CloudTrail alarms on `Sign` volume and on any other
+  caller.
 - **Service URL:** `OPENBAO_ADDRESS` becomes a typed `macro_service_urls` entry.
 - **Monitoring:** telemetry to Grafana/Datadog; seal, leader, and Raft-commit
   alerts; audit logs retained in immutable storage.

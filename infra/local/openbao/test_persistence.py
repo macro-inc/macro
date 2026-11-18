@@ -64,7 +64,7 @@ class PersistenceIntegration(unittest.TestCase):
                     return LocalOpenBao("http://127.0.0.1:" + port, json.loads(credentials)["root_token"])
 
                 root = client()
-                bootstrap(root, team, public_key, "local-persistence")
+                bootstrap(root, team, [public_key], "local-persistence", ["RS256"])
                 for version in (0, 1):
                     root.request("POST", "passwords/data/item", {"options": {"cas": version}, "data": {"password": f"synthetic-{version}"}}, namespace)
                 root.request("POST", "totp/keys/item", {"key": "JBSWY3DPEHPK3PXP"}, namespace)
@@ -82,7 +82,7 @@ class PersistenceIntegration(unittest.TestCase):
                     self.assertEqual(root.request("GET", "passwords/data/item?version=1", namespace=namespace)["data"]["data"]["password"], "synthetic-0")
                     self.assertRegex(root.request("GET", "totp/code/item", namespace=namespace)["data"]["code"], r"^\d{6}$")
                     self.assertEqual(root.request("GET", "auth/macro/config", namespace=namespace)["data"]["bound_issuer"], "local-persistence")
-                    bootstrap(root, team, public_key, "local-persistence")
+                    bootstrap(root, team, [public_key], "local-persistence", ["RS256"])
                     logs = run("logs")
                     for credential in [json.loads(credentials)["root_token"], *json.loads(credentials)["recovery_keys_b64"]]:
                         self.assertFalse(credential.encode() in logs, "Initialization credential appeared in container logs")
@@ -99,15 +99,19 @@ class PersistenceIntegration(unittest.TestCase):
                 rust_binary = os.environ.get("PASSWORDS_TEST_OPENBAO_RUST_BIN")
                 if rust_binary:
                     self.assertTrue(os.environ.get("DATABASE_URL"), "Rust regressions require an explicit disposable metadata DATABASE_URL")
-                    public_key_path = Path(directory) / "jwt-public.pem"
-                    public_key_path.write_text(public_key)
+                    # The Rust provider signs ES256; its fixtures bootstrap their own
+                    # namespaces with this P-256 key.
+                    rust_private_key = Path(directory) / "jwt-es256.pem"
+                    subprocess.run(["openssl", "genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256", "-out", str(rust_private_key)], check=True, capture_output=True)
+                    public_key_path = Path(directory) / "jwt-es256-public.pem"
+                    public_key_path.write_bytes(subprocess.check_output(["openssl", "pkey", "-in", str(rust_private_key), "-pubout"]))
                     rust = subprocess.run([
                         rust_binary, "--ignored", "--test-threads=1", "--nocapture",
                     ], cwd=source.parents[2] / "crates/passwords", env={
                         **os.environ,
                         "BAO_TOKEN": json.loads(credentials)["root_token"],
                         "PASSWORDS_TEST_OPENBAO_ADDRESS": "http://127.0.0.1:" + port,
-                        "PASSWORDS_TEST_OPENBAO_SIGNING_KEY": str(private_key),
+                        "PASSWORDS_TEST_OPENBAO_SIGNING_KEY": str(rust_private_key),
                         "PASSWORDS_TEST_OPENBAO_PUBLIC_KEY": str(public_key_path),
                     }, capture_output=True)
                     self.assertEqual(rust.returncode, 0, (rust.stdout + rust.stderr).decode())

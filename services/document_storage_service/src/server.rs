@@ -923,24 +923,26 @@ async fn run_server() -> anyhow::Result<()> {
         .with_voice_repo(PgVoiceRepo::new(db.clone()))
         .with_event_broker(macro_event_broker.clone());
 
-    let passwords_provider: Arc<dyn passwords::domain::ports::SecretProvider> = match (
-        config.openbao_address.value(),
-        config.passwords_jwt_issuer.value(),
-        config.passwords_jwt_signing_key.value(),
-    ) {
-        (None, None, None) => Arc::new(passwords::outbound::openbao::UnavailableProvider),
-        (Some(address), Some(issuer), Some(signing_key)) => Arc::new(
-            passwords::outbound::openbao::OpenBaoProvider::new(
-                address.to_owned(),
-                issuer.to_owned(),
-                signing_key,
-            )
-            .map_err(|_| anyhow::anyhow!("invalid Passwords OpenBao configuration"))?,
-        ),
-        _ => anyhow::bail!(
-            "Passwords requires OPENBAO_ADDRESS, PASSWORDS_JWT_ISSUER and PASSWORDS_JWT_SIGNING_KEY together"
-        ),
-    };
+    let passwords_provider: Arc<dyn passwords::domain::ports::SecretProvider> =
+        match passwords::outbound::openbao::settings::openbao_settings(
+            config.openbao_address.value(),
+            config.passwords_jwt_issuer.value(),
+            config.passwords_jwt_kms_key_id.value(),
+            matches!(config.environment, Environment::Local),
+        )? {
+            None => Arc::new(passwords::outbound::openbao::UnavailableProvider),
+            Some(settings) => Arc::new(
+                passwords::outbound::openbao::OpenBaoProvider::new(
+                    settings.address.to_owned(),
+                    settings.issuer.to_owned(),
+                    Arc::new(passwords::outbound::openbao::signer::KmsJwtSigner::new(
+                        aws_sdk_kms::Client::new(&aws_config),
+                        settings.key,
+                    )),
+                )
+                .map_err(|_| anyhow::anyhow!("invalid Passwords OpenBao configuration"))?,
+            ),
+        };
     let (passwords_availability, passwords_agent_availability): (
         Arc<dyn passwords::domain::ports::Availability>,
         Arc<dyn passwords::domain::agent::ports::AgentAvailability>,

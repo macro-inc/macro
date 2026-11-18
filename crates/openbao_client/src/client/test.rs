@@ -427,10 +427,10 @@ async fn disposable_provider_cas_history_totp_and_namespace_scope() {
         std::env::var("PASSWORDS_TEST_OPENBAO_TEAM").expect("bootstrapped synthetic team UUID");
     let now = chrono::Utc::now().timestamp();
     let claims = serde_json::json!({"iss":"macro-local-passwords","sub":"macro-passwords-service","aud":"macro-passwords","team_id":team,"iat":now,"exp":now+60,"audit_id":"synthetic-client-fixture"});
-    let key =
-        EncodingKey::from_rsa_pem(&std::fs::read(signing_path).expect("key")).expect("RSA key");
+    let key = EncodingKey::from_ec_pem(&std::fs::read(signing_path).expect("key"))
+        .expect("P-256 PKCS#8 key");
     let jwt = SecretString::new(
-        jsonwebtoken::encode(&Header::new(Algorithm::RS256), &claims, &key).expect("JWT"),
+        jsonwebtoken::encode(&Header::new(Algorithm::ES256), &claims, &key).expect("JWT"),
     );
     let client = OpenBaoClient::new(&address).expect("client");
     let session = client

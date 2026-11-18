@@ -403,6 +403,7 @@ opentelemetry-otlp = { version = "0.31.0", default-features = false, features = 
 ] }
 opentelemetry_sdk = { version = "0.31.0", default-features = false }
 ordered-float = "5"
+p256 = { version = "0.13.2", default-features = false, features = ["ecdsa", "pem", "pkcs8", "std"] }
 paste = "1"
 pdfium-render = { version = "0.8.37", default-features = false, features = [
   "pdfium_7543",

@@ -32,14 +32,16 @@ spec capture and synthetic protocol probes. Applications receive only JWTs.
 ## Capture again
 
 Start a fresh isolated normal-mode 2.7.2 server with the configuration above and
-initialize it into a restricted local file. Generate a fresh RSA signing key and
-its public key outside the repository, and provision the synthetic team:
+initialize it into a restricted local file. Generate a fresh P-256 signing key
+(`openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256`) and its public
+key outside the repository, and provision the synthetic team:
 
 ```sh
 python3 infra/local/openbao/bootstrap.py \
   --address http://127.0.0.1:18272 --init-file /outside/repo/bootstrap.json \
   --team-id 00000000-0000-7000-8000-000000000272 \
-  --jwt-public-key /outside/repo/public.pem --jwt-issuer macro-local-passwords
+  --jwt-public-key /outside/repo/public.pem --jwt-alg ES256 \
+  --jwt-issuer macro-local-passwords
 python3 crates/openbao_client/spec/capture.py \
   --address http://127.0.0.1:18272 --init-file /outside/repo/bootstrap.json
 python3 crates/openbao_client/spec/patch.py

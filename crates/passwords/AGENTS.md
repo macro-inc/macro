@@ -12,6 +12,8 @@ means this is a Macro-managed team vault.
 - `src/domain/service.rs`: human membership, grants, administrator policy and retry recovery.
 - `src/domain/ports.rs`: provider, metadata, lock and per-user rollout ports.
 - `src/outbound/openbao.rs`: team JWT login, KV v2 CAS/history, TOTP.
+- `src/outbound/openbao/signer.rs`: the ES256 `JwtSigner` seam; `KmsJwtSigner` in
+  deployed and local stacks, `LocalJwtSigner` in tests only.
 - `src/outbound/postgres.rs`: metadata index, durable intents and transaction-scoped locks.
 - `src/inbound/router.rs`: authenticated human routes, CSRF header, private no-store responses.
 - `src/domain/agent.rs`, `src/domain/agent/service.rs`: bounded agent vault API
@@ -81,6 +83,12 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   response bodies in Debug, Display, error sources or tracing.
 - Team namespace is `team-{uuid}`, KV mount `passwords`, TOTP mount `totp`;
   JWT role `macro/passwords-service` binds issuer, audience, subject and team ID.
+- Login JWTs are ES256, signed through `JwtSigner`. `KmsJwtSigner` hashes the
+  signing input locally, sends only the SHA-256 digest (`MessageType::Digest`),
+  and converts KMS's DER signature to JWS `r || s`. There is no fallback signer
+  and no private key in config: `PASSWORDS_JWT_KMS_KEY_ID` is a key ARN, an alias
+  only locally. One `Sign` per real login (`passwords.jwt.sign` span), so the
+  token cache bounds KMS calls to about one per active team per 40 seconds.
 - Value calls reuse a team's service token (`outbound/openbao/token_cache.rs`): one
   login per team per lease (clamped to 60 s), single-flight (waiters share a failed
   login), refreshed 20 s before the lease ends. Idle slots are LRU-evicted past
@@ -92,8 +100,8 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   purge) logins are never cached.
 
 Run the ignored Rust provider and import tests against a disposable local OpenBao with
-`PASSWORDS_TEST_OPENBAO_ADDRESS`, `PASSWORDS_TEST_OPENBAO_SIGNING_KEY` (private
-PEM file path), `PASSWORDS_TEST_OPENBAO_PUBLIC_KEY` (public PEM file path), and
+`PASSWORDS_TEST_OPENBAO_ADDRESS`, `PASSWORDS_TEST_OPENBAO_SIGNING_KEY` (P-256
+PKCS#8 private PEM file path), `PASSWORDS_TEST_OPENBAO_PUBLIC_KEY` (public PEM file path), and
 `BAO_TOKEN` and `DATABASE_URL` set explicitly: `cargo test -p passwords -- --ignored`.
 The test creates synthetic team namespaces with the local bootstrap script.
 

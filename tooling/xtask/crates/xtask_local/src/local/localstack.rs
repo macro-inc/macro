@@ -13,14 +13,17 @@ use super::resources;
 /// up a Tokio runtime so the orchestrator stays synchronous.
 pub fn provision(instance: &Instance) -> Result<()> {
     let url = format!("http://localhost:{}/", instance.port(Port::LocalStack));
+    let passwords_public_key = instance
+        .ensure_artifact_dir()?
+        .join("passwords-jwt.public.pem");
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("building tokio runtime")?;
-    rt.block_on(provision_async(&url))
+    rt.block_on(provision_async(&url, &passwords_public_key))
 }
 
-async fn provision_async(url: &str) -> Result<()> {
+async fn provision_async(url: &str, passwords_public_key: &std::path::Path) -> Result<()> {
     let cfg = macro_aws_config::local_aws_config(url).await;
 
     let sqs = aws_sdk_sqs::Client::new(&cfg);
@@ -32,17 +35,19 @@ async fn provision_async(url: &str) -> Result<()> {
             .build(),
     );
 
-    // The four groups are independent — run them concurrently.
-    let (q, t, b, k) = tokio::join!(
+    // The groups are independent — run them concurrently.
+    let (q, t, b, k, p) = tokio::join!(
         create_queues(&sqs),
         create_tables(&ddb),
         create_buckets(&s3),
-        create_kms_keys(&kms)
+        create_kms_keys(&kms),
+        create_passwords_jwt_key(&kms, passwords_public_key)
     );
     q?;
     t?;
     b?;
     k?;
+    p?;
 
     // Dependent: wire doc-storage ObjectCreated -> document-upload-finalizer-queue.
     wire_upload_finalizer(&sqs, &s3).await?;
@@ -125,6 +130,67 @@ async fn create_kms_keys(kms: &aws_sdk_kms::Client) -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+/// The asymmetric P-256 key DSS signs OpenBao login JWTs with, plus its public
+/// half as PEM at `public_key_path` for `infra/local/openbao/bootstrap.py`.
+/// Idempotent by alias, like [`create_kms_keys`]. Tearing LocalStack down loses
+/// the key: rerun the bootstrap for each team so OpenBao trusts the new one.
+async fn create_passwords_jwt_key(
+    kms: &aws_sdk_kms::Client,
+    public_key_path: &std::path::Path,
+) -> Result<()> {
+    use aws_sdk_kms::types::{KeySpec, KeyUsageType};
+    use p256::pkcs8::{DecodePublicKey, EncodePublicKey, LineEnding};
+
+    let alias = resources::PASSWORDS_JWT_KMS_ALIAS;
+    let existing = kms
+        .list_aliases()
+        .send()
+        .await
+        .context("listing kms aliases")?;
+    if !existing
+        .aliases()
+        .iter()
+        .any(|entry| entry.alias_name() == Some(alias))
+    {
+        let key = kms
+            .create_key()
+            .key_spec(KeySpec::EccNistP256)
+            .key_usage(KeyUsageType::SignVerify)
+            .description("Passwords OpenBao JWT signing key (local)")
+            .send()
+            .await
+            .context("creating local Passwords JWT signing key")?;
+        let key_id = key
+            .key_metadata()
+            .map(|metadata| metadata.key_id())
+            .context("kms create_key returned no key metadata")?;
+        ignore_exists(
+            kms.create_alias()
+                .alias_name(alias)
+                .target_key_id(key_id)
+                .send()
+                .await
+                .map(|_| ()),
+            &format!("kms alias {alias}"),
+        )?;
+    }
+
+    let public_key = kms
+        .get_public_key()
+        .key_id(alias)
+        .send()
+        .await
+        .context("reading the local Passwords JWT public key")?;
+    let der = public_key
+        .public_key()
+        .context("kms get_public_key returned no key")?;
+    let pem = p256::PublicKey::from_public_key_der(der.as_ref())
+        .context("local Passwords JWT key is not P-256")?
+        .to_public_key_pem(LineEnding::LF)
+        .context("encoding the local Passwords JWT public key")?;
+    std::fs::write(public_key_path, pem).context("writing the local Passwords JWT public key")
 }
 
 async fn create_queues(sqs: &aws_sdk_sqs::Client) -> Result<()> {

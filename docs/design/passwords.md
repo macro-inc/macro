@@ -116,7 +116,9 @@ the namespace from the authenticated team's identity, never a caller-supplied
 provider path. The bootstrap script provisions mounts and JWT roles idempotently.
 
 Macro-issued JWTs use a dedicated audience, short expiry, and a team claim bound
-by the namespace's JWT role. Value-role policy allows only the required KV/TOTP
+by the namespace's JWT role. They are ES256, signed by an asymmetric KMS key
+only the document storage service's role may use; no private signing key exists
+outside KMS, and the JWT mounts trust only its public key. Value-role policy allows only the required KV/TOTP
 paths; the separate lifecycle role permits exact-team namespace read/delete.
 The service reuses each team's value-role token in memory until 20 seconds before
 its lease ends (never trusting a lease beyond 60 seconds), logging in once per team
@@ -176,7 +178,7 @@ server mode with single-node integrated Raft on a named Compose volume per insta
 Startup initializes a new vault once and unseals it automatically using a generated
 32-byte static seal key. Raft storage, the seal key, and bootstrap credentials
 live together on the local volume and stay outside git; application services
-receive only their JWT signing identity. Container and stack restarts
+receive only the alias of their LocalStack JWT signing key. Container and stack restarts
 preserve values, history, TOTP seeds, namespaces, and JWT configuration. The
 [local bootstrap](../../infra/local/openbao/README.md) provisions each team
 idempotently without replacing stored values. Keep the vault volume and its seal
