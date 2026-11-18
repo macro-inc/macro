@@ -5,7 +5,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { DebouncedNotificationReadMarker } from '@notifications';
+import { NotificationReadMarker } from '@notifications';
 import { Show } from 'solid-js';
 import { chatBlockData } from '../signal/chatBlockData';
 import { Chat } from './Chat';
@@ -20,7 +20,7 @@ export default function ChatBlock() {
   return (
     <DocumentBlockContainer title={name()}>
       <div class="size-full" tabIndex={-1}>
-        <DebouncedNotificationReadMarker
+        <NotificationReadMarker
           notificationSource={notificationSource}
           entity={{ type: 'chat', id: blockId }}
         />

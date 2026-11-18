@@ -6,6 +6,7 @@ import { createExternalChatCapabilities } from '@app/features/external-chat/quer
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { ExternalChatView } from '@app/features/external-chat/views/external-chat-view';
 import { InMacroChats } from '@app/features/external-view/components/in-macro-section';
+import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
@@ -17,6 +18,7 @@ import { themeCssVars } from '@theme/utils/themeCssVars';
 import { onMount, Show, Suspense } from 'solid-js';
 // The app's styles, so the page and its screenshots look like the app.
 import '../../../src/index.css';
+import { WhatsAppHistoryImportPrompt } from '@app/features/whatsapp-linked/components/history-import-prompt';
 import {
   type PasskeyCapability,
   WhatsAppLinkedProvider,
@@ -40,6 +42,7 @@ import { queryReadyGate } from '@queries/gate';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { ResultAsync } from 'neverthrow';
 import { render } from 'solid-js/web';
+import { ChatHeaderFixture } from './split-header-fixture';
 
 declare global {
   interface Window {
@@ -47,6 +50,7 @@ declare global {
   }
 }
 window.openedChats = [];
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 /** The production adapter and real queries; only the network is the test's. */
 /**
@@ -76,6 +80,7 @@ const noQuickAccess: QuickAccessContextValue = {
   isLoading: () => false,
   refresh: () => {},
   getById: () => undefined,
+  interactionForUser: () => undefined,
 };
 
 function ChatHarness(props: { chatId: string }) {
@@ -99,29 +104,31 @@ function ChatHarness(props: { chatId: string }) {
   });
   return (
     <div class="relative h-dvh">
-      <ToastRegion />
-      {/* The app's bottom chrome host, where the composer floats on touch. */}
-      <Show when={isTouchDevice()}>
-        <FloatRegionHost />
-      </Show>
-      <ExternalChatContextProvider value={source}>
-        <SidePanel.Root floating defaultOpen={false}>
-          <ExternalChatView
-            userId={userId()}
-            share={
-              <ShareTrigger
-                onClick={share}
-                id={props.chatId}
-                blockType="external_chat"
-              />
-            }
-            onShare={share}
-            onConnect={() => {
-              location.search = '';
-            }}
-          />
-        </SidePanel.Root>
-      </ExternalChatContextProvider>
+      <ChatHeaderFixture>
+        <ToastRegion />
+        {/* The app's bottom chrome host, where the composer floats on touch. */}
+        <Show when={isTouchDevice()}>
+          <FloatRegionHost />
+        </Show>
+        <ExternalChatContextProvider value={source}>
+          <SidePanel.Root floating defaultOpen={false}>
+            <ExternalChatView
+              userId={userId()}
+              share={
+                <ShareTrigger
+                  onClick={share}
+                  id={props.chatId}
+                  blockType="external_chat"
+                />
+              }
+              onShare={share}
+              onConnect={() => {
+                location.search = '';
+              }}
+            />
+          </SidePanel.Root>
+        </ExternalChatContextProvider>
+      </ChatHeaderFixture>
     </div>
   );
 }
@@ -186,10 +193,14 @@ function Page() {
       <main class="min-h-screen bg-panel p-4 text-ink">
         <WhatsAppPage />
       </main>
+      {/* The app shell's prompt, here beside the page it nudges toward. */}
+      <ToastRegion />
+      <WhatsAppHistoryImportPrompt />
     </WhatsAppLinkedProvider>
   );
 }
 
+initializeLexical();
 const root = document.getElementById('root');
 if (!root) throw new Error('missing #root');
 render(

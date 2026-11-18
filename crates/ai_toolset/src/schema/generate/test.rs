@@ -132,3 +132,109 @@ fn test_unsupported_constraints_stripped_into_description() {
     // `uuid` is on both providers' format whitelist and survives.
     assert_eq!(property(&json, "id")["format"], "uuid");
 }
+
+#[derive(JsonSchema)]
+#[serde(tag = "kind", content = "drafts", rename_all = "snake_case")]
+#[expect(dead_code, reason = "Schema generation fixture")]
+enum Drafts {
+    Email(Vec<String>),
+    Calendar(Vec<String>),
+}
+
+#[derive(JsonSchema)]
+#[schemars(title = "FlattenedInput", description = "A flattened tagged enum")]
+#[expect(dead_code, reason = "Schema generation fixture")]
+struct FlattenedInput {
+    title: String,
+    #[serde(flatten)]
+    drafts: Drafts,
+}
+
+#[test]
+fn rejects_a_flattened_enum_at_the_tool_input_root() {
+    assert!(generate_validated_input_schema::<FlattenedInput>().is_err());
+}
+
+#[derive(JsonSchema)]
+#[schemars(title = "NestedInput", description = "A nested tagged enum")]
+#[expect(dead_code, reason = "Schema generation fixture")]
+struct NestedInput {
+    review: FlattenedInput,
+}
+
+#[derive(JsonSchema)]
+#[serde(tag = "op", rename_all = "snake_case")]
+#[expect(dead_code, reason = "Schema generation fixture")]
+enum Filter {
+    Any { filters: Vec<Filter> },
+    Not { filter: Box<Filter> },
+}
+
+#[derive(JsonSchema)]
+#[schemars(title = "FilterInput", description = "A recursive filter")]
+#[expect(dead_code, reason = "Schema generation fixture")]
+struct FilterInput {
+    filter: Filter,
+}
+
+#[test]
+fn rejects_a_recursive_type_whose_loop_is_all_required_fields() {
+    let error = generate_validated_input_schema::<FilterInput>().unwrap_err();
+    assert!(
+        matches!(&error, ValidationError::RequiredRefLoop(path) if path == "$defs.Filter.anyOf.1.properties.filter"),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn accepts_a_tagged_enum_under_a_named_property() {
+    let validated = generate_validated_input_schema::<NestedInput>().unwrap();
+    let json = schema_json(&validated.schema);
+    assert!(json.get("anyOf").is_none());
+    assert_eq!(
+        json["properties"]["review"]["anyOf"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
+#[derive(JsonSchema)]
+#[expect(dead_code, reason = "Schema generation fixture")]
+struct Clause {
+    include: String,
+}
+
+/// One clause, or several that all apply.
+#[derive(JsonSchema)]
+#[serde(untagged)]
+#[expect(dead_code, reason = "Schema generation fixture")]
+enum Where {
+    One(Clause),
+    All(Vec<Clause>),
+}
+
+#[derive(JsonSchema)]
+#[schemars(title = "OptionalUnionInput", description = "An optional union")]
+#[expect(dead_code, reason = "Schema generation fixture")]
+struct OptionalUnionInput {
+    /// Which items to keep.
+    filter: Option<Where>,
+}
+
+#[test]
+fn an_optional_union_is_one_any_of_that_keeps_its_descriptions() {
+    let validated = generate_validated_input_schema::<OptionalUnionInput>().unwrap();
+    let json = schema_json(&validated.schema);
+    let filter = property(&json, "filter");
+    let branches = filter["anyOf"].as_array().unwrap();
+    assert_eq!(branches.len(), 3, "{filter:#}");
+    assert_eq!(branches[0]["properties"]["include"]["type"], "string");
+    assert_eq!(branches[1]["type"], "array");
+    assert_eq!(branches[2]["type"], "null");
+    assert_eq!(
+        filter["description"],
+        "Which items to keep.\n\nOne clause, or several that all apply."
+    );
+}

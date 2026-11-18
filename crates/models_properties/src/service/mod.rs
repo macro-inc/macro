@@ -7,6 +7,7 @@ pub mod document_metadata;
 pub mod entity_property;
 pub mod entity_property_with_definition;
 pub mod project_metadata;
+pub mod property_change_source;
 pub mod property_definition;
 pub mod property_definition_with_options;
 pub mod property_option;

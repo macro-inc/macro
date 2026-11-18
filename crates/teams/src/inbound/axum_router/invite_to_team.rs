@@ -23,6 +23,15 @@ pub struct InviteEntry {
 pub struct InviteToTeamRequest {
     /// The invites to send, each with an email and tier
     pub invites: Vec<InviteEntry>,
+    /// The team the caller means to invite to. Invites always go to the
+    /// caller's current team; when this names another team, nothing is sent
+    /// and the request answers 409.
+    #[serde(default)]
+    pub team_id: Option<uuid::Uuid>,
+    /// Invite these addresses as agents: an address with no account signs up
+    /// as an agent and joins the team when it first signs in.
+    #[serde(default)]
+    pub is_agent: bool,
 }
 
 /// Error type for the invite to team handler
@@ -37,6 +46,9 @@ pub enum InviteToTeamError {
     /// No valid emails provided
     #[error("no valid emails provided")]
     NoValidEmailsProvided,
+    /// The request named a team other than the caller's current team
+    #[error("the requested team is not the caller's current team")]
+    NotCurrentTeam,
 }
 
 impl axum::response::IntoResponse for InviteToTeamError {
@@ -54,6 +66,7 @@ impl axum::response::IntoResponse for InviteToTeamError {
                     message: "no emails provided".into(),
                 }),
             ),
+            InviteToTeamError::NotCurrentTeam => return super::not_current_team_response(),
             // Domain errors share one mapping - see the IntoResponse impl
             // for InviteUsersToTeamError in this crate's axum_router module.
             InviteToTeamError::InviteUsersToTeamError(e) => return e.into_response(),
@@ -74,6 +87,7 @@ impl axum::response::IntoResponse for InviteToTeamError {
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse, description = "`team_id` names a team other than the caller's current team"),
         (status = 500, body = ErrorResponse),
     ),
 )]
@@ -83,6 +97,10 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthor
     State(state): State<TeamRouterState<T, Eas, Auth>>,
     Json(req): Json<InviteToTeamRequest>,
 ) -> Result<StatusCode, InviteToTeamError> {
+    if !super::is_expected_team(&access.entity_access_receipt, req.team_id) {
+        return Err(InviteToTeamError::NotCurrentTeam);
+    }
+
     let parsed: Vec<Result<Email<Lowercase<'_>>, _>> = req
         .invites
         .iter()
@@ -100,7 +118,7 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthor
 
     let team_invites = state
         .service
-        .invite_users_to_team(access.entity_access_receipt, invites)
+        .invite_users_to_team(access.entity_access_receipt, invites, req.is_agent)
         .await
         .map_err(InviteToTeamError::InviteUsersToTeamError)?;
 

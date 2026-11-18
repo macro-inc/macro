@@ -1,3 +1,4 @@
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { getChannelParams } from '@channel/Channel/link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { pushNotificationNavigation } from '@service-notification/generated/push';
@@ -134,7 +135,13 @@ export function notificationLaunchPath(
   const params = new URLSearchParams(
     getChannelParams(messageId, threadId ?? messageId)
   );
-  return `/channel/${encodeURIComponent(channelId)}?${params}`;
+  // A cold launch has no pane history. Keep Home behind the destination so
+  // the channel has the same Back control as a notification opened in-app.
+  notificationOpenSpan(intent.notificationId)?.setAttr(
+    'notification.launch_pane_count',
+    2
+  );
+  return `${DEFAULT_ROUTE}/~/channel/${encodeURIComponent(channelId)}?${params}`;
 }
 
 export function finishNotificationNavigation(

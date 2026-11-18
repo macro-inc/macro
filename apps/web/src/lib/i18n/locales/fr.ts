@@ -53,8 +53,6 @@ export default {
     projectBadge: 'Projet',
     newProject: 'Nouveau projet',
     contentAlreadyOpen: 'Contenu déjà ouvert',
-    unableToOpenConversation:
-      'Impossible d’ouvrir la conversation. Veuillez réessayer.',
     mobileSearchPlaceholder: 'Rechercher…',
     closeSearch: 'Fermer la recherche',
     searchFullTextFor: 'Recherche en texte intégral de « {{query}} »',
@@ -615,10 +613,6 @@ export default {
       other: '{{accepted}} sur {{count}} éléments marqués comme non terminés',
     },
     toastMarkNotDoneFailed: 'Impossible de marquer comme non terminé',
-    toastThreadStaysDone:
-      'Ce fil ne contient aucun message reçu, il reste donc terminé',
-    toastThreadsStayDone:
-      'Ces fils ne contiennent aucun message reçu, ils restent donc terminés',
     toastCountNotRestored: {
       one: '{{count}} élément n’a pas pu être restauré.',
       many: '{{count}} d’éléments n’ont pas pu être restaurés.',
@@ -725,8 +719,6 @@ export default {
     create: 'Créer',
     getMobileApp: 'Obtenir l’app mobile',
     signedInAs: 'Connecté en tant que {{name}}',
-    commandMenu: 'Menu des commandes',
-    searchEverything: 'Tout rechercher',
     customizeSidebar: 'Personnaliser la barre latérale',
     customizeSidebarDescription:
       'Choisissez les apps affichées dans la barre latérale et faites-les glisser pour les réorganiser. Accueil reste toujours en premier.',
@@ -795,7 +787,7 @@ export default {
     tabMobileApp: 'App mobile',
     tabTags: 'Tags',
     tabIntegrations: 'Intégrations',
-    tabRuntimes: 'Runtimes',
+    tabRuntimes: 'Machines',
     tabMcpServer: 'Serveur MCP',
     tabApiKeys: 'Clés API',
     tabBots: 'Bots',
@@ -843,7 +835,6 @@ export default {
     goForward: 'Suivant',
     createNewSplit: 'Créer un volet',
     close: 'Fermer',
-    returnToList: 'Retour à la liste',
     previousItem: 'Élément précédent',
     nextItem: 'Élément suivant',
     itemNavigation: 'Navigation entre les éléments',

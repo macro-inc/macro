@@ -11,6 +11,11 @@ export {
   toEntityActionListState,
   toSingleEntityActionListState,
 } from './entity-action-context';
+export {
+  type CreateFolderDropTarget,
+  createFolderDropTargets,
+  FolderDropZone,
+} from './folder-drop-zone';
 export { makeAddTagAction } from './make-add-tag-action';
 export { makeArchiveSessionAction } from './make-archive-session-action';
 export { makeBlockSenderAction } from './make-block-sender-action';
@@ -21,6 +26,7 @@ export { makeCopyEntityIdAction } from './make-copy-entity-id-action';
 export { makeCopyLinkAction } from './make-copy-link-action';
 export { makeCreateReminderAction } from './make-create-reminder-action';
 export { makeDeleteAction } from './make-delete-action';
+export { makeDiscardDraftAction } from './make-discard-draft-action';
 export { makeDownloadAction } from './make-download-action';
 export { makeFavoriteAction } from './make-favorite-action';
 export { makeGithubLinkAction } from './make-github-link-action';

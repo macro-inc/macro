@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
@@ -31,8 +32,6 @@ import {
   type CardMove,
   cardMove,
   cardsOf,
-  laneCards,
-  placeCard,
   withMovedCards,
   withPositions,
 } from '../core/board-moves';
@@ -65,7 +64,10 @@ type BoardLayout = Extract<ViewLayout, { kind: 'board' }>;
 
 /** Where a board's card places come from, and how a move is written. */
 export type BoardPositions = {
+  /** Stable view identity; switching it retires pending visual moves and sort prompts. */
+  viewId?: string;
   state: Accessor<BoardPositionsState>;
+  /** Reading this capability binds it to the current view for a pending move. */
   setPositions?: (
     change: (positions: CardPosition[]) => CardPosition[]
   ) => void;
@@ -93,6 +95,7 @@ type DatabaseBoardViewProps = {
   ) => Promise<Result<void, DatabaseOpsError>>;
   renderCell?: DatabaseTableProps['renderCell'];
   renderTextValue?: (value: string) => JSX.Element;
+  renderLinkValue?: (url: string) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   controlsRef?: (controls: DatabaseBoardControls) => void;
 };
@@ -152,11 +155,15 @@ export function DatabaseBoardView(props: DatabaseBoardViewProps) {
         }
       >
         {(shown) => (
-          <GroupedBoard
-            {...props}
-            layout={shown().layout}
-            groupColumn={shown().group}
-          />
+          <Show when={props.positions.viewId ?? 'local'} keyed>
+            {(_viewId) => (
+              <GroupedBoard
+                {...props}
+                layout={shown().layout}
+                groupColumn={shown().group}
+              />
+            )}
+          </Show>
         )}
       </Show>
     </>
@@ -233,33 +240,23 @@ function GroupedBoard(
   function write(move: CardMove) {
     const persist = props.positions.move;
     if (!persist) return;
-    const ready = state();
-    const shown = board();
-    // A move the shown lane has no place for writes no early places; the server's answer settles them.
-    const placed =
-      ready.kind === 'ready' && shown
-        ? placeCard(
-            laneCards(shown, ready.positions, move.lane, move.row),
-            move,
-            ready.engine.keyBetween
-          )
-        : undefined;
-    if (placed?.isOk())
-      props.positions.setPositions?.((current) =>
-        withPositions(current, placed.value)
-      );
+    // Capture the setter for the view where this move started.
+    const setPositions = props.positions.setPositions;
+    // Pending moves supply visual optimism; saved positions change only on success.
+    // A refusal then reveals the original order without overwriting a later move.
     setMoves((current) => [...current, { move }]);
-    void persist(move)
-      .map(({ positions, tableVersion }) => {
-        props.positions.setPositions?.((current) =>
-          withPositions(current, positions)
-        );
-        taken(move, tableVersion);
-      })
-      .mapErr((failure) => {
-        forget(move);
-        toast.failure(databaseOpMessage(failure, 'this card'));
-      });
+    fireAndForget(
+      persist(move)
+        .map(({ positions, tableVersion }) => {
+          setPositions?.((current) => withPositions(current, positions));
+          taken(move, tableVersion);
+        })
+        .mapErr((failure) => {
+          forget(move);
+          toast.failure(databaseOpMessage(failure, 'this card'));
+        }),
+      'database'
+    );
   }
   function drop(row: string, lane: LaneKey, next?: string) {
     const shown = board();
@@ -317,7 +314,10 @@ function GroupedBoard(
   const addGroup = () => {
     const add = props.onAddGroup;
     const columnId = props.groupColumn.id;
-    return add && canEdit() && isOptionColumn(props.groupColumn)
+    return add &&
+      canEdit() &&
+      !props.groupColumn.fixedOptions &&
+      isOptionColumn(props.groupColumn)
       ? (label: string) => add(columnId, label)
       : undefined;
   };
@@ -343,6 +343,7 @@ function GroupedBoard(
               groupColumn={props.groupColumn}
               renderCell={props.renderCell}
               renderTextValue={props.renderTextValue}
+              renderLinkValue={props.renderLinkValue}
               renderMentionValue={props.renderMentionValue}
               canEdit={props.canEdit}
               rowPending={props.rowPending}

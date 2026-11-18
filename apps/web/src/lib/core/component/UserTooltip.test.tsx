@@ -11,7 +11,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserTooltip } from './UserTooltip';
 
 const mocks = vi.hoisted(() => ({
-  crmFlagEnabled: true,
   teamCrmEnabled: true as boolean | null,
   contact: { id: 'contact-1' } as { id: string } | null | undefined,
   openWithSplit: vi.fn(),
@@ -30,9 +29,13 @@ const mocks = vi.hoisted(() => ({
   bots: [] as Array<{ id: string }>,
 }));
 
+vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
+  AgentRuntime: () => null,
+}));
+
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: (flag: { key: string }) => () => ({
-    enabled: flag.key === 'enable-crm' ? mocks.crmFlagEnabled : true,
+  useFeatureFlag: () => () => ({
+    enabled: true,
     payload: undefined,
   }),
 }));
@@ -57,7 +60,7 @@ vi.mock('@core/user', () => ({
 }));
 
 vi.mock('@queries/channel/get-or-create-dm', () => ({
-  useGetOrCreateDirectMessageMutation: () => ({ mutateAsync: vi.fn() }),
+  existingDirectMessage: vi.fn(),
 }));
 
 vi.mock('@app/features/crm/record-adapter', () => ({
@@ -107,7 +110,6 @@ vi.mock('./UserIcon', () => ({
 }));
 
 beforeEach(() => {
-  mocks.crmFlagEnabled = true;
   mocks.teamCrmEnabled = true;
   mocks.contact = { id: 'contact-1' };
   mocks.openWithSplit.mockReset();
@@ -221,24 +223,14 @@ describe('UserTooltip CRM contact action', () => {
     expect(mocks.onClose).toHaveBeenCalledOnce();
   });
 
-  it('hides the contact action when the CRM feature flag is off', () => {
-    mocks.crmFlagEnabled = false;
-
-    render(() => (
-      <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
-    ));
-
-    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
-  });
-
-  it('hides the contact action when CRM is disabled for the team', () => {
+  it('shows the contact action without legacy team email enrollment', () => {
     mocks.teamCrmEnabled = false;
 
     render(() => (
       <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
     ));
 
-    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Open contact' })).toBeTruthy();
   });
 
   it('hides the contact action when the user has no team', () => {
@@ -297,7 +289,7 @@ describe('UserTooltip settings action', () => {
     await user.click(screen.getByRole('button', { name: 'Settings' }));
 
     expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
-    expect(agentSettingsRequest()?.agentId).toBe(agentId);
+    expect(agentSettingsRequest()).toMatchObject({ type: 'edit', agentId });
     expect(mocks.onClose).toHaveBeenCalledOnce();
   });
 

@@ -31,6 +31,7 @@ pub fn message_type(message: &FromPeer<'_>) -> &'static str {
     match message {
         FromPeer::PeerRegisterId { .. } => "register_id",
         FromPeer::PeerUpdate { .. } => "update",
+        FromPeer::PeerCommentUpdate { .. } => "comment_update",
         FromPeer::PeerAwareness { .. } => "awareness",
         FromPeer::PeerRequestSince { .. } => "request_since",
         FromPeer::PeerRequestSnapshot { .. } => "request_snapshot",
@@ -181,6 +182,7 @@ pub async fn process_message(
         message = tracing::field::display(&message),
         "process websocket message"
     );
+    let comment_only = matches!(message, FromPeer::PeerCommentUpdate { .. });
     match message {
         // Handle peer id registration
         // This registers a peer id to the owner of the current websocket
@@ -193,7 +195,7 @@ pub async fn process_message(
         // Handle an incoming update from a peer
         // Should extract binary update and broadcast it to all other connected peers
         // Should also store the update in the operation log to be applied to the remote doc
-        FromPeer::PeerUpdate { updates, id } => {
+        FromPeer::PeerUpdate { updates, id } | FromPeer::PeerCommentUpdate { updates, id } => {
             telemetry.op_id = Some(id.to_string());
             telemetry.update_bytes = Some(updates.iter().map(|u| u.len()).sum());
             match Wsm::new(dss, sender.websocket()).write_access().await? {
@@ -202,11 +204,26 @@ pub async fn process_message(
                     return Ok(());
                 }
                 WriteAccess::CommentMarks => {
-                    if !changes_only_comment_marks(dss, document_state, &updates).await {
+                    if !changes_only_comment_marks(dss, document_state, &updates, document_id, id)
+                        .await
+                    {
                         return Ok(());
                     }
                 }
-                WriteAccess::Full => {}
+                WriteAccess::Full => {
+                    if comment_only
+                        && !changes_only_comment_marks(
+                            dss,
+                            document_state,
+                            &updates,
+                            document_id,
+                            id,
+                        )
+                        .await
+                    {
+                        return Ok(());
+                    }
+                }
             }
 
             let attribution = match Wsm::new(dss, sender.websocket()).edit_attribution().await {
@@ -347,10 +364,13 @@ pub async fn process_message(
 
 /// A commenter's updates are accepted only when they change nothing but
 /// comment marks. Anything that cannot be checked is refused.
+#[tracing::instrument(skip_all, fields(document.id = %document_id, op.id = %op_id))]
 async fn changes_only_comment_marks(
     dss: &SyncSession,
     document_state: &DocumentState,
     updates: &[SliceWrapper<'_, u8>],
+    document_id: &str,
+    op_id: &str,
 ) -> bool {
     let updates: Vec<&[u8]> = updates.iter().map(|update| &update[..]).collect();
     let change = match document_state.root_change(&updates) {

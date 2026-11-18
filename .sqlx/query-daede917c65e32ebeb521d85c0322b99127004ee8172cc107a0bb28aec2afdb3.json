@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT f.anonymous <> $2 AND EXISTS (\n                    SELECT 1 FROM form_responses\n                    WHERE form_id = f.id AND status = 'submitted'\n                ) AS \"locked!\"\n                FROM forms f WHERE f.id = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "locked!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "daede917c65e32ebeb521d85c0322b99127004ee8172cc107a0bb28aec2afdb3"
+}

@@ -25,6 +25,7 @@ async fn protected_schema_ops_are_refused_and_stale_writes_are_rechecked(pool: P
     let guests = guests(&pool).await;
     // A write planned before the protection was registered must also be refused.
     let planned = Writes {
+        derivations: Vec::new(),
         database_id: guests.database_id,
         created_by: viewer().user_id,
         writes: vec![Write::DeleteColumn {
@@ -140,6 +141,7 @@ async fn one_batch_creates_a_table_a_select_column_on_it_and_rows_filling_it(poo
                                 value: CellValue::Options(vec![OptionRef::Id(crew)]),
                             }],
                         ],
+                        ids: None,
                     },
                 },
             ]
@@ -345,6 +347,7 @@ async fn a_table_id_another_database_already_has_is_refused_as_taken(pool: PgPoo
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -409,6 +412,7 @@ async fn an_option_id_another_definition_already_has_is_refused_as_taken(pool: P
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -509,6 +513,7 @@ async fn a_view_id_another_database_already_has_is_refused_as_taken(pool: PgPool
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -597,6 +602,7 @@ async fn a_stale_expected_version_conflicts_and_writes_nothing(pool: PgPool) {
 
     let outcome = cells(&pool)
         .apply_writes(&Writes {
+            derivations: Vec::new(),
             database_id: guests.database_id,
             created_by: viewer().user_id,
             writes: vec![
@@ -654,6 +660,7 @@ async fn a_type_change_converts_stored_cells_and_rewrites_views_testing_the_colu
                                 value: CellValue::Text("7".into()),
                             }],
                         ],
+                        ids: None,
                     },
                 },
                 DatabaseOp::View {
@@ -888,7 +895,8 @@ async fn a_derived_column_stores_its_formula_and_keeps_its_definition_across_edi
     assert_eq!(
         created.config,
         Some(ColumnConfig::Derived {
-            formula: times(2.0)
+            formula: times(2.0),
+            percentage: false,
         })
     );
 
@@ -924,7 +932,8 @@ async fn a_derived_column_stores_its_formula_and_keeps_its_definition_across_edi
     assert_eq!(
         edited.config,
         Some(ColumnConfig::Derived {
-            formula: times(3.0)
+            formula: times(3.0),
+            percentage: false,
         })
     );
     assert_eq!(

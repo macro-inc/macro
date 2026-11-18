@@ -1,8 +1,5 @@
-import {
-  endTrackedDocumentSpan,
-  registerDocumentSpan,
-} from '@block-md/observability';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { schema } from '@loro-mirror/core';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
@@ -31,7 +28,7 @@ import {
   WALSyncer,
 } from '@macro-inc/collaboration/collab/wal';
 import type { PeerPresence } from '@macro-inc/graphics/loro';
-import { Telemetry } from '@macro-inc/observability';
+import type { Span } from '@macro-inc/observability';
 import type { LoroDoc } from 'loro-crdt';
 import { err, errAsync, type ResultAsync } from 'neverthrow';
 import {
@@ -52,6 +49,7 @@ type CanvasConnection = {
 export type CanvasSessionOptions = {
   documentId: string;
   initial: CanvasFile;
+  span?: Span;
   requireShared?: boolean;
   userId?: string;
   canEdit: Accessor<boolean>;
@@ -95,6 +93,15 @@ function serializeSnapshot<T>(
   const settled = finish();
   snapshotOperations.set(id, settled);
   return result;
+}
+
+// A failed request's text names hosts and transport internals, which tell the
+// person nothing; the span keeps it. Opening calls more than one service, so
+// the message names none of them.
+function openFailure(cause: unknown): string {
+  if (thrownResultErrorHasCode(cause, 'NETWORK_ERROR'))
+    return "Couldn't connect to open this canvas. Check your connection and try again.";
+  return cause instanceof Error ? cause.message : 'Unable to open this canvas.';
 }
 
 /** Durable scene ownership uses the same engine, WAL and transport as documents. */
@@ -173,6 +180,7 @@ export function createCanvasSession(options: CanvasSessionOptions) {
   }
   const manager = new CanvasManager(schema({}), {
     documentId: options.documentId,
+    parentSpan: options.span,
     // The graphics backend owns the typed scene Mirror on this same document.
     mirror: false,
   });
@@ -294,6 +302,7 @@ export function createCanvasSession(options: CanvasSessionOptions) {
   };
   const engine = createSyncEngine({
     loroManager: manager,
+    parentSpan: options.span,
     awareness,
     syncs: { live, wal },
     bindings: { onRemoteState: () => {} },
@@ -432,28 +441,17 @@ export function createCanvasSession(options: CanvasSessionOptions) {
     return hydration;
   }
   async function runInitialization() {
-    const span = Telemetry.span('canvas.open');
-    span.setAttr('document.id', options.documentId);
-    span.setAttr('document.type', 'canvas');
-    registerDocumentSpan(options.documentId, span);
+    const span = options.span;
     try {
-      await span.span('canvas.hydrate', hydrate);
+      if (span) await span.span('canvas.hydrate', hydrate);
+      else await hydrate();
     } catch (cause) {
-      span.error(cause);
+      span?.error(cause);
       if (!disposed && started)
         setFailure(
           'Live canvas sync is unavailable. Local changes are preserved.'
         );
-      else if (!disposed)
-        setState({
-          t: 'error',
-          message:
-            cause instanceof Error
-              ? cause.message
-              : 'Unable to open this canvas.',
-        });
-    } finally {
-      endTrackedDocumentSpan(span);
+      else if (!disposed) setState({ t: 'error', message: openFailure(cause) });
     }
   }
   const initialization = initialize();

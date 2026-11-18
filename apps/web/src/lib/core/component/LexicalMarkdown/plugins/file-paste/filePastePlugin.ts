@@ -10,6 +10,10 @@ import {
   type LexicalEditor,
   PASTE_COMMAND,
 } from 'lexical';
+import {
+  shouldStageDesktopPasteFiles,
+  stageDesktopPasteFiles,
+} from './desktopPasteboardFiles';
 
 type FilePastePluginProps = {
   onPasteFilesAndDirs: (
@@ -17,6 +21,13 @@ type FilePastePluginProps = {
     directories: FileSystemDirectoryEntry[]
   ) => void;
 };
+
+async function pasteStagedDesktopFiles(
+  files: File[],
+  props: FilePastePluginProps
+) {
+  props.onPasteFilesAndDirs(await stageDesktopPasteFiles(files), []);
+}
 
 function registerFilePastePlugin(
   editor: LexicalEditor,
@@ -61,6 +72,17 @@ function registerFilePastePlugin(
           props.onPasteFilesAndDirs([], directoryEntries);
           return true;
         }
+
+        const files = Array.from(data.files);
+        if (shouldStageDesktopPasteFiles(files)) {
+          event.preventDefault();
+          fireAndForget(
+            pasteStagedDesktopFiles(files, props),
+            'markdown-file-paste'
+          );
+          return true;
+        }
+
         props.onPasteFilesAndDirs(fileEntries, []);
         return true;
       },

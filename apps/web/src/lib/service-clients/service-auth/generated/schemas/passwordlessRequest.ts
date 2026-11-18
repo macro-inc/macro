@@ -9,6 +9,10 @@ import type { PasswordlessRequestReferralCode } from './passwordlessRequestRefer
 export interface PasswordlessRequest {
   /** The email to initiate passwordless authentication for */
   email: string;
+  /** Create an agent account if this address has no account yet. Otherwise
+`true` has no effect, and `false` reverts an agent flag nobody has proven:
+see `revert_unconfirmed_agent`. */
+  is_agent?: boolean;
   /** The redirect uri to redirect to after login */
   redirect_uri: string;
   /** The referral code */

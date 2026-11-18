@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(SUM(cost_cents), 0)::bigint AS \"bonus!\"\n            FROM ai_free_allowance_bonus\n            WHERE user_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bonus!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "595fd1716ea138f6d3e995dda5e2ad7dbb646a72ba2161d2afb2d83c5b326ab0"
+}

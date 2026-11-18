@@ -184,6 +184,10 @@ jobs:
       with:
         persist-credentials: 'false'
         clean: 'false'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: 1.3.13
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -237,10 +241,11 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Upload handoff artifact
-      run: nsc artifact upload prebuilt-binaries.tar.gz "$DEST" --expires_in=24h
+      run: bun .github/scripts/upload-handoff-artifact.ts prebuilt-binaries.tar.gz "$DEST"
       shell: bash
       env:
         DEST: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.service }}/prebuilt-binaries.tar.gz
+      timeout-minutes: 20
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
@@ -261,6 +266,10 @@ jobs:
       with:
         persist-credentials: 'false'
         clean: 'false'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: 1.3.13
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -289,10 +298,11 @@ jobs:
         echo "handoff receipt: $(sha256sum lambda-artifacts.tar.gz | cut -d' ' -f1) ($(stat -c%s lambda-artifacts.tar.gz) bytes)"
       shell: bash
     - name: Upload handoff artifact
-      run: nsc artifact upload lambda-artifacts.tar.gz "$DEST" --expires_in=24h
+      run: bun .github/scripts/upload-handoff-artifact.ts lambda-artifacts.tar.gz "$DEST"
       shell: bash
       env:
         DEST: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.service }}/lambda-artifacts.tar.gz
+      timeout-minutes: 20
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
@@ -409,36 +419,19 @@ jobs:
     name: Deployment Summary
     runs-on: namespace-profile-linux-tiny-no-cache
     steps:
+    - name: Checkout Repo
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        persist-credentials: 'false'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: 1.3.13
     - name: Check deployment results
-      run: |
-        if [[ "${{ needs.setup.result }}" == "failure" ]]; then
-          echo "❌ Deployment setup failed"
-          exit 1
-        elif [[ "${{ needs.setup.result }}" == "skipped" ]]; then
-          echo "⏭️ Deployment setup was skipped"
-        elif [[ "${{ needs.warm-binaries.result }}" == "failure" || "${{ needs.warm-lambdas.result }}" == "failure" ]]; then
-          echo "❌ Warming shared deps onto a sticky disk failed"
-          exit 1
-        elif [[ "${{ needs.build-service-binaries.result }}" == "failure" ]]; then
-          echo "❌ One or more service binary builds failed"
-          exit 1
-        elif [[ "${{ needs.build-lambda-artifacts.result }}" == "failure" ]]; then
-          echo "❌ One or more Lambda artifact builds failed"
-          exit 1
-        elif [[ "${{ needs.migrate-db.result }}" == "failure" ]]; then
-          echo "❌ Database migrations failed"
-          exit 1
-        elif [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
-          echo "❌ One or more service deployments failed"
-          exit 1
-        elif [[ "${{ needs.deploy-services.result }}" == "skipped" ]]; then
-          echo "⏭️ No services to deploy"
-        else
-          echo "✅ All service deployments completed successfully for $ENVIRONMENT environment"
-        fi
+      run: bun .github/scripts/check-service-deployment-results.ts
       shell: bash
       env:
-        ENVIRONMENT: ${{ inputs.environment }}
+        DEPLOYMENT_NEEDS: ${{ toJson(needs) }}
 concurrency:
   group: deploy-all-services-${{ inputs.environment }}
   cancel-in-progress: false

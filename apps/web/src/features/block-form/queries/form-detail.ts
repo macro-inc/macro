@@ -1,5 +1,7 @@
+import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 /** The forms service's wire shapes, projected into the feature's vocabulary and back. */
 
+import type { ColumnKind } from '@service-storage/generated/schemas/columnKind';
 import type { Form } from '@service-storage/generated/schemas/form';
 import type { FormDetail as WireFormDetail } from '@service-storage/generated/schemas/formDetail';
 import type { FormLayout as WireFormLayout } from '@service-storage/generated/schemas/formLayout';
@@ -12,6 +14,7 @@ import type { MyResponse, SubmitOutcome } from '../context/form-context';
 import type {
   FormBookingTarget,
   FormColumn,
+  FormColumnKind,
   FormDetail,
   FormLayout,
   FormMetadata,
@@ -24,6 +27,7 @@ export function toFormMetadata(form: Form): FormMetadata {
   return {
     id: form.id,
     name: form.name,
+    appearance: readEntityAppearance(form.appearance),
     description: form.description,
     ownerId: form.ownerId,
     databaseId: form.databaseId,
@@ -32,7 +36,14 @@ export function toFormMetadata(form: Form): FormMetadata {
     status: form.status,
     closesAt: form.closesAt ?? null,
     tallyVisible: form.tallyVisible,
+    responsesVisible: form.responsesVisible,
+    anonymous: form.anonymous,
     confirmationMessage: form.confirmationMessage,
+    branding: {
+      logoFileId: form.branding.logoFileId ?? null,
+      coverFileId: form.branding.coverFileId ?? null,
+      accentColor: form.branding.accentColor ?? null,
+    },
     submittedColumnId: form.submittedColumnId ?? null,
     respondentColumnId: form.respondentColumnId ?? null,
   };
@@ -48,6 +59,7 @@ function toSection(section: FormSectionDetail): FormSection {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: questions.showWhen ?? null,
       bookingTarget: null,
       questions: questions.questions.map((question) => ({
         id: question.id,
@@ -64,6 +76,7 @@ function toSection(section: FormSectionDetail): FormSection {
       kind: 'gate',
       gateRules: gate.rules,
       gateMessage: gate.message,
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     }))
@@ -74,6 +87,7 @@ function toSection(section: FormSectionDetail): FormSection {
       kind: 'booking',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       // Editors only: a respondent's detail withholds where it books.
       bookingTarget: booking.target ? toBookingTarget(booking.target) : null,
       questions: [],
@@ -85,6 +99,7 @@ function toSection(section: FormSectionDetail): FormSection {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     }));
@@ -94,6 +109,11 @@ function toBookingTarget(target: FormBookingTarget): FormBookingTarget {
   return { profileId: target.profileId, eventTypeId: target.eventTypeId };
 }
 
+/** Percentage is Number storage; forms send the stored fraction. */
+function toFormColumnKind(kind: ColumnKind): FormColumnKind {
+  return kind.type === 'percentage' ? { type: 'number' } : kind;
+}
+
 /** The columns the questions ask, as the detail joins them. */
 function questionColumns(detail: WireFormDetail): FormColumn[] {
   return detail.sections.flatMap((section) =>
@@ -101,7 +121,8 @@ function questionColumns(detail: WireFormDetail): FormColumn[] {
       ? section.questions.map((question) => ({
           id: question.column,
           name: question.title,
-          kind: question.kind,
+          kind: toFormColumnKind(question.kind),
+          percentage: question.kind.type === 'percentage',
           options: question.options.map((option) => ({
             id: option.id,
             label: option.label,
@@ -154,6 +175,7 @@ export function toFormLayout(layout: WireFormLayout): FormLayout {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: questions.showWhen ?? null,
           bookingTarget: null,
           questions: questions.questions.map((question) => ({
             id: question.id,
@@ -170,6 +192,7 @@ export function toFormLayout(layout: WireFormLayout): FormLayout {
           kind: 'gate',
           gateRules: gate.rules,
           gateMessage: gate.message,
+          showWhen: null,
           bookingTarget: null,
           questions: [],
         }))
@@ -180,6 +203,7 @@ export function toFormLayout(layout: WireFormLayout): FormLayout {
           kind: 'booking',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: toBookingTarget(booking.target),
           questions: [],
         }))
@@ -190,6 +214,7 @@ export function toFormLayout(layout: WireFormLayout): FormLayout {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [],
         }))
@@ -223,6 +248,7 @@ export function toLayoutDocument(layout: FormLayout): WireFormLayout {
           id: section.id,
           title: section.title,
           description: section.description,
+          ...(section.showWhen ? { showWhen: section.showWhen } : {}),
           questions: section.questions.map((question) => ({
             id: question.id,
             column: question.columnId,
@@ -271,6 +297,15 @@ export function toSubmitOutcome(outcome: SubmissionOutcome): SubmitOutcome {
 }
 
 export function toMyResponse(mine: WireMyResponse): MyResponse {
+  if (mine.kind === 'anonymous')
+    return {
+      status: 'submitted',
+      submittedAt: undefined,
+      answers: [],
+      booking: null,
+      anonymous: true,
+    };
+  // Before `kind`, the service sent only saved responses.
   return {
     status: mine.response.status,
     submittedAt: mine.response.submittedAt,

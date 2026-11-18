@@ -11,8 +11,11 @@ impl MailboxCredentialHealthRepository for PgMailboxSync {
         mailbox: MailboxAccess,
         health: CredentialHealth,
     ) -> Result<(), TokenError> {
-        let failed = |_| TokenError::Transient {
-            message: "could not persist mailbox health".into(),
+        let failed = |error: sqlx::Error| TokenError::Transient {
+            message: format!(
+                "could not persist mailbox health: {}",
+                DatabaseFailure::from(&error)
+            ),
         };
         let mut tx = self.db.begin().await.map_err(failed)?;
         let current = sqlx::query!("SELECT sync_generation,needs_reauth FROM email_links WHERE id = $1 AND grant_generation = $2 AND is_sync_active AND provider = 'OUTLOOK' AND sync_generation = $3 FOR UPDATE",mailbox.link_id,mailbox.grant_generation,mailbox.sync_generation)

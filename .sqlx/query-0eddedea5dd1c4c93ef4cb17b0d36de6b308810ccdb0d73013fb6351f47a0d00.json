@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT entity_id AS \"entity_id!\", access_level AS \"access_level!: AccessLevel\"\n        FROM entity_access\n        JOIN database_entities d ON d.database_id = entity_access.entity_id\n        WHERE entity_type = 'database'\n        AND source_id = ANY($1)\n\n        UNION ALL\n\n        SELECT f.database_id, 'edit'::\"AccessLevel\"\n        FROM entity_access ea\n        JOIN forms f ON f.id = ea.entity_id\n        JOIN database_entities d ON d.database_id = f.database_id\n        WHERE ea.entity_type = 'form'\n        AND ea.source_id = ANY($1)\n        AND ea.access_level IN ('edit', 'owner')\n        AND f.trashed_at IS NULL\n\n        UNION ALL\n\n        SELECT f.database_id, 'view'::\"AccessLevel\"\n        FROM entity_access ea\n        JOIN forms f ON f.id = ea.entity_id\n        JOIN database_entities d ON d.database_id = f.database_id\n        WHERE ea.entity_type = 'form'\n        AND ea.source_id = ANY($1)\n        AND ea.access_level = 'view'\n        AND f.responses_visible\n        AND f.trashed_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "0eddedea5dd1c4c93ef4cb17b0d36de6b308810ccdb0d73013fb6351f47a0d00"
+}

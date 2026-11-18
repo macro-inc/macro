@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-    
+
     constructor(args?: {
         client?: Client;
     }) {
@@ -30,9 +30,9 @@ class HeyApiClient {
 
 class HeyApiRegistry<T> {
     private readonly defaultKey = 'default';
-    
+
     private readonly instances: Map<string, T> = new Map();
-    
+
     get(key?: string): T {
         const instance = this.instances.get(key ?? this.defaultKey);
         if (!instance) {
@@ -40,7 +40,7 @@ class HeyApiRegistry<T> {
         }
         return instance;
     }
-    
+
     set(value: T, key?: string): void {
         this.instances.set(key ?? this.defaultKey, value);
     }
@@ -48,7 +48,7 @@ class HeyApiRegistry<T> {
 
 export class Sdk extends HeyApiClient {
     public static readonly __registry: HeyApiRegistry<Sdk> = new HeyApiRegistry<Sdk>();
-    
+
     constructor(args?: {
         client?: Client;
         key?: string;
@@ -56,11 +56,11 @@ export class Sdk extends HeyApiClient {
         super(args);
         Sdk.__registry.set(this, args?.key);
     }
-    
+
     public proxyRequestHandler<ThrowOnError extends boolean = false>(options: Options<ProxyRequestHandlerData, ThrowOnError>): RequestResult<unknown, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<unknown, unknown, ThrowOnError>({ url: '/proxy', ...options });
     }
-    
+
     /**
      * Unfurl the URL passed via the `url` query parameter and return its
      * extracted metadata (title, description, image, favicon).
@@ -73,7 +73,7 @@ export class Sdk extends HeyApiClient {
     public getUnfurl<ThrowOnError extends boolean = false>(options: Options<GetUnfurlData, ThrowOnError>): RequestResult<GetUnfurlResponses, GetUnfurlErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetUnfurlResponses, GetUnfurlErrors, ThrowOnError>({ url: '/unfurl', ...options });
     }
-    
+
     public getUnfurlBulk<ThrowOnError extends boolean = false>(options: Options<GetUnfurlBulkData, ThrowOnError>): RequestResult<GetUnfurlBulkResponses, GetUnfurlBulkErrors, ThrowOnError> {
         return (options.client ?? this.client).post<GetUnfurlBulkResponses, GetUnfurlBulkErrors, ThrowOnError>({
             url: '/unfurl/bulk',

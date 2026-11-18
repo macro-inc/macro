@@ -17,6 +17,9 @@
 //! - [`outbound::manager::InMemAgentManager`] provisions per-session agent
 //!   tasks and hands the harness the [`agent_runtime_protocol`] transport it
 //!   expects from any container manager.
+// The skill service's listing future, laid out inside a turn, needs more than
+// the default query depth with production adapters.
+#![recursion_limit = "256"]
 #![deny(missing_docs)]
 
 pub mod domain;

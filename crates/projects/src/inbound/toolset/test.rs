@@ -180,3 +180,18 @@ fn test_update_sharing_detects_an_empty_change() {
     }));
     assert!(!change.is_empty());
 }
+
+#[test]
+fn test_duplicate_item_deserializes_entity_types() {
+    for (raw, expected) in [
+        ("document", DuplicableEntityType::Document),
+        ("database", DuplicableEntityType::Database),
+    ] {
+        let tool: DuplicateItem = serde_json::from_value(serde_json::json!({
+            "entityType": raw,
+            "entityId": "d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc",
+        }))
+        .expect("valid input");
+        assert_eq!(tool.entity_type, expected);
+    }
+}

@@ -3,7 +3,7 @@
 use agent_runtime_protocol::domain::action::{AgentAction, PromptAttachment};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use trigger_context::TriggerContext;
+use trigger_context::{TriggerContext, TriggerOrigin};
 
 use super::{AnnounceOrigin, ReplyPlacement};
 
@@ -32,6 +32,9 @@ pub struct MentionOrigin {
     /// Why the agent was called, as the trigger read it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<TriggerContext>,
+    /// What opened the session, stored with it.
+    #[serde(default, skip_serializing_if = "TriggerOrigin::is_unknown")]
+    pub trigger_origin: TriggerOrigin,
 }
 
 /// A task assignment that starts a session without a user-authored mention.
@@ -48,6 +51,9 @@ pub struct TaskAssignmentOrigin {
     /// The task, who assigned it, and how, as the trigger read it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<TriggerContext>,
+    /// What opened the session, stored with it.
+    #[serde(default, skip_serializing_if = "TriggerOrigin::is_unknown")]
+    pub trigger_origin: TriggerOrigin,
 }
 
 /// The event that opens a managed session.
@@ -90,6 +96,13 @@ impl SessionOrigin {
         match self {
             Self::Mention(origin) => origin.context.as_ref(),
             Self::TaskAssignment(origin) => origin.context.as_ref(),
+        }
+    }
+
+    pub(crate) fn trigger_origin(&self) -> &TriggerOrigin {
+        match self {
+            Self::Mention(origin) => &origin.trigger_origin,
+            Self::TaskAssignment(origin) => &origin.trigger_origin,
         }
     }
 

@@ -22,13 +22,10 @@ else
   fi
   echo "PR head moved to ${head_sha:0:10} but its native tree is still ${built_tree:0:10}."
 fi
-merge=$(pr_merge_commit)
-native_tree_fetch "$merge"
-merged_tree=$(native_tree_hash "$merge")
-if [[ "$merged_tree" != "$built_tree" ]]; then
-  echo "iOS native code landed on main while this release was building: the merge result" \
-    "(${merge:0:10}) hashes ${merged_tree:0:10}, build ${built} ${built_tree:0:10}. Not submitting a build the merge gate could never accept." >&2
-  echo "Merge main into the PR, bump (${bump}), commit, and re-add the ios-update label." >&2
+if ! merge_result_native_check native_tree_hash native_tree_listing native_tree_fetch; then
+  echo "iOS native code landed on ${BASE_BRANCH} while this release was building. Not submitting build ${built}" \
+    "(native tree ${built_tree:0:10}): the merge gate could never accept it." >&2
+  echo "Merge ${BASE_BRANCH} into the PR, bump (${bump}), commit, and re-add the ios-update label." >&2
   exit 1
 fi
-echo "Merge result ${merge:0:10} matches the built native tree (${built_tree:0:10}); submitting."
+echo "Submitting build ${built} (native tree ${built_tree:0:10})."

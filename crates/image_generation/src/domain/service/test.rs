@@ -142,6 +142,7 @@ fn request(prompt: &str) -> NewGeneratedImage {
         prompt: prompt.to_string(),
         aspect_ratio: Some(ImageAspectRatio::Widescreen),
         reference_images: Vec::new(),
+        agent_session_id: None,
     }
 }
 
@@ -518,7 +519,8 @@ impl UsageRecorder for RecordingUsage {
 }
 
 #[tokio::test]
-async fn attributes_usage_to_the_user_even_when_upload_fails() {
+async fn attributes_usage_to_the_user_and_session_even_when_upload_fails() {
+    let session = Uuid::from_u128(0xabc);
     for fail in [false, true] {
         let recorder = Arc::new(RecordingUsage::default());
         let service = ImageGenerationServiceImpl::new(
@@ -532,7 +534,13 @@ async fn attributes_usage_to_the_user_even_when_upload_fails() {
         )
         .with_reference_reader(Arc::new(RecordingReader::returning(Vec::new())));
         let result = service
-            .create_generated_image(&principal(), request("draw a cat"))
+            .create_generated_image(
+                &principal(),
+                NewGeneratedImage {
+                    agent_session_id: Some(session),
+                    ..request("draw a cat")
+                },
+            )
             .await;
         assert_eq!(result.is_err(), fail);
         let events = recorder.0.lock().unwrap();
@@ -540,6 +548,7 @@ async fn attributes_usage_to_the_user_even_when_upload_fails() {
         assert_eq!(events[0].feature, AiFeature::ImageGeneration);
         assert_eq!(&events[0].user, principal().user().unwrap());
         assert_eq!(events[0].entity, None);
+        assert_eq!(events[0].agent_session_id, Some(session));
         assert_eq!(
             events[0].amount,
             ai_usage::UsageAmount::Tokens {
@@ -597,4 +606,105 @@ async fn direct_users_and_team_bots_have_distinct_usage_attribution() {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].user, expected_user);
     }
+}
+
+/// Records who was admitted for which feature and answers with a fixed result.
+struct RecordingAdmission {
+    result: Result<(), ai_billing::AiAdmissionError>,
+    admitted: Mutex<Vec<(String, AiFeature)>>,
+}
+
+impl RecordingAdmission {
+    fn new(result: Result<(), ai_billing::AiAdmissionError>) -> Arc<Self> {
+        Arc::new(Self {
+            result,
+            admitted: Mutex::default(),
+        })
+    }
+}
+
+impl AiAdmissionService for RecordingAdmission {
+    fn admit<'a>(
+        &'a self,
+        user: &'a MacroUserIdStr<'_>,
+        feature: AiFeature,
+    ) -> ai_billing::domain::admission::AdmissionFuture<'a> {
+        self.admitted
+            .lock()
+            .unwrap()
+            .push((user.to_string(), feature));
+        let result = self.result;
+        Box::pin(async move { result })
+    }
+}
+
+#[tokio::test]
+async fn admitted_service_charges_the_acting_user_before_generating() {
+    let generator = Arc::new(FakeGenerator::returning(png()));
+    let admission = RecordingAdmission::new(Ok(()));
+    let service = AdmittedImageGenerationService::new(
+        Arc::new(test_service(
+            generator.clone(),
+            Arc::new(RecordingStore::default()),
+        )),
+        admission.clone(),
+    );
+    let created = service
+        .create_generated_image(&principal(), request("draw a cat"))
+        .await
+        .unwrap();
+    assert_eq!(created.static_file.id, STATIC_FILE_ID);
+    assert_eq!(
+        *admission.admitted.lock().unwrap(),
+        [(
+            "macro|owner@example.com".to_string(),
+            AiFeature::ImageGeneration
+        )]
+    );
+    assert_eq!(generator.requests.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn admitted_service_generates_nothing_when_admission_refuses() {
+    let generator = Arc::new(FakeGenerator::returning(png()));
+    let store = Arc::new(RecordingStore::default());
+    let denied = ai_billing::AiAdmissionError::Denied(ai_billing::DenyReason::AllowanceExhausted);
+    let service = AdmittedImageGenerationService::new(
+        Arc::new(test_service(generator.clone(), store.clone())),
+        RecordingAdmission::new(Err(denied)),
+    );
+    assert!(matches!(
+        service
+            .create_generated_image(&principal(), request("draw a cat"))
+            .await,
+        Err(GenerateImageError::Admission(error)) if error == denied
+    ));
+    assert!(generator.requests.lock().unwrap().is_empty());
+    assert!(store.saves.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn admitted_service_refuses_team_bots_with_no_user_to_bill() {
+    let generator = Arc::new(FakeGenerator::returning(png()));
+    let admission = RecordingAdmission::new(Ok(()));
+    let service = AdmittedImageGenerationService::new(
+        Arc::new(test_service(
+            generator.clone(),
+            Arc::new(RecordingStore::default()),
+        )),
+        admission.clone(),
+    );
+    let team_bot = CreationPrincipal::TeamBot {
+        bot: bot_id::NonSystemBotId::new(bot_id::BotId::new_from_uuid(Uuid::from_u128(42)))
+            .unwrap(),
+        team: Uuid::from_u128(43),
+    };
+    assert!(matches!(
+        service
+            .create_generated_image(&team_bot, request("draw a cat"))
+            .await,
+        Err(GenerateImageError::UserRequired)
+    ));
+    assert!(admission.admitted.lock().unwrap().is_empty());
+    assert!(generator.requests.lock().unwrap().is_empty());
 }

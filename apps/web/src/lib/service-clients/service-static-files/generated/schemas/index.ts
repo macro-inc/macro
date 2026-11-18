@@ -12,5 +12,6 @@ export * from './deleteResultError';
 export * from './errorResponse';
 export * from './fileMetadata';
 export * from './putFileRequest';
+export * from './putFileRequestContentLength';
 export * from './putFileRequestContentType';
 export * from './putFileResponse';

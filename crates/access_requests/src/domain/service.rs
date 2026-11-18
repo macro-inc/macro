@@ -9,6 +9,7 @@ use models_permissions::{
     sharing::{SharingFacts, SharingTeamRole},
 };
 use std::sync::Arc;
+use tracing::Level;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -52,6 +53,8 @@ fn team_reviewers(facts: &SharingFacts) -> Vec<MacroUserIdStr<'static>> {
 pub fn supported_levels(kind: ShareEntityType, file_type: Option<&str>) -> Vec<AccessLevel> {
     use AccessLevel::{Comment, Edit, View};
     match kind {
+        // A runtime's readers and users.
+        ShareEntityType::Harness => vec![View, Edit],
         ShareEntityType::ExternalChat | ShareEntityType::EmailThread => vec![View],
         ShareEntityType::Document => match file_type {
             Some("md" | "docx" | "spreadsheet" | "pptx") => vec![View, Comment, Edit],
@@ -145,6 +148,25 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
             Err(RequestError::Forbidden)
         }
     }
+    /// A runtime is only ever shared among people who share a team with its owner.
+    async fn require_teammate(
+        &self,
+        tx: &mut R::Transaction,
+        entity: ShareEntity,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<(), RequestError> {
+        if entity.entity_type != ShareEntityType::Harness {
+            return Ok(());
+        }
+        let Owner::User(owner) = tx.facts().owner.clone() else {
+            return Err(RequestError::Forbidden);
+        };
+        if tx.shares_team(&owner, user).await? {
+            Ok(())
+        } else {
+            Err(RequestError::Forbidden)
+        }
+    }
     fn event(
         &self,
         entity: ShareEntity,
@@ -169,11 +191,12 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
             affected_users,
             superseded: Vec::new(),
             trace_context: Default::default(),
+            stopped: None,
         }
     }
 
     /// Read current request state; non-reviewers never receive other people's requests.
-    #[tracing::instrument(name = "access_requests.state", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.state", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn state(
         &self,
         user: MacroUserIdStr<'static>,
@@ -215,17 +238,19 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     }
 
     /// Submit or change one pending access request. Identical pending replays are harmless.
-    #[tracing::instrument(name = "access_requests.submit", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.submit", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn submit(
         &self,
         user: MacroUserIdStr<'static>,
         entity: ShareEntity,
         args: RequestAccess,
+        requested_by_agent: Option<Uuid>,
     ) -> Result<AccessRequest, RequestError> {
         let (mut tx, level) = self.begin_request(&user, entity).await?;
         if reviewers(tx.facts()).is_empty() || reviewers(tx.facts()).contains(&user) {
             return Err(RequestError::Forbidden);
         }
+        self.require_teammate(&mut tx, entity, &user).await?;
         if !supported_levels(entity.entity_type, tx.facts().file_type.as_deref())
             .contains(&args.requested_level)
             || level.is_some_and(|level| args.requested_level <= level)
@@ -265,6 +290,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
             resolved_at: None,
             granted_level: None,
             retry_after: Some(now + Duration::seconds(REQUEST_COOLDOWN_SECONDS)),
+            requested_by_agent,
         };
         tx.save(&request).await?;
         let event = self.event(
@@ -280,7 +306,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     }
 
     /// Cancel only the caller's current revision.
-    #[tracing::instrument(name = "access_requests.cancel", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.cancel", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn cancel(
         &self,
         user: MacroUserIdStr<'static>,
@@ -304,7 +330,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     }
 
     /// Resolve a pending revision and atomically grant access or begin the denial cooldown.
-    #[tracing::instrument(name = "access_requests.resolve", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.resolve", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn resolve(
         &self,
         user: MacroUserIdStr<'static>,
@@ -322,6 +348,8 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
             {
                 return Err(RequestError::InvalidLevel);
             }
+            self.require_teammate(&mut tx, entity, &request.requester_id)
+                .await?;
             tx.grant(&request.requester_id, Some(level), true).await?;
             request.status = RequestStatus::Granted;
             request.granted_level = Some(level);
@@ -347,7 +375,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     }
 
     /// Direct grants are visible to reviewers and their recipient only.
-    #[tracing::instrument(name = "access_requests.direct_access", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.direct_access", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn direct_access(
         &self,
         user: MacroUserIdStr<'static>,
@@ -364,7 +392,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     }
 
     /// Explicit owner management can reduce a direct grant, preserving other access paths.
-    #[tracing::instrument(name = "access_requests.set_direct_access", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.set_direct_access", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn set_direct_access(
         &self,
         user: MacroUserIdStr<'static>,
@@ -383,8 +411,26 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
         {
             return Err(RequestError::InvalidLevel);
         }
+        if level.is_some() {
+            self.require_teammate(&mut tx, entity, &recipient).await?;
+        }
+        let stopped_before = tx.stopped_residents(&recipient).await?;
         tx.grant(&recipient, level, false).await?;
-        let event = self.event(entity, tx.facts(), &user, None, recipient);
+        // Only agents this change stopped: lowering a grant that never let
+        // them run tells nobody anything.
+        let agents: Vec<Resident> = tx
+            .stopped_residents(&recipient)
+            .await?
+            .into_iter()
+            .filter(|agent| !stopped_before.contains(agent))
+            .collect();
+        let mut event = self.event(entity, tx.facts(), &user, None, recipient.clone());
+        if !agents.is_empty() {
+            event.stopped = Some(StoppedResidents {
+                owner: recipient,
+                agents,
+            });
+        }
         tx.enqueue(event).await?;
         tx.commit().await
     }

@@ -38,7 +38,12 @@ export function runCanvasCode(
     const minted = new Set(refs);
     const created = new Set<string>();
     for (const op of ops) {
-      if (op.kind !== 'create' && op.kind !== 'connect' && op.kind !== 'group')
+      if (
+        op.kind !== 'create' &&
+        op.kind !== 'connect' &&
+        op.kind !== 'group' &&
+        op.kind !== 'createArtifact'
+      )
         continue;
       if (!minted.has(op.id) || created.has(op.id))
         throw new Error(

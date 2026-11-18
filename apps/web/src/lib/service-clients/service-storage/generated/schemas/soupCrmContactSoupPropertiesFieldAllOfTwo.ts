@@ -4,18 +4,21 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SoupCrmContactSoupPropertiesFieldAllOfTwoCompanyId } from './soupCrmContactSoupPropertiesFieldAllOfTwoCompanyId';
+import type { SoupCrmContactSoupPropertiesFieldAllOfTwoCompanyName } from './soupCrmContactSoupPropertiesFieldAllOfTwoCompanyName';
+import type { SoupCrmContactSoupPropertiesFieldAllOfTwoEmail } from './soupCrmContactSoupPropertiesFieldAllOfTwoEmail';
 import type { SoupCrmContactSoupPropertiesFieldAllOfTwoName } from './soupCrmContactSoupPropertiesFieldAllOfTwoName';
 import type { SoupCrmContactSoupPropertiesFieldAllOfTwoViewedAt } from './soupCrmContactSoupPropertiesFieldAllOfTwoViewedAt';
 
 export type SoupCrmContactSoupPropertiesFieldAllOfTwo = {
-  /** Parent company ID. */
-  companyId: string;
-  /** Parent company's display name. */
-  companyName: string;
+  /** Parent company ID; `None` for a contact without a company. */
+  companyId?: SoupCrmContactSoupPropertiesFieldAllOfTwoCompanyId;
+  /** Parent company's display name; `None` without a company. */
+  companyName?: SoupCrmContactSoupPropertiesFieldAllOfTwoCompanyName;
   /** Record creation time. */
   createdAt: string;
-  /** Full email address. */
-  email: string;
+  /** Full email address; `None` for a contact added by name alone. */
+  email?: SoupCrmContactSoupPropertiesFieldAllOfTwoEmail;
   /** Earliest interaction for this team record. */
   firstInteraction: string;
   /** Whether the contact or parent company is hidden. */

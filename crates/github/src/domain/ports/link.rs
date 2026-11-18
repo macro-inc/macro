@@ -97,7 +97,7 @@ pub trait GithubRepo: Send + Sync + 'static {
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait GithubOauth: Send + Sync + 'static {
     /// The error type returned by repository operations.
-    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+    type Err: Into<GithubError> + Send + std::fmt::Debug;
 
     /// Constructs the oauth url to authenticate with github.
     ///
@@ -197,7 +197,7 @@ pub trait GithubOauth: Send + Sync + 'static {
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait Auth: Send + Sync + 'static {
     /// The error type returned by repository operations.
-    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+    type Err: Into<GithubError> + Send + std::fmt::Debug;
 
     /// Creates or refreshes the grant after OAuth has verified the GitHub account.
     fn link_user(
@@ -257,6 +257,14 @@ pub trait GithubLinkService: Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'static>>,
     ) -> impl Future<Output = Result<GithubLinkStatus, GithubError>> + Send;
+
+    /// The user's GitHub token from their account link, checked against
+    /// GitHub. [`GithubError::NoLinkFound`] when they never linked,
+    /// [`GithubError::ReauthenticationRequired`] when the token no longer works.
+    fn get_user_access_token(
+        &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> impl Future<Output = Result<GithubAccessToken, GithubError>> + Send;
 
     /// Enriches GitHub pull request references with details from the GitHub API.
     fn enrich_pull_requests(

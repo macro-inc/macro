@@ -81,7 +81,8 @@ export function createRunCodeTool(opts: RunCodeToolOptions) {
       code: z.string(),
       snippets: SnippetsSchema,
     }),
-    execute: async ({ code, snippets }) => {
+    // The agent's abort signal: a cancelled request stops applying ops.
+    execute: async ({ code, snippets }, { abortSignal }) => {
       const flattened = snippetsToRecord(snippets);
       opts.onRunCode?.(flattened);
       const span = opts.span
@@ -101,6 +102,7 @@ export function createRunCodeTool(opts: RunCodeToolOptions) {
           sleep: opts.sleep,
           runner: opts.runner,
           onOps: opts.onOps,
+          signal: abortSignal,
           span,
         });
         opts.onRunCodeResult?.(result);

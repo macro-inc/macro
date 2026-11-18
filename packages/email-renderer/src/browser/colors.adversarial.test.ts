@@ -435,5 +435,6 @@ describe('computeTextNodeColor caching is equivalent to main', () => {
       spy.mockRestore();
       attr.mockRestore();
     }
-  });
+    // Usually under 2 s, but over 5 s on a busy CI runner.
+  }, 20_000);
 });

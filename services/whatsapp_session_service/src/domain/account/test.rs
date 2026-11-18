@@ -11,9 +11,10 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ClaimedSend, InboundEvent, InboundKind, MediaImport, Message, MessageAnchor, MessageKind,
-    OutboundMedia, SessionScope,
+    ClaimedSend, InboundEvent, InboundKind, LookupAnswer, MediaImport, Message, MessageAnchor,
+    MessageKind, OutboundMedia, PictureAnswer, PictureCheck, SessionScope,
 };
+use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
 use whatsapp_linked::domain::session::SessionService;
 use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
@@ -28,6 +29,8 @@ use crate::domain::ports::{
 
 const IDENTITY: &str = "15550001111@s.whatsapp.net";
 const GROUP: &str = "120363000000000001@g.us";
+/// The one number the fake WhatsApp has an account for.
+const REGISTERED: &str = "+5550002";
 
 /// Calls the runner made, in order.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +49,10 @@ enum Call {
     RequestHistory(String, String, u32),
     /// Chat, message id.
     RequestMessage(String, String),
+    /// Phone number.
+    LookUp(String),
+    /// Whose picture.
+    ProfilePicture(String),
 }
 
 #[derive(Clone)]
@@ -58,6 +65,8 @@ struct FakeWhatsApp {
     group: Arc<Mutex<Option<GroupInfo>>>,
     /// Failures the next opens return, in order, before opening succeeds.
     open_failures: Arc<Mutex<Vec<OpenFailure>>>,
+    /// What the next picture queries answer, in order; then not set.
+    pictures: Arc<Mutex<std::collections::VecDeque<PictureAnswer>>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -214,6 +223,36 @@ impl WhatsAppSession for FakeSession {
         Ok(self.whatsapp.group.lock().unwrap().clone())
     }
 
+    /// [`REGISTERED`] is the customer; every other number is unregistered.
+    async fn profile_picture(&self, check: &PictureCheck) -> Result<PictureAnswer, SessionError> {
+        self.whatsapp
+            .calls
+            .send(Call::ProfilePicture(check.jid.clone()))
+            .unwrap();
+        Ok(self
+            .whatsapp
+            .pictures
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or(PictureAnswer::NotSet))
+    }
+
+    async fn look_up(&self, phone: &PhoneNumber) -> Result<LookupAnswer, SessionError> {
+        self.whatsapp
+            .calls
+            .send(Call::LookUp(phone.as_str().to_owned()))
+            .unwrap();
+        Ok(if phone.as_str() == REGISTERED {
+            LookupAnswer::Found {
+                jid: phone.jid(),
+                name: Some("Customer".to_owned()),
+            }
+        } else {
+            LookupAnswer::NotOnWhatsApp
+        })
+    }
+
     async fn logout(&self) {
         self.whatsapp.calls.send(Call::Logout).unwrap();
     }
@@ -295,6 +334,26 @@ fn runner_with(
     FakeWhatsApp,
     mpsc::UnboundedReceiver<Call>,
 ) {
+    // Pictures wait long enough after connecting never to run in tests that
+    // are not about them.
+    let pictures = crate::domain::pictures::PicturePacing {
+        spacing: Duration::from_secs(3),
+        warmup: Duration::from_secs(600),
+        backoff: Duration::from_secs(900),
+    };
+    runner_pacing(tick_every, groups_refresh_interval, pictures, pool)
+}
+
+fn runner_pacing(
+    tick_every: Duration,
+    groups_refresh_interval: Duration,
+    pictures: crate::domain::pictures::PicturePacing,
+    pool: &PgPool,
+) -> (
+    Arc<AccountSessions<FakeWhatsApp>>,
+    FakeWhatsApp,
+    mpsc::UnboundedReceiver<Call>,
+) {
     let (calls, call_receiver) = mpsc::unbounded_channel();
     let whatsapp = FakeWhatsApp {
         calls,
@@ -303,6 +362,7 @@ fn runner_with(
         identity: Arc::default(),
         group: Arc::default(),
         open_failures: Arc::default(),
+        pictures: Arc::default(),
     };
     let runner = Arc::new(AccountSessions::new(
         SessionService::new(Arc::new(PgWhatsAppRepository::new(pool.clone()))),
@@ -313,7 +373,7 @@ fn runner_with(
             tick_every,
             groups_refresh_interval,
             backfill_timeout: Duration::from_secs(60),
-            backfill_retry: Duration::from_secs(300),
+            pictures,
         },
     ));
     (runner, whatsapp, call_receiver)
@@ -929,3 +989,6 @@ async fn a_kms_outage_leaves_a_connected_account_and_its_device_alone(pool: PgPo
     );
     assert_eq!(account_state(&pool, account).await, "connected");
 }
+
+mod lookups;
+mod pictures;

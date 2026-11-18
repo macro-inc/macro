@@ -8,6 +8,7 @@ import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import DeviceMobileDownloadIcon from '@icon/device-mobile-download.svg';
 import GearFillIcon from '@icon/system/fill/gear-fill.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
@@ -15,6 +16,7 @@ import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Button, cn, pressHandlers } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { useAppUpdate } from './app-update';
+import { HelpMenu } from './help-menu';
 import { NavGlyph } from './nav-glyph';
 import { UpdateButton } from './update-button';
 
@@ -37,8 +39,9 @@ const isSettingsActive = () => {
 
 /**
  * Get the mobile app: opens the Mobile App settings page, which carries the
- * App Store QR code. Hidden inside the native app, where that page shows the
- * installed app's version instead, and wherever the page is unavailable.
+ * App Store and Google Play links. Hidden inside the native app, where that
+ * page shows the installed app's version instead, and wherever the page is
+ * unavailable.
  */
 const MobileAppButton = () => {
   const analytics = useAnalytics();
@@ -78,9 +81,10 @@ const MobileAppButton = () => {
 };
 
 /**
- * The rail's bottom actions: a ready app update, the mobile app link, then
- * Settings, opened like any other rail view. The gear carries the account photo
- * as a badge, so people with several accounts can tell which one they are in.
+ * The rail's bottom actions: a ready app update, the mobile app link, help,
+ * then Settings, opened like any other rail view. The gear carries the account
+ * photo as a badge, so people with several accounts can tell which one they
+ * are in.
  */
 export const FooterActions = (props: {
   onMenuOpenChange?: (open: boolean) => void;
@@ -115,7 +119,7 @@ export const FooterActions = (props: {
   return (
     <div class="flex w-full shrink-0 flex-col items-center gap-1">
       {/* Keyed by id: a new update remounts the button, so its popover opens again. */}
-      <Show when={update()?.id} keyed>
+      <Show when={!isTouchDevice() && update()?.id} keyed>
         {(_id) => (
           <Show when={update()}>
             {(current) => <UpdateButton update={current} />}
@@ -123,6 +127,7 @@ export const FooterActions = (props: {
         )}
       </Show>
       <MobileAppButton />
+      <HelpMenu />
       <SidebarOpenInSplitMenu
         content={() => SETTINGS_CONTENT}
         // Route through settings state so the menu reuses an open settings

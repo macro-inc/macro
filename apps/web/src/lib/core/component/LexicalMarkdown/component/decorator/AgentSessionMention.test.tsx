@@ -109,6 +109,24 @@ describe('agent session mention rendering', () => {
       expect.anything()
     );
   });
+  it('wears the Claude mark in Claude orange for a Claude Code session', () => {
+    mocks.query.data = {
+      access: 'access',
+      data: {
+        id: 'session',
+        name: 'Unify styling',
+        botId: '11111111-2222-3333-4444-555555555555',
+        harness: 'claude-code',
+        status: { kind: 'disconnected' },
+      },
+    };
+    const view = render(() => (
+      <AgentSessionMention id="session" label="Old" key="node" theme={{}} />
+    ));
+    expect(
+      view.container.querySelector('svg')?.getAttribute('class')
+    ).toContain('text-brand-claude');
+  });
   it('opens from inside an editable editor, whose shell stops click propagation', () => {
     render(() => (
       <div on:click={(event) => event.stopPropagation()}>

@@ -1,9 +1,13 @@
+import { catchToResult } from '@core/util/result';
 import { createSignal } from 'solid-js';
 
 /** Keep failures in the picker so a rejected write can be retried. */
 export function createSnoozeController<Item>(options: {
   items: readonly Item[];
-  saveItem: (item: Item, until: string) => Promise<void>;
+  saveItems: (
+    items: readonly Item[],
+    until: string
+  ) => Promise<readonly Item[]>;
   onSaved: (until: string, count: number) => void;
   now?: () => number;
 }) {
@@ -24,12 +28,12 @@ export function createSnoozeController<Item>(options: {
     setError(undefined);
     const deadline = until.toISOString();
     const items = remainingItems();
-    const results = await Promise.allSettled(
-      items.map(async (item) => options.saveItem(item, deadline))
+    const result = await catchToResult(() =>
+      options.saveItems(items, deadline)
     );
-    setRemainingItems(
-      items.filter((_, index) => results[index].status === 'rejected')
-    );
+    if (result.isOk()) {
+      setRemainingItems(result.value);
+    }
     setPending(false);
     if (remainingCount()) {
       const saved = options.items.length - remainingCount();

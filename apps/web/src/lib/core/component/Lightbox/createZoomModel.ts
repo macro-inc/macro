@@ -201,12 +201,16 @@ export function createZoomModel(
     else setZoom(1);
   };
 
+  // Adopt a new unzoomed size and snap to the zoom floor.
+  const setBase = (base: Size) => {
+    setBaseSize(base);
+    resetZoom();
+  };
+
   // Measure the freshly-loaded image and snap to the zoom floor.
   const handleImageLoad = (img: HTMLImageElement) => {
     const base = measureBase(img);
-    if (!base) return;
-    setBaseSize(base);
-    resetZoom();
+    if (base) setBase(base);
   };
 
   return {
@@ -218,6 +222,7 @@ export function createZoomModel(
     applyZoom,
     handleWheel,
     onEngineUpdate,
+    setBase,
     handleImageLoad,
     resetZoom,
   };

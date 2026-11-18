@@ -6,6 +6,6 @@
  */
 
 /**
- * Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+ * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.
  */
 export type PatchBotRequestHasAgent = boolean | null;

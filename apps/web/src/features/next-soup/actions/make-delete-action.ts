@@ -42,6 +42,8 @@ function reportTrashedEmails(
       ? t('entityActions.toastMovedCountToTrash', { count })
       : t('entityActions.toastMovedToTrash'),
     {
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
       actions: [
         {
           label: t('entityActions.undo'),
@@ -68,6 +70,7 @@ function reportTrashedEmails(
 
 type MakeDeleteOptions = {
   userId: () => string | undefined;
+  isTeamAdmin?: (teamId: string) => boolean;
   onDeleted?: (entities: EntityData[]) => void;
 };
 
@@ -102,6 +105,14 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     if (entity.type === 'database') return entity.grant === 'owner';
     if (entity.type === 'email') {
       return true;
+    }
+    if (entity.type === 'channel') {
+      if (entity.ownerId === userId()) return true;
+      return (
+        entity.channelType === 'team' &&
+        !!entity.teamId &&
+        (options.isTeamAdmin?.(entity.teamId) ?? false)
+      );
     }
     // The types the delete mutation supports; it skips any other.
     if (

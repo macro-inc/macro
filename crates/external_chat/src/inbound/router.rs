@@ -19,8 +19,9 @@ use entity_access::{
     domain::ports::EntityAccessService, inbound::axum_extractors::ExternalChatAccessLevelExtractor,
 };
 use macro_authorization::{
-    CredentialOrigin, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, MacroUserAuthentication, UserOnly,
+    CredentialAttribution, CredentialOrigin, MacroAuthorizationExtractor,
+    MacroAuthorizationService, MacroAuthorizationState, MacroUserAuthentication, UserOnly,
+    is_agent_run,
 };
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use serde::Deserialize;
@@ -84,7 +85,9 @@ impl IntoResponse for ApiError {
             ExternalChatError::Invalid(_) | ExternalChatError::CannotAdd(_) => {
                 StatusCode::BAD_REQUEST
             }
-            ExternalChatError::Forbidden => StatusCode::FORBIDDEN,
+            ExternalChatError::Forbidden | ExternalChatError::ConfirmationRequired => {
+                StatusCode::FORBIDDEN
+            }
             ExternalChatError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
             ExternalChatError::NotFound => StatusCode::NOT_FOUND,
             ExternalChatError::Conflict
@@ -111,10 +114,29 @@ impl IntoResponse for ApiError {
     }
 }
 
+/// Refuse a send from an agent's program (`is_agent_run`: an agent-signed
+/// token or the code-execution header) that does not quote the user's
+/// approval, as email send does. Owner routines and the person's own
+/// credentials send as before.
+pub fn refuse_unconfirmed_program_send(
+    attribution: CredentialAttribution,
+    headers: &axum::http::HeaderMap,
+    confirmation: Option<&str>,
+) -> Result<(), ApiError> {
+    let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
+    if is_agent_run(attribution, headers) && !confirmed {
+        return Err(ApiError(ExternalChatError::ConfirmationRequired));
+    }
+    Ok(())
+}
+
 /// Who is acting, from how the caller authenticated.
 pub fn authority(user: &MacroUserAuthentication) -> SendAuthority {
     match user.origin {
-        CredentialOrigin::MacroApiJwt | CredentialOrigin::UserApiKey => SendAuthority::UserApiToken,
+        CredentialOrigin::MacroApiJwt
+        | CredentialOrigin::ScopedMacroApiJwt
+        | CredentialOrigin::UserApiKey
+        | CredentialOrigin::AccountManager(_) => SendAuthority::UserApiToken,
         CredentialOrigin::Session if user.agent_id.is_none() => SendAuthority::Human,
         CredentialOrigin::Session
         | CredentialOrigin::Bot
@@ -393,13 +415,19 @@ pub async fn open_sends<
 }
 
 /// Send to the chat from the caller's own provider account (one request per second per user).
-#[utoipa::path(post, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/sends", operation_id = "external_chat_send", params(("chat_id" = Uuid, Path)), request_body = SendReply, responses((status = 200, body = SendProgress), (status = 429, description = "One send request per second per user; Retry-After: 1")))]
+#[utoipa::path(post, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/sends", operation_id = "external_chat_send", params(("chat_id" = Uuid, Path)), request_body = SendReply, responses((status = 200, body = SendProgress), (status = 403, description = "An agent's program sent without userConfirmation (code confirmation_required), or the caller may not send"), (status = 429, description = "One send request per second per user; Retry-After: 1")))]
 pub async fn send<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
     auth: MacroAuthorizationExtractor<Auth, UserOnly>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
+    headers: axum::http::HeaderMap,
     Json(body): Json<SendReply>,
 ) -> Result<Json<SendProgress>, ApiError> {
+    refuse_unconfirmed_program_send(
+        auth.authorization.attribution(),
+        &headers,
+        body.user_confirmation.as_deref(),
+    )?;
     Ok(Json(
         state
             .service

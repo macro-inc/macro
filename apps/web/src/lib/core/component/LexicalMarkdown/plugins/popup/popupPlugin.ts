@@ -161,9 +161,9 @@ function $updateDomRectInSelction(
   if (selection.type === 'table') {
     newRect = $tableSelectionToRect(selection.lexicalSelection);
   }
-  if (selection.type === 'range') {
-    newRect =
-      selection.domSelection.getRangeAt(0).getBoundingClientRect() ?? null;
+  // iOS clears the DOM selection when focus leaves the editor.
+  if (selection.type === 'range' && selection.domSelection.rangeCount > 0) {
+    newRect = selection.domSelection.getRangeAt(0).getBoundingClientRect();
   }
   if (newRect) {
     return { ...selection, rect: newRect };

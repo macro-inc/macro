@@ -27,3 +27,7 @@ runs:
         echo "BASH_ENV=$dev_env" >> "$GITHUB_ENV"
         source "$dev_env"
         printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
+        if [ "${NIX_SEED_SAVE:-}" = true ]; then
+          echo "NIX_SEED_SAVE=false" >> "$GITHUB_ENV"
+          .github/actions/setup-nix/nix_seed.sh save || echo "::warning::Could not save the Nix seed"
+        fi

@@ -1,0 +1,854 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/android_play_publish.rs
+name: Android Play Publish
+'on':
+  workflow_run:
+    types:
+    - completed
+    workflows:
+    - Android Play Release
+jobs:
+  check:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.head_repository.full_name == github.repository
+    name: Check the release request
+    runs-on: namespace-profile-linux-tiny-no-cache
+    permissions:
+      actions: read
+      contents: read
+      issues: read
+      pull-requests: write
+    outputs:
+      publish: ${{ steps.verify.outputs.publish }}
+      pr_number: ${{ steps.verify.outputs.pr_number }}
+      version_code: ${{ steps.verify.outputs.version_code }}
+      release_name: ${{ steps.verify.outputs.release_name }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    timeout-minutes: 10
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: '1.3.13'
+    - id: verify
+      name: Require a build the android-update label started
+      run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
+        # --- authenticated fetch ------------------------------------------------------
+        # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
+        # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
+        # may persist credentials, so clear inherited headers before supplying one
+        # explicitly. Keep Nix build libraries out of the host Git HTTPS helper.
+        # Fails if the commit is unreachable (a force-pushed-away head).
+        gh_fetch() {
+          local auth
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            fetch -q --depth=1 origin "$1"
+        }
+        # ------------------------------------------------------------------------------
+        set -euo pipefail
+        # Android Play Publish runs main's copy for every completed Android Play
+        # Release run. That run executed the PR's own copy of the workflow, so its
+        # name, artifact and outcome prove nothing on their own: any PR can add a
+        # workflow named "Android Play Release" that runs on any event. The
+        # `android-update` label is the release decision, so publish only a build
+        # tied to the person who added it, checking GitHub's records rather than
+        # the run's:
+        #
+        #   1. it ran the release workflow file and its release job succeeded;
+        #   2. its branch is the head of exactly one open same-repository PR into main;
+        #   3. that PR still carries the label, and the label's latest event is an
+        #      add by a person (not a bot or token) with write access;
+        #   4. that person started this run, within minutes of adding the label, so
+        #      a run from before a newer add, or from much later, does not qualify.
+        #
+        # This binds the build to that person, not to the label event itself: GitHub
+        # doesn't record which activity created a run, and the branch's own copy of
+        # the release workflow decides which activities build. A branch that edits
+        # that workflow could also build on the person's other PR activity inside
+        # the window, after a push they did not review. That gives nobody more than
+        # adding the label already does: pushing to a same-repository branch needs
+        # write access, which is all adding the label needs.
+        #
+        # The head guard (a later step) then checks the PR's native code is still the
+        # built one. Needs GH_TOKEN, GH_REPO, RUN_ID, RUN_ATTEMPT, RUN_PATH,
+        # RUN_ACTOR, RUN_CREATED_AT, HEAD_SHA, HEAD_BRANCH, and gh_fetch.
+        skip() {
+          echo "$1"
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        }
+        refuse() {
+          echo "Not publishing run ${RUN_ID}: $1" >&2
+          exit 1
+        }
+
+        if [[ "${RUN_PATH%%@*}" != .github/workflows/android-play-release.yml ]]; then
+          skip "Run ${RUN_ID} ran ${RUN_PATH}, not the Android Play Release workflow file; nothing to publish."
+        fi
+        build=$(gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}/jobs" \
+          --jq '[.jobs[] | select(.name == "Android Play Release") | .conclusion] | first // ""')
+        if [[ "$build" != success ]]; then
+          skip "Run ${RUN_ID}'s Android Play Release job did not succeed (${build:-absent}): another label, or a failed build. Nothing to publish."
+        fi
+
+        pr=$(gh pr list --repo "$GH_REPO" --head "$HEAD_BRANCH" --base main --state open \
+          --json number,isCrossRepository \
+          --jq '[.[] | select(.isCrossRepository == false)] | if length == 1 then .[0].number else "" end')
+        if [[ -z "$pr" ]]; then
+          refuse "branch ${HEAD_BRANCH} is not the head of exactly one open same-repository PR into main."
+        fi
+        export PR_NUMBER=$pr
+        echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+        echo "Run ${RUN_ID} built ${HEAD_SHA:0:10} for PR #${PR_NUMBER}."
+
+        if [[ "$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json labels \
+          --jq 'any(.labels[]; .name == "android-update")')" != true ]]; then
+          refuse "PR #${PR_NUMBER} no longer carries the android-update label."
+        fi
+        event=$(gh api --paginate "repos/${GH_REPO}/issues/${PR_NUMBER}/events" \
+          --jq '.[] | select((.event == "labeled" or .event == "unlabeled") and .label.name == "android-update")
+            | {event, login: .actor.login, type: .actor.type, at: .created_at}' \
+          | jq -cs 'sort_by(.at) | last // empty')
+        if [[ -z "$event" ]]; then
+          refuse "PR #${PR_NUMBER} has no android-update label event."
+        fi
+        kind=$(jq -r '.event' <<<"$event")
+        login=$(jq -r '.login' <<<"$event")
+        type=$(jq -r '.type' <<<"$event")
+        at=$(jq -r '.at' <<<"$event")
+        if [[ "$kind" != labeled ]]; then
+          refuse "the android-update label was last removed (${at}), not added."
+        fi
+        if [[ "$type" != User ]]; then
+          refuse "the android-update label was last added by ${login} (${type}); a person with write access must add it."
+        fi
+        if [[ "$login" != "$RUN_ACTOR" ]]; then
+          refuse "${login} added the android-update label last, but ${RUN_ACTOR} started this run, so this is not the run that label started."
+        fi
+        permission=$(gh api "repos/${GH_REPO}/collaborators/${login}/permission" --jq '.permission')
+        if [[ "$permission" != admin && "$permission" != write ]]; then
+          refuse "${login}, who added the android-update label, has ${permission} access; releasing needs write access."
+        fi
+        label_epoch=$(jq -rn --arg t "$at" '$t | fromdateiso8601')
+        run_epoch=$(jq -rn --arg t "$RUN_CREATED_AT" '$t | fromdateiso8601')
+        if (( run_epoch < label_epoch - 60 || run_epoch > label_epoch + 600 )); then
+          refuse "this run was created at ${RUN_CREATED_AT}, but the android-update label was last added at ${at}, so the label did not start it. Re-add the label to release the PR's current head."
+        fi
+        echo "${login} (${permission} access) added android-update at ${at} and started this run at ${RUN_CREATED_AT}."
+
+        gh_fetch "$HEAD_SHA"
+        version_code=$(bun scripts/android-native.mjs version-code "$HEAD_SHA")
+        version=$(git show "${HEAD_SHA}:apps/web/tauri/src-tauri/tauri.android.conf.json" | jq -r '.version')
+        {
+          echo "version_code=${version_code}"
+          echo "release_name=${version} (${version_code})"
+          echo "publish=true"
+        } >> "$GITHUB_OUTPUT"
+        echo "Publishing Android ${version} (version code ${version_code})."
+      shell: bash
+      env:
+        LOGGED_STEP: Require a build the android-update label started
+        RUN_ID: ${{ github.event.workflow_run.id }}
+        RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        RUN_PATH: ${{ github.event.workflow_run.path }}
+        RUN_ACTOR: ${{ github.event.workflow_run.actor.login }}
+        RUN_CREATED_AT: ${{ github.event.workflow_run.created_at }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      working-directory: apps/web
+    - name: Comment on the PR
+      if: failure() && steps.verify.outputs.pr_number != ''
+      run: |
+        set -euo pipefail
+        reason=$(sed -n 's/\x1b\[[0-9;]*m//g; s/^Not publishing run [0-9]*: //p' "$RUNNER_TEMP/last-step.log" | tail -n 1)
+        gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "🤖 Android Play Publish did not publish [this Android Play Release build](${BUILD_URL}): ${reason:-see the [workflow run](${RUN_URL}).}
+
+        A person with write access can remove and re-add the \`android-update\` label to release the PR's current head."
+      shell: bash
+      env:
+        PR_NUMBER: ${{ steps.verify.outputs.pr_number }}
+        BUILD_URL: ${{ github.event.workflow_run.html_url }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  publish:
+    needs:
+    - check
+    if: needs.check.outputs.publish == 'true'
+    name: Android Play Publish
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+      statuses: write
+      id-token: write
+    concurrency:
+      group: android-play-publish-${{ github.event.workflow_run.head_branch }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ needs.check.outputs.pr_number }}
+      VERSION_CODE: ${{ needs.check.outputs.version_code }}
+      BUILT_SHA: ${{ github.event.workflow_run.head_sha }}
+      BASE_BRANCH: main
+    timeout-minutes: 30
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: '1.3.13'
+    - name: Require the PR's Android native code to be unchanged since the build
+      run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
+        # --- authenticated fetch ------------------------------------------------------
+        # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
+        # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
+        # may persist credentials, so clear inherited headers before supplying one
+        # explicitly. Keep Nix build libraries out of the host Git HTTPS helper.
+        # Fails if the commit is unreachable (a force-pushed-away head).
+        gh_fetch() {
+          local auth
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            fetch -q --depth=1 origin "$1"
+        }
+        # ------------------------------------------------------------------------------
+        # --- PR merge result ----------------------------------------------------------
+        # pr_merge_commit: print the sha of GitHub's test merge commit for $PR_NUMBER —
+        # the merge result the native gates hash. GitHub computes it lazily
+        # (mergeable=UNKNOWN until it has), so poll a little; a PR that really
+        # conflicts with its base cannot merge anyway. Needs GH_TOKEN, GH_REPO,
+        # PR_NUMBER. Progress goes to stderr so `merge=$(pr_merge_commit)` works.
+        pr_merge_commit() {
+          local deadline pr_json mergeable merge
+          deadline=$(( $(date +%s) + 120 ))
+          while true; do
+            pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
+            mergeable=$(jq -r '.mergeable' <<<"$pr_json")
+            merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
+            if [[ -n "$merge" ]]; then
+              echo "$merge"
+              return 0
+            fi
+            if [[ "$mergeable" == "CONFLICTING" ]]; then
+              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
+              return 1
+            fi
+            if (( $(date +%s) > deadline )); then
+              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
+              return 1
+            fi
+            echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
+            sleep 10
+          done
+        }
+        # ------------------------------------------------------------------------------
+        # --- merge result native check ------------------------------------------------
+        # merge_result_native_check <hash> <listing> <fetch>: is the native code of
+        # PR #PR_NUMBER's merge result the native code of the commit this run built
+        # or is about to build — BUILT_SHA when set (a job that checked out other
+        # code, such as main's, to judge it), else HEAD? The merge gate hashes the merge result, so a
+        # build that differs from it could never pass the gate. <hash> / <listing>
+        # print a commit's native hash / the listing behind it; <fetch> makes a
+        # commit available (the iOS and Android helpers differ). Needs GH_TOKEN,
+        # GH_REPO, PR_NUMBER, BASE_BRANCH, and pr_merge_commit.
+        #
+        # GitHub's test merge commit answers directly when it exists. It doesn't for
+        # a PR that conflicts with its base, but the question still has an answer:
+        # if the base's native code hasn't moved since the PR branched, merging can
+        # only carry HEAD's native code, whatever files the conflicts are in. A
+        # refusal lists the native files the base changed.
+        merge_result_native_check() {
+          local hash=$1 listing=$2 fetch=$3 built built_hash merge merge_hash compare tip \
+            merge_base tip_hash base_hash why files
+          # Callers run this under `if !`, which turns off `set -e` here, so every
+          # lookup is checked: an empty commit hashes the same on both sides and would
+          # pass an unchecked comparison.
+          built=${BUILT_SHA:-$(git rev-parse HEAD)}
+          if ! built_hash=$($hash "$built"); then
+            echo "Could not hash this build's native code (${built:0:10})." >&2
+            return 1
+          fi
+          merge=""
+          if merge=$(pr_merge_commit); then
+            if ! $fetch "$merge" || ! merge_hash=$($hash "$merge"); then
+              echo "Could not fetch or hash PR #${PR_NUMBER}'s merge result (${merge:0:10})." >&2
+              return 1
+            fi
+            if [[ "$merge_hash" == "$built_hash" ]]; then
+              echo "Native code matches the merge result ${merge:0:10}."
+              return 0
+            fi
+            why="PR #${PR_NUMBER}'s merge result (${merge:0:10}) has native code this build (${built:0:10}) lacks"
+          fi
+          if ! compare=$(gh api "repos/${GH_REPO}/compare/${BASE_BRANCH}...${built}" \
+            --jq '"\(.base_commit.sha) \(.merge_base_commit.sha)"'); then
+            echo "Could not compare ${BASE_BRANCH} with ${built:0:10}, so the merge result's native code is unverified." >&2
+            return 1
+          fi
+          read -r tip merge_base <<<"$compare"
+          if [[ -z "$tip" || -z "$merge_base" ]] || ! $fetch "$tip" || ! $fetch "$merge_base"; then
+            echo "Could not fetch ${BASE_BRANCH} (${tip:0:10}) or the PR's branch point (${merge_base:0:10})." >&2
+            return 1
+          fi
+          if [[ -z "$merge" ]]; then
+            if ! tip_hash=$($hash "$tip") || ! base_hash=$($hash "$merge_base"); then
+              echo "Could not hash ${BASE_BRANCH} (${tip:0:10}) or the PR's branch point (${merge_base:0:10})." >&2
+              return 1
+            fi
+            if [[ "$tip_hash" == "$base_hash" ]]; then
+              echo "PR #${PR_NUMBER} has no merge result (conflicts, or GitHub has not computed it), but ${BASE_BRANCH} (${tip:0:10})" \
+                "still has the native code the PR branched from (${merge_base:0:10}), so merging can only carry this build's native code."
+              return 0
+            fi
+            why="PR #${PR_NUMBER} has no merge result (conflicts, or GitHub has not computed it), and ${BASE_BRANCH} changed native code since the PR branched"
+          fi
+          # Listing lines are `<mode> <type> <sha>\t<path>` or `cache-wasm-version <v>`.
+          # awk splits on the tab portably; BSD sed has no `\t` in a bracket.
+          files=$({ diff <($listing "$merge_base") <($listing "$tip") || true; } \
+            | awk -F'\t' '/^[<>] cache-wasm-version / { print "  " substr($0, 3); next }
+                          /^[<>] / && NF > 1 { print "  " $2 }' | sort -u)
+          echo "${why}. Native changes on ${BASE_BRANCH} since ${merge_base:0:10}" \
+            "(https://github.com/${GH_REPO}/compare/${merge_base:0:10}...${tip:0:10}):" >&2
+          echo "${files:-  (none listed: an excluded path?)}" >&2
+          return 1
+        }
+        # ------------------------------------------------------------------------------
+        set -euo pipefail
+        # Last check before uploading (and before promoting): the bundle must still describe the native code
+        # the merge gate will hash — that of the PR's merge result — or it could never
+        # pass the gate, and a promoted Play release cannot be withdrawn. Two things
+        # can move while a build runs: the PR head (a native push; the drift workflow
+        # cancels runs after the fact, but better not to upload at all) and main
+        # (another Android PR merged). The build is HEAD, or BUILT_SHA when set (the
+        # publisher judges a PR build from main's checkout). GUARD_STAGE=promote words
+        # it for the check before the production promotion, after the upload to the
+        # internal track has used the version code up.
+        if [[ "${GUARD_STAGE:-upload}" == promote ]]; then
+          verb=promoting
+          done_msg="Promoting"
+          retry="Version code is used up on the internal track: bump (cd apps/web && just android-bump), commit, and re-add the android-update label."
+        else
+          verb=uploading
+          done_msg="Uploading"
+          retry="Re-add the android-update label to release the current head."
+        fi
+        built_sha=${BUILT_SHA:-$(git rev-parse HEAD)}
+        if [[ -n "${BUILT_SHA:-}" ]]; then
+          gh_fetch "$BUILT_SHA"
+        fi
+        built=$(bun scripts/android-native.mjs hash "$built_sha")
+        head_sha=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq '.headRefOid')
+        if [[ "$head_sha" == "$built_sha" ]]; then
+          echo "PR head unchanged (${head_sha:0:10}); native hash ${built:0:10} is current."
+        else
+          gh_fetch "$head_sha"
+          current=$(bun scripts/android-native.mjs hash "$head_sha")
+          if [[ "$current" != "$built" ]]; then
+            echo "Android native code changed on PR #${PR_NUMBER} while this release was building" \
+              "(${built:0:10} → ${current:0:10}). Not ${verb} the stale bundle." >&2
+            echo "$retry" >&2
+            exit 1
+          fi
+          echo "PR head moved to ${head_sha:0:10} but its Android native code is unchanged (${built:0:10})."
+        fi
+        if ! merge_result_native_check "bun scripts/android-native.mjs hash" "bun scripts/android-native.mjs listing" gh_fetch; then
+          echo "Android native code landed on ${BASE_BRANCH} while this release was building. Not ${verb} the bundle" \
+            "(native hash ${built:0:10}): the merge gate could never accept it." >&2
+          echo "Merge ${BASE_BRANCH} into the PR, bump (cd apps/web && just android-bump), commit, and re-add the android-update label." >&2
+          exit 1
+        fi
+        echo "${done_msg} the bundle (native hash ${built:0:10})."
+      shell: bash
+      env:
+        LOGGED_STEP: Require the PR's Android native code to be unchanged since the build
+        GUARD_STAGE: upload
+      working-directory: apps/web
+    - id: stamp
+      name: Write the provenance stamp as release notes
+      run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
+        set -euo pipefail
+        hash=$(bun scripts/android-native.mjs hash "$BUILT_SHA")
+        mkdir -p "$RUNNER_TEMP/whatsnew"
+        printf 'native tree %s for PR #%s\n' "$hash" "$PR_NUMBER" > "$RUNNER_TEMP/whatsnew/whatsnew-en-US"
+        echo "native_hash=${hash}" >> "$GITHUB_OUTPUT"
+        echo "Stamp: native tree ${hash} for PR #${PR_NUMBER}"
+      shell: bash
+      env:
+        LOGGED_STEP: Write the provenance stamp as release notes
+      working-directory: apps/web
+    - name: Download the built App Bundle
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        name: android-release
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ github.token }}
+        path: ${{ runner.temp }}/android-release
+    - id: artifact
+      name: Pick the bundle and its R8 mapping
+      run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
+        set -euo pipefail
+        dir="$RUNNER_TEMP/android-release"
+        mapfile -t bundles < <(find "$dir" -maxdepth 1 -type f -name '*.aab' -printf '%f\n')
+        mapfile -t mappings < <(find "$dir" -maxdepth 1 -type f -name '*-mapping.txt' -printf '%f\n')
+        if (( ${#bundles[@]} != 1 || ${#mappings[@]} != 1 )); then
+          echo "Expected one .aab and one -mapping.txt in the android-release artifact, found ${#bundles[@]} and ${#mappings[@]}." >&2
+          exit 1
+        fi
+        for name in "${bundles[0]}" "${mappings[0]}"; do
+          if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Refusing the artifact file name ${name}." >&2
+            exit 1
+          fi
+        done
+        echo "bundle=${dir}/${bundles[0]}" >> "$GITHUB_OUTPUT"
+        echo "mapping=${dir}/${mappings[0]}" >> "$GITHUB_OUTPUT"
+        echo "Bundle ${bundles[0]}, mapping ${mappings[0]}."
+      shell: bash
+      env:
+        LOGGED_STEP: Pick the bundle and its R8 mapping
+    - id: auth
+      name: Authenticate to Google Play
+      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+      with:
+        workload_identity_provider: ${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+        token_format: access_token
+        access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+        export_environment_variables: 'false'
+    - id: upload
+      name: Upload to internal testing
+      uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5
+      with:
+        serviceAccountJson: ${{ steps.auth.outputs.credentials_file_path }}
+        packageName: com.macro.workspace.mobile
+        releaseFiles: ${{ steps.artifact.outputs.bundle }}
+        mappingFile: ${{ steps.artifact.outputs.mapping }}
+        releaseName: ${{ needs.check.outputs.release_name }}
+        track: internal
+        status: completed
+        whatsNewDirectory: ${{ runner.temp }}/whatsnew
+    - name: Require the native code to be unchanged before promoting
+      run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
+        # --- authenticated fetch ------------------------------------------------------
+        # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
+        # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
+        # may persist credentials, so clear inherited headers before supplying one
+        # explicitly. Keep Nix build libraries out of the host Git HTTPS helper.
+        # Fails if the commit is unreachable (a force-pushed-away head).
+        gh_fetch() {
+          local auth
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            fetch -q --depth=1 origin "$1"
+        }
+        # ------------------------------------------------------------------------------
+        # --- PR merge result ----------------------------------------------------------
+        # pr_merge_commit: print the sha of GitHub's test merge commit for $PR_NUMBER —
+        # the merge result the native gates hash. GitHub computes it lazily
+        # (mergeable=UNKNOWN until it has), so poll a little; a PR that really
+        # conflicts with its base cannot merge anyway. Needs GH_TOKEN, GH_REPO,
+        # PR_NUMBER. Progress goes to stderr so `merge=$(pr_merge_commit)` works.
+        pr_merge_commit() {
+          local deadline pr_json mergeable merge
+          deadline=$(( $(date +%s) + 120 ))
+          while true; do
+            pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
+            mergeable=$(jq -r '.mergeable' <<<"$pr_json")
+            merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
+            if [[ -n "$merge" ]]; then
+              echo "$merge"
+              return 0
+            fi
+            if [[ "$mergeable" == "CONFLICTING" ]]; then
+              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
+              return 1
+            fi
+            if (( $(date +%s) > deadline )); then
+              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
+              return 1
+            fi
+            echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
+            sleep 10
+          done
+        }
+        # ------------------------------------------------------------------------------
+        # --- merge result native check ------------------------------------------------
+        # merge_result_native_check <hash> <listing> <fetch>: is the native code of
+        # PR #PR_NUMBER's merge result the native code of the commit this run built
+        # or is about to build — BUILT_SHA when set (a job that checked out other
+        # code, such as main's, to judge it), else HEAD? The merge gate hashes the merge result, so a
+        # build that differs from it could never pass the gate. <hash> / <listing>
+        # print a commit's native hash / the listing behind it; <fetch> makes a
+        # commit available (the iOS and Android helpers differ). Needs GH_TOKEN,
+        # GH_REPO, PR_NUMBER, BASE_BRANCH, and pr_merge_commit.
+        #
+        # GitHub's test merge commit answers directly when it exists. It doesn't for
+        # a PR that conflicts with its base, but the question still has an answer:
+        # if the base's native code hasn't moved since the PR branched, merging can
+        # only carry HEAD's native code, whatever files the conflicts are in. A
+        # refusal lists the native files the base changed.
+        merge_result_native_check() {
+          local hash=$1 listing=$2 fetch=$3 built built_hash merge merge_hash compare tip \
+            merge_base tip_hash base_hash why files
+          # Callers run this under `if !`, which turns off `set -e` here, so every
+          # lookup is checked: an empty commit hashes the same on both sides and would
+          # pass an unchecked comparison.
+          built=${BUILT_SHA:-$(git rev-parse HEAD)}
+          if ! built_hash=$($hash "$built"); then
+            echo "Could not hash this build's native code (${built:0:10})." >&2
+            return 1
+          fi
+          merge=""
+          if merge=$(pr_merge_commit); then
+            if ! $fetch "$merge" || ! merge_hash=$($hash "$merge"); then
+              echo "Could not fetch or hash PR #${PR_NUMBER}'s merge result (${merge:0:10})." >&2
+              return 1
+            fi
+            if [[ "$merge_hash" == "$built_hash" ]]; then
+              echo "Native code matches the merge result ${merge:0:10}."
+              return 0
+            fi
+            why="PR #${PR_NUMBER}'s merge result (${merge:0:10}) has native code this build (${built:0:10}) lacks"
+          fi
+          if ! compare=$(gh api "repos/${GH_REPO}/compare/${BASE_BRANCH}...${built}" \
+            --jq '"\(.base_commit.sha) \(.merge_base_commit.sha)"'); then
+            echo "Could not compare ${BASE_BRANCH} with ${built:0:10}, so the merge result's native code is unverified." >&2
+            return 1
+          fi
+          read -r tip merge_base <<<"$compare"
+          if [[ -z "$tip" || -z "$merge_base" ]] || ! $fetch "$tip" || ! $fetch "$merge_base"; then
+            echo "Could not fetch ${BASE_BRANCH} (${tip:0:10}) or the PR's branch point (${merge_base:0:10})." >&2
+            return 1
+          fi
+          if [[ -z "$merge" ]]; then
+            if ! tip_hash=$($hash "$tip") || ! base_hash=$($hash "$merge_base"); then
+              echo "Could not hash ${BASE_BRANCH} (${tip:0:10}) or the PR's branch point (${merge_base:0:10})." >&2
+              return 1
+            fi
+            if [[ "$tip_hash" == "$base_hash" ]]; then
+              echo "PR #${PR_NUMBER} has no merge result (conflicts, or GitHub has not computed it), but ${BASE_BRANCH} (${tip:0:10})" \
+                "still has the native code the PR branched from (${merge_base:0:10}), so merging can only carry this build's native code."
+              return 0
+            fi
+            why="PR #${PR_NUMBER} has no merge result (conflicts, or GitHub has not computed it), and ${BASE_BRANCH} changed native code since the PR branched"
+          fi
+          # Listing lines are `<mode> <type> <sha>\t<path>` or `cache-wasm-version <v>`.
+          # awk splits on the tab portably; BSD sed has no `\t` in a bracket.
+          files=$({ diff <($listing "$merge_base") <($listing "$tip") || true; } \
+            | awk -F'\t' '/^[<>] cache-wasm-version / { print "  " substr($0, 3); next }
+                          /^[<>] / && NF > 1 { print "  " $2 }' | sort -u)
+          echo "${why}. Native changes on ${BASE_BRANCH} since ${merge_base:0:10}" \
+            "(https://github.com/${GH_REPO}/compare/${merge_base:0:10}...${tip:0:10}):" >&2
+          echo "${files:-  (none listed: an excluded path?)}" >&2
+          return 1
+        }
+        # ------------------------------------------------------------------------------
+        set -euo pipefail
+        # Last check before uploading (and before promoting): the bundle must still describe the native code
+        # the merge gate will hash — that of the PR's merge result — or it could never
+        # pass the gate, and a promoted Play release cannot be withdrawn. Two things
+        # can move while a build runs: the PR head (a native push; the drift workflow
+        # cancels runs after the fact, but better not to upload at all) and main
+        # (another Android PR merged). The build is HEAD, or BUILT_SHA when set (the
+        # publisher judges a PR build from main's checkout). GUARD_STAGE=promote words
+        # it for the check before the production promotion, after the upload to the
+        # internal track has used the version code up.
+        if [[ "${GUARD_STAGE:-upload}" == promote ]]; then
+          verb=promoting
+          done_msg="Promoting"
+          retry="Version code is used up on the internal track: bump (cd apps/web && just android-bump), commit, and re-add the android-update label."
+        else
+          verb=uploading
+          done_msg="Uploading"
+          retry="Re-add the android-update label to release the current head."
+        fi
+        built_sha=${BUILT_SHA:-$(git rev-parse HEAD)}
+        if [[ -n "${BUILT_SHA:-}" ]]; then
+          gh_fetch "$BUILT_SHA"
+        fi
+        built=$(bun scripts/android-native.mjs hash "$built_sha")
+        head_sha=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq '.headRefOid')
+        if [[ "$head_sha" == "$built_sha" ]]; then
+          echo "PR head unchanged (${head_sha:0:10}); native hash ${built:0:10} is current."
+        else
+          gh_fetch "$head_sha"
+          current=$(bun scripts/android-native.mjs hash "$head_sha")
+          if [[ "$current" != "$built" ]]; then
+            echo "Android native code changed on PR #${PR_NUMBER} while this release was building" \
+              "(${built:0:10} → ${current:0:10}). Not ${verb} the stale bundle." >&2
+            echo "$retry" >&2
+            exit 1
+          fi
+          echo "PR head moved to ${head_sha:0:10} but its Android native code is unchanged (${built:0:10})."
+        fi
+        if ! merge_result_native_check "bun scripts/android-native.mjs hash" "bun scripts/android-native.mjs listing" gh_fetch; then
+          echo "Android native code landed on ${BASE_BRANCH} while this release was building. Not ${verb} the bundle" \
+            "(native hash ${built:0:10}): the merge gate could never accept it." >&2
+          echo "Merge ${BASE_BRANCH} into the PR, bump (cd apps/web && just android-bump), commit, and re-add the android-update label." >&2
+          exit 1
+        fi
+        echo "${done_msg} the bundle (native hash ${built:0:10})."
+      shell: bash
+      env:
+        LOGGED_STEP: Require the native code to be unchanged before promoting
+        GUARD_STAGE: promote
+      working-directory: apps/web
+    - id: pending
+      name: Mark the promotion as started
+      run: |
+        # --- Android Play commit statuses ---------------------------------------------
+        # Only workflows that run main's copy may sign in to Google Play, so they
+        # record what they learn as commit statuses on the PR's commits, where the
+        # PR-side jobs (the merge gate, the drift check) read it:
+        #
+        #   android-play/release  set by Android Play Publish on the commit it built:
+        #                         pending just before the production promotion, then
+        #                         success or failure.
+        #   android-play/live     set by Android Release Watch on the PR head once the
+        #                         release is live on production.
+        #
+        # Readers match the descriptions exactly, so they are built only here.
+        # Needs GH_TOKEN and GH_REPO; pr_commit_statuses also PR_NUMBER.
+
+        # android_release_description <version code> <native hash>
+        android_release_description() {
+          printf 'Version code %s (native tree %s)' "$1" "$2"
+        }
+
+        # android_live_description <version code> <native hash> <PR number>
+        android_live_description() {
+          printf 'Version code %s is live on Google Play (native tree %s, PR #%s)' "$1" "$2" "$3"
+        }
+
+        # commit_status <sha> <context>: `<state> <description>` of the commit's latest
+        # status with that context, or nothing.
+        commit_status() {
+          gh api "repos/${GH_REPO}/commits/$1/status" \
+            --jq ".statuses[] | select(.context == \"$2\") | \"\(.state) \(.description)\""
+        }
+
+        # pr_commit_statuses <context>: `<sha> <state> <description>` for each of PR
+        # #PR_NUMBER's last 100 commits that has a status with that context (its
+        # latest one), states in lower case like the REST API's.
+        pr_commit_statuses() {
+          gh api graphql -F owner="${GH_REPO%%/*}" -F name="${GH_REPO#*/}" -F pr="$PR_NUMBER" -F context="$1" \
+            -f query='query($owner: String!, $name: String!, $pr: Int!, $context: String!) {
+              repository(owner: $owner, name: $name) {
+                pullRequest(number: $pr) {
+                  commits(last: 100) { nodes { commit { oid status { context(name: $context) { state description } } } } }
+                }
+              }
+            }' \
+            --jq '.data.repository.pullRequest.commits.nodes[].commit
+              | select(.status.context != null)
+              | "\(.oid) \(.status.context.state | ascii_downcase) \(.status.context.description)"'
+        }
+
+        # set_commit_status <sha> <context> <state> <description>, linking this run.
+        set_commit_status() {
+          gh api "repos/${GH_REPO}/statuses/$1" -f context="$2" -f state="$3" -f description="$4" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        }
+        # ------------------------------------------------------------------------------
+        set -euo pipefail
+        set_commit_status "$BUILT_SHA" android-play/release pending \
+          "$(android_release_description "$VERSION_CODE" "$NATIVE_HASH")"
+      shell: bash
+      env:
+        NATIVE_HASH: ${{ steps.stamp.outputs.native_hash }}
+    - id: promote
+      name: Promote to production
+      run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
+        set -euo pipefail
+        for attempt in 1 2 3 4 5; do
+          if node scripts/android-play-promote.mjs; then
+            exit 0
+          fi
+          echo "Promotion attempt ${attempt} failed; retrying in 30s."
+          sleep 30
+        done
+        echo "Could not promote version code ${VERSION_CODE} to production; promote it by hand with publish-android-play.yml (operation=promote-production)." >&2
+        exit 1
+      shell: bash
+      env:
+        LOGGED_STEP: Promote to production
+        GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        CHANGES_NOT_SENT_FOR_REVIEW: 'false'
+      working-directory: apps/web
+    - name: Record the promotion result
+      if: always() && steps.pending.outcome == 'success'
+      run: |
+        # --- Android Play commit statuses ---------------------------------------------
+        # Only workflows that run main's copy may sign in to Google Play, so they
+        # record what they learn as commit statuses on the PR's commits, where the
+        # PR-side jobs (the merge gate, the drift check) read it:
+        #
+        #   android-play/release  set by Android Play Publish on the commit it built:
+        #                         pending just before the production promotion, then
+        #                         success or failure.
+        #   android-play/live     set by Android Release Watch on the PR head once the
+        #                         release is live on production.
+        #
+        # Readers match the descriptions exactly, so they are built only here.
+        # Needs GH_TOKEN and GH_REPO; pr_commit_statuses also PR_NUMBER.
+
+        # android_release_description <version code> <native hash>
+        android_release_description() {
+          printf 'Version code %s (native tree %s)' "$1" "$2"
+        }
+
+        # android_live_description <version code> <native hash> <PR number>
+        android_live_description() {
+          printf 'Version code %s is live on Google Play (native tree %s, PR #%s)' "$1" "$2" "$3"
+        }
+
+        # commit_status <sha> <context>: `<state> <description>` of the commit's latest
+        # status with that context, or nothing.
+        commit_status() {
+          gh api "repos/${GH_REPO}/commits/$1/status" \
+            --jq ".statuses[] | select(.context == \"$2\") | \"\(.state) \(.description)\""
+        }
+
+        # pr_commit_statuses <context>: `<sha> <state> <description>` for each of PR
+        # #PR_NUMBER's last 100 commits that has a status with that context (its
+        # latest one), states in lower case like the REST API's.
+        pr_commit_statuses() {
+          gh api graphql -F owner="${GH_REPO%%/*}" -F name="${GH_REPO#*/}" -F pr="$PR_NUMBER" -F context="$1" \
+            -f query='query($owner: String!, $name: String!, $pr: Int!, $context: String!) {
+              repository(owner: $owner, name: $name) {
+                pullRequest(number: $pr) {
+                  commits(last: 100) { nodes { commit { oid status { context(name: $context) { state description } } } } }
+                }
+              }
+            }' \
+            --jq '.data.repository.pullRequest.commits.nodes[].commit
+              | select(.status.context != null)
+              | "\(.oid) \(.status.context.state | ascii_downcase) \(.status.context.description)"'
+        }
+
+        # set_commit_status <sha> <context> <state> <description>, linking this run.
+        set_commit_status() {
+          gh api "repos/${GH_REPO}/statuses/$1" -f context="$2" -f state="$3" -f description="$4" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        }
+        # ------------------------------------------------------------------------------
+        set -euo pipefail
+        state=failure
+        if [[ "$PROMOTE_OUTCOME" == success ]]; then
+          state=success
+        fi
+        set_commit_status "$BUILT_SHA" android-play/release "$state" \
+          "$(android_release_description "$VERSION_CODE" "$NATIVE_HASH")"
+      shell: bash
+      env:
+        NATIVE_HASH: ${{ steps.stamp.outputs.native_hash }}
+        PROMOTE_OUTCOME: ${{ steps.promote.outcome }}
+    - name: Comment on the PR
+      if: success() || failure()
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          // Android Play Publish's closing comment on the PR (actions/github-script).
+          // A failure names the step that failed and, when it is one that logs its
+          // output (steps::logged_run), quotes the end of that output.
+          const fs = require('fs');
+          const path = require('path');
+          const env = process.env;
+          const versionCode = env.VERSION_CODE || '?';
+          const releaseName = env.RELEASE_NAME || `version code ${versionCode}`;
+          const runUrl =
+            `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
+            `/actions/runs/${context.runId}`;
+          const runs = `[build](${env.BUILD_URL}), [publish](${runUrl})`;
+          let body;
+          if (env.JOB_STATUS === 'success') {
+            body = [
+              `🤖 Android ${releaseName} was uploaded to Google Play internal testing and submitted for a full production rollout (${runs}).`,
+              '',
+              'When Google approves it, the version goes live, the **Android Release Watch** workflow',
+              'marks this PR `android-play/live` and re-runs the **Android Native Check** within half an hour',
+              'of that, and the PR becomes mergeable. To merge it the moment that happens, click',
+              '**Enable auto-merge** on this PR now (squash).',
+              'After merge, the next prod deploy applies the Android native build floor committed in `min-native-build.json`.',
+            ].join('\n');
+          } else {
+            let failedStep = null;
+            try {
+              const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.runId,
+                attempt_number: Number(env.GITHUB_RUN_ATTEMPT),
+              });
+              const job = data.jobs.find((j) => j.name === env.JOB_NAME);
+              failedStep = job?.steps.find((s) => s.conclusion === 'failure')?.name ?? null;
+            } catch (error) {
+              core.warning(`Could not list this job's steps: ${error.message}`);
+            }
+            const read = (file) => {
+              try {
+                return fs.readFileSync(path.join(env.RUNNER_TEMP, file), 'utf8');
+              } catch {
+                return '';
+              }
+            };
+            let tail = '';
+            if (failedStep && read('last-step.name').trim() === failedStep) {
+              const lines = read('last-step.log').replace(/\x1b\[[0-9;]*m/g, '').trimEnd().split('\n');
+              tail = lines.slice(-30).join('\n').slice(-3000);
+            }
+            const retry =
+              env.UPLOAD_OUTCOME === 'success'
+                ? [
+                    `The bundle reached the internal track, so version code ${versionCode} is used up: bump`,
+                    '(`cd apps/web && just android-bump`), commit, and re-add the `android-update` label.',
+                    'If only the promotion failed and the native code is unchanged, you can instead promote',
+                    `version code ${versionCode} by hand with **Publish Android to Google Play** (\`operation=promote-production\`).`,
+                  ].join('\n')
+                : 'Fix the problem, then remove and re-add the `android-update` label to retry.';
+            body = [
+              `🤖 Android Play release for ${releaseName} **failed**${failedStep ? ` at **${failedStep}**` : ''} (${runs}).`,
+              ...(tail ? ['', '```text', tail, '```'] : []),
+              '',
+              retry,
+            ].join('\n');
+          }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: Number(env.PR_NUMBER),
+            body,
+          });
+      env:
+        JOB_NAME: Android Play Publish
+        BUILD_URL: ${{ github.event.workflow_run.html_url }}
+        RELEASE_NAME: ${{ needs.check.outputs.release_name }}
+        JOB_STATUS: ${{ job.status }}
+        UPLOAD_OUTCOME: ${{ steps.upload.outcome }}

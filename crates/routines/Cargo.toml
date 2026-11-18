@@ -12,8 +12,10 @@ chrono.workspace = true
 chrono-tz.workspace = true
 cron.workspace = true
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 reqwest.workspace = true
+routine_program = { path = "../routine_program" }
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

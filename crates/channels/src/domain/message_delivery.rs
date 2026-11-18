@@ -63,6 +63,7 @@ fn persisted(channel_id: Uuid, message: &Message) -> MutatedMessage {
         thread_id: message.thread_id,
         sender_id: message.sender_id.clone(),
         triggered_by: message.triggered_by.clone(),
+        triggered_via: message.triggered_via.clone(),
         content: message.content.clone(),
         created_at: message.created_at,
         updated_at: message.updated_at,
@@ -143,6 +144,21 @@ async fn recheck_agent_creations<C, P>(
     );
 }
 
+/// Where a bot message sits: the thread it starts, or the one it replies in.
+#[derive(Clone, Copy, Debug)]
+enum BotMessageThread {
+    Starts(Uuid),
+    RepliesIn(Uuid),
+}
+
+impl BotMessageThread {
+    fn root(self) -> Uuid {
+        match self {
+            Self::Starts(root) | Self::RepliesIn(root) => root,
+        }
+    }
+}
+
 fn repo_error(error: impl Into<anyhow::Error>) -> rootcause::Report {
     rootcause::report!("channel message delivery failed: {}", error.into())
 }
@@ -157,14 +173,16 @@ where
 {
     /// Share, as `person`, the linked items that `bot` created for them since
     /// their latest message in this thread before `replied_at`, the request
-    /// the reply answers. One bound covers classic bot replies and agent
-    /// session turns alike. Items without a creation record yet are
+    /// the reply answers; a bot message that starts its own thread answers
+    /// their latest message in the channel. One bound covers classic bot
+    /// replies and agent session turns alike. Items without a creation record yet are
     /// re-checked in the background; the rest, including anything that
     /// existed before the request, stay unshared.
     #[tracing::instrument(
         skip(self, person, items),
         fields(
             items = items.len(),
+            request = tracing::field::Empty,
             created = tracing::field::Empty,
             shared = tracing::field::Empty,
             not_permitted = tracing::field::Empty,
@@ -176,18 +194,30 @@ where
         bot: BotId,
         person: MacroUserIdStr<'static>,
         channel_id: Uuid,
-        thread_root: Uuid,
+        thread: BotMessageThread,
         replied_at: DateTime<Utc>,
         items: Vec<ReferencedShareItem>,
     ) -> anyhow::Result<()> {
-        let Some(requested_at) = self
+        let in_thread = self
             .creations
-            .request_sent_at(thread_root, &person, replied_at)
+            .request_sent_at(thread.root(), &person, replied_at)
             .await
-            .map_err(Into::into)?
-        else {
+            .map_err(Into::into)?;
+        let request = match (in_thread, thread) {
+            (Some(at), _) => Some((at, "thread")),
+            (None, BotMessageThread::Starts(_)) => self
+                .creations
+                .channel_request_sent_at(channel_id, &person, replied_at)
+                .await
+                .map_err(Into::into)?
+                .map(|at| (at, "channel")),
+            (None, BotMessageThread::RepliesIn(_)) => None,
+        };
+        let Some((requested_at, source)) = request else {
+            tracing::Span::current().record("request", "none");
             return Ok(());
         };
+        tracing::Span::current().record("request", source);
         let created = self
             .creations
             .created_since(bot, &person, requested_at, items.clone())
@@ -200,7 +230,7 @@ where
             .collect();
         if !pending.is_empty() {
             let pending_count = pending.len();
-            tokio::spawn(
+            tokio::spawn(agent_correlation::context::capture(
                 recheck_agent_creations(
                     self.creations.clone(),
                     self.permissions.clone(),
@@ -214,12 +244,12 @@ where
                     "channels.recheck_agent_creations",
                     %channel_id,
                     %bot,
-                    %thread_root,
+                    thread_root = %thread.root(),
                     pending = pending_count,
                     shared = tracing::field::Empty,
                     not_permitted = tracing::field::Empty,
                 )),
-            );
+            ));
         }
         if !created.is_empty() {
             let results = self
@@ -322,7 +352,10 @@ where
                         bot.bot_id(),
                         person,
                         channel_id,
-                        message.thread_id.unwrap_or(message.id),
+                        match message.thread_id {
+                            Some(root) => BotMessageThread::RepliesIn(root),
+                            None => BotMessageThread::Starts(message.id),
+                        },
                         message.created_at,
                         items,
                     )
@@ -342,6 +375,11 @@ where
             if let Err(error) = self.repo.touch_channel_updated_at(channel_id).await {
                 side_effect_error = Some(repo_error(error));
             }
+        }
+        if matches!(event.change, MessageChange::CallRootPosted { .. })
+            && let Err(error) = self.repo.touch_channel_updated_at(channel_id).await
+        {
+            side_effect_error = Some(repo_error(error));
         }
         // Notifications derive from a post, or from an edit that must notify like one.
         let posted = match &event.change {
@@ -401,6 +439,7 @@ where
             MessageChange::Edited { .. }
             | MessageChange::MessageDeleted { .. }
             | MessageChange::Typing { .. }
+            | MessageChange::CallRootPosted { .. }
             | MessageChange::ThreadUpdated { .. } => None,
         };
         if let Some((message, mentions, notification_policy)) = posted {

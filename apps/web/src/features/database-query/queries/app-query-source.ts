@@ -2,7 +2,7 @@ import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-ha
 import type { TModel } from '@core/component/AI/constant';
 import { databaseSqlAnswer } from '@core/database-sql/answer';
 import { databaseSqlSchema } from '@core/database-sql/catalog';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import {
   checkDatabaseSql,
@@ -52,6 +52,7 @@ function generateDatabaseQuery(
   input: Parameters<QueryCapabilities['generate']>[0],
   model: TModel
 ): ResultAsync<QueryProposal, QueryFailure> {
+  const parent = Telemetry.captureContext();
   return ResultAsync.fromPromise(
     import('@service-cognition/database-query'),
     (thrown) =>
@@ -60,10 +61,12 @@ function generateDatabaseQuery(
       )
   )
     .andThen((cognition) =>
-      cognition.generateDatabaseQuery(input, model).mapErr((failure) => {
-        handleAiUsageLimitError(failure.errors);
-        return generationFailure(serviceError(failure.errors).message);
-      })
+      parent
+        .run(() => cognition.generateDatabaseQuery(input, model))
+        .mapErr((failure) => {
+          handleAiUsageLimitError(failure.errors);
+          return generationFailure(serviceError(failure.errors).message);
+        })
     )
     .andThen(parseQueryProposal);
 }
@@ -71,7 +74,7 @@ function generateDatabaseQuery(
 /** Phase summaries remain visible in DevTools even when browser export is disabled. */
 function traceQueryPhase<T>(
   phase: 'generate' | 'read' | 'catalog',
-  work: () => ResultAsync<T, QueryFailure>,
+  work: (span: Span) => ResultAsync<T, QueryFailure>,
   attributes: Record<string, string | number | boolean> = {}
 ): ResultAsync<T, QueryFailure> {
   const span = Telemetry.span(`database.query.${phase}`);
@@ -81,7 +84,7 @@ function traceQueryPhase<T>(
   const settle = async () => {
     let outcome = 'error';
     try {
-      const result = await span.run(work);
+      const result = await span.run(() => work(span));
       outcome = result.isOk() ? 'success' : result.error.kind;
       span.setAttr('database.outcome', outcome);
       if (result.isErr()) span.error(result.error.kind);
@@ -124,15 +127,19 @@ export function createQueryCapabilities(
     },
     // A draft question may read any database the viewer can reach.
     read: (sql, context) =>
-      traceQueryPhase('read', () =>
+      traceQueryPhase('read', (read) =>
         traceQueryPhase('catalog', viewerDatabases).andThen((databases) =>
-          readDatabaseSql({
-            schema: databaseSqlSchema(databases),
-            sql,
-            scope: context?.databaseId,
-          }).map(({ catalog, outcome }) =>
-            databaseSqlAnswer(outcome, catalog, databases)
-          )
+          read
+            .run(() =>
+              readDatabaseSql({
+                schema: databaseSqlSchema(databases),
+                sql,
+                scope: context?.databaseId,
+              })
+            )
+            .map(({ catalog, outcome }) =>
+              databaseSqlAnswer(outcome, catalog, databases)
+            )
         )
       ),
     describe: (databaseId) =>
@@ -178,9 +185,9 @@ export function createSavedQuestionSource(
 }
 
 /**
- * Saved queries are immutable: every new SQL text becomes a new row. The
- * service stores it as given, so it is compiled against the viewer's
- * catalog first, and only a read is saved.
+ * Saved queries are immutable: every new SQL text becomes a new row. It is
+ * compiled against the viewer's catalog here first, for an immediate error;
+ * the service compiles it again and saves only a read.
  */
 export function saveQuestionSql(input: {
   sql: string;

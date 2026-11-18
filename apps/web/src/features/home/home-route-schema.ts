@@ -50,8 +50,21 @@ export function homeBaseBlockType(
     : (blockType as BlockName);
 }
 
+export const homeProjectSearch = {
+  namespace: 'project',
+  schema: z.object({
+    section: z.enum(['overview', 'tasks']).default('overview'),
+    discussionId: z.string().optional(),
+  }),
+  defaults: {
+    section: 'overview' as const,
+    discussionId: undefined as string | undefined,
+  },
+};
+
 /** Search the inline Home item owns; the channel namespace is shared with the channels view. */
 export const HOME_PREVIEW_SEARCH_NAMESPACES = [
   channelsSearch.namespace,
   driveSearch.namespace,
+  homeProjectSearch.namespace,
 ] as const;

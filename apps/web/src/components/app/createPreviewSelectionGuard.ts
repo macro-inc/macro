@@ -34,10 +34,11 @@ export function createPreviewSelectionGuard(): PreviewSelectionGuard {
   const panel = useSplitPanelOrThrow();
   const owner = Symbol('inline-preview');
   const [current, setCurrent] = createSignal<ContentIdentity>();
+  const activate = () => panel.handle.activate();
   const unregister = manager.registerOpenViews(() => {
     const content = current();
     return content
-      ? [{ owner, content, activate: () => panel.handle.activate() }]
+      ? [{ owner, content, activate, split: panel.handle.id }]
       : [];
   });
   onCleanup(unregister);
@@ -98,7 +99,16 @@ export function createPreviewSelectionGuard(): PreviewSelectionGuard {
       }
       return true;
     });
-  const select: SelectPreview = (selection, reason) => {
+  // A host's route effect makes the first call as its view mounts. That
+  // selection was already in the URL (a restored tab or layout), so a conflict
+  // yields quietly: moving focus would bounce the user out of the tab they just
+  // opened.
+  let viewMounting = true;
+  const select: SelectPreview = (
+    selection,
+    reason = viewMounting ? 'restore' : 'navigate'
+  ) => {
+    viewMounting = false;
     if (!canSelect(selection, reason)) return false;
     setCurrent(identity(targetFor(selection)));
     return true;

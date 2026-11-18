@@ -14,5 +14,10 @@ fn runs_the_end_to_end_tests_on_every_platform() {
     }
     assert!(yaml.contains("update_e2e.py"));
     assert!(yaml.contains("windows_test.ps1"));
-    assert!(yaml.contains("crates/coding_agent_worker/**"));
+    assert!(yaml.contains("windows_claude_code_test.ps1"));
+    assert!(
+        PATHS
+            .iter()
+            .any(|path| path.as_str() == "crates/coding_agent_worker/**")
+    );
 }

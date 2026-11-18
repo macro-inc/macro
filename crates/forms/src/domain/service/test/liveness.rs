@@ -111,6 +111,7 @@ async fn refused_changes_and_no_op_lifecycle_calls_ping_nobody() {
                             required: false,
                             widget: None,
                         }],
+                        show_when: None,
                     }],
                 },
             )

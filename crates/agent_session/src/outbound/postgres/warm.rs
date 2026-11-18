@@ -15,6 +15,7 @@ impl<B: BotFacts + 'static> WarmSessionLifecycle for PgAgentSessionRepo<B> {
         bot: BotId,
         model: &'a str,
         instructions: Option<&'a str>,
+        origin: &'a trigger_context::TriggerOrigin,
     ) -> Pin<Box<dyn Future<Output = Result<WarmClaim>> + Send + 'a>> {
         Box::pin(async move {
             let user = session_owner_user(owner)?;
@@ -93,6 +94,8 @@ impl<B: BotFacts + 'static> WarmSessionLifecycle for PgAgentSessionRepo<B> {
                 upsert_user_history(&mut transaction, user.as_ref(), &id.as_uuid())
                     .await
                     .context("record claimed warm session history")?;
+                // A warm row has no cause until someone claims it.
+                source::link_source(&mut transaction, id, origin).await?;
             }
             transaction.commit().await.context("commit warm claim")?;
             Ok(claim)
@@ -102,9 +105,11 @@ impl<B: BotFacts + 'static> WarmSessionLifecycle for PgAgentSessionRepo<B> {
         Box::pin(async move {
             // Mark under row locks before deleting: a concurrent claim cannot win
             // after this operation, and a crash leaves a retryable expired row.
+            // A ready warm row is at `acp_ready`, an event status; leaving its
+            // event name behind breaks `agent_session_status_event_name_check`.
             let rows = sqlx::query!(
                 r#"
-                UPDATE agent_session SET status = 'disconnected'
+                UPDATE agent_session SET status = 'disconnected', status_event_name = NULL
                 WHERE id IN (
                     SELECT id FROM agent_session
                     WHERE for_warming AND visibility = 'hidden' AND thread_id IS NULL

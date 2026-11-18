@@ -2,6 +2,10 @@ import {
   parseMacroAppLink,
   sanitizeCalendarDescription,
 } from '@app/features/calendar/utils/calendar-description';
+import {
+  calendarMacroCallUrl,
+  removeCalendarMacroCall,
+} from '@app/features/calendar/utils/macro-call-link';
 import { SharedEventActions } from '@app/features/calendar-view/components/SharedEventActions';
 import {
   type CalendarMentionTarget,
@@ -43,18 +47,19 @@ import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
 import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CollapseInlinePreview from '@icon/system/regular/arrows-in-line-horizontal.svg';
 import ExpandInlinePreview from '@icon/system/regular/arrows-out-line-horizontal.svg';
 import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import MessageIcon from '@icon/system/regular/chat-circle.svg';
 import ThreadIcon from '@icon/system/regular/chats-circle.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
+import SplitIcon from '@icon/system/regular/columns.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import GitBranchIcon from '@icon/system/regular/git-branch.svg';
 import HighlightIcon from '@icon/system/regular/highlighter-circle.svg';
-import Link from '@icon/system/regular/link.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import MapPinIcon from '@icon/system/regular/map-pin-simple.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
@@ -62,6 +67,7 @@ import TextAlignLeftIcon from '@icon/system/regular/text-align-left.svg';
 import TextTIcon from '@icon/system/regular/text-t.svg';
 import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
 import {
   isAccessiblePreviewItem,
   isCalendarEventPreviewItem,
@@ -331,7 +337,7 @@ const calendarTimeFormat = new Intl.DateTimeFormat(undefined, {
 
 /** One compact local-time schedule line for a calendar mention preview. */
 export function calendarPreviewSchedule(
-  event: Pick<PreviewCalendarEventAccess['event'], 'time'>
+  event: PreviewCalendarEventAccess['event']
 ): string | undefined {
   if (event.time.kind === 'allDay') {
     const start = parseLocalDate(event.time.startDate);
@@ -366,19 +372,26 @@ function heldOnCalendarLabel(
 }
 
 /** Meeting-level rows of the calendar mention hover card. */
-export function CalendarEventPreviewDetails(props: {
-  event: Omit<PreviewCalendarEventAccess['event'], 'updatedAt'>;
+function CalendarEventPreviewDetails(props: {
+  event: PreviewCalendarEventAccess['event'];
   /** The mentioned event, which a read-only share copies from. */
   mentionedEventId: string;
   /** Opens the viewer's own copy; absent where the card cannot open it. */
   onOpen?: (event: MouseEvent) => void;
-  /** Team-calendar projections have no channel-share mutation capabilities. */
-  sharedActions?: boolean;
+  /** Runs once Join has left the card; native apps join in-app, behind it. */
+  onJoin?: () => void;
 }) {
   const organizer = () =>
     props.event.organizerName ?? props.event.organizerEmail;
+  const macroMeetingUrl = () => calendarMacroCallUrl(props.event);
+  // A channel share exposes the meeting, not a way into its call.
+  const joinableMeetingUrl = () =>
+    props.event.viewerEventId ? macroMeetingUrl() : undefined;
+  const eventContent = createMemo(() =>
+    removeCalendarMacroCall(props.event, macroMeetingUrl())
+  );
   const descriptionHtml = () =>
-    sanitizeCalendarDescription(props.event.description ?? '');
+    sanitizeCalendarDescription(eventContent().description);
   // Opening a Macro link reads the split layout from context, so the handler
   // keeps this component's owner.
   const openDescriptionLink = createCallback((event: MouseEvent) => {
@@ -425,7 +438,25 @@ export function CalendarEventPreviewDetails(props: {
           </MetadataInfo>
         )}
       </Show>
-      <Show when={props.event.location}>
+      <Show when={joinableMeetingUrl()}>
+        {(url) => (
+          <MetadataInfo icon={VideoCameraIcon}>
+            <Button
+              variant="secondary"
+              size="xs"
+              onClick={(event) => {
+                event.stopPropagation();
+                openExternalUrl(url());
+                props.onJoin?.();
+              }}
+            >
+              Join Macro call
+              <ArrowSquareOutIcon class="size-3.5 shrink-0" />
+            </Button>
+          </MetadataInfo>
+        )}
+      </Show>
+      <Show when={eventContent().location.trim()}>
         {(location) => (
           <MetadataInfo icon={MapPinIcon}>
             <span class="truncate">{location()}</span>
@@ -437,7 +468,7 @@ export function CalendarEventPreviewDetails(props: {
           <div class="mt-2 flex items-start text-[0.8em] text-ink-muted">
             <TextAlignLeftIcon class="relative mx-1 mt-0.5 size-3 shrink-0" />
             <div
-              class="line-clamp-4 min-w-0 wrap-anywhere [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+              class="line-clamp-4 min-w-0 wrap-anywhere [&_a]:text-link [&_a:hover]:text-link-hover [&_a:visited]:text-link-visited [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
               innerHTML={html()}
               onClick={openDescriptionLink}
             />
@@ -459,9 +490,7 @@ export function CalendarEventPreviewDetails(props: {
         </MetadataInfo>
       </Show>
       <Switch>
-        <Match
-          when={!props.event.viewerEventId && props.sharedActions !== false}
-        >
+        <Match when={!props.event.viewerEventId}>
           <SharedEventActions
             eventId={props.mentionedEventId}
             title={props.event.title}
@@ -737,24 +766,20 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     try {
       const mentionTarget = calendarMentionTarget();
       if (mentionTarget) {
-        await copyCalendarEventMentionTarget(mentionTarget);
-        return;
+        return copyCalendarEventMentionTarget(mentionTarget, { silent: true });
       }
 
       await navigator.clipboard.writeText(documentLink());
-      toast.success('Copied document link to clipboard');
+      return true;
     } catch (e) {
       console.error(e);
       toast.failure('Could not copy link');
+      return false;
     }
   };
 
-  const handleCopyBranchName = () => {
-    fireAndForget(
-      copyBranchNameToClipboard(props.documentInfo.id),
-      'document-preview'
-    );
-  };
+  const handleCopyBranchName = () =>
+    copyBranchNameToClipboard(props.documentInfo.id, { silent: true });
 
   const isSplitAlreadyOpen = () => {
     const splitManager = globalSplitManager();
@@ -888,15 +913,19 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                 Ask Macro
               </Dropdown.Item>
             </Show>
-            <Dropdown.Item onSelect={handleCopy}>
-              <Link class="size-4" />
+            <Dropdown.CopyItem
+              icon={<LinkIcon class="size-4" />}
+              onCopy={handleCopy}
+            >
               Copy Link
-            </Dropdown.Item>
+            </Dropdown.CopyItem>
             <Show when={props.documentInfo.type === 'task'}>
-              <Dropdown.Item onSelect={handleCopyBranchName}>
-                <GitBranchIcon class="size-4" />
+              <Dropdown.CopyItem
+                icon={<GitBranchIcon class="size-4" />}
+                onCopy={handleCopyBranchName}
+              >
                 Copy Branch Name
-              </Dropdown.Item>
+              </Dropdown.CopyItem>
             </Show>
             <Show when={isOpenable() && !isSplitAlreadyOpen()}>
               <Dropdown.Item
@@ -904,7 +933,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                   fireAndForget(openInNewSplit(), 'document-preview')
                 }
               >
-                <ColumnsPlusRight class="size-4" />
+                <SplitIcon class="size-4" />
                 Open in New Split
               </Dropdown.Item>
             </Show>
@@ -1062,6 +1091,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                               )
                           : undefined
                       }
+                      onJoin={props.onOpened}
                     />
                   )}
                 </Show>
@@ -1142,7 +1172,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                   </div>
                 </Show>
                 {noAccessItem().access === 'no_access' ? (
-                  <Unauthorized noun={itemNoun()} />
+                  <Unauthorized compact noun={itemNoun()} />
                 ) : (
                   <NotFound message={deletedMessage()} />
                 )}
@@ -1202,6 +1232,7 @@ export function PopupPreview(
             previewInfo={props.previewInfo}
             snapshotInfo={props.snapshotInfo}
             useFallbackData={props.useFallbackData}
+            onOpened={props.onOpened}
           />
         </Suspense>
       </Card>

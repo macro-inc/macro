@@ -10,6 +10,7 @@ import type {
   FilterNode,
   FilterTest,
 } from '../../../lib/core/database-sql/generated/types';
+import { percentagePointsText } from '../core/column-inference';
 import type { DatabaseViewColumn } from '../core/database-view';
 import {
   addCondition,
@@ -70,8 +71,8 @@ export function FilterPanel(props: {
           root={draft()}
         />
       </div>
-      <div class="mt-3 flex items-center justify-between">
-        <div class="flex items-center gap-1">
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-y-1">
+        <div class="flex flex-wrap items-center gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -320,15 +321,25 @@ function TestValue(props: {
         {(test) => (
           <FilterValueInput
             type="number"
-            value={Number.isFinite(test().value) ? test().value : ''}
-            placeholder="Enter a number…"
+            value={
+              Number.isFinite(test().value)
+                ? props.column.percentage
+                  ? percentagePointsText(test().value)
+                  : test().value
+                : ''
+            }
+            placeholder={
+              props.column.percentage ? 'Enter a percent…' : 'Enter a number…'
+            }
             onInput={(event) =>
               props.onChange({
                 ...test(),
                 value:
                   event.currentTarget.value === ''
                     ? Number.NaN
-                    : Number(event.currentTarget.value),
+                    : props.column.percentage
+                      ? Number(event.currentTarget.value) / 100
+                      : Number(event.currentTarget.value),
               })
             }
           />

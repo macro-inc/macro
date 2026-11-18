@@ -20,6 +20,7 @@ pub fn incoming() -> IncomingEvent {
     IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: EventPayload::Document(
             serde_json::from_value(json!({
                 "event_type":"document.updated", "metadata": {
@@ -56,13 +57,25 @@ pub fn pending(configuration: &EventActionConfiguration) -> PendingEventRun {
 }
 
 pub fn capability(owner: MacroUserIdStr<'static>, event: &EventReference) -> EventAccessCapability {
+    match event.source() {
+        EventSource::Github(delivery) => {
+            return EventAccessCapability::GithubInstallation {
+                owner,
+                installation_id: delivery.installation_id,
+            };
+        }
+        EventSource::Entity { .. } => {}
+    }
     let entity = Entity {
-        entity_id: event.entity_id().to_string(),
+        entity_id: event.entity_id().unwrap().to_string(),
         entity_type: match event.entity_type() {
             EventEntityType::Document => EntityType::Document,
             EventEntityType::Channel => EntityType::Channel,
             EventEntityType::EmailThread => EntityType::EmailThread,
             EventEntityType::Call => EntityType::Call,
+            EventEntityType::GithubInstallation => {
+                unreachable!("external events returned above")
+            }
         },
     };
     match event.entity_type() {
@@ -104,6 +117,9 @@ pub fn capability(owner: MacroUserIdStr<'static>, event: &EventReference) -> Eve
             )
             .unwrap(),
         ),
+        EventEntityType::GithubInstallation => {
+            unreachable!("external events returned above")
+        }
     }
 }
 
@@ -310,6 +326,10 @@ impl EventRunRepository for Repo {
                 claimed: Some(started_at),
                 run_visibility: RunVisibility::Unlisted,
                 template_id: None,
+                appearance: model_entity::EntityAppearance::default(),
+                suggestion_id: None,
+                description: String::new(),
+                sub_routine: None,
             },
         }))
     }
@@ -447,4 +467,17 @@ pub fn setup() -> (Arc<Repo>, Arc<Access>, Arc<Executor>, PendingEventRun) {
     repo.0.lock().unwrap().configurations.push(config);
     repo.0.lock().unwrap().pending.push(pending.clone());
     (repo, Arc::default(), Arc::default(), pending)
+}
+
+/// A rollout answering the same for every owner, or failing to load.
+#[derive(Clone, Copy)]
+pub struct Rollout(pub Option<bool>);
+
+pub const ROLLED_OUT: Rollout = Rollout(Some(true));
+
+impl crate::domain::event_rollout::EventRoutineRollout for Rollout {
+    async fn enabled_for(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        self.0
+            .ok_or_else(|| rootcause::report!("flags unavailable"))
+    }
 }

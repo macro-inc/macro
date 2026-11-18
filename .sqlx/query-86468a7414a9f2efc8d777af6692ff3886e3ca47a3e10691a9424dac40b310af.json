@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_companies c SET email_sync = TRUE WHERE c.team_id = $1 AND NOT c.hidden\n                               AND EXISTS (SELECT 1 FROM crm_domains d WHERE d.company_id = c.id AND lower(d.domain) = $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "86468a7414a9f2efc8d777af6692ff3886e3ca47a3e10691a9424dac40b310af"
+}

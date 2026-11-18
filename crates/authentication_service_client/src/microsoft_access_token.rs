@@ -8,6 +8,10 @@ use crate::{
 pub struct MicrosoftAccessToken {
     pub access_token: String,
     pub scopes: Vec<String>,
+    /// Whether authentication served a cached token; `None` from a version
+    /// that does not report it.
+    #[serde(default)]
+    pub cached: Option<bool>,
 }
 
 /// Non-secret, owner-bound result of a completed Microsoft OAuth attempt.
@@ -130,6 +134,11 @@ impl AuthServiceClient {
             .send()
             .await
             .map_err(|_| unavailable())?;
+        // Lands on the caller's token span when it declares the field.
+        tracing::Span::current().record(
+            "http.response.status_code",
+            i64::from(response.status().as_u16()),
+        );
         match response.status() {
             reqwest::StatusCode::OK => {
                 let token: MicrosoftAccessToken =

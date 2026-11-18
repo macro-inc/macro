@@ -10,34 +10,50 @@ import {
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { Badge, Tabs } from '@ui';
+import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { composeEmail } from '../compose-email';
 import {
-  EMAIL_FOCUS_TAB,
+  canSearchEmailTab,
   EMAIL_INBOX_TAB_IDS,
   EMAIL_TAB_LABELS,
   EMAIL_TABS,
   isEmailInboxTab,
 } from '../constants';
 import { useEmailView } from '../email-view-context';
+import type { EmailSearchSuggestions } from '../search/create-email-search-suggestions';
 import { EMAIL_TOUR } from '../tour';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
+import {
+  EmailSavedViewActions,
+  EmailSavedViewMenu,
+  EmailSaveViewButton,
+  useEmailSavedViewTitle,
+} from '../views/email-saved-views';
 import { EmailControls } from './EmailControls';
 
 export type EmailHeaderProps = {
-  /** Restores list focus when Escape leaves the search field. */
-  onSearchEscape?: () => void;
+  /** Moves the keyboard from the search field into the list. */
+  focusSearchResults?: () => void;
+  /** Hands the search field's focus to the view's search keys. */
+  registerSearch?: (focus: () => void) => () => void;
+  /**
+   * The wide search: the open field takes over the header and lists recent
+   * searches. Absent, the field stays compact beside the other actions.
+   */
+  searchSuggestions?: EmailSearchSuggestions;
   tabOnly?: boolean;
 };
 
 export function EmailViewBreadcrumbItem() {
-  const { state, tagViewTitle } = useEmailView();
-  const inboxSelected = () => !isTouchDevice() && isEmailInboxTab(state.tab);
+  const { state, tagViewTitle, savedViewActive } = useEmailView();
+  const savedViewTitle = useEmailSavedViewTitle();
+  const inboxSelected = () =>
+    !isTouchDevice() && !savedViewActive() && isEmailInboxTab(state.tab);
   const tabTitle = () =>
+    savedViewTitle() ??
     tagViewTitle() ??
     (inboxSelected()
       ? 'Inbox'
@@ -83,48 +99,33 @@ export function EmailViewBreadcrumbItem() {
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const { state, setState, setTab, tagViewTitle } = useEmailView();
+  const { state, setState, setTab, tagViewTitle, savedViewActive } =
+    useEmailView();
+  const savedViewTitle = useEmailSavedViewTitle();
   const [filterOpen, setFilterOpen] = createSignal(false);
-  let focusSearch: (() => void) | undefined;
+  let releaseSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
   const isVisible = useVisibleEmailTab();
-  const inboxSelected = () => isEmailInboxTab(state.tab);
+  const inboxSelected = () => !savedViewActive() && isEmailInboxTab(state.tab);
   const inboxTabs = () =>
     EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
       value: id,
       label: EMAIL_TAB_LABELS[id],
     }));
   const selectedTabLabel = () =>
+    savedViewTitle() ??
     tagViewTitle() ??
     (inboxSelected()
       ? 'Inbox'
       : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));
 
-  const runSearch = () => {
-    focusSearch?.();
-    return true;
-  };
-  const canSearch = () =>
-    state.tab !== 'scheduled' && state.tab !== 'reminders';
+  const canSearch = () => canSearchEmailTab(state.tab);
 
-  // Mail clients search with `/`; elsewhere it opens the app's search view.
-  registerHotkey({
-    hotkey: '/',
-    scopeId: panel.splitHotkeyScope,
-    description: 'Search email',
-    condition: () => panel.isPanelActive() && canSearch(),
-    keyDownHandler: runSearch,
-  });
+  onCleanup(() => releaseSearch?.());
 
-  // The view's control hotkeys are registered once, here, for the split scope.
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    search: {
-      description: 'Search email',
-      condition: canSearch,
-      run: runSearch,
-    },
     filter: {
       description: 'Filter email',
       condition: () => state.tab !== 'scheduled',
@@ -134,6 +135,11 @@ export function EmailHeader(props: EmailHeaderProps) {
       },
     },
   });
+
+  // The filter menu is unmounted with the other actions, so the search only
+  // takes the header while it is closed.
+  const searchOwnsHeader = () =>
+    !!props.searchSuggestions?.open() && canSearch() && !filterOpen();
 
   return (
     <ListHeader
@@ -155,6 +161,9 @@ export function EmailHeader(props: EmailHeaderProps) {
               </h2>
             </Show>
           </div>
+          <Show when={savedViewActive()}>
+            <EmailSavedViewMenu />
+          </Show>
           <Show when={inboxSelected()}>
             <Tabs
               ref={tourTarget(EMAIL_TOUR.signalNoise)}
@@ -166,35 +175,38 @@ export function EmailHeader(props: EmailHeaderProps) {
               onChange={setTab}
             />
           </Show>
-          <Show when={state.tab === 'focus'}>
-            <Badge variant="outline" size="xs" class="shrink-0">
-              {EMAIL_FOCUS_TAB.badge}
-            </Badge>
-          </Show>
         </div>
       }
     >
-      <Show when={state.tab !== 'scheduled'}>
-        <EmailControls
-          filterOpen={filterOpen()}
-          onFilterOpenChange={setFilterOpen}
-        />
+      <Show when={!searchOwnsHeader()}>
+        <EmailSavedViewActions />
+        <EmailSaveViewButton />
+        <Show when={state.tab !== 'scheduled'}>
+          <EmailControls
+            filterOpen={filterOpen()}
+            onFilterOpenChange={setFilterOpen}
+          />
+        </Show>
+        <div class="contents @max-[640px]/split-header:hidden">
+          <ViewCreateButton
+            aria-label="New email"
+            onClick={() => composeEmail(openWithSplit, state.inboxIds)}
+          />
+        </div>
       </Show>
-      <div class="contents @max-[640px]/split-header:hidden">
-        <ViewCreateButton
-          aria-label="New email"
-          onClick={() => composeEmail(openWithSplit, state.inboxIds)}
-        />
-      </div>
-      <Show when={state.tab !== 'reminders' && state.tab !== 'scheduled'}>
+      <Show when={canSearch()}>
         <ListHeaderSearch
           ref={searchTarget}
           label="Search email"
           value={state.search}
           onValueChange={(search) => setState('search', search)}
-          onEscape={props.onSearchEscape}
+          focusResults={props.focusSearchResults}
+          wide={!!props.searchSuggestions}
+          onOpenChange={props.searchSuggestions?.setOpen}
+          onFocusChange={props.searchSuggestions?.setFocused}
+          suggestions={props.searchSuggestions}
           registerFocus={(focus) => {
-            focusSearch = focus;
+            releaseSearch = props.registerSearch?.(focus);
           }}
         />
       </Show>

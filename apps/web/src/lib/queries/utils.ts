@@ -1,3 +1,4 @@
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import type { MutationOptions } from '@tanstack/solid-query';
 
 /**
@@ -28,27 +29,36 @@ export function withCallbacks<
   TContext = unknown,
 >(
   defaults: MutationCallbacks<TData, TError, TVariables, TContext>,
-  overrides?: MutationCallbacks<TData, TError, TVariables, TContext>
+  overrides?: MutationCallbacks<TData, TError, TVariables, TContext>,
+  parentFor?: (variables: TVariables) => TraceContext | undefined
 ): MutationCallbacks<TData, TError, TVariables, TContext> {
-  if (!overrides) return defaults;
+  if (!overrides && !parentFor) return defaults;
 
   return {
     onMutate: async (...args) => {
-      const defaultContext = await defaults.onMutate?.(...args);
-      const overrideContext = await overrides.onMutate?.(...args);
+      const parent = parentFor?.(args[0]) ?? Telemetry.captureContext();
+      const defaultContext = await parent.run(() =>
+        defaults.onMutate?.(...args)
+      );
+      const overrideContext = await parent.run(() =>
+        overrides?.onMutate?.(...args)
+      );
       return (overrideContext ?? defaultContext) as TContext;
     },
     onSuccess: async (...args) => {
-      await defaults.onSuccess?.(...args);
-      await overrides.onSuccess?.(...args);
+      const parent = parentFor?.(args[1]) ?? Telemetry.captureContext();
+      await parent.run(() => defaults.onSuccess?.(...args));
+      await parent.run(() => overrides?.onSuccess?.(...args));
     },
     onError: async (...args) => {
-      await defaults.onError?.(...args);
-      await overrides.onError?.(...args);
+      const parent = parentFor?.(args[1]) ?? Telemetry.captureContext();
+      await parent.run(() => defaults.onError?.(...args));
+      await parent.run(() => overrides?.onError?.(...args));
     },
     onSettled: async (...args) => {
-      await defaults.onSettled?.(...args);
-      await overrides.onSettled?.(...args);
+      const parent = parentFor?.(args[2]) ?? Telemetry.captureContext();
+      await parent.run(() => defaults.onSettled?.(...args));
+      await parent.run(() => overrides?.onSettled?.(...args));
     },
   };
 }

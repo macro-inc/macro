@@ -8,5 +8,8 @@ pub mod discovery;
 pub mod toolset;
 
 pub use catalog::browse_catalog;
-pub use connect::{PipedreamConnectError, complete_pipedream_connection, disconnect_mcp_server};
+pub use connect::{
+    PipedreamConnectError, complete_connect_connection, complete_pipedream_connection,
+    connect_app_for, disconnect_mcp_server, start_connect_session,
+};
 pub use toolset::PipedreamToolSet;

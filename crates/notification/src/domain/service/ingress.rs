@@ -3,6 +3,7 @@
 //! This service handles the caller-facing side of notifications:
 //! filtering recipients, persisting to DB, and publishing to the queue.
 
+use crate::domain::item_preferences::is_direct_mention;
 use crate::domain::models::apple::{APNSPushNotification, Aps};
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
@@ -326,7 +327,7 @@ where
     /// Filter recipients based on:
     /// - Sender (sender cannot receive their own notification)
     /// - Muted notifications
-    /// - Unsubscribed from item
+    /// - Unsubscribed from item (a mentions-only preference lets direct mentions through)
     async fn filter_recipients<'a, T, U>(
         &self,
         req: SendNotificationRequest<'a, T, U>,
@@ -337,8 +338,11 @@ where
         // Fetch all filter data upfront
         let (muted_users, unsubscribed_users, type_disabled_users) = tokio::try_join!(
             self.repository.get_muted_users(&recipient_ids),
-            self.repository
-                .get_unsubscribed_users(&req.req.notification_entity.entity_id, &recipient_ids),
+            self.repository.get_unsubscribed_users(
+                &req.req.notification_entity.entity_id,
+                is_direct_mention(notification_type),
+                &recipient_ids
+            ),
             self.repository
                 .get_users_with_type_disabled(notification_type, &recipient_ids),
         )?;
@@ -523,6 +527,11 @@ where
             NotificationStatus::Done(done) => {
                 self.repository
                     .mark_notifications_done(&req.user_id, req.notification_ids, *done)
+                    .await?
+            }
+            NotificationStatus::Reopen { unseen } => {
+                self.repository
+                    .reopen_notifications(&req.user_id, req.notification_ids, unseen)
                     .await?
             }
         };
@@ -777,7 +786,7 @@ where
         Ok(paginated)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,

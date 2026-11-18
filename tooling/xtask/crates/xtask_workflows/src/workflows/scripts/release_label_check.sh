@@ -33,7 +33,7 @@ announce_release() {
     steps="builds the app, uploads it to TestFlight and submits it for App Review"
   else
     what="Android version code $(jq -r '.bundle.android.versionCode' <<<"$conf")"
-    steps="builds the App Bundle, uploads it to the internal track and promotes it to production"
+    steps="builds the App Bundle, and **Android Play Publish** uploads it to the internal track and promotes it to production"
   fi
   gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "🚀 **${WORKFLOW}** started for ${what} at ${HEAD_SHA:0:10} ([workflow run](${url})). It ${steps}, then comments here with the result."
   echo "PR #${PR_NUMBER}: ${WORKFLOW} started for ${what}: ${url}"

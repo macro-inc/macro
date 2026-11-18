@@ -35,6 +35,14 @@ pub struct StoredAttachmentBlob {
     pub size: i64,
 }
 
+/// The Macro document already linked to an attachment.
+#[derive(Debug, Clone)]
+pub struct ExistingAttachmentDocument {
+    pub id: String,
+    /// The document's bytes have not finished reaching storage.
+    pub awaiting_upload: bool,
+}
+
 pub trait AttachmentReadRepository: EmailUserRepo {
     fn attachment_read_record(
         &self,
@@ -43,7 +51,7 @@ pub trait AttachmentReadRepository: EmailUserRepo {
     fn existing_attachment_document(
         &self,
         id: Uuid,
-    ) -> impl Future<Output = Result<Option<String>, AttachmentError>> + Send;
+    ) -> impl Future<Output = Result<Option<ExistingAttachmentDocument>, AttachmentError>> + Send;
 }
 pub trait AttachmentBytes: Send + Sync + 'static {
     fn bytes(
@@ -136,11 +144,34 @@ impl<R: AttachmentReadRepository, P: AttachmentBytes, S: AttachmentFiles, A: Ent
         }
         // Authorization precedes even the cache hit: a document ID is not proof
         // that this caller can read the attachment's source thread.
-        if let Some(id) = self.repository.existing_attachment_document(id).await? {
-            return Ok(id);
+        if let Some(document) = self.repository.existing_attachment_document(id).await? {
+            if document.awaiting_upload {
+                self.store_unfinished_document(&record, &document.id).await;
+            }
+            return Ok(document.id);
         }
         let bytes = self.provider.bytes(&record).await?;
         self.files.store_document(&record, bytes).await
+    }
+
+    /// Stores the bytes again for a document whose upload never finished. Its
+    /// link to the attachment is written first, so sync and later imports treat
+    /// the attachment as done and nothing else retries it. A failure still
+    /// opens the document: the first upload may simply be finishing.
+    #[tracing::instrument(
+        name = "email.attachment.store_unfinished_document",
+        skip_all,
+        fields(attachment_id = %record.attachment.db_id, document_id = %document_id)
+    )]
+    async fn store_unfinished_document(&self, record: &AttachmentReadRecord, document_id: &str) {
+        let stored = async {
+            let bytes = self.provider.bytes(record).await?;
+            self.files.store_document(record, bytes).await
+        }
+        .await;
+        if let Err(error) = stored {
+            tracing::warn!(?error, "could not store an unfinished attachment document");
+        }
     }
 }
 

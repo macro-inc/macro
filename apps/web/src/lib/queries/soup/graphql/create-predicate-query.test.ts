@@ -1,7 +1,8 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+import { Telemetry } from '@macro-inc/observability';
 import { gql } from '@urql/core';
 import { createComputed, createRoot, createSignal } from 'solid-js';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { selectRecords } from '../../../graphql-cache/exchange/record-selection';
 import { createNoopCacheHost } from '../../../graphql-cache/host/noop-host';
 import type {
@@ -80,6 +81,7 @@ function setup(onRead: () => void = () => {}) {
   const requests: Array<{
     args: EntityFilterCacheArgs;
     resolve: (value: EntityFilterCacheResult) => void;
+    reject: (cause: Error) => void;
   }> = [];
   const host: CacheHost = {
     ...createNoopCacheHost(),
@@ -99,7 +101,9 @@ function setup(onRead: () => void = () => {}) {
       onRead();
       return args.liveQuery?.release
         ? Promise.resolve({ kind: 'unsupported' })
-        : new Promise((resolve) => requests.push({ args, resolve }));
+        : new Promise((resolve, reject) =>
+            requests.push({ args, resolve, reject })
+          );
     },
   };
   const state = createRoot((dispose) => {
@@ -180,6 +184,75 @@ it('coalesces writes during a read and rejects a superseded snapshot', async () 
   expect(state.query.data()!.revision).toBe('3');
 });
 
+it('stops stale-read retries without publishing stale rows and recovers on the next change', async () => {
+  const state = setup();
+  state.change('2');
+  for (let index = 0; index < 3; index++) {
+    state.requests[index].resolve(snapshot());
+    await flush();
+  }
+  expect(state.query.status()).toBe('error');
+  expect(state.query.error()).toBeInstanceOf(Error);
+  expect(state.query.data()).toBeUndefined();
+  expect(state.requests).toHaveLength(3);
+
+  state.change('3');
+  expect(state.requests).toHaveLength(4);
+  state.requests[3].resolve({ ...snapshot(), revision: revision('3') });
+  await flush();
+  expect(state.query.status()).toBe('ready');
+  expect(state.query.error()).toBeUndefined();
+  expect(state.query.data()?.revision).toBe('3');
+});
+
+it('defers a cache change received during the last stale read instead of dropping it', async () => {
+  vi.useFakeTimers();
+  try {
+    const state = setup();
+    state.change('2');
+    for (let index = 0; index < 2; index++) {
+      state.requests[index].resolve(snapshot());
+      await flush();
+    }
+    state.change('3');
+    state.requests[2].resolve(snapshot());
+    await flush();
+    expect(state.query.status()).toBe('error');
+    expect(state.requests).toHaveLength(3);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.requests).toHaveLength(4);
+    state.requests[3].resolve({ ...snapshot(), revision: revision('3') });
+    await flush();
+    expect(state.query.status()).toBe('ready');
+    expect(state.query.data()?.revision).toBe('3');
+    state.dispose();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('resets the stale-read budget when an old-generation request rejects', async () => {
+  const state = setup();
+  state.change('2');
+  for (let index = 0; index < 2; index++) {
+    state.requests[index].resolve(snapshot());
+    await flush();
+  }
+  state.generations.forEach((callback) => callback({ storage: 'reset' }));
+  state.requests[2].reject(new Error('old generation closed'));
+  await flush();
+  state.change('2');
+  state.requests[3].resolve(snapshot());
+  await flush();
+  expect(state.query.status()).toBe('loading');
+  expect(state.requests).toHaveLength(5);
+  state.requests[4].resolve({ ...snapshot(), revision: revision('2') });
+  await flush();
+  expect(state.query.status()).toBe('ready');
+  expect(state.query.data()?.revision).toBe('2');
+});
+
 it('discards in-flight work on query changes and disposal', async () => {
   const state = setup();
   state.setInput({
@@ -243,4 +316,46 @@ it('does not recreate held rows when host setup reads an unrelated signal', asyn
   await flush();
   expect(state.requests).toHaveLength(1);
   expect(state.query.data()!.records).toBe(rows);
+});
+
+it('does not create root performance spans for repeated cache evaluations', async () => {
+  const span = vi.spyOn(Telemetry, 'span');
+  try {
+    const state = setup();
+    state.requests[0].resolve(snapshot());
+    await flush();
+    for (let index = 1; index <= 100; index++) {
+      state.query.refresh();
+      state.requests[index].resolve(patch(String(index + 1)));
+      await flush();
+    }
+    expect(state.query.data()?.revision).toBe('101');
+    expect(span).not.toHaveBeenCalledWith('urql.reconcile', {
+      sampling: 'perf',
+    });
+  } finally {
+    span.mockRestore();
+  }
+});
+
+it('does not read on cache changes while hidden, then catches up once', async () => {
+  const visibility = vi.spyOn(document, 'visibilityState', 'get');
+  try {
+    const state = setup();
+    state.requests[0].resolve(snapshot());
+    await flush();
+
+    visibility.mockReturnValue('hidden');
+    state.change('2');
+    state.change('3');
+    state.generations.forEach((cb) => cb({ storage: 'preserved' }));
+    expect(state.requests).toHaveLength(1);
+
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(state.requests).toHaveLength(2);
+    expect(state.requests[1].args.liveQuery?.since).toBeUndefined();
+  } finally {
+    visibility.mockRestore();
+  }
 });

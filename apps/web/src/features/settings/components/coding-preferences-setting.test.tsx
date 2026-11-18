@@ -22,6 +22,9 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: vi.fn(), failure: toastFailure },
 }));
 
+// The repository row has its own suite.
+vi.mock('../DefaultRepository', () => ({ DefaultRepository: () => null }));
+
 afterEach(() => {
   vi.clearAllMocks();
   queryClient.clear();

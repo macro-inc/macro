@@ -5,12 +5,11 @@
 //!
 //! # Architecture
 //!
-//! - **domain**: item identity, membership policy, notification stacking,
+//! - **domain**: Home's items, membership policy, notification stacking,
 //!   seen/done state, and the page, recompute, done and undo use cases.
-//! - **outbound**: adapters over the Soup, notification, email, activity and
-//!   realtime services that own the underlying data.
+//!
+//! Paging, notification loading, acknowledgment and the adapters over the
+//! services that own the data are the shared feed layer's
+//! (`crates/attention_feed`).
 
 pub mod domain;
-
-#[cfg(feature = "outbound")]
-pub mod outbound;

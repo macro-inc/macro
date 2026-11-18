@@ -1,9 +1,11 @@
 import { processEmailColors, stripColorSchemeMediaQueries } from '@core/email';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
+import { sanitizeEmailHtml } from '@macro-inc/email-renderer';
 import type { HtmlRenderDecoratorProps } from '@macro-inc/lexical-core/nodes/HtmlRenderNode';
 import {
   type Component,
   createEffect,
+  createMemo,
   createSignal,
   onMount,
   untrack,
@@ -16,6 +18,8 @@ export const HtmlRender: Component<HtmlRenderDecoratorProps> = (props) => {
   let marker: HTMLDivElement | undefined;
   const [shadowContainer, setShadowContainer] = createSignal<HTMLElement>();
   const [content, setContent] = createSignal<HTMLDivElement>();
+  // Memoized: theme changes re-run the effect below, not the parse.
+  const safeHtml = createMemo(() => sanitizeEmailHtml(props.html));
 
   onMount(() => {
     const host = marker?.parentElement;
@@ -53,8 +57,8 @@ export const HtmlRender: Component<HtmlRenderDecoratorProps> = (props) => {
     const colors = theme();
     const el = content();
     if (!el) return;
-    // Reset to the raw html so recoloring never compounds
-    el.innerHTML = props.html;
+    // Reset to the sanitized html so recoloring never compounds
+    el.innerHTML = safeHtml();
     // Raw mailto: anchors open the in-app composer instead of the OS mail client
     interceptMailtoLinks(el);
     for (const styleEl of el.querySelectorAll('style')) {

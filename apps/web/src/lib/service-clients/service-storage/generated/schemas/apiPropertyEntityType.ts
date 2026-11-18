@@ -13,6 +13,10 @@ export type ApiPropertyEntityType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ApiPropertyEntityType = {
+  CALL_RECORD: 'CALL_RECORD',
+  CALENDAR_EVENT: 'CALENDAR_EVENT',
+  DATABASE_ROW: 'DATABASE_ROW',
+  INITIATIVE: 'INITIATIVE',
   CHANNEL: 'CHANNEL',
   CHAT: 'CHAT',
   COMPANY: 'COMPANY',

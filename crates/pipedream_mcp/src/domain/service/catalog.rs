@@ -1,11 +1,12 @@
 //! Browsing the catalog of connectable MCP apps.
 //!
-//! The catalog is Pipedream's app directory, ranked by Pipedream's own
-//! popularity ordering (see the directory adapter). Clients render the
+//! The catalog is the user's directory: Macro Connect's catalog for a user
+//! on Connect alone, otherwise Pipedream's app directory, ranked by
+//! Pipedream's own popularity ordering (see the directory adapters). Clients render the
 //! user's connected apps as their own section from the connections
 //! endpoint; the catalog itself carries no curated pinning.
 
-use crate::domain::models::CatalogPage;
+use crate::domain::models::{CatalogPage, MacroUserIdStr};
 use crate::domain::ports::ConnectorDirectory;
 
 #[cfg(test)]
@@ -20,6 +21,7 @@ const DEFAULT_PAGE_SIZE: u32 = 20;
 #[tracing::instrument(skip(directory), err)]
 pub async fn browse_catalog<D: ConnectorDirectory>(
     directory: &D,
+    user_id: &MacroUserIdStr<'static>,
     search: Option<&str>,
     cursor: Option<&str>,
     limit: Option<u32>,
@@ -27,5 +29,5 @@ pub async fn browse_catalog<D: ConnectorDirectory>(
     let search = search.map(str::trim).filter(|s| !s.is_empty());
     let limit = limit.unwrap_or(DEFAULT_PAGE_SIZE).clamp(1, MAX_PAGE_SIZE);
 
-    directory.search(search, cursor, limit).await
+    directory.search(user_id, search, cursor, limit).await
 }

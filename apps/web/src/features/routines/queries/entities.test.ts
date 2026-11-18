@@ -21,7 +21,7 @@ const cron: ScheduledAction = {
   name: 'Summary',
   kind: 'Agent',
   trigger: { type: 'cron', schedule: '0 0 9 * * 2', timezone: 'UTC' },
-  task: {},
+  task: { steps: [] },
   enabled: true,
   run_visibility: 'unlisted',
   configuration_revision: 1,
@@ -89,6 +89,7 @@ describe('routine entities', () => {
       ownerId: 'macro|owner@example.com',
       createdAt: '2026-09-22T12:00:00Z',
       updatedAt: '2026-09-22T12:00:00Z',
+      appearance: null,
       cron: '0 0 9 * * 2',
       status: { kind: 'scheduled', nextRunAt: '2026-09-28T09:00:00Z' },
     });

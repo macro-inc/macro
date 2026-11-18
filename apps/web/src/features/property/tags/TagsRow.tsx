@@ -60,7 +60,7 @@ function TagChip(props: {
               <Badge
                 variant="outline"
                 size="sm"
-                class="m-px min-w-0 max-w-[30ch] gap-1.5 cursor-default"
+                class="m-px min-w-0 max-w-[30ch] gap-1.5 border-edge bg-surface-2 cursor-default"
               >
                 <TagDot color={props.tag.color} />
                 <span class="min-w-0 truncate">{props.tag.label}</span>

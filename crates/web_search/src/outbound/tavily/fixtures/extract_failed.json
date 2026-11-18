@@ -1,0 +1,12 @@
+{
+  "results": [],
+  "failed_results": [
+    {
+      "url": "https://example.com/members-only",
+      "error": "Failed to retrieve content"
+    }
+  ],
+  "response_time": 0.31,
+  "usage": { "credits": 0 },
+  "request_id": "5a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+}

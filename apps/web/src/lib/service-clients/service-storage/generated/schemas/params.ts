@@ -8,6 +8,7 @@ import type { ParamsExpand } from './paramsExpand';
 import type { ParamsLimit } from './paramsLimit';
 import type { ParamsSortDirection } from './paramsSortDirection';
 import type { ParamsSortMethod } from './paramsSortMethod';
+import type { ParamsSortPropertyDefinitionId } from './paramsSortPropertyDefinitionId';
 
 /**
  * Query parameters shared by soup endpoints.
@@ -22,4 +23,6 @@ export interface Params {
   limit?: ParamsLimit;
   sort_direction?: ParamsSortDirection;
   sort_method?: ParamsSortMethod;
+  /** Property definition selected for numeric property sorting. */
+  sort_property_definition_id?: ParamsSortPropertyDefinitionId;
 }

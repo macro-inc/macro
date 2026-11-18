@@ -20,11 +20,14 @@
 //! is why the in-memory runtime is the one provider that needs no wire format
 //! for them. See [`system_prompt`] for how the sections are ordered.
 
+use std::pin::Pin;
 use std::sync::Arc;
 
-use agent::{AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit};
+use agent::{
+    AgentError, AgentLoop, PromptSection, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit,
+};
 use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
-use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
+use ai_tools::{DeferredToolSet, ToolServiceContext};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
 use futures::{FutureExt as _, StreamExt as _};
@@ -35,12 +38,14 @@ use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use model_owner::Owner;
 use sqlx::PgPool;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use crate::domain::auto_model::{AutoModelSelector, DefaultAutoModel, JevAutoModel};
 use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnRequest};
+use crate::domain::entity_routing::{EntityRoutingPolicy, NoEntityRouting};
+use crate::domain::skill_routing::{NoSkillRouting, SessionSkills, SkillRoutingPolicy};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
-use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[path = "outbound/rig_engine/opener.rs"]
@@ -48,6 +53,8 @@ mod opener;
 #[cfg(test)]
 #[path = "outbound/rig_engine/test.rs"]
 mod test;
+#[path = "outbound/rig_engine/unseen.rs"]
+mod unseen;
 
 #[cfg(test)]
 #[path = "outbound/rig_engine/measure_prompt_cache.rs"]
@@ -66,20 +73,15 @@ const EAGER_INTERNAL_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ReadCodeDocs",
 ];
 
-const CODE_MODE_MCP_TOOLS: &[&str] = &[
-    "mcp__macro_internal__ExecuteCode",
-    "mcp__macro_internal__DescribeCodeTools",
-    "mcp__macro_internal__ReadCodeDocs",
-];
-
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
-/// [`ai_tools::tools_for`].
+/// [`ai_tools::tools_for_agent_code_mode`].
 pub struct RigTurnEngine {
     memory: Arc<MemoryServiceImpl<PgMemoryRepo>>,
     native_tools: Arc<NativeTools>,
-    code_mode_tools: Arc<NativeTools>,
-    tool_mode: Arc<dyn ToolModeSelector>,
     auto_model: Arc<dyn AutoModelSelector>,
+    skill_routing: Arc<dyn SkillRoutingPolicy>,
+    session_skills: Arc<SessionSkills>,
+    entity_routing: Arc<dyn EntityRoutingPolicy>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
 }
@@ -91,21 +93,18 @@ impl RigTurnEngine {
     #[must_use]
     pub fn new(db: PgPool, tool_context: ToolServiceContext) -> Self {
         Self {
-            memory: Arc::new(MemoryServiceImpl::new(
-                PgMemoryRepo::new(db),
+            memory: Arc::new(ai_tools::memory::build_memory_service(
+                db,
                 tool_context.clone(),
-                tools_for(AiHost::Chat),
             )),
             native_tools: Arc::new(NativeTools::new()),
-            code_mode_tools: Arc::new(NativeTools::from_factory(
-                ai_tools::tools_for_agent_code_mode,
-                true,
-            )),
-            tool_mode: Arc::new(StandardTools),
             auto_model: match &tool_context.cognition_tool_context.service {
                 Some(cognition) => Arc::new(JevAutoModel::new(Arc::clone(cognition))),
                 None => Arc::new(DefaultAutoModel),
             },
+            skill_routing: Arc::new(NoSkillRouting),
+            session_skills: Arc::new(SessionSkills::default()),
+            entity_routing: Arc::new(NoEntityRouting),
             tool_context,
             gate: Arc::new(UngatedNativeTools),
         }
@@ -118,10 +117,17 @@ impl RigTurnEngine {
         self
     }
 
-    /// Select the owner's tool presentation once per conversational turn.
+    /// Decide per turn whether the owner's turns load their skills on their own.
     #[must_use]
-    pub fn with_tool_mode(mut self, selector: Arc<dyn ToolModeSelector>) -> Self {
-        self.tool_mode = selector;
+    pub fn with_skill_routing(mut self, policy: Arc<dyn SkillRoutingPolicy>) -> Self {
+        self.skill_routing = policy;
+        self
+    }
+
+    /// Decide per turn whether the owner's code-mode turns route SDK entities.
+    #[must_use]
+    pub fn with_entity_routing(mut self, policy: Arc<dyn EntityRoutingPolicy>) -> Self {
+        self.entity_routing = policy;
         self
     }
 }
@@ -131,14 +137,33 @@ impl RigTurnEngine {
 /// turn already got, spend nobody's access.
 const UNGATED_NATIVE_TOOLS: [&str; 4] = ["AskUser", "SearchTools", "LoadTools", "ReadToolResult"];
 
-/// A turn's tools, each call to one of Macro's own asked of the gate first.
-/// Remote MCP tools are left to the egress proxy, which gates them already.
+/// A turn's tools, each call to one of Macro's own asked of the gate first,
+/// those that use nobody's access included. A remote MCP tool's account and
+/// approvals are the egress proxy's; the gate only says whether the session
+/// may call it at all.
 struct GatedToolSet<Context> {
     tools: Arc<dyn AiToolSet<Context> + Send + Sync>,
     gate: Arc<dyn NativeToolGate>,
     session: agent_session::domain::model::AgentSessionId,
     awaiting: Arc<crate::domain::engine::AwaitingUser>,
     reviewed_tools: Vec<String>,
+    /// The turn's remote MCP tools, to tell which server a call reaches.
+    remote: Option<mcp_toolset::RemoteMcpToolSet>,
+}
+
+impl<Context> GatedToolSet<Context> {
+    /// Whether `tool_name` is a remote MCP tool of a server other than the
+    /// harness's internal one, which gates its own tools. Decided by the
+    /// server the tool was registered under, never by its name's server
+    /// segment, which another server's name can mangle to.
+    fn reaches_remote_server(&self, tool_name: &str) -> bool {
+        tool_name.starts_with(mcp_select::MANGLED_PREFIX)
+            && self
+                .remote
+                .as_ref()
+                .and_then(|remote| remote.server_of(tool_name))
+                != Some(crate::domain::mcp::MACRO_INTERNAL_MCP_NAME)
+    }
 }
 
 impl<Context> AiToolSet<Context> for GatedToolSet<Context>
@@ -154,19 +179,43 @@ where
     ) -> ai_toolset::ToolCallFuture<'a> {
         Box::pin(async move {
             let mut request_context = request_context;
+            if self.reaches_remote_server(tool_name)
+                && let Some(reason) = self.gate.refuse_remote_mcp(self.session, tool_name).await
+            {
+                return Ok(Err(ai_toolset::ToolCallError {
+                    internal_error: anyhow::anyhow!("{tool_name} was refused before dispatch"),
+                    description: reason,
+                }));
+            }
             let native = !UNGATED_NATIVE_TOOLS.contains(&tool_name)
-                && !tool_name.starts_with(mcp_select::MANGLED_PREFIX)
-                && agent_egress::domain::approval::spends_owner_access("macro", tool_name);
+                && !tool_name.starts_with(mcp_select::MANGLED_PREFIX);
             let arguments = if native {
-                let _waiting = self.awaiting.begin();
-                let verdict = if self.reviewed_tools.iter().any(|name| name == tool_name) {
+                // A tool that uses nobody's access (the web, Macro's help)
+                // takes no account and waits for nobody, but still asks the
+                // gate: a scoped session's gate refuses it.
+                let spends_owner_access =
+                    agent_egress::domain::approval::spends_owner_access("macro", tool_name);
+                let _waiting = spends_owner_access.then(|| self.awaiting.begin());
+                let verdict = if spends_owner_access
+                    && self.reviewed_tools.iter().any(|name| name == tool_name)
+                {
                     NativeToolVerdict::Run
                 } else {
-                    self.gate.check(self.session, tool_name, json).await
+                    check_unless_cancelled(
+                        self.gate.as_ref(),
+                        &request_context.cancel,
+                        self.session,
+                        tool_name,
+                        json,
+                    )
+                    .await
                 };
                 match verdict {
-                    NativeToolVerdict::RunAs(user) => request_context.user_id = user,
-                    NativeToolVerdict::Run => {}
+                    NativeToolVerdict::RunAs(user) if spends_owner_access => {
+                        request_context.user_id = user;
+                    }
+                    // An identity-free tool takes no account to run as.
+                    NativeToolVerdict::RunAs(_) | NativeToolVerdict::Run => {}
                     NativeToolVerdict::Refuse(reason) => {
                         return Ok(Err(ai_toolset::ToolCallError {
                             internal_error: anyhow::anyhow!("{tool_name} was not approved"),
@@ -174,18 +223,25 @@ where
                         }));
                     }
                 }
-                match ai_toolset::actor::ToolActor::take(json) {
-                    Ok((_, arguments)) => arguments,
-                    Err(error) => {
-                        return Ok(Err(ai_toolset::ToolCallError {
-                            description: error.to_string(),
-                            internal_error: error.into(),
-                        }));
+                if spends_owner_access {
+                    match ai_toolset::actor::ToolActor::take(json) {
+                        Ok((_, arguments)) => arguments,
+                        Err(error) => {
+                            return Ok(Err(ai_toolset::ToolCallError {
+                                description: error.to_string(),
+                                internal_error: error.into(),
+                            }));
+                        }
                     }
+                } else {
+                    json.clone()
                 }
             } else {
                 json.clone()
             };
+            if request_context.cancel.is_cancelled() {
+                return Ok(Err(cancelled_call(tool_name)));
+            }
             self.tools
                 .dispatch_tool_call(context, request_context, tool_name, &arguments)
                 .await
@@ -215,6 +271,33 @@ where
 
     fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ai_toolset::ToolInfo> {
         self.tools.routing_description(tool_name)
+    }
+}
+
+/// What the model hears for a call its turn's cancellation stopped.
+const TURN_CANCELLED: &str = "The turn was cancelled; nothing was done.";
+
+fn cancelled_call(tool_name: &str) -> ai_toolset::ToolCallError {
+    ai_toolset::ToolCallError {
+        internal_error: anyhow::anyhow!("{tool_name} was cancelled with its turn"),
+        description: TURN_CANCELLED.to_owned(),
+    }
+}
+
+/// Ask `gate`, giving up when the turn is cancelled. The agent loop waits for
+/// running tools on cancel, so a call held for the owner must give up itself;
+/// dropping the hold cancels its approval.
+async fn check_unless_cancelled(
+    gate: &dyn NativeToolGate,
+    cancel: &CancellationToken,
+    session: agent_session::domain::model::AgentSessionId,
+    tool: &str,
+    arguments: &serde_json::Value,
+) -> NativeToolVerdict {
+    tokio::select! {
+        biased;
+        _ = cancel.cancelled() => NativeToolVerdict::Refuse(TURN_CANCELLED.to_owned()),
+        verdict = gate.check(session, tool, arguments) => verdict,
     }
 }
 
@@ -273,8 +356,13 @@ fn tools_for_turn(
 struct NativeTools {
     with_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     without_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
+    /// An unseen turn's native tools: only the pager for its cut results;
+    /// code mode comes from the MCP servers.
+    unseen: Arc<AsyncToolCollection<InMemToolContext>>,
     prompt: String,
-    code_mode: bool,
+    /// [`Self::prompt`] without area guidance, for turns that route SDK
+    /// entities.
+    routed_prompt: String,
     deferred: Arc<[ai_toolset::SearchableTool]>,
     /// Every native tool's name, for the opening line's model to guess the
     /// direction a reply will take.
@@ -282,16 +370,13 @@ struct NativeTools {
 }
 
 impl NativeTools {
+    /// The code-mode toolset: the SDK in place of every direct tool it covers.
     fn new() -> Self {
-        Self::from_factory(|| tools_for(AiHost::AgentSession), false)
-    }
-
-    fn from_factory(build: impl Fn() -> ai_tools::ToolSetWithPrompt, code_mode: bool) -> Self {
-        let tools = build();
+        let tools = ai_tools::tools_for_agent_code_mode();
         let base_tools = Arc::into_inner(tools.toolset)
-            .expect("tools_for should return a fresh, uniquely owned collection");
-        let other_tools = Arc::into_inner(build().toolset)
-            .expect("tools_for should return a fresh, uniquely owned collection");
+            .expect("tools_for_agent_code_mode should return a fresh, uniquely owned collection");
+        let other_tools = Arc::into_inner(ai_tools::tools_for_agent_code_mode().toolset)
+            .expect("tools_for_agent_code_mode should return a fresh, uniquely owned collection");
         let with_user_input = tools_for_turn(base_tools, true);
         let tool_names = with_user_input
             .tools
@@ -303,8 +388,12 @@ impl NativeTools {
         Self {
             with_user_input: Arc::new(with_user_input),
             without_user_input: Arc::new(tools_for_turn(other_tools, false)),
-            code_mode,
+            unseen: Arc::new(
+                AsyncToolCollection::<InMemToolContext>::new()
+                    .add_tool::<ReadToolResult, ToolResultLimit>(),
+            ),
             prompt: tools.prompt.to_string(),
+            routed_prompt: tools.routed_prompt.to_string(),
             deferred: tools.deferred,
             tool_names,
         }
@@ -328,9 +417,10 @@ impl TurnEngine for RigTurnEngine {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
         let memory = Arc::clone(&self.memory);
         let native_tools = Arc::clone(&self.native_tools);
-        let code_mode_tools = Arc::clone(&self.code_mode_tools);
-        let tool_mode = Arc::clone(&self.tool_mode);
         let auto_model = Arc::clone(&self.auto_model);
+        let skill_routing = Arc::clone(&self.skill_routing);
+        let session_skills = Arc::clone(&self.session_skills);
+        let entity_routing = Arc::clone(&self.entity_routing);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
@@ -341,20 +431,26 @@ impl TurnEngine for RigTurnEngine {
                     return;
                 };
                 request.model = model;
-                let Some(selected) = select_tool_mode(tool_mode.as_ref(), &request).await else {
+                let (routes, entities_routed) = tokio::join!(
+                    routes_skills(skill_routing.as_ref(), &request),
+                    routes_entities(entity_routing.as_ref(), &request),
+                );
+                if let Err(error) = code_tools_listed(&request) {
+                    let _ = parts.send(Err(error)).await;
                     return;
-                };
-                let native_tools = match selected {
-                    ToolMode::Standard => native_tools,
-                    ToolMode::Code => code_mode_tools,
-                };
-                tracing::debug!(?selected, "selected agent tool presentation");
+                }
                 // The product toolset makes this future large. Keep its state
                 // on the heap when adding the panic boundary, including in
                 // unoptimized local builds with Tokio's default worker stack.
+                let skills = TurnRouting {
+                    routes,
+                    sessions: &session_skills,
+                    entities: entities_routed,
+                };
                 let turn = Box::pin(drive_turn(
                     &memory,
                     &native_tools,
+                    skills,
                     tool_context,
                     gate,
                     request,
@@ -413,35 +509,74 @@ async fn select_auto_model(
     }
 }
 
-// A failed/missing code-mode MCP connection must never leave a turn with only the
-// small direct set. Summaries neither evaluate flags nor advertise tools.
-async fn select_tool_mode(
-    selector: &dyn ToolModeSelector,
-    request: &TurnRequest,
-) -> Option<ToolMode> {
-    if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
-        return Some(ToolMode::Standard);
-    }
-    let (Owner::User(owner), Some(mcp)) = (&request.owner, &request.mcp_tools) else {
-        return Some(ToolMode::Standard);
+// Only conversation turns load skills; summaries read no instructions.
+async fn routes_skills(policy: &dyn SkillRoutingPolicy, request: &TurnRequest) -> bool {
+    let Owner::User(owner) = &request.owner else {
+        return false;
     };
-    let catalog = mcp.searchable_catalog();
-    if !CODE_MODE_MCP_TOOLS
-        .iter()
-        .all(|name| catalog.iter().any(|tool| tool.name == *name))
-    {
-        return Some(ToolMode::Standard);
-    }
-    tokio::select! {
-        biased;
-        _ = request.cancel.cancelled() => None,
-        mode = selector.select(owner) => Some(mode),
+    request.purpose == crate::domain::engine::TurnPurpose::Conversation
+        && policy.routes(owner).await
+}
+
+// Only a user's conversation turns route SDK entities; summaries read none.
+async fn routes_entities(policy: &dyn EntityRoutingPolicy, request: &TurnRequest) -> bool {
+    let Owner::User(owner) = &request.owner else {
+        return false;
+    };
+    request.purpose == crate::domain::engine::TurnPurpose::Conversation
+        && policy.routes(owner).await
+}
+
+/// What a turn loads on its own: the user's skills (and what its session has
+/// loaded already), and the SDK areas its request needs.
+struct TurnRouting<'a> {
+    routes: bool,
+    sessions: &'a SessionSkills,
+    entities: bool,
+}
+
+/// Route the turn's request to the user's skills. Boxed: the skill service's
+/// listing future is deep enough to overflow the turn's own future type.
+fn select_skills<'a>(
+    context: &'a ToolServiceContext,
+    owner: &'a MacroUserIdStr<'static>,
+    request: cognition::domain::RoutingRequest<'a>,
+    already_loaded: &'a [uuid::Uuid],
+    cancel: &'a CancellationToken,
+) -> Pin<Box<dyn Future<Output = skills::domain::selection::SkillSelection> + Send + 'a>> {
+    Box::pin(skills::domain::selection::select_skills(
+        context.skill_tool_context.service.as_ref(),
+        context.cognition_tool_context.service.as_ref(),
+        owner,
+        request,
+        already_loaded,
+        cancel,
+    ))
+}
+
+// A user's conversation turn needs the code-mode tools: every one runs code
+// mode, and there is no direct-tools fallback. Summaries advertise no tools,
+// and turns of other owners are refused when they run.
+fn code_tools_listed(request: &TurnRequest) -> Result<(), AgentError> {
+    let (crate::domain::engine::TurnPurpose::Conversation, Owner::User(_)) =
+        (request.purpose, &request.owner)
+    else {
+        return Ok(());
+    };
+    if crate::domain::mcp::has_code_mode_tools(request.mcp_tools.as_ref()) {
+        Ok(())
+    } else {
+        tracing::error!("code-mode tools unavailable; refusing the turn");
+        Err(AgentError::Other(anyhow::anyhow!(
+            "The code runner is unavailable, so this turn could not run."
+        )))
     }
 }
 
 async fn drive_turn(
     memory: &MemoryServiceImpl<PgMemoryRepo>,
     native_tools: &NativeTools,
+    skills: TurnRouting<'_>,
     base_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
     request: TurnRequest,
@@ -453,6 +588,7 @@ async fn drive_turn(
         session_id,
         awaiting,
         owner,
+        feature,
         model,
         reasoning_effort,
         speed,
@@ -486,6 +622,10 @@ async fn drive_turn(
     // reads no memory, offers the model no tools, and is read, not shown, so
     // no opening line races it.
     let summarizing = purpose == crate::domain::engine::TurnPurpose::Summary;
+    // A turn nobody watches gets code mode and what its opener gave it, not a
+    // conversation's prompt and tools (see `unseen`).
+    let unseen = delivery == ReplyDelivery::Unseen;
+    let reasoning_effort = unseen_effort(unseen, &model, reasoning_effort);
     if let Some(key) = &agent_key
         && agent_api_keys::domain::ModelProvider::of_model(&model) != Some(key.key.provider())
     {
@@ -500,7 +640,8 @@ async fn drive_turn(
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
-    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
+    let usage_ctx = ai_usage::UsageContext::new(feature, owner.clone())
+        .with_agent_session(Some(session_id.as_uuid()));
     let agent = identity.as_ref().map_or_else(
         || "Macro".to_owned(),
         |identity| format!("{} (@{})", identity.name, identity.handle),
@@ -542,35 +683,75 @@ async fn drive_turn(
     // Chat's tools with the session's prompt: the user tools (`SendEmail`,
     // `CreateCalendarEvent`) defer to the user, and this runtime finishes
     // them in the turn through `reviewer`.
-    let (system_prompt, toolset, deferred) = if summarizing {
+    let (system_prompt, toolset, deferred, loaded_skills) = if summarizing {
         (
             SystemPrompt::from(instructions.unwrap_or_default()),
             Arc::new(AsyncToolCollection::<InMemToolContext>::new()),
             Arc::from(Vec::new()),
+            Vec::new(),
         )
     } else {
-        let requested = messages
+        let user_messages: Vec<String> = messages
             .iter()
-            .rev()
-            .find(|message| message.role == agent::types::Role::User)
-            .and_then(|message| message.content.user_message_text())
-            .unwrap_or_default();
-        let docs = async {
-            if native_tools.code_mode {
-                agent_code_mode::domain::select_documentation(
-                    &owner,
-                    &requested,
-                    base_context.cognition_tool_context.service.as_ref(),
-                    &cancel,
-                )
-                .await
-            } else {
-                String::new()
-            }
+            .filter(|message| message.role == agent::types::Role::User)
+            .filter_map(|message| message.content.user_message_text())
+            .collect();
+        let requested = user_messages.last().cloned().unwrap_or_default();
+        // Docs and skills route on the same request, so a follow-up keeps what
+        // the conversation is using.
+        let request = cognition::domain::RoutingRequest {
+            latest: &requested,
+            previous: user_messages.iter().rev().nth(1).map(String::as_str),
         };
-        let (user_memory, sdk_docs) = tokio::join!(fetch_user_memory(memory, &owner), docs);
+        // Routed turns leave area guidance out of the prompt; the entities the
+        // request needs bring theirs, with their indexes, in the turn's part.
+        // An unseen turn is routed the same way, unless its opener gave the
+        // documentation (see `routes_documentation`).
+        let routed = skills.entities;
+        let picks = routes_documentation(delivery, instructions.as_deref());
+        let docs = async {
+            if !picks {
+                return String::new();
+            }
+            agent_code_mode::domain::select_documentation(
+                &owner,
+                request,
+                base_context.cognition_tool_context.service.as_ref(),
+                if routed || unseen {
+                    agent_code_mode::domain::Guidance::Selected
+                } else {
+                    agent_code_mode::domain::Guidance::Inline
+                },
+                &cancel,
+            )
+            .await
+        };
+        let loaded_skills = async {
+            if !skills.routes || unseen {
+                return Vec::new();
+            }
+            let selection = select_skills(
+                &base_context,
+                &owner,
+                request,
+                &skills.sessions.loaded_ids(session_id),
+                &cancel,
+            )
+            .await;
+            skills.sessions.add(
+                session_id,
+                user_messages.len().saturating_sub(1),
+                selection.loaded,
+            )
+        };
+        let (user_memory, sdk_docs, loaded_skills) =
+            tokio::join!(fetch_user_memory(memory, &owner), docs, loaded_skills);
         let prompt = system_prompt(
-            &native_tools.prompt,
+            if routed {
+                &native_tools.routed_prompt
+            } else {
+                &native_tools.prompt
+            },
             &sdk_docs,
             session_id,
             delivery,
@@ -578,15 +759,28 @@ async fn drive_turn(
             instructions.as_deref(),
             user_memory.as_deref(),
         );
-        (
-            prompt,
-            native_tools.for_turn(user_input.is_some()),
-            Arc::clone(&native_tools.deferred),
-        )
+        if unseen {
+            (
+                prompt,
+                Arc::clone(&native_tools.unseen),
+                Arc::from(Vec::new()),
+                loaded_skills,
+            )
+        } else {
+            (
+                prompt,
+                native_tools.for_turn(user_input.is_some()),
+                Arc::clone(&native_tools.deferred),
+                loaded_skills,
+            )
+        }
     };
-    // Carry the feature on the context so tool-spawned subagents attribute to it.
+    // Carry the feature on the context so AI calls made by tools are attributed to it,
+    // and record whatever the tools spend as part of this session.
     let mut tool_context = base_context.clone();
     tool_context.usage_context = usage_ctx.clone();
+    tool_context.recorder =
+        ai_usage::for_agent_session(base_context.recorder.clone(), session_id.as_uuid());
     // The tools act as the session's bot, delegated for the owner: its writes
     // are attributed to it and presented under its name, not Macro's.
     if let Some(identity) = &identity {
@@ -637,49 +831,71 @@ async fn drive_turn(
         let gate = Arc::clone(&gate);
         let cancel = cancel.clone();
         let awaiting = Arc::clone(&awaiting);
-        agent_loop = agent_loop.with_user_tool_finisher(Arc::new(move |mut call: agent::PendingUserTool| {
-            let tools = Arc::clone(&tools);
-            let context = context.clone();
-            let gate = Arc::clone(&gate);
-            let cancel = cancel.clone();
-            let reviewer = Arc::clone(&reviewer);
-            let awaiting = Arc::clone(&awaiting);
-            Box::pin(async move {
-                if !tools.user_tools.contains_key(&call.tool_name) { return None; }
-                let (actor, arguments) = match ai_toolset::actor::ToolActor::take(&call.args) {
-                    Ok(selection) => selection,
-                    Err(error) => return Some(agent::FinishedUserTool::Error(error.to_string())),
-                };
-                let authorize_cancel = cancel.clone();
-                let authorize: UserToolAuthorizer = Arc::new(move |name, mut args| {
-                    let gate = Arc::clone(&gate);
-                    let cancel = authorize_cancel.clone();
-                    let awaiting = Arc::clone(&awaiting);
-                    Box::pin(async move {
-                        args[ai_toolset::actor::ACTING_AS] = serde_json::to_value(actor).map_err(|error| ReviewError::Failed(error.to_string()))?;
-                        let _waiting = awaiting.begin();
-                        let verdict = tokio::select! {
-                            biased;
-                            _ = cancel.cancelled() => return Err(ReviewError::Failed("The turn was cancelled; nothing was done.".into())),
-                            verdict = gate.check(session_id, &name, &args) => verdict,
-                        };
-                        match verdict {
-                            NativeToolVerdict::RunAs(user) => Ok(user),
-                            NativeToolVerdict::Refuse(reason) => Err(ReviewError::Failed(reason)),
-                            NativeToolVerdict::Run => Err(ReviewError::Failed("Could not resolve the tool actor.".into())),
+        agent_loop = agent_loop.with_user_tool_finisher(Arc::new(
+            move |mut call: agent::PendingUserTool| {
+                let tools = Arc::clone(&tools);
+                let context = context.clone();
+                let gate = Arc::clone(&gate);
+                let cancel = cancel.clone();
+                let reviewer = Arc::clone(&reviewer);
+                let awaiting = Arc::clone(&awaiting);
+                Box::pin(async move {
+                    if !tools.user_tools.contains_key(&call.tool_name) {
+                        return None;
+                    }
+                    let (actor, arguments) = match ai_toolset::actor::ToolActor::take(&call.args) {
+                        Ok(selection) => selection,
+                        Err(error) => {
+                            return Some(agent::FinishedUserTool::Error(error.to_string()));
                         }
-                    })
-                });
-                call.args = arguments;
-                authorized_user_tool_finisher(tools, context, reviewer, cancel, authorize)(call).await
-            })
-        }));
+                    };
+                    let authorize_cancel = cancel.clone();
+                    let authorize: UserToolAuthorizer = Arc::new(move |name, mut args| {
+                        let gate = Arc::clone(&gate);
+                        let cancel = authorize_cancel.clone();
+                        let awaiting = Arc::clone(&awaiting);
+                        Box::pin(async move {
+                            args[ai_toolset::actor::ACTING_AS] = serde_json::to_value(actor)
+                                .map_err(|error| ReviewError::Failed(error.to_string()))?;
+                            let _waiting = awaiting.begin();
+                            let verdict = check_unless_cancelled(
+                                gate.as_ref(),
+                                &cancel,
+                                session_id,
+                                &name,
+                                &args,
+                            )
+                            .await;
+                            match verdict {
+                                NativeToolVerdict::RunAs(user) => Ok(user),
+                                NativeToolVerdict::Refuse(reason) => {
+                                    Err(ReviewError::Failed(reason))
+                                }
+                                NativeToolVerdict::Run => Err(ReviewError::Failed(
+                                    "Could not resolve the tool actor.".into(),
+                                )),
+                            }
+                        })
+                    });
+                    call.args = arguments;
+                    authorized_user_tool_finisher(tools, context, reviewer, cancel, authorize)(call)
+                        .await
+                })
+            },
+        ));
     }
     // Native tools use the actor gate unless the installed finisher authorizes
-    // their final reviewed arguments. Remote MCP tools use the egress gate.
+    // their final reviewed arguments. Remote MCP tools are first put to the
+    // gate's `refuse_remote_mcp`, then to the egress proxy's.
     // Keep remote MCP tools alongside the native and AskUser tools. The
     // finisher above reviews only Macro's native user tools.
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools.filter(|_| !summarizing) {
+    let mcp_tools = mcp_tools.filter(|_| !summarizing);
+    let remote = mcp_tools.clone();
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
+        Some(mcp) if unseen => Arc::new(
+            mcp_select::CombinedToolSet::new(toolset, unseen::CodeModeOnly::new(mcp))
+                .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS),
+        ),
         Some(mcp) => Arc::new(
             mcp_select::CombinedToolSet::new(toolset, mcp)
                 .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS),
@@ -695,6 +911,7 @@ async fn drive_turn(
         session: session_id,
         awaiting,
         reviewed_tools,
+        remote,
     });
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), system_prompt, loop_usage)
@@ -712,6 +929,10 @@ async fn drive_turn(
         }
     }));
 
+    // Loaded skills ride with the request that loaded them, in the model's copy
+    // of the conversation only.
+    let mut messages = messages;
+    crate::domain::skill_routing::inject(&mut messages, &loaded_skills);
     let rig_messages = agent::to_rig_messages_limited(&messages, &tool_results);
     let result = async {
         let mut stream = session.send_message(rig_messages).await?;
@@ -863,6 +1084,10 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
 /// Memory stays after the instructions so a remembered fact is never read as
 /// an instruction. The turn's documentation goes after everything the loop
 /// adds, because each turn picks different documentation.
+///
+/// An unseen turn splits after its identity and instructions instead: its
+/// opener gives every session of its kind the same ones (every routine
+/// draft's), so they are read back from the cache across those sessions.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
     sdk_docs: &str,
@@ -872,41 +1097,92 @@ fn system_prompt(
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> SystemPrompt {
-    let mut shared = String::new();
-    shared.push_str(&prompt::agent_session::PROMPT.to_string());
-    shared.push_str(&tools_prompt.to_string());
-    let mut rest = String::new();
-    if let Some(identity) = identity {
-        rest.push('\n');
-        rest.push_str(&prompt::agent_identity::render(
-            &identity.name,
-            &identity.handle,
-        ));
-    }
+    let mut prompt = SystemPrompt::default();
+    let identity = identity.map(|identity| {
+        format!(
+            "\n{}",
+            prompt::agent_identity::render(&identity.name, &identity.handle)
+        )
+    });
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
-    if let Some(instructions) = instructions.filter(|text| !text.trim().is_empty()) {
-        rest.push_str("\n<session_instructions>\n");
-        rest.push_str(instructions);
-        rest.push_str("\n</session_instructions>");
+    let instructions = instructions
+        .filter(|text| !text.trim().is_empty())
+        .map(|text| format!("\n<session_instructions>\n{text}\n</session_instructions>"));
+    // A turn nobody watches has neither a conversation to write for nor the
+    // tools `tools_prompt` describes. Its opener sends every session of its
+    // kind (every routine draft) the same instructions, so they join the
+    // cached shared block and are read back across sessions.
+    if delivery == ReplyDelivery::Unseen {
+        prompt.push_shared(PromptSection::Preamble, unseen::PROMPT);
+        if let Some(identity) = &identity {
+            prompt.push_shared(PromptSection::Identity, identity);
+        }
+        if let Some(instructions) = &instructions {
+            prompt.push_shared(PromptSection::SessionInstructions, instructions);
+        }
+    } else {
+        prompt.push_shared(
+            PromptSection::Preamble,
+            &prompt::agent_session::PROMPT.to_string(),
+        );
+        prompt.push_shared(PromptSection::MacroPrompt, &tools_prompt.to_string());
+        if let Some(identity) = &identity {
+            prompt.push(PromptSection::Identity, identity);
+        }
+        if let Some(instructions) = &instructions {
+            prompt.push(PromptSection::SessionInstructions, instructions);
+        }
+        // An unseen turn has no ContentSearch to look back with.
+        prompt.push(
+            PromptSection::SessionNote,
+            &format!(
+                "\n<agent_session>\nThis conversation is agent session {session_id}. Once it grows \
+                 long, its earlier part is summarized to keep it within your context. To find the exact \
+                 words of anything said earlier, summarized or not, run ContentSearch with \
+                 agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
+            ),
+        );
     }
-    rest.push_str(&format!(
-        "\n<agent_session>\nThis conversation is agent session {session_id}. Once it grows \
-         long, its earlier part is summarized to keep it within your context. To find the exact \
-         words of anything said earlier, summarized or not, run ContentSearch with \
-         agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
-    ));
     if delivery == ReplyDelivery::Whole {
-        rest.push('\n');
-        rest.push_str(opener::NOT_OPENED);
+        prompt.push(
+            PromptSection::OpenerNote,
+            &format!("\n{}", opener::NOT_OPENED),
+        );
     }
     if let Some(memory) = user_memory {
-        rest.push_str("\n<user_memory>\n");
-        rest.push_str(memory);
-        rest.push_str("\n</user_memory>");
+        prompt.push(
+            PromptSection::Memory,
+            &format!("\n<user_memory>\n{memory}\n</user_memory>"),
+        );
     }
-    SystemPrompt::split(shared, rest).with_turn(sdk_docs)
+    prompt.push_turn(PromptSection::SdkDocs, sdk_docs);
+    prompt
+}
+
+/// The effort a turn runs at. Someone waits on an unseen turn (a routine
+/// draft) and its opener wrote out what the work needs, so it runs at low
+/// effort where its model takes one.
+fn unseen_effort(
+    unseen: bool,
+    model: &str,
+    effort: agent::ReasoningEffort,
+) -> agent::ReasoningEffort {
+    let low = agent::ReasoningEffort::Low;
+    if unseen && agent::ReasoningEffort::supported(model).contains(&low) {
+        low
+    } else {
+        effort
+    }
+}
+
+/// Whether a turn's request picks the SDK documentation its prompt carries.
+/// A background session whose opener wrote its instructions was given the
+/// reference its work needs, in them and in its prompt: documentation picked
+/// again would repeat it, uncached, after a routing call.
+fn routes_documentation(delivery: ReplyDelivery, instructions: Option<&str>) -> bool {
+    delivery != ReplyDelivery::Unseen || instructions.is_none_or(|text| text.trim().is_empty())
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.
@@ -914,7 +1190,7 @@ async fn fetch_user_memory(
     memory_service: &MemoryServiceImpl<PgMemoryRepo>,
     owner: &MacroUserIdStr<'static>,
 ) -> Option<String> {
-    match memory_service.get_or_generate_memory(owner.clone()).await {
+    match memory_service.get_memory(owner.clone()).await {
         Ok(memory) => memory.map(|memory| memory.to_string()),
         Err(error) => {
             tracing::warn!(error=?error, %owner, "failed to fetch user memory; running without it");

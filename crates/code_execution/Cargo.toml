@@ -6,7 +6,14 @@ publish = false
 
 [dependencies]
 url = { workspace = true }
+axum = { workspace = true }
+macro_tower_layers = { path = "../macro_tower_layers" }
+opentelemetry = { workspace = true, features = ["trace"] }
+tracing-opentelemetry = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+rustix = { workspace = true }
 async-trait = { workspace = true }
+code_mode_assets = { path = "../code_mode_assets" }
 futures = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

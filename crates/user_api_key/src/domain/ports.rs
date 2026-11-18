@@ -42,6 +42,17 @@ pub trait UserApiKeysRepo: Send + Sync + 'static {
         id: UserApiKeyId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Atomically replace the user's keys with this name by a new key.
+    /// Concurrent replacements for a user run one at a time, so exactly one of
+    /// the keys they return stays live.
+    fn replace_keys_named(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        id: UserApiKeyId,
+        name: &str,
+        hash: &[u8; 32],
+    ) -> impl Future<Output = Result<UserApiKeyInfo, Self::Err>> + Send;
+
     /// Owner of a key. Authenticate-by-key is implemented by
     /// `macro_authorization`'s `PgUserApiKeyAuthorizationRepo`.
     ///
@@ -58,6 +69,14 @@ pub trait UserApiKeyService: Send + Sync + 'static {
     /// Mint a new key for the user. The full secret is returned here and
     /// nowhere else.
     fn create_key(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        name: &str,
+    ) -> impl Future<Output = Result<CreatedUserApiKey, UserApiKeyError>> + Send;
+
+    /// Mint a new key and revoke the user's earlier keys with the same name,
+    /// atomically, so repeating or racing this always leaves one live key.
+    fn replace_key(
         &self,
         user_id: &MacroUserIdStr<'_>,
         name: &str,

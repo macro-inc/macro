@@ -3,11 +3,17 @@ export type CrmRecordTarget = { type: 'company' | 'contact'; id: string };
 /** Record identity and already-loaded associations for a new task. */
 export type CrmTaskRecord =
   | { type: 'company'; id: string }
-  | { type: 'contact'; id: string; companyId?: string };
+  | { type: 'contact'; id: string; companyId?: string | null };
 /** A CRM record whose associated files, tasks and calls a record tab lists. */
 export type CrmRecordScope =
   | { type: 'company'; id: string; domains: string[] }
-  | { type: 'contact'; id: string; email: string; companyId: string };
+  | {
+      type: 'contact';
+      id: string;
+      /** Every address of the contact, primary first. */
+      emails: string[];
+      companyId?: string | null;
+    };
 
 /**
  * Whether two scopes describe the same record. Record views keep their
@@ -22,7 +28,11 @@ export function sameRecordScope(
     return a.id === b.id && a.domains.join('\n') === b.domains.join('\n');
   }
   if (a.type === 'contact' && b.type === 'contact') {
-    return a.id === b.id && a.email === b.email && a.companyId === b.companyId;
+    return (
+      a.id === b.id &&
+      a.emails.join('\n') === b.emails.join('\n') &&
+      a.companyId === b.companyId
+    );
   }
   return false;
 }
@@ -42,7 +52,6 @@ export const COMPANY_SECTIONS = [
   'files',
   'tasks',
   'calls',
-  'databases',
 ] as const;
 export const CONTACT_SECTIONS = [
   'overview',
@@ -50,7 +59,6 @@ export const CONTACT_SECTIONS = [
   'files',
   'tasks',
   'calls',
-  'databases',
 ] as const;
 
 export type CompanySection = (typeof COMPANY_SECTIONS)[number];

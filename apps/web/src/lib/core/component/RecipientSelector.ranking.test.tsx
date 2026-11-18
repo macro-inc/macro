@@ -138,6 +138,40 @@ it.each(inboxes)(
 );
 
 it.each(inboxes)(
+  'adds the typed address on Enter after contacts load and reorder in a $provider inbox',
+  async ({ address }) => {
+    const [options, setOptions] = createSignal<CombinedRecipientItem[]>([]);
+    const [selected, setSelected] = createSignal<WithCustomUserInput[]>([]);
+    render(() => (
+      <RecipientSelector
+        options={options}
+        selfEmail={address}
+        selectedOptions={selected()}
+        setSelectedOptions={setSelected}
+        openOnFocus={false}
+      />
+    ));
+    const input = screen.getByRole<HTMLInputElement>('combobox');
+    fireEvent.input(input, { target: { value: 'sam@contoso.example' } });
+    await screen.findByRole('listbox');
+    setOptions([
+      contact('sam@contoso-test.example', 'sam'),
+      contact('sam@contoso.example', 'Sam Rivera'),
+    ]);
+    await screen.findByRole('option', { name: /contoso-test/ });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(
+        selected().map((option) =>
+          'email' in option.data ? option.data.email : ''
+        )
+      ).toEqual(['sam@contoso.example'])
+    );
+  }
+);
+
+it.each(inboxes)(
   'suggests a contact whose name starts with the query near the top in a $provider inbox',
   async ({ address }) => {
     const selector = renderSelector(

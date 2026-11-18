@@ -54,6 +54,7 @@ impl<Svc: SkillService> AsyncTool<SkillToolContext<Svc>> for ListSkills {
                 .map(|skill| SkillSearchResult {
                     document_id: skill.document_id,
                     name: skill.name,
+                    description: skill.description,
                     updated_at: skill.updated_at,
                 })
                 .collect(),

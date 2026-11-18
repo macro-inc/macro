@@ -1,9 +1,9 @@
 use std::marker::PhantomData;
 
 use async_graphql::{Context, ID, Object, SimpleObject};
+use attention_feed::domain::models::DoneReceipt;
 use graphql_common::require_authenticated_user;
 use graphql_soup::SoupEntityEdges;
-use work_feed::domain::models::WorkFeedDoneReceipt;
 
 use crate::{
     context::{WorkFeedGraphqlContext, to_graphql_error},
@@ -75,7 +75,7 @@ impl<E: SoupEntityEdges> WorkFeedMutationRoot<E> {
     ) -> async_graphql::Result<UndoWorkFeedItemsDonePayload<E>> {
         let user = require_authenticated_user(ctx)?;
         let context = ctx.data::<WorkFeedGraphqlContext>()?;
-        let receipt = WorkFeedDoneReceipt::decode(&input.undo_token)
+        let receipt = DoneReceipt::decode(&input.undo_token)
             .map_err(|_| async_graphql::Error::new("invalid work feed undo token"))?;
         let scope = input.scope.unwrap_or_default().into_scope();
         let viewer = context.viewer(user).await?;

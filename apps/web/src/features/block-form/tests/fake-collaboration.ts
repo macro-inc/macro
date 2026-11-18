@@ -77,8 +77,10 @@ export function createFakeCollaboration(
   // the same objects so the layouts compare by value.
   const knownRules: GateRules[] = [];
   const remember = (layout: FormLayout) => {
-    for (const section of layout.sections)
+    for (const section of layout.sections) {
       if (section.gateRules) knownRules.push(section.gateRules);
+      if (section.showWhen) knownRules.push(section.showWhen);
+    }
   };
   const rulesOf = (value: unknown): GateRules | null => {
     const json = canonical(value);
@@ -97,6 +99,7 @@ export function createFakeCollaboration(
           description: text(section.description),
           gateRules: kind === 'gate' ? rulesOf(section.rules) : null,
           gateMessage: text(section.message),
+          showWhen: kind === 'questions' ? rulesOf(section.showWhen) : null,
           bookingTarget:
             kind === 'booking' ? bookingTargetOf(section.target) : null,
           questions: (section.questions ?? []).map((question) => ({

@@ -21,7 +21,20 @@ const mocks = vi.hoisted(() => ({
   restore: vi.fn(),
   focus: vi.fn(),
   failure: vi.fn(),
+  popoverSplit: vi.fn(),
 }));
+vi.mock('@components/app/split-layout/layout', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('@components/app/split-layout/layout')
+    >();
+  return {
+    useSplitLayout: () => ({
+      ...actual.useSplitLayout(),
+      popoverSplit: mocks.popoverSplit,
+    }),
+  };
+});
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|me@example.test',
 }));
@@ -190,6 +203,44 @@ it('lets a viewer without WhatsApp read and offers to connect', () => {
   expect(connect).toHaveBeenCalledOnce();
 });
 
+it('makes a task from a message for a viewer who cannot reply', () => {
+  const fake = createFakeChat({
+    chat: {
+      ...chat,
+      accessLevel: 'view',
+      canSend: false,
+      sendReason: 'no_account',
+    },
+  });
+  mount(fake);
+  const row = document.querySelector('[data-message-id="message-1"]');
+  if (!row) throw new Error('message row missing');
+  fireEvent.pointerEnter(row);
+  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Task' }));
+  expect(mocks.popoverSplit).toHaveBeenCalledWith({
+    type: 'component',
+    id: 'task-compose',
+    params: {
+      initialTitle: 'The *updated* designs are ready for review.',
+      initialContent:
+        '<m-document-mention>{"documentId":"019a061e-0000-7000-8000-000000000001","documentName":"Design Crit","blockName":"external_chat"}</m-document-mention>',
+      initialAssigneeIds: undefined,
+    },
+  });
+});
+
+it('offers no task on a deleted message', () => {
+  const fake = createFakeChat({
+    messages: [{ ...messages[0], deleted: true }],
+  });
+  mount(fake);
+  const row = document.querySelector('[data-message-id="message-1"]');
+  if (!row) throw new Error('message row missing');
+  fireEvent.pointerEnter(row);
+  expect(screen.queryByRole('button', { name: 'Task' })).toBeNull();
+});
+
 it('offers actions on rows that rendered before the viewer could send', () => {
   const fake = createFakeChat({
     chat: { ...chat, canSend: false, sendReason: 'disconnected' },
@@ -216,13 +267,18 @@ it('says while history imports and shows older messages as they land', () => {
     backfill: { state: 'waiting_for_phone', imported: 1 },
   });
   fake.setMessages(messages);
-  expect(screen.getByRole('status').textContent).toBe(
-    'Waiting for your phone to import history'
-  );
+  expect(
+    screen.getByText('Open WhatsApp on your phone to import earlier messages.')
+  ).toBeTruthy();
   const ids = [...document.querySelectorAll('[data-message-id]')].map((row) =>
     row.getAttribute('data-message-id')
   );
   expect(ids).toEqual(['message-1', 'message-2']);
+  // The owner can always start the import here, prompt or not.
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Import earlier messages' })
+  );
+  expect(fake.capabilities.importHistory).toHaveBeenCalledOnce();
 
   fake.setChat({ ...chat, backfill: { state: 'done', imported: 1 } });
   expect(screen.queryByText(/Importing history|Waiting for/)).toBeNull();
@@ -262,10 +318,13 @@ it('tells a shared viewer whose phone the import waits for', () => {
   });
   mount(fake);
   expect(
-    screen.getAllByText(/Waiting for the owner's phone to import history/)
+    screen.getAllByText(/Earlier messages wait for the owner's phone/)
   ).toHaveLength(2);
   // Not "No messages yet" while history is still coming.
   expect(screen.queryByText(/No messages yet/)).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Import earlier messages' })
+  ).toBeNull();
 });
 
 it('plays stored images and voice notes inline, like Chat, and opens other files', () => {

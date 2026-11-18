@@ -12,7 +12,7 @@ use serde::Deserialize;
 #[derive(Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "TextEditorCodeExecution",
-    description = "Use a text editor in a sandboxed environment using Claude's built-in code execution tool."
+    description = "Use a text editor in a sandboxed environment using Claude's built-in code execution tool. Its files live only in the sandbox: to create a document or file for the user, use CreateDocument, or macro.documents in ExecuteCode where CreateDocument is absent."
 )]
 pub struct TextEditorCodeExecution {
     /// The text editing instruction.

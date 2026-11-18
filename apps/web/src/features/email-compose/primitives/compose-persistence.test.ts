@@ -1,3 +1,4 @@
+import { $createImageNode } from '@macro-inc/lexical-core';
 import { $getRoot } from 'lexical';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
@@ -11,14 +12,26 @@ import type { LocalDraft } from '../core/local-draft';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
+import { resetScheduledNoticesForTests } from './email-send-schedule';
 
 const response: PersistedEmailIdentity = {
   draftId: 'saved-id',
   threadId: 'thread',
   inboxId: 'inbox',
 };
+const providers = ['GMAIL', 'OUTLOOK'] as const;
+function providerContext(provider: (typeof providers)[number]) {
+  const composeContext = createComposeContext();
+  composeContext.accounts.inboxes = () => [
+    { id: 'inbox', email_address: 'me@example.com', settings: {}, provider },
+  ];
+  return composeContext;
+}
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  resetScheduledNoticesForTests();
+});
 
 it('flushes the latest pending body and envelope exactly once on disposal', async () => {
   const composeContext = createComposeContext();
@@ -77,26 +90,72 @@ it('discard cancels an unsaved debounce without creating a draft', async () => {
   expect(composeContext.drafts.saveDraft).not.toHaveBeenCalled();
   expect(composeContext.drafts.deleteDraft).not.toHaveBeenCalled();
 });
-it('discard waits for an in-flight first save and deletes its returned draft', async () => {
-  const pending = Promise.withResolvers<PersistedEmailIdentity>();
-  const composeContext = createComposeContext();
-  vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(
-    pending.promise
-  );
-  const root = mountEmailComposer(composeContext);
-  root.edit('First');
-  await vi.advanceTimersByTimeAsync(600);
-  root.edit('Discard these changes too');
-  const discard = root.state.deleteDraftAndReset();
-  root.dispose();
-  pending.resolve(response);
-  await discard;
-  await vi.advanceTimersByTimeAsync(1000);
-  expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
-  expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
-    expect.objectContaining({ draftId: 'saved-id' })
-  );
-});
+it.each(providers)(
+  'Delete leaves a %s draft at once and deletes the ID its in-flight first save returns',
+  async (provider) => {
+    const pending = Promise.withResolvers<PersistedEmailIdentity>();
+    const composeContext = providerContext(provider);
+    vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(
+      pending.promise
+    );
+    const goBack = vi.fn(() => root.dispose());
+    const root = mountEmailComposer(composeContext, { goBack });
+    root.edit('First');
+    await vi.advanceTimersByTimeAsync(600);
+    root.edit('Discard these changes too');
+    const discard = root.state.deleteDraftAndReset();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(goBack).toHaveBeenCalledOnce();
+    pending.resolve(response);
+    await discard;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
+    expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: 'saved-id' })
+    );
+  }
+);
+it.each(providers)(
+  'Delete leaves a %s draft whose send waits on a pasted image while its save is on the wire',
+  async (provider) => {
+    const composeContext = providerContext(provider);
+    const goBack = vi.fn(() => root.dispose());
+    const root = mountEmailComposer(composeContext, { goBack });
+    root.edit('Body');
+    await vi.advanceTimersByTimeAsync(600);
+    const saving = Promise.withResolvers<PersistedEmailIdentity>();
+    vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(
+      saving.promise
+    );
+    root.editor.update(
+      () =>
+        $getRoot().append(
+          $createImageNode({
+            srcType: 'local',
+            url: 'blob:http://localhost/pasted',
+            alt: 'pasted',
+          })
+        ),
+      { discrete: true }
+    );
+    root.state.context.onContentChange('Body');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(2);
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(composeContext.delivery.sendMessage).not.toHaveBeenCalled();
+
+    root.state.context.onDelete?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(goBack).toHaveBeenCalledOnce();
+    saving.resolve({ draftId: 'draft', threadId: 'thread', inboxId: 'inbox' });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: 'draft' })
+    );
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(2);
+  }
+);
 it('discards a standalone draft at its server generation', async () => {
   const composeContext = createComposeContext();
   // Each send that Undo cancels advances the server's generation twice.
@@ -113,6 +172,40 @@ it('discards a standalone draft at its server generation', async () => {
     expect.objectContaining({ draftId: 'restored', draftGeneration: 4 })
   );
 });
+
+it.each([
+  { state: 'CONFLICT', issue: 'DRAFT_CONFLICT', discards: true },
+  { state: 'UNCERTAIN', issue: 'ATTACHMENT_UNKNOWN', discards: true },
+  { state: 'UNCERTAIN', issue: 'SEND_UNKNOWN', discards: false },
+  { state: 'SUBMITTING', issue: null, discards: false },
+] as const)(
+  'discards a draft whose $state $issue operation locks editing: $discards',
+  async ({ state, issue, discards }) => {
+    const composeContext = providerContext('OUTLOOK');
+    const goBack = vi.fn();
+    const root = mountEmailComposer(
+      composeContext,
+      { goBack },
+      {
+        draft: message('locked', {
+          is_draft: true,
+          thread_db_id: 'thread',
+          operation: { state, revision: '1', issue },
+        }),
+      }
+    );
+    expect(root.state.context.disabled()).toBe(true);
+    expect(root.state.context.deleteDisabled?.()).toBe(!discards);
+    await root.state.deleteDraftAndReset();
+    // A host that cannot leave keeps an empty composer, now unlocked.
+    expect(root.state.context.disabled()).toBe(!discards);
+    root.dispose();
+    expect(goBack).toHaveBeenCalledTimes(discards ? 1 : 0);
+    expect(composeContext.drafts.deleteDraft).toHaveBeenCalledTimes(
+      discards ? 1 : 0
+    );
+  }
+);
 
 it('discards a reply draft at its server generation', async () => {
   const composeContext = createComposeContext();
@@ -151,7 +244,7 @@ it('sends a reloaded reply without appending its quoted thread again', async () 
   );
 });
 
-it('keeps the draft editable after failed deletion and saves later edits', async () => {
+it('reports a failed deletion and keeps a draft its host still shows editable', async () => {
   const composeContext = createComposeContext();
   const goBack = vi.fn();
   const root = mountEmailComposer(composeContext, { goBack });
@@ -161,35 +254,90 @@ it('keeps the draft editable after failed deletion and saves later edits', async
     new Error('offline')
   );
   await expect(root.state.deleteDraftAndReset()).rejects.toThrow('offline');
-  expect(goBack).not.toHaveBeenCalled();
+  expect(goBack).toHaveBeenCalledOnce();
+  expect(composeContext.notices.feedback.failure).toHaveBeenCalledWith(
+    'Failed to delete draft'
+  );
   root.edit('Still here');
   await vi.advanceTimersByTimeAsync(600);
   root.dispose();
   expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(2);
 });
-
-it('toolbar discard returns to the list after deletion without recreating the draft on disposal', async () => {
+it('reports a failed deletion after the composer has left without saving the draft again', async () => {
   const composeContext = createComposeContext();
-  const pending = Promise.withResolvers<void>();
   const goBack = vi.fn(() => root.dispose());
   const root = mountEmailComposer(composeContext, { goBack });
-  root.edit('Discard this standalone thread');
+  root.edit('Saved');
   await vi.advanceTimersByTimeAsync(600);
-  vi.mocked(composeContext.drafts.deleteDraft).mockReturnValueOnce(
-    pending.promise
+  vi.mocked(composeContext.drafts.deleteDraft).mockRejectedValueOnce(
+    new Error('offline')
   );
-
-  root.state.context.onDelete?.();
-  await vi.advanceTimersByTimeAsync(0);
-  expect(composeContext.drafts.deleteDraft).toHaveBeenCalledOnce();
-  expect(goBack).not.toHaveBeenCalled();
-  pending.resolve();
+  await expect(root.state.deleteDraftAndReset()).rejects.toThrow('offline');
   await vi.advanceTimersByTimeAsync(1000);
-
   expect(goBack).toHaveBeenCalledOnce();
-  expect(root.state.context.hasDraft()).toBe(false);
+  expect(composeContext.notices.feedback.failure).toHaveBeenCalledWith(
+    'Failed to delete draft'
+  );
   expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
 });
+
+it.each(providers)(
+  'toolbar discard leaves a %s draft before deleting it and does not recreate it on disposal',
+  async (provider) => {
+    const composeContext = providerContext(provider);
+    const pending = Promise.withResolvers<void>();
+    const goBack = vi.fn(() => root.dispose());
+    const root = mountEmailComposer(composeContext, { goBack });
+    root.edit('Discard this standalone thread');
+    await vi.advanceTimersByTimeAsync(600);
+    // Deleting a draft-only thread empties the open thread as soon as the
+    // delete starts, so the composer has to be gone by then.
+    let leftBeforeDelete = false;
+    vi.mocked(composeContext.drafts.deleteDraft).mockImplementationOnce(() => {
+      leftBeforeDelete = goBack.mock.calls.length > 0;
+      return pending.promise;
+    });
+
+    root.state.context.onDelete?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(goBack).toHaveBeenCalledOnce();
+    expect(leftBeforeDelete).toBe(true);
+    pending.resolve();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: 'draft' })
+    );
+    expect(root.state.context.hasDraft()).toBe(false);
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
+  }
+);
+it.each(providers)(
+  'Delete still deletes a %s draft and frees the composer when its host cannot leave',
+  async (provider) => {
+    const composeContext = providerContext(provider);
+    const navigation = new Error('navigation failed');
+    const goBack = vi.fn(() => {
+      throw navigation;
+    });
+    const root = mountEmailComposer(composeContext, { goBack });
+    root.edit('Discard this draft');
+    await vi.advanceTimersByTimeAsync(600);
+
+    root.state.context.onDelete?.();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: 'draft' })
+    );
+    expect(root.state.context.disabled()).toBe(false);
+    expect(goBack).toHaveBeenCalledOnce();
+    expect(composeContext.notices.reportError).toHaveBeenCalledWith(navigation);
+    root.dispose();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
+  }
+);
 it('waits for the saved draft ID, prevents duplicate sends, and does not recreate the sent draft on disposal', async () => {
   const pending = Promise.withResolvers<PersistedEmailIdentity>();
   const composeContext = createComposeContext();
@@ -312,7 +460,7 @@ it('rejects sender/schedule changes and repeated discard while a deletion is pen
   );
   const discard = root.state.deleteDraftAndReset();
   expect(await root.state.deleteDraftAndReset()).toBe(false);
-  expect(goBack).not.toHaveBeenCalled();
+  expect(goBack).toHaveBeenCalledOnce();
   root.state.context.onSelectInbox?.('other-inbox');
   root.state.context.schedule.onSelect(new Date('2026-12-01T12:00:00Z'));
   expect(root.state.context.selectedInboxId?.()).toBe('inbox');
@@ -436,8 +584,12 @@ it('only commits a selected time through the primary action', async () => {
       // The year appears only when the send is not this year.
       subtext: expect.stringMatching(/^Sends Tue, Dec 1(, 2026)? at 12:00 PM$/),
       actions: [
+        expect.objectContaining({
+          label: 'View message',
+          kind: 'open',
+          variant: 'secondary',
+        }),
         expect.objectContaining({ label: 'Undo' }),
-        expect.objectContaining({ label: 'View message', kind: 'open' }),
       ],
       duration: 8_000,
     })
@@ -451,7 +603,7 @@ it('only commits a selected time through the primary action', async () => {
     .mocked(composeContext.notices.feedback.success)
     .mock.calls.find(([message]) => message === 'Email scheduled');
   host.showThread.mockClear();
-  scheduledNotice?.[1]?.actions?.[1].onClick();
+  scheduledNotice?.[1]?.actions?.find(({ kind }) => kind === 'open')?.onClick();
   expect(host.showThread).toHaveBeenCalledExactlyOnceWith('thread');
   // Showing the thread mounts its own composer on the scheduled draft.
   const threadView = mountEmailComposer(composeContext, host, {
@@ -460,7 +612,7 @@ it('only commits a selected time through the primary action', async () => {
       scheduled_send_time: firstTime.toISOString(),
     }),
   });
-  scheduledNotice?.[1]?.actions?.[0].onClick();
+  scheduledNotice?.[1]?.actions?.find(({ kind }) => kind === 'undo')?.onClick();
   await vi.advanceTimersByTimeAsync(1);
   threadView.dispose();
   expect(composeContext.delivery.unschedule).toHaveBeenCalledExactlyOnceWith({
@@ -524,11 +676,373 @@ it('retires the scheduled notice when the thread view cancels the schedule', asy
   expect(await threadView.state.context.schedule.onCancel()).toBe(true);
   expect(composeContext.notices.feedback.dismiss).toHaveBeenCalledWith(7);
   // A click that lands during the dismissal must not undo the newer draft.
-  scheduledNotice?.[1]?.actions?.[0].onClick();
+  scheduledNotice?.[1]?.actions?.find(({ kind }) => kind === 'undo')?.onClick();
   await vi.advanceTimersByTimeAsync(1);
   expect(composeContext.delivery.unschedule).toHaveBeenCalledOnce();
   expect(composeContext.drafts.restoreDraft).not.toHaveBeenCalled();
   threadView.dispose();
+});
+
+/** Schedules a new message, which then shows its thread. */
+async function scheduleAndShowThread(
+  composeContext: ReturnType<typeof createComposeContext>,
+  sendTime: Date
+) {
+  const host = { showThread: vi.fn(), showDraft: vi.fn() };
+  const root = mountEmailComposer(composeContext, host);
+  root.edit('Schedule from the thread');
+  root.state.context.schedule.onSelect(sendTime);
+  root.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(host.showThread).toHaveBeenCalledExactlyOnceWith('thread');
+  root.dispose();
+  const scheduledNotice = vi
+    .mocked(composeContext.notices.feedback.success)
+    .mock.calls.find(([text]) => text === 'Email scheduled');
+  return { host, options: scheduledNotice?.[1] };
+}
+
+it('keeps its own schedule when the thread view reads the draft from before it', async () => {
+  const composeContext = createComposeContext();
+  const sendTime = new Date('2026-12-01T12:00:00Z');
+  const { host, options } = await scheduleAndShowThread(
+    composeContext,
+    sendTime
+  );
+
+  // The thread's read can predate the schedule this tab just made.
+  const threadView = mountEmailComposer(composeContext, host, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(threadView.state.context.schedule.confirmedTime()).toEqual(sendTime);
+  expect(threadView.state.context.deliveryState?.()).toBe('scheduled');
+  composeContext.setDraftLifecycle({
+    type: 'scheduled',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    sendTime: sendTime.toISOString(),
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
+  expect(composeContext.notices.feedback.dismiss).not.toHaveBeenCalled();
+
+  options?.actions?.find(({ kind }) => kind === 'undo')?.onClick();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.delivery.unschedule).toHaveBeenCalledOnce();
+  threadView.dispose();
+});
+
+it('reads the draft afresh once the scheduled notice has closed', async () => {
+  const composeContext = createComposeContext();
+  const { host, options } = await scheduleAndShowThread(
+    composeContext,
+    new Date('2026-12-01T12:00:00Z')
+  );
+  options?.onDismiss?.();
+
+  const threadView = mountEmailComposer(composeContext, host, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(threadView.state.context.schedule.state()).toEqual({
+    type: 'editing',
+    intent: { type: 'immediate' },
+  });
+  threadView.dispose();
+});
+
+it('reads the draft afresh long after a notice that never reported closing', async () => {
+  const composeContext = createComposeContext();
+  // A notice dismissed before it was shown never reports closing.
+  const { host } = await scheduleAndShowThread(
+    composeContext,
+    new Date('2026-12-01T12:00:00Z')
+  );
+  await vi.advanceTimersByTimeAsync(30_000);
+
+  const later = mountEmailComposer(composeContext, host, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(later.state.context.schedule.state()).toEqual({
+    type: 'editing',
+    intent: { type: 'immediate' },
+  });
+  later.dispose();
+});
+
+it('follows a schedule moved elsewhere and keeps its notice', async () => {
+  const composeContext = createComposeContext();
+  const sendTime = new Date('2026-12-01T12:00:00Z');
+  const moved = new Date('2026-12-02T14:30:00Z');
+  const { host } = await scheduleAndShowThread(composeContext, sendTime);
+  const threadView = mountEmailComposer(composeContext, host, {
+    draft: message('draft', { is_draft: true }),
+  });
+  // Another device moves the schedule while the notice shows.
+  composeContext.setDraftLifecycle({
+    type: 'scheduled',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    sendTime: moved.toISOString(),
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(threadView.state.context.schedule.confirmedTime()).toEqual(moved);
+  // The notice and its Undo stay for the schedule wherever it went.
+  expect(composeContext.notices.feedback.dismiss).not.toHaveBeenCalled();
+  threadView.dispose();
+  vi.mocked(composeContext.notices.feedback.alert).mockClear();
+
+  // Neither a read of the move nor one from before it is news to this tab.
+  for (const read of [moved, sendTime]) {
+    const later = mountEmailComposer(composeContext, host, {
+      draft: message('draft', {
+        is_draft: true,
+        scheduled_send_time: read.toISOString(),
+      }),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(later.state.context.schedule.confirmedTime()).toEqual(moved);
+    later.dispose();
+  }
+  expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
+});
+
+it('does not give its own schedule the delivery status of an older one', async () => {
+  const composeContext = createComposeContext();
+  const sendTime = new Date('2026-12-01T12:00:00Z');
+  const { host } = await scheduleAndShowThread(composeContext, sendTime);
+
+  // The thread's read still holds an earlier schedule that failed.
+  const threadView = mountEmailComposer(composeContext, host, {
+    draft: message('draft', {
+      is_draft: true,
+      scheduled_send_time: '2026-11-30T09:00:00Z',
+      scheduled_send_status: 'failed',
+    }),
+  });
+  expect(threadView.state.context.schedule.state()).toEqual({
+    type: 'scheduled',
+    confirmedTime: sendTime,
+    deliveryStatus: undefined,
+  });
+  threadView.dispose();
+});
+
+/** Schedules a new message whose thread is marked done only on `markDone`. */
+async function scheduleWhileMarkingDone(
+  composeContext: ReturnType<typeof createComposeContext>,
+  sendTime: Date
+) {
+  let markDone: (() => void) | undefined;
+  vi.mocked(composeContext.delivery.archive).mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        markDone = resolve;
+      })
+  );
+  const root = mountEmailComposer(composeContext);
+  root.edit('Schedule and mark done');
+  root.state.context.schedule.onSelect(sendTime);
+  root.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.delivery.archive).toHaveBeenCalledOnce();
+  return { root, markDone: () => markDone?.() };
+}
+
+it('starts a composer mounted while the thread is marked done from the schedule', async () => {
+  const composeContext = createComposeContext();
+  const sendTime = new Date('2026-12-01T12:00:00Z');
+  const { root, markDone } = await scheduleWhileMarkingDone(
+    composeContext,
+    sendTime
+  );
+
+  // The thread open in another split mounts its composer meanwhile.
+  const beside = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(beside.state.context.schedule.confirmedTime()).toEqual(sendTime);
+  markDone();
+  await vi.advanceTimersByTimeAsync(1);
+  beside.dispose();
+  root.dispose();
+});
+
+it('announces no schedule that another view cancelled while the thread was marked done', async () => {
+  const composeContext = createComposeContext();
+  const { root, markDone } = await scheduleWhileMarkingDone(
+    composeContext,
+    new Date('2026-12-01T12:00:00Z')
+  );
+  const beside = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(await beside.state.context.schedule.onCancel()).toBe(true);
+  composeContext.setDraftLifecycle({
+    type: 'editing',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+
+  markDone();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.notices.feedback.success).not.toHaveBeenCalledWith(
+    'Email scheduled',
+    expect.anything()
+  );
+  // The cancel it observed while marking the thread done unlocks it.
+  expect(root.state.context.schedule.state().type).toBe('editing');
+  expect(root.state.context.disabled()).toBe(false);
+  beside.dispose();
+  root.dispose();
+});
+
+it('reads the draft afresh when its schedule was cancelled before this composer heard', async () => {
+  const composeContext = createComposeContext();
+  const { root, markDone } = await scheduleWhileMarkingDone(
+    composeContext,
+    new Date('2026-12-01T12:00:00Z')
+  );
+  const beside = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(await beside.state.context.schedule.onCancel()).toBe(true);
+  // The cancel has not reached this composer's lifecycle; only a read finds it.
+  const [observed] = vi.mocked(composeContext.draftLifecycle.observe).mock
+    .results;
+  if (observed?.type !== 'return') throw new Error('no lifecycle observed');
+  vi.mocked(observed.value.refresh).mockImplementation(async () => {
+    const editing = {
+      type: 'editing' as const,
+      draftId: 'draft',
+      threadId: 'thread',
+      inboxId: 'inbox',
+      observedAt: Date.now(),
+    };
+    composeContext.setDraftLifecycle(editing);
+    return editing;
+  });
+
+  markDone();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(root.state.context.schedule.state().type).toBe('editing');
+  expect(root.state.context.disabled()).toBe(false);
+  beside.dispose();
+  root.dispose();
+});
+
+it('announces where a schedule moved while the thread was marked done', async () => {
+  const composeContext = createComposeContext();
+  const moved = new Date('2026-12-02T14:30:00Z');
+  const { root, markDone } = await scheduleWhileMarkingDone(
+    composeContext,
+    new Date('2026-12-01T12:00:00Z')
+  );
+  const beside = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', { is_draft: true }),
+  });
+  // Another device moves the schedule; the thread open beside sees it.
+  composeContext.setDraftLifecycle({
+    type: 'scheduled',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    sendTime: moved.toISOString(),
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(beside.state.context.schedule.confirmedTime()).toEqual(moved);
+
+  markDone();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
+    'Email scheduled',
+    expect.objectContaining({
+      subtext: expect.stringMatching(/^Sends Wed, Dec 2(, 2026)? at 2:30 PM$/),
+    })
+  );
+  expect(root.state.context.schedule.confirmedTime()).toEqual(moved);
+  beside.dispose();
+  root.dispose();
+});
+
+it('starts composers from the schedule while its notice shows, however long marking done took', async () => {
+  const composeContext = createComposeContext();
+  const sendTime = new Date('2026-12-01T12:00:00Z');
+  const { root, markDone } = await scheduleWhileMarkingDone(
+    composeContext,
+    sendTime
+  );
+  await vi.advanceTimersByTimeAsync(40_000);
+  markDone();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
+    'Email scheduled',
+    expect.anything()
+  );
+  root.dispose();
+
+  const threadView = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(threadView.state.context.schedule.confirmedTime()).toEqual(sendTime);
+  threadView.dispose();
+});
+
+it('starts a composer from the reschedule this tab just made, not an older read', async () => {
+  const composeContext = createComposeContext();
+  const original = new Date('2026-12-01T12:00:00Z');
+  const replacement = new Date('2026-12-02T14:30:00Z');
+  const root = mountEmailComposer(composeContext);
+  root.edit('Reschedule this');
+  await vi.advanceTimersByTimeAsync(600);
+  composeContext.setDraftLifecycle({
+    type: 'scheduled',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    sendTime: original.toISOString(),
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(root.state.context.schedule.onSelect(replacement)).toBe(true);
+  root.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
+    'Email rescheduled',
+    expect.anything()
+  );
+  composeContext.setDraftLifecycle({
+    type: 'scheduled',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    sendTime: replacement.toISOString(),
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  vi.mocked(composeContext.notices.feedback.alert).mockClear();
+
+  // View message opens the thread, whose read still holds the old time.
+  const threadView = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', {
+      is_draft: true,
+      scheduled_send_time: original.toISOString(),
+    }),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(threadView.state.context.schedule.confirmedTime()).toEqual(
+    replacement
+  );
+  expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
+  threadView.dispose();
+  root.dispose();
 });
 
 it('preserves local intent on schedule failure without falling back to send', async () => {

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { BatchSendMessageHandlerData, BatchSendMessageHandlerErrors, BatchSendMessageHandlerResponses, GetEntityHandlerData, GetEntityHandlerErrors, GetEntityHandlerResponses, SendMessageHandlerData, SendMessageHandlerErrors, SendMessageHandlerResponses } from './types.gen';
+import type { BatchSendMessageHandlerData, BatchSendMessageHandlerErrors, BatchSendMessageHandlerResponses, BroadcastMessageHandlerData, BroadcastMessageHandlerErrors, BroadcastMessageHandlerResponses, GetEntityHandlerData, GetEntityHandlerErrors, GetEntityHandlerResponses, SendMessageHandlerData, SendMessageHandlerErrors, SendMessageHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-    
+
     constructor(args?: {
         client?: Client;
     }) {
@@ -30,9 +30,9 @@ class HeyApiClient {
 
 class HeyApiRegistry<T> {
     private readonly defaultKey = 'default';
-    
+
     private readonly instances: Map<string, T> = new Map();
-    
+
     get(key?: string): T {
         const instance = this.instances.get(key ?? this.defaultKey);
         if (!instance) {
@@ -40,7 +40,7 @@ class HeyApiRegistry<T> {
         }
         return instance;
     }
-    
+
     set(value: T, key?: string): void {
         this.instances.set(key ?? this.defaultKey, value);
     }
@@ -48,7 +48,7 @@ class HeyApiRegistry<T> {
 
 export class Sdk extends HeyApiClient {
     public static readonly __registry: HeyApiRegistry<Sdk> = new HeyApiRegistry<Sdk>();
-    
+
     constructor(args?: {
         client?: Client;
         key?: string;
@@ -56,7 +56,7 @@ export class Sdk extends HeyApiClient {
         super(args);
         Sdk.__registry.set(this, args?.key);
     }
-    
+
     public batchSendMessageHandler<ThrowOnError extends boolean = false>(options: Options<BatchSendMessageHandlerData, ThrowOnError>): RequestResult<BatchSendMessageHandlerResponses, BatchSendMessageHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<BatchSendMessageHandlerResponses, BatchSendMessageHandlerErrors, ThrowOnError>({
             security: [{ name: 'x-internal-auth-key', type: 'apiKey' }],
@@ -68,7 +68,23 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
+    /**
+     * Sends a message to every open connection on every instance. Delivery is
+     * best-effort and asynchronous, so there are no receipts.
+     */
+    public broadcastMessageHandler<ThrowOnError extends boolean = false>(options: Options<BroadcastMessageHandlerData, ThrowOnError>): RequestResult<BroadcastMessageHandlerResponses, BroadcastMessageHandlerErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<BroadcastMessageHandlerResponses, BroadcastMessageHandlerErrors, ThrowOnError>({
+            security: [{ name: 'x-internal-auth-key', type: 'apiKey' }],
+            url: '/message/broadcast',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
     public sendMessageHandler<ThrowOnError extends boolean = false>(options: Options<SendMessageHandlerData, ThrowOnError>): RequestResult<SendMessageHandlerResponses, SendMessageHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<SendMessageHandlerResponses, SendMessageHandlerErrors, ThrowOnError>({
             security: [{ name: 'x-internal-auth-key', type: 'apiKey' }],
@@ -80,7 +96,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public getEntityHandler<ThrowOnError extends boolean = false>(options: Options<GetEntityHandlerData, ThrowOnError>): RequestResult<GetEntityHandlerResponses, GetEntityHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetEntityHandlerResponses, GetEntityHandlerErrors, ThrowOnError>({
             security: [{ name: 'x-internal-auth-key', type: 'apiKey' }],

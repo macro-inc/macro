@@ -1,11 +1,13 @@
 use crate::domain::{
-    models::{CatalogEntry, ConnectorOverlay, PipedreamConnection},
-    ports::{ConnectionStore, ConnectorDirectory, ConnectorOverlays, PipedreamConnect},
+    models::{CatalogEntry, ConnectionProvider, ConnectorOverlay, PipedreamConnection},
+    ports::{
+        ConnectionStore, ConnectorDirectory, ConnectorOverlays, MacroConnect, PipedreamConnect,
+    },
     service::{
         catalog::browse_catalog,
         connect::{
-            PipedreamConnectError, complete_pipedream_connection, disconnect_mcp_server,
-            recover_pipedream_connection,
+            PipedreamConnectError, complete_connect_connection, complete_pipedream_connection,
+            disconnect_mcp_server, recover_pipedream_connection, start_connect_session,
         },
     },
 };
@@ -72,7 +74,7 @@ impl<S, P, Auth> FromRef<PipedreamRouterState<S, P, Auth>> for MacroAuthorizatio
 impl<S, P, Auth> PipedreamRouterState<S, P, Auth>
 where
     S: ConnectionStore,
-    P: PipedreamConnect + ConnectorDirectory,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
 {
     /// Create a new router state from a server store, the Pipedream client
@@ -116,6 +118,18 @@ where
             .as_ref()
             .ok_or(PipedreamHandlerErr::PipedreamNotConfigured)
     }
+
+    /// Whether `user_id` is on Macro Connect alone (see
+    /// [`MacroConnect::connect_only`]).
+    async fn connect_only(
+        &self,
+        user_id: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> bool {
+        match &self.pipedream {
+            Some(backends) => backends.connect_only(user_id).await,
+            None => false,
+        }
+    }
 }
 
 /// Authenticated MCP routes: connected-app CRUD, the Pipedream connect flow,
@@ -125,7 +139,7 @@ pub fn pipedream_mcp_router<S, P, Auth, Global>(
 ) -> Router<Global>
 where
     S: ConnectionStore + ConnectorOverlays,
-    P: PipedreamConnect + ConnectorDirectory,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
     Global: Send + Sync,
@@ -156,6 +170,10 @@ where
             post(recover_connection::<S, P, Auth>),
         )
         .route(
+            "/pipedream/mcp/connect/complete",
+            post(complete_connect::<S, P, Auth>),
+        )
+        .route(
             "/pipedream/mcp/catalog",
             get(browse_catalog_handler::<S, P, Auth>),
         )
@@ -184,6 +202,39 @@ where
             secret: Arc::from(secret),
         })
 }
+
+/// The public page Macro Connect sends the browser to after consent.
+///
+/// It records nothing: the page only tells the user to return to Macro and
+/// closes itself. The app, polling the authenticated
+/// `/pipedream/mcp/connect/complete`, records the connection once Connect
+/// confirms it, so nothing in this unauthenticated request is trusted.
+pub fn pipedream_connect_callback_router<Global>() -> Router<Global>
+where
+    Global: Send + Sync + Clone + 'static,
+{
+    Router::new().route("/pipedream/mcp/connect/callback", get(connect_callback))
+}
+
+/// Query Connect appends to the callback URL.
+#[derive(Debug, Deserialize)]
+pub struct ConnectCallbackQuery {
+    /// `connected` or `error`.
+    status: Option<String>,
+}
+
+#[tracing::instrument(skip_all, fields(status = query.status.as_deref()))]
+async fn connect_callback(
+    Query(query): Query<ConnectCallbackQuery>,
+) -> axum::response::Html<&'static str> {
+    axum::response::Html(match query.status.as_deref() {
+        Some("connected") => CONNECT_CALLBACK_CONNECTED,
+        _ => CONNECT_CALLBACK_FAILED,
+    })
+}
+
+const CONNECT_CALLBACK_CONNECTED: &str = "<!doctype html><meta charset=utf-8><title>Connected</title><p>Connected. You can close this window and return to Macro.</p><script>window.close()</script>";
+const CONNECT_CALLBACK_FAILED: &str = "<!doctype html><meta charset=utf-8><title>Not connected</title><p>The connection did not finish. Close this window and try again in Macro.</p>";
 
 /// State for the public webhook route: the shared secret, nothing else.
 #[derive(Clone)]
@@ -271,15 +322,61 @@ pub struct PipedreamDeleteParams {
     app_slug: String,
 }
 
-/// Response from creating a Pipedream Connect token.
+/// Request body for starting a connect flow.
+#[derive(Debug, Default, Deserialize, ToSchema)]
+pub struct PipedreamTokenRequest {
+    /// The app to connect, by Pipedream slug. With it, an app Macro Connect
+    /// serves can answer with a Connect URL instead of a Pipedream token.
+    #[serde(default)]
+    app_slug: Option<String>,
+}
+
+/// Which backend a connection or connect flow uses.
+#[derive(Clone, Copy, Debug, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PipedreamProviderResponse {
+    /// Pipedream Connect.
+    Pipedream,
+    /// Macro Connect.
+    Connect,
+}
+
+impl From<ConnectionProvider> for PipedreamProviderResponse {
+    fn from(provider: ConnectionProvider) -> Self {
+        match provider {
+            ConnectionProvider::Pipedream => Self::Pipedream,
+            ConnectionProvider::Connect => Self::Connect,
+        }
+    }
+}
+
+/// Response from starting a connect flow: a Pipedream Connect token, or for
+/// `provider = connect` a Macro Connect URL.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PipedreamTokenResponse {
-    /// Short-lived token to open the Pipedream Connect UI with.
-    token: String,
-    /// RFC 3339 expiry of the token.
-    expires_at: String,
+    /// The backend this flow connects through.
+    provider: PipedreamProviderResponse,
+    /// Short-lived token to open the Pipedream Connect UI with. Pipedream only.
+    token: Option<String>,
+    /// RFC 3339 expiry of the token. Pipedream only.
+    expires_at: Option<String>,
     /// Shareable link that opens the same connect flow in a browser tab.
-    connect_link_url: String,
+    /// Pipedream only.
+    connect_link_url: Option<String>,
+    /// URL to open in a popup or browser tab for Macro Connect's consent
+    /// flow; once it finishes, call `/pipedream/mcp/connect/complete`.
+    /// Connect only.
+    connect_url: Option<String>,
+}
+
+/// Request body for recording a finished Macro Connect flow.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PipedreamConnectCompleteRequest {
+    /// The app that was connected, by Pipedream slug.
+    app_slug: String,
+    /// Optional display name for the connector, as for completion.
+    #[serde(default)]
+    server_name: Option<String>,
 }
 
 /// Request body for completing a Pipedream connect flow.
@@ -313,6 +410,8 @@ pub struct PipedreamConnectionResponse {
     server_name: String,
     /// Whether the connector is enabled for tool use.
     enabled: bool,
+    /// The backend holding the grant.
+    provider: PipedreamProviderResponse,
 }
 
 impl PipedreamConnectionResponse {
@@ -321,6 +420,7 @@ impl PipedreamConnectionResponse {
             app_slug: record.app_slug.clone(),
             server_name: record.server_name.clone(),
             enabled: record.enabled,
+            provider: record.provider.into(),
         }
     }
 }
@@ -410,6 +510,9 @@ pub enum PipedreamHandlerErr {
     /// The app connects through its own MCP server, never Pipedream.
     #[error("{0}")]
     Overlaid(String),
+    /// The user is on Macro Connect alone, which this request would bypass.
+    #[error("{0}")]
+    ConnectOnly(&'static str),
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
@@ -433,6 +536,7 @@ impl IntoResponse for PipedreamHandlerErr {
             PipedreamHandlerErr::NotFound => StatusCode::NOT_FOUND,
             PipedreamHandlerErr::PipedreamNotConfigured => StatusCode::NOT_IMPLEMENTED,
             PipedreamHandlerErr::Overlaid(_) => StatusCode::CONFLICT,
+            PipedreamHandlerErr::ConnectOnly(_) => StatusCode::CONFLICT,
             PipedreamHandlerErr::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -466,7 +570,7 @@ pub async fn list_connections<S, P, Auth>(
 ) -> Result<Json<Vec<PipedreamConnectionResponse>>, PipedreamHandlerErr>
 where
     S: ConnectionStore,
-    P: PipedreamConnect + ConnectorDirectory,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
@@ -476,10 +580,14 @@ where
         .list(&user.macro_user_id)
         .await
         .map_err(anyhow::Error::from)?;
+    // Pipedream connections are unusable to a user on Connect alone; the
+    // app shows as not connected until they reconnect it through Connect.
+    let connect_only = state.connect_only(&user.macro_user_id).await;
 
     Ok(Json(
         records
             .iter()
+            .filter(|record| !connect_only || record.provider == ConnectionProvider::Connect)
             .map(PipedreamConnectionResponse::from_record)
             .collect(),
     ))
@@ -507,7 +615,7 @@ pub async fn update_connection<S, P, Auth>(
 ) -> Result<Json<PipedreamConnectionResponse>, PipedreamHandlerErr>
 where
     S: ConnectionStore,
-    P: PipedreamConnect + ConnectorDirectory,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
@@ -556,7 +664,7 @@ pub async fn delete_connection<S, P, Auth>(
 ) -> Result<StatusCode, PipedreamHandlerErr>
 where
     S: ConnectionStore,
-    P: PipedreamConnect + ConnectorDirectory,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
@@ -582,6 +690,7 @@ where
     path = "/pipedream/mcp/token",
     tag = "pipedream-mcp",
     operation_id = "create_pipedream_mcp_token",
+    request_body(content = Option<PipedreamTokenRequest>),
     responses(
         (status = 200, body = PipedreamTokenResponse),
         (status = 401, body = String),
@@ -589,31 +698,106 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-/// Create a short-lived Pipedream Connect token for the authenticated user.
+/// Start a connect flow for the authenticated user.
 ///
-/// The frontend opens Pipedream's hosted Connect UI with this token; the
-/// user picks (or is deep-linked into) an app and authorizes it there.
+/// By default, a short-lived Pipedream Connect token: the frontend opens
+/// Pipedream's hosted Connect UI with it, and the user picks (or is
+/// deep-linked into) an app and authorizes it there. When the body names an
+/// app Macro Connect serves and the `macro-connect` rollout is on for the
+/// user, a Connect URL instead.
 #[tracing::instrument(skip_all, err)]
 pub async fn create_connect_token<S, P, Auth>(
     State(state): State<PipedreamRouterState<S, P, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    body: Option<Json<PipedreamTokenRequest>>,
 ) -> Result<Json<PipedreamTokenResponse>, PipedreamHandlerErr>
 where
-    S: ConnectionStore,
-    P: PipedreamConnect + ConnectorDirectory,
+    S: ConnectionStore + ConnectorOverlays,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
 {
     let user = &authorization.authorization.user;
-    let token = state
-        .pipedream()?
+    let pipedream = state.pipedream()?;
+    let app_slug = body.and_then(|Json(body)| body.app_slug);
+    // A user on Connect alone gets a Connect URL or a 404, never a
+    // Pipedream token.
+    if state.connect_only(&user.macro_user_id).await {
+        let app_slug = app_slug.ok_or(PipedreamHandlerErr::ConnectOnly(
+            "name the app to connect through Macro Connect",
+        ))?;
+        let connect_url = start_connect_session(pipedream.as_ref(), &user.macro_user_id, &app_slug)
+            .await?
+            .ok_or(PipedreamHandlerErr::NotFound)?;
+        return Ok(Json(PipedreamTokenResponse {
+            provider: PipedreamProviderResponse::Connect,
+            token: None,
+            expires_at: None,
+            connect_link_url: None,
+            connect_url: Some(connect_url),
+        }));
+    }
+
+    let token = pipedream
         .create_connect_token(user.macro_user_id.as_ref())
         .await?;
 
     Ok(Json(PipedreamTokenResponse {
-        token: token.token,
-        expires_at: token.expires_at,
-        connect_link_url: token.connect_link_url,
+        provider: PipedreamProviderResponse::Pipedream,
+        token: Some(token.token),
+        expires_at: Some(token.expires_at),
+        connect_link_url: Some(token.connect_link_url),
+        connect_url: None,
     }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/pipedream/mcp/connect/complete",
+    tag = "pipedream-mcp",
+    operation_id = "complete_pipedream_mcp_connect",
+    request_body = PipedreamConnectCompleteRequest,
+    responses(
+        (status = 200, body = PipedreamConnectionResponse),
+        (status = 401, body = String),
+        (status = 404, body = ErrorResponse),
+        (status = 501, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+/// Record an app the user connected through Macro Connect.
+///
+/// Answers 404 until Connect lists an active connection for this user and
+/// app, so the frontend can poll it while the consent window is open.
+#[tracing::instrument(skip_all, err, fields(connector.app_slug = %body.app_slug))]
+pub async fn complete_connect<S, P, Auth>(
+    State(state): State<PipedreamRouterState<S, P, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(body): Json<PipedreamConnectCompleteRequest>,
+) -> Result<Json<PipedreamConnectionResponse>, PipedreamHandlerErr>
+where
+    S: ConnectionStore + ConnectorOverlays,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
+    Auth: MacroAuthorizationService,
+    anyhow::Error: From<S::Err>,
+{
+    let user = &authorization.authorization.user;
+    if !state.connect_only(&user.macro_user_id).await {
+        return Err(PipedreamHandlerErr::NotFound);
+    }
+    let record = complete_connect_connection(
+        state.store.as_ref(),
+        state.pipedream()?.as_ref(),
+        &user.macro_user_id,
+        &body.app_slug,
+        body.server_name.as_deref(),
+    )
+    .await?;
+
+    if let Some(hook) = &state.on_auth_completed {
+        hook(record.clone()).await;
+    }
+
+    Ok(Json(PipedreamConnectionResponse::from_record(&record)))
 }
 
 #[utoipa::path(
@@ -644,11 +828,16 @@ pub async fn complete_connection<S, P, Auth>(
 ) -> Result<Json<PipedreamConnectionResponse>, PipedreamHandlerErr>
 where
     S: ConnectionStore + ConnectorOverlays,
-    P: PipedreamConnect + ConnectorDirectory,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
     let user = &authorization.authorization.user;
+    if state.connect_only(&user.macro_user_id).await {
+        return Err(PipedreamHandlerErr::ConnectOnly(
+            "this account connects apps through Macro Connect, not Pipedream",
+        ));
+    }
     let record = complete_pipedream_connection(
         state.store.as_ref(),
         state.store.as_ref(),
@@ -695,11 +884,14 @@ pub async fn recover_connection<S, P, Auth>(
 ) -> Result<Json<PipedreamConnectionResponse>, PipedreamHandlerErr>
 where
     S: ConnectionStore + ConnectorOverlays,
-    P: PipedreamConnect + ConnectorDirectory,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
     let user = &authorization.authorization.user;
+    if state.connect_only(&user.macro_user_id).await {
+        return Err(PipedreamHandlerErr::NotFound);
+    }
     let record = recover_pipedream_connection(
         state.store.as_ref(),
         state.store.as_ref(),
@@ -738,16 +930,18 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn browse_catalog_handler<S, P, Auth>(
     State(state): State<PipedreamRouterState<S, P, Auth>>,
-    _authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Query(params): Query<PipedreamCatalogParams>,
 ) -> Result<Json<PipedreamCatalogResponse>, PipedreamHandlerErr>
 where
     S: ConnectionStore,
-    P: PipedreamConnect + ConnectorDirectory,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
 {
+    // Connect's catalog for a user on Connect alone (see the directory).
     let page = browse_catalog(
         state.pipedream()?.as_ref(),
+        &authorization.authorization.user.macro_user_id,
         params.search.as_deref(),
         params.cursor.as_deref(),
         params.limit,
@@ -778,13 +972,27 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn list_overlays<S, P, Auth>(
     State(state): State<PipedreamRouterState<S, P, Auth>>,
-    _authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<Vec<PipedreamOverlayResponse>>, PipedreamHandlerErr>
 where
     S: ConnectionStore + ConnectorOverlays,
-    P: PipedreamConnect + ConnectorDirectory,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
 {
-    let overlays = state.store.overlays().await?;
+    let mut overlays = state.store.overlays().await?;
+    // Connect serves its apps to a user on Connect alone, overlaid or not.
+    if let Ok(backends) = state.pipedream()
+        && backends
+            .connect_only(&authorization.authorization.user.macro_user_id)
+            .await
+    {
+        let mut kept = Vec::with_capacity(overlays.len());
+        for overlay in overlays {
+            if backends.app_for_slug(&overlay.app_slug).await?.is_none() {
+                kept.push(overlay);
+            }
+        }
+        overlays = kept;
+    }
     Ok(Json(overlays.into_iter().map(Into::into).collect()))
 }

@@ -1,7 +1,11 @@
 pub mod action_history;
+pub mod activity;
+#[cfg(feature = "admission")]
+pub mod activity_summary;
 pub mod agent_conversation;
 /// Current authorization for agent session streams.
 pub mod audience;
+pub mod auto_archive;
 pub mod coding_agents;
 pub mod coding_preferences;
 pub mod connection;
@@ -10,6 +14,8 @@ pub mod control;
 pub mod error;
 pub mod events;
 pub mod lifecycle;
+/// Lifecycle events as their owner's activity.
+pub mod lifecycle_activity;
 pub mod model;
 #[cfg(feature = "admission")]
 pub mod name_generation;
@@ -26,6 +32,7 @@ pub mod session;
 pub mod session_task;
 /// Session link, channel, and team sharing.
 pub mod sharing;
+pub mod updates;
 
 pub mod credentials;
 
@@ -54,3 +61,6 @@ pub mod tool_actions;
 
 /// Durable system notifications.
 pub mod notifications;
+
+/// Sessions registered as an account's work.
+pub mod work_registration;

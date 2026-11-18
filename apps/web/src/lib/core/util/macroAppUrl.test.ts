@@ -19,6 +19,12 @@ describe('parseInternalAppLink', () => {
     ).toEqual({ path: '/component/abc', query: 'foo=bar' });
   });
 
+  it('keeps the fragment of a booking receipt link', () => {
+    expect(
+      parseInternalAppLink('https://dev.macro.com/app/booking/abc#token')
+    ).toEqual({ path: '/booking/abc', query: '', fragment: 'token' });
+  });
+
   it('maps a bare /app path to the router root', () => {
     expect(parseInternalAppLink('https://dev.macro.com/app')).toEqual({
       path: '/',

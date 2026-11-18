@@ -55,7 +55,6 @@ export function createLiveSession(sessionId: Accessor<string | undefined>) {
     const rows = new Map<string, FoldedMessage>();
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const key = (row: FoldedMessage) => `${row.turn}:${row.author.kind}`;
     const flush = () => {
       timer = undefined;
       if (!disposed) setMessages([...rows.values()]);
@@ -65,8 +64,8 @@ export function createLiveSession(sessionId: Accessor<string | undefined>) {
         if (event.kind === 'metadata') setMetadata(event.metadata);
         else if (event.kind === 'replace') {
           rows.clear();
-          for (const row of event.messages) rows.set(key(row), row);
-        } else rows.set(key(event.message), event.message);
+          for (const row of event.messages) rows.set(row.key, row);
+        } else rows.set(event.message.key, event.message);
       }
       timer ??= setTimeout(flush, 250);
     };

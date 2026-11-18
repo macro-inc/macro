@@ -3,9 +3,12 @@
 
 pub mod activity;
 pub mod catalog;
+pub mod derivation;
 pub mod events;
 pub mod journal;
 pub mod models;
+#[cfg(feature = "view_rows")]
+pub mod view_rows;
 
 #[cfg(feature = "ports")]
 pub mod storage;
@@ -27,6 +30,9 @@ pub mod sharing;
 
 #[cfg(feature = "ports")]
 pub mod transfer;
+
+#[cfg(feature = "ports")]
+pub mod duplicate;
 
 /// Retry-safe first database provisioning.
 #[cfg(feature = "ports")]

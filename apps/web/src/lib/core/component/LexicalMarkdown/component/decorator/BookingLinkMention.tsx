@@ -55,7 +55,7 @@ function BookingLinkPreviewCard(props: {
               href={props.url}
               target="_blank"
               rel="noreferrer"
-              class="shrink-0 text-link hover:text-link-hover visited:text-link-visited"
+              class="shrink-0 text-ink-muted hover:text-ink"
               onClick={(e) => e.stopPropagation()}
             >
               <OpenIcon class="size-4" />
@@ -107,7 +107,7 @@ function BookingLinkMentionContent(props: BookingLinkMentionDecoratorProps) {
       <span class="relative top-[0.125em] size-[1em] shrink-0 inline-flex mx-1">
         <BookingLinkIcon />
       </span>
-      <span class="flex min-w-0 items-baseline underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+      <span class="flex min-w-0 items-baseline text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         <span class="min-w-0 truncate">{label()}</span>
         <Show when={props.slug && label() !== props.slug}>
           <span class="shrink-0 whitespace-pre text-ink-extra-muted text-[0.8em]">

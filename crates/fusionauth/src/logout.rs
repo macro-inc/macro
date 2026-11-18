@@ -1,7 +1,4 @@
-use crate::{
-    FusionAuthClient, Result, UnauthedClient,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{FusionAuthClient, Result, UnauthedClient, error::FusionAuthClientError};
 use std::borrow::Cow;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -20,11 +17,7 @@ async fn logout(client: &UnauthedClient, base_url: &str, request: LogoutRequest<
         .json(&request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     let status_code = res.status();
     match status_code {
@@ -33,21 +26,18 @@ async fn logout(client: &UnauthedClient, base_url: &str, request: LogoutRequest<
             Ok(())
         }
         _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
 
             if status_code == reqwest::StatusCode::NOT_FOUND {
                 return Err(FusionAuthClientError::UserDoesNotExist);
             }
 
-            tracing::error!(body=%body, status=%status_code, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
+            Err(FusionAuthClientError::unexpected(
+                status_code,
+                &headers,
+                body,
+            ))
         }
     }
 }

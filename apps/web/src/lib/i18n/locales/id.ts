@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Proyek',
     newProject: 'Proyek baru',
     contentAlreadyOpen: 'Konten sudah terbuka',
-    unableToOpenConversation: 'Tidak dapat membuka percakapan. Coba lagi.',
     mobileSearchPlaceholder: 'Cari…',
     closeSearch: 'Tutup penelusuran',
     searchFullTextFor: 'Cari teks lengkap untuk “{{query}}”',
@@ -574,10 +573,6 @@ export default {
       other: '{{accepted}} dari {{count}} item ditandai belum selesai',
     },
     toastMarkNotDoneFailed: 'Gagal menandai belum selesai',
-    toastThreadStaysDone:
-      'Utas ini belum menerima pesan apa pun, jadi tetap selesai',
-    toastThreadsStayDone:
-      'Utas-utas ini belum menerima pesan apa pun, jadi tetap selesai',
     toastCountNotRestored: {
       other: '{{count}} item tidak dapat dipulihkan.',
     },
@@ -672,8 +667,6 @@ export default {
     create: 'Buat',
     getMobileApp: 'Dapatkan aplikasi seluler',
     signedInAs: 'Login sebagai {{name}}',
-    commandMenu: 'Menu perintah',
-    searchEverything: 'Cari di mana saja',
     customizeSidebar: 'Sesuaikan sidebar',
     customizeSidebarDescription:
       'Pilih aplikasi yang muncul di sidebar dan seret untuk mengubah urutannya. Beranda selalu berada di urutan pertama.',
@@ -740,7 +733,7 @@ export default {
     tabMobileApp: 'Aplikasi seluler',
     tabTags: 'Tag',
     tabIntegrations: 'Integrasi',
-    tabRuntimes: 'Runtime',
+    tabRuntimes: 'Mesin',
     tabMcpServer: 'Server MCP',
     tabApiKeys: 'Kunci API',
     tabBots: 'Bot',
@@ -786,7 +779,6 @@ export default {
     goForward: 'Maju',
     createNewSplit: 'Buat panel baru',
     close: 'Tutup',
-    returnToList: 'Kembali ke daftar',
     previousItem: 'Item sebelumnya',
     nextItem: 'Item berikutnya',
     itemNavigation: 'Navigasi item',

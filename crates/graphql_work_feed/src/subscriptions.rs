@@ -1,49 +1,17 @@
-use std::{collections::HashSet, marker::PhantomData, time::Duration};
+use std::marker::PhantomData;
 
 use async_graphql::{Context, Subscription};
-use futures::Stream;
+use attention_feed::domain::{
+    live::{COALESCE_WINDOW, coalesce},
+    models::CandidateKeying,
+};
+use futures::{Stream, StreamExt};
 use graphql_common::require_authenticated_user;
 use graphql_soup::SoupEntityEdges;
-use work_feed::domain::models::{WorkFeedItemKey, WorkFeedTrigger};
 
 use crate::{
     context::WorkFeedGraphqlContext, inputs::WorkFeedScopeInput, objects::GraphqlWorkFeedPatch,
 };
-
-#[cfg(test)]
-mod test;
-
-/// How long triggers are collected before one recompute, so a burst of
-/// realtime events (a busy thread, a bulk done) costs one feed lookup.
-const COALESCE_WINDOW: Duration = Duration::from_millis(300);
-
-/// The triggers collected for one recompute.
-#[derive(Default)]
-struct TriggerBatch {
-    /// Keys to recompute, in arrival order.
-    keys: Vec<WorkFeedItemKey>,
-    /// Keys already in `keys`.
-    seen: HashSet<WorkFeedItemKey>,
-    /// Whether any trigger said changes may have been missed.
-    invalidated: bool,
-}
-
-impl TriggerBatch {
-    /// Add one trigger to the batch.
-    fn absorb(&mut self, trigger: WorkFeedTrigger) {
-        match trigger {
-            WorkFeedTrigger::Changed(entities) => {
-                for entity in entities {
-                    let key = WorkFeedItemKey::new(entity);
-                    if self.seen.insert(key.clone()) {
-                        self.keys.push(key);
-                    }
-                }
-            }
-            WorkFeedTrigger::Invalidated => self.invalidated = true,
-        }
-    }
-}
 
 /// Root GraphQL adapter for the work feed subscription.
 pub struct WorkFeedSubscriptionRoot<E>(PhantomData<fn() -> E>);
@@ -73,25 +41,15 @@ impl<E: SoupEntityEdges> WorkFeedSubscriptionRoot<E> {
         let context = ctx.data::<WorkFeedGraphqlContext>()?.clone();
         let scope = scope.unwrap_or_default().into_scope();
         let viewer = context.viewer(user.clone()).await?;
-        let mut triggers = context.triggers.subscribe(user);
+        let triggers =
+            context
+                .triggers
+                .subscribe(user, CandidateKeying::ThreadScoped, scope.mode.own_work());
 
         Ok(async_stream::stream! {
-            while let Some(first) = triggers.recv().await {
-                let mut batch = TriggerBatch::default();
-                batch.absorb(first);
-                let window = tokio::time::sleep(COALESCE_WINDOW);
-                tokio::pin!(window);
-                let mut open = true;
-                while open {
-                    tokio::select! {
-                        () = &mut window => break,
-                        next = triggers.recv() => match next {
-                            Some(trigger) => batch.absorb(trigger),
-                            None => open = false,
-                        },
-                    }
-                }
-
+            let batches = coalesce(triggers, COALESCE_WINDOW);
+            futures::pin_mut!(batches);
+            while let Some(batch) = batches.next().await {
                 if batch.invalidated {
                     yield Ok(vec![GraphqlWorkFeedPatch::invalidated()]);
                     continue;

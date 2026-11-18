@@ -43,16 +43,16 @@ describe('columnDeleteNote', () => {
     );
   });
 
-  it('warns that forms whose gate checks the column stop taking responses', () => {
+  it('warns that forms whose gate or section condition checks the column stop taking responses', () => {
     expect(
       columnDeleteNote({ kind: 'known', names: ['RSVP'], gated: ['RSVP'] })
     ).toBe(
-      'Asked by “RSVP”: the question leaves the form with it. “RSVP” checks it in a gate, so it stops taking responses until the gate is fixed.'
+      'Asked by “RSVP”: the question leaves the form with it. “RSVP” checks it in a gate or section condition, so it stops taking responses until the rule is fixed.'
     );
     expect(
       columnDeleteNote({ kind: 'known', names: [], gated: ['Lunch'] })
     ).toBe(
-      '“Lunch” checks it in a gate, so it stops taking responses until the gate is fixed.'
+      '“Lunch” checks it in a gate or section condition, so it stops taking responses until the rule is fixed.'
     );
   });
 });

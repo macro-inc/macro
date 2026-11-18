@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_pipeline_stage_requirements (pipeline_id, stage_column_id, stage_id, required_column_id) SELECT $1, $2, $3, unnest($4::uuid[]) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bad5e9278f7012f19f59200fc9eef562f622bc2a3d244a9ea355b5e0f1f652e2"
+}

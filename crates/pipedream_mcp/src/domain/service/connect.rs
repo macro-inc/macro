@@ -5,9 +5,14 @@
 //! [`complete_pipedream_connection`] owns that policy: it verifies with
 //! Pipedream that the account exists and was connected for this user before
 //! any local record is written.
+//!
+//! Apps Macro Connect serves connect through Connect instead, when the
+//! `macro-connect` rollout is on for the user: [`start_connect_session`]
+//! picks the backend and [`complete_connect_connection`] records the
+//! connection once Connect confirms it.
 
-use crate::domain::models::{MacroUserIdStr, PipedreamConnection};
-use crate::domain::ports::{ConnectionStore, ConnectorOverlays, PipedreamConnect};
+use crate::domain::models::{ConnectApp, ConnectionProvider, MacroUserIdStr, PipedreamConnection};
+use crate::domain::ports::{ConnectionStore, ConnectorOverlays, MacroConnect, PipedreamConnect};
 
 #[cfg(test)]
 mod test;
@@ -36,8 +41,9 @@ pub enum PipedreamConnectError {
 ///
 /// Confirms with Pipedream that `account_id` exists and belongs to `user_id`
 /// (accounts are minted for our user IDs via the Connect token), then
-/// upserts the app record. Reconnecting an app the user already has simply
-/// points its record at the new account.
+/// upserts the app record. Reconnecting an app the user already has points
+/// its record at the new account and turns it on: connecting is how a user
+/// asks to use the app, and the app reports a disabled result as a failure.
 ///
 /// An overlaid app is refused and its new Pipedream account deleted, so no
 /// Pipedream grant for it outlives the attempt.
@@ -91,7 +97,8 @@ where
             .or_else(|| existing.as_ref().map(|r| r.server_name.clone()))
             .unwrap_or(account.app_name),
         account_id: account.id,
-        enabled: existing.as_ref().is_none_or(|r| r.enabled),
+        enabled: true,
+        provider: ConnectionProvider::Pipedream,
     };
 
     store.save(&record).await.map_err(anyhow::Error::from)?;
@@ -161,38 +168,144 @@ where
         .map(Some)
 }
 
-/// Remove a connected app, revoking its Pipedream account. Returns the
-/// connection that was removed, or `None` when the app was not connected.
+/// Remove a connected app, revoking its grant with whichever backend holds
+/// it. Returns the connection that was removed, or `None` when the app was
+/// not connected.
 ///
-/// The Pipedream deletion is best effort: failing to clean up remotely must
+/// The remote deletion is best effort: failing to clean up remotely must
 /// not strand the local row, so remote failures are logged and the local
 /// delete proceeds.
-#[tracing::instrument(skip(store, pipedream), err)]
+#[tracing::instrument(skip(store, backends), err)]
 pub async fn disconnect_mcp_server<S, P>(
     store: &S,
-    pipedream: &P,
+    backends: &P,
     user_id: &MacroUserIdStr<'static>,
     app_slug: &str,
 ) -> anyhow::Result<Option<PipedreamConnection>>
 where
     S: ConnectionStore,
-    P: PipedreamConnect,
+    P: PipedreamConnect + MacroConnect,
     anyhow::Error: From<S::Err>,
 {
     let record = store
         .load(user_id, app_slug)
         .await
         .map_err(anyhow::Error::from)?;
-    if let Some(record) = &record
-        && let Err(e) = pipedream.delete_account(&record.account_id).await
-    {
-        tracing::warn!(error = ?e, account_id = %record.account_id, "failed to delete Pipedream account");
+    if let Some(record) = &record {
+        revoke(backends, record).await;
     }
 
     store
         .delete(user_id, app_slug)
         .await
         .map_err(anyhow::Error::from)?;
+
+    Ok(record)
+}
+
+/// Best-effort removal of `record`'s grant from the backend holding it.
+async fn revoke<P: PipedreamConnect + MacroConnect>(backends: &P, record: &PipedreamConnection) {
+    let result = match record.provider {
+        ConnectionProvider::Pipedream => backends.delete_account(&record.account_id).await,
+        ConnectionProvider::Connect => {
+            backends
+                .delete_connection(&record.user_id, &record.account_id)
+                .await
+        }
+    };
+    if let Err(error) = result {
+        tracing::warn!(
+            error = ?error,
+            account_id = %record.account_id,
+            provider = record.provider.as_str(),
+            "failed to delete remote connection"
+        );
+    }
+}
+
+/// The Connect app to connect `app_slug` through, or `None` when Connect does
+/// not serve it.
+///
+/// Only for users on Connect alone (callers check
+/// [`MacroConnect::connect_only`]), for whom Connect serves every app it
+/// lists, overlaid or not, Granola included: nothing falls back to Pipedream.
+#[tracing::instrument(skip(connect), err)]
+pub async fn connect_app_for<C>(connect: &C, app_slug: &str) -> anyhow::Result<Option<ConnectApp>>
+where
+    C: MacroConnect,
+{
+    connect.app_for_slug(app_slug).await
+}
+
+/// Start connecting `app_slug` through Connect. Returns the URL for the
+/// user's browser, or `None` when Connect does not serve the app.
+#[tracing::instrument(skip(connect), err)]
+pub async fn start_connect_session<C>(
+    connect: &C,
+    user_id: &MacroUserIdStr<'static>,
+    app_slug: &str,
+) -> anyhow::Result<Option<String>>
+where
+    C: MacroConnect,
+{
+    let Some(app) = connect_app_for(connect, app_slug).await? else {
+        return Ok(None);
+    };
+    connect
+        .create_connect_session(user_id, &app)
+        .await
+        .map(Some)
+}
+
+/// Record a connection Connect holds for `user_id` to the app replacing
+/// `app_slug`.
+///
+/// Nothing the browser reports is trusted: Connect itself must list an
+/// active connection for this user before a record is written. The record
+/// is turned on, as for [`complete_pipedream_connection`]. A Pipedream grant
+/// the record replaces is revoked, so only one backend holds the app.
+#[tracing::instrument(skip(store, backends), err)]
+pub async fn complete_connect_connection<S, P>(
+    store: &S,
+    backends: &P,
+    user_id: &MacroUserIdStr<'static>,
+    app_slug: &str,
+    server_name: Option<&str>,
+) -> Result<PipedreamConnection, PipedreamConnectError>
+where
+    S: ConnectionStore,
+    P: PipedreamConnect + MacroConnect,
+    anyhow::Error: From<S::Err>,
+{
+    let app = connect_app_for(backends, app_slug)
+        .await?
+        .ok_or(PipedreamConnectError::NotFound)?;
+    if !backends.is_connected(user_id, &app.app_id).await? {
+        return Err(PipedreamConnectError::NotFound);
+    }
+
+    let existing = store
+        .load(user_id, app_slug)
+        .await
+        .map_err(anyhow::Error::from)?;
+    let record = PipedreamConnection {
+        user_id: user_id.clone(),
+        app_slug: app.app_slug,
+        server_name: server_name
+            .map(str::to_owned)
+            .or_else(|| existing.as_ref().map(|r| r.server_name.clone()))
+            .unwrap_or(app.name),
+        account_id: app.app_id,
+        enabled: true,
+        provider: ConnectionProvider::Connect,
+    };
+    store.save(&record).await.map_err(anyhow::Error::from)?;
+
+    if let Some(previous) = existing
+        && previous.provider == ConnectionProvider::Pipedream
+    {
+        revoke(backends, &previous).await;
+    }
 
     Ok(record)
 }

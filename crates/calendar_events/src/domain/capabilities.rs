@@ -10,7 +10,7 @@ use super::models::{CalendarAttendee, CalendarEvent, CalendarProvider, EventStat
 /// do. Google omits a switch from the payload while it holds its default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema, specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct GuestPolicy {
     /// Whether guests may change the event, including its guest list.
@@ -126,10 +126,8 @@ impl ViewerCapabilities {
     /// needs the inbox's own attendee row, since that is the row the answer
     /// is written to.
     pub fn for_event(event: &CalendarEvent, inbox: Option<&OwnedInbox>) -> Self {
-        if event.status == EventStatus::Cancelled {
-            return Self::NONE;
-        }
-        Self::for_access(
+        Self::for_copy(
+            event.status,
             EventAccess {
                 is_read_only: event.is_read_only,
                 organizer_email: event.organizer_email.as_deref(),
@@ -139,6 +137,19 @@ impl ViewerCapabilities {
             },
             inbox,
         )
+    }
+
+    /// Resolve what the owner of `inbox` may do with a copy of an event in
+    /// `status`; see [`Self::for_event`].
+    pub fn for_copy(
+        status: EventStatus,
+        access: EventAccess<'_>,
+        inbox: Option<&OwnedInbox>,
+    ) -> Self {
+        if status == EventStatus::Cancelled {
+            return Self::NONE;
+        }
+        Self::for_access(access, inbox)
     }
 
     /// Resolve what the owner of `inbox` may do with a live copy of an

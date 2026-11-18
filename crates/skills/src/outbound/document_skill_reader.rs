@@ -68,6 +68,24 @@ impl<D: DocumentService, A: EntityAccessService> SkillReader for DocumentSkillRe
         })
     }
 
+    async fn descriptions(
+        &self,
+        document_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, String>, SkillError> {
+        let ids: Vec<String> = document_ids.iter().map(Uuid::to_string).collect();
+        let descriptions = self
+            .documents
+            .skill_descriptions(&ids)
+            .await
+            .map_err(|error| SkillError::ListFailed(error.into()))?;
+        Ok(descriptions
+            .into_iter()
+            .filter_map(|(id, description)| {
+                Some((Uuid::parse_str(&id).ok()?, description.as_str().to_owned()))
+            })
+            .collect())
+    }
+
     async fn markdown(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,

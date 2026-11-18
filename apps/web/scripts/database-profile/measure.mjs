@@ -119,10 +119,12 @@ try {
         await session.send('Profiler.start');
       }
       const started = performance.now();
-      await page.goto(values.url, {
+      const navigation = {
         waitUntil: 'domcontentloaded',
         timeout: 180_000,
-      });
+      };
+      if (temperature === 'cold') await page.goto(values.url, navigation);
+      else await page.reload(navigation);
       if (values.table)
         await page
           .locator('[aria-label="Database tables"]')
@@ -130,12 +132,18 @@ try {
           .click();
       await page.waitForFunction(
         (count) => {
+          if (
+            [...document.querySelectorAll('[role="alert"]')].some((alert) =>
+              alert.textContent.includes('This database could not be displayed')
+            )
+          )
+            throw new Error('The database grid crashed while opening.');
           const grid = document.querySelector('[role="grid"]');
           return (
             grid &&
-            grid.querySelectorAll(
+            Number(grid.getAttribute('data-grid-saved-rows') ?? grid.querySelectorAll(
               '[data-grid-row-id]:not([data-grid-row-id^="draft:"])'
-            ).length >= count
+            ).length) === count
           );
         },
         expectedRows,
@@ -150,7 +158,10 @@ try {
         );
         const grid = document.querySelector('[role="grid"]');
         return {
-          rows: grid.querySelectorAll(
+          rows: Number(grid.getAttribute('data-grid-saved-rows') ?? grid.querySelectorAll(
+            '[data-grid-row-id]:not([data-grid-row-id^="draft:"])'
+          ).length),
+          mountedRows: grid.querySelectorAll(
             '[data-grid-row-id]:not([data-grid-row-id^="draft:"])'
           ).length,
           cells: grid.querySelectorAll('[role="gridcell"]').length,
@@ -173,6 +184,12 @@ try {
       }
       // Capture refresh requests too, separately from the first rendering opportunity.
       await page.waitForTimeout(1500);
+      if (!(await page.locator('[role="grid"]').count())) {
+        await page.screenshot({
+          path: `${output}/${repeat}-${temperature}-failure.png`,
+        });
+        throw new Error('The database grid disappeared during refresh.');
+      }
       page.off('requestfinished', finished);
       await Promise.all(pending);
       const result = {

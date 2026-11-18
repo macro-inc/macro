@@ -95,6 +95,7 @@ async fn a_connected_user_reaches_notion_through_the_proxy_with_one_pacer_per_ac
         server_name: "Notion".into(),
         account_id: "apn_notion".into(),
         enabled: true,
+        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
     })));
     let proxy = Arc::new(RecordingProxy::default());
     let connections = PipedreamNotionConnections::new(store, Some(proxy.clone()));
@@ -143,6 +144,7 @@ async fn no_connection_a_disabled_one_or_no_proxy_means_no_notion() {
         server_name: "Notion".into(),
         account_id: "apn_notion".into(),
         enabled: false,
+        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
     };
     let enabled = PipedreamConnection {
         enabled: true,

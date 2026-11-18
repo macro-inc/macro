@@ -104,6 +104,8 @@ export type ScalarFieldFilters = {
   callAttended?: boolean;
   crmCompanyHidden?: boolean;
   crmContactHidden?: boolean;
+  /** Owning teams, applied by the server before contact deduplication and paging. */
+  crmContactTeamId?: string[];
   /** Literal text matched against a CRM contact's name or email. */
   crmContactSearch?: string;
   calendarEventSeen?: boolean;

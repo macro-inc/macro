@@ -101,6 +101,7 @@ fn hydrate(handle: &EngineHandle) {
         Variables::new(),
         seed(),
         Some(VIEWER.into()),
+        None,
     ))
     .unwrap();
     assert_eq!(
@@ -169,7 +170,17 @@ fn native_live_query_returns_field_deltas_from_the_shared_engine() {
         project_data(true),
         Some(VIEWER),
     );
-    let next = evaluate(&handle, live_request(first["revision"].as_str()));
+    let registration = serde_json::from_value(first["registrationId"].clone()).unwrap();
+    let next = serde_json::to_value(
+        block_on(handle.resume_entity_filter(
+            "native-live".into(),
+            registration,
+            first["revision"].as_str().map(str::to_owned),
+        ))
+        .unwrap()
+        .unwrap(),
+    )
+    .unwrap();
     assert_eq!(next["reset"], false);
     assert!(next.get("keys").is_none());
     assert!(next["upserts"].as_array().unwrap().is_empty());
@@ -177,6 +188,22 @@ fn native_live_query_returns_field_deltas_from_the_shared_engine() {
     assert_eq!(
         next["patches"][0]["fields"],
         json!([{ "path":["favorite"], "value":true }])
+    );
+    assert!(
+        block_on(handle.resume_entity_filter(
+            "native-live".into(),
+            registration,
+            Some("invalid".into()),
+        ))
+        .is_err()
+    );
+    let mut release = live_request(None);
+    release.live_query.as_mut().unwrap().release = true;
+    evaluate(&handle, release);
+    assert!(
+        block_on(handle.resume_entity_filter("native-live".into(), registration, None,))
+            .unwrap()
+            .is_none()
     );
 }
 
@@ -394,6 +421,7 @@ fn native_identity_switch_does_not_borrow_old_mail_projection_inputs() {
                 Variables::new(),
                 data,
                 Some("macro|new@example.com".into()),
+                None,
             ))
             .unwrap()
             .write_result

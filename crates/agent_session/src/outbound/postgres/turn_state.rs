@@ -8,7 +8,7 @@ impl<B: BotFacts + 'static> crate::domain::ports::ActiveSessionTurn for PgAgentS
         id: AgentSessionId,
     ) -> Result<Option<agent_runtime_protocol::domain::action::AgentActionId>> {
         let turn = sqlx::query_scalar!(
-            "SELECT turn_action_id FROM agent_session WHERE id = $1 AND NOT is_archived AND turn_state IN ('starting', 'running', 'blocked')",
+            "SELECT turn_action_id FROM agent_session WHERE id = $1 AND archived_by IS NULL AND turn_state IN ('starting', 'running', 'blocked')",
             id.as_uuid(),
         )
         .fetch_optional(&self.pool)

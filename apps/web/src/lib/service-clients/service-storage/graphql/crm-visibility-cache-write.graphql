@@ -1,0 +1,19 @@
+# Confirmed REST archive effects use the existing Soup update normalization path.
+subscription CrmVisibilityCacheWrite {
+  soupUpdates {
+    __typename
+    ... on SoupUpdated {
+      item {
+        __typename
+        ... on GraphqlSoupCrmCompany {
+          id
+          hidden
+        }
+        ... on GraphqlSoupCrmContact {
+          id
+          hidden
+        }
+      }
+    }
+  }
+}

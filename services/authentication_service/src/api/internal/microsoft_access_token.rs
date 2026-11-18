@@ -37,7 +37,7 @@ pub async fn handler(
     {
         Ok(token) => (
             [(header::CACHE_CONTROL, "no-store")],
-            Json(serde_json::json!({"access_token":token.as_str(),"scopes":token.scopes})),
+            Json(serde_json::json!({"access_token":token.as_str(),"scopes":token.scopes,"cached":token.cached})),
         )
             .into_response(),
         Err(

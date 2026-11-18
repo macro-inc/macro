@@ -3,6 +3,7 @@ export {
   CollapsibleSection,
   type CollapsibleSectionRootProps,
 } from './CollapsibleSection';
+export { CollectionEmpty, CollectionPanes } from './CollectionPanes';
 export {
   createCollapsedSidebarSectionsStorage,
   setSidebarSectionCollapsed,
@@ -23,6 +24,7 @@ export {
 } from './ListDropdowns';
 export { MobileFilterDrawer } from './MobileFilterDrawer';
 export { SearchBar, type SearchBarProps } from './SearchBar';
+export { useTouchTopBarsFloat } from './touch-top-bar';
 export { VIEW_SHELL_TOUR } from './tour';
 export {
   type UseViewControlHotkeysOptions,
@@ -45,6 +47,7 @@ export {
   type ViewBreadcrumbsSeparatorState,
 } from './ViewBreadcrumbs';
 export {
+  asideCollapsedPreferenceKey,
   useViewShell,
   ViewNavigationControls,
   ViewShell,

@@ -1,31 +1,20 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import {
+  composePropsFromParams,
+  recipientsFromLink,
+} from '@app/features/email-compose/compose-params';
 import { HomeRouteView } from '@app/features/home/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import {
-  DEV_MODE_ENV,
-  enableChatV3Agents,
-  enableProjects,
-  isFeatureEnabled,
-  LOCAL_ONLY,
-} from '@core/constant/featureFlags';
+import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
 import { lazyNamed } from '@core/util/lazyNamed';
-import {
-  type ComponentProps,
-  type JSXElement,
-  lazy,
-  onMount,
-  type ParentProps,
-  Show,
-} from 'solid-js';
-import { useSplitPanelOrThrow } from './layoutUtils';
+import { type JSXElement, lazy } from 'solid-js';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -33,9 +22,21 @@ import {
 } from './split-router/app-route-shell';
 
 // Views load as their own chunks the first time a split opens them.
+const ForYouRouteView = lazyNamed(
+  () => import('@app/features/suggestions/route-views'),
+  'ForYouRouteView'
+);
+const PasswordsRouteView = lazyNamed(
+  () => import('@app/features/passwords/route-views'),
+  'PasswordsRouteView'
+);
 const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
+);
+const NotificationsRouteView = lazyNamed(
+  () => import('@app/features/notifications-inbox/route-views'),
+  'NotificationsRouteView'
 );
 const AgentsRouteView = lazyNamed(
   () => import('@app/features/agents-view/route-views'),
@@ -240,46 +241,13 @@ registerComponent('getting-started', () => (
   <RedirectSplit to={{ type: 'component', id: 'home' }} />
 ));
 
-function DisabledProjectsRoute() {
-  const panel = useSplitPanelOrThrow();
-  onMount(() => {
-    if (panel.handle.isPopover()) panel.handle.close();
-    else panel.handle.replace({ next: { type: 'component', id: 'tasks' } });
-  });
-  return null;
-}
-
-function ProjectsRouteGate(props: ParentProps) {
-  const flag = useFeatureFlag(enableProjects);
-  return (
-    <Show
-      when={flag().enabled}
-      fallback={
-        <Show when={!flag().loading} fallback={<LoadingBlock />}>
-          <DisabledProjectsRoute />
-        </Show>
-      }
-    >
-      {props.children}
-    </Show>
-  );
-}
-
-const GatedCreateProjectView = (
-  props: ComponentProps<typeof CreateProjectView>
-) => (
-  <ProjectsRouteGate>
-    <CreateProjectView {...props} />
-  </ProjectsRouteGate>
-);
-
-registerComponent('new-project', withAuth(GatedCreateProjectView), {
+registerComponent('new-project', withAuth(CreateProjectView), {
   splitPanelLayout: 'composable',
 });
 registerComponent('folder-compose', withAuth(FolderComposeView), {
   splitPanelLayout: 'composable',
 });
-registerComponent('project-compose', withAuth(GatedCreateProjectView), {
+registerComponent('project-compose', withAuth(CreateProjectView), {
   splitPanelLayout: 'composable',
 });
 registerComponent(
@@ -290,9 +258,7 @@ registerComponent(
         ? parseProjectRoute(params.projectRoute)
         : undefined;
     return route ? (
-      <ProjectsRouteGate>
-        <ProjectView route={route} />
-      </ProjectsRouteGate>
+      <ProjectView route={route} />
     ) : (
       <RedirectSplit to={{ type: 'component', id: 'tasks' }} />
     );
@@ -301,11 +267,7 @@ registerComponent(
 );
 registerComponent(
   'tasks-projects',
-  withAuth(() => (
-    <ProjectsRouteGate>
-      <ProjectsListView />
-    </ProjectsRouteGate>
-  )),
+  withAuth(() => <ProjectsListView />),
   { splitPanelLayout: 'composable' }
 );
 
@@ -318,24 +280,32 @@ registerComponent(
 );
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
+registerComponent(
+  'for-you',
+  () => <ForYouRouteView />,
+  () => composableLayout()
+);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent(
-  'routines',
-  () => <AgentsRouteView />,
+  'passwords',
+  () => <PasswordsRouteView />,
   () => composableLayout()
 );
 registerComponent(
-  'agents',
-  () => <AgentsRouteView />,
-  () =>
-    isFeatureEnabled(enableChatV3Agents)
-      ? { splitPanelLayout: 'composable' }
-      : undefined
+  'notifications',
+  () => <NotificationsRouteView />,
+  () => composableLayout()
 );
+registerComponent('routines', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
+registerComponent('agents', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
 registerComponent(
   'mail',
   () => <MailRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'documents',
@@ -355,19 +325,17 @@ registerComponent(
 registerComponent(
   'calendar',
   () => <CalendarRouteView />,
-  // Desktop Calendar draws its own top bar. Touch still needs the split header
-  // for the floating month and action controls.
-  () => (isTouchDevice() ? undefined : { splitPanelLayout: 'composable' })
+  () => composableLayout(true)
 );
 registerComponent(
   'channels',
   () => <ChannelsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'calls',
   () => <CallsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent('companies', () => <CompaniesRouteView />, {
   ownsCollectionState: true,
@@ -389,54 +357,23 @@ registerComponent('channel-compose', () => {
 });
 registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
-  // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
+  // mailto: links land here as
+  // `component/email-compose?to=a@example.com,b@example.com` on touch;
+  // desktop carries `to` into its `/mail/new` route.
   const toParam = new URLSearchParams(window.location.search).get('to');
-  const paramsInitialTo = Array.isArray(params.initialTo)
-    ? params.initialTo.filter(
-        (value): value is string => typeof value === 'string'
-      )
-    : undefined;
-  const initialTo =
-    paramsInitialTo ??
-    toParam
-      ?.split(',')
-      .map((e) => e.trim())
-      .filter(Boolean);
-  const draftID =
-    typeof params.draftID === 'string' ? params.draftID : undefined;
-  const initialInboxId =
-    typeof params.initialInboxId === 'string'
-      ? params.initialInboxId
-      : undefined;
-  const initialSubject =
-    typeof params.initialSubject === 'string'
-      ? params.initialSubject
-      : undefined;
-  const initialBodyText =
-    typeof params.initialBodyText === 'string'
-      ? params.initialBodyText
-      : undefined;
-  const initialAttachments = Array.isArray(params.initialAttachments)
-    ? params.initialAttachments.filter(
-        (value): value is File => value instanceof File
-      )
-    : undefined;
+  const props = composePropsFromParams(params);
   return (
     <EmailCompose
-      draftId={draftID}
-      initialTo={initialTo}
-      initialInboxId={initialInboxId}
-      initialSubject={initialSubject}
-      initialBodyText={initialBodyText}
-      initialAttachments={initialAttachments}
+      {...props}
+      initialTo={props.initialTo ?? recipientsFromLink(toParam)}
     />
   );
 });
 registerComponent('routine-compose', (params) => (
   <RoutineCreator
-    onCreated={
-      typeof params.onCreated === 'function'
-        ? (params.onCreated as (id: string) => void)
+    onStart={
+      typeof params.onStart === 'function'
+        ? (params.onStart as () => void)
         : undefined
     }
   />
@@ -462,6 +399,11 @@ registerComponent('calendar-event-compose', (params) => {
       initialValues={
         params?.initialValues as EventEditorInitialValues | undefined
       }
+      suggestedValues={
+        params?.suggestedValues as
+          | Promise<Partial<EventEditorInitialValues>>
+          | undefined
+      }
       onCalendarChange={
         params?.onCalendarChange as
           | ((calendarId: string, color: string) => void)
@@ -471,6 +413,11 @@ registerComponent('calendar-event-compose', (params) => {
         params?.onDirtyChange as ((dirty: boolean) => void) | undefined
       }
       onSaveSuccess={params?.onSaveSuccess as (() => void) | undefined}
+      onCreated={
+        params?.onCreated as
+          | ((created: CreatedCalendarEvent) => void)
+          | undefined
+      }
     />
   );
 });
@@ -486,7 +433,7 @@ registerComponent(
 registerComponent(
   'settings',
   () => <SettingsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'booking-links',
@@ -529,16 +476,8 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'chat-attachment',
-    lazy(() => import('@core/component/AI/component/debug/Attachment'))
-  );
-  registerComponent(
     'chat-tool',
     lazy(() => import('@core/component/AI/component/debug/Tool'))
-  );
-  registerComponent(
-    'http-stream',
-    lazy(() => import('@core/component/AI/component/debug/HttpStream'))
   );
   registerComponent(
     'static-markdown-stream',
@@ -596,8 +535,13 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'agent-replay',
-    lazy(() => import('@app/features/block-agent/debug/replay/Replay'))
+    'agent-cards',
+    lazy(() => import('@app/features/agent-cards/debug/Gallery'))
+  );
+
+  registerComponent(
+    'agent-progress',
+    lazy(() => import('@app/features/agent-activity/debug/ProgressPlayground'))
   );
 
   registerComponent(
@@ -614,20 +558,9 @@ if (LOCAL_ONLY) {
 if (import.meta.env.DEV) {
   registerComponent(
     'spreadsheet-demo',
-    withAuth(() => {
-      const enabled = useSpreadsheetAccess();
-      const Demo = lazy(
-        () => import('@app/features/block-spreadsheet/SpreadsheetDemo')
-      );
-      return (
-        <Show
-          when={enabled()}
-          fallback={<RedirectSplit to={{ type: 'component', id: 'home' }} />}
-        >
-          <Demo />
-        </Show>
-      );
-    })
+    withAuth(
+      lazy(() => import('@app/features/block-spreadsheet/SpreadsheetDemo'))
+    )
   );
 }
 
@@ -638,13 +571,6 @@ if (DEV_MODE_ENV) {
       lazy(
         () => import('@app/features/next-soup/debug/DocumentWherePlayground')
       )
-    )
-  );
-
-  registerComponent(
-    'projection-playground',
-    withAuth(
-      lazy(() => import('@app/features/devtools/debug/ProjectionPlayground'))
     )
   );
 

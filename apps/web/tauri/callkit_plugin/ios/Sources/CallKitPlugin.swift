@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Tauri
 import UIKit
@@ -23,6 +24,15 @@ struct WatchParticipantIdentitiesArgs: Decodable {
     let channel: Channel
 }
 
+struct SelectAudioOutputArgs: Decodable {
+    let callId: String
+    let id: String
+}
+
+struct WatchAudioOutputArgs: Decodable {
+    let channel: Channel
+}
+
 struct SetVideoEnabledArgs: Decodable {
     let enabled: Bool
 }
@@ -39,10 +49,17 @@ struct SetCallDrawerChannelTitleArgs: Decodable {
 class CallKitPlugin: Plugin, @unchecked Sendable {
     private var mediaSession: NativeLiveKitCallSession?
     private var callCoordinator: IncomingCallCoordinator!
-    private let videoOverlay = CallVideoOverlayController()
+    /// Created in `load(webview:)`, never in an initializer: Tauri constructs
+    /// plugins before `UIApplicationMain`. UIKit registers a gesture recognizer
+    /// with the running application when it's added to a view, so recognizers
+    /// created earlier keep a nil delayed-touch dispatcher, and UIKit aborts
+    /// (`insertObject:atIndex:` nil in `_delayTouchesForEvent:inPhase:`) the
+    /// first time one of them delays a touch, e.g. on touching the participant row.
+    private var videoOverlay: CallVideoOverlayController!
     private var pendingParticipantDisplayNamesByIdentity: [String: String] = [:]
 
     // Singleton channels avoid leaking listeners across webview reloads/HMR.
+    private var audioOutputChannel: Channel?
     private var callAnsweredChannel: Channel?
     private var callEndedChannel: Channel?
     private var connectionStateChannel: Channel?
@@ -58,6 +75,9 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
 
     override public func load(webview: WKWebView) {
         callKitLog("Tauri CallKitPlugin loading")
+        if videoOverlay == nil {
+            videoOverlay = CallVideoOverlayController()
+        }
         callCoordinator = IncomingCallCoordinator(
             mediaSession: { [weak self] in
                 guard let self else {
@@ -265,6 +285,66 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         }
     }
 
+    @objc public func getAudioOutput(_ invoke: Invoke) {
+        onMain { [weak self] in
+            invoke.resolve(["state": (self?.mediaSession?.audioOutputState() as Any?) ?? NSNull()])
+        }
+    }
+
+    @objc public func selectAudioOutput(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(SelectAudioOutputArgs.self)
+        onMain { [weak self] in
+            guard let session = self?.mediaSession,
+                  session.currentSnapshot()?.callId.lowercased() == args.callId.lowercased(),
+                  session.selectAudioOutput(args.id) else {
+                invoke.reject("Audio output is unavailable for this call")
+                return
+            }
+            invoke.resolve(["state": (session.audioOutputState() as Any?) ?? NSNull()])
+        }
+    }
+
+    @objc public func watchAudioOutput(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(WatchAudioOutputArgs.self)
+        onMain { [weak self] in
+            self?.audioOutputChannel = args.channel
+            if let state = self?.mediaSession?.audioOutputState() {
+                args.channel.send(state)
+            }
+            invoke.resolve()
+        }
+    }
+    /// Asked before the join so the prompt appears over the call the user just
+    /// started, not after the room connects, possibly behind the lock screen.
+    @objc public func requestMicrophonePermission(_ invoke: Invoke) {
+        let session = AVAudioSession.sharedInstance()
+        guard session.recordPermission == .undetermined else {
+            invoke.resolve(["granted": session.recordPermission == .granted])
+            return
+        }
+        callKitLog("JS requested microphone permission before joining")
+        session.requestRecordPermission { granted in
+            callKitLog("Microphone permission request before joining completed granted=\(granted)")
+            invoke.resolve(["granted": granted])
+        }
+    }
+
+    @objc public func openMicrophoneSettings(_ invoke: Invoke) {
+        onMain {
+            guard let url = URL(string: UIApplication.openSettingsURLString) else {
+                invoke.reject("Unable to open microphone settings")
+                return
+            }
+            UIApplication.shared.open(url) { opened in
+                if opened {
+                    invoke.resolve()
+                } else {
+                    invoke.reject("Unable to open microphone settings")
+                }
+            }
+        }
+    }
+
     @objc public func setVideoEnabled(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(SetVideoEnabledArgs.self)
         onMain { [weak self] in
@@ -432,6 +512,9 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
             },
             videoOverlay: videoOverlay
         )
+        mediaSession.onAudioOutputChanged = { [weak self] state in
+            self?.audioOutputChannel?.send(state)
+        }
         self.mediaSession = mediaSession
         replayPendingParticipantDisplayNames(to: mediaSession)
         return mediaSession

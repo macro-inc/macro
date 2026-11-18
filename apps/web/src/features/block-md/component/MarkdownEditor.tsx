@@ -1,7 +1,10 @@
+import { usePending } from '@app/observability/flow';
+import { activeElement } from '@app/signal/focus';
 import { MessageCommentsProvider } from '@block-md/comments/MessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
   HighlightLayer,
@@ -10,6 +13,7 @@ import {
 import { LexicalStateDebugger } from '@core/component/LexicalMarkdown/component/debug/LexicalStateDebugger';
 import { GenerateMenu } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
+import { HeadingFoldControls } from '@core/component/LexicalMarkdown/component/misc/HeadingFoldControls';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
@@ -47,6 +51,7 @@ import {
   type NodekeyOffset,
   SearchHighlight,
 } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
+import { createHeadingFolds } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import {
   GO_TO_LOCATION_COMMAND,
   GO_TO_NODE_ID_COMMAND,
@@ -76,10 +81,8 @@ import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
-  enableGitBlame,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import { useIsAuthenticated } from '@core/context/user';
+import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -107,7 +110,6 @@ import {
   onCleanup,
   Show,
   Suspense,
-  untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
@@ -115,6 +117,7 @@ import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
 import { isMarkdownEditorLoading } from './markdownEditorLoadingState';
+import { shouldAutofocusDocument } from './should-autofocus-document';
 
 false && fileFolderDrop;
 
@@ -143,12 +146,14 @@ export function MarkdownEditor(props: {
 }) {
   const {
     documentId,
+    element: blockElement,
     kind,
     documentSource,
     persistedName: mdDocumentName,
     permissions,
     state: documentState,
   } = useMarkdownDocument();
+  const panel = useSplitPanel();
   const authenticated = useIsAuthenticated();
   const { canEdit } = permissions;
   const blockId = documentId();
@@ -227,6 +232,7 @@ export function MarkdownEditor(props: {
   ];
 
   const [editorReady, setEditorReady] = createSignal<boolean>(false);
+  usePending('doc.editor.initialize', () => !editorReady() && !editorError());
 
   const [highlightLayerRef, setHighlightLayerRef] =
     createSignal<HTMLDivElement>();
@@ -630,13 +636,24 @@ export function MarkdownEditor(props: {
     setEditorReady(true);
   });
 
-  // Auto-focus on mount if enabled and editor is ready and document name is not empty.
+  // Focus a named document once both its editor and metadata are ready.
+  let didAutoFocus = false;
   createEffect(() => {
+    activeElement();
     if (
+      !didAutoFocus &&
       props.autoFocusOnMount &&
       editorReady() &&
-      untrack(mdDocumentName) !== ''
+      mdDocumentName()
     ) {
+      if (
+        !shouldAutofocusDocument(
+          blockElement() ?? null,
+          panel?.panelRef() ?? null
+        )
+      )
+        return;
+      didAutoFocus = true;
       editor.focus(undefined, { defaultSelection: 'rootStart' });
     }
   });
@@ -647,17 +664,19 @@ export function MarkdownEditor(props: {
   });
 
   const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
-  if (isFeatureEnabled(enableGitBlame)) {
-    plugins.use(
-      blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) })
-    );
-  }
+  plugins.use(blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) }));
 
   const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
   plugins.use(
     wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
   );
   setMdStore('wordcountStats', wordcountStats);
+
+  const headingFolds = createHeadingFolds({
+    documentId: blockId,
+    userId: useUserId()(),
+  });
+  plugins.use(headingFolds.plugin);
 
   const [progressStats, setProgressStats] = createProgressStatsStore();
   plugins.use(progressPlugin({ setStore: setProgressStats }));
@@ -736,11 +755,9 @@ export function MarkdownEditor(props: {
             {getBlankMarkdownPlaceholder(canEdit())}
           </div>
         </Show>
-        <Show when={isFeatureEnabled(enableGitBlame)}>
-          <Suspense>
-            <BlameTooltip state={blameTooltipStore} documentId={blockId} />
-          </Suspense>
-        </Show>
+        <Suspense>
+          <BlameTooltip state={blameTooltipStore} documentId={blockId} />
+        </Suspense>
         <HighlightLayer
           editor={editor}
           ref={(el) => {
@@ -757,6 +774,8 @@ export function MarkdownEditor(props: {
             class="bg-accent/50"
           />
         </Show>
+
+        <HeadingFoldControls editor={editor} folds={headingFolds} />
 
         <MarkdownEditingOverlays
           editor={editor}

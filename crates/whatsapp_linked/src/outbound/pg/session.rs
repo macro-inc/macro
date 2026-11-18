@@ -469,15 +469,14 @@ impl SessionRepository for PgWhatsAppRepository {
         &self,
         scope: SessionScope,
         chats: &[ChatUpdate],
-    ) -> ExternalChatResult<bool> {
+    ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         if account.state != AccountState::Connected {
-            return Ok(false);
+            return Ok(());
         }
-        let anchored = chats::update_chats_in(&mut tx, &account, chats).await?;
-        tx.commit().await.map_err(failure)?;
-        Ok(anchored)
+        chats::update_chats_in(&mut tx, &account, chats).await?;
+        tx.commit().await.map_err(failure)
     }
 
     async fn backfill_work(&self, scope: SessionScope) -> ExternalChatResult<Vec<BackfillWork>> {
@@ -506,6 +505,74 @@ impl SessionRepository for PgWhatsAppRepository {
             false,
         )
         .await?;
+        tx.commit().await.map_err(failure)
+    }
+
+    async fn pending_lookups(&self, scope: SessionScope) -> ExternalChatResult<Vec<LookupWork>> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let account = fence_in(&mut tx, scope).await?;
+        if account.state != AccountState::Connected {
+            return Ok(vec![]);
+        }
+        let work = lookups::pending_lookups_in(&mut tx, &account).await?;
+        tx.commit().await.map_err(failure)?;
+        Ok(work)
+    }
+
+    async fn complete_lookup(
+        &self,
+        scope: SessionScope,
+        lookup: Uuid,
+        answer: &LookupAnswer,
+    ) -> ExternalChatResult<()> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let account = fence_in(&mut tx, scope).await?;
+        if account.state != AccountState::Connected {
+            return Ok(());
+        }
+        lookups::complete_lookup_in(&mut tx, &account, lookup, answer).await?;
+        tx.commit().await.map_err(failure)
+    }
+
+    async fn claim_picture_checks(
+        &self,
+        scope: SessionScope,
+        limit: i64,
+    ) -> ExternalChatResult<Vec<PictureCheck>> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let account = fence_in(&mut tx, scope).await?;
+        if account.state != AccountState::Connected {
+            return Ok(vec![]);
+        }
+        let checks = pictures::claim_picture_checks_in(&mut tx, &account, limit).await?;
+        tx.commit().await.map_err(failure)?;
+        Ok(checks)
+    }
+
+    async fn complete_picture_check(
+        &self,
+        scope: SessionScope,
+        check: &PictureCheck,
+        answer: &PictureAnswer,
+    ) -> ExternalChatResult<()> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let account = fence_in(&mut tx, scope).await?;
+        if account.state != AccountState::Connected {
+            return Ok(());
+        }
+        pictures::complete_picture_check_in(&mut tx, &account, check, answer).await?;
+        tx.commit().await.map_err(failure)
+    }
+
+    async fn picture_changed(
+        &self,
+        scope: SessionScope,
+        jids: &[String],
+        picture_id: Option<&str>,
+    ) -> ExternalChatResult<()> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let account = fence_in(&mut tx, scope).await?;
+        pictures::picture_changed_in(&mut tx, &account, jids, picture_id).await?;
         tx.commit().await.map_err(failure)
     }
 

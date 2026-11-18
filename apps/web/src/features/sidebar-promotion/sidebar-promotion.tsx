@@ -1,20 +1,14 @@
-import { useUserId } from '@core/context/user';
-import { usePromptDismissalsQuery } from '@queries/prompt-dismissals';
 import { cn } from '@ui';
-import { type JSX, Show, untrack } from 'solid-js';
-import { z } from 'zod';
+import { type JSX, Show } from 'solid-js';
 import type { PromotionLogo } from './components/logo-stack';
 import { type PromoAction, PromoCard } from './components/promo-card';
-import { allOf, type Verdict } from './core/verdict';
-import { createLastKnown } from './primitives/last-known';
-import {
-  hidePromotion,
-  isPromotionHiddenLocally,
-} from './primitives/promotion';
+import type { Verdict } from './core/verdict';
+import { createPromotionVisibility } from './primitives/promotion-visibility';
 
 export type { PromotionLogo } from './components/logo-stack';
 export type { PromoAction } from './components/promo-card';
 export { allOf, flagVerdict, type Verdict } from './core/verdict';
+export { createPromotionVisibility } from './primitives/promotion-visibility';
 
 /**
  * A view sidebar's dismissible prompt card. Dismissal is stored on the
@@ -41,27 +35,12 @@ export function SidebarPromotion(props: {
   dismissLabel?: string;
   class?: string;
 }): JSX.Element {
-  const userId = useUserId();
-  const dismissals = usePromptDismissalsQuery();
-  // An unreachable server falls back to what this browser remembers.
-  const dismissed = (): Verdict => {
-    if (isPromotionHiddenLocally(userId(), props.id)) return true;
-    if (dismissals.isError) return false;
-    if (!dismissals.isSuccess) return undefined;
-    return dismissals.data.dismissed.includes(props.id);
-  };
-  const shown = createLastKnown(
-    `shown:${untrack(() => props.id)}`,
-    untrack(userId),
-    () =>
-      allOf(
-        props.applies,
-        dismissed() === undefined ? undefined : !dismissed()
-      ),
-    z.boolean()
+  const visibility = createPromotionVisibility(
+    () => props.id,
+    () => props.applies
   );
   return (
-    <Show when={shown()}>
+    <Show when={visibility.shown()}>
       <div class={cn('shrink-0', props.class)}>
         <PromoCard
           logos={props.logos}
@@ -72,7 +51,7 @@ export function SidebarPromotion(props: {
           dismissLabel={
             props.dismissLabel ?? `Dismiss ${props.action.label.toLowerCase()}`
           }
-          onDismiss={() => hidePromotion(userId(), props.id)}
+          onDismiss={visibility.dismiss}
         />
       </div>
     </Show>

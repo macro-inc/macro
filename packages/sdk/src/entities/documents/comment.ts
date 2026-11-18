@@ -55,22 +55,38 @@ export class Comment extends MacroEntity<MessageRecord> {
   /** When the comment was last updated. */
   readonly updatedAt = this.field('updated_at');
 
-  /** The id of the thread this comment belongs to: its root, or itself for a root. */
+  /**
+   * The id of the thread this comment belongs to: its root, or itself for a root.
+   *
+   * @readonly
+   */
   async threadId(): Promise<string> {
     return (await this.detail.get()).thread_id ?? this.id;
   }
 
-  /** The document this comment is on. */
+  /**
+   * The document this comment is on.
+   *
+   * @readonly
+   */
   document(): Document {
     return Document.byId(this.client, this.documentId);
   }
 
-  /** The user who wrote this comment. */
+  /**
+   * The user who wrote this comment.
+   *
+   * @readonly
+   */
   async author(): Promise<User> {
     return User.byId(this.client, (await this.detail.get()).sender_id);
   }
 
-  /** Reply in this comment's thread. */
+  /**
+   * Reply in this comment's thread.
+   *
+   * @write
+   */
   async reply(body: string | RichMessage): Promise<Comment> {
     return this.document().comment(body, { threadId: await this.threadId() });
   }
@@ -79,6 +95,9 @@ export class Comment extends MacroEntity<MessageRecord> {
    * Replace the comment's text.
    *
    * @param body - Plain text, or a rich body composed with {@link msg}.
+   *
+   * @write
+   * @idempotent
    */
   async edit(body: string | RichMessage): Promise<this> {
     const { content, mentions } = toBody(body);
@@ -91,7 +110,12 @@ export class Comment extends MacroEntity<MessageRecord> {
     return this;
   }
 
-  /** Delete this comment. */
+  /**
+   * Delete this comment.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.storage.entityMessageDeleteMessage({ path: this.path }),

@@ -29,6 +29,7 @@ export function decodeChat(
     jid: chat.jid,
     kind: chat.kind,
     name: chat.name,
+    phoneNumber: chat.phoneNumber ?? undefined,
     lastActivityAt: chat.lastActivityAt ?? undefined,
     archived: chat.archived,
     inMacro: chat.added

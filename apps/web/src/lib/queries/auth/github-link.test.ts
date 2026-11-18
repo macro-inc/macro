@@ -15,7 +15,7 @@ it('only treats a confirmed missing account as unlinked', async () => {
   mocks.check.mockResolvedValue(err([{ code: 'NOT_FOUND' }]));
   expect(await fetchGithubLinkStatus()).toEqual({ status: 'unlinked' });
 });
-it.each(['SERVER_ERROR', 'UNAUTHORIZED', 'NETWORK_ERROR'])(
+it.each(['SERVER_ERROR', 'HTTP_ERROR', 'UNAUTHORIZED', 'NETWORK_ERROR'])(
   'preserves %s as a failure instead of asking for OAuth',
   async (code) => {
     mocks.check.mockResolvedValue(err([{ code }]));

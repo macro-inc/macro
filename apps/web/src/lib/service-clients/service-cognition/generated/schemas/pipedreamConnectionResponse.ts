@@ -4,6 +4,7 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { PipedreamProviderResponse } from './pipedreamProviderResponse';
 
 /**
  * A connected MCP app as returned by the API.
@@ -13,6 +14,8 @@ export interface PipedreamConnectionResponse {
   app_slug: string;
   /** Whether the connector is enabled for tool use. */
   enabled: boolean;
+  /** The backend holding the grant. */
+  provider: PipedreamProviderResponse;
   /** Human-readable display name. */
   server_name: string;
 }

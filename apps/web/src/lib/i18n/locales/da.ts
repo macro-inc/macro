@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Projekt',
     newProject: 'Nyt projekt',
     contentAlreadyOpen: 'Indholdet er allerede åbent',
-    unableToOpenConversation: 'Samtalen kunne ikke åbnes. Prøv igen.',
     mobileSearchPlaceholder: 'Søg…',
     closeSearch: 'Luk søgning',
     searchFullTextFor: 'Fritekstsøg efter »{{query}}«',
@@ -591,10 +590,6 @@ export default {
       other: '{{accepted}} af {{count}} elementer markeret som ikke færdige',
     },
     toastMarkNotDoneFailed: 'Kunne ikke markere som ikke færdig',
-    toastThreadStaysDone:
-      'Denne tråd har ingen modtagne beskeder, så den forbliver færdig',
-    toastThreadsStayDone:
-      'Disse tråde har ingen modtagne beskeder, så de forbliver færdige',
     toastCountNotRestored: {
       one: '{{count}} kunne ikke gendannes.',
       other: '{{count}} kunne ikke gendannes.',
@@ -694,8 +689,6 @@ export default {
     create: 'Opret',
     getMobileApp: 'Hent mobilappen',
     signedInAs: 'Logget ind som {{name}}',
-    commandMenu: 'Kommandomenu',
-    searchEverything: 'Søg i alt',
     customizeSidebar: 'Tilpas sidepanelet',
     customizeSidebarDescription:
       'Vælg, hvilke apps der vises i sidepanelet, og træk for at ændre rækkefølgen. Hjem er altid først.',
@@ -762,7 +755,7 @@ export default {
     tabMobileApp: 'Mobilapp',
     tabTags: 'Tags',
     tabIntegrations: 'Integrationer',
-    tabRuntimes: 'Kørselsmiljøer',
+    tabRuntimes: 'Maskiner',
     tabMcpServer: 'MCP-server',
     tabApiKeys: 'API-nøgler',
     tabBots: 'Bots',
@@ -809,7 +802,6 @@ export default {
     goForward: 'Gå frem',
     createNewSplit: 'Opret nyt panel',
     close: 'Luk',
-    returnToList: 'Tilbage til listen',
     previousItem: 'Forrige element',
     nextItem: 'Næste element',
     itemNavigation: 'Elementnavigation',

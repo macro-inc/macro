@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH deleted_sources AS (\n                DELETE FROM calendar_event_sources source\n                WHERE source.source_kind IN ('google', 'outlook')\n                  AND source.account_id = $1\n                  AND source.calendar_id = $2\n                  AND (\n                        source.provider_event_id = ANY($3::text[])\n                        OR source.provider_recurring_event_id = ANY($3::text[])\n                  )\n                RETURNING source.event_id, source.event_type\n            )\n            SELECT\n                event_id AS \"event_id!\",\n                bool_or(event_type = 'out_of_office') AS \"out_of_office!\"\n            FROM deleted_sources\n            GROUP BY event_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "out_of_office!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "1892e66d6c081f67180fb6861ab295ff5b00d50735ee97a7c4ec47d63af2a815"
+}

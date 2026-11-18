@@ -14,6 +14,7 @@ const upload = vi.hoisted(() => ({
 }));
 
 vi.mock('@app/features/next-soup/actions', () => ({
+  FolderDropZone: (props: ParentProps) => props.children,
   useBlockEntityCommands: () => {},
 }));
 vi.mock('@app/features/next-soup/create-soup-state', () => ({
@@ -90,7 +91,10 @@ vi.mock('./project-scoped-panel', () => ({
 vi.mock('./sidepanel/ProjectSidePanelSections', () => ({
   ProjectSidePanelSections: () => null,
 }));
-vi.mock('./TopBar', () => ({ TopBar: () => null }));
+vi.mock('../views/project-header', () => ({ ProjectHeader: () => null }));
+vi.mock('../views/mobile/project-header', () => ({
+  MobileProjectHeader: () => null,
+}));
 
 afterEach(() => {
   cleanup();

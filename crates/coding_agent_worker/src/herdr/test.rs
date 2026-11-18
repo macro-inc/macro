@@ -80,3 +80,16 @@ fn instance_settings_keep_native_arguments_after_the_separator() {
         ]
     );
 }
+
+#[test]
+fn viewer_states_encode_as_program_status_reports() {
+    use wire::AgentState;
+    assert_eq!(
+        AgentState::Working.osc_7501(None),
+        "\x1b]7501;state=working:app=macro\x1b\\"
+    );
+    assert_eq!(
+        AgentState::Blocked.osc_7501(Some("Run ls?")),
+        "\x1b]7501;state=blocked:app=macro:kind=permission:msg=UnVuIGxzPw==\x1b\\"
+    );
+}

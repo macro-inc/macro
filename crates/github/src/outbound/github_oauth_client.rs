@@ -1,13 +1,19 @@
 //! Github Oauth Client implementation of the [`GithubOauth`] port.
 
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use reqwest::{
+    StatusCode,
+    header::{HeaderMap, RETRY_AFTER},
+};
+use upstream_error::{UpstreamError, UpstreamFailure};
 
 use super::pull_request_metadata::fetch_pull_request_metadata;
 
 use crate::domain::{
     models::{
-        GithubDraftOutcome, GithubExchangeTokenResponse, GithubMergeMethod, GithubMergeOutcome,
-        GithubMergeRejection, GithubPullRequestDetails, GithubPullRequestMerge,
+        GithubDraftOutcome, GithubError, GithubExchangeTokenResponse, GithubMergeMethod,
+        GithubMergeOutcome, GithubMergeRejection, GithubPullRequestDetails, GithubPullRequestMerge,
         GithubPullRequestMergeability, GithubPullRequestMergeabilityEntry, GithubPullRequestNumber,
         GithubPullRequestState, GithubPullRequestUpdateRejection, GithubRepositoryMergeSettings,
         GithubStateOutcome, GithubUserInfo,
@@ -19,8 +25,86 @@ use crate::domain::{
 mod test;
 
 const GITHUB_API_BASE_URL: &str = "https://api.github.com";
+/// GitHub's name in error messages users see.
+const GITHUB: &str = "GitHub";
 const USER_AGENT: &str = "Macro-Auth-Service";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn upstream(failure: UpstreamFailure) -> GithubError {
+    GithubError::Upstream(UpstreamError {
+        service: GITHUB,
+        failure,
+    })
+}
+
+/// A request that got no usable answer from GitHub.
+fn transport_error(error: reqwest::Error) -> GithubError {
+    tracing::error!(error=?error, "request to github failed");
+    upstream(UpstreamFailure::from_transport(&error))
+}
+
+/// GitHub throttling. A 429, or a 403 that carries `Retry-After`, exhausts
+/// `x-ratelimit-remaining` (primary limit), or says it hit a secondary rate
+/// limit, which GitHub may send without either header; any other 403 is a
+/// real refusal.
+/// See https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+fn throttling(status: StatusCode, headers: &HeaderMap, body: &str) -> Option<UpstreamFailure> {
+    let quota_exhausted = headers
+        .get("x-ratelimit-remaining")
+        .is_some_and(|remaining| remaining == "0");
+    let throttled = status == StatusCode::TOO_MANY_REQUESTS
+        || (status == StatusCode::FORBIDDEN
+            && (headers.contains_key(RETRY_AFTER)
+                || quota_exhausted
+                || body.to_ascii_lowercase().contains("secondary rate limit")));
+    // `x-ratelimit-reset` is when the primary quota refills, so it only says
+    // when to retry once that quota is spent.
+    throttled.then(|| UpstreamFailure::RateLimited {
+        retry_after: upstream_error::retry_after(headers)
+            .or_else(|| quota_exhausted.then(|| rate_limit_reset(headers)).flatten()),
+    })
+}
+
+/// How long until `x-ratelimit-reset`, a Unix time in seconds.
+fn rate_limit_reset(headers: &HeaderMap) -> Option<Duration> {
+    let reset: u64 = headers
+        .get("x-ratelimit-reset")?
+        .to_str()
+        .ok()?
+        .parse()
+        .ok()?;
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
+    Some(Duration::from_secs(reset.saturating_sub(now)))
+}
+
+/// A response the call did not expect: GitHub throttling or failing is
+/// upstream; anything else is ours to look into.
+async fn unexpected_response(response: reqwest::Response, context: &str) -> GithubError {
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = response_text(response).await;
+    unexpected(status, &headers, body, context)
+}
+
+/// [`unexpected_response`] for a call that already read the body.
+fn unexpected(status: StatusCode, headers: &HeaderMap, body: String, context: &str) -> GithubError {
+    let failure = throttling(status, headers, &body)
+        .or_else(|| UpstreamFailure::from_status(status, headers));
+    match failure {
+        Some(failure) => {
+            tracing::error!(status=%status, body=%body, context, "github is failing");
+            upstream(failure)
+        }
+        None => GithubError::Internal(anyhow::anyhow!("{context} (status {status}): {body}")),
+    }
+}
+
+async fn response_text(response: reqwest::Response) -> String {
+    response
+        .text()
+        .await
+        .unwrap_or_else(|_| "unknown error".to_string())
+}
 
 /// Github email information from /user/emails endpoint
 #[derive(Debug, serde::Deserialize)]
@@ -190,7 +274,7 @@ impl GithubOauthImpl {
         access_token: &str,
         query: &str,
         variables: serde_json::Value,
-    ) -> anyhow::Result<GraphqlResponse<T>> {
+    ) -> Result<GraphqlResponse<T>, GithubError> {
         let response = self
             .client
             .post(format!("{}/graphql", self.api_base_url()))
@@ -199,18 +283,14 @@ impl GithubOauthImpl {
             .json(&serde_json::json!({ "query": query, "variables": variables }))
             .timeout(REQUEST_TIMEOUT)
             .send()
-            .await?;
+            .await
+            .map_err(transport_error)?;
 
-        let status = response.status();
-        if !status.is_success() {
-            let error_body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown error".to_string());
-            anyhow::bail!("GitHub GraphQL request failed (status {status}): {error_body}");
+        if !response.status().is_success() {
+            return Err(unexpected_response(response, "GitHub GraphQL request failed").await);
         }
 
-        Ok(response.json().await?)
+        response.json().await.map_err(transport_error)
     }
 
     fn api_base_url(&self) -> &str {
@@ -232,7 +312,7 @@ impl GithubOauthImpl {
 }
 
 impl GithubOauth for GithubOauthImpl {
-    type Err = anyhow::Error;
+    type Err = GithubError;
 
     #[tracing::instrument(skip(self), err)]
     fn construct_oauth_url(
@@ -282,19 +362,19 @@ impl GithubOauth for GithubOauthImpl {
             .json(&token_request)
             .timeout(Duration::from_secs(30))
             .send()
-            .await?;
+            .await
+            .map_err(transport_error)?;
 
-        let status = response.status();
-
-        if !status.is_success() {
-            let error_body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown error".to_string());
-            anyhow::bail!("token exchange failed {}", error_body)
+        if !response.status().is_success() {
+            return Err(unexpected_response(response, "token exchange failed").await);
         }
 
-        let token_response: GithubExchangeTokenResponse = response.json().await?;
+        // GitHub answers a bad or expired code with a 200 and an error body,
+        // which fails to decode here. That is the code's fault, not GitHub's.
+        let token_response: GithubExchangeTokenResponse = response
+            .json()
+            .await
+            .map_err(|error| GithubError::Internal(error.into()))?;
 
         Ok(token_response)
     }
@@ -304,31 +384,31 @@ impl GithubOauth for GithubOauthImpl {
         // Get basic user info
         let user_response = self
             .client
-            .get("https://api.github.com/user")
+            .get(format!("{}/user", self.api_base_url()))
             .header("Authorization", format!("Bearer {}", access_token))
             .header("User-Agent", "Macro-Auth-Service")
             .timeout(Duration::from_secs(30))
             .send()
-            .await?;
+            .await
+            .map_err(transport_error)?;
 
         let status = user_response.status();
 
         if !status.is_success() {
-            let error_body = user_response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown error".to_string());
-
             // Check for 401 Unauthorized - token expired or invalid
             if status.as_u16() == 401 {
+                let error_body = user_response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "unknown error".to_string());
                 tracing::warn!(error_body=%error_body, "GitHub token expired or invalid");
-                anyhow::bail!("token expired")
+                return Err(GithubError::Internal(anyhow::anyhow!("token expired")));
             }
 
-            anyhow::bail!("failed to get user info {}", error_body)
+            return Err(unexpected_response(user_response, "failed to get user info").await);
         }
 
-        let mut user_info: GithubUserInfo = user_response.json().await?;
+        let mut user_info: GithubUserInfo = user_response.json().await.map_err(transport_error)?;
 
         // If email is not public, try to fetch from emails endpoint (optional)
         if user_info.email.is_none() {
@@ -336,7 +416,7 @@ impl GithubOauth for GithubOauthImpl {
 
             match self
                 .client
-                .get("https://api.github.com/user/emails")
+                .get(format!("{}/user/emails", self.api_base_url()))
                 .header("Authorization", format!("Bearer {}", access_token))
                 .header("User-Agent", "Macro-Auth-Service")
                 .timeout(Duration::from_secs(30))
@@ -389,12 +469,13 @@ impl GithubOauth for GithubOauthImpl {
     async fn is_access_token_expired(&self, access_token: &str) -> Result<bool, Self::Err> {
         let user_response = self
             .client
-            .get("https://api.github.com/user")
+            .get(format!("{}/user", self.api_base_url()))
             .header("Authorization", format!("Bearer {}", access_token))
             .header("User-Agent", "Macro-Auth-Service")
             .timeout(Duration::from_secs(30))
             .send()
-            .await?;
+            .await
+            .map_err(transport_error)?;
 
         let status = user_response.status();
 
@@ -403,11 +484,9 @@ impl GithubOauth for GithubOauthImpl {
         }
 
         if !status.is_success() {
-            let error_body = user_response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown error".to_string());
-            anyhow::bail!("failed to validate access token {}", error_body);
+            return Err(
+                unexpected_response(user_response, "failed to validate access token").await,
+            );
         }
 
         Ok(false)
@@ -421,7 +500,9 @@ impl GithubOauth for GithubOauthImpl {
         repo: &str,
         number: u64,
     ) -> Result<GithubPullRequestDetails, Self::Err> {
-        fetch_pull_request_metadata(&self.client, access_token, owner, repo, number).await
+        fetch_pull_request_metadata(&self.client, access_token, owner, repo, number)
+            .await
+            .map_err(GithubError::Internal)
     }
 
     #[tracing::instrument(skip(self, access_token), err)]
@@ -440,18 +521,15 @@ impl GithubOauth for GithubOauthImpl {
             .header("X-GitHub-Api-Version", "2022-11-28")
             .timeout(REQUEST_TIMEOUT)
             .send()
-            .await?;
+            .await
+            .map_err(transport_error)?;
 
-        let status = response.status();
-        if !status.is_success() {
-            let error_body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown error".to_string());
-            anyhow::bail!("failed to read repository settings (status {status}): {error_body}");
+        if !response.status().is_success() {
+            return Err(unexpected_response(response, "failed to read repository settings").await);
         }
 
-        let settings: RepositorySettingsResponse = response.json().await?;
+        let settings: RepositorySettingsResponse =
+            response.json().await.map_err(transport_error)?;
 
         Ok(GithubRepositoryMergeSettings {
             allow_merge_commit: settings.allow_merge_commit,
@@ -493,15 +571,28 @@ impl GithubOauth for GithubOauthImpl {
             .json(&MergeRequest { merge_method })
             .timeout(REQUEST_TIMEOUT)
             .send()
-            .await?;
+            .await
+            .map_err(transport_error)?;
 
         let status = response.status();
         if status.is_success() {
-            let merged: MergeResponse = response.json().await?;
+            let merged: MergeResponse = response.json().await.map_err(transport_error)?;
             return Ok(GithubMergeOutcome::Merged(GithubPullRequestMerge {
                 sha: merged.sha,
                 message: merged.message,
             }));
+        }
+
+        let headers = response.headers().clone();
+        let body = response_text(response).await;
+        // A throttled merge is a 403 too; it must not read as a refusal.
+        if throttling(status, &headers, &body).is_some() {
+            return Err(unexpected(
+                status,
+                &headers,
+                body,
+                "failed to merge pull request",
+            ));
         }
 
         // The statuses GitHub documents for this endpoint, each a decision
@@ -513,16 +604,15 @@ impl GithubOauth for GithubOauthImpl {
             reqwest::StatusCode::FORBIDDEN => GithubMergeRejection::Forbidden,
             reqwest::StatusCode::UNPROCESSABLE_ENTITY => GithubMergeRejection::Invalid,
             _ => {
-                let error_body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "unknown error".to_string());
-                anyhow::bail!("failed to merge pull request (status {status}): {error_body}");
+                return Err(unexpected(
+                    status,
+                    &headers,
+                    body,
+                    "failed to merge pull request",
+                ));
             }
         };
-        let message = response
-            .json::<GithubErrorBody>()
-            .await
+        let message = serde_json::from_str::<GithubErrorBody>(&body)
             .map(|body| body.message)
             .unwrap_or_else(|_| "GitHub declined to merge the pull request.".to_string());
 
@@ -616,14 +706,27 @@ impl GithubOauth for GithubOauthImpl {
             .json(&PullRequestState { state })
             .timeout(REQUEST_TIMEOUT)
             .send()
-            .await?;
+            .await
+            .map_err(transport_error)?;
 
         let status = response.status();
         if status.is_success() {
-            let changed: PullRequestState = response.json().await?;
+            let changed: PullRequestState = response.json().await.map_err(transport_error)?;
             return Ok(GithubStateOutcome::Changed {
                 state: changed.state,
             });
+        }
+
+        let headers = response.headers().clone();
+        let body = response_text(response).await;
+        // A throttled change is a 403 too; it must not read as a refusal.
+        if throttling(status, &headers, &body).is_some() {
+            return Err(unexpected(
+                status,
+                &headers,
+                body,
+                "failed to change pull request state",
+            ));
         }
 
         // The statuses GitHub documents for this endpoint, each a decision
@@ -633,18 +736,15 @@ impl GithubOauth for GithubOauthImpl {
             reqwest::StatusCode::NOT_FOUND => GithubPullRequestUpdateRejection::NotFound,
             reqwest::StatusCode::UNPROCESSABLE_ENTITY => GithubPullRequestUpdateRejection::Invalid,
             _ => {
-                let error_body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "unknown error".to_string());
-                anyhow::bail!(
-                    "failed to change pull request state (status {status}): {error_body}"
-                );
+                return Err(unexpected(
+                    status,
+                    &headers,
+                    body,
+                    "failed to change pull request state",
+                ));
             }
         };
-        let message = response
-            .json::<GithubErrorBody>()
-            .await
+        let message = serde_json::from_str::<GithubErrorBody>(&body)
             .map(GithubErrorBody::reason)
             .unwrap_or_else(|_| "GitHub declined to change the pull request.".to_string());
 
@@ -676,7 +776,9 @@ impl GithubOauth for GithubOauthImpl {
                 .next()
                 .map(|error| error.message)
                 .unwrap_or_else(|| "no data".to_string());
-            anyhow::bail!("failed to read pull request mergeability: {message}");
+            return Err(GithubError::Internal(anyhow::anyhow!(
+                "failed to read pull request mergeability: {message}"
+            )));
         };
 
         Ok(pull_requests

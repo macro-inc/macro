@@ -93,7 +93,7 @@ pub enum Predicate {
         options: Vec<Reference<OptionId>>,
     },
 }
-/// One screening condition or nested nonempty group.
+/// One gate or show-when condition, or a nested nonempty group.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Rule {
@@ -107,7 +107,8 @@ pub enum Rule {
     /// Nested conjunction.
     Group(Rules),
 }
-/// Gates support AND/OR, at most eight levels and 200 conditions.
+/// Gate and show-when rules support AND/OR, at most eight levels and 200
+/// conditions across the form.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Rules {
@@ -146,6 +147,12 @@ pub enum Section {
         description: String,
         /// Ordered questions.
         questions: Vec<Question>,
+        /// Show this section only when earlier answers pass these rules,
+        /// which reference questions of earlier sections like a gate's.
+        /// A skipped section's questions are not required and their answers
+        /// are not saved. Omitted means always shown.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        show_when: Option<Rules>,
     },
     /// Stop respondents whose previous answers fail.
     Gate {
@@ -317,6 +324,16 @@ pub enum Change {
         /// Nonempty AND/OR tree referencing earlier questions' columns.
         rules: models_databases::views::FilterGroup,
     },
+    /// Set or clear when a questions section is shown, using saved
+    /// column/option ids from ReadForm. A skipped section's questions are
+    /// not required and their answers are not saved.
+    SetShowWhen {
+        /// Existing questions section.
+        section_id: FormSectionId,
+        /// Nonempty AND/OR tree referencing earlier sections' question
+        /// columns; null makes the section always shown.
+        show_when: Option<models_databases::views::FilterGroup>,
+    },
     /// Replace the final booking destination after authorized Scheduling validation.
     SetBookingTarget {
         /// Existing booking section.
@@ -445,10 +462,14 @@ pub enum Code {
     TooManyConditions,
     /// GateReferencesLaterQuestion: see the accompanying path and corrective message.
     GateReferencesLaterQuestion,
+    /// A section's show-when rules reference a question of its own or a later section.
+    ShowWhenReferencesLaterQuestion,
     /// UnknownOption: see the accompanying path and corrective message.
     UnknownOption,
     /// InvalidGateRule: see the accompanying path and corrective message.
     InvalidGateRule,
+    /// A section's show-when rule does not fit its question's column.
+    InvalidShowWhenRule,
     /// ConcurrentFieldChange: see the accompanying path and corrective message.
     ConcurrentFieldChange,
     /// InvalidEdit: see the accompanying path and corrective message.

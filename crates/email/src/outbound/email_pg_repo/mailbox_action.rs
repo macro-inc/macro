@@ -106,7 +106,7 @@ pub(super) async fn enqueue(
     for thread_id in threads {
         email_db_client::threads::update::recompute_thread_metadata(&mut tx, thread_id, link_id)
             .await?;
-        let payload = serde_json::json!({"kind":"organization","thread_id":thread_id,"actor":actor.as_ref(),"action":action});
+        let payload = serde_json::json!({"kind":"organization","thread_id":thread_id,"actor":actor.as_ref(),"action":action,"agent_correlation_id":agent_correlation::context::current()});
         sqlx::query!(
             r#"
             INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,$3,$4)

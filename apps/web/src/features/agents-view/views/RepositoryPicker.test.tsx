@@ -134,7 +134,7 @@ describe('RepositoryPicker', () => {
     ).toContain('macro-inc/infra');
     openRepositories();
     expect(optionNames()).toEqual([
-      'Choose automatically',
+      'Auto-detect',
       'macro-inc/infra',
       'macro-inc/macro',
     ]);
@@ -161,7 +161,7 @@ describe('RepositoryPicker', () => {
     openRepositories();
     expect(
       screen
-        .getByRole('option', { name: 'Choose automatically' })
+        .getByRole('option', { name: 'Auto-detect' })
         .getAttribute('aria-selected')
     ).toBe('true');
     fireEvent.keyDown(search(), { key: 'ArrowDown' });
@@ -195,7 +195,7 @@ describe('RepositoryPicker', () => {
     });
     openRepositories();
     expect(optionNames()).toEqual([
-      'Choose automatically',
+      'Auto-detect',
       'macro-inc/macro',
       'macro-inc/infra',
     ]);
@@ -222,12 +222,10 @@ describe('RepositoryPicker', () => {
     expect(handlers.onSelectRepository).not.toHaveBeenCalled();
   });
 
-  it('leaves the choice to the coder with Choose automatically', () => {
+  it('leaves the choice to the coder with Auto-detect', () => {
     const handlers = picker({ repoUrl: macro.url });
     openRepositories();
-    fireEvent.click(
-      screen.getByRole('option', { name: 'Choose automatically' })
-    );
+    fireEvent.click(screen.getByRole('option', { name: 'Auto-detect' }));
     expect(handlers.onSelectRepository).toHaveBeenCalledWith(undefined);
   });
 

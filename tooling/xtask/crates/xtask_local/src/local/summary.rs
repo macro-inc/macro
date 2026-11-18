@@ -73,13 +73,29 @@ pub fn logs_command(instance: &Instance, generated_env: &Path) -> String {
     )
 }
 
+/// The flags that name the instance on a printed command: `--instance`, plus
+/// `--port-base` when the instance runs on one other than its name derives, or
+/// the command would reach the wrong ports.
+pub(super) fn instance_flags(instance: &Instance) -> String {
+    if instance.is_default() {
+        return String::new();
+    }
+    let mut flags = format!(" --instance {}", instance.name());
+    let derived = Instance::derive(Some(instance.name()), None).map(|i| i.port_base());
+    if derived.ok() != Some(instance.port_base()) {
+        flags.push_str(&format!(" --port-base {}", instance.port_base()));
+    }
+    flags
+}
+
 /// The `just stop_local` invocation for the instance.
 pub fn stop_command(instance: &Instance) -> String {
-    if instance.is_default() {
-        "just stop_local".to_string()
-    } else {
-        format!("just stop_local --instance {}", instance.name())
-    }
+    format!("just stop_local{}", instance_flags(instance))
+}
+
+/// The `just run_local rebuild` invocation for the instance.
+fn rebuild_command(instance: &Instance) -> String {
+    format!("just run_local rebuild{}", instance_flags(instance))
 }
 
 /// Print the mode/instance/endpoints block after a successful startup.
@@ -176,6 +192,13 @@ pub fn print(
     if let Some(url) = traces_url() {
         row("traces", url);
     }
+    // `services = true`: this machine's stacks on the shared dashboard.
+    if let Some(url) = port_open(3001)
+        .then(super::grafana_forwarder::dashboard_url)
+        .flatten()
+    {
+        row("grafana", url);
+    }
     if let Some(url) = dd_logs_url() {
         row("dd logs", url);
     }
@@ -188,6 +211,7 @@ pub fn print(
     }
 
     row("logs", logs_command(instance, &env.generated_path));
+    row("rebuild", rebuild_command(instance));
     row("stop", stop_command(instance));
     println!();
 }
@@ -236,9 +260,8 @@ fn dd_env() -> String {
 
 /// Whether something is listening on `port` on localhost.
 pub(super) fn port_open(port: u16) -> bool {
-    std::net::TcpStream::connect_timeout(
-        &([127, 0, 0, 1], port).into(),
-        std::time::Duration::from_millis(150),
-    )
-    .is_ok()
+    xtask_ports::probe::accepting(port, std::time::Duration::from_millis(150))
 }
+
+#[cfg(test)]
+mod test;

@@ -3,6 +3,7 @@ pub mod backfill;
 pub mod backfill_write_slots;
 pub mod health_probe;
 pub mod lock;
+pub mod outlook_health;
 pub mod rate_limit;
 
 #[derive(Clone)]

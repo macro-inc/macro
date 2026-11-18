@@ -12,6 +12,7 @@ import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
 import { contactGridTemplate } from '../components/contact-grid-template';
+import { ArchivedRecordBadge } from '../components/record-archived-status';
 import { CrmListRow } from './record-row';
 
 /** People row: name and email, company, and last interaction. */
@@ -52,6 +53,9 @@ function ContactGridLayout(props: LayoutProps) {
         <span class="truncate min-w-0">
           <Entity.Title entity={props.entity} />
         </span>
+        <Show when={'hidden' in props.entity && props.entity.hidden}>
+          <ArchivedRecordBadge />
+        </Show>
         <Show when={contact()?.email !== contact()?.name && contact()?.email}>
           {(email) => (
             <span class="truncate shrink-[2] min-w-0 text-xs font-normal text-ink-extra-muted">

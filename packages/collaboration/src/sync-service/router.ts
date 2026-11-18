@@ -31,8 +31,9 @@ import type { SyncSocket } from './socket';
  * DSS host routes inbound frames through its embedded router, which holds
  * one upstream connection per (socket, document).
  *
- * Each document gets a {@link SyncSocket}-compatible virtual socket, so
- * `SyncServiceSource` works unmodified on top of this transport.
+ * Each caller attaching a document gets its own {@link SyncSocket}-compatible
+ * virtual socket, so `SyncServiceSource` works unmodified on top of this
+ * transport.
  */
 export class SyncRouterTransport {
   private readonly getUrl: UrlResolver;
@@ -45,8 +46,9 @@ export class SyncRouterTransport {
   }
 
   /**
-   * Attach a document to the shared socket: subscribes immediately and
-   * returns the virtual socket for it. `refreshToken` is consulted on every
+   * Attach a document to the shared socket and return a socket for this
+   * caller. Callers of one document share its route, but each gets its own
+   * socket, closed independently. `refreshToken` is consulted on every
    * re-subscribe (upstream drop, router reconnect), mirroring how the direct
    * socket refetches a permission token per reconnect.
    */
@@ -56,22 +58,18 @@ export class SyncRouterTransport {
     refreshToken: () => Promise<string>
   ): SyncSocket {
     const existing = this.docs.get(documentId);
-    if (existing) return existing;
+    if (existing) return existing.addOwner(initialToken, refreshToken);
 
-    const virtual = new VirtualSyncSocket(
-      this,
-      documentId,
-      initialToken,
-      refreshToken
-    );
+    const virtual = new VirtualSyncSocket(this, documentId, initialToken);
     this.docs.set(documentId, virtual);
+    const socket = virtual.addOwner(undefined, refreshToken);
     virtual.subscribe();
-    return virtual;
+    return socket;
   }
 
-  /** Called by a virtual socket when it is closed for good. */
-  public detach(documentId: string): void {
-    this.docs.delete(documentId);
+  /** Called by a virtual socket when its last owner closes it. */
+  public detach(documentId: string, virtual: VirtualSyncSocket): void {
+    if (this.docs.get(documentId) === virtual) this.docs.delete(documentId);
   }
 
   /** The shared router websocket, built lazily on first use. */
@@ -147,23 +145,26 @@ const RESUBSCRIBE_BASE_MS = 500;
 const RESUBSCRIBE_MAX_MS = 8_000;
 
 /**
- * A {@link SyncSocket} for one document, riding the shared router socket.
+ * One document's route on the shared router socket, shared by every caller
+ * that attached the document. Each caller holds its own
+ * {@link OwnedSyncSocket}; the route unsubscribes when the last one closes.
  *
  * Lifecycle mapping (virtual event ← router/envelope cause):
  * - Open       ← first `RouterSubscribed`
  * - Message    ← `RouterDocFrame` (decoded to `FromRemote`)
  * - Close      ← `RouterSubscribeFailed` / `RouterDocClosed` / router close
- * - Reconnect  ← any later `RouterSubscribed` (upstream or router recovery)
+ * - Reconnect  ← any later `RouterSubscribed` (upstream or router recovery,
+ *                or a new caller joining an open route)
  */
-class VirtualSyncSocket implements SyncSocket {
+class VirtualSyncSocket {
   private readonly transport: SyncRouterTransport;
   private readonly documentId: string;
-  private readonly refreshToken: () => Promise<string>;
   private initialToken: string | undefined;
   private reassembler = new Reassembler();
   private subscriptionAttempt = 0;
 
-  private readonly listeners: ListenerSets = {};
+  /** Callers sharing this route, in join order. */
+  private readonly owners = new Set<OwnedSyncSocket>();
   private state: 'subscribing' | 'open' | 'dropped' | 'closed' = 'subscribing';
   private wasEverOpen = false;
   private resubscribeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -174,13 +175,67 @@ class VirtualSyncSocket implements SyncSocket {
   public constructor(
     transport: SyncRouterTransport,
     documentId: string,
-    initialToken: string | undefined,
-    refreshToken: () => Promise<string>
+    initialToken: string | undefined
   ) {
     this.transport = transport;
     this.documentId = documentId;
     this.initialToken = initialToken;
-    this.refreshToken = refreshToken;
+  }
+
+  /**
+   * Give another caller its own socket on this route. A sync source learns
+   * the document only from `RemoteInitialSync`, which the Durable Object sends
+   * once per downstream connection, so a caller joining an open route
+   * re-subscribes it; the callers already on it see a close, then a
+   * reconnect.
+   */
+  public addOwner(
+    initialToken: string | undefined,
+    refreshToken: () => Promise<string>
+  ): SyncSocket {
+    const owner = new OwnedSyncSocket(this, refreshToken);
+    const current = [...this.owners];
+    // Registered first, so the route outlives any current owner that closes
+    // during the close below.
+    this.owners.add(owner);
+    // A route still subscribing (or waiting to) delivers its initial sync to
+    // every owner, including this one.
+    if (current.length === 0 || this.state !== 'open') return owner;
+
+    // Re-subscribing replaces the server's route, dropping its in-flight acks
+    // and replies. Start the new subscription first, so anything sent from
+    // here on waits for it, then close the current owners as an upstream drop
+    // would, so their pending waits end now instead of timing out.
+    this.initialToken = initialToken;
+    this.resubscribe();
+    const close = new CloseEvent(WebsocketEvent.Close, {
+      code: 4000,
+      reason: 'resubscribing for another caller',
+      wasClean: false,
+    });
+    for (const other of current) other.dispatch(WebsocketEvent.Close, close);
+    return owner;
+  }
+
+  /** Called by an owner's `close()`; the last one closes the route. */
+  public release(owner: OwnedSyncSocket): void {
+    if (!this.owners.delete(owner) || this.owners.size > 0) return;
+    this.clearResubscribeTimer();
+    // Even a dropped route may still be live server-side (a re-subscribe that
+    // failed to authorize never replaced it); unsubscribing an unknown route
+    // is a no-op for the router.
+    if (
+      this.state !== 'closed' &&
+      this.transport.socket().connectionState === WebsocketConnectionState.Open
+    ) {
+      this.transport
+        .socket()
+        .send(ToRouter.fromRouterUnsubscribe({ docId: this.documentId }));
+    }
+    this.state = 'closed';
+    this.subscriptionAttempt++;
+    this.pending = [];
+    this.transport.detach(this.documentId, this);
   }
 
   public get connectionState(): WebsocketConnectionState {
@@ -214,50 +269,6 @@ class VirtualSyncSocket implements SyncSocket {
     if (this.state === 'dropped') this.resubscribe();
   }
 
-  public close(): void {
-    if (this.state === 'closed') return;
-    this.clearResubscribeTimer();
-    if (
-      this.state !== 'dropped' &&
-      this.transport.socket().connectionState === WebsocketConnectionState.Open
-    ) {
-      this.transport
-        .socket()
-        .send(ToRouter.fromRouterUnsubscribe({ docId: this.documentId }));
-    }
-    this.state = 'closed';
-    this.subscriptionAttempt++;
-    this.pending = [];
-    this.transport.detach(this.documentId);
-  }
-
-  public addEventListener<K extends WebsocketEvent>(
-    type: K,
-    listener: WebsocketEventListener<K, IFromPeer, FromRemote>
-  ): void {
-    // The per-key generic can't be proven against the mapped type; the
-    // add/dispatch pair keeps K consistent.
-    let listeners = this.listeners[type] as unknown as
-      | Set<WebsocketEventListener<K, IFromPeer, FromRemote>>
-      | undefined;
-    if (!listeners) {
-      listeners = new Set();
-      (this.listeners as Record<K, unknown>)[type] = listeners;
-    }
-    listeners.add(listener);
-  }
-
-  public removeEventListener<K extends WebsocketEvent>(
-    type: K,
-    listener: WebsocketEventListener<K, IFromPeer, FromRemote>
-  ): void {
-    (
-      this.listeners[type] as unknown as
-        | Set<WebsocketEventListener<K, IFromPeer, FromRemote>>
-        | undefined
-    )?.delete(listener);
-  }
-
   /** Send `RouterSubscribe`, minting a fresh token when the initial is spent. */
   public subscribe(): void {
     if (this.state === 'closed') return;
@@ -269,10 +280,13 @@ class VirtualSyncSocket implements SyncSocket {
   private async authorizeSubscription(attempt: number): Promise<void> {
     const initial = this.initialToken;
     this.initialToken = undefined;
+    // The newest caller holds the most current authorization.
+    const refreshToken = [...this.owners].at(-1)?.refreshToken;
     try {
-      const token = initial ?? (await this.refreshToken());
+      const token = initial ?? (await refreshToken?.());
       if (this.state === 'closed' || attempt !== this.subscriptionAttempt)
         return;
+      if (token === undefined) throw new Error('No caller to authorize');
       this.transport
         .socket()
         .send(ToRouter.fromRouterSubscribe({ docId: this.documentId, token }));
@@ -391,12 +405,87 @@ class VirtualSyncSocket implements SyncSocket {
     type: K,
     event: Parameters<WebsocketEventListener<K, IFromPeer, FromRemote>>[1]
   ): void {
+    for (const owner of [...this.owners]) owner.dispatch(type, event);
+  }
+}
+
+/** One caller's socket on a shared document route. */
+class OwnedSyncSocket implements SyncSocket {
+  private readonly route: VirtualSyncSocket;
+  public readonly refreshToken: () => Promise<string>;
+  private readonly listeners: ListenerSets = {};
+  private closed = false;
+
+  public constructor(
+    route: VirtualSyncSocket,
+    refreshToken: () => Promise<string>
+  ) {
+    this.route = route;
+    this.refreshToken = refreshToken;
+  }
+
+  public get connectionState(): WebsocketConnectionState {
+    return this.closed
+      ? WebsocketConnectionState.Closed
+      : this.route.connectionState;
+  }
+
+  public send(message: IFromPeer): boolean {
+    return !this.closed && this.route.send(message);
+  }
+
+  public startHeartbeat(): void {
+    this.route.startHeartbeat();
+  }
+
+  public reconnectIfDisconnected(): void {
+    if (!this.closed) this.route.reconnectIfDisconnected();
+  }
+
+  public close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.route.release(this);
+  }
+
+  public addEventListener<K extends WebsocketEvent>(
+    type: K,
+    listener: WebsocketEventListener<K, IFromPeer, FromRemote>
+  ): void {
+    // The per-key generic can't be proven against the mapped type; the
+    // add/dispatch pair keeps K consistent.
+    let listeners = this.listeners[type] as unknown as
+      | Set<WebsocketEventListener<K, IFromPeer, FromRemote>>
+      | undefined;
+    if (!listeners) {
+      listeners = new Set();
+      (this.listeners as Record<K, unknown>)[type] = listeners;
+    }
+    listeners.add(listener);
+  }
+
+  public removeEventListener<K extends WebsocketEvent>(
+    type: K,
+    listener: WebsocketEventListener<K, IFromPeer, FromRemote>
+  ): void {
+    (
+      this.listeners[type] as unknown as
+        | Set<WebsocketEventListener<K, IFromPeer, FromRemote>>
+        | undefined
+    )?.delete(listener);
+  }
+
+  public dispatch<K extends WebsocketEvent>(
+    type: K,
+    event: Parameters<WebsocketEventListener<K, IFromPeer, FromRemote>>[1]
+  ): void {
+    if (this.closed) return;
     const listeners = this.listeners[type] as unknown as
       | Set<WebsocketEventListener<K, IFromPeer, FromRemote>>
       | undefined;
     if (!listeners) return;
     // The listener signature carries the concrete Websocket for convenience;
-    // sources only use the event, so the virtual socket passes itself.
+    // sources only use the event, so the owned socket passes itself.
     const instance = this as unknown as Websocket<IFromPeer, FromRemote>;
     for (const listener of [...listeners]) listener(instance, event);
   }

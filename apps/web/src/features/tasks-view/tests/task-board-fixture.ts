@@ -19,7 +19,7 @@ export function boardEntity(
 export function boardProperty(
   id: string,
   value: SoupProperty['value'],
-  dataType: 'ENTITY' | 'SELECT_STRING' = 'ENTITY'
+  dataType: 'ENTITY' | 'SELECT_STRING' | 'DATE' = 'ENTITY'
 ): SoupProperty {
   return {
     id: `assignment:${id}`,

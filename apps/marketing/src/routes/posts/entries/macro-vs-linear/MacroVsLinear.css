@@ -1,10 +1,5 @@
-.posts-article .linear-post .mvn-graphic {
-  left: 50%;
-  position: relative;
-  transform: translateX(-50%);
-  width: min(920px, calc(100vw - 48px));
-}
-
+/* Article typography must not leak into the shared product UI. */
+@scope (:root) to (.post-product-ui) {
 .linear-post .mvn-graphic-frame {
   background: transparent;
   border-color: #292929;
@@ -19,4 +14,6 @@
 .linear-post .mvn-graphic-inner {
   border: 0;
   border-radius: inherit;
+}
+
 }

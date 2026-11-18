@@ -6,7 +6,7 @@ use crate::SystemSkill;
 
 static TITLE: &str = "Configure Agent";
 
-static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to change how one of their agents behaves - its instructions or system prompt, the model or runtime it runs on, which channels it answers in, which connected apps its sessions get, whether it asks before using tools, or whether it is a coding or chat agent. Agents are the personas people `@` mention in channels and open sessions with; each has a bot profile plus this configuration.
+static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to change how one of their agents behaves - its instructions or system prompt, the model or runtime it runs on, which channels it answers in, which connected apps its sessions get, whether it asks before using tools, or whether it is a coding or chat agent. Agents are the personas people `@` mention in channels and open sessions with; each has a bot profile plus this configuration. Where `ListAgents` and `ConfigureAgent` are absent, do each step through `ExecuteCode` with `macro.agents.list()` and `Agent.update()`.
 
 ## Find the agent
 
@@ -35,7 +35,7 @@ Pass only the fields that should change; `ConfigureAgent` keeps the others.
 - **Permissions (`autoAcceptPermissions`)**: `true` lets sessions approve tool permission requests without asking, `false` makes them ask. Self-hosted harnesses only honor `true` when their operator allows bypass; the tool reports the refusal.
 - **Coding mode (`isCoding`)**: a coding agent works in a repository and answers a mention with a live session; a chat agent replies in the thread.
 
-Profile changes - display name, handle, description, picture - go through `ConfigureBot` instead.
+Profile changes - display name, handle, description, picture - go through `ConfigureBot` instead (in code mode, `Bot.update` on `macro.bots.byId`).
 
 ## Report
 

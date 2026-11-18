@@ -1,4 +1,5 @@
 import type { GraphicsItem, ShapeItem, ShapeKind } from '../model';
+import { artifactDefinition } from './artifact';
 import { connectorDefinition } from './connector';
 import type { ShapeDefinition } from './definition';
 import { ellipseDefinition } from './ellipse';
@@ -23,6 +24,7 @@ export const shapeDefinitions: {
   image: imageDefinition,
   video: videoDefinition,
   document: documentDefinition,
+  artifact: artifactDefinition,
 });
 export const shapeKinds = Object.freeze(
   Object.keys(shapeDefinitions) as ShapeKind[]

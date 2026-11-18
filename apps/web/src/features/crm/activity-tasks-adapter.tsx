@@ -1,8 +1,9 @@
-import { SearchBar, ViewShell } from '@app/components/view-shell';
+import { SearchBar } from '@app/components/view-shell';
 import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { TasksControls } from '@app/features/tasks-view/components/TasksControls';
 import { useTasksDataSource } from '@app/features/tasks-view/queries/use-tasks-query';
@@ -11,6 +12,7 @@ import {
   TasksViewProvider,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
@@ -26,11 +28,13 @@ import {
   CrmListSkeleton,
 } from './components/list-state';
 import { useCrmContext } from './context/crm-context';
+import { useCrmWorkspace } from './context/workspace-context';
 
 /** Production Tasks layouts for the workspace-wide CRM activity scope. */
 export function CrmActivityTasks(props: { title?: JSX.Element }) {
   const crm = useCrmContext();
   const layout = useSplitLayout();
+  const workspace = useCrmWorkspace();
   return (
     <TagSetsQueryProvider>
       <TasksViewProvider
@@ -38,6 +42,19 @@ export function CrmActivityTasks(props: { title?: JSX.Element }) {
         restoreEntryState
         scopeKey="crm:activity:tasks"
         onOpenTask={(task, options) => {
+          if (
+            workspace.host.record.openItem(
+              {
+                type: 'document',
+                id: task.id,
+                name: task.fallbackName ?? 'Task',
+                fileType: 'md',
+                subType: { type: 'task' },
+              },
+              options?.event
+            )
+          )
+            return true;
           layout.openWithSplit(
             { type: 'task', id: task.id },
             { preferNewSplit: options?.event?.shiftKey }
@@ -88,31 +105,30 @@ function ActivityTasksBody(props: {
     </>
   );
   return (
-    <div class="flex size-full min-h-0 flex-col">
-      <Show
-        when={!isTouchDevice()}
-        fallback={
-          <ViewShell.Header>
-            <div class="flex min-w-0 items-center gap-2 px-4 py-2">
-              {controls()}
-              <SearchBar
-                label="Search tasks"
-                placeholder="Search tasks"
-                value={state.search}
-                onValueChange={(search) => setState('search', search)}
-                class="min-w-0 flex-1"
-              />
-            </div>
-          </ViewShell.Header>
-        }
-      >
-        <ListHeader title={props.title ?? 'Tasks'}>
+    <MobileListLayout
+      header={
+        isTouchDevice() ? (
+          <div class="flex min-w-0 items-center gap-2 px-4 py-2">
+            {controls()}
+            <SearchBar
+              label={t('crm.searchSalesTasks')}
+              placeholder={t('crm.searchSalesTasks')}
+              value={state.search}
+              onValueChange={(search) => setState('search', search)}
+              class="min-w-0 flex-1"
+            />
+          </div>
+        ) : undefined
+      }
+    >
+      <Show when={!isTouchDevice()}>
+        <ListHeader title={props.title ?? t('crm.salesTasks')}>
           {controls()}
           <ListHeaderSearch
-            label="Search tasks"
+            label={t('crm.searchSalesTasks')}
             value={state.search}
             onValueChange={(search) => setState('search', search)}
-            onEscape={() => listElement?.focus()}
+            focusResults={() => listElement?.focus()}
             registerFocus={() => {}}
           />
         </ListHeader>
@@ -152,6 +168,6 @@ function ActivityTasksBody(props: {
           ]}
         />
       </div>
-    </div>
+    </MobileListLayout>
   );
 }

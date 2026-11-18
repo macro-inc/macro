@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   timeline: vi.fn(),
   linkResolved: true,
   capturedParent: undefined as { type: string; id: string } | undefined,
+  bots: undefined as Accessor<{ id: string }[]> | undefined,
   linkError: null as unknown,
   refetchLink: vi.fn(),
   urlTarget: undefined as string | undefined,
@@ -30,8 +31,12 @@ vi.mock('./scroll-to-rendered-target', async (importOriginal) => ({
 }));
 
 vi.mock('@channel/Input', () => ({
-  ChannelInput: (props: { parent?: { type: string; id: string } }) => {
+  ChannelInput: (props: {
+    parent?: { type: string; id: string };
+    bots?: Accessor<{ id: string }[]>;
+  }) => {
     mocks.capturedParent = props.parent;
+    mocks.bots = props.bots;
     return <textarea aria-label="Leave a comment..." />;
   },
 }));
@@ -41,7 +46,9 @@ vi.mock('@channel/Thread/utils/message-actions', () => ({
     `/channel/${channelId}/${messageId}`,
 }));
 vi.mock('@channel/use-channel-bot-mention-users', () => ({
-  useMessageBotMentionUsers: () => [],
+  useMessageBotMentionUsers:
+    (_parent: unknown, load: Accessor<boolean>) => () =>
+      load() ? [{ id: 'agent' }] : [],
 }));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
@@ -292,6 +299,20 @@ describe('EntityConversation placement', () => {
     expect(mocks.capturedParent).toEqual({ type: 'document', id: 'document' });
   });
 
+  it('lists the agents for mentions once someone focuses the composer', () => {
+    const view = discussion([[]], undefined, { canWrite: true });
+    expect(mocks.bots?.()).toEqual([]);
+    fireEvent.focusIn(view.getByRole('textbox'));
+    expect(mocks.bots?.()).toEqual([{ id: 'agent' }]);
+  });
+
+  it('lists the agents for mentions once the pointer reaches the composer', () => {
+    const view = discussion([[]], undefined, { canWrite: true });
+    expect(mocks.bots?.()).toEqual([]);
+    fireEvent.pointerEnter(view.getByRole('textbox').parentElement!);
+    expect(mocks.bots?.()).toEqual([{ id: 'agent' }]);
+  });
+
   it('shows nothing from the shared latest page while a link is still resolving', () => {
     mocks.linkResolved = false;
     const view = discussion([[thread('new discussion', null)]], 'reply');
@@ -487,9 +508,32 @@ it('hides cached comments when a linked message denies access and retries the li
   ));
   expect(view.queryAllByRole('article')).toHaveLength(0);
   expect(view.queryByRole('textbox')).toBeNull();
-  fireEvent.click(
-    view.getByRole('button', { name: 'Could not load comments. Retry' })
-  );
+  fireEvent.click(view.getByRole('button', { name: 'Retry' }));
   expect(refetch).toHaveBeenCalled();
   expect(mocks.refetchLink).toHaveBeenCalled();
 });
+
+it.each([false, true])(
+  'keeps a missing-parent error visible (hide empty: %s)',
+  (hideWhenEmpty) => {
+    mocks.timeline.mockReturnValue({
+      isPending: false,
+      isError: true,
+      error: new ThrownResultError([
+        { code: 'NOT_FOUND', message: 'message or parent not found' },
+      ]),
+    });
+    const view = render(() => (
+      <EntityConversation
+        parent={{ type: 'document', id: 'deleted' }}
+        canWrite
+        hideWhenEmpty={hideWhenEmpty}
+      />
+    ));
+    expect(view.getByRole('alert').textContent).toBe(
+      'Comments are unavailable for this item.'
+    );
+    expect(view.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(view.queryByRole('textbox')).toBeNull();
+  }
+);

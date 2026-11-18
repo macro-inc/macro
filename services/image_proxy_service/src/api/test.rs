@@ -34,9 +34,13 @@ fn test_context() -> ApiContext {
     );
 
     ApiContext {
+        logo_service: crate::domain::LogoService::new(crate::outbound::FaviconProvider(
+            crate::outbound::remote_image::build_http_client().expect("test favicon client"),
+        )),
         authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
         environment: Environment::Production,
         http_client: proxy::build_http_client().expect("test HTTP client should build"),
+        jwt_validation_args: JwtValidationArgs::new_testing(),
     }
 }
 
@@ -110,6 +114,49 @@ async fn proxy_rejects_missing_credentials() {
         StatusCode::UNAUTHORIZED,
         json!({ "message": "unauthorized" }),
     );
+}
+
+#[tokio::test]
+async fn logos_require_authentication_and_reject_non_domains() {
+    for path in [
+        "/logos?domain=example.com",
+        "/image-proxy/logos?domain=example.com",
+    ] {
+        let request = Request::get(path).body(Body::empty()).unwrap();
+        assert_eq!(send(request).await.0, StatusCode::UNAUTHORIZED);
+    }
+    let token = access_token(valid_expiration());
+    let request = Request::get("/logos?domain=127.0.0.1")
+        .header(COOKIE, format!("{ACCESS_TOKEN_COOKIE}={token}"))
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(send(request).await.0, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn proxy_error_responses_are_sandboxed() {
+    for (uri, status) in [
+        (
+            "/proxy?url=http://127.0.0.1/image.png",
+            StatusCode::UNAUTHORIZED,
+        ),
+        ("/image-proxy/proxy", StatusCode::UNAUTHORIZED),
+        ("/proxy/unknown", StatusCode::NOT_FOUND),
+    ] {
+        let response = app(test_context())
+            .oneshot(proxy_request(uri).body(Body::empty()).unwrap())
+            .await
+            .expect("application should return a response");
+
+        assert_eq!(response.status(), status, "{uri}");
+        let headers = response.headers();
+        assert_eq!(headers["x-content-type-options"], "nosniff", "{uri}");
+        assert_eq!(
+            headers["content-security-policy"],
+            "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            "{uri}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -239,4 +286,292 @@ async fn prefixed_proxy_reaches_existing_auth() {
         StatusCode::UNAUTHORIZED,
         json!({ "message": "unauthorized" }),
     );
+}
+
+#[tokio::test]
+async fn generic_proxy_preserves_authenticated_error_contract_at_both_mounts() {
+    let token = access_token(valid_expiration());
+    for prefix in ["", "/image-proxy"] {
+        for credential in [AUTHORIZATION, COOKIE] {
+            for (query, status, body) in [
+                (
+                    "url=ftp%3A%2F%2Fexample.com%2Fimage.png",
+                    StatusCode::BAD_REQUEST,
+                    "only http/https URLs are allowed",
+                ),
+                (
+                    "url=http%3A%2F%2F127.0.0.1%2Fimage.png",
+                    StatusCode::FORBIDDEN,
+                    "requests to private/internal IPs are not allowed",
+                ),
+            ] {
+                let value = if credential == AUTHORIZATION {
+                    format!("Bearer {token}")
+                } else {
+                    format!("{ACCESS_TOKEN_COOKIE}={token}")
+                };
+                let request = proxy_request(&format!("{prefix}/proxy?{query}"))
+                    .header(credential.clone(), value)
+                    .body(Body::empty())
+                    .unwrap();
+                let response = app(test_context()).oneshot(request).await.unwrap();
+                assert_eq!(response.status(), status);
+                assert_eq!(
+                    response.headers()["content-type"],
+                    "text/plain; charset=utf-8"
+                );
+                assert!(!response.headers().contains_key("cache-control"));
+                assert_eq!(
+                    response.into_body().collect().await.unwrap().to_bytes(),
+                    body
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn generic_proxy_http_success_and_ua_retries_preserve_deployed_contract() {
+    use axum::http::header::USER_AGENT;
+    use axum::response::Response;
+
+    // An explicit local HTTP proxy keeps all traffic on loopback while the
+    // real generic handler still preflights the public upstream IP. The
+    // production client and both DNS guards remain untouched.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (captured_tx, mut captured_rx) = tokio::sync::mpsc::unbounded_channel();
+    let upstream = axum::Router::new().fallback(move |request: Request<Body>| {
+        let captured_tx = captured_tx.clone();
+        async move {
+            let with_ua = request.headers().contains_key(USER_AGENT);
+            let path = request.uri().path();
+            let (status, content_type, body) = if path == "/status-retry" && with_ua {
+                (
+                    StatusCode::FORBIDDEN,
+                    "text/plain",
+                    Bytes::from_static(b"denied"),
+                )
+            } else if path == "/mime-retry" && with_ua {
+                (
+                    StatusCode::OK,
+                    "text/html",
+                    Bytes::from_static(b"challenge"),
+                )
+            } else {
+                (
+                    StatusCode::PARTIAL_CONTENT,
+                    "image/png; charset=binary",
+                    Bytes::from_static(b"\x89PNG\r\n\x1a\nimage"),
+                )
+            };
+            captured_tx
+                .send((request.uri().clone(), request.headers().clone()))
+                .unwrap();
+            Response::builder()
+                .status(status)
+                .header("content-type", content_type)
+                .header("cache-control", "private, max-age=0")
+                .header("set-cookie", "upstream-cookie=fixture")
+                .header("x-upstream-only", "fixture")
+                .body(Body::from(body))
+                .unwrap()
+        }
+    });
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, upstream)
+            .with_graceful_shutdown(async {
+                let _ = shutdown_rx.await;
+            })
+            .await
+            .unwrap();
+    });
+    let mut context = test_context();
+    context.http_client = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::http(format!("http://{address}")).unwrap())
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let token = access_token(valid_expiration());
+    for prefix in ["", "/image-proxy"] {
+        for path in ["image", "status-retry", "mime-retry"] {
+            let request = proxy_request(&format!(
+                "{prefix}/proxy?url=http%3A%2F%2F8.8.8.8%2F{path}%3Fsignature%3Da%252Bb"
+            ))
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .header(COOKIE, "browser-only=fixture")
+            .body(Body::empty())
+            .unwrap();
+            let response = app(context.clone()).oneshot(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK, "{prefix}/{path}");
+            assert_eq!(
+                response.headers()["content-type"],
+                "image/png; charset=binary"
+            );
+            assert_eq!(
+                response.headers()["cache-control"],
+                "public, max-age=31536000, immutable"
+            );
+            assert_eq!(
+                response.headers()["cross-origin-resource-policy"],
+                "cross-origin"
+            );
+            assert!(!response.headers().contains_key("set-cookie"));
+            assert!(!response.headers().contains_key("x-upstream-only"));
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                &b"\x89PNG\r\n\x1a\nimage"[..]
+            );
+            let attempts = if path == "image" { 1 } else { 2 };
+            for attempt in 0..attempts {
+                let (uri, headers) = captured_rx.try_recv().unwrap();
+                assert_eq!(
+                    uri.to_string(),
+                    format!("http://8.8.8.8/{path}?signature=a%2Bb")
+                );
+                assert!(!headers.contains_key(AUTHORIZATION));
+                assert!(!headers.contains_key(COOKIE));
+                if attempt == 0 {
+                    assert_eq!(
+                        headers[USER_AGENT],
+                        "Mozilla/5.0 (compatible; MacroImageProxy/1.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                    );
+                } else {
+                    assert!(!headers.contains_key(USER_AGENT));
+                }
+            }
+            assert!(matches!(
+                captured_rx.try_recv(),
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+            ));
+        }
+    }
+    shutdown_tx.send(()).unwrap();
+    server.await.unwrap();
+}
+
+const MACRO_API_PRIVATE_KEY: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.private.pem"
+);
+const MACRO_API_PUBLIC_KEY: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.public.pem"
+);
+
+/// An agent run's Macro API credential, signing `scope` if any.
+fn agent_credential(scope: Option<&str>) -> String {
+    macro_auth::macro_api_token::encode_macro_api_token(
+        macro_auth::macro_api_token::EncodeMacroApiTokenArgs {
+            fusionauth_id: "fixture".into(),
+            macro_user_id: TEST_USER_ID.into(),
+            organization_id: None,
+            issuer: "fixture".into(),
+            private_key: MACRO_API_PRIVATE_KEY.into(),
+            expiry_seconds: 60,
+            agent_id: Some(uuid::Uuid::from_u128(3)),
+            agent_via: None,
+            agent_correlation_id: Some(uuid::Uuid::from_u128(1)),
+            agent_session_id: None,
+            routine_id: None,
+            agent_scope: scope.map(str::to_owned),
+        },
+    )
+    .unwrap()
+}
+
+/// Every route fetches what its caller names, so a scoped agent credential
+/// is refused at the service, on both mounts and whatever else the request
+/// carries; one with no scope reaches the routes as before.
+#[tokio::test]
+async fn a_scoped_credential_is_refused_every_fetch() {
+    let validation = JwtValidationArgs::testing_macro_token("fixture", MACRO_API_PUBLIC_KEY);
+    let context = ApiContext {
+        authorization_state: MacroAuthorizationState::new(Arc::new(
+            MacroAuthorizationServiceImpl::new(
+                MacroAuthJwtValidator::new(validation.clone()),
+                InternalAuthConfig {
+                    api_key: TEST_INTERNAL_API_KEY.to_string(),
+                    default_user_id: None,
+                },
+                macro_authorization::NoBotAuthorizer,
+                macro_authorization::NoUserApiKeyAuthorizer,
+            ),
+        )),
+        jwt_validation_args: validation,
+        ..test_context()
+    };
+    let send = |path: &str, token: String, internal: bool| {
+        let mut request = Request::builder()
+            .uri(path)
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .header("x-macro-code-execution", "1");
+        if internal {
+            request = request.header(INTERNAL_API_KEY_HEADER, TEST_INTERNAL_API_KEY);
+        }
+        app(context.clone()).oneshot(request.body(Body::empty()).unwrap())
+    };
+    for prefix in ["", "/image-proxy"] {
+        for path in [
+            "/proxy?url=https%3A%2F%2Fexample.test%2F%3Fd%3Dsecret",
+            "/logos?domain=secret.example.test",
+        ] {
+            let path = format!("{prefix}{path}");
+            for scope in ["no_send", "generation", "newer"] {
+                for internal in [false, true] {
+                    let response = send(&path, agent_credential(Some(scope)), internal)
+                        .await
+                        .unwrap();
+                    // Beside the internal key the bearer is a second
+                    // explicit credential, refused before its scope is read.
+                    let refused = if internal {
+                        StatusCode::BAD_REQUEST
+                    } else {
+                        StatusCode::FORBIDDEN
+                    };
+                    assert_eq!(
+                        response.status(),
+                        refused,
+                        "{scope} {path} internal={internal}"
+                    );
+                }
+            }
+        }
+        // Without a scope the route answers itself.
+        for path in ["/proxy?url=not-a-url", "/logos?domain=-"] {
+            let path = format!("{prefix}{path}");
+            let response = send(&path, agent_credential(None), false).await.unwrap();
+            assert_ne!(response.status(), StatusCode::FORBIDDEN, "{path}");
+        }
+    }
+    // An unscoped bearer beside a scoped cookie is held to the cookie's scope.
+    let mixed = app(context.clone())
+        .oneshot(
+            Request::builder()
+                .uri("/image-proxy/proxy?url=https%3A%2F%2Fexample.test")
+                .header(AUTHORIZATION, format!("Bearer {}", agent_credential(None)))
+                .header(
+                    COOKIE,
+                    format!(
+                        "{}={}",
+                        macro_auth::credential::access_token_cookie_name(),
+                        agent_credential(Some("no_send"))
+                    ),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(mixed.status(), StatusCode::FORBIDDEN);
+    let health = app(context.clone())
+        .oneshot(
+            Request::builder()
+                .uri("/image-proxy/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(health.status(), StatusCode::OK);
 }

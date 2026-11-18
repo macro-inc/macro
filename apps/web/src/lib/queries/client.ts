@@ -7,6 +7,7 @@ import { isPlatform } from '@core/util/platform';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { onlineManager } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
+import { traceQueriesToFlows } from './flow-trace';
 import { setupQueryPersistence } from './persistence';
 import { createQueryPersistenceScopes } from './persistence-scopes';
 import { initSoupNormalizer } from './soup/normalized-cache/normalizer';
@@ -32,6 +33,8 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+traceQueriesToFlows(queryClient);
 
 if (isPlatform(['ios', 'android'])) {
   // Use the native default network path on both mobile platforms.

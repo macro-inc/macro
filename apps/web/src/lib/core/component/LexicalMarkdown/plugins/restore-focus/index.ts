@@ -1,1 +1,4 @@
-export { restoreFocusPlugin } from './restoreFocusPlugin';
+export {
+  type RestoreFocusDefault,
+  restoreFocusPlugin,
+} from './restoreFocusPlugin';

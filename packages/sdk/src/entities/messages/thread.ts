@@ -10,16 +10,21 @@ import type { CallRecord } from '../calls/call-record';
 import type { CallMessage } from '../calls/message';
 import type { Channel } from '../channels/channel';
 import type { Message } from '../channels/message';
-import type { CrmComment } from '../crm/comment';
 import type { Company } from '../crm/company';
 import type { Contact } from '../crm/contact';
 import type { Comment } from '../documents/comment';
 import type { Document } from '../documents/document';
 import { MacroEntity } from '../entity';
+import type { Initiative } from '../initiatives/initiative';
 import { User } from '../users/user';
+import type { DiscussionComment } from './discussion';
 
 /** A message handle accepted by a mixed timeline selector. */
-export type TimelineMessage = Message | Comment | CrmComment | CallMessage;
+export type TimelineMessage =
+  | Message
+  | Comment
+  | DiscussionComment
+  | CallMessage;
 
 /** Timeline selection with typed message references and camel case options. */
 export interface TimelineOptions<
@@ -51,6 +56,7 @@ export type MessageParent =
   | { type: 'document'; entity: Document }
   | { type: 'crm_company'; entity: Company }
   | { type: 'crm_contact'; entity: Contact }
+  | { type: 'initiative'; entity: Initiative }
   | { type: 'call'; entity: CallRecord };
 
 /** A shared message thread with resolution and deletion operations. */
@@ -99,7 +105,12 @@ export class MessageThread extends MacroEntity<ThreadState> {
   /** Whether the thread is resolved. */
   readonly resolved = this.field('resolved');
 
-  /** Resolve the thread or detach its annotation anchor. */
+  /**
+   * Resolve the thread or detach its annotation anchor.
+   *
+   * @write
+   * @idempotent
+   */
   async update(options: {
     resolved?: boolean;
     detachAnchor?: boolean;
@@ -115,7 +126,12 @@ export class MessageThread extends MacroEntity<ThreadState> {
     );
   }
 
-  /** Delete the entire thread, including replies. */
+  /**
+   * Delete the entire thread, including replies.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(nonce?: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.entityMessageDeleteThread({

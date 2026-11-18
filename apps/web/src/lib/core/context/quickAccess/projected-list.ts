@@ -4,6 +4,10 @@ import type {
   SearchCursor,
   SearchDocumentWire,
 } from '@graphql-cache/index';
+import {
+  isOwnerEpochLostError,
+  isOwnerHandoffBlockedError,
+} from '@graphql-cache/protocol';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -13,9 +17,11 @@ import {
   untrack,
 } from 'solid-js';
 import type { Bucket } from './types';
+import { keepUnchangedRows } from './unchanged-rows';
 
 // Only these buckets can be materialized from cache hits. Other Quick Access
-// sources (contacts, sessions) are merged locally, after the search limit.
+// sources (such as sessions) are merged locally. Personal contacts use their
+// separate bounded, context-ranked window rather than this generic projection.
 const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'document',
   'note',
@@ -35,6 +41,13 @@ const BROWSE_PAGE_SIZE = 50;
 const SEARCH_LIMIT = 500;
 /** Maximum cache pages inspected by one initial browse or load-more action. */
 export const MAX_BROWSE_PAGES_PER_LOAD = 4;
+/**
+ * How long a search the cache has not answered keeps reporting as pending.
+ * It outlasts the host's own wait for an owner change (its one-second read
+ * budget plus the read timeout a held search gets), so a search the host gave
+ * up on stops by then and an owner change that never completes still ends.
+ */
+export const UNANSWERED_SEARCH_LIMIT_MS = 12_000;
 
 type Request = {
   buckets: Bucket[];
@@ -43,12 +56,38 @@ type Request = {
   cursor?: SearchCursor;
   busy: boolean;
   refreshPending: boolean;
+  answered: boolean;
+  awaitingEngine: boolean;
+  /** Tells the host to stop holding this search once another replaces it. */
+  superseded: AbortController;
+  giveUpTimer?: ReturnType<typeof setTimeout>;
 };
+
+function isRefusedFirstAnswer(request: Request, error: unknown): boolean {
+  // Either way the cache was changing owner and a replacement engine follows.
+  const ownerChanging =
+    isOwnerHandoffBlockedError(error) || isOwnerEpochLostError(error);
+  return !request.answered && ownerChanging;
+}
+
+/** Someone is waiting on the rows of a typed search, so their reads run
+ * with it rather than behind the lists already on screen. */
+export function searchRowHost(
+  host: Pick<CacheHost, 'readRecordsByKeys'>,
+  query: string
+): Pick<CacheHost, 'readRecordsByKeys'> {
+  if (!query) return host;
+  return {
+    readRecordsByKeys: (args) =>
+      host.readRecordsByKeys({ ...args, priority: 'typed-search' }),
+  };
+}
 
 /** A paginated, cache-only search. Refreshes replay the loaded browse window
  * rather than shrinking a scrolled list back to its first page. */
 export function createProjectedList<T extends { id: string }>(options: {
-  host: Pick<CacheHost, 'search'>;
+  host: Pick<CacheHost, 'search'> &
+    Partial<Pick<CacheHost, 'onCacheGenerationChanged'>>;
   /** A reactive getter can change the allowed buckets as feature flags load. */
   buckets: readonly Bucket[];
   revision: Accessor<number>;
@@ -60,7 +99,8 @@ export function createProjectedList<T extends { id: string }>(options: {
   sourceAttributes?: Accessor<Record<string, number>>;
   /** Keep already-materialized matches visible while a new query is pending. */
   filterPreviousItems?: (items: T[], query: string) => T[];
-  materialize: (documents: SearchDocumentWire[]) => Promise<T[]>;
+  /** `query` is the typed text the documents answer; empty when browsing. */
+  materialize: (documents: SearchDocumentWire[], query: string) => Promise<T[]>;
 }) {
   const buckets = () => {
     const requested = options.buckets;
@@ -76,14 +116,39 @@ export function createProjectedList<T extends { id: string }>(options: {
     )
   );
   const [error, setError] = createSignal<unknown>();
+  // True from a new query or bucket set until its first answer, unlike
+  // `loading`, which also covers replays of a window already on screen.
+  const [searching, setSearching] = createSignal(
+    untrack(loading) === 'initial'
+  );
   let current: Request | undefined;
+  let engineReplacements = 0;
+  const retire = (request: Request | undefined) => {
+    request?.superseded.abort();
+    clearTimeout(request?.giveUpTimer);
+  };
   onCleanup(() => {
+    retire(current);
     current = undefined;
   });
+
+  // The search stays pending and the replacement engine still replays it
+  // whenever it arrives; this only stops telling the user that an answer is
+  // on its way. It runs from the start of the attempt because a host that is
+  // waiting for an owner has paused its own read timeouts.
+  const stopWaitingAtLimit = (request: Request) => {
+    clearTimeout(request.giveUpTimer);
+    request.giveUpTimer = setTimeout(() => {
+      if (current === request && !request.answered) setSearching(false);
+    }, UNANSWERED_SEARCH_LIMIT_MS);
+  };
 
   const finishRequest = (request: Request) => {
     if (current !== request) return;
     request.busy = false;
+    // A read refused while the cache moves between owners is replayed when
+    // the replacement engine arrives, so the query is still unanswered.
+    if (!request.awaitingEngine) setSearching(false);
     if (request.refreshPending) {
       // Publish the completed window before replaying changes received during
       // search/materialization (or a load-more operation).
@@ -101,6 +166,10 @@ export function createProjectedList<T extends { id: string }>(options: {
     request.busy = true;
     request.refreshPending = false;
     setLoading(append ? 'more' : 'initial');
+    if (!request.answered) {
+      setSearching(true);
+      stopWaitingAtLimit(request);
+    }
     const previous = append ? untrack(items) : [];
     const merged = new Map(previous.map((item) => [item.id, item]));
     const visibleIds = new Set([
@@ -116,10 +185,12 @@ export function createProjectedList<T extends { id: string }>(options: {
     let foundNewRow = false;
     let cursor = append ? request.cursor : undefined;
     let pages = append ? request.pages : 0;
+    const replacementsAtStart = engineReplacements;
     const span = Telemetry.span('quick_access.search');
     span.setAttr('search.buckets', request.buckets.join(','));
     span.setAttr('search.query_length', request.query.length);
     span.setAttr('search.append', append);
+    span.setAttr('search.refresh', !append && request.answered);
     try {
       for (const [key, value] of Object.entries(
         untrack(() => options.sourceAttributes?.() ?? {})
@@ -132,13 +203,16 @@ export function createProjectedList<T extends { id: string }>(options: {
           async (span) => {
             span.setAttr('search.buckets', request.buckets.join(','));
             span.setAttr('search.query_length', request.query.length);
-            const result = await options.host.search({
-              profile: 'quick-access-v1',
-              buckets: request.buckets,
-              query: request.query,
-              limit: request.query ? SEARCH_LIMIT : BROWSE_PAGE_SIZE,
-              ...(cursor ? { cursor } : {}),
-            });
+            const result = await options.host.search(
+              {
+                profile: 'quick-access-v1',
+                buckets: request.buckets,
+                query: request.query,
+                limit: request.query ? SEARCH_LIMIT : BROWSE_PAGE_SIZE,
+                ...(cursor ? { cursor } : {}),
+              },
+              { signal: request.superseded.signal }
+            );
             span.setAttr('search.result_count', result.documents.length);
             return result;
           }
@@ -148,7 +222,7 @@ export function createProjectedList<T extends { id: string }>(options: {
           'quick_access.materialize',
           async (span) => {
             span.setAttr('search.result_count', page.documents.length);
-            return options.materialize(page.documents);
+            return options.materialize(page.documents, request.query);
           }
         );
         if (current !== request) return;
@@ -167,14 +241,22 @@ export function createProjectedList<T extends { id: string }>(options: {
         fetchedPages < pageBudget &&
         (pageCount > 0 || !foundNewRow)
       );
+      span.setAttr('search.page_count', fetchedPages);
+      span.setAttr('search.materialized_count', merged.size);
       request.cursor = cursor;
       request.pages = pages;
+      request.answered = true;
+      request.awaitingEngine = false;
       setError(undefined);
-      setItems([...merged.values()]);
+      // A page reader waits for a new list after each load-more, even one
+      // that found no new row; only a refresh may keep the listed array.
+      const rows = [...merged.values()];
+      setItems((shown) => (append ? rows : keepUnchangedRows(shown, rows)));
       setHasMore(cursor !== undefined);
     } catch (error) {
-      span.error('Quick Access cache search failed');
       if (current !== request) return;
+      span.error('Quick Access cache search failed');
+      request.awaitingEngine = isRefusedFirstAnswer(request, error);
       setError(error);
       // Rows and their continuation are a committed window. A failed replay
       // (or append) must leave both intact so normal pagination can retry.
@@ -182,10 +264,34 @@ export function createProjectedList<T extends { id: string }>(options: {
       setHasMore(request.cursor !== undefined);
       console.warn('Quick Access cache search failed', error);
     } finally {
+      span.setAttr(
+        'search.engine_restarted',
+        engineReplacements !== replacementsAtStart
+      );
       span.end();
       finishRequest(request);
     }
   };
+
+  // Nothing else replays a refused first answer: cache-change refreshes only
+  // follow a write, and the menu would list no documents until one happened.
+  const stopWatchingEngine = options.host.onCacheGenerationChanged?.(() => {
+    engineReplacements += 1;
+    // The host reports the replacement before it starts reinitializing, so
+    // read after the notification returns.
+    queueMicrotask(() => {
+      const request = current;
+      if (!request?.awaitingEngine) return;
+
+      if (request.busy) request.refreshPending = true;
+      else
+        fireAndForget(
+          fetchPages(request, request.pages, false),
+          'quick-access'
+        );
+    });
+  });
+  onCleanup(() => stopWatchingEngine?.());
 
   createEffect(() => {
     options.revision();
@@ -212,6 +318,7 @@ export function createProjectedList<T extends { id: string }>(options: {
 
     // Genuine query/bucket changes, disabling, and disposal still fence off
     // obsolete responses and their queued refreshes.
+    retire(previous);
     current = undefined;
     setError(undefined);
     setHasMore(false);
@@ -225,6 +332,7 @@ export function createProjectedList<T extends { id: string }>(options: {
         ? (options.filterPreviousItems?.(untrack(items), query) ?? [])
         : []
     );
+    setSearching(enabled);
     if (!enabled) {
       setLoading('idle');
       return;
@@ -235,6 +343,9 @@ export function createProjectedList<T extends { id: string }>(options: {
       pages: 1,
       busy: false,
       refreshPending: false,
+      answered: false,
+      awaitingEngine: false,
+      superseded: new AbortController(),
     };
     current = request;
     fireAndForget(fetchPages(request, request.pages, false), 'quick-access');
@@ -245,6 +356,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     error,
     hasMore,
     isLoading: () => loading() === 'initial',
+    isSearching: searching,
     isLoadingMore: () => loading() === 'more',
     loadMore: async () => {
       const request = current;

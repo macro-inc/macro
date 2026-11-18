@@ -70,24 +70,27 @@ export async function getFileDocumentBlob(
   },
   options?: GetFileBlobOptions
 ): Promise<Blob> {
+  const parent = options?.span ?? Telemetry.captureContext();
   const url = await getFileDocumentUrl(data, options?.span);
   options?.signal?.throwIfAborted();
-  return (options?.span ?? Telemetry).span('file.transfer', async (span) => {
-    span.setAttr('document.id', data.documentId);
-    span.setAttr('document.version_id', data.documentVersionId);
-    try {
-      const blob = await throwOnErr(() =>
-        options?.onProgress
-          ? fetchPresignedBlobWithProgress(url, options.onProgress, {
-              signal: options.signal,
-            })
-          : fetchPresigned(url, 'blob', { signal: options?.signal })
-      );
-      span.setAttr('file.size', blob.size);
-      return blob;
-    } catch (error) {
-      if (!options?.signal?.aborted) span.error(error);
-      throw error;
-    }
-  });
+  return parent.run(() =>
+    Telemetry.span('file.transfer', async (span) => {
+      span.setAttr('document.id', data.documentId);
+      span.setAttr('document.version_id', data.documentVersionId);
+      try {
+        const blob = await throwOnErr(() =>
+          options?.onProgress
+            ? fetchPresignedBlobWithProgress(url, options.onProgress, {
+                signal: options.signal,
+              })
+            : fetchPresigned(url, 'blob', { signal: options?.signal })
+        );
+        span.setAttr('file.size', blob.size);
+        return blob;
+      } catch (error) {
+        if (!options?.signal?.aborted) span.error(error);
+        throw error;
+      }
+    })
+  );
 }

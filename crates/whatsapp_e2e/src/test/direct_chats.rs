@@ -83,6 +83,7 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(binding.kind, ExternalChatKind::Direct);
+    assert_eq!(world.import_history(ALICE).await, 1);
     assert_eq!(
         backfill_state(&world, &binding, &["done", "partial"])
             .await
@@ -188,6 +189,7 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
                         mentions: vec![],
                     },
                     reply_to: None,
+                    user_confirmation: None,
                 },
                 SendAuthority::Human,
             )

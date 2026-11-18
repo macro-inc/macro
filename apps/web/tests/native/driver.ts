@@ -134,16 +134,27 @@ export async function nativeHttpReachable(browser: Browser, origin: string) {
   }, origin);
 }
 
+/** Noise is an Inbox view radio in the list header; All is the All mail sidebar row. */
 export async function selectTab(browser: Browser, label: 'Noise' | 'All') {
-  const tab = browser.$(
-    `//nav[@aria-label="Email tabs"]//button[.//span[normalize-space(.)="${label}"]]`
-  );
+  const tab =
+    label === 'Noise'
+      ? browser.$(
+          '//*[@role="radiogroup"][@aria-label="Inbox view"]//label[normalize-space(.)="Noise"]'
+        )
+      : browser.$(
+          '//nav[@aria-label="Email library"]//button[.//span[normalize-space(.)="All mail"]]'
+        );
+  const selected =
+    label === 'Noise' ? browser.$('//input[@name and @value="noise"]') : tab;
   // WebKitWebDriver's pointer clicks can hit the adjacent row in this Tauri
-  // window. Activate the labeled button's real UI handler, not query/cache state.
+  // window. Activate the labeled control's real UI handler, not query/cache state.
   await tab.waitForDisplayed({ timeout: 5000 });
   await tab.execute((element) => element.click());
   await browser.waitUntil(
-    async () => (await tab.getAttribute('aria-current')) === 'page',
+    async () =>
+      label === 'Noise'
+        ? (await selected.getAttribute('data-checked')) !== null
+        : (await selected.getAttribute('aria-current')) === 'page',
     {
       timeout: 5000,
       timeoutMsg: `${label} tab did not become selected`,

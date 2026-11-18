@@ -45,6 +45,9 @@ pub struct SmartTagChannelMatch {
     pub id: Uuid,
     /// Channel display name.
     pub name: String,
+    /// Whether the viewer actively participates in this channel (section previews only).
+    #[serde(rename = "isParticipant", skip_serializing_if = "Option::is_none")]
+    pub is_participant: Option<bool>,
 }
 
 /// A bounded preview and the total number of visible channels matching a rule.
@@ -54,15 +57,16 @@ pub struct SmartTagChannelMatch {
 pub struct SmartTagPreview {
     /// First matches, in alphabetical order.
     pub channels: Vec<SmartTagChannelMatch>,
-    /// Number of matching channels the caller participates in, including overflow.
+    /// Number of visible matches, including overflow; legacy previews count participants.
     pub total_count: i64,
 }
 
 /// A shared or account-private label grouping chat channels in the sidebar.
 ///
-/// `channel_ids` is viewer-relative: it lists only the labelled channels the
-/// requesting user participates in. `channel_count` counts every channel in
-/// the label so clients can warn accurately before a delete.
+/// `channel_ids` is viewer-relative: legacy labels include joined channels;
+/// sections also include viewable unjoined channels in the verified team.
+/// Legacy manual counts include every assignment; section counts reflect
+/// effective channels visible to the viewer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -77,13 +81,16 @@ pub struct ChannelLabel {
     pub rule: Option<ChannelLabelRule>,
     /// Manual ordering value within the scope; lower sorts first.
     pub sort_order: f64,
-    /// Channels in this label that the requesting user participates in.
+    /// Effective channels visible to the viewer in this label or section.
     pub channel_ids: Vec<Uuid>,
-    /// All assignments for a manual label; visible matches for a smart tag.
+    /// Explicit picks visible to the viewer (section responses only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub explicit_channel_ids: Option<Vec<Uuid>>,
+    /// Legacy assignments or smart matches; visible effective channels for sections.
     pub channel_count: i64,
     /// When the label was created.
     pub created_at: DateTime<Utc>,
-    /// When the label was last renamed or reordered.
+    /// When the label's name, rule, scope, or order last changed.
     pub updated_at: DateTime<Utc>,
 }
 
@@ -92,6 +99,8 @@ pub struct ChannelLabel {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelLabelsList {
+    /// Resolved label namespace.
+    pub scope: ChannelLabelScopeSelection,
     /// Team scope, or `None` for private labels.
     pub team_id: Option<Uuid>,
     /// Every label of the scope, whether or not the caller sees channels in it.
@@ -137,6 +146,17 @@ pub enum SetChannelLabelOutcome {
     SmartTagReadOnly,
 }
 
+/// Requested label namespace. Omission retains the deployed automatic selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelLabelScopeSelection {
+    /// Labels private to the authenticated account.
+    Personal,
+    /// Labels shared by the authenticated member's team.
+    Team,
+}
+
 /// Namespace in which channel labels and assignments are isolated.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChannelLabelsScope {
@@ -147,16 +167,17 @@ pub enum ChannelLabelsScope {
 }
 
 impl ChannelLabelsScope {
-    /// Whether a channel's owning team permits grouping it in this namespace.
-    /// Non-team channels have no owning team and cannot be labelled. Shared
-    /// labels accept only their own team's channels; private labels accept any
-    /// team channel the viewer participates in.
-    pub fn can_label_channel(&self, channel_team_id: Option<Uuid>) -> bool {
-        match (self, channel_team_id) {
-            (Self::Team(team_id), Some(channel_team_id)) => *team_id == channel_team_id,
-            (Self::User(_), Some(_)) => true,
-            (_, None) => false,
+    /// Whether a visible channel can be assigned in this namespace.
+    pub fn can_label_channel(&self, channel_type: &str, channel_team_id: Option<Uuid>) -> bool {
+        match self {
+            Self::Team(team_id) => channel_type == "team" && channel_team_id == Some(*team_id),
+            Self::User(_) => matches!(channel_type, "team" | "public" | "private"),
         }
+    }
+
+    /// Sections expose unjoined channels only within their verified team scope.
+    pub fn allows_unjoined_section_members(&self) -> bool {
+        matches!(self, Self::Team(_))
     }
 
     /// Stable persistence key for this namespace.
@@ -164,6 +185,14 @@ impl ChannelLabelsScope {
         match self {
             Self::Team(id) => format!("team:{id}"),
             Self::User(id) => format!("user:{id}"),
+        }
+    }
+
+    /// Public selection corresponding to this authorized namespace.
+    pub fn selection(&self) -> ChannelLabelScopeSelection {
+        match self {
+            Self::Team(_) => ChannelLabelScopeSelection::Team,
+            Self::User(_) => ChannelLabelScopeSelection::Personal,
         }
     }
 
@@ -197,6 +226,7 @@ impl ChannelLabelsReceipt {
     pub fn from_access(
         user_id: MacroUserIdStr<'static>,
         receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+        selection: Option<ChannelLabelScopeSelection>,
     ) -> Result<Self, ChannelLabelsError> {
         let scope = match receipt {
             Some(receipt) => {
@@ -210,7 +240,15 @@ impl ChannelLabelsReceipt {
                 }
                 let team_id = Uuid::parse_str(&receipt.entity().entity_id)
                     .map_err(|_| ChannelLabelsError::Unauthorized)?;
-                ChannelLabelsScope::Team(team_id)
+                match selection {
+                    Some(ChannelLabelScopeSelection::Personal) => {
+                        ChannelLabelsScope::User(user_id.clone())
+                    }
+                    _ => ChannelLabelsScope::Team(team_id),
+                }
+            }
+            None if selection == Some(ChannelLabelScopeSelection::Team) => {
+                return Err(ChannelLabelsError::Unauthorized);
             }
             None => ChannelLabelsScope::User(user_id.clone()),
         };

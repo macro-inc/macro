@@ -2,7 +2,7 @@ import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const agentSessionKeys = createQueryKeys('agentSessionMentions', {
   detail: (id: string) => ({ queryKey: [id] }),
-  preview: (id: string, graphql: boolean) => ({ queryKey: [id, graphql] }),
+  preview: (id: string) => ({ queryKey: [id] }),
 });
 
 /**
@@ -41,3 +41,11 @@ export const agentCodeExecutionKeys = createQueryKeys('agentCodeExecution', {
     queryKey: [sessionId, executionId],
   }),
 });
+
+/** A session's auto-archive choices, its owner's defaults, and the archive a trigger made. */
+export const agentSessionAutoArchiveKeys = createQueryKeys(
+  'agentSessionAutoArchive',
+  {
+    detail: (sessionId: string) => ({ queryKey: [sessionId] }),
+  }
+);

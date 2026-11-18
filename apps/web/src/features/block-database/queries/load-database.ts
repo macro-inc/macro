@@ -1,4 +1,4 @@
-import { storageServiceClient } from '@service-storage/client';
+import { fetchDatabaseDetail } from '@queries/storage/databases';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 
@@ -7,8 +7,7 @@ type LoadedDatabase = DatabaseDetail & { userAccessLevel: AccessLevel };
 
 /** Load transport only when opening a database, not while discovering block types. */
 export async function loadDatabase(id: string) {
-  const result = await storageServiceClient.databases.get({ id });
-  return result.map(
+  return await fetchDatabaseDetail(id).map(
     (detail): LoadedDatabase => ({ ...detail, userAccessLevel: detail.grant })
   );
 }

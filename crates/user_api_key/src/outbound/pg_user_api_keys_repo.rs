@@ -111,6 +111,56 @@ impl UserApiKeysRepo for PgUserApiKeysRepo {
     }
 
     #[tracing::instrument(err, skip_all)]
+    async fn replace_keys_named(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        id: UserApiKeyId,
+        name: &str,
+        hash: &[u8; 32],
+    ) -> Result<UserApiKeyInfo, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+
+        // Serializes replacements for this user: without it, two transactions
+        // could each miss the other's uncommitted key and both stay live.
+        sqlx::query!(
+            r#"SELECT 1 AS "locked!" FROM "User" WHERE id = $1 FOR UPDATE"#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+
+        sqlx::query!(
+            r#"
+            DELETE FROM "UserApiKey"
+            WHERE user_id = $1 AND name = $2
+            "#,
+            user_id.as_ref(),
+            name,
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        let row = sqlx::query_as!(
+            UserApiKeyInfoRow,
+            r#"
+            INSERT INTO "UserApiKey" (id, name, user_id, hash)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, name, created_at
+            "#,
+            id.as_uuid(),
+            name,
+            user_id.as_ref(),
+            &hash[..],
+        )
+        .fetch_one(&mut *transaction)
+        .await?;
+
+        transaction.commit().await?;
+
+        Ok(row.into())
+    }
+
+    #[tracing::instrument(err, skip_all)]
     async fn delete_key(
         &self,
         user_id: &MacroUserIdStr<'_>,

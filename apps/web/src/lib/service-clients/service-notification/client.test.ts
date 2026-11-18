@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { notificationServiceClient } from './client';
 
 const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: { 'notification-service': 'http://localhost/notifications' },
 }));
 vi.mock('@core/util/fetchWithToken', () => ({ fetchWithToken: fetchMock }));
@@ -42,5 +43,87 @@ describe('notification list state query parameters', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
       eventItemIds: ['item'],
     });
+  });
+});
+
+describe('bulk notification preferences', () => {
+  it.each(['unsubscribeItems', 'removeUnsubscribeItems'] as const)(
+    '%s returns a typed error without sending a partially valid batch',
+    async (method) => {
+      const result = await notificationServiceClient[method]([
+        { item_id: 'valid', item_type: 'channel' },
+        { item_id: 'invalid', item_type: 'unsupported' },
+      ]);
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toEqual([
+          {
+            code: 'INVALID_ITEM_TYPE',
+            message: 'Unsupported notification item type.',
+            arg: 'item_type',
+          },
+        ]);
+      }
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    ['unsubscribeItems', 'POST'],
+    ['removeUnsubscribeItems', 'DELETE'],
+  ] as const)(
+    '%s preserves supported types and normalizes aliases',
+    async (method, httpMethod) => {
+      const result = await notificationServiceClient[method]([
+        { item_id: 'channel', item_type: 'channel' },
+        { item_id: 'email', item_type: 'email' },
+        { item_id: 'thread', item_type: 'thread' },
+        { item_id: 'foreign', item_type: 'foreign' },
+      ]);
+
+      expect(result.isOk()).toBe(true);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost/notifications/unsubscribe/items',
+        {
+          method: httpMethod,
+          body: JSON.stringify({
+            items: [
+              { item_id: 'channel', item_type: 'channel' },
+              { item_id: 'email', item_type: 'email_thread' },
+              { item_id: 'thread', item_type: 'email_thread' },
+              { item_id: 'foreign', item_type: 'foreign_entity' },
+            ],
+          }),
+        }
+      );
+    }
+  );
+});
+
+describe('item notification preferences', () => {
+  const item = { item_id: 'channel-one', item_type: 'channel' };
+
+  it('asks for mentions only instead of a mute', async () => {
+    await notificationServiceClient.unsubscribeItem({
+      ...item,
+      mentions_only: true,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost/notifications/unsubscribe/item/channel/channel-one?mentions_only=true',
+      { method: 'POST' }
+    );
+  });
+
+  it('keeps plain mutes and snoozes unchanged', async () => {
+    await notificationServiceClient.unsubscribeItem(item);
+    await notificationServiceClient.unsubscribeItem({
+      ...item,
+      snoozed_until: '2030-01-01T00:00:00Z',
+    });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'http://localhost/notifications/unsubscribe/item/channel/channel-one',
+      'http://localhost/notifications/unsubscribe/item/channel/channel-one?snoozed_until=2030-01-01T00%3A00%3A00Z',
+    ]);
   });
 });

@@ -5,7 +5,7 @@ use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::models::ViewAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
-use entity_mutation::MoveEntity;
+use entity_mutation::{DuplicateEntity, MoveEntity};
 use model::item::Item;
 use model_entity::EntityType;
 use schemars::JsonSchema;
@@ -96,19 +96,21 @@ impl ToolAnnotated for ReadProject {
 }
 
 #[async_trait]
-impl<PSvc, ESvc, DSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>> for ReadProject
+impl<PSvc, ESvc, DSvc, EmSvc, DbSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>
+    for ReadProject
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
+    DbSvc: DuplicateEntity + Send + Sync + 'static,
 {
     type Output = ReadProjectResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, project_id=?self.project_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>,
+        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Read project");

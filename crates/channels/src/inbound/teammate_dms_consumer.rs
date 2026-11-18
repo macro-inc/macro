@@ -256,12 +256,12 @@ where
                 let kafka_message = message.inner();
                 match message.decode_payload() {
                     Ok(DeclaredMacroEvent::TeamsMacroEventForDms(event)) => {
-                        handle_with_retry(
+                        agent_correlation::context::scope(event.event().agent_correlation_id, handle_with_retry(
                             &channels,
                             &event.event().event,
                             kafka_message.partition(),
                             kafka_message.offset(),
-                        )
+                        ))
                         .await?;
                     }
                     Err(e) => tracing::error!(

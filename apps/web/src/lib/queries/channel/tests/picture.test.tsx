@@ -19,7 +19,8 @@ vi.mock('../../client', () => ({
     return client;
   },
 }));
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   staticFileSizedEndpoint: (id: string) => `/file/${id}`,
 }));
 vi.mock('../../preview/dataloader', () => ({

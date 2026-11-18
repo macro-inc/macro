@@ -1,7 +1,10 @@
 //! Types exchanged in-process with the WhatsApp session service. They carry no
 //! whatsmeow types: the session service maps protocol events onto them.
 
-use super::models::{Identity, PairingState};
+use super::{
+    jid::PhoneNumber,
+    models::{Identity, PairingState},
+};
 use chrono::{DateTime, Utc};
 use external_chat::domain::{
     models::{
@@ -469,4 +472,72 @@ pub struct HistoryPage {
     pub oldest: Option<MessageAnchor>,
     /// The phone says there is nothing older.
     pub complete: bool,
+}
+
+/// A phone-number lookup the account's session should answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LookupWork {
+    /// The lookup.
+    pub id: Uuid,
+    /// The number to ask WhatsApp about.
+    pub phone_number: PhoneNumber,
+}
+
+/// What WhatsApp answered about a number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LookupAnswer {
+    /// Registered as this phone-number JID, with the name WhatsApp or the
+    /// address book gives it.
+    Found {
+        /// Phone-number JID.
+        jid: String,
+        /// Business, address-book or WhatsApp name, when known.
+        name: Option<String>,
+    },
+    /// No WhatsApp account has this number.
+    NotOnWhatsApp,
+    /// The question could not be asked or was not answered.
+    Failed,
+}
+
+/// A profile picture the account's session should ask WhatsApp about now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PictureCheck {
+    /// The person (preferably by LID) or group.
+    pub jid: String,
+    /// The id of the picture already stored; WhatsApp answers "unchanged"
+    /// instead of sending it again.
+    pub existing_id: Option<String>,
+    /// An added group the account shares with this person, which WhatsApp
+    /// expects for people who are not contacts.
+    pub common_group: Option<String>,
+    /// When the claim's hold ends; it identifies the claim, so an answer
+    /// that a removal, a newer change or the end of consent overtook is
+    /// dropped.
+    pub claim: DateTime<Utc>,
+}
+
+/// What WhatsApp answered about a profile picture.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PictureAnswer {
+    /// The stored picture is current.
+    Unchanged,
+    /// A new picture, downloaded.
+    Picture {
+        /// WhatsApp's id of the picture.
+        id: String,
+        /// The preview image, at most [`super::models::PICTURE_LIMIT_BYTES`].
+        bytes: Vec<u8>,
+        /// Its `image/*` type.
+        mime: String,
+    },
+    /// Their privacy setting hides it from this account.
+    Hidden,
+    /// They have no picture.
+    NotSet,
+    /// WhatsApp throttled the account; the check is due again at once, and
+    /// the query still counts against the budget.
+    RateLimited,
+    /// The question could not be asked or the download failed.
+    Failed,
 }

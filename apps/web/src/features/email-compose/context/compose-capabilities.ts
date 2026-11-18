@@ -1,3 +1,4 @@
+import type { RecipientSourceFactory } from '@core/user/recipient-source';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import type { MessageOperationSourceFactory } from '../../email-message/context/message-operation-source';
@@ -238,7 +239,8 @@ export interface OutgoingEmail {
 /**
  * One queued send as this device's outbox last recorded it. `accepted` is
  * cancellable until the server's `undoUntil`; `pending` covers waiting,
- * delivering, and cancellation in progress.
+ * delivering, and cancellation in progress. `untracked` means the send left
+ * the outbox and the server could not say whether it was delivered.
  */
 export type EmailSendProgress =
   | { state: 'pending' }
@@ -246,7 +248,8 @@ export type EmailSendProgress =
   | { state: 'sent' }
   | { state: 'failed' }
   | { state: 'cancelled' }
-  | { state: 'unconfirmed' };
+  | { state: 'unconfirmed' }
+  | { state: 'untracked' };
 
 export interface EmailDelivery {
   /** Whether sends can be persisted and replayed without connectivity. */
@@ -290,6 +293,12 @@ export interface EmailDelivery {
   }): Promise<void>;
 }
 
+/**
+ * The working-copy version a send from this browser carried. Absent when the
+ * draft was sent from another device.
+ */
+export type SentWorkingCopy = Pick<LocalDraft, 'generation' | 'revision'>;
+
 export type EmailDraftLifecycleState =
   | {
       type: 'editing';
@@ -312,6 +321,7 @@ export type EmailDraftLifecycleState =
       draftId: string;
       threadId: string;
       inboxId: string;
+      sentCopy?: SentWorkingCopy;
       observedAt: number;
     }
   | {
@@ -350,7 +360,7 @@ export interface EmailComposeFeedback {
       message: string,
       options?: ComposeNoticeOptions
     ): number | undefined;
-    alert(message: string, options?: ComposeNoticeOptions): void;
+    alert(message: string, options?: ComposeNoticeOptions): number | undefined;
     dismiss(id: number): void;
   };
   /** A modal notice with a single acknowledgement; resolves when dismissed. */
@@ -384,7 +394,6 @@ export interface EmailComposePresentation {
   isTouch: Accessor<boolean>;
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
-  signaturesEnabled: Accessor<boolean>;
 }
 
 /** A file stored as a Macro document, as a body link names it. */
@@ -411,8 +420,19 @@ export interface EmailEditorFiles {
   }): void;
 }
 
+/** Opens a calendar event drafted from an email. */
+export interface EmailCalendarEvents {
+  open(email: { subject: string; guests: string[]; text: string }): boolean;
+}
+
+export type EmailRecipientSourceFactory = RecipientSourceFactory<
+  EmailRecipient['kind']
+>;
+
 /** Production composition groups capabilities for views to wire into their consumers. */
 export interface EmailComposeContext {
+  /** Absent where the composer has no calendar, such as isolated tests. */
+  calendarEvents?: EmailCalendarEvents;
   operations?: MessageOperationSourceFactory;
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
@@ -424,7 +444,10 @@ export interface EmailComposeContext {
   presentation: EmailComposePresentation;
   editorFiles: EmailEditorFiles;
   viewerEmail: Accessor<string | undefined>;
+  /** Explicit host-scoped extras, never the full personal directory. */
   recipients: Accessor<EmailRecipient[]>;
+  /** Each open To/Cc/Bcc selector owns its personal suggestion source. */
+  createRecipientSource: EmailRecipientSourceFactory | undefined;
   recipientName(id: string): string;
   hasPaidAccess: Accessor<boolean>;
   recordMention(sourceId: string, targetId: string): void;
@@ -434,8 +457,19 @@ export interface ComposeNoticeOptions {
   subtext?: string;
   duration?: number;
   persistent?: boolean;
+  /** An open notice this one changes in place, keeping its id. */
+  replace?: number;
+  /** Keeps an earlier notice with the same message instead of replacing it. */
+  stack?: boolean;
+  /** Runs once the notice closes, however it closes. */
+  onDismiss?: () => void;
   /** `kind` picks the action's icon; actions default to undo. */
-  actions?: { label: string; onClick: () => void; kind?: 'undo' | 'open' }[];
+  actions?: {
+    label: string;
+    onClick: () => void;
+    kind?: 'undo' | 'open' | 'save';
+    variant?: 'primary' | 'secondary';
+  }[];
 }
 export interface EmailComposeHost {
   focusSibling?: (direction: 'next' | 'prev') => boolean | void;

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT lower(trim(c.email_address)) AS \"email!\"\n           FROM email_message_recipients r JOIN email_contacts c ON c.id = r.contact_id\n           WHERE r.message_id=$1 AND c.email_address IS NOT NULL AND trim(c.email_address) <> ''",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "aabd840d29381ccb28f16a1162e0d67add00264fbb31bb36c6e3744a5fdd2f18"
+}

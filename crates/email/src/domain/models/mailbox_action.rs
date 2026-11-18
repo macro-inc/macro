@@ -101,10 +101,10 @@ impl MailboxAction {
                         pending.in_junk = Some(false);
                         pending.in_inbox = Some(!value && !m.is_draft);
                     }
-                    Self::Junk(value) if m.in_junk != *value && !m.is_draft => {
+                    Self::Junk(value) if m.in_junk != *value && (!m.is_draft || !value) => {
                         pending.in_junk = Some(*value);
                         pending.in_trash = Some(false);
-                        pending.in_inbox = Some(!value);
+                        pending.in_inbox = Some(!value && !m.is_draft);
                     }
                     Self::Trashed(_) | Self::Junk(_) => return None,
                     Self::Category { .. } => (),
@@ -225,6 +225,33 @@ mod test {
 #[cfg(test)]
 mod restore_test {
     use super::*;
+    #[test]
+    fn junk_drafts_can_be_restored_but_clean_drafts_cannot_be_marked_junk() {
+        let draft = MailboxActionMessage {
+            id: Uuid::now_v7(),
+            provider_id: Some("junk-draft".into()),
+            is_sent: false,
+            is_draft: true,
+            is_read: true,
+            in_inbox: false,
+            in_trash: false,
+            in_junk: true,
+            is_present: true,
+        };
+        let targets = MailboxAction::Junk(false).targets(&[draft.clone()]);
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].pending.in_junk, Some(false));
+        assert_eq!(targets[0].pending.in_inbox, Some(false));
+        assert!(
+            MailboxAction::Junk(true)
+                .targets(&[MailboxActionMessage {
+                    in_junk: false,
+                    ..draft
+                }])
+                .is_empty()
+        );
+    }
+
     #[test]
     fn explicit_restore_targets_sent_correspondence_without_erasing_its_provenance() {
         let sent = MailboxActionMessage {

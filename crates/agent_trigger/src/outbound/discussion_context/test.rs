@@ -123,6 +123,7 @@ fn posted(
     minute: i64,
 ) -> Message {
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: Uuid::from_u128(id),
         parent: parent.clone(),
         thread_id: thread.map(Uuid::from_u128),
@@ -260,6 +261,7 @@ async fn a_document_comment_carries_its_whole_thread_through_the_prompt() {
     assert_eq!(
         context,
         DiscussionContext {
+            agent_request: None,
             // An unanchored discussion names no place in the document.
             surface: DiscussionSurface::DocumentComment {
                 id: "doc".to_owned(),
@@ -349,6 +351,86 @@ async fn a_thread_root_image_travels_on_its_context_message() {
         }]
     );
     assert!(thread.messages[1].attachments.is_empty());
+}
+
+/// A document shared on its own starts a thread whose root has no text.
+/// The agent must still see the root and its document, here and in the
+/// channel background.
+#[tokio::test]
+async fn an_attachment_only_message_reaches_the_agent_with_its_document() {
+    let parent = channel();
+    let mut shared = posted(&parent, 30, None, "jacob@example.com", "  \n ", 0);
+    shared.attachments = vec![MessageAttachment {
+        id: Uuid::from_u128(39),
+        entity_type: "document".to_owned(),
+        entity_id: "01a18da2-731f-7066-a182-c46cbc0db2f9".to_owned(),
+        width: None,
+        height: None,
+        created_at: at(0),
+    }];
+    let mut root = posted(&parent, 10, None, "teo@example.com", "\n \n", 1);
+    root.attachments = vec![MessageAttachment {
+        id: Uuid::from_u128(19),
+        entity_type: "document".to_owned(),
+        entity_id: "0f2c1d6e-8a4b-4c3e-9f1a-2b7d5e6c8a90".to_owned(),
+        width: None,
+        height: None,
+        created_at: at(1),
+    }];
+    let prompt = posted(
+        &parent,
+        11,
+        Some(10),
+        "wolf@example.com",
+        "@Macro summarize into a short paragraph",
+        2,
+    );
+
+    let mut source = MockMessageReader::new();
+    let prompt_message = prompt.clone();
+    source
+        .expect_get()
+        .withf(|_, id| *id == Uuid::from_u128(11))
+        .returning(move |_, _| Ok(prompt_message.clone()));
+    let thread = discussion(root.clone(), vec![prompt.clone()], None);
+    source
+        .expect_get_thread()
+        .once()
+        .withf(|_, root| *root == Uuid::from_u128(10))
+        .return_once(move |_, _| Ok(thread));
+    let recent = vec![shared.clone(), root.clone()];
+    source
+        .expect_preceding()
+        .once()
+        .return_once(move |_, _, _| Ok(recent));
+
+    let context = context_from(source, channel_names(), Lexical::none(), &prompt).await;
+
+    assert_eq!(
+        context.thread,
+        Some(ContextThread {
+            root_id: root.id,
+            messages: vec![
+                ContextMessage {
+                    content: String::new(),
+                    ..entry(&root)
+                },
+                entry(&prompt),
+            ],
+            messages_omitted: false,
+        })
+    );
+    assert_eq!(
+        context.channel,
+        [ContextThread {
+            root_id: shared.id,
+            messages: vec![ContextMessage {
+                content: String::new(),
+                ..entry(&shared)
+            }],
+            messages_omitted: false,
+        }]
+    );
 }
 
 /// "please fix" in thread A, posted while another thread was busier. The
@@ -441,6 +523,7 @@ async fn a_channel_thread_reply_is_about_its_thread_not_the_latest_message() {
     assert_eq!(
         context,
         DiscussionContext {
+            agent_request: None,
             surface: DiscussionSurface::Channel {
                 id: Uuid::from_u128(3),
                 name: Some("eng".to_owned()),
@@ -1180,4 +1263,44 @@ async fn design_discussions_reach_the_agent_unanchored() {
         }
     );
     assert!(context.thread.is_some());
+}
+
+#[tokio::test]
+async fn an_agent_asking_for_a_person_names_them_and_counts_its_hop() {
+    let parent = document();
+    let root = posted(&parent, 1, None, "alice@example.com", "@Macro fix this", 0);
+    let by_bot = |id: u128, bot: bot_id::BotId, name: &str, content: &str, minute: i64| Message {
+        sender_id: channel_sender::ChannelSender::new_from_bot(bot),
+        triggered_by: Some(actor().as_ref().to_owned()),
+        bot_profile: Some(BotSenderProfile {
+            name: name.to_owned(),
+            avatar_url: None,
+        }),
+        ..posted(&parent, id, Some(1), "unused@example.com", content, minute)
+    };
+    let macro_reply = by_bot(2, bot_id::MACRO_NEW_BOT_ID, "Macro", "@Cursor fix it", 1);
+    let prompt = by_bot(3, bot_id::CURSOR_BOT_ID, "Cursor", "@Macro done, check", 2);
+
+    let mut source = MockMessageReader::new();
+    let prompt_message = prompt.clone();
+    source
+        .expect_get()
+        .returning(move |_, _| Ok(prompt_message.clone()));
+    source.expect_preceding().never();
+    let replies = vec![macro_reply, prompt.clone()];
+    source
+        .expect_get_thread()
+        .once()
+        .return_once(move |_, _| Ok(discussion(root, replies, None)));
+
+    let context = context_from(source, document_names(), Lexical::none(), &prompt).await;
+
+    assert_eq!(context.sender.name, "Cursor");
+    assert_eq!(
+        context.agent_request,
+        Some(AgentRequest {
+            on_behalf_of: person("actor@example.com"),
+            hops: 2,
+        })
+    );
 }

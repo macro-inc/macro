@@ -18,6 +18,13 @@ view access for the acting user. Static-file IDs retain their existing bearer
 capability semantics and resolve only through configured storage; arbitrary URLs
 are not accepted. Generated static file IDs can be reused for subsequent edits.
 
+`POST /images/generate` (feature `axum`, mounted by the cognition API) serves
+the same use case over HTTP for the SDK and code-mode agents. It creates as the
+caller's `CreationPrincipal` and runs through `AdmittedImageGenerationService`,
+which admits the acting user for `AiFeature::ImageGeneration` before any
+provider call and refuses team bots with no user to bill. The tool path skips
+admission because agent turns are admitted before they run.
+
 Hosts compose the provider, reference reader, and storage client in `ai_tools`.
 The frontend renders the returned SFS image directly.
 

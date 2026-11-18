@@ -9,11 +9,11 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { useSplitPanelOrThrow } from '../layoutUtils';
 import {
   type PriorityCollapseController,
   PriorityCollapseOverflowSensor,
-} from './PriorityCollapseOverflowSensor';
+} from '../../../priority-collapse/PriorityCollapseOverflowSensor';
+import { useSplitPanelOrThrow } from '../layoutUtils';
 
 export function SplitToolbar(props: {
   ref: Setter<HTMLDivElement | null>;

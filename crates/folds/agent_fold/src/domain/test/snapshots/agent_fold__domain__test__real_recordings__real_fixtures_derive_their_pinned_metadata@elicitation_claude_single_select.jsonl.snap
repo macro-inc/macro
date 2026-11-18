@@ -5,6 +5,7 @@ input_file: crates/folds/agent_fold/fixtures/real/elicitation_claude_single_sele
 ---
 SessionMetadata {
     notifications: [],
+    review_revisions: [],
     noop_turn: None,
     harness: ClaudeCode,
     model: Some(

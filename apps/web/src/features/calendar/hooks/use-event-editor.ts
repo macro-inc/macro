@@ -1,6 +1,5 @@
 import { getMeetingShareToken, getMeetingUrl } from '@channel/Call/call-link';
 import { toast } from '@core/component/Toast/Toast';
-import { recipientEntityMapper, useContacts } from '@core/user';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
   isGuestEditRefused,
@@ -28,6 +27,7 @@ import {
   type EventEditorDisabledFields,
   type EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
+import { eventGuestOptions } from '../components/composer/guest-options';
 import {
   type CalendarEvent,
   DEFAULT_CALENDAR_SOURCE,
@@ -108,9 +108,17 @@ function hasTimeChanged(
     .otherwise(() => true);
 }
 
+/** A new event's id and the time it was created with. */
+export type CreatedCalendarEvent = {
+  eventId: string;
+  time: EventEditorSubmitValues['time'];
+};
+
 interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
   onSaved: () => void;
+  /** Called with a new event once it exists, before `onSaved`. */
+  onCreated?: (created: CreatedCalendarEvent) => void;
   macroCallsEnabled: Accessor<boolean>;
   /**
    * Whether the guest-invites rollout is on: a guest the organizer lets
@@ -148,10 +156,13 @@ export function useEventEditor(props: UseEventEditorProps) {
   // Event edits also need calendar metadata to resolve reminders that still
   // follow the calendar defaults.
   const calendarsQuery = useVisibleCalendarsQuery();
-  const contacts = useContacts();
-
   const guestOptions = createMemo(() =>
-    contacts().map(recipientEntityMapper('user'))
+    eventGuestOptions(
+      (props.event()?.attendees ?? []).map((guest) => ({
+        email: guest.email,
+        name: guest.displayName,
+      }))
+    )
   );
   const writableCalendars = createMemo(
     () => calendarsQuery.data?.filter((calendar) => calendar.isWritable) ?? []
@@ -339,7 +350,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       if (!event) {
         // The server mints the call and writes its link into the event, so
         // the one invitation attendees receive already carries it.
-        await create.mutateAsync({
+        const created = await create.mutateAsync({
           title: values.title,
           time: values.time,
           calendarId: values.calendarId,
@@ -357,6 +368,7 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
           ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
         });
+        props.onCreated?.({ eventId: created.id, time: values.time });
         props.onSaved();
         return;
       }

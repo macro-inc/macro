@@ -825,3 +825,29 @@ fn an_untrusted_xml_prefix_is_still_user_text() {
             .is_some_and(|text| text.contains("untrusted"))
     }));
 }
+
+/// A runtime replays history on load, so every replayed frame is stored at
+/// the load: a replayed reply's end says nothing about when it was sent.
+#[test]
+fn a_replayed_reply_has_no_time() {
+    let loaded_at = "2026-10-15T14:02:00Z".parse().unwrap();
+    let log = [
+        request("session/load", json!(1)),
+        update("user_message_chunk", "question"),
+        update("agent_message_chunk", "answer"),
+        frame(
+            "to_server",
+            json!({"method":"_session/turn_complete","params":{"sessionId":"s","outcome":{"kind":"finished"}}}),
+        ),
+        result(json!(1)),
+    ]
+    .map(|entry| AgentSessionLog {
+        logged_at: Some(loaded_at),
+        ..entry
+    });
+
+    let folded = fold(log);
+
+    assert!(folded[1].stop.is_some());
+    assert_eq!(folded[1].posted_at, None);
+}

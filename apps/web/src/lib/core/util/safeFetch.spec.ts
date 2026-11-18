@@ -89,6 +89,26 @@ describe('safeFetch', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
+  test('does not resend a request whose response failed to read', async () => {
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.reject(new TypeError('network error')),
+        headers: new Headers({ 'Content-Type': 'application/json' }),
+      } as Response)
+    );
+
+    const result = await safeFetch<{ data: string }>('https://localhost/data', {
+      method: 'POST',
+      retry: { maxTries: 2, delay: 0 },
+    });
+
+    expect(result._unsafeUnwrapErr()).toEqual([
+      { code: 'NETWORK_ERROR', message: 'Network error occurred' },
+    ]);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
   test('handle invalid JSON', async () => {
     mockFetch.mockImplementationOnce(() =>
       Promise.resolve({
@@ -133,6 +153,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 404,
+          headers: new Headers(),
         } as Response)
       );
 
@@ -152,6 +173,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 404,
+          headers: new Headers(),
         } as Response)
       );
 
@@ -171,6 +193,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 401,
+          headers: new Headers(),
         } as Response)
       );
 
@@ -190,6 +213,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 500,
+          headers: new Headers(),
         } as Response)
       );
 
@@ -209,6 +233,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 418,
+          headers: new Headers(),
         } as Response)
       );
 
@@ -230,6 +255,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 429,
+          headers: new Headers(),
           json: () => Promise.resolve({ error: 'Too many requests' }),
         } as Response)
       );

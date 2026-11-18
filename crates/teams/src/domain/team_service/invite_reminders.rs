@@ -152,6 +152,7 @@ where
         let invited_by = MacroUserIdStr::parse_from_str(&reminder.invited_by)
             .map_err(|e| anyhow::anyhow!("invalid inviter id: {e:?}"))?
             .into_owned();
+        let inviter_name = self.inviter_name(&invited_by).await;
 
         let request = SendNotificationRequestBuilder {
             notification_entity: EntityType::Team
@@ -167,6 +168,8 @@ where
                 sender_profile_picture_url: None,
                 invitee_plan: invitee_plan(reminder),
                 reminder: true,
+                is_agent: reminder.is_agent,
+                inviter_name,
             },
             recipient_ids: HashSet::from([recipient]),
         }

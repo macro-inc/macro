@@ -15,7 +15,7 @@ fn client(server: &MockServer) -> GmailClient {
 }
 
 #[tokio::test]
-async fn history_paginates_and_advances_to_the_latest_cursor() {
+async fn each_history_page_is_one_request_that_returns_the_next_page_token() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/users/me/history"))
@@ -35,6 +35,7 @@ async fn history_paginates_and_advances_to_the_latest_cursor() {
         .await;
     Mock::given(method("GET"))
         .and(path("/users/me/history"))
+        .and(query_param("startHistoryId", "100"))
         .and(query_param("pageToken", "next"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "history": [{
@@ -47,13 +48,18 @@ async fn history_paginates_and_advances_to_the_latest_cursor() {
         .mount(&server)
         .await;
 
-    let response = get_history(&client(&server), "token", "100")
+    let first = get_history_page(&client(&server), "token", "100", None)
         .await
-        .expect("history should decode");
+        .expect("first page should decode");
+    assert_eq!(first.history_id, "101");
+    assert_eq!(first.next_page_token.as_deref(), Some("next"));
 
-    assert_eq!(response.history_id, "102");
-    assert_eq!(response.history.unwrap().len(), 2);
-    assert!(response.next_page_token.is_none());
+    let last = get_history_page(&client(&server), "token", "100", Some("next"))
+        .await
+        .expect("last page should decode");
+    assert_eq!(last.history_id, "102");
+    assert_eq!(last.history.unwrap().len(), 1);
+    assert!(last.next_page_token.is_none());
 }
 
 #[tokio::test]
@@ -68,7 +74,7 @@ async fn stale_history_not_found_status_is_preserved() {
         .mount(&server)
         .await;
 
-    let error = get_history(&client(&server), "token", "stale")
+    let error = get_history_page(&client(&server), "token", "stale", None)
         .await
         .expect_err("stale history should fail");
 

@@ -68,6 +68,12 @@ export const semanticTokens = [
   'success',
   'warning',
   'failure',
+  'priority-urgent',
+  'task-status-not-started',
+  'task-status-in-progress',
+  'task-status-in-review',
+  'task-status-completed',
+  'task-status-canceled',
   'chrome',
 ] as const;
 export type SemanticToken = (typeof semanticTokens)[number];

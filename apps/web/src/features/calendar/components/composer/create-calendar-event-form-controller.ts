@@ -126,6 +126,7 @@ export interface CreateCalendarEventFormControllerOptions {
   calendarOptions: Accessor<EventEditorCalendarOption[]>;
   /** Override the default account; undefined means wait for it or choose explicitly. */
   defaultCalendarId?: Accessor<string | undefined>;
+  /** Scoped initial guest metadata; the open picker owns personal suggestions. */
   guestOptions: Accessor<EventEditorGuestOption[]>;
   recurrenceTimeZone?: string;
   onChange?: (value: EventEditorInitialValues) => void;

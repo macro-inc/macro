@@ -1,6 +1,7 @@
 //! Configuration for the email focus worker, loaded with `macro_config` from
 //! the email-service Doppler project it shares with the other email binaries.
 
+use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
 
@@ -22,6 +23,8 @@ pub struct Config {
     pub macro_db_url: MacroDbUrl,
     /// Kafka bootstrap servers; the worker reads `macro.email`.
     pub kafka_brokers: KafkaBrokers,
+    /// Authenticates the worker's pushes to the connection gateway.
+    pub internal_api_key: InternalApiKey,
     /// TypeSafe credential for Jev. While it is unset the worker classifies nothing.
     pub typesafe_api_key: jev::outbound::TypesafeApiKey,
     /// Comma-separated inbox domains to classify, e.g. `macro.com`. Mail from

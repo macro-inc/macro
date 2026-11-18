@@ -28,7 +28,6 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure, alert: mocks.alert },
 }));
 vi.mock('@core/user', () => ({
-  useContacts: () => () => [],
   recipientEntityMapper: () => (value: unknown) => value,
 }));
 vi.mock('@queries/calendar/calendars', () => ({
@@ -499,6 +498,33 @@ describe('scheduling a Macro call', () => {
       expect(mocks.updateEvent).not.toHaveBeenCalled();
       expect(editor.saveError()).toBeUndefined();
       expect(saved).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('reports the created event before it closes', async () => {
+    const order: string[] = [];
+    const created = vi.fn(() => order.push('created'));
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({
+            macroCallsEnabled: () => false,
+            event: () => undefined,
+            onCreated: created,
+            onSaved: () => order.push('saved'),
+          }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save(values);
+      expect(created).toHaveBeenCalledExactlyOnceWith({
+        eventId: 'event-1',
+        time: values.time,
+      });
+      expect(order).toEqual(['created', 'saved']);
     } finally {
       dispose();
     }

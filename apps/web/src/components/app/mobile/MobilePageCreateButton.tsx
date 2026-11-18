@@ -1,12 +1,15 @@
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import {
   setCreateMenuOpen,
   useCreateMenuBlocks,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
+import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
 import { type TranslationKey, t } from '@app/lib/i18n';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import MessageIcon from '@icon/system/regular/chat-circle.svg';
 import MoreIcon from '@icon/system/regular/dots-three.svg';
@@ -45,13 +48,15 @@ const NEW_ITEM_LABELS: Partial<Record<MobileNavViewId, TranslationKey>> = {
   companies: 'mobile.newCompany',
 };
 
-type PageCreateAction = Pick<MobileCreateMenuItem, 'label' | 'onSelect'>;
+type PageCreateAction = Pick<
+  MobileCreateMenuItem,
+  'label' | 'onSelect' | 'raiseKeyboard'
+>;
 
 /** The current non-AI view's New action above the navigation dock. */
 export function MobilePageCreateButton() {
   const foregroundView = useForegroundMobileView();
   const createBlocks = useCreateMenuBlocks();
-  const calendarEnabled = useCalendarUiFlag();
   const openEventComposer = useOpenEventComposer();
   const openCreateMenu = () => setCreateMenuOpen(true);
 
@@ -62,12 +67,31 @@ export function MobilePageCreateButton() {
       return { label: t('mobile.company'), onSelect: openCreateCompanyModal };
     }
     if (view === 'calendar') {
-      return calendarEnabled()
-        ? { label: t('mobile.event'), onSelect: () => openEventComposer() }
-        : undefined;
+      return {
+        label: t('mobile.event'),
+        // Created away from the calendar, the event shows there next.
+        onSelect: () =>
+          openEventComposer({
+            onCreated: (created) =>
+              fireAndForget(openCalendarEventSplit(created), 'mobile-create'),
+          }),
+      };
     }
     const block = mobilePageCreateBlock(view, createBlocks());
-    return block && { label: block.label, onSelect: block.keyDownHandler };
+    return (
+      block && {
+        label: block.label,
+        onSelect: block.keyDownHandler,
+        ...(block.blockName === 'task'
+          ? {
+              raiseKeyboard: () =>
+                triggerFocusNewElement(NEW_TASK_TITLE_SELECTOR, {
+                  touchOnly: true,
+                }),
+            }
+          : {}),
+      }
+    );
   };
 
   const quickActions = (): MobileCreateMenuItem[] => [
@@ -114,7 +138,7 @@ export function MobilePageCreateButton() {
         when={foregroundView() === 'home'}
         fallback={
           <Show
-            when={foregroundView() === 'calendar' && calendarEnabled()}
+            when={foregroundView() === 'calendar'}
             fallback={
               <MobileCreateButton
                 ariaLabel={actionAriaLabel()}

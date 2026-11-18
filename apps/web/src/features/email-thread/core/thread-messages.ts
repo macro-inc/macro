@@ -1,13 +1,54 @@
 import type { EmailMessage } from '../../email-message/core/email-message';
+import { isViewerAddress } from '../../email-message/core/email-user';
 import type { EmailThread } from './email-thread';
 
-/** Sender actions historically target the earliest sender other than the viewer. */
-export function selectThreadSender(thread: EmailThread, viewerEmail?: string) {
-  const viewer = viewerEmail?.toLowerCase();
+/**
+ * Sender actions target the earliest sender other than the viewer: the
+ * inbox's own address or any other address of theirs. With no inbox address
+ * the viewer is unknown, so no sender is.
+ */
+export function selectThreadSender(
+  thread: EmailThread,
+  viewerEmail?: string,
+  ...otherViewerEmails: (string | undefined)[]
+) {
+  if (!viewerEmail) return undefined;
+  const viewer = [viewerEmail, ...otherViewerEmails];
   return selectThreadMessages(thread).messages.find(
     (message) =>
-      message.from?.email && message.from.email.toLowerCase() !== viewer
+      message.from?.email &&
+      !viewer.some((email) => isViewerAddress(message.from?.email, email))
   )?.from?.email;
+}
+
+/**
+ * Everyone the thread's sent and received messages were from, to or cc'd,
+ * earliest first and each address once, without the viewer's own addresses.
+ * Bcc stays out: those recipients were hidden from the others.
+ */
+export function selectThreadParticipants(
+  thread: EmailThread,
+  ...viewerEmails: (string | undefined)[]
+) {
+  const participants = new Map<string, string>();
+  for (const message of selectThreadMessages(thread).filtered) {
+    for (const contact of [
+      ...(message.from ? [message.from] : []),
+      ...message.to,
+      ...message.cc,
+    ]) {
+      const key = contact.email.toLowerCase();
+      if (
+        !contact.email ||
+        participants.has(key) ||
+        viewerEmails.some((email) => isViewerAddress(contact.email, email))
+      ) {
+        continue;
+      }
+      participants.set(key, contact.email);
+    }
+  }
+  return [...participants.values()];
 }
 
 /**

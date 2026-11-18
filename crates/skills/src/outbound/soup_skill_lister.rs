@@ -121,6 +121,7 @@ impl<S: SoupService> SkillLister for SoupSkillLister<S> {
                 SoupItem::Document(doc) => Some(SkillSummary {
                     document_id: doc.id,
                     name: doc.name,
+                    description: None,
                     updated_at: Some(doc.updated_at),
                 }),
                 _ => None,

@@ -8,6 +8,7 @@ import {
 
 const response = (overrides: Partial<FoldedMessage> = {}): FoldedMessage => ({
   agentSessionId: 'session',
+  key: '0:agent',
   requestId: null,
   turn: 0,
   author: { kind: 'agent' },

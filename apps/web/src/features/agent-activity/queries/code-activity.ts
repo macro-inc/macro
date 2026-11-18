@@ -1,4 +1,7 @@
-import { codeExecutionInput } from '@app/features/block-agent/state/code-execution';
+import {
+  codeExecutionId,
+  codeExecutionInput,
+} from '@app/features/block-agent/state/code-execution';
 import { isCodeExecution } from '@app/features/block-agent/state/tool-groups';
 import type { AgentActivityRow } from '@macro-inc/lexical-core';
 import { agentCodeExecutionQueryOptions } from '@queries/agent-session/code-execution';
@@ -9,11 +12,14 @@ import type {
 import { useQueries } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 
-/** Share the session view's observed SDK activity while an inline run is open. */
+/**
+ * Share the session view's observed SDK activity while an inline run is open.
+ * Without a `segment` there is no run to look into, and `rows` stand as given.
+ */
 export function createCodeActivityRows(
   sessionId: Accessor<string>,
   reply: Accessor<FoldedMessage | undefined>,
-  segment: Accessor<number>,
+  segment: Accessor<number | undefined>,
   rows: Accessor<readonly (ActivityRow | AgentActivityRow)[]>
 ) {
   const calls = createMemo(() => {
@@ -28,7 +34,10 @@ export function createCodeActivityRows(
       )
         return [];
       const input = codeExecutionInput(part);
-      return input ? [{ ...input, id: part.id }] : [];
+      const executionId = codeExecutionId(part);
+      return input && executionId
+        ? [{ executionId, source: input.source, id: part.id }]
+        : [];
     });
   });
   const queries = useQueries(() => ({

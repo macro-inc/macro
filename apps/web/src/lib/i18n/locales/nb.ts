@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Prosjekt',
     newProject: 'Nytt prosjekt',
     contentAlreadyOpen: 'Innholdet er allerede åpent',
-    unableToOpenConversation: 'Kan ikke åpne samtalen. Prøv igjen.',
     mobileSearchPlaceholder: 'Søk…',
     closeSearch: 'Lukk søk',
     searchFullTextFor: 'Søk i fulltekst etter «{{query}}»',
@@ -589,10 +588,6 @@ export default {
       other: 'Merket {{accepted}} av {{count}} elementer som ikke ferdige',
     },
     toastMarkNotDoneFailed: 'Kunne ikke merke som ikke ferdig',
-    toastThreadStaysDone:
-      'Denne tråden har ingen mottatte meldinger, så den forblir ferdig',
-    toastThreadsStayDone:
-      'Disse trådene har ingen mottatte meldinger, så de forblir ferdige',
     toastCountNotRestored: {
       one: '{{count}} kunne ikke gjenopprettes.',
       other: '{{count}} kunne ikke gjenopprettes.',
@@ -692,8 +687,6 @@ export default {
     create: 'Opprett',
     getMobileApp: 'Last ned mobilappen',
     signedInAs: 'Logget på som {{name}}',
-    commandMenu: 'Kommandomeny',
-    searchEverything: 'Søk i alt',
     customizeSidebar: 'Tilpass sidefeltet',
     customizeSidebarDescription:
       'Velg hvilke apper som vises i sidefeltet, og dra for å endre rekkefølgen. Hjem er alltid først.',
@@ -760,7 +753,7 @@ export default {
     tabMobileApp: 'Mobilapp',
     tabTags: 'Etiketter',
     tabIntegrations: 'Integrasjoner',
-    tabRuntimes: 'Kjøremiljøer',
+    tabRuntimes: 'Maskiner',
     tabMcpServer: 'MCP-server',
     tabApiKeys: 'API-nøkler',
     tabBots: 'Boter',
@@ -807,7 +800,6 @@ export default {
     goForward: 'Gå fremover',
     createNewSplit: 'Opprett ny rute',
     close: 'Lukk',
-    returnToList: 'Tilbake til listen',
     previousItem: 'Forrige element',
     nextItem: 'Neste element',
     itemNavigation: 'Elementnavigasjon',

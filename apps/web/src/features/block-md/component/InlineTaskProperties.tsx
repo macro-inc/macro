@@ -1,12 +1,9 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ProgressChip } from '@core/component/LexicalMarkdown/component/status/Progress';
-import { enableProjects } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
 import {
-  getBuiltinPropertyIds,
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
@@ -46,13 +43,9 @@ export function InlineTaskProperties() {
 
   const { properties, refetch, addProperty, removeProperty } =
     useEntityProperties(blockId, entityType, false);
-  const projects = useFeatureFlag(enableProjects);
   const defaultDefinitionIds = () =>
     documentKind === 'task'
-      ? [
-          ...getDefaultPinnedProperties('task'),
-          ...(projects().enabled ? [SYSTEM_PROPERTY_IDS.PROJECT] : []),
-        ]
+      ? [...getDefaultPinnedProperties('task'), SYSTEM_PROPERTY_IDS.PROJECT]
       : [];
   const pins = createPinnedProperties(
     () => state.editor.md.editor,
@@ -61,7 +54,6 @@ export function InlineTaskProperties() {
   const titleProperties = () => {
     const fetched = properties();
     return documentKind === 'task' &&
-      projects().enabled &&
       !fetched.some(
         (property) =>
           property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
@@ -111,17 +103,15 @@ export function InlineTaskProperties() {
       (property) =>
         selected.includes(property.propertyId) &&
         !property.isMetadata &&
-        !tagDefinitionIds().has(property.propertyDefinitionId) &&
-        !(
-          documentKind === 'task' &&
-          !projects().enabled &&
-          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
-        )
+        !tagDefinitionIds().has(property.propertyDefinitionId)
     );
     if (documentKind !== 'task') return visible;
-    const order = [
-      ...getDefaultPinnedProperties('task'),
+    const order: readonly string[] = [
+      SYSTEM_PROPERTY_IDS.STATUS,
+      SYSTEM_PROPERTY_IDS.PRIORITY,
+      SYSTEM_PROPERTY_IDS.DUE_DATE,
       SYSTEM_PROPERTY_IDS.PROJECT,
+      SYSTEM_PROPERTY_IDS.ASSIGNEES,
     ];
     return [...visible].sort((left, right) => {
       const leftIndex = order.indexOf(left.propertyDefinitionId);
@@ -179,25 +169,27 @@ export function InlineTaskProperties() {
             entityType={entityType}
             variant="secondary"
             size="xs"
+            class={documentKind === 'task' ? 'touch:min-h-9' : undefined}
             showAddButton={documentKind === 'document' && canEdit()}
           />
-          <Key each={inlineProperties()} by="propertyId">
+          {/* A placeholder keeps its chip, and a pick in it, when saving assigns its ID. */}
+          <Key each={inlineProperties()} by="propertyDefinitionId">
             {(property) => (
               <InlinePropertyValue
                 property={property()}
                 entityId={blockId}
+                showLabel={
+                  documentKind === 'task' &&
+                  property().propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.DUE_DATE
+                    ? false
+                    : undefined
+                }
                 canManage={
                   !property().propertyId.startsWith('pending:') ||
                   defaultDefinitionIds().includes(
                     property().propertyDefinitionId
                   )
-                }
-                canRemove={
-                  !property().propertyId.startsWith('pending:') &&
-                  (documentKind !== 'task' ||
-                    !getBuiltinPropertyIds('task').includes(
-                      property().propertyDefinitionId
-                    ))
                 }
               />
             )}

@@ -69,3 +69,12 @@ it('hides Gmail import on mobile or without a handler', () => {
     screen.queryByRole('button', { name: 'Import from Gmail' })
   ).toBeNull();
 });
+
+it('says a shared inbox signature applies to everyone who sends from it', () => {
+  render(() => <SignatureForm {...baseProps} mobile={false} shared />);
+  expect(
+    screen.getByText(
+      'Shared inbox. Automatically added to new emails anyone sends from this account.'
+    )
+  ).toBeTruthy();
+});

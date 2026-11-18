@@ -7,6 +7,7 @@
 import type { AutoReloadSnapshot } from './autoReloadSnapshot';
 import type { PlanTier } from './planTier';
 import type { UsageSnapshotBlockedReason } from './usageSnapshotBlockedReason';
+import type { UsageSnapshotCreditPurchase } from './usageSnapshotCreditPurchase';
 
 /**
  * The payer's current-period position, as shown in Billing settings and used
@@ -21,6 +22,7 @@ reloads are not suspended. */
   can_manage_billing: boolean;
   /** Shared prepaid credit balance, in customer cents. */
   credit_balance_cents: number;
+  credit_purchase?: UsageSnapshotCreditPurchase;
   /** Shared payer credits already applied to this period, in customer cents. */
   credits_consumed_cents: number;
   /** Whether prepaid credits belong to the team, including a team with one seat. */

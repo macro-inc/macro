@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::SaveImageError;
+use crate::domain::models::{ImageGenerationError, ReadImageError, SaveImageError};
 use ai_toolset::schema::generate_validated_input_schema;
 
 #[test]

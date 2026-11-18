@@ -4,7 +4,7 @@
 
 import type { MessageData } from '@core/messages/types';
 import { fireEvent, render } from '@solidjs/testing-library';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActionMenu } from '../ActionMenu';
 import { Root } from '../Root';
 
@@ -17,6 +17,22 @@ const message: MessageData = {
   attachments: [],
   reactions: [],
 };
+
+// The emoji picker's virtual list measures its rows, which jsdom can't.
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('ActionMenu', () => {
   it('mounts only while its message is hovered', () => {

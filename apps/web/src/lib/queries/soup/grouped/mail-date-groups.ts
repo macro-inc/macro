@@ -1,15 +1,6 @@
 import type { SoupAstItemsData } from '../items';
+import { DATE_GROUP_BUCKETS } from './api';
 import type { GroupMeta } from './types';
-
-const buckets = [
-  ['today', 'Today'],
-  ['yesterday', 'Yesterday'],
-  ['this_week', 'This Week'],
-  ['last_week', 'Last Week'],
-  ['this_month', 'This Month'],
-  ['last_month', 'Last Month'],
-  ['older', 'Older'],
-] as const;
 
 /** Matches models_grouping's UTC date buckets; counts describe loaded cached mail. */
 export function groupCachedMailByDate(
@@ -49,8 +40,8 @@ export function groupCachedMailByDate(
                     ? 5
                     : 6;
     const group = groups.get(index) ?? {
-      key: buckets[index][0],
-      label: buckets[index][1],
+      key: DATE_GROUP_BUCKETS[index][0],
+      label: DATE_GROUP_BUCKETS[index][1],
       displayOrder: index,
       totalCount: 0,
       itemIds: [],

@@ -20,12 +20,15 @@ use models_databases::{ColumnId, ColumnKind, EntityKind, OptionId, TableId};
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Audience, DatabaseId, Form, FormId, FormLayout, FormQuestionId, FormSection, FormSectionId,
-    FormStatus, QuestionLayout, StoredForm, Widget,
+    Audience, DatabaseId, Form, FormBranding, FormId, FormLayout, FormQuestionId, FormSection,
+    FormSectionId, FormStatus, QuestionLayout, StoredForm, Widget,
 };
 
+mod anonymous;
+mod authoring_branching;
 mod authoring_workflow;
 mod booking;
+mod branching;
 mod catalog;
 mod create;
 mod drafts;
@@ -56,6 +59,7 @@ type Service = FormsServiceImpl<
     FixedClock,
     RecordingBroker,
     FakeDrafts,
+    FakeImageFiles,
 >;
 
 fn user(id: &'static str) -> MacroUserIdStr<'static> {
@@ -87,6 +91,7 @@ fn service(world: &Shared) -> Service {
         FixedClock(world.clone()),
         RecordingBroker(world.clone()),
         FakeDrafts(world.clone()),
+        FakeImageFiles(world.clone()),
     )
 }
 
@@ -190,6 +195,7 @@ fn rsvp_layout() -> FormLayout {
                         widget: Some(Widget::Date),
                     },
                 ],
+                show_when: None,
             },
             FormSection::Gate {
                 id: ELIGIBILITY,
@@ -227,6 +233,7 @@ fn rsvp_layout() -> FormLayout {
                         widget: None,
                     },
                 ],
+                show_when: None,
             },
         ],
     }
@@ -280,6 +287,7 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
     let now = world.now;
     world.forms.push(StoredForm {
         form: Form {
+            appearance: None,
             id: RSVP_FORM,
             name: "Q4 offsite RSVP".into(),
             description: "".into(),
@@ -293,9 +301,13 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
             status: FormStatus::Open,
             closes_at: None,
             confirmation_message: "".into(),
+            branding: FormBranding::default(),
             created_at: now,
             updated_at: now,
+            project_id: None,
             is_hidden_in_drive: false,
+            responses_visible: false,
+            anonymous: false,
         },
         trashed_at: None,
         name_follows_database: false,

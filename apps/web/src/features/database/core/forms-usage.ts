@@ -11,7 +11,7 @@ export type FormsUsage =
       kind: 'known';
       /** Forms asking it as a question (tables: forms writing to it). */
       names: readonly string[];
-      /** Forms whose gate rules test it. */
+      /** Forms whose gate or section-condition rules test it. */
       gated: readonly string[];
     };
 
@@ -50,7 +50,7 @@ export function columnDeleteNote(usage: FormsUsage): string | undefined {
           ? `Asked by ${quoted(names)}: the question leaves the form with it.`
           : undefined,
         gated.length > 0
-          ? `${quoted(gated)} ${gated.length === 1 ? 'checks' : 'check'} it in a gate, so ${gated.length === 1 ? 'it stops' : 'they stop'} taking responses until the gate is fixed.`
+          ? `${quoted(gated)} ${gated.length === 1 ? 'checks' : 'check'} it in a gate or section condition, so ${gated.length === 1 ? 'it stops' : 'they stop'} taking responses until the rule is fixed.`
           : undefined,
       ].filter((line) => line !== undefined);
       return lines.length > 0 ? lines.join(' ') : undefined;

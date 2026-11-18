@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_mailbox_import_minutes (link_id, minute, imported, last_imported_at)\n            SELECT link_id, date_trunc('minute', now()), imported, last_imported_at\n            FROM unnest($1::uuid[], $2::int[], $3::timestamptz[]) AS flushed(link_id, imported, last_imported_at)\n            ON CONFLICT (link_id, minute) DO UPDATE SET\n                imported = email_mailbox_import_minutes.imported + EXCLUDED.imported,\n                last_imported_at = GREATEST(email_mailbox_import_minutes.last_imported_at, EXCLUDED.last_imported_at)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int4Array",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "88e47b1fc3e5e19bfd0f4083e078d02ba8d5b4a2eafe1cf6c1d8fbf1b4d841a3"
+}

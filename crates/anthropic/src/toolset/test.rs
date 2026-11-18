@@ -1,6 +1,6 @@
 use super::*;
-use crate::types::response::web_search::{SearchResult, WebSearchContent, WebSearchToolError};
-use crate::types::response::{Content, MessageResponse, ResponseContentKind};
+use crate::types::response::ResponseContentKind;
+use crate::types::response::code_execution::BashCodeExecutionContent;
 use ai_billing::domain::{
     DenyReason,
     admission::{AdmissionFuture, AiAdmissionError, AiAdmissionService},
@@ -62,7 +62,7 @@ async fn direct_tools_refuse_before_both_provider_branches_and_observation() {
                 RequestContext::new("macro|first@example.com".to_owned().try_into().unwrap());
             let second =
                 RequestContext::new("macro|second@example.com".to_owned().try_into().unwrap());
-            let tool = WebSearch {
+            let tool = BashCodeExecution {
                 input: "test".into(),
             };
             let (a, b) = tokio::join!(
@@ -167,7 +167,7 @@ async fn context_with_status(
 async fn independent_tool_uses_authenticated_user_and_records_before_parsing() {
     let journal = Arc::new(Observations::default());
     // Deliberately malformed tool content: usage must survive SDK/result failure.
-    let context = context_with_response(r#"{"id":"msg-1","content":42,"usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":2,"cache_creation_input_tokens":3,"server_tool_use":{"web_search_requests":1}}}"#, journal.clone()).await;
+    let context = context_with_response(r#"{"id":"msg-1","content":42,"usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":2,"cache_creation_input_tokens":3,"server_tool_use":{"code_execution_requests":1}}}"#, journal.clone()).await;
     let request = RequestContext::new(
         "macro|authenticated@example.com"
             .to_owned()
@@ -178,7 +178,7 @@ async fn independent_tool_uses_authenticated_user_and_records_before_parsing() {
         invoke_server_tool(
             &context,
             &request,
-            crate::types::request::WEB_SEARCH_TOOL.clone(),
+            crate::types::request::CODE_EXECUTION_TOOL.clone(),
             "query"
         )
         .await
@@ -219,7 +219,7 @@ async fn recorder_failure_does_not_fail_tool_execution() {
     invoke_server_tool(
         &context,
         &request,
-        crate::types::request::WEB_SEARCH_TOOL.clone(),
+        crate::types::request::CODE_EXECUTION_TOOL.clone(),
         "query",
     )
     .await
@@ -246,7 +246,7 @@ async fn failed_http_response_preserves_reported_usage() {
         invoke_server_tool(
             &context,
             &request,
-            crate::types::request::WEB_SEARCH_TOOL.clone(),
+            crate::types::request::CODE_EXECUTION_TOOL.clone(),
             "query"
         )
         .await
@@ -316,7 +316,7 @@ async fn live_tool_has_no_deadline_but_cancelled_tool_drain_is_bounded() {
             invoke_server_tool(
                 &context,
                 &request,
-                crate::types::request::WEB_SEARCH_TOOL.clone(),
+                crate::types::request::CODE_EXECUTION_TOOL.clone(),
                 "query",
             )
             .await
@@ -375,117 +375,11 @@ fn nullable_cache_counters_are_absent_but_malformed_usage_is_unresolved() {
     }
 }
 
-#[test]
-fn deserialize_web_search_response() {
-    // From the Anthropic docs: https://platform.claude.com/docs/en/docs/build-with-claude/tool-use/web-search-tool
-    let json = serde_json::json!({
-        "id": "msg_a930390d3a",
-        "type": "message",
-        "role": "assistant",
-        "model": "claude-sonnet-4-5-20250929",
-        "content": [
-            {
-                "type": "text",
-                "text": "I'll search for when Claude Shannon was born."
-            },
-            {
-                "type": "server_tool_use",
-                "id": "srvtoolu_01WYG3ziw53XMcoyKL4XcZmE",
-                "name": "web_search",
-                "input": {
-                    "query": "claude shannon birth date"
-                }
-            },
-            {
-                "type": "web_search_tool_result",
-                "tool_use_id": "srvtoolu_01WYG3ziw53XMcoyKL4XcZmE",
-                "content": [
-                    {
-                        "type": "web_search_result",
-                        "url": "https://en.wikipedia.org/wiki/Claude_Shannon",
-                        "title": "Claude Shannon - Wikipedia",
-                        "encrypted_content": "EqgfCioIARgB...",
-                        "page_age": "April 30, 2025"
-                    }
-                ]
-            },
-            {
-                "text": "Based on the search results, ",
-                "type": "text"
-            },
-            {
-                "text": "Claude Shannon was born on April 30, 1916",
-                "type": "text",
-                "citations": [
-                    {
-                        "type": "web_search_result_location",
-                        "url": "https://en.wikipedia.org/wiki/Claude_Shannon",
-                        "title": "Claude Shannon - Wikipedia",
-                        "encrypted_index": "Eo8BCioIAhgB...",
-                        "cited_text": "Claude Elwood Shannon (April 30, 1916 – February 24, 2001)..."
-                    }
-                ]
-            }
-        ],
-        "stop_reason": "end_turn",
-        "stop_sequence": null,
-        "usage": {
-            "input_tokens": 6039,
-            "output_tokens": 931,
-            "server_tool_use": {
-                "web_search_requests": 1
-            }
-        }
-    });
-
-    let result = serde_json::from_value::<MessageResponse>(json);
-    match &result {
-        Err(e) => panic!("Failed to deserialize web search response: {e}"),
-        Ok(msg) => {
-            let content = msg.content.as_ref().expect("content");
-            match content {
-                Content::Array(blocks) => {
-                    assert!(
-                        blocks.len() >= 4,
-                        "expected at least 4 content blocks, got {}",
-                        blocks.len()
-                    );
-                    assert!(
-                        blocks
-                            .iter()
-                            .any(|b| matches!(b, ResponseContentKind::WebSearchToolResult(_))),
-                        "expected a WebSearchToolResult block"
-                    );
-                }
-                _ => panic!("expected Content::Array"),
-            }
-        }
-    }
-}
-
-fn search_result(url: &str) -> serde_json::Value {
-    serde_json::json!({
-        "type": "web_search_result",
-        "url": url,
-        "title": format!("Title of {url}"),
-        "encrypted_content": "EqgfCioIARgB...",
-        "page_age": "April 30, 2025"
-    })
-}
-
-fn search_result_block(tool_use_id: &str, content: serde_json::Value) -> serde_json::Value {
-    serde_json::json!({
-        "type": "web_search_tool_result",
-        "tool_use_id": tool_use_id,
-        "content": content
-    })
-}
-
-/// A paused server-tool loop is a real stop reason for web search, so the
-/// tool must hand back the results found so far rather than fail on the
+/// A paused server-tool loop is a real stop reason for server tools, so the
+/// tool must hand back the result found so far rather than fail on the
 /// envelope; stop reasons this crate has never seen must not fail it either.
 #[tokio::test]
-async fn web_search_survives_paused_and_unknown_stop_reasons() {
+async fn server_tool_survives_paused_and_unknown_stop_reasons() {
     use ai_toolset::{AsyncTool, ServiceContext};
     for stop_reason in [
         "pause_turn",
@@ -497,9 +391,18 @@ async fn web_search_survives_paused_and_unknown_stop_reasons() {
             "type": "message",
             "role": "assistant",
             "content": [
-                {"type": "server_tool_use", "id": "srv-1", "name": "web_search", "input": {"query": "a"}},
-                search_result_block("srv-1", serde_json::json!([search_result("https://a.example")])),
-                {"type": "server_tool_use", "id": "srv-2", "name": "web_search", "input": {"query": "b"}},
+                {"type": "server_tool_use", "id": "srv-1", "name": "bash_code_execution", "input": {"command": "echo a"}},
+                {
+                    "type": "bash_code_execution_tool_result",
+                    "tool_use_id": "srv-1",
+                    "content": {
+                        "type": "bash_code_execution_result",
+                        "stdout": "a\n",
+                        "stderr": "",
+                        "return_code": 0
+                    }
+                },
+                {"type": "server_tool_use", "id": "srv-2", "name": "bash_code_execution", "input": {"command": "echo b"}},
             ],
             "stop_reason": stop_reason,
             "stop_sequence": null,
@@ -512,118 +415,35 @@ async fn web_search_survives_paused_and_unknown_stop_reasons() {
                 .try_into()
                 .unwrap(),
         );
-        let response = WebSearch {
-            input: "a and b".into(),
+        let response = BashCodeExecution {
+            input: "echo a and b".into(),
         }
         .call(ServiceContext(context), request)
         .await
         .unwrap_or_else(|error| panic!("{stop_reason}: {}", error.description));
         assert_eq!(response.tool_use_id, "srv-1");
         match response.content {
-            WebSearchContent::Results(results) => assert_eq!(results.len(), 1),
-            WebSearchContent::Error(error) => panic!("{stop_reason}: {error:?}"),
+            BashCodeExecutionContent::BashCodeExecutionResult(result) => {
+                assert_eq!(result.stdout, "a\n")
+            }
+            BashCodeExecutionContent::BashCodeExecutionToolResultError(error) => {
+                panic!("{stop_reason}: {error:?}")
+            }
         }
     }
 }
 
 #[test]
-fn web_search_output_folds_every_search_without_encrypted_content() {
-    let blocks: Vec<ResponseContentKind> = serde_json::from_value(serde_json::json!([
-        {"type": "text", "text": "Searching."},
-        {"type": "server_tool_use", "id": "srv-1", "name": "web_search", "input": {"query": "a"}},
-        search_result_block("srv-1", serde_json::json!([
-            search_result("https://a.example"),
-            search_result("https://shared.example"),
-        ])),
-        search_result_block("srv-2", serde_json::json!({
-            "type": "web_search_tool_result_error",
-            "error_code": "too_many_requests"
-        })),
-        search_result_block("srv-3", serde_json::json!([
-            search_result("https://shared.example"),
-            search_result("https://c.example"),
-        ])),
-    ]))
-    .unwrap();
-
-    let response = web_search::collect_results(blocks).expect("a search ran");
-    assert_eq!(response.tool_use_id, "srv-1");
-    let WebSearchContent::Results(results) = response.content else {
-        panic!("one failed search must not hide the others' results");
-    };
-    let urls: Vec<_> = results
-        .iter()
-        .map(|result| match result {
-            SearchResult::WebSearchResult {
-                url,
-                encrypted_content,
-                ..
-            } => {
-                assert_eq!(encrypted_content, &None);
-                url.as_str()
-            }
-        })
-        .collect();
-    assert_eq!(
-        urls,
-        [
-            "https://a.example",
-            "https://shared.example",
-            "https://c.example"
-        ]
-    );
-}
-
-#[test]
-fn web_search_output_reports_the_error_only_when_nothing_was_found() {
-    let blocks: Vec<ResponseContentKind> = serde_json::from_value(serde_json::json!([
-        search_result_block(
-            "srv-1",
-            serde_json::json!({
-                "type": "web_search_tool_result_error",
-                "error_code": "max_uses_exceeded"
-            })
-        ),
-        search_result_block(
-            "srv-2",
-            serde_json::json!({
-                "type": "web_search_tool_result_error",
-                "error_code": "unavailable"
-            })
-        ),
-    ]))
-    .unwrap();
-    let response = web_search::collect_results(blocks).expect("a search ran");
-    assert_eq!(response.tool_use_id, "srv-1");
-    assert!(matches!(
-        response.content,
-        WebSearchContent::Error(WebSearchToolError { ref error_code, .. }) if error_code == "max_uses_exceeded"
-    ));
-
-    let no_search: Vec<ResponseContentKind> = serde_json::from_value(serde_json::json!([
-        {"type": "text", "text": "I do not need to search for that."}
-    ]))
-    .unwrap();
-    assert!(web_search::collect_results(no_search).is_none());
-}
-
-#[test]
-fn deserialize_web_search_error_response() {
-    // Error case from docs — content is a single object, not an array
+fn unknown_content_blocks_deserialize_as_unknown() {
     let json = serde_json::json!({
         "type": "web_search_tool_result",
         "tool_use_id": "srvtoolu_a93jad",
-        "content": {
-            "type": "web_search_tool_result_error",
-            "error_code": "max_uses_exceeded"
-        }
+        "content": []
     });
-
-    let result = serde_json::from_value::<ResponseContentKind>(json);
-    match &result {
-        Err(e) => panic!("Failed to deserialize web search error: {e}"),
-        Ok(block) => assert!(matches!(block, ResponseContentKind::WebSearchToolResult(_))),
-    }
+    assert_eq!(
+        serde_json::from_value::<ResponseContentKind>(json).unwrap(),
+        ResponseContentKind::Unknown
+    );
 }
 
 #[test]

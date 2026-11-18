@@ -7,13 +7,17 @@ pill strip with a leading filter drawer (Status and Type), pull-to-refresh,
 and swipe-left to mark done. On touch, Signal is a pure notification feed — the viewer's own
 touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
+Access requests, grants and removals on a paired machine appear as rows about
+that machine; opening one goes to Settings → Machines with the machine pointed out.
+Signal, including its empty state, starts with the Home tutorial entry (from `features/video-tutorials`) once that video is in its catalog: a `TutorialSidebarItem` in the desktop rail; touch devices show none. It sits outside the virtualized rows, so list keyboard focus skips it.
 
-On a cold launch, notification transport follows the GraphQL Soup flag reactively:
-if the flag arrives after REST starts, the GraphQL notification query must actually
-start too. Verify a reload with delayed flags retains non-email notifications once
-loading settles, including when the list itself uses REST (notified-at sorting).
-Email alone is not sufficient verification: its inbox membership does not require
-the global notification feed.
+At 720px or narrower on touch, Notifications fills the pane with floating
+Signal/Noise pills and opens items as standalone pages. Above 720px, including
+unfolded Duo, the notification list docks on the left with the selected item's
+preview on the right, using Chat's width check. Collapse sits beside the
+Notifications title; the leading preview control restores the list. The Home
+composer remains desktop-only. Restored detail URLs stay inline when wide and
+redirect to standalone pages when folded.
 
 Check live Home recency with two accounts: leave the recipient on Home without
 opening the conversation, then send a DM from the other account. The row should
@@ -42,11 +46,24 @@ Noise-only email activity. Each entity appears once, ordered by its latest
 notification or own action. On desktop, the funnel button to the right of **Home**
 opens **Filter Home**.
 
-With the GraphQL Soup flag on, desktop Signal reads
+Desktop Signal reads
 the server work feed (`user.workFeed` plus the `workFeedUpdates` subscription)
-instead of merging sources in the browser; Noise, search, and touch devices keep
-the merged feed. Verify these against a backend that serves the work feed: a
+instead of merging sources in the browser; Noise and touch devices keep
+the merged feed.
+
+Typing in **Search Home** there filters the feed first: every loaded Home row
+whose name matches the query is listed, in Home's order, whatever its type or
+age, followed by the search service's hits (content matches in mail, documents,
+tasks and chats that pass Home's notification filters). The Watch tutorial row
+is hidden while the field has text. Rows on feed pages that have not loaded
+yet, and a row whose only match is its sender or body, are found only if the
+search service returns them. To check, type a word from the title of a row of
+each type further down the list (an agent session, a task older than two
+weeks, a channel, a project): each must appear. Verify these against a backend that serves the work feed: a
 document you edited with no notifications appears read and offers no **Mark Done**.
+What an agent session does for you is the session's work, not yours: a task or
+document it creates stays out of Home unless a notification brings it in, and
+its edits never move an item you worked on.
 **Mark Done** clears a row's notifications (and archives an inbox email): a row
 that is only notifications leaves and stays gone after a reload, while a row you
 also worked on stays, read, at the time of your own work. **Undo** brings a done
@@ -61,8 +78,8 @@ The menu shares the legacy compact submenus: **Status** offers **Unread**, **Rea
 and **All** as single-select radio items with a checkmark on the right of the selected
 option, and **Type** contains the entity checkboxes. Status closes the menu
 after selection. Type uses the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
-checkboxes toggle without closing, rows add and close, and Shift/Only selects just
-one type without closing. Press **f** to open the menu.
+clicking a row or its checkbox toggles it without closing, Enter adds and closes,
+and Shift/Only selects just one type without closing. Press **f** to open the menu.
 Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
 both channels and reply threads; **Chats** and **Agents** have separate toggles.
@@ -98,6 +115,8 @@ message. Channel names
 prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
+A click or Enter gives the conversation's composer focus, and Esc returns to the
+row; see [composer focus and Esc](channels.md#composer-focus-and-esc).
 If the channel is already open in another split or preview, clicking a message
 or reply notification focuses that view and jumps to the specific message,
 without a **Content already open** warning. Verify with two splits and a reply
@@ -120,12 +139,29 @@ working. A coding session adds a second line with repository, captured working
 branch (when available), and PR number/status. Non-coding sessions stay on one
 line. Their timestamps and unread dots stay visible. Missing repository metadata
 is omitted.
+A session a person starts is their own work from the moment its row commits,
+before its sandbox boots: Home lists it on every signed-in device within a
+couple of seconds of sending, without waiting for the first reply. Sessions
+another agent or a routine starts join only when they notify. Verify by sending
+a prompt from Home and checking the row appears while the session is still
+starting, is highlighted while it is open, and shows on a second device too.
 Once `HIDE_AGENT_DM_SESSIONS` is enabled after the warm-marker rollout, agent
 DM contexts stay out of broad Agents/Home lists, including work-feed and
 notification-driven candidates. Prior notifications or activity must not bring
 them back. The DM remains in Channels/DMs; authorized direct session links and
 explicitly saved favorites still open their context. Verify this alongside an
 ordinary standalone session, which remains listed.
+
+A session started from a thread (a mention in a channel, document or call, or a
+task assignment) stays out of Home, Recent and the Agents sidebar for everyone,
+owner included, whichever agent runs it; the thread is where it is reached.
+Follow-up mentions in that thread list it for nobody either. A person who
+prompts the session from the session view itself (after **Open session**)
+follows it: from then on it lists for them in Home, Recent and Agents while they
+can still open it, and nobody else's lists change. Prompting never changes
+anyone's access. Verify with two accounts: mention an agent in a document
+thread and check neither lists it, then have the second account open the
+session, send a prompt, and check the row appears for that account only.
 
 The Agents workspace uses a single left dot for activity and unread state in
 place of the sparkle. Clicking a session row in Home or the Agents sidebar
@@ -140,40 +176,36 @@ preview; alternate activation and Shift-click open a split.
 On desktop, before selecting a row, the main pane shows a centered single-line chat
 composer under “What should we get done in Macro?”. Attachment, text, model, and
 send controls share one row; longer prompts expand the input as needed.
-Home uses the shared app font and composer theme tokens; suggestion text and
-hover states use the same semantic colors as other app surfaces.
+Home uses the shared app font and composer theme tokens; hover states use the same semantic colors as other app surfaces.
 Type in “Type @ to reference / for skills”, use the attachment button for
 attachments and the model menu to choose a model, then press Enter or Send to
 create and open an AI chat. If chat creation fails, the submitted text and attachments
 are restored, including before a chat-limit paywall opens. With agents disabled,
-the input stays 32px above the vertical center as suggestions load. With agents
-enabled, the composer uses the same topbar offset and 24/64 padding as the
-Agents new-conversation page so the two inputs share a baseline; suggestions
-still load below it without moving the input. Up to three cached AI
-suggestions appear below the
-composer, using the existing fast/smart recommendation projections. Compact rows
-use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
-suggestion fills the input and replaces its context attachments without sending;
-the Open action opens its source item in a new split, preserving the editor type
-for tasks, skills, snippets, and other documents. Suggestion loading/errors
-are isolated from the input. If generation stalls for 45 seconds, the shimmer
-is replaced with a retry action; a late result still appears automatically.
-Generation status updates do not extend that deadline. Retry starts a fresh
-45-second wait. Free users get suggestions from the free-tier model; if the
-plan refuses the request (403), the row says suggestions are unavailable and
-offers no retry. Shift+Enter adds a line. Selecting a Home row replaces
-the composer with its preview. Home uses the shared 256px sidebar and collapses
+the input stays 32px above the vertical center. With agents enabled, the
+composer uses the same topbar offset and 24/64 padding as the Agents
+new-conversation page so the two inputs share a baseline. With
+`enable-suggestions` on, today and the top priorities appear below the
+composer; otherwise the space below it is empty. Shift+Enter adds a line. Selecting a Home row replaces
+the composer with its preview. Desktop Home uses the shared 256px sidebar and collapses
 navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
 slide-over. Activating a row or **New chat** closes that overlay to show content;
 arrow-key browsing keeps it open. Preview headers start with **Home >**. Clicking
 **Home** clears the preview and returns to the starting pane without changing
-sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
-show the activity list alone.
+sidebar visibility. Use the hamburger to reopen the feed. Narrow touch shows
+the notification feed alone; wide touch keeps the feed beside its preview.
+
+Project rows, including unread discussion notifications, open the project Overview
+inside Home on desktop. The preview keeps the Home return breadcrumb, project
+properties, description, and discussion; a discussion notification targets its
+message. Overview/Tasks tabs stay inside the Home preview, and reloading its URL
+restores the section and discussion target. Shift-click still opens the project
+in a split; touch opens the full-screen project page. Verify clicking an unread
+project row, switching tabs, returning Home, and reopening the same comment.
 
 Desktop previews use the same header controls as their standalone views, with
 the **Home >** return breadcrumb added. Calendar shares its date, search,
 navigation, view, and New controls; email shares its action, navigation, AI/task,
-and Share groups. Touch previews retain their existing compact headers.
+and Share groups. Touch previews and standalone pages retain their compact headers.
 
 Conversation breadcrumbs preserve identity: human DMs show the other participant's
 avatar, agent DMs show the persona avatar, and named channels show their picture
@@ -231,6 +263,8 @@ On mobile, the dock uses the bell icon and **Notifications**
 label; Home is desktop-only. Notifications has no merged own-activity feed or
 chat starting pane. Opening a row navigates to its entity. On iOS, rows fade
 underneath the filters and status bar using the shared top edge gradient.
+With `enable-unified-notifications` on, the bell opens the unified
+Notifications view instead (see [notifications.md](notifications.md)).
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
 unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`
@@ -264,3 +298,28 @@ On phones, shared confirmations (including Remove Member and Cancel Invitation)
 use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
+
+## Suggestions on Home
+
+With `enable-suggestions` on (desktop only), the idle pane shows, below the composer:
+
+- **Today**: the day's timed events across working hours (8am to 8pm) as
+  neutral chips with a thin line at now; a chip opens the event in Calendar.
+  It needs the calendar to be on.
+- **Your top priorities**: the five most important open suggestions, as the
+  server ranks them. A row opens For you with that suggestion first; **All in
+  For you** opens the page.
+
+On For you, each card has one main action for its kind: **Open in chat** opens
+the composer with the prompt, unsent; **Run in background** starts the run at
+once (the card says what it will post or send first), then shows Running and,
+when done, a row with **Open result**; **Open** or **Open draft** opens the
+item or the drafted reply; **Turn on** saves a routine suggestion and
+**Review** opens it in the routine editor. The `x` (shown on hover or focus)
+dismisses at once and leaves an Undo row for the visit; Undo restores the
+suggestion, which the server allows for a few minutes. Dismissing a running
+suggestion stops its run, and restoring it brings it back open, not running.
+**Refresh suggestions** in the header asks for a fresh run, at most once an
+hour; while one runs it reads "Looking for suggestions", and during the
+cooldown "Available at" a time.
+

@@ -23,6 +23,15 @@ pub(crate) fn approve_key(kind: TuiAgent, screen: &str) -> Option<&'static str> 
     }
 }
 
+/// Claude Code's exit confirmation, shown when Ctrl-C is pressed again while
+/// background work runs. Its Esc answer is "Stay", which keeps the session.
+pub(crate) fn exit_confirmation(kind: TuiAgent, screen: &str) -> bool {
+    kind == TuiAgent::Claude
+        && screen.contains("Exit and stop tasks")
+        && screen.contains("Stay")
+        && screen.contains("Esc to cancel")
+}
+
 /// A dialog's own "don't ask again" answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NativeAlways {

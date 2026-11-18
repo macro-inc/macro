@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { notificationSound } from '../core/sounds';
 
 declare global {
   interface Window {
@@ -27,6 +28,34 @@ async function toggle(page: Page, name: string) {
   await control.focus();
   await control.press('Space');
 }
+
+test('call cues default on, preview independently, and persist their own switch', async ({
+  page,
+}) => {
+  const joinTones = notificationSound('call-join').tones.length;
+  const leaveTones = notificationSound('call-leave').tones.length;
+  await expect(
+    page.getByRole('switch', { name: 'Call sounds', exact: true })
+  ).toBeChecked();
+  await expect(
+    page.getByRole('switch', { name: 'Notification sounds', exact: true })
+  ).not.toBeChecked();
+  await expect(page.getByRole('slider', { name: 'Volume' })).toBeVisible();
+  await page.getByRole('button', { name: 'Preview join', exact: true }).click();
+  await expect.poll(() => tonesPlayed(page)).toBe(joinTones);
+  await page
+    .getByRole('button', { name: 'Preview leave', exact: true })
+    .click();
+  await expect.poll(() => tonesPlayed(page)).toBe(joinTones + leaveTones);
+  await toggle(page, 'Call sounds');
+  await expect(page.getByRole('slider', { name: 'Volume' })).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole('switch', { name: 'Call sounds', exact: true })
+  ).not.toBeChecked();
+  await page.getByRole('button', { name: 'Preview join', exact: true }).click();
+  await expect.poll(() => tonesPlayed(page)).toBe(joinTones);
+});
 
 test('sounds stay off until turned on, then reveal per-type choices', async ({
   page,
@@ -99,4 +128,66 @@ test('play buttons preview each type and a muted type stays quiet', async ({
     window.deliverNotification('channel_message_reply');
   });
   await expect.poll(() => tonesPlayed(page)).toBe(3);
+});
+
+test('quiet hours persist and silence sounds without stopping a preview', async ({
+  page,
+}) => {
+  const quiet = page.getByRole('switch', { name: 'Quiet hours' });
+  await expect(quiet).not.toBeChecked();
+  await expect(page.getByRole('group', { name: 'Days' })).toHaveCount(0);
+
+  await toggle(page, 'Quiet hours');
+  await expect(page.getByRole('button', { name: 'Monday' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await page.getByRole('button', { name: 'Saturday' }).click();
+  await expect(page.getByRole('button', { name: 'Saturday' })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  );
+
+  await page.reload();
+  await expect(quiet).toBeChecked();
+  await expect(page.getByRole('button', { name: 'Saturday' })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  );
+  await expect(page.getByRole('button', { name: 'Monday' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+
+  await page.evaluate(() => {
+    const key = 'macro:notification-sounds:fixture-user';
+    const saved = JSON.parse(localStorage.getItem(key) ?? '{}') as {
+      enabled?: boolean;
+      quietHours?: {
+        enabled?: boolean;
+        startMinutes?: number;
+        endMinutes?: number;
+        days?: string[];
+        timeZone?: string;
+      };
+    };
+    const now = new Date();
+    const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    saved.enabled = true;
+    saved.quietHours = {
+      ...saved.quietHours,
+      enabled: true,
+      startMinutes: (minutes + 1440 - 30) % 1440,
+      endMinutes: (minutes + 30) % 1440,
+      days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+      timeZone: 'UTC',
+    };
+    localStorage.setItem(key, JSON.stringify(saved));
+  });
+  await page.reload();
+  await page.getByRole('heading', { name: 'Notifications' }).click();
+  await page.evaluate(() => window.deliverNotification('channel_mention'));
+  expect(await tonesPlayed(page)).toBe(0);
+  await page.getByRole('button', { name: 'Play Mentions sound' }).click();
+  await expect.poll(() => tonesPlayed(page)).toBe(2);
 });

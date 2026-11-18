@@ -13,6 +13,45 @@ vi.mock('@app/features/email-message/components/email-user-tooltip', () => ({
   EmailUserTooltip: (props: ParentProps) => <>{props.children}</>,
 }));
 
+const renderParticipants = (
+  messages: ReturnType<typeof message>[],
+  viewerEmail: () => string | undefined
+) =>
+  render(() => {
+    const context = {
+      ...createThreadContext({ thread: () => thread(messages) }),
+      viewerEmail,
+    };
+    return (
+      <EmailThreadViewProvider
+        value={{
+          thread: context,
+          compose: createComposeContext(),
+          rendering: {},
+        }}
+      >
+        <EmailThreadStateProvider value={createEmailThreadState(context)}>
+          <EmailParticipants />
+        </EmailThreadStateProvider>
+      </EmailThreadViewProvider>
+    );
+  });
+
+it("labels the viewer's address as Me whatever its case", () => {
+  const view = renderParticipants(
+    [
+      message('sent', {
+        from: { email: 'sender@example.com', name: 'Sender' },
+        to: [{ email: 'Viewer@Example.com' }],
+      }),
+    ],
+    () => 'viewer@example.com'
+  );
+  expect(view.getAllByRole('listitem').map((node) => node.textContent)).toEqual(
+    ['Sender', 'Me']
+  );
+});
+
 it('keeps participant order and nodes through draft creation, deletion and refetches', () => {
   const sent = message('sent', {
     from: { email: 'sender@example.com', name: 'Sender' },

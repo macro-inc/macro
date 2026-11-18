@@ -8,6 +8,7 @@ import type {
   LiveSyncSource,
   SyncError,
 } from '@macro-inc/collaboration/collab/source';
+import type { Span } from '@macro-inc/observability';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import type { GetDocumentResponseData } from '@service-storage/generated/schemas/getDocumentResponseData';
@@ -293,7 +294,8 @@ export type LoadFunction<
   S extends Source | P = Source | P,
 > = (
   source: NoInfer<S>,
-  intent: Intent
+  intent: Intent,
+  parentSpan?: Span
 ) => Promise<
   Result<S extends Source ? T | P : T, ResultError<keyof typeof LoadErrors>[]>
 >;

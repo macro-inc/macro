@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE email_mailbox_drafts d SET delete_requested = true,actor_id = $3,updated_at = now()\n                FROM email_messages m WHERE d.message_id = $1 AND m.id = d.message_id AND m.link_id = $2 AND m.is_draft AND NOT m.is_sent\n                    AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages WHERE message_id = m.id)\n                RETURNING d.message_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bc3d7668db5f473f6a35cb237c9162548a4f80ec6414d9e1f42a8b7374603ef6"
+}

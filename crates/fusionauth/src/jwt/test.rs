@@ -1,4 +1,4 @@
-use wiremock::matchers::{body_string, header, method, path};
+use wiremock::matchers::{body_json, header, method, path, query_param_is_missing};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::FusionAuthClient;
@@ -16,13 +16,14 @@ fn client(base_url: String) -> FusionAuthClient {
 }
 
 #[tokio::test]
-async fn revoke_refresh_token_sends_the_token_form_encoded() {
+async fn revoke_refresh_token_sends_the_token_as_json() {
     let server = MockServer::start().await;
     Mock::given(method("DELETE"))
         .and(path("/api/jwt/refresh"))
         .and(header("authorization", "api-key"))
-        .and(header("content-type", "application/x-www-form-urlencoded"))
-        .and(body_string("token=refresh-token"))
+        .and(header("content-type", "application/json"))
+        .and(body_json(serde_json::json!({ "token": "refresh-token" })))
+        .and(query_param_is_missing("token"))
         .respond_with(ResponseTemplate::new(200))
         .expect(1)
         .mount(&server)
@@ -60,8 +61,12 @@ async fn revoke_refresh_token_reports_a_server_error() {
         .mount(&server)
         .await;
 
-    client(server.uri())
+    let error = client(server.uri())
         .revoke_refresh_token("refresh-token")
         .await
         .expect_err("a server error must not count as a revocation");
+    assert_eq!(
+        error.upstream().map(|upstream| upstream.failure),
+        Some(upstream_error::UpstreamFailure::Unavailable)
+    );
 }

@@ -1,5 +1,5 @@
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
-import { onCleanup, onMount } from 'solid-js';
+import { type JSX, onCleanup, onMount } from 'solid-js';
 
 export function FormInput(props: {
   id: string;
@@ -66,10 +66,19 @@ export function ContinueButton(props: {
   label?: string;
   disabled?: boolean;
   onClick: () => void;
+  /** A secondary action beside Continue; both stack full width on phones. */
+  secondary?: JSX.Element;
 }) {
   return (
     <div class="mt-6 flex shrink-0 justify-center pb-3">
-      <div class="flex justify-center">
+      <div
+        class={
+          props.secondary
+            ? 'flex w-full flex-col-reverse items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-center'
+            : 'flex justify-center'
+        }
+      >
+        {props.secondary}
         <button
           type="button"
           aria-label={props.label ?? 'Continue'}
@@ -83,5 +92,25 @@ export function ContinueButton(props: {
         </button>
       </div>
     </div>
+  );
+}
+
+/** An outlined action that sits beside Continue (see its `secondary` slot). */
+export function SecondaryButton(props: {
+  label: string;
+  icon?: JSX.Element;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={props.disabled}
+      onClick={props.onClick}
+      class="flex min-h-14 items-center justify-center gap-2.5 rounded-full border border-edge bg-surface px-7 py-3.5 text-base font-medium text-ink transition-colors hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-ink disabled:opacity-40"
+    >
+      {props.icon}
+      <span>{props.label}</span>
+    </button>
   );
 }

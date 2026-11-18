@@ -222,6 +222,9 @@ pub struct SendingInboxRequest<'a> {
 pub struct ResolvedSendingInbox {
     /// The sending inbox.
     pub link: Link,
+    /// The verified send-as alias of `link` the caller asked to send from.
+    /// `None` sends from the inbox's own address.
+    pub sender_address: Option<EmailStr<'static>>,
     /// Every inbox the caller can reach. A reply target may live in any of
     /// them, so a send has to be given the whole set rather than just `link`.
     pub accessible_inboxes: Vec<Link>,

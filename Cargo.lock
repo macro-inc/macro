@@ -38,18 +38,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "account_manager"
+version = "0.1.0"
+dependencies = [
+ "account_manager",
+ "axum",
+ "bot_id",
+ "channels",
+ "chrono",
+ "entity_access",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_service_urls",
+ "macro_user_id",
+ "messages",
+ "model-error-response",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "user_api_key",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "activity"
 version = "0.1.0"
 dependencies = [
- "ai_toolset",
+ "agent_correlation",
  "async-trait",
+ "axum",
  "bot_id",
  "broadcast",
  "channel_sender",
  "chrono",
  "chrono-tz",
+ "entity_access",
  "futures",
  "kafka_util",
+ "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",
@@ -64,6 +97,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum 0.27.2",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
  "tokio-util",
@@ -169,7 +203,6 @@ dependencies = [
  "ai_toolset",
  "ai_usage",
  "anyhow",
- "async-openai",
  "async-stream",
  "async-trait",
  "attachment",
@@ -179,19 +212,20 @@ dependencies = [
  "genai_telemetry",
  "jsonschema",
  "macro_env_var",
+ "macro_service_urls",
  "macro_user_id",
  "model-entity",
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
  "prompt",
- "regex",
  "reqwest 0.13.4",
  "rig-agent",
  "rig-core",
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
@@ -216,7 +250,7 @@ dependencies = [
  "futures",
  "futures-concurrency",
  "rustc-hash 2.1.2",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -280,9 +314,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-s3",
  "axum",
- "bot_id",
  "chrono",
- "dashmap",
  "entity_access",
  "git_patch",
  "github_pull_requests",
@@ -299,7 +331,6 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
- "uuid",
  "workspace-hack",
 ]
 
@@ -314,34 +345,98 @@ dependencies = [
  "async-trait",
  "axum",
  "bot_id",
+ "calendar_events",
  "chrono",
  "code_execution",
+ "code_mode_assets",
  "cognition",
+ "dynamic_ui",
+ "email",
  "entity_access",
+ "futures",
+ "import",
+ "jev",
+ "lazy-regex",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "mcp_client",
+ "nom 8.0.0",
+ "nutype",
+ "pipedream_mcp",
  "rootcause",
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "serde_path_to_error",
+ "specta",
+ "specta-serde",
+ "specta-typescript",
  "sqlx",
- "tempfile",
+ "system_skills",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
- "tower 0.5.3",
  "tracing",
+ "urlencoding",
  "utoipa",
  "uuid",
  "workspace-hack",
 ]
 
 [[package]]
+name = "agent_correlation"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "lazy-regex",
+ "macro_auth",
+ "macro_db_migrator",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_credentials"
+version = "0.1.0"
+dependencies = [
+ "constant_time_eq 0.3.1",
+ "feature_flags",
+ "hex",
+ "lazy-regex",
+ "macro_db_migrator",
+ "macro_user_id",
+ "rand 0.9.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "user_api_key",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
@@ -394,6 +489,7 @@ dependencies = [
  "agent_runtime_protocol",
  "chrono",
  "clap",
+ "dynamic_ui",
  "html-escape",
  "insta",
  "lazy-regex",
@@ -417,6 +513,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_git"
+version = "0.1.0"
+dependencies = [
+ "agent_credentials",
+ "axum",
+ "axum-extra",
+ "bytes",
+ "chrono",
+ "feature_flags",
+ "flate2",
+ "futures",
+ "hex",
+ "httparse",
+ "lazy-regex",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_tower_layers",
+ "macro_user_id",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "strum 0.27.2",
+ "teams",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_harness"
 version = "0.1.0"
 dependencies = [
@@ -436,15 +570,18 @@ dependencies = [
  "base64 0.22.1",
  "bot_id",
  "bots",
+ "calendar_events",
  "channel_sender",
  "channels",
  "chrono",
+ "chrono-tz",
  "codex_cloud_agents",
  "codex_connection",
  "cursor_api_key",
  "cursor_cloud_agents",
  "dashmap",
  "documents",
+ "dynamic_ui",
  "entity_access",
  "entity_access_db_utils",
  "entity_registry",
@@ -454,11 +591,12 @@ dependencies = [
  "genai_telemetry",
  "github",
  "harness_id",
+ "harnesses",
  "jev",
- "kafka_util",
  "lexical_client",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_env",
  "macro_env_var",
  "macro_event_broker",
  "macro_tower_layers",
@@ -467,7 +605,6 @@ dependencies = [
  "mcp_client",
  "mcp_select",
  "messages",
- "mockall",
  "model",
  "model-entity",
  "model_notifications",
@@ -477,6 +614,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "pipedream_mcp",
+ "rand 0.9.4",
  "redis",
  "reqwest 0.13.4",
  "rootcause",
@@ -485,6 +623,7 @@ dependencies = [
  "serde_json",
  "shared_entity_registry",
  "sqlx",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -511,8 +650,11 @@ dependencies = [
  "agent_api_keys",
  "agent_changes",
  "agent_code_mode",
+ "agent_correlation",
+ "agent_credentials",
  "agent_egress",
  "agent_fold",
+ "agent_git",
  "agent_harness",
  "agent_inmem",
  "agent_preview",
@@ -520,15 +662,12 @@ dependencies = [
  "agent_session",
  "agent_session_realtime",
  "agent_trigger",
- "aho-corasick",
  "ai_billing",
- "ai_projections",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
  "analytics_client",
  "anyhow",
- "async-openai",
  "async-stream",
  "async-trait",
  "attachment",
@@ -540,24 +679,26 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "bot_id",
  "bots",
+ "calendar_events",
  "call",
- "channel_sender",
  "channels",
  "chat",
  "chrono",
  "chrono-tz",
+ "clap",
  "code_execution",
+ "code_mode_assets",
  "codex_cloud_agents",
  "codex_connection",
  "cognition",
+ "computer_id",
  "connection_gateway",
  "connection_gateway_client",
  "contacts",
- "cookie",
  "crm",
- "cron",
  "cursor_api_key",
  "cursor_cloud_agents",
  "database_env_vars",
@@ -566,12 +707,10 @@ dependencies = [
  "document_storage_service_client",
  "document_sub_type",
  "documents",
- "doppleganger",
  "doppler-config",
  "email",
  "email_service_client",
  "entity_access",
- "entity_access_db_utils",
  "entity_access_management",
  "entity_registry",
  "entity_registry_db_utils",
@@ -580,22 +719,27 @@ dependencies = [
  "frecency",
  "fusionauth",
  "futures",
+ "genai_telemetry",
  "github",
  "github_pull_requests",
+ "gmail_client",
  "granola_sync",
  "harness_id",
+ "harnessd_protocol",
  "harnesses",
+ "hosted_runtimes",
  "http 1.4.0",
  "http-body-util",
+ "image_generation",
  "import",
  "import_jira",
  "import_linear",
  "import_notion",
+ "incus_client",
  "initiative",
  "jev",
+ "jsonwebtoken 10.3.0",
  "kafka_util",
- "last_online_tracker",
- "lazy_static",
  "lexical_client",
  "lexical_mention_extractor",
  "log",
@@ -611,7 +755,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_event_broker",
- "macro_event_topics",
  "macro_middleware",
  "macro_queues",
  "macro_service_urls",
@@ -622,32 +765,34 @@ dependencies = [
  "mcp_client",
  "mcp_select",
  "memory",
- "mention_utils",
  "messages",
+ "mimalloc",
  "model",
  "model-entity",
  "model-error-response",
  "model_notifications",
  "model_owner",
- "models_ai_projection",
  "models_dcs",
- "models_opensearch",
  "models_permissions",
- "models_properties",
+ "models_search",
+ "nom 8.0.0",
  "non_empty",
  "notification",
  "onboarding",
+ "opentelemetry",
  "pipedream_mcp",
+ "png",
  "prompt",
  "properties",
+ "rate_limit",
  "rdkafka",
  "readonly_pool",
  "redis",
- "regex",
  "reqwest 0.13.4",
  "rmcp",
  "roles_and_permissions",
  "rootcause",
+ "routine_program",
  "scheduled_action",
  "schemars 1.2.1",
  "search_service_client",
@@ -655,22 +800,28 @@ dependencies = [
  "serde",
  "serde_json",
  "share_permission_db_utils",
+ "skills",
  "soup",
+ "soup_realtime",
  "sqlx",
  "sqs_client",
- "sqs_worker",
+ "sse-core",
  "static_file",
  "static_file_service_client",
  "stream",
  "strum 0.27.2",
+ "suggestion_generation",
+ "suggestions",
  "sync_service_client",
  "system_properties",
+ "team_agents",
  "teams",
  "tempfile",
  "thiserror 2.0.18",
- "time",
  "tokio",
  "tokio-retry",
+ "tokio-stream",
+ "tokio-tungstenite 0.28.0",
  "tokio-util",
  "tower 0.5.3",
  "tower-http",
@@ -679,9 +830,12 @@ dependencies = [
  "unfurl_service",
  "universal_input",
  "url",
+ "user_api_key",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "web_search",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -715,6 +869,7 @@ dependencies = [
  "genai_telemetry",
  "http 1.4.0",
  "http-body-util",
+ "jev",
  "macro_user_id",
  "macro_uuid",
  "mcp_select",
@@ -734,6 +889,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "skills",
  "sqlx",
  "sse-stream",
  "thiserror 2.0.18",
@@ -742,7 +898,9 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "trigger_context",
  "url",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -812,6 +970,7 @@ dependencies = [
 name = "agent_session"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "agent-client-protocol",
  "agent_fold",
@@ -832,6 +991,8 @@ dependencies = [
  "entity_access_db_utils",
  "entity_registry",
  "entity_registry_db_utils",
+ "feature_flags",
+ "futures",
  "genai_telemetry",
  "harness_id",
  "jev",
@@ -916,6 +1077,7 @@ dependencies = [
  "document_sub_type",
  "entity_access",
  "initiative",
+ "jev",
  "lexical_client",
  "macro_db_migrator",
  "macro_event_broker",
@@ -963,6 +1125,7 @@ dependencies = [
  "entity_registry",
  "entity_registry_db_utils",
  "initiative",
+ "jev",
  "kafka_util",
  "lexical_client",
  "macro_config",
@@ -973,13 +1136,10 @@ dependencies = [
  "messages",
  "properties",
  "rdkafka",
- "roles_and_permissions",
  "rootcause",
- "serde_json",
  "sqlx",
  "static_file",
  "system_properties",
- "teams",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -1061,10 +1221,8 @@ dependencies = [
  "clap",
  "console_error_panic_hook",
  "fig_engine",
- "js-sys",
  "miniz_oxide",
  "png",
- "ruzstd",
  "serde",
  "serde_json",
  "skrifa",
@@ -1073,44 +1231,6 @@ dependencies = [
  "wasm-bindgen",
  "zune-core",
  "zune-jpeg",
-]
-
-[[package]]
-name = "ai_projections"
-version = "0.1.0"
-dependencies = [
- "agent",
- "ai_tools",
- "ai_toolset",
- "ai_usage",
- "anyhow",
- "aws-sdk-sqs",
- "axum",
- "chrono",
- "connection_gateway_client",
- "futures",
- "http-body-util",
- "macro_authorization",
- "macro_db_migrator",
- "macro_user_id",
- "model-entity",
- "model-error-response",
- "model_user",
- "models_ai_projection",
- "rootcause",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "sqlx",
- "sqs_client",
- "sqs_worker",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.5.3",
- "tracing",
- "utoipa",
- "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -1127,7 +1247,6 @@ dependencies = [
  "anthropic",
  "anyhow",
  "async-trait",
- "attachment",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -1145,12 +1264,12 @@ dependencies = [
  "connection",
  "connection_gateway_client",
  "contacts",
- "cool_asserts",
  "crm",
  "databases",
  "databases_sql",
  "dateparser",
  "documents",
+ "dynamic_ui",
  "email",
  "email_service_client",
  "entity_access",
@@ -1158,11 +1277,13 @@ dependencies = [
  "entity_registry",
  "entity_registry_db_utils",
  "favorites",
+ "feature_flags",
  "foreign_entity",
  "forms",
  "frecency",
- "futures",
  "github_pull_requests",
+ "harnesses",
+ "hosted_runtimes",
  "image_generation",
  "import",
  "import_jira",
@@ -1171,13 +1292,14 @@ dependencies = [
  "initiative",
  "initiative_description",
  "item_filters",
- "lazy_static",
+ "jev",
  "lexical_client",
  "lexical_mention_extractor",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
- "macro_db_client",
+ "macro_db_migrator",
+ "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_event_broker",
@@ -1186,29 +1308,24 @@ dependencies = [
  "macro_user_id",
  "mcp_client",
  "mcp_select",
+ "memory",
  "messages",
  "model",
  "model-entity",
- "model_notifications",
  "model_owner",
  "model_user",
  "models_databases",
- "models_dcs",
- "models_email",
  "models_pagination",
  "models_permissions",
  "models_properties",
  "models_search",
  "models_soup",
- "non_empty",
  "notification",
  "pipedream_mcp",
  "projects",
  "prompt",
  "properties",
- "rand 0.9.4",
  "readonly_pool",
- "remote_env_var",
  "reqwest 0.13.4",
  "rootcause",
  "routines",
@@ -1232,8 +1349,9 @@ dependencies = [
  "tokio-util",
  "tracing",
  "unicode-segmentation",
- "utoipa",
+ "url",
  "uuid",
+ "web_search",
  "workspace-hack",
 ]
 
@@ -1334,9 +1452,9 @@ checksum = "c880a97d28a3681c0267bd29cff89621202715b065127cd445fa0f0fe0aa2880"
 
 [[package]]
 name = "ammonia"
-version = "4.1.8"
+version = "4.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f6660fb4ff692ef4937b1b4e74ab3d378653d8588389587d91f96a296907ea0"
+checksum = "935c841d86ee68ba89a983ea6e4255436f769ab1e2b701574653baf4b30739ce"
 dependencies = [
  "cssparser 0.37.0",
  "html5ever 0.39.0",
@@ -1433,11 +1551,11 @@ dependencies = [
  "async-trait",
  "chrono",
  "futures",
+ "genai_telemetry",
  "lazy_static",
  "macro_env_var",
  "macro_user_id",
  "rand 0.9.4",
- "regex",
  "reqwest 0.13.4",
  "schemars 1.2.1",
  "serde",
@@ -1765,6 +1883,7 @@ dependencies = [
  "asynk-strim",
  "base64 0.22.1",
  "bytes",
+ "chrono",
  "fast_chemail",
  "fnv",
  "futures-channel",
@@ -1857,7 +1976,7 @@ dependencies = [
  "futures-lite 2.6.1",
  "parking",
  "polling",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "slab",
  "windows-sys 0.61.2",
 ]
@@ -1927,7 +2046,7 @@ dependencies = [
  "cfg-if",
  "event-listener 5.4.2",
  "futures-lite 2.6.1",
- "rustix 1.1.4",
+ "rustix 1.1.6",
 ]
 
 [[package]]
@@ -1953,7 +2072,7 @@ dependencies = [
  "cfg-if",
  "futures-core",
  "futures-io",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "signal-hook-registry",
  "slab",
  "windows-sys 0.61.2",
@@ -2115,11 +2234,40 @@ dependencies = [
  "image",
  "macro_user_id",
  "model-entity",
- "model_file_type",
  "non_empty",
  "serde",
  "thiserror 2.0.18",
  "webp",
+ "workspace-hack",
+]
+
+[[package]]
+name = "attention_feed"
+version = "0.1.0"
+dependencies = [
+ "activity",
+ "async-stream",
+ "base64 0.22.1",
+ "chrono",
+ "cowlike",
+ "email",
+ "entity_access",
+ "futures",
+ "item_filters",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
+ "models_soup",
+ "notification",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "soup",
+ "soup_realtime",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -2129,6 +2277,9 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "agent_api_keys",
+ "agent_correlation",
+ "agent_credentials",
+ "agent_git",
  "ai_billing",
  "ai_usage",
  "analytics_client",
@@ -2160,7 +2311,6 @@ dependencies = [
  "database_env_vars",
  "decode_jwt",
  "document_storage_service_client",
- "doppleganger",
  "doppler-config",
  "email",
  "email_db_client",
@@ -2168,6 +2318,7 @@ dependencies = [
  "entity_access",
  "entity_registry",
  "favorites",
+ "feature_flags",
  "foreign_entity",
  "fusionauth",
  "futures",
@@ -2175,11 +2326,13 @@ dependencies = [
  "github",
  "github_pull_requests",
  "gtm_invite",
+ "harnesses",
  "hmac 0.12.1",
+ "hosted_runtimes",
  "http-body-util",
  "initiative",
  "jsonwebtoken 10.3.0",
- "last_online_tracker",
+ "lazy-regex",
  "loops_client",
  "macro_auth",
  "macro_authorization",
@@ -2202,19 +2355,18 @@ dependencies = [
  "maud",
  "mention_utils",
  "messages",
- "microsoft_oauth_grant_db_utils",
- "miniserde",
  "mobile_welcome_email_db_client",
  "mockall",
  "model",
  "model-entity",
- "model_notifications",
  "models_email",
  "models_permissions",
+ "models_sfs",
  "native_app_service",
  "non_empty",
  "notification",
  "onboarding",
+ "passwords",
  "rand 0.9.4",
  "rate_limit",
  "redis",
@@ -2234,7 +2386,11 @@ dependencies = [
  "sha2 0.10.9",
  "sqlx",
  "sqs_client",
+ "static_file_service_client",
+ "stripe_inbox",
  "strum 0.27.2",
+ "system_status",
+ "team_agents",
  "teams",
  "thiserror 2.0.18",
  "time",
@@ -2244,8 +2400,12 @@ dependencies = [
  "tower-cookies",
  "tower-http",
  "tracing",
+ "tracing-subscriber",
+ "upstream_error",
  "url",
  "urlencoding",
+ "user_api_key",
+ "user_events",
  "user_language",
  "user_quota",
  "utoipa",
@@ -3174,6 +3334,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
+
+[[package]]
 name = "base64-simd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3494,10 +3660,13 @@ dependencies = [
  "bot_token",
  "channels",
  "chrono",
+ "connection_gateway_client",
  "entity_access",
  "entity_registry",
  "harness_id",
+ "harnesses",
  "hex",
+ "kafka_util",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -3506,9 +3675,11 @@ dependencies = [
  "macro_uuid",
  "messages",
  "mockall",
+ "model-entity",
  "model-error-response",
  "model_owner",
  "rand 0.9.4",
+ "rdkafka",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -3645,31 +3816,11 @@ dependencies = [
 
 [[package]]
 name = "bzip2"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49ecfb22d906f800d4fe833b6282cf4dc1c298f5057ca0b5445e5c209735ca47"
-dependencies = [
- "bzip2-sys",
- "libbz2-rs-sys 0.1.3",
-]
-
-[[package]]
-name = "bzip2"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3a53fac24f34a81bc9954b5d6cfce0c21e18ec6959f44f56e8e90e4bb7c346c"
 dependencies = [
- "libbz2-rs-sys 0.2.5",
-]
-
-[[package]]
-name = "bzip2-sys"
-version = "0.1.13+1.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "225bff33b2141874fe80d71e07d6eec4f85c5c216453dd96388240f96e1acc14"
-dependencies = [
- "cc",
- "pkg-config",
+ "libbz2-rs-sys",
 ]
 
 [[package]]
@@ -3679,16 +3830,20 @@ dependencies = [
  "apollo-compiler",
  "apollo-parser",
  "chrono",
+ "database_sql",
  "lru 0.16.4",
+ "macro_user_id",
  "maybe_send",
  "miniz_oxide",
  "pollster",
  "postcard",
  "predicate-index",
  "proptest",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "subsequence_match",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -3715,7 +3870,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.52"
+version = "0.6.54"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3786,7 +3941,6 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.18",
  "tracing",
- "utoipa",
  "workspace-hack",
 ]
 
@@ -3803,15 +3957,18 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "email_utils",
- "entity_access",
+ "email_validator",
  "futures",
+ "http-body-util",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",
+ "macro_service_urls",
  "macro_user_id",
  "model-entity",
  "model_notifications",
+ "model_user",
  "models_pagination",
  "notification",
  "reqwest 0.13.4",
@@ -3819,10 +3976,12 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "specta",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "urlencoding",
  "utoipa",
@@ -3856,6 +4015,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
  "wiremock",
  "workspace-hack",
@@ -3865,6 +4025,7 @@ dependencies = [
 name = "calendar_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "authentication_service_client",
  "aws-sdk-secretsmanager",
@@ -3877,7 +4038,6 @@ dependencies = [
  "email_api_client",
  "email_db_client",
  "email_utils",
- "entity_access",
  "futures",
  "google_token",
  "macro_auth",
@@ -3885,13 +4045,17 @@ dependencies = [
  "macro_aws_config",
  "macro_config",
  "macro_cors",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_event_broker",
  "macro_queues",
  "macro_service_urls",
+ "macro_tower_layers",
  "models_email",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "redis",
  "reqwest 0.13.4",
  "rootcause",
@@ -3907,6 +4071,8 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
@@ -3919,6 +4085,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "agent_correlation",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -3926,6 +4093,7 @@ dependencies = [
  "aws-sdk-s3",
  "axum",
  "base64 0.22.1",
+ "bot_id",
  "channels",
  "chrono",
  "cloudfront_sign",
@@ -3933,6 +4101,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_mutation",
+ "feature_flags",
  "filter_ast",
  "futures",
  "invite_email",
@@ -3951,6 +4120,7 @@ dependencies = [
  "mockall",
  "model-entity",
  "model-error-response",
+ "model_user",
  "models_pagination",
  "models_permissions",
  "notification",
@@ -4192,6 +4362,7 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -4219,6 +4390,7 @@ name = "channels"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4294,6 +4466,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4318,7 +4491,6 @@ dependencies = [
  "model",
  "model-entity",
  "model_owner",
- "models_entity_access_management",
  "models_permissions",
  "non_empty",
  "roles_and_permissions",
@@ -4356,8 +4528,6 @@ dependencies = [
 [[package]]
 name = "chrono-tz"
 version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6139a8597ed92cf816dfb33f5dd6cf0bb93a6adc938f11039f371bc5bcd26c3"
 dependencies = [
  "chrono",
  "phf 0.12.1",
@@ -4497,8 +4667,14 @@ name = "code_execution"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "axum",
+ "code_mode_assets",
  "futures",
+ "macro_tower_layers",
+ "opentelemetry",
+ "reqwest 0.13.4",
  "rootcause",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "tempfile",
@@ -4506,8 +4682,16 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
  "url",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "code_mode_assets"
+version = "0.1.0"
+dependencies = [
  "workspace-hack",
 ]
 
@@ -4580,6 +4764,7 @@ dependencies = [
  "agent_session",
  "agent_trigger",
  "arboard",
+ "base64 0.22.1",
  "bot_id",
  "channel_sender",
  "channels",
@@ -4588,24 +4773,31 @@ dependencies = [
  "claude_fold",
  "codex_fold",
  "crossterm 0.28.1",
- "dashmap",
  "eventsource-stream",
  "flate2",
  "futures",
  "harness_id",
  "harnesses",
  "hex",
+ "hosted_runtimes",
  "lazy-regex",
  "macro_env_var",
  "macro_event_broker",
+ "macro_service_urls",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "messages",
+ "mimalloc",
  "openssl-sys",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "pairing_id",
  "ratatui",
  "reqwest 0.13.4",
  "rootcause",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "rustls",
  "serde",
  "serde_json",
@@ -4622,6 +4814,7 @@ dependencies = [
  "toml 0.8.23",
  "toml_edit 0.22.27",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "trigger_context",
  "tui-input",
@@ -4629,8 +4822,10 @@ dependencies = [
  "webbrowser",
  "webhook",
  "windows-sys 0.61.2",
+ "wiremock",
  "workspace-hack",
- "zip 9.0.5",
+ "zeroize",
+ "zip",
 ]
 
 [[package]]
@@ -4723,16 +4918,11 @@ dependencies = [
  "cached",
  "channels",
  "chrono",
- "doppleganger",
- "futures",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
- "model",
  "serde",
- "serde_json",
  "sqlx",
- "strum 0.27.2",
  "tracing",
  "utoipa",
  "uuid",
@@ -4758,6 +4948,7 @@ name = "complete_graph"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "agent_runtime_protocol",
  "agent_session",
  "agent_session_realtime",
@@ -4765,13 +4956,16 @@ dependencies = [
  "apollo-compiler",
  "async-graphql",
  "async-stream",
+ "attention_feed",
  "axum",
  "bot_id",
  "bots",
  "calendar_events",
  "chrono",
+ "contacts",
  "crm",
  "databases",
+ "databases_sql",
  "email",
  "entity_access",
  "entity_mutation",
@@ -4780,28 +4974,35 @@ dependencies = [
  "graphql_calendar",
  "graphql_channel",
  "graphql_common",
+ "graphql_contacts",
  "graphql_crm",
+ "graphql_databases",
  "graphql_email",
  "graphql_entity_mutation",
  "graphql_favorite",
  "graphql_initiative",
  "graphql_notification",
+ "graphql_notification_inbox",
  "graphql_permission",
  "graphql_properties",
+ "graphql_registered_work",
  "graphql_scheduled_action",
  "graphql_soup",
  "graphql_work_feed",
  "macro_authorization",
+ "macro_db_migrator",
  "macro_user_id",
  "model-entity",
  "model_notifications",
  "model_owner",
  "model_user",
+ "models_databases",
  "models_pagination",
  "models_permissions",
  "models_properties",
  "models_soup",
  "notification",
+ "notification_inbox",
  "predicate-index",
  "rootcause",
  "saved_views",
@@ -4811,7 +5012,9 @@ dependencies = [
  "soup",
  "soup-filter-projection",
  "soup_realtime",
+ "sqlx",
  "tokio",
+ "tokio-util",
  "tracing",
  "uuid",
  "work_feed",
@@ -4834,6 +5037,18 @@ name = "compression-core"
 version = "0.4.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc14f565cf027a105f7a44ccf9e5b424348421a1d8952a8fc9d499d313107789"
+
+[[package]]
+name = "computer_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
 
 [[package]]
 name = "concolor"
@@ -4865,11 +5080,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "connect_client"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_tower_layers",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
+ "wiremock",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "connection"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "chrono",
  "connection_gateway_client",
  "entity_access",
  "macro_user_id",
@@ -4878,7 +5113,6 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tracing",
- "uuid",
  "workspace-hack",
 ]
 
@@ -4886,6 +5120,7 @@ dependencies = [
 name = "connection_gateway"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "async-trait",
  "aws-sdk-dynamodb",
@@ -4899,6 +5134,7 @@ dependencies = [
  "dashmap",
  "doppler-config",
  "ensure_exists",
+ "entity_access",
  "frecency",
  "futures",
  "http-body-util",
@@ -4913,7 +5149,6 @@ dependencies = [
  "macro_env_var",
  "macro_tower_layers",
  "macro_user_id",
- "mockall",
  "model",
  "model-entity",
  "models_bulk_upload",
@@ -4927,13 +5162,11 @@ dependencies = [
  "sqlx",
  "stream",
  "strum 0.27.2",
- "strum_macros 0.27.2",
  "tokio",
  "tower 0.5.3",
  "tower-http",
  "tracing",
  "tracing-opentelemetry",
- "url",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
@@ -5059,22 +5292,31 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "axum-extra",
+ "connection_gateway_client",
  "futures",
  "http-body-util",
+ "kafka_util",
  "macro_authorization",
+ "macro_db_client",
  "macro_db_migrator",
+ "macro_event_broker",
  "macro_user_id",
+ "model-entity",
+ "non_empty",
  "rate_limit",
+ "rdkafka",
  "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
  "sqlx",
  "sqs_worker",
+ "subsequence_match",
  "tokio",
  "tower 0.5.3",
  "tracing",
  "urlencoding",
+ "user_events",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -5084,6 +5326,7 @@ dependencies = [
 name = "contacts_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -5103,11 +5346,9 @@ dependencies = [
  "macro_queues",
  "macro_service_urls",
  "macro_user_id",
- "model",
  "rate_limit",
  "redis",
  "secretsmanager_client",
- "serde",
  "serde_json",
  "sqlx",
  "sqs_worker",
@@ -5144,7 +5385,6 @@ dependencies = [
  "anyhow",
  "aws-sdk-lambda",
  "aws-sdk-s3",
- "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
  "database_env_vars",
@@ -5167,12 +5407,12 @@ dependencies = [
  "macro_uuid",
  "model",
  "nix 0.29.0",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "pptx_engine",
- "remote_env_var",
  "rs-libreoffice-bindings",
  "s3_client",
  "s3_key",
- "secretsmanager_client",
  "serde",
  "serde_json",
  "sqlx",
@@ -5183,10 +5423,12 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "utoipa-swagger-ui",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -5331,6 +5573,7 @@ checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 name = "crm"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -5342,8 +5585,10 @@ dependencies = [
  "databases",
  "entity_access",
  "entity_access_db_utils",
+ "feature_flags",
  "filter_ast",
  "futures",
+ "harness_id",
  "item_filters",
  "kafka_util",
  "macro_authorization",
@@ -5353,26 +5598,30 @@ dependencies = [
  "macro_uuid",
  "messages",
  "model-error-response",
+ "model_user",
  "models_databases",
+ "models_pagination",
  "models_permissions",
  "models_properties",
+ "opentelemetry",
  "properties",
  "rdkafka",
- "reqwest 0.13.4",
+ "readonly_pool",
  "rootcause",
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sqlx",
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
  "unfurl",
  "utoipa",
  "uuid",
- "wiremock",
  "workspace-hack",
 ]
 
@@ -5921,6 +6170,7 @@ name = "database_webhooks"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bot_id",
  "chrono",
  "databases",
  "entity_access",
@@ -5931,6 +6181,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model-error-response",
+ "model_user",
  "models_databases",
  "rand 0.9.4",
  "rootcause",
@@ -5940,6 +6191,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
@@ -5957,13 +6209,16 @@ dependencies = [
  "axum",
  "bot_id",
  "chrono",
+ "clap",
  "connection_gateway_client",
+ "database_env_vars",
  "database_sql",
  "entity_access",
  "entity_access_db_utils",
  "entity_mutation",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_entrypoint",
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
@@ -6001,6 +6256,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "base64 0.22.1",
  "bot_id",
  "chrono",
  "contacts",
@@ -6012,6 +6268,7 @@ dependencies = [
  "item_filters",
  "macro_authorization",
  "macro_user_id",
+ "model-entity",
  "model-error-response",
  "model_owner",
  "models_databases",
@@ -6023,6 +6280,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "soup",
  "thiserror 2.0.18",
  "tokio",
@@ -6038,7 +6296,6 @@ name = "dataloss_prevention_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-sdk-s3",
  "aws-sdk-sns",
  "aws_lambda_events",
  "lambda_runtime",
@@ -6153,7 +6410,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-sqs",
- "aws-smithy-types",
  "aws_lambda_events",
  "chat",
  "chrono",
@@ -6162,22 +6418,19 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_event_broker",
  "macro_queues",
- "macro_uuid",
- "model",
  "model_owner",
  "projects",
- "serde",
  "serde_json",
  "sqlx",
  "sqs_client",
  "tokio",
  "tracing",
- "urlencoding",
  "workspace-hack",
 ]
 
@@ -6352,7 +6605,7 @@ dependencies = [
  "axum-extra",
  "backoff",
  "bytes",
- "http-body-util",
+ "genai_telemetry",
  "infer 0.19.0",
  "macro_authorization",
  "macro_env_var",
@@ -6372,7 +6625,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "utoipa",
- "uuid",
  "wiremock",
  "workspace-hack",
 ]
@@ -6444,7 +6696,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6485,8 +6737,10 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "access_requests",
+ "account_manager",
  "activity",
  "agent_changes",
+ "agent_correlation",
  "agent_session",
  "agent_session_realtime",
  "ai_billing",
@@ -6497,6 +6751,7 @@ dependencies = [
  "async-graphql",
  "async-graphql-axum",
  "async-trait",
+ "attention_feed",
  "authentication_service_client",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -6509,18 +6764,14 @@ dependencies = [
  "bebop",
  "bot_id",
  "bots",
- "bytes",
- "bzip2 0.5.2",
  "cal",
  "calendar_events",
  "call",
  "channel_bots",
  "channel_labels",
- "channel_sender",
  "channels",
  "chat",
  "chrono",
- "clap",
  "cloudfront_sign",
  "collab_surface",
  "comms_db_client",
@@ -6528,8 +6779,6 @@ dependencies = [
  "connection",
  "connection_gateway_client",
  "contacts",
- "cool_asserts",
- "cowlike",
  "crm",
  "database_webhooks",
  "databases",
@@ -6548,6 +6797,7 @@ dependencies = [
  "entity_registry_db_utils",
  "external_chat",
  "favorites",
+ "feature_flags",
  "flate2",
  "foreign_entity",
  "forms",
@@ -6557,12 +6807,15 @@ dependencies = [
  "github_pull_requests",
  "gmail_client",
  "graphql_calendar",
+ "graphql_contacts",
  "graphql_crm",
+ "graphql_databases",
  "graphql_initiative",
  "graphql_scheduled_action",
  "graphql_soup",
  "harnesses",
  "hex",
+ "hosted_runtimes",
  "http-body-util",
  "hyper 1.9.0",
  "hyper-util",
@@ -6570,10 +6823,9 @@ dependencies = [
  "initiative",
  "initiative_description",
  "jsonwebtoken 10.3.0",
- "last_online_tracker",
- "lazy_static",
  "lexical_client",
  "lexical_mention_extractor",
+ "lru 0.16.4",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -6581,6 +6833,7 @@ dependencies = [
  "macro_config",
  "macro_cors",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -6593,37 +6846,35 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "mcp_client",
  "messages",
  "mockall",
  "model",
  "model-entity",
  "model_notifications",
  "model_owner",
- "model_user",
- "models_bulk_upload",
  "models_databases",
  "models_dcs",
- "models_opensearch",
+ "models_email",
  "models_pagination",
  "models_permissions",
  "models_properties",
  "models_soup",
  "notification",
+ "notification_inbox",
  "opensearch_client",
  "opentelemetry",
  "opentelemetry_sdk",
- "ordered-float",
+ "password_events",
+ "passwords",
  "projects",
  "properties",
- "properties_service",
  "rate_limit",
  "rayon",
  "readonly_pool",
  "redis",
- "regex",
  "reminders",
  "reqwest 0.13.4",
- "roles_and_permissions",
  "rootcause",
  "s3_key",
  "saved_views",
@@ -6659,7 +6910,6 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "tungstenite 0.27.0",
- "unicode-segmentation",
  "urlencoding",
  "user_api_key",
  "utoipa",
@@ -6667,9 +6917,10 @@ dependencies = [
  "uuid",
  "webhook",
  "whatsapp_linked",
+ "wiremock",
  "work_feed",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -6678,6 +6929,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bot_id",
+ "macro_tower_layers",
  "model",
  "model_owner",
  "models_bulk_upload",
@@ -6712,11 +6964,9 @@ dependencies = [
 name = "document_text_extractor"
 version = "0.1.0"
 dependencies = [
- "agent",
  "anyhow",
  "aws-sdk-s3",
  "aws_lambda_events",
- "chrono",
  "lambda_runtime",
  "macro_aws_config",
  "macro_db_migrator",
@@ -6732,7 +6982,6 @@ dependencies = [
  "tiktoken-rs",
  "tokio",
  "tracing",
- "urlencoding",
  "uuid",
  "workspace-hack",
 ]
@@ -6777,6 +7026,7 @@ name = "documents"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_billing",
  "ai_engine",
  "ai_toolset",
@@ -6797,7 +7047,6 @@ dependencies = [
  "connection",
  "document_sub_type",
  "docx_engine",
- "dotenvy",
  "embedding",
  "entity_access",
  "entity_access_db_utils",
@@ -6867,6 +7116,7 @@ dependencies = [
  "unicode-segmentation",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -6891,18 +7141,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-lambda",
- "aws-sdk-s3",
  "aws-sdk-sqs",
- "aws-smithy-types",
  "aws_lambda_events",
- "bzip2 0.5.2",
  "futures",
  "lambda_client",
  "lambda_runtime",
  "macro_aws_config",
  "macro_db_client",
  "macro_entrypoint",
- "macro_env",
  "macro_env_var",
  "macro_queues",
  "macro_sha_count_client",
@@ -6913,7 +7159,6 @@ dependencies = [
  "s3_client",
  "s3_key",
  "serde",
- "serde_json",
  "sha2 0.10.9",
  "sqlx",
  "sqs_client",
@@ -6921,7 +7166,7 @@ dependencies = [
  "tracing",
  "urlencoding",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -7026,6 +7271,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
+name = "dynamic_ui"
+version = "0.1.0"
+dependencies = [
+ "insta",
+ "lazy-regex",
+ "nutype",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "specta",
+ "specta-serde",
+ "specta-typescript",
+]
+
+[[package]]
 name = "dynamodb_client"
 version = "0.1.0"
 dependencies = [
@@ -7035,8 +7296,6 @@ dependencies = [
  "macro_aws_config",
  "models_bulk_upload",
  "s3_key",
- "strum 0.27.2",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -7184,6 +7443,7 @@ name = "email"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -7202,7 +7462,9 @@ dependencies = [
  "email_api_client",
  "email_db_client",
  "email_utils",
+ "email_validator",
  "entity_access",
+ "entity_access_db_utils",
  "entity_access_management",
  "entity_mutation",
  "filter_ast",
@@ -7225,6 +7487,9 @@ dependencies = [
  "models_email",
  "models_pagination",
  "non_empty",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "rand 0.9.4",
  "recursion",
  "redis",
  "reqwest 0.13.4",
@@ -7235,12 +7500,15 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sha2 0.10.9",
+ "specta",
  "sqlx",
+ "sqs_client",
  "strum 0.27.2",
  "subtle",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
  "utoipa",
@@ -7281,9 +7549,9 @@ dependencies = [
  "html-escape",
  "http 1.4.0",
  "httpdate",
- "lol_html",
  "macro_db_migrator",
  "macro_event_broker",
+ "macro_service_urls",
  "mail-builder",
  "mailparse",
  "models_email",
@@ -7292,11 +7560,13 @@ dependencies = [
  "scraper",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "url",
  "uuid",
  "wiremock",
@@ -7316,9 +7586,6 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "models_email",
- "models_pagination",
- "once_cell",
- "regex",
  "serde_json",
  "sqlx",
  "tokio",
@@ -7327,31 +7594,87 @@ dependencies = [
 ]
 
 [[package]]
+name = "email_e2e"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "aws-sdk-sqs",
+ "axum",
+ "base64 0.22.1",
+ "calendar_events",
+ "chrono",
+ "crm",
+ "email",
+ "entity_access",
+ "entity_access_management",
+ "frecency",
+ "gmail_emulator",
+ "hex",
+ "lexical_client",
+ "macro_auth",
+ "macro_authorization",
+ "macro_aws_config",
+ "macro_db_migrator",
+ "macro_event_topics",
+ "macro_user_id",
+ "outlook_emulator",
+ "rdkafka",
+ "redis",
+ "reqwest 0.13.4",
+ "rootcause",
+ "rustix 1.1.6",
+ "rustls",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "sqs_client",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
  "ai_usage",
+ "calendar_events",
  "chrono",
+ "connection_gateway_client",
  "doppler-config",
  "email",
  "jev",
  "kafka_util",
+ "macro_auth",
+ "macro_authorization",
  "macro_config",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_event_broker",
+ "macro_service_urls",
+ "macro_tower_layers",
  "macro_user_id",
  "memory",
+ "models_email",
+ "opentelemetry",
  "rdkafka",
+ "reqwest 0.13.4",
  "rootcause",
- "serde",
  "serde_json",
  "sqlx",
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
+ "universal_input",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -7389,7 +7712,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_queues",
- "model",
  "models_email",
  "sqlx",
  "sqs_client",
@@ -7406,7 +7728,6 @@ dependencies = [
  "anyhow",
  "aws-sdk-sqs",
  "aws_lambda_events",
- "chrono",
  "email",
  "futures",
  "lambda_runtime",
@@ -7428,7 +7749,7 @@ dependencies = [
 name = "email_service"
 version = "0.1.0"
 dependencies = [
- "ammonia",
+ "agent_correlation",
  "anyhow",
  "authentication_service_client",
  "aws-sdk-s3",
@@ -7446,7 +7767,6 @@ dependencies = [
  "contacts",
  "crm",
  "document_storage_service_client",
- "doppleganger",
  "doppler-config",
  "ego-tree",
  "email",
@@ -7455,7 +7775,6 @@ dependencies = [
  "email_utils",
  "entity_access",
  "entity_access_management",
- "filter_ast",
  "frecency",
  "futures",
  "generic_email_domains",
@@ -7464,8 +7783,6 @@ dependencies = [
  "html-escape",
  "http-body-util",
  "infer 0.19.0",
- "item_filters",
- "last_online_tracker",
  "lol_html",
  "macro_auth",
  "macro_authorization",
@@ -7481,6 +7798,7 @@ dependencies = [
  "macro_middleware",
  "macro_queues",
  "macro_service_urls",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mime_guess",
@@ -7489,19 +7807,16 @@ dependencies = [
  "model_file_type",
  "model_notifications",
  "models_email",
- "models_opensearch",
- "models_pagination",
- "models_permissions",
  "models_properties",
  "notification",
- "once_cell",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "rand 0.9.4",
  "redis",
  "regex",
  "reqwest 0.13.4",
  "rootcause",
  "s3_client",
- "schemars 1.2.1",
  "scraper",
  "secretsmanager_client",
  "serde",
@@ -7521,6 +7836,8 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "unfurl",
  "unicode-segmentation",
  "url",
@@ -7537,13 +7854,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "email",
- "model",
+ "macro_tower_layers",
  "models_email",
  "reqwest 0.13.4",
- "serde",
  "serde_json",
  "tokio",
  "tracing",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -7564,6 +7881,7 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -7573,9 +7891,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws_lambda_events",
- "chrono",
  "lambda_runtime",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env_var",
  "serde",
@@ -7584,6 +7902,7 @@ dependencies = [
  "strum 0.27.2",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -7606,7 +7925,12 @@ name = "email_validator"
 version = "0.1.0"
 dependencies = [
  "lazy_static",
+ "nutype",
  "regex",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "specta",
  "workspace-hack",
 ]
 
@@ -7628,7 +7952,17 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-openai",
+ "genai_telemetry",
  "workspace-hack",
+]
+
+[[package]]
+name = "emojis"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "589871e639330783bc20ad89d32ac1b049e02c273d96c907ca27478c8bc674a2"
+dependencies = [
+ "phf 0.13.1",
 ]
 
 [[package]]
@@ -7673,7 +8007,6 @@ dependencies = [
  "bot_id",
  "cached",
  "clap",
- "cool_asserts",
  "database_env_vars",
  "futures",
  "harness_id",
@@ -7681,7 +8014,6 @@ dependencies = [
  "macro_db_migrator",
  "macro_entrypoint",
  "macro_user_id",
- "mockall",
  "model",
  "model-entity",
  "model-error-response",
@@ -7692,11 +8024,13 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "single_flight",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -7706,6 +8040,7 @@ dependencies = [
 name = "entity_access_db_utils"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "macro_db_migrator",
  "macro_user_id",
@@ -7714,9 +8049,7 @@ dependencies = [
  "model_owner",
  "models_entity_access_management",
  "models_permissions",
- "serde",
  "sqlx",
- "tokio",
  "tracing",
  "workspace-hack",
 ]
@@ -7725,20 +8058,15 @@ dependencies = [
 name = "entity_access_management"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
- "cool_asserts",
  "entity_access_db_utils",
  "macro_db_migrator",
- "macro_user_id",
- "mockall",
  "model-entity",
  "models_entity_access_management",
  "models_permissions",
- "serde",
- "serde_json",
  "sqlx",
  "thiserror 2.0.18",
- "tokio",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -7793,7 +8121,6 @@ dependencies = [
  "rootcause",
  "shared_entity_registry",
  "sqlx",
- "tokio",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -8062,7 +8389,6 @@ dependencies = [
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
- "mockall",
  "model-entity",
  "model-error-response",
  "model_user",
@@ -8099,6 +8425,7 @@ dependencies = [
 name = "feature_flags"
 version = "0.1.0"
 dependencies = [
+ "macro_env",
  "macro_user_id",
  "reqwest 0.13.4",
  "rootcause",
@@ -8151,7 +8478,6 @@ dependencies = [
  "console_error_panic_hook",
  "gif",
  "image-webp",
- "js-sys",
  "miniz_oxide",
  "png",
  "ruzstd",
@@ -8344,7 +8670,6 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "model-entity",
- "model-error-response",
  "models_databases",
  "models_forms",
  "models_permissions",
@@ -8356,11 +8681,13 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "static_file_service_client",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -8407,7 +8734,6 @@ dependencies = [
  "model-entity",
  "num-traits",
  "ordered-float",
- "rand 0.9.4",
  "recursion",
  "serde",
  "serde_json",
@@ -8439,13 +8765,17 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "jsonwebtoken 10.3.0",
+ "macro_service_urls",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber",
+ "upstream_error",
  "urlencoding",
  "uuid",
  "wiremock",
@@ -8638,6 +8968,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "serde_json",
+ "strum 0.27.2",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -8676,7 +9007,6 @@ version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb130435a959a8d525e6bca66ff6c40981a300ee96d70e3ef56f046556d614a3"
 dependencies = [
- "generic-array 0.14.9",
  "rustversion",
  "typenum",
 ]
@@ -8708,7 +9038,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bd49230192a3797a9a4d6abe9b3eed6f7fa4c8a8a4947977c6f80025f92cbd8"
 dependencies = [
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "windows-link",
 ]
 
@@ -8850,10 +9180,8 @@ dependencies = [
 name = "github"
 version = "0.1.0"
 dependencies = [
- "activity",
  "anyhow",
  "axum",
- "axum-extra",
  "base64 0.22.1",
  "chrono",
  "connection_gateway_client",
@@ -8866,13 +9194,14 @@ dependencies = [
  "github_pull_requests",
  "hex",
  "hmac 0.12.1",
- "http-body-util",
  "jsonwebtoken 10.3.0",
  "lru 0.16.4",
  "macro_authorization",
  "macro_db_migrator",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
@@ -8884,6 +9213,7 @@ dependencies = [
  "model_owner",
  "model_user",
  "models_permissions",
+ "models_properties",
  "notification",
  "redis",
  "regex",
@@ -8898,6 +9228,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "utoipa",
@@ -8977,6 +9308,7 @@ dependencies = [
  "base64 0.22.1",
  "httpdate",
  "jsonwebtoken 10.3.0",
+ "macro_service_urls",
  "models_email",
  "regex",
  "reqwest 0.13.4",
@@ -8985,6 +9317,45 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
+name = "gmail_emulator"
+version = "0.1.0"
+dependencies = [
+ "askama",
+ "axum",
+ "base64 0.22.1",
+ "calendar_events",
+ "chrono",
+ "chrono-tz",
+ "clap",
+ "email_api_client",
+ "fusionauth",
+ "gmail_client",
+ "jsonwebtoken 10.3.0",
+ "macro_entrypoint",
+ "macro_env",
+ "mail-builder",
+ "mailparse",
+ "models_email",
+ "nom 8.0.0",
+ "reqwest 0.13.4",
+ "rrule",
+ "rsa",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -9025,7 +9396,6 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
- "tower 0.5.3",
  "tracing",
  "url",
  "uuid",
@@ -9039,6 +9409,7 @@ dependencies = [
  "activity",
  "async-graphql",
  "async-stream",
+ "axum",
  "chrono",
  "chrono-tz",
  "entity_access",
@@ -9097,6 +9468,7 @@ dependencies = [
  "async-graphql",
  "axum",
  "axum-extra",
+ "chrono",
  "filter_ast",
  "item_filters",
  "macro_authorization",
@@ -9108,8 +9480,23 @@ dependencies = [
  "rootcause",
  "serde",
  "tokio",
- "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_contacts"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "contacts",
+ "graphql_common",
+ "macro_user_id",
+ "models_pagination",
+ "rootcause",
+ "serde_json",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -9131,6 +9518,26 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_databases"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "databases",
+ "databases_sql",
+ "entity_access",
+ "futures",
+ "graphql_common",
+ "graphql_soup",
+ "macro_user_id",
+ "model-entity",
+ "models_databases",
+ "rootcause",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -9199,7 +9606,6 @@ dependencies = [
 name = "graphql_initiative"
 version = "0.1.0"
 dependencies = [
- "activity",
  "async-graphql",
  "chrono",
  "entity_access",
@@ -9221,6 +9627,7 @@ dependencies = [
  "soup",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "workspace-hack",
 ]
@@ -9249,6 +9656,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_notification_inbox"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-stream",
+ "attention_feed",
+ "chrono",
+ "futures",
+ "graphql_common",
+ "graphql_notification",
+ "graphql_soup",
+ "macro_user_id",
+ "notification_inbox",
+ "soup",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_permission"
 version = "0.1.0"
 dependencies = [
@@ -9259,6 +9688,7 @@ dependencies = [
  "model-entity",
  "rootcause",
  "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -9283,6 +9713,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_registered_work"
+version = "0.1.0"
+dependencies = [
+ "agent_session",
+ "async-graphql",
+ "async-stream",
+ "attention_feed",
+ "chrono",
+ "futures",
+ "graphql_common",
+ "graphql_soup",
+ "macro_user_id",
+ "model-entity",
+ "soup_realtime",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_scheduled_action"
 version = "0.1.0"
 dependencies = [
@@ -9292,6 +9743,7 @@ dependencies = [
  "macro_uuid",
  "model_owner",
  "rootcause",
+ "routine_program",
  "scheduled_action",
  "serde_json",
  "tokio",
@@ -9310,8 +9762,6 @@ dependencies = [
  "axum",
  "axum-extra",
  "chrono",
- "document_sub_type",
- "either",
  "email",
  "entity_access",
  "filter_ast",
@@ -9324,7 +9774,6 @@ dependencies = [
  "macro_authorization",
  "macro_user_id",
  "model-entity",
- "model_file_type",
  "model_owner",
  "models_grouping",
  "models_pagination",
@@ -9370,22 +9819,14 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "async-stream",
- "chrono",
- "entity_access",
+ "attention_feed",
  "futures",
  "graphql_common",
  "graphql_notification",
  "graphql_soup",
  "macro_user_id",
- "model-entity",
- "model_notifications",
- "notification",
- "rootcause",
- "serde_json",
  "soup",
- "tokio",
  "tracing",
- "uuid",
  "work_feed",
  "workspace-hack",
 ]
@@ -9418,7 +9859,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "axum-extra",
  "chrono",
  "http-body-util",
  "ip_extractor",
@@ -9611,6 +10051,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "harnessd"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "harnessd_protocol",
+ "hex",
+ "rustix 1.1.6",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "vt100",
+ "workspace-hack",
+]
+
+[[package]]
+name = "harnessd_protocol"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "harnesses"
 version = "0.1.0"
 dependencies = [
@@ -9618,24 +10092,33 @@ dependencies = [
  "axum",
  "bot_id",
  "chrono",
+ "computer_id",
  "constant_time_eq 0.3.1",
+ "entity_access_db_utils",
  "harness_id",
  "harness_token",
+ "harnessd_protocol",
+ "harnesses",
  "hex",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "mockall",
  "model-error-response",
+ "models_permissions",
+ "pairing_id",
  "rand 0.9.4",
+ "rootcause",
  "serde",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -9804,9 +10287,9 @@ checksum = "e712f64ec3850b98572bffac52e2c6f282b29fe6c5fa6d42334b30be438d95c1"
 
 [[package]]
 name = "hickory-net"
-version = "0.26.1"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2295ed2f9c31e471e1428a8f88a3f0e1f4b27c15049592138d1eebe9c35b183"
+checksum = "c480823ed7c2c5d0f09c41020cb6b7c28029ce60ec42dc942158dcf22f8e0a4d"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -9828,9 +10311,9 @@ dependencies = [
 
 [[package]]
 name = "hickory-proto"
-version = "0.26.1"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bab31817bfb44672a252e97fe81cd0c18d1b2cf892108922f6818820df8c643"
+checksum = "12b92608f679a6fa515dd1d15c1ff89443026e391200a2c840c7afcba482893d"
 dependencies = [
  "data-encoding",
  "idna",
@@ -9848,9 +10331,9 @@ dependencies = [
 
 [[package]]
 name = "hickory-resolver"
-version = "0.26.1"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0d58d28879ceecde6607729660c2667a081ccdc082e082675042793960f178c"
+checksum = "3f3da5255c95d5a716857d54b5b8f4e8d67c3484d3beaaaae2ce25063b3ba981"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -9915,6 +10398,52 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d"
 dependencies = [
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "hosted_runtimes"
+version = "0.1.0"
+dependencies = [
+ "async-stripe",
+ "axum",
+ "bot_id",
+ "chrono",
+ "clap",
+ "computer_id",
+ "entity_access",
+ "feature_flags",
+ "harness_id",
+ "harnesses",
+ "incus_client",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_env",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "pairing_id",
+ "proptest",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-retry",
+ "tower 0.5.3",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "utoipa",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -10497,19 +11026,25 @@ dependencies = [
 name = "image_generation"
 version = "0.1.0"
 dependencies = [
+ "ai_billing",
  "ai_toolset",
  "ai_usage",
  "anyhow",
  "async-trait",
  "attachment",
+ "axum",
  "base64 0.22.1",
  "bot_id",
+ "entity_registry",
+ "genai_telemetry",
  "image",
  "lexical_client",
+ "macro_authorization",
  "macro_user_id",
  "model",
  "model-entity",
  "model_owner",
+ "model_user",
  "non_empty",
  "reqwest 0.13.4",
  "rootcause",
@@ -10519,7 +11054,9 @@ dependencies = [
  "static_file_service_client",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
+ "utoipa",
  "uuid",
  "wiremock",
  "workspace-hack",
@@ -10550,6 +11087,7 @@ dependencies = [
 name = "image_proxy_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-secretsmanager",
  "axum",
@@ -10558,6 +11096,7 @@ dependencies = [
  "futures",
  "http-body-util",
  "jsonwebtoken 10.3.0",
+ "lazy-regex",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -10566,6 +11105,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_tower_layers",
  "model",
  "reqwest 0.13.4",
  "secretsmanager_client",
@@ -10578,6 +11118,7 @@ dependencies = [
  "url",
  "utoipa",
  "utoipa-swagger-ui",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -10620,6 +11161,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "specta",
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
@@ -10678,6 +11220,7 @@ dependencies = [
  "indexmap 2.14.0",
  "lazy-regex",
  "macro_user_id",
+ "models_databases",
  "pipedream_mcp",
  "rand 0.9.4",
  "rootcause",
@@ -10686,6 +11229,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -10725,6 +11269,27 @@ checksum = "7cab85a7ed0bd5f0e76d93846e0147172bed2e2d3f859bcc33a8d9699cad1a75"
 dependencies = [
  "proc-macro2",
  "quote",
+]
+
+[[package]]
+name = "incus_client"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "futures",
+ "progenitor-client",
+ "reqwest 0.13.4",
+ "rustls",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tracing",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10804,6 +11369,7 @@ name = "initiative"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -10813,6 +11379,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "http-body-util",
+ "log",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -10837,6 +11404,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "unicode-segmentation",
  "utoipa",
  "uuid",
@@ -11116,6 +11684,7 @@ dependencies = [
  "ai_billing",
  "ai_usage",
  "async-trait",
+ "futures",
  "macro_env_var",
  "macro_user_id",
  "reqwest 0.13.4",
@@ -11375,6 +11944,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "kinded"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21677048d7aa2c4c73e7edac4a9d5aee810a3987ccef2762c8449ffd0b92f8d2"
+dependencies = [
+ "kinded_macros",
+]
+
+[[package]]
+name = "kinded_macros"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6eaa04e7e45e39b21765756cc9544a4eb4a7f41abefbe77e6256a1649789551d"
+dependencies = [
+ "convert_case 0.11.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "lambda_client"
 version = "0.1.0"
 dependencies = [
@@ -11538,7 +12128,6 @@ dependencies = [
  "reqwest 0.13.4",
  "serde",
  "serde_json",
- "tokio",
  "tracing",
  "trigger_context",
  "workspace-hack",
@@ -11554,12 +12143,6 @@ dependencies = [
  "rootcause",
  "workspace-hack",
 ]
-
-[[package]]
-name = "libbz2-rs-sys"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0864a00c8d019e36216b69c2c4ce50b83b7bd966add3cf5ba554ec44f8bebcf5"
 
 [[package]]
 name = "libbz2-rs-sys"
@@ -11598,6 +12181,15 @@ name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
+
+[[package]]
+name = "libmimalloc-sys"
+version = "0.1.49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a45a52f43e1c16f667ccfe4dd8c85b7f7c204fd5e3bf46c5b0db9a5c3c0b8e9"
+dependencies = [
+ "cc",
+]
 
 [[package]]
 name = "libredox"
@@ -11911,9 +12503,9 @@ dependencies = [
 
 [[package]]
 name = "loro"
-version = "1.16.2"
+version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e86dea63b66576db244cbc3a40bdb17517263c93f318e2fbe08aca3be1192cb"
+checksum = "410c939fe3bee34b8ed61f7aea93201fb136629f685ffa557039c4d9952f9988"
 dependencies = [
  "enum-as-inner 0.6.1",
  "generic-btree",
@@ -11927,9 +12519,9 @@ dependencies = [
 
 [[package]]
 name = "loro-common"
-version = "1.16.0"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2146b353a56b0a743f8643725cb9f42dfe209665939b59db901ecea732a3ab29"
+checksum = "2bc76e378b98f08fd308eeff42461d60566053076f4884a881d3429a29081e0e"
 dependencies = [
  "arbitrary",
  "enum-as-inner 0.6.1",
@@ -11940,6 +12532,7 @@ dependencies = [
  "serde",
  "serde_columnar",
  "serde_json",
+ "smallvec",
  "thiserror 1.0.69",
 ]
 
@@ -11957,9 +12550,9 @@ dependencies = [
 
 [[package]]
 name = "loro-internal"
-version = "1.16.2"
+version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d5806b65ee68c3ae7891959dd968898860dab74fbf6498b312de9b548dce5ec"
+checksum = "7e533c1688430aa4fcdd933f00861e331c169a4158ee6d27d054e0558892d447"
 dependencies = [
  "append-only-bytes",
  "arref",
@@ -12004,9 +12597,9 @@ dependencies = [
 
 [[package]]
 name = "loro-kv-store"
-version = "1.16.0"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "841e206d3749fd14f23e64985be230dad2b2199da1d381c44c3dd0d2b9583fcc"
+checksum = "3a169f32c2d2d6ffe67d03603b61bd17d8d90b1a7f8c2f2585304f3181be8089"
 dependencies = [
  "bytes",
  "ensure-cov",
@@ -12107,10 +12700,10 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_user_id",
- "rand 0.9.4",
  "remote_env_var",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -12126,7 +12719,6 @@ dependencies = [
  "bot_id",
  "bot_token",
  "constant_time_eq 0.3.1",
- "cookie",
  "harness_id",
  "harness_token",
  "http-body-util",
@@ -12140,7 +12732,6 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
- "serde_urlencoded",
  "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
@@ -12148,7 +12739,6 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
- "urlencoding",
  "uuid",
  "workspace-hack",
 ]
@@ -12161,9 +12751,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "macro_env_var",
- "thiserror 2.0.18",
  "tokio",
- "tracing",
  "url",
  "wiremock",
  "workspace-hack",
@@ -12182,8 +12770,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "email_validator",
+ "macro_env_var",
  "macro_redis",
  "redis",
+ "tokio",
  "workspace-hack",
 ]
 
@@ -12230,8 +12820,6 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "anyhow",
- "async-recursion",
- "async-trait",
  "cached",
  "chrono",
  "document_sub_type",
@@ -12244,12 +12832,9 @@ dependencies = [
  "messages",
  "model",
  "model-entity",
- "model_file_type",
  "model_owner",
  "models_dcs",
- "models_entity_access_management",
  "models_opensearch",
- "models_pagination",
  "models_permissions",
  "models_team",
  "non_empty",
@@ -12257,10 +12842,10 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "single_flight",
  "sqlx",
  "system_properties",
  "thiserror 2.0.18",
- "tokio",
  "tracing",
  "user_quota",
  "uuid",
@@ -12328,6 +12913,7 @@ dependencies = [
 name = "macro_event_broker"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "kafka_util",
  "macro_event_topics",
  "rdkafka",
@@ -12356,32 +12942,21 @@ dependencies = [
 name = "macro_middleware"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "axum",
- "axum-extra",
  "entity_access_db_utils",
- "http-body-util",
  "ip_extractor",
  "macro_db_client",
- "macro_env",
- "macro_env_var",
  "macro_user_id",
  "macro_uuid",
  "model",
  "model-entity",
- "model_user",
  "models_permissions",
- "remote_env_var",
  "serde",
- "serde_json",
- "serde_urlencoded",
  "sqlx",
- "thiserror 2.0.18",
  "tokio",
- "tower 0.5.3",
  "tracing",
- "urlencoding",
- "uuid",
  "workspace-hack",
 ]
 
@@ -12401,7 +12976,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "redis",
- "tokio",
  "workspace-hack",
 ]
 
@@ -12444,6 +13018,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "http 1.4.0",
+ "nom 8.0.0",
  "opentelemetry",
  "opentelemetry-http",
  "opentelemetry_sdk",
@@ -12609,25 +13184,43 @@ version = "0.1.0"
 dependencies = [
  "ai_toolset",
  "anyhow",
+ "askama",
+ "async-trait",
  "axum",
+ "axum-extra",
  "base64 0.22.1",
  "bot_id",
+ "chrono",
+ "cursor_api_key",
  "fusionauth",
+ "jsonwebtoken 10.3.0",
  "macro_auth",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_tower_layers",
  "macro_user_id",
+ "model",
+ "rand 0.9.4",
  "redis",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sqlx",
+ "strum 0.27.2",
+ "subtle",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "uuid",
+ "wiremock",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -12635,15 +13228,15 @@ name = "mcp_client"
 version = "0.1.0"
 dependencies = [
  "aes-gcm 0.10.3",
- "agent",
  "ai_toolset",
  "anyhow",
- "async-openai",
  "async-trait",
+ "authentication_service_client",
  "axum",
  "base64 0.22.1",
  "futures",
  "macro_authorization",
+ "macro_env",
  "macro_env_var",
  "macro_user_id",
  "model-error-response",
@@ -12689,11 +13282,13 @@ dependencies = [
  "ai_toolset",
  "anyhow",
  "futures",
+ "macro_user_id",
  "regex",
  "rmcp",
  "schemars 1.2.1",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]
@@ -12751,50 +13346,34 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "ai_billing",
- "ai_tools",
  "ai_toolset",
  "ai_usage",
  "anyhow",
+ "async-trait",
  "axum",
- "bots",
- "call",
- "channels",
  "chrono",
- "crm",
- "documents",
- "email",
- "email_service_client",
- "entity_access",
- "entity_access_management",
- "entity_registry",
- "entity_registry_db_utils",
- "foreign_entity",
- "frecency",
+ "feature_flags",
  "futures",
- "github_pull_requests",
- "lexical_client",
+ "jev",
  "macro_authorization",
- "macro_aws_config",
  "macro_db_migrator",
- "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_user_id",
  "macro_uuid",
- "notification",
- "readonly_pool",
- "reminders",
+ "model_user",
+ "prompt",
  "rootcause",
- "search_service_client",
+ "scheduled_action",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
- "soup",
  "sqlx",
- "sqs_client",
- "sync_service_client",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "workspace-hack",
@@ -12807,7 +13386,7 @@ dependencies = [
  "bot_id",
  "channel_sender",
  "cool_asserts",
- "either",
+ "lazy-regex",
  "macro_user_id",
  "nom 8.0.0",
  "serde",
@@ -12861,6 +13440,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "mention_utils",
  "mockall",
  "model",
  "model-entity",
@@ -12893,18 +13473,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a86d3146ed3995b5913c414f6664344b9617457320782e64f0bb44afd49d74"
 
 [[package]]
-name = "microsoft_oauth_grant_db_utils"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "macro_db_migrator",
- "sqlx",
- "tokio",
- "workspace-hack",
-]
-
-[[package]]
 name = "miette"
 version = "7.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12924,6 +13492,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d4139bb28d14ad1facf21d5eb8825051b326e172d216b39f6d31df53cc97862"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]
@@ -13072,10 +13649,8 @@ dependencies = [
  "agent",
  "anyhow",
  "axum",
- "base64 0.22.1",
  "chrono",
  "document_sub_type",
- "doppleganger",
  "macro_user_id",
  "model-entity",
  "model-error-response",
@@ -13102,10 +13677,12 @@ dependencies = [
 name = "model-entity"
 version = "0.1.0"
 dependencies = [
- "cool_asserts",
  "cowlike",
+ "emojis",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
+ "specta",
  "strum 0.27.2",
  "utoipa",
  "workspace-hack",
@@ -13117,6 +13694,29 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "model_emulator"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "futures",
+ "lazy-regex",
+ "macro_entrypoint",
+ "macro_env",
+ "regex",
+ "reqwest 0.13.4",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -13135,16 +13735,15 @@ dependencies = [
 name = "model_notifications"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "chrono",
  "chrono-tz",
+ "harnessd_protocol",
  "html-escape",
  "invite_email",
  "macro_user_id",
  "mention_utils",
  "model-entity",
  "model_owner",
- "models_pagination",
  "notification",
  "paste",
  "rootcause",
@@ -13152,7 +13751,6 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum 0.27.2",
- "tracing",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -13175,21 +13773,12 @@ dependencies = [
 name = "model_user"
 version = "0.1.0"
 dependencies = [
- "macro_user_id",
  "serde",
  "serde_json",
  "sqlx",
  "strum 0.27.2",
  "utoipa",
  "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "models_ai_projection"
-version = "0.1.0"
-dependencies = [
- "serde",
  "workspace-hack",
 ]
 
@@ -13227,7 +13816,6 @@ name = "models_dcs"
 version = "0.1.0"
 dependencies = [
  "serde",
- "serde_json",
  "utoipa",
  "workspace-hack",
 ]
@@ -13241,6 +13829,7 @@ dependencies = [
  "chrono",
  "email_utils",
  "macro_user_id",
+ "mailparse",
  "models_pagination",
  "schemars 1.2.1",
  "serde",
@@ -13268,7 +13857,9 @@ name = "models_forms"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "lazy-regex",
  "macro_uuid",
+ "model-entity",
  "models_databases",
  "schemars 1.2.1",
  "serde",
@@ -13287,6 +13878,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "serde",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
@@ -13321,6 +13913,7 @@ dependencies = [
 name = "models_permissions"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "macro_user_id",
  "model-entity",
  "model_file_type",
@@ -13331,6 +13924,7 @@ dependencies = [
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
+ "tokio",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -13363,7 +13957,6 @@ dependencies = [
  "document_sub_type",
  "item_filters",
  "model_file_type",
- "models_opensearch",
  "models_soup",
  "opensearch_client",
  "schemars 1.2.1",
@@ -13401,7 +13994,7 @@ dependencies = [
 name = "models_soup"
 version = "0.1.0"
 dependencies = [
- "anyhow",
+ "bot_id",
  "call",
  "channels",
  "chrono",
@@ -13411,7 +14004,6 @@ dependencies = [
  "email",
  "item_filters",
  "macro_user_id",
- "model",
  "model-entity",
  "model_owner",
  "models_pagination",
@@ -13430,11 +14022,9 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "serde",
- "serde_json",
  "sqlx",
  "strum 0.27.2",
  "utoipa",
- "uuid",
  "workspace-hack",
 ]
 
@@ -13521,8 +14111,8 @@ dependencies = [
  "serde",
  "sqlx",
  "thiserror 2.0.18",
- "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "workspace-hack",
 ]
@@ -13552,7 +14142,6 @@ dependencies = [
  "macro_env_var",
  "native_app_service",
  "rootcause",
- "semver",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
@@ -13562,7 +14151,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -13586,6 +14175,19 @@ dependencies = [
  "tracing",
  "url",
  "workspace-hack",
+]
+
+[[package]]
+name = "natural_time"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "nom 8.0.0",
+ "serde",
+ "serde-wasm-bindgen",
+ "strsim",
+ "thiserror 2.0.18",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -13712,7 +14314,6 @@ dependencies = [
  "last_online_tracker",
  "macro_authorization",
  "macro_db_migrator",
- "macro_env",
  "macro_event_broker",
  "macro_event_topics",
  "macro_service_urls",
@@ -13761,12 +14362,33 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "model_notifications",
+ "serde",
+ "sqlx",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "notification_inbox"
+version = "0.1.0"
+dependencies = [
+ "attention_feed",
+ "chrono",
+ "connection_gateway_client",
+ "filter_ast",
+ "item_filters",
+ "macro_user_id",
  "model-entity",
  "model_notifications",
- "models_pagination",
+ "notification",
+ "rootcause",
  "serde",
  "serde_json",
- "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -13794,8 +14416,6 @@ version = "0.1.0"
 dependencies = [
  "aws-sdk-sesv2",
  "aws-sdk-sns",
- "chrono",
- "either",
  "email_formatting",
  "hmac 0.12.1",
  "inquire",
@@ -13814,7 +14434,6 @@ dependencies = [
  "sha2 0.10.9",
  "sqlx",
  "tokio",
- "tracing",
  "tracing-subscriber",
  "uuid",
  "workspace-hack",
@@ -13824,6 +14443,7 @@ dependencies = [
 name = "notification_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",
@@ -13852,33 +14472,25 @@ dependencies = [
  "macro_service_urls",
  "macro_tower_layers",
  "macro_user_id",
- "macro_uuid",
- "mention_utils",
  "model",
  "model-entity",
  "model-error-response",
- "model_file_type",
  "model_notifications",
- "model_user",
  "models_pagination",
  "notification",
  "notification_db_client",
- "paste",
  "rate_limit",
  "redis",
- "regex",
  "secretsmanager_client",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "sns_client",
  "sqlx",
- "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
  "tower-http",
  "tracing",
- "url",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
@@ -14076,6 +14688,30 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "nutype"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae5a3dbe7b39891991de649985f7930fea69131fc7492d1cf2621d279ad56f77"
+dependencies = [
+ "nutype_macros",
+]
+
+[[package]]
+name = "nutype_macros"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea8ebf0265a233787dc277bd299f7facf14954a4e8a40c7c3435d8a58c9cd522"
+dependencies = [
+ "cfg-if",
+ "kinded",
+ "proc-macro2",
+ "quote",
+ "rustc_version",
+ "syn 2.0.117",
+ "urlencoding",
 ]
 
 [[package]]
@@ -14282,14 +14918,12 @@ dependencies = [
  "mcp_client",
  "rootcause",
  "serde",
- "serde_json",
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
  "utoipa",
- "uuid",
  "workspace-hack",
 ]
 
@@ -14322,6 +14956,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
+name = "openbao_client"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "jsonwebtoken 10.3.0",
+ "macro_tower_layers",
+ "progenitor-client",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "wiremock",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "opensearch"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14346,17 +15000,24 @@ name = "opensearch_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "chrono",
- "macro_entrypoint",
+ "h2 0.4.16",
+ "hyper 1.9.0",
+ "hyper-util",
  "models_opensearch",
  "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
+ "reqwest 0.13.4",
+ "rustls",
  "serde",
  "serde_json",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-retry",
+ "tokio-rustls",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -14373,15 +15034,14 @@ dependencies = [
 
 [[package]]
 name = "openssl"
-version = "0.10.76"
+version = "0.10.82"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "951c002c75e16ea2c65b8c7e4d3d51d5530d8dfa7d060b4776828c88cfb18ecf"
+checksum = "4de8111e94a56adca7ebfe6c365b6d42f99deb69b74b6becacd4204e2f193aa2"
 dependencies = [
  "bitflags 2.11.1",
  "cfg-if",
  "foreign-types",
  "libc",
- "once_cell",
  "openssl-macros",
  "openssl-sys",
 ]
@@ -14414,9 +15074,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.112"
+version = "0.9.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57d55af3b3e226502be1526dfdba67ab0e9c96fc293004e79576b2b9edb0dbdb"
+checksum = "19c413d6ec9ebaf5e1c829d355cb3e9f783778d700f135be0921d52fce3c60ae"
 dependencies = [
  "cc",
  "libc",
@@ -14602,6 +15262,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "outlook_emulator"
+version = "0.1.0"
+dependencies = [
+ "askama",
+ "axum",
+ "base64 0.22.1",
+ "calendar_events",
+ "chrono",
+ "chrono-tz",
+ "clap",
+ "email_api_client",
+ "fusionauth",
+ "jsonwebtoken 10.3.0",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_service_urls",
+ "mail-builder",
+ "mailparse",
+ "models_email",
+ "nom 8.0.0",
+ "reqwest 0.13.4",
+ "rsa",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "outref"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14708,6 +15406,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pairing_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14743,6 +15453,91 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aab41826031698d6ffcd9cff78ef56ef998e39dc7e5067cdfebe373842d4723b"
 dependencies = [
  "phc",
+]
+
+[[package]]
+name = "password_events"
+version = "0.1.0"
+dependencies = [
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "password_import"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "csv",
+ "csv-core",
+ "insta",
+ "nom 8.0.0",
+ "password_import",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "url",
+ "zeroize",
+ "zip",
+]
+
+[[package]]
+name = "password_import_wasm"
+version = "0.1.0"
+dependencies = [
+ "password_import",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "passwords"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "feature_flags",
+ "futures",
+ "jsonwebtoken 10.3.0",
+ "lazy-regex",
+ "log",
+ "lru 0.16.4",
+ "macro_authorization",
+ "macro_db_client",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model_user",
+ "openbao_client",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "password_import",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -15156,6 +15951,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
+ "connect_client",
  "futures",
  "http 1.4.0",
  "macro_authorization",
@@ -15281,7 +16077,7 @@ dependencies = [
  "concurrent-queue",
  "hermit-abi",
  "pin-project-lite",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "windows-sys 0.61.2",
 ]
 
@@ -15408,6 +16204,7 @@ dependencies = [
  "skrifa",
  "thiserror 2.0.18",
  "tiny-skia",
+ "utoipa",
  "wasm-bindgen",
  "zune-core",
  "zune-jpeg",
@@ -15603,10 +16400,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "progenitor-client"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6aa13eb6d9499a851512ec8fa3280f586be059682da4f05d953924be45d736f0"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "percent-encoding",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+]
+
+[[package]]
 name = "projects"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-recursion",
@@ -15614,13 +16427,11 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "axum",
- "axum-extra",
  "base64 0.22.1",
  "bot_id",
  "chrono",
  "document_sub_type",
  "documents",
- "dotenvy",
  "dynamodb_client",
  "entity_access",
  "entity_access_db_utils",
@@ -15640,11 +16451,9 @@ dependencies = [
  "macro_event_topics",
  "macro_sha_count_client",
  "macro_user_id",
- "macro_uuid",
  "mockall",
  "model",
  "model-entity",
- "model-error-response",
  "model_owner",
  "model_user",
  "models_bulk_upload",
@@ -15901,7 +16710,6 @@ dependencies = [
  "clap",
  "console_error_panic_hook",
  "fig_engine",
- "js-sys",
  "miniz_oxide",
  "png",
  "serde",
@@ -16477,10 +17285,8 @@ name = "referral"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-stripe",
  "axum",
  "axum-extra",
- "chrono",
  "http-body-util",
  "invite_email",
  "ip_extractor",
@@ -16503,7 +17309,6 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "url",
- "urlencoding",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -16557,7 +17362,6 @@ dependencies = [
  "entity_access",
  "entity_access_management",
  "frecency",
- "http-body-util",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
@@ -16796,18 +17600,20 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "1.7.0"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0810a9f717d9828f475fe1f629f4c305c8464b7f496c3a854b58d29e65f4058e"
+checksum = "d24a7e92f4bcaa36b97fa93c4fa7ca8f3e669eced949345b3462dba333c7f909"
 dependencies = [
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "chrono",
  "futures",
  "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
+ "indexmap 2.14.0",
+ "libc",
  "oauth2",
  "pastey 0.2.3",
  "pin-project-lite",
@@ -16817,6 +17623,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "sse-stream",
  "thiserror 2.0.18",
  "tokio",
@@ -16830,15 +17637,15 @@ dependencies = [
 
 [[package]]
 name = "rmcp-macros"
-version = "1.7.0"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6aefac48c364756e97f04c0401ba3231e8607882c7c1d92da0437dc16307904d"
+checksum = "b3140f24a766f80f9ec1607bde85680959a69b83d46fa9ce87dadab7e67ab029"
 dependencies = [
- "darling 0.23.0",
+ "darling 0.24.1",
  "proc-macro2",
  "quote",
  "serde_json",
- "syn 2.0.117",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -16901,6 +17708,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "routine_program"
+version = "0.1.0"
+dependencies = [
+ "bots",
+ "nom 8.0.0",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "routines"
 version = "0.1.0"
 dependencies = [
@@ -16911,8 +17733,10 @@ dependencies = [
  "chrono-tz",
  "cron",
  "macro_authorization",
+ "macro_tower_layers",
  "macro_user_id",
  "reqwest 0.13.4",
+ "routine_program",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -16931,6 +17755,19 @@ dependencies = [
  "hashbrown 0.14.5",
  "rustc-hash 1.1.0",
  "text-size",
+]
+
+[[package]]
+name = "rrule"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "720acfb4980b9d8a6a430f6d7a11933e701ebbeba5eee39cc9d8c5f932aaff74"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "log",
+ "regex",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -16965,9 +17802,9 @@ dependencies = [
 
 [[package]]
 name = "russh"
-version = "0.63.3"
+version = "0.65.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "036204edbd199552a5b3832f63c60dcdf395dc44c7f06b4af1c0e8139cc11bce"
+checksum = "94be3d86c71b9ed220a675c405e35c7a02565a009bf8da2e9cc13a700320a5c5"
 dependencies = [
  "aes 0.9.3",
  "bitflags 2.11.1",
@@ -17136,9 +17973,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "1.1.4"
+version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190"
+checksum = "e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa"
 dependencies = [
  "bitflags 2.11.1",
  "errno",
@@ -17297,7 +18134,6 @@ dependencies = [
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
- "tokio",
  "tracing",
  "utoipa",
  "uuid",
@@ -17327,11 +18163,13 @@ name = "scheduled_action"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "agent_runtime_protocol",
  "agent_session",
  "ai_billing",
  "ai_usage",
  "anyhow",
+ "async-trait",
  "axum",
  "bot_id",
  "bots",
@@ -17341,31 +18179,25 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "connection_gateway_client",
- "crm",
  "cron",
  "document_sub_type",
  "documents",
  "email",
  "entity_access",
  "entity_access_db_utils",
- "entity_access_management",
  "entity_registry",
  "entity_registry_db_utils",
  "feature_flags",
- "frecency",
  "futures",
+ "github",
+ "glob",
  "jev",
  "kafka_util",
  "lexical_client",
- "macro_auth",
  "macro_authorization",
- "macro_cors",
- "macro_db_client",
  "macro_db_migrator",
- "macro_entrypoint",
  "macro_event_broker",
- "macro_event_topics",
- "macro_service_urls",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mention_utils",
@@ -17373,20 +18205,20 @@ dependencies = [
  "model",
  "model-entity",
  "model_owner",
- "models_permissions",
  "models_properties",
  "properties",
  "rdkafka",
  "reqwest 0.13.4",
- "roles_and_permissions",
  "rootcause",
+ "routine_program",
  "serde",
  "serde_json",
- "share_permission_db_utils",
+ "shown_text",
  "sqlx",
  "strum 0.27.2",
+ "suggestions",
+ "suggestions_db_utils",
  "system_properties",
- "teams",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -17394,7 +18226,6 @@ dependencies = [
  "tracing",
  "trigger_context",
  "utoipa",
- "utoipa-swagger-ui",
  "workspace-hack",
 ]
 
@@ -17519,6 +18350,7 @@ dependencies = [
  "doppler-config",
  "email",
  "email_db_client",
+ "encoding_rs",
  "ensure_exists",
  "entity_registry",
  "entity_registry_db_utils",
@@ -17549,7 +18381,6 @@ dependencies = [
  "model_file_type",
  "model_owner",
  "models_email",
- "models_opensearch",
  "models_properties",
  "models_search",
  "nom 8.0.0",
@@ -17568,7 +18399,6 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "sqs_worker",
- "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -17588,8 +18418,9 @@ version = "0.1.0"
 dependencies = [
  "agent_session",
  "anyhow",
- "aws-sdk-secretsmanager",
+ "async-trait",
  "axum",
+ "calendar_events",
  "channels",
  "chrono",
  "comms_db_client",
@@ -17597,16 +18428,11 @@ dependencies = [
  "document_sub_type",
  "email_db_client",
  "entity_access",
- "futures",
- "http-body-util",
+ "feature_flags",
  "indexmap 2.14.0",
  "item_filters",
- "macro_auth",
  "macro_authorization",
- "macro_aws_config",
  "macro_db_client",
- "macro_env",
- "macro_env_var",
  "macro_user_id",
  "model",
  "models_email",
@@ -17620,17 +18446,14 @@ dependencies = [
  "properties",
  "readonly_pool",
  "rootcause",
- "secretsmanager_client",
  "serde",
  "serde_json",
  "sqlx",
- "strum 0.27.2",
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
- "tower 0.5.3",
- "tower-http",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -17641,9 +18464,9 @@ name = "search_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "macro_tower_layers",
  "models_search",
  "reqwest 0.13.4",
- "tracing",
  "workspace-hack",
 ]
 
@@ -17707,7 +18530,6 @@ name = "secretsmanager_client"
 version = "0.1.0"
 dependencies = [
  "aws-sdk-secretsmanager",
- "macro_env",
  "mockall",
  "remote_env_var",
  "thiserror 2.0.18",
@@ -17749,6 +18571,7 @@ dependencies = [
  "chrono",
  "clap",
  "comms_db_client",
+ "email",
  "email_db_client",
  "email_utils",
  "entity_access",
@@ -18297,7 +19120,6 @@ dependencies = [
  "rootcause",
  "sqlx",
  "thiserror 2.0.18",
- "tokio",
  "workspace-hack",
 ]
 
@@ -18336,6 +19158,14 @@ name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+
+[[package]]
+name = "shown_text"
+version = "0.1.0"
+dependencies = [
+ "lazy-regex",
+ "workspace-hack",
+]
 
 [[package]]
 name = "shuttle"
@@ -18468,6 +19298,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "single_flight"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "siphasher"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18496,19 +19337,25 @@ dependencies = [
  "ai_toolset",
  "anyhow",
  "async-trait",
+ "axum",
  "chrono",
+ "cognition",
  "cowlike",
  "document_sub_type",
  "documents",
  "email",
  "entity_access",
  "filter_ast",
+ "futures",
  "item_filters",
  "lexical_client",
+ "macro_authorization",
  "macro_user_id",
+ "model_user",
  "models_pagination",
  "models_search",
  "models_soup",
+ "rootcause",
  "schemars 1.2.1",
  "search_service_client",
  "serde",
@@ -18517,7 +19364,10 @@ dependencies = [
  "system_skills",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
+ "tower 0.5.3",
  "tracing",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
@@ -18557,20 +19407,15 @@ dependencies = [
  "macro_queues",
  "macro_service_urls",
  "macro_user_id",
- "mention_utils",
  "messages",
- "notification",
  "reqwest 0.13.4",
  "rootcause",
- "serde",
  "serde_json",
  "sha2 0.10.9",
  "slack_integration",
  "sqlx",
- "teams",
  "tokio",
  "tokio-util",
- "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -18700,6 +19545,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-extra",
+ "bot_id",
  "call",
  "channels",
  "chrono",
@@ -18707,7 +19553,6 @@ dependencies = [
  "cowlike",
  "crm",
  "document_sub_type",
- "doppleganger",
  "either",
  "email",
  "entity_access",
@@ -18715,7 +19560,6 @@ dependencies = [
  "filter_ast",
  "foreign_entity",
  "frecency",
- "futures",
  "github_pull_requests",
  "http-body-util",
  "indexmap 2.14.0",
@@ -19136,17 +19980,19 @@ dependencies = [
  "anyhow",
  "aws-sdk-sqs",
  "chrono",
- "email",
  "futures",
  "model",
- "models_ai_projection",
  "models_email",
+ "opentelemetry",
  "s3_key",
  "serde",
  "serde_json",
  "strum 0.27.2",
+ "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -19173,9 +20019,9 @@ dependencies = [
 
 [[package]]
 name = "sse-stream"
-version = "0.2.3"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3962b63f038885f15bce2c6e02c0e7925c072f1ac86bb60fd44c5c6b762fb72"
+checksum = "c25ac7aff0abd1dbc474536e40416e1102c7dd9bfba0b9861c6d357f835dcfb4"
 dependencies = [
  "bytes",
  "futures-util",
@@ -19279,6 +20125,7 @@ dependencies = [
 name = "static_file_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -19307,9 +20154,9 @@ dependencies = [
  "strum_macros 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tower-http",
  "tracing",
- "tracing-tree",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
@@ -19350,7 +20197,6 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
- "tokio-test",
  "tracing",
  "utoipa",
  "workspace-hack",
@@ -19428,7 +20274,32 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "011cbb39cf7c1f62871aea3cc46e5817b0937b49e9447370c93cacbe93a766d8"
 dependencies = [
- "vte",
+ "vte 0.10.1",
+]
+
+[[package]]
+name = "stripe_inbox"
+version = "0.1.0"
+dependencies = [
+ "async-stripe",
+ "chrono",
+ "futures",
+ "macro_db_migrator",
+ "macro_user_id",
+ "opentelemetry",
+ "rand 0.9.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-opentelemetry",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -19502,10 +20373,113 @@ dependencies = [
 ]
 
 [[package]]
+name = "subsequence_match"
+version = "0.1.0"
+
+[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
+name = "suggestion_generation"
+version = "0.1.0"
+dependencies = [
+ "agent_runtime_protocol",
+ "agent_session",
+ "anyhow",
+ "async-trait",
+ "axum",
+ "bot_id",
+ "chrono",
+ "chrono-tz",
+ "feature_flags",
+ "futures",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_tower_layers",
+ "macro_user_id",
+ "macro_uuid",
+ "model_owner",
+ "rootcause",
+ "routine_program",
+ "scheduled_action",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "suggestions",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tower 0.5.3",
+ "tracing",
+ "trigger_context",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "suggestions"
+version = "0.1.0"
+dependencies = [
+ "agent_correlation",
+ "agent_session",
+ "async-trait",
+ "axum",
+ "bot_id",
+ "channels",
+ "chrono",
+ "chrono-tz",
+ "documents",
+ "email",
+ "email_utils",
+ "entity_access",
+ "entity_registry",
+ "feature_flags",
+ "futures",
+ "kafka_util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_event_broker",
+ "macro_user_id",
+ "macro_uuid",
+ "messages",
+ "model-entity",
+ "model_owner",
+ "model_user",
+ "projects",
+ "rdkafka",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "shown_text",
+ "sqlx",
+ "strum 0.27.2",
+ "suggestions_db_utils",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "suggestions_db_utils"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_db_migrator",
+ "macro_uuid",
+ "serde_json",
+ "sqlx",
+ "workspace-hack",
+]
 
 [[package]]
 name = "symphonia"
@@ -19794,6 +20768,34 @@ name = "system_skills"
 version = "0.1.0"
 dependencies = [
  "prompt",
+ "routine_program",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "system_status"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "connection_gateway_client",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
@@ -19863,11 +20865,10 @@ dependencies = [
  "connection_gateway_client",
  "embedding",
  "futures",
+ "genai_telemetry",
  "lexical_client",
  "macro_aws_config",
  "macro_db_migrator",
- "macro_entrypoint",
- "macro_env",
  "macro_env_var",
  "macro_service_urls",
  "model-entity",
@@ -19881,6 +20882,39 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "team_agents"
+version = "0.1.0"
+dependencies = [
+ "agent_credentials",
+ "agent_git",
+ "axum",
+ "bot_id",
+ "chrono",
+ "entity_access",
+ "feature_flags",
+ "hosted_runtimes",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_service_urls",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "team_agents",
+ "teams",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "user_api_key",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -19949,7 +20983,7 @@ dependencies = [
  "fastrand 2.4.1",
  "getrandom 0.4.2",
  "once_cell",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "windows-sys 0.61.2",
 ]
 
@@ -20214,17 +21248,6 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "tokio-test"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f6d24790a10a7af737693a3e8f1d03faef7e6ca0cc99aae5066f533766de545"
-dependencies = [
- "futures-core",
- "tokio",
- "tokio-stream",
 ]
 
 [[package]]
@@ -20652,8 +21675,10 @@ version = "0.1.0"
 dependencies = [
  "bot_id",
  "chrono",
+ "macro_user_id",
  "serde",
  "serde_json",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
@@ -20801,7 +21826,7 @@ dependencies = [
  "regex-syntax",
  "roaring",
  "rustc-hash 2.1.2",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "ryu",
  "serde_json",
  "shuttle",
@@ -20911,7 +21936,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "bytes",
  "futures",
  "mockall",
  "reqwest 0.13.4",
@@ -20946,7 +21970,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tower 0.5.3",
- "tower-http",
  "tracing",
  "unfurl",
  "url",
@@ -21083,6 +22106,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "utoipa",
+ "uuid",
  "wiremock",
  "workspace-hack",
 ]
@@ -21116,9 +22140,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-s3",
- "aws-sdk-sqs",
  "aws_lambda_events",
- "chrono",
  "connection_gateway_client",
  "document_storage_service_client",
  "dynamodb_client",
@@ -21131,18 +22153,15 @@ dependencies = [
  "model",
  "model-entity",
  "models_bulk_upload",
- "serde",
  "serde_json",
  "sha2 0.10.9",
  "sqs_client",
  "tempfile",
  "tokio",
- "tokio-stream",
- "tokio-util",
  "tracing",
  "walkdir",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -21161,10 +22180,26 @@ dependencies = [
  "models_bulk_upload",
  "s3_key",
  "serde",
- "serde_json",
  "sqs_client",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "upstream_error"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http 1.4.0",
+ "http-body-util",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "utoipa",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -21213,6 +22248,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "user_events"
+version = "0.1.0"
+dependencies = [
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "user_language"
 version = "0.1.0"
 dependencies = [
@@ -21237,14 +22285,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws_lambda_events",
- "chrono",
- "futures",
  "lambda_runtime",
  "macro_db_client",
  "macro_entrypoint",
  "macro_env_var",
- "serde",
- "serde_json",
  "sqlx",
  "tokio",
  "tracing",
@@ -21256,7 +22300,6 @@ name = "user_quota"
 version = "0.1.0"
 dependencies = [
  "serde",
- "serde_json",
  "utoipa",
  "workspace-hack",
 ]
@@ -21339,7 +22382,7 @@ dependencies = [
  "url",
  "utoipa",
  "utoipa-swagger-ui-vendored",
- "zip 3.0.0",
+ "zip",
 ]
 
 [[package]]
@@ -21423,12 +22466,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 
 [[package]]
+name = "vt100"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84cd863bf0db7e392ba3bd04994be3473491b31e66340672af5d11943c6274de"
+dependencies = [
+ "itoa",
+ "log",
+ "unicode-width 0.1.14",
+ "vte 0.11.1",
+]
+
+[[package]]
 name = "vte"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6cbce692ab4ca2f1f3047fcf732430249c0e971bfdd2b234cf2c47ad93af5983"
 dependencies = [
  "arrayvec 0.5.2",
+ "utf8parse",
+ "vte_generate_state_changes",
+]
+
+[[package]]
+name = "vte"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5022b5fbf9407086c180e9557be968742d839e68346af7792b8592489732197"
+dependencies = [
+ "arrayvec 0.7.6",
  "utf8parse",
  "vte_generate_state_changes",
 ]
@@ -21653,7 +22719,7 @@ checksum = "38a91b4eaddff87b1cd1074985e3713da4af2c49742d1b356b2c01670a67a078"
 dependencies = [
  "cc",
  "downcast-rs",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "smallvec",
  "wayland-sys",
 ]
@@ -21665,7 +22731,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3c36a0f861ad76d0901f2800b46321410d9f73f2ea88aac0650d86c32688073"
 dependencies = [
  "bitflags 2.11.1",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "wayland-backend",
  "wayland-scanner",
 ]
@@ -21748,6 +22814,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "web_search"
+version = "0.1.0"
+dependencies = [
+ "ai_billing",
+ "ai_toolset",
+ "ai_usage",
+ "anyhow",
+ "async-trait",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "macro_authorization",
+ "macro_env_var",
+ "macro_user_id",
+ "macro_uuid",
+ "model_user",
+ "rate_limit",
+ "reqwest 0.13.4",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "url",
+ "utoipa",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
 name = "webbrowser"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -21775,6 +22874,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "bot_id",
+ "call",
  "channel_sender",
  "channels",
  "chrono",
@@ -21792,6 +22892,7 @@ dependencies = [
  "model-error-response",
  "model_owner",
  "model_user",
+ "password_events",
  "rate_limit",
  "rdkafka",
  "reqwest 0.13.4",
@@ -21806,7 +22907,9 @@ dependencies = [
  "tokio-retry",
  "tower 0.5.3",
  "tracing",
+ "trigger_context",
  "url",
+ "user_events",
  "utoipa",
  "uuid",
  "webhook_signature",
@@ -21880,7 +22983,6 @@ dependencies = [
  "sqlx",
  "tokio",
  "tokio-util",
- "tracing",
  "uuid",
  "whatsapp_fake_server",
  "whatsapp_linked",
@@ -21926,6 +23028,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "bot_id",
  "chrono",
  "entity_access",
  "entity_access_db_utils",
@@ -21975,6 +23078,7 @@ dependencies = [
  "macro_env",
  "macro_service_urls",
  "nom 8.0.0",
+ "reqwest 0.13.4",
  "rootcause",
  "rustls",
  "serde",
@@ -22637,7 +23741,7 @@ dependencies = [
  "libc",
  "log",
  "os_pipe",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "thiserror 2.0.18",
  "tree_magic_mini",
  "wayland-backend",
@@ -22662,27 +23766,18 @@ dependencies = [
 name = "work_feed"
 version = "0.1.0"
 dependencies = [
- "activity",
- "base64 0.22.1",
+ "attention_feed",
  "chrono",
- "cowlike",
  "document_sub_type",
- "email",
- "entity_access",
  "filter_ast",
- "futures",
  "item_filters",
  "macro_user_id",
  "model-entity",
  "model_notifications",
- "models_soup",
  "notification",
  "rootcause",
  "serde",
  "serde_json",
- "soup",
- "soup_realtime",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
  "uuid",
@@ -22794,6 +23889,7 @@ dependencies = [
  "ahash",
  "aho-corasick",
  "anyhow",
+ "arrayvec 0.7.6",
  "async-graphql",
  "async-openai",
  "aws-config",
@@ -22924,7 +24020,7 @@ dependencies = [
  "rsa",
  "rust-embed-utils",
  "rustc-hash 2.1.2",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "rustls",
  "rustls-webpki",
  "schemars 1.2.1",
@@ -22943,6 +24039,8 @@ dependencies = [
  "simd-adler32",
  "slab",
  "smallvec",
+ "specta",
+ "specta-macros",
  "spin 0.9.9",
  "sqlx-core",
  "sqlx-postgres",
@@ -22973,6 +24071,7 @@ dependencies = [
  "xxhash-rust",
  "zerocopy",
  "zeroize",
+ "zip",
 ]
 
 [[package]]
@@ -23003,7 +24102,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9993aa5be5a26815fe2c3eacfc1fde061fc1a1f094bf1ad2a18bf9c495dd7414"
 dependencies = [
  "gethostname",
- "rustix 1.1.4",
+ "rustix 1.1.6",
  "x11rb-protocol",
 ]
 
@@ -23043,7 +24142,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
 dependencies = [
  "libc",
- "rustix 1.1.4",
+ "rustix 1.1.6",
 ]
 
 [[package]]
@@ -23055,15 +24154,6 @@ checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
 [[package]]
 name = "xtask"
 version = "0.1.0"
-
-[[package]]
-name = "xtask_cache_wasm"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde_json",
- "xtask_paths",
-]
 
 [[package]]
 name = "xtask_deps"
@@ -23087,6 +24177,26 @@ dependencies = [
  "serde",
  "serde_json",
  "xtask_graph",
+]
+
+[[package]]
+name = "xtask_email_coverage"
+version = "0.1.0"
+dependencies = [
+ "async-graphql-parser",
+ "clap",
+ "glob",
+ "heck 0.5.0",
+ "lazy-regex",
+ "proc-macro2",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "syn 2.0.117",
+ "tempfile",
+ "toml 0.8.23",
+ "xtask_paths",
 ]
 
 [[package]]
@@ -23136,6 +24246,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "bollard",
+ "chrono",
  "clap",
  "console 0.15.11",
  "docker-compose-types",
@@ -23150,13 +24261,34 @@ dependencies = [
  "macro_event_topics",
  "macro_queues",
  "rdkafka",
+ "regex",
  "serde",
  "serde_json",
  "serde_yaml",
  "sha2 0.10.9",
- "strum 0.27.2",
+ "tempfile",
  "tokio",
+ "xtask_local_telemetry",
  "xtask_paths",
+ "xtask_ports",
+]
+
+[[package]]
+name = "xtask_local_telemetry"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "libc",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "toml 0.8.23",
+ "uuid",
+ "wiremock",
 ]
 
 [[package]]
@@ -23177,6 +24309,19 @@ name = "xtask_paths"
 version = "0.1.0"
 dependencies = [
  "glob",
+]
+
+[[package]]
+name = "xtask_ports"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "macro_env_var",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -23331,26 +24476,12 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12598812502ed0105f607f941c386f43d441e00148fce9dec3ca5ffb0bde9308"
-dependencies = [
- "arbitrary",
- "crc32fast",
- "flate2",
- "indexmap 2.14.0",
- "memchr",
- "zopfli",
-]
-
-[[package]]
-name = "zip"
 version = "9.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
 dependencies = [
  "aes 0.9.3",
- "bzip2 0.6.1",
+ "bzip2",
  "constant_time_eq 0.6.1",
  "crc32fast",
  "deflate64",

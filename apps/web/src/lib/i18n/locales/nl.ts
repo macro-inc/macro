@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Project',
     newProject: 'Nieuw project',
     contentAlreadyOpen: 'Inhoud is al geopend',
-    unableToOpenConversation: 'Kan gesprek niet openen. Probeer het opnieuw.',
     mobileSearchPlaceholder: 'Zoeken…',
     closeSearch: 'Zoeken sluiten',
     searchFullTextFor: 'Volledige tekst doorzoeken op “{{query}}”',
@@ -591,10 +590,6 @@ export default {
       other: '{{accepted}} van {{count}} items gemarkeerd als niet voltooid',
     },
     toastMarkNotDoneFailed: 'Markeren als niet voltooid mislukt',
-    toastThreadStaysDone:
-      'Deze thread heeft geen ontvangen berichten en blijft dus voltooid',
-    toastThreadsStayDone:
-      'Deze threads hebben geen ontvangen berichten en blijven dus voltooid',
     toastCountNotRestored: {
       one: '{{count}} kon niet worden teruggezet.',
       other: '{{count}} konden niet worden teruggezet.',
@@ -695,8 +690,6 @@ export default {
     create: 'Maken',
     getMobileApp: 'Download de mobiele app',
     signedInAs: 'Ingelogd als {{name}}',
-    commandMenu: 'Opdrachtmenu',
-    searchEverything: 'Alles doorzoeken',
     customizeSidebar: 'Zijbalk aanpassen',
     customizeSidebarDescription:
       'Kies welke apps in de zijbalk staan en sleep om ze te herschikken. Start staat altijd bovenaan.',
@@ -763,7 +756,7 @@ export default {
     tabMobileApp: 'Mobiele app',
     tabTags: 'Tags',
     tabIntegrations: 'Integraties',
-    tabRuntimes: 'Runtimes',
+    tabRuntimes: 'Machines',
     tabMcpServer: 'MCP-server',
     tabApiKeys: 'API-sleutels',
     tabBots: 'Bots',
@@ -810,7 +803,6 @@ export default {
     goForward: 'Vooruitgaan',
     createNewSplit: 'Nieuw paneel maken',
     close: 'Sluiten',
-    returnToList: 'Terug naar lijst',
     previousItem: 'Vorig item',
     nextItem: 'Volgend item',
     itemNavigation: 'Itemnavigatie',

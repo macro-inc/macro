@@ -76,13 +76,22 @@ describe('desktop recording', () => {
       'app.platform': 'desktop',
       'service.instance.id': 'launch-1',
       'macro.recording.id': 'recording-1',
-      'os.type': 'darwin',
     });
     recorded.identity.recordingId = null;
     expect(desktopResourceAttributes(recorded)).toMatchObject({
       'macro.recording.enabled': false,
       'macro.recording.id': undefined,
     });
+  });
+
+  it('keeps known runtime attributes when asynchronous diagnostics are unavailable', async () => {
+    const attributes = desktopResourceAttributes(Promise.resolve(undefined));
+    expect(attributes['app.runtime']).toBe('tauri');
+    expect(attributes['app.platform']).toBe('desktop');
+    expect(await attributes['service.instance.id']).toBeUndefined();
+    const recorded = desktopResourceAttributes(Promise.resolve(snapshot([])));
+    expect(await recorded['service.instance.id']).toBe('launch-1');
+    expect(await recorded['macro.recording.id']).toBe('recording-1');
   });
 
   it('exports each new sample once, preserves sample times, and expires stale readings', () => {

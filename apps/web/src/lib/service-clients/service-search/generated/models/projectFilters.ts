@@ -18,9 +18,9 @@ export interface ProjectFilters {
   include_root?: boolean;
   /** Filter by project notification state. */
   notification_filters?: NotificationFilters;
-  /** Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+  /** Filter by project owner principal — a user ('macro|user@example.com'), a bot
 ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
 search all owners. */
   owners?: string[];
   /** Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects.

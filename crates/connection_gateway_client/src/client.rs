@@ -131,6 +131,28 @@ impl ConnectionGatewayClient {
         Ok(receipts.receipts)
     }
 
+    /// Send a message to every open connection, whoever it belongs to.
+    pub async fn broadcast_message(
+        &self,
+        message_type: String,
+        message: serde_json::Value,
+    ) -> anyhow::Result<()> {
+        let body = SendMessageBody {
+            message_type,
+            message,
+        };
+        let request = self
+            .client
+            .post(format!("{}/message/broadcast", self.connection_gateway_url));
+        self.with_trace_headers(request)
+            .json(&body)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
+
     /// Get users who are interacting with a given entity.
     pub async fn track_entity_users(&self, entity: Entity<'_>) -> anyhow::Result<Vec<String>> {
         let request = self.client.get(format!(

@@ -6,6 +6,7 @@ use entity_access::{
 use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
+use tracing::Level;
 use utoipa::{IntoParams, ToSchema};
 
 use crate::domain::{auth::CrmTeamReceipt, model::CrmError, service::CrmService};
@@ -29,7 +30,8 @@ pub struct GetContactByEmailResponse {
 /// Look up a CRM contact by email in the caller's team. Returns a null
 /// `contact` when no visible contact exists. Any team member may resolve a
 /// visible contact; admin/owner callers may also resolve hidden contacts and
-/// contacts under hidden companies.
+/// contacts under hidden companies. Returns 400 when several visible contacts
+/// match; callers must choose an explicit contact ID instead.
 #[utoipa::path(
     get,
     path = "/crm/contacts/by-email",
@@ -41,12 +43,12 @@ pub struct GetContactByEmailResponse {
             body = GetContactByEmailResponse,
             description = "The matching contact, or a null contact when none is visible."
         ),
-        (status = 400, body = ErrorResponse),
+        (status = 400, body = ErrorResponse, description = "Invalid email or multiple visible contacts match; choose a contact ID."),
         (status = 401, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     ),
 )]
-#[tracing::instrument(skip_all, err, fields(email = %params.email))]
+#[tracing::instrument(skip_all, err(level = Level::DEBUG))]
 pub async fn handler<
     C: CrmService,
     St,
@@ -57,7 +59,8 @@ pub async fn handler<
     State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Query(params): Query<GetContactByEmailParams>,
 ) -> Result<Json<GetContactByEmailResponse>, CrmError> {
-    let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;
+    let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)
+        .inspect_err(|error| tracing::error!(error = ?error, "invalid crm team receipt"))?;
     let contact = state
         .service
         .get_contact_by_email(&receipt, &params.email)

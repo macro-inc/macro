@@ -9,7 +9,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { createRoot, createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComposerMode } from '../core/mode';
 import {
@@ -17,9 +17,14 @@ import {
   type PersistedAgentLike,
   type RuntimeLike,
 } from '../core/roster';
-import { NEW_CONVERSATION_ATTACHMENTS_KEY } from '../primitives/composer-draft';
+import {
+  createPersistedComposerDraft,
+  HOME_CONVERSATION_ATTACHMENTS_KEY,
+  NEW_CONVERSATION_ATTACHMENTS_KEY,
+} from '../primitives/composer-draft';
+import { createPreferredRepository } from '../primitives/preferred-repository';
 import { AgentPicker } from './AgentPicker';
-import { NewChatPage } from './NewChatPage';
+import { type AgentRequest, NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
   userId: () => 'user' as string | undefined,
@@ -201,6 +206,7 @@ type ComposerProps = {
   drawerOpen: boolean;
   draft: string;
   attachments: InputAttachmentData[];
+  onRemoveAttachment: (attachment: InputAttachmentData) => void;
   onDraftChange: (draft: string) => void;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
 };
@@ -212,6 +218,13 @@ vi.mock('../components/ChatComposer', () => ({
       <output data-testid="attachments">
         {props.attachments.map((a) => a.name).join(',')}
       </output>
+      <For each={props.attachments}>
+        {(attachment) => (
+          <button onClick={() => props.onRemoveAttachment(attachment)}>
+            Remove {attachment.name}
+          </button>
+        )}
+      </For>
       <div data-testid="drawer" hidden={!props.drawerOpen}>
         {props.drawer}
       </div>
@@ -321,6 +334,7 @@ describe('agent-led new conversation', () => {
     mocks.tier = 'max';
     mocks.currentEffort = 'low';
     mocks.touch = false;
+    localStorage.clear();
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
     mocks.recentUrls = [];
@@ -648,13 +662,152 @@ describe('agent-led new conversation', () => {
       (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
     ).toBe('Keep this prompt');
   });
-  it('starts a new conversation on Choose automatically, not the last used one', async () => {
+  it('restores a parent-owned Agents draft and its attachments after remount', () => {
+    mocks.attachments = [
+      { id: 'kept-file', name: 'notes.txt', kind: 'document' },
+    ];
+    localStorage.setItem(
+      `${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`,
+      JSON.stringify(mocks.attachments)
+    );
+    const host = () => {
+      const persisted = createPersistedComposerDraft(undefined, () => 'user');
+      return (
+        <NewChatPage
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          roster={buildAgentRoster({
+            agents: [],
+            runtimes: [],
+            cursorConnected: true,
+            cursorNeedsConnection: false,
+            macroDefaultModel: 'chat-default',
+            cursorDefaultModel: 'cursor-default',
+          })}
+          rosterLoading={false}
+          onStart={vi.fn()}
+          onOpenRoster={vi.fn()}
+        />
+      );
+    };
+    render(host);
+    fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Keep the Agents prompt' },
+    });
+    expect(screen.getByTestId('attachments').textContent).toBe('notes.txt');
+    cleanup();
+    render(host);
+    expect(
+      (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
+    ).toBe('Keep the Agents prompt');
+    expect(screen.getByTestId('attachments').textContent).toBe('notes.txt');
+  });
+  it('shows the Agents page and the list composer the same unsent draft', () => {
+    localStorage.setItem(
+      `${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`,
+      JSON.stringify([{ id: 'kept-file', name: 'notes.txt', kind: 'document' }])
+    );
+    const roster = buildAgentRoster({
+      agents: [],
+      runtimes: [],
+      cursorConnected: true,
+      cursorNeedsConnection: false,
+      macroDefaultModel: 'chat-default',
+      cursorDefaultModel: 'cursor-default',
+    });
+    render(() => {
+      const persisted = createPersistedComposerDraft(undefined, () => 'user');
+      return (
+        <>
+          <section aria-label="Agents page">
+            <NewChatPage
+              draft={persisted.draft()}
+              onDraftChange={persisted.setDraft}
+              roster={roster}
+              rosterLoading={false}
+              onStart={vi.fn()}
+              onOpenRoster={vi.fn()}
+            />
+          </section>
+          <section aria-label="List composer">
+            <NewChatPage
+              compact
+              roster={roster}
+              rosterLoading={false}
+              onStart={vi.fn()}
+              onOpenRoster={vi.fn()}
+            />
+          </section>
+        </>
+      );
+    });
+    const agentsPage = within(
+      screen.getByRole('region', { name: 'Agents page' })
+    );
+    const list = within(screen.getByRole('region', { name: 'List composer' }));
+
+    fireEvent.input(agentsPage.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Typed on the page' },
+    });
+    expect(
+      (list.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
+    ).toBe('Typed on the page');
+
+    fireEvent.input(list.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Typed on the page, then in the list' },
+    });
+    expect(
+      (agentsPage.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement)
+        .value
+    ).toBe('Typed on the page, then in the list');
+
+    fireEvent.click(
+      agentsPage.getByRole('button', { name: 'Remove notes.txt' })
+    );
+    expect(list.getByTestId('attachments').textContent).toBe('');
+  });
+  it('keeps Home attachments off the Agents store when the parent owns the draft', () => {
+    mocks.attachments = [
+      { id: 'home-file', name: 'home-only.txt', kind: 'document' },
+    ];
+    localStorage.setItem(
+      `${HOME_CONVERSATION_ATTACHMENTS_KEY}:user`,
+      JSON.stringify(mocks.attachments)
+    );
+    localStorage.setItem(
+      `${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`,
+      JSON.stringify([{ id: 'agents-file', name: 'agents.txt', kind: 'file' }])
+    );
+    render(() => {
+      const persisted = createPersistedComposerDraft(undefined, () => 'user');
+      return (
+        <NewChatPage
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          attachmentsKey={HOME_CONVERSATION_ATTACHMENTS_KEY}
+          roster={buildAgentRoster({
+            agents: [],
+            runtimes: [],
+            cursorConnected: true,
+            cursorNeedsConnection: false,
+            macroDefaultModel: 'chat-default',
+            cursorDefaultModel: 'cursor-default',
+          })}
+          rosterLoading={false}
+          onStart={vi.fn()}
+          onOpenRoster={vi.fn()}
+        />
+      );
+    });
+    expect(screen.getByTestId('attachments').textContent).toBe('home-only.txt');
+  });
+  it('starts a new conversation on Auto-detect, not the last used one', async () => {
     mocks.recentIds = [CURSOR_BOT_ID];
     mocks.recentUrls = ['https://github.com/macro-inc/macro'];
     const send = page(true, [], false, [], 'code');
     expect(
       screen.getByRole('button', { name: 'Repository' }).textContent
-    ).toContain('Choose automatically');
+    ).toContain('Auto-detect');
     expect(
       screen.getByRole('button', { name: 'Repository' }).textContent
     ).not.toContain('macro-inc/macro');
@@ -666,6 +819,100 @@ describe('agent-led new conversation', () => {
       repoUrl: undefined,
     });
   });
+  it('preselects the saved default and sends its default branch', () => {
+    createRoot((dispose) => {
+      createPreferredRepository('user').select(
+        'https://github.com/macro-inc/macro'
+      );
+      dispose();
+    });
+    mocks.recentIds = [CURSOR_BOT_ID];
+    const send = page(true, [], false, [], 'code');
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).toContain('macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      repoUrl: 'https://github.com/macro-inc/macro',
+      repoBranch: 'develop',
+    });
+  });
+
+  it('lets a conversation override the default with Auto-detect without changing settings', () => {
+    createRoot((dispose) => {
+      createPreferredRepository('user').select(
+        'https://github.com/macro-inc/macro'
+      );
+      dispose();
+    });
+    mocks.recentIds = [CURSOR_BOT_ID];
+    const send = page(true, [], false, [], 'code');
+    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Auto-detect' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      repoUrl: undefined,
+    });
+    createRoot((dispose) => {
+      expect(createPreferredRepository('user').repository()).toBe(
+        'https://github.com/macro-inc/macro'
+      );
+      dispose();
+    });
+  });
+
+  it('uses Auto-detect when the saved repository is no longer accessible', () => {
+    createRoot((dispose) => {
+      createPreferredRepository('user').select(
+        'https://github.com/org/removed'
+      );
+      dispose();
+    });
+    mocks.recentIds = [CURSOR_BOT_ID];
+    const send = page(true, [], false, [], 'code');
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).toContain('Auto-detect');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      repoUrl: undefined,
+    });
+  });
+
+  it('updates the mounted composer when settings change until the caller overrides it', () => {
+    mocks.recentIds = [CURSOR_BOT_ID];
+    const send = page(true, [], false, [], 'code');
+    const settings = createRoot((dispose) => ({
+      ...createPreferredRepository('user'),
+      dispose,
+    }));
+    settings.select('https://github.com/macro-inc/macro');
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).toContain('macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Auto-detect' }));
+    settings.select(undefined);
+    settings.select('https://github.com/macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      repoUrl: undefined,
+    });
+    settings.dispose();
+  });
+
   it('refuses an unlisted repository and starts a listed one on its default branch', async () => {
     const send = page(true, [], false, [], 'code');
     await selectAgent(/Cursor/);
@@ -793,6 +1040,52 @@ describe('agent-led new conversation', () => {
     });
   });
 
+  it('selects a requested agent once the roster has it, and again on every request', async () => {
+    const computerAgent: PersistedAgentLike = {
+      bot: { id: 'computer-agent', name: "Maya's Agent", handle: 'maya' },
+      harness: 'macrod',
+      harness_id: 'computer',
+      default_model: 'default',
+    };
+    const [agents, setAgents] = createSignal<PersistedAgentLike[]>([]);
+    const [requested, setRequested] = createSignal<AgentRequest>({
+      agentId: 'computer-agent',
+      request: 'first',
+    });
+    const send = vi.fn();
+    render(() => (
+      <NewChatPage
+        mode="code"
+        requestedAgent={requested()}
+        roster={buildAgentRoster({
+          agents: agents(),
+          runtimes: [{ id: 'computer', name: 'Agent Box', connected: true }],
+          cursorConnected: true,
+          cursorNeedsConnection: false,
+        })}
+        rosterLoading={false}
+        onStart={send}
+        onOpenRoster={vi.fn()}
+      />
+    ));
+    const trigger = () => screen.getByRole('button', { name: 'Agent' });
+    // The agent list was cached before the computer created its agent.
+    expect(trigger().title).not.toContain("Maya's Agent");
+
+    setAgents([computerAgent]);
+    expect(trigger().title).toContain("Maya's Agent");
+
+    await selectAgent(/Cursor/);
+    expect(trigger().title).toContain('Cursor');
+    setRequested({ agentId: 'computer-agent', request: 'second' });
+    expect(trigger().title).toContain("Maya's Agent");
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ botId: 'computer-agent' })
+    );
+  });
+
   it('keeps a disconnected paired agent visible and offers to reconnect it', () => {
     page(
       true,
@@ -813,8 +1106,8 @@ describe('agent-led new conversation', () => {
     // The row stays clickable: selecting it opens Settings → Runtimes, where
     // the runtime can be restarted (one click on desktop) or re-paired.
     expect(row.getAttribute('aria-disabled')).not.toBe('true');
-    expect(row.getAttribute('title')).toBe('Its runtime is disconnected');
-    expect(row.textContent).toContain('Reconnect runtime');
+    expect(row.getAttribute('title')).toBe('Its machine is disconnected');
+    expect(row.textContent).toContain('Reconnect machine');
   });
 
   it.each([false, true])(
@@ -867,9 +1160,9 @@ describe('agent-led new conversation', () => {
       expect(offline.textContent).toContain('Offline agent');
       // The disconnected row stays clickable: it offers to reconnect the
       // runtime (opens Settings → Runtimes) and keeps the reason as a tooltip.
-      expect(offline.textContent).toContain('Reconnect runtime');
+      expect(offline.textContent).toContain('Reconnect machine');
       expect(
-        within(picker).queryByText('Connect the runtime to load models.')
+        within(picker).queryByText('Connect the machine to load models.')
       ).toBeNull();
       expect(within(picker).queryByText('Models')).toBeNull();
       const unavailable = within(offline).getByRole(
@@ -879,7 +1172,7 @@ describe('agent-led new conversation', () => {
       // title attribute.
       if (!touch) {
         expect(unavailable.getAttribute('title')).toBe(
-          'Its runtime is disconnected'
+          'Its machine is disconnected'
         );
       }
       expect(
@@ -1211,6 +1504,49 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith(
       expect.objectContaining({ effortOverride: undefined })
+    );
+  });
+  it('keeps the last picked effort as the default for that model', async () => {
+    const pickGpt5 = async () => {
+      const models = await hoverAgent('Cursor');
+      fireEvent.keyDown(models.getByRole('menuitem', { name: /^GPT-5/ }), {
+        key: 'Enter',
+      });
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    };
+    const send = page(true, [], false, [], 'code');
+    await pickGpt5();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Effort: Low' }), {
+      key: 'ArrowDown',
+    });
+    fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Ultra' }), {
+      key: 'Enter',
+    });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+      })
+    );
+
+    await pickGpt5();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+      })
+    );
+
+    cleanup();
+    const remounted = page(true, [], false, [], 'code');
+    await pickGpt5();
+    expect(screen.getByRole('button', { name: 'Effort: Ultra' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(remounted).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+      })
     );
   });
 });

@@ -1,29 +1,37 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
+import { INVALID_REVIEW_DECISION } from '@service-agent-harness/reviews';
 import { debounce } from '@solid-primitives/scheduled';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
-import type { Review, ReviewActions, ReviewItem } from '../core/review';
+import type { Review, ReviewActions, ReviewDraft } from '../core/review';
 
-/** Serial saves share an acknowledged revision; conflicts never retry a send. */
+/**
+ * Serial saves share an acknowledged revision; conflicts never retry a send.
+ * The server checks that each selected draft is complete before it claims a
+ * batch, and its refusal is shown as the validation message.
+ */
 export function createReviewController(
   source: Accessor<Review>,
-  actions: ReviewActions,
-  validateDraft?: (item: ReviewItem, kind: Review['kind']) => string | undefined
+  actions: ReviewActions
 ) {
   const [saved, setSaved] = createSignal(source());
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal<string>();
   const [saving, setSaving] = createSignal(false);
-  const [validation, setValidation] = createSignal<{
-    item: string;
-    message: string;
-  }>();
-  const drafts = new Map<string, unknown>();
+  const [validation, setValidation] = createSignal<string>();
+  // Bumped whenever the saved drafts replace what the editors were mounted
+  // with, so the view remounts them on the new drafts.
+  const [generation, setGeneration] = createSignal(0);
+  const drafts = new Map<string, ReviewDraft>();
   let tail: Promise<void> = Promise.resolve();
-  const record = () =>
-    source().revision > saved().revision ? source() : saved();
-  const stale = () => source().revision > saved().revision;
-  // Acknowledgments and action status can advance without changing editor data.
-  // Adopt those revisions only when no local edits or writes can be displaced.
+  // A poll can return the revision our in-flight save or decision already
+  // committed; only a newer revision once our writes settle is someone else's.
+  const stale = () =>
+    !saving() && !busy() && source().revision > saved().revision;
+  const record = () => (stale() ? source() : saved());
+  // A newer revision (an acknowledgment, a status, or a draft the agent or
+  // another editor changed) is adopted whenever no local edits or writes can
+  // be displaced; otherwise the review is stale until an explicit reload.
   createEffect(() => {
     const next = source();
     const current = saved();
@@ -32,16 +40,10 @@ export function createReviewController(
       busy() ||
       saving() ||
       error() ||
-      drafts.size > 0 ||
-      next.items.length !== current.items.length ||
-      next.items.some(
-        (item, index) =>
-          item.id !== current.items[index]?.id ||
-          JSON.stringify(item.draft) !==
-            JSON.stringify(current.items[index]?.draft)
-      )
+      drafts.size > 0
     )
       return;
+    if (draftsChanged(current, next)) setGeneration((value) => value + 1);
     setSaved(next);
   });
   async function saveDrafts() {
@@ -81,11 +83,11 @@ export function createReviewController(
   const saveLater = debounce(() => {
     fireAndForget(flush(), 'agent-reviews');
   }, 300);
-  function edit(item: string, draft: unknown) {
+  function edit(item: string, draft: ReviewDraft) {
     if (busy() || error()) return;
     setValidation(undefined);
     const existing = saved().items.find((entry) => entry.id === item);
-    if (JSON.stringify(existing?.draft) === JSON.stringify(draft)) return;
+    if (JSON.stringify(existing?.draft) === JSON.stringify(draft.draft)) return;
     drafts.set(item, draft);
     saveLater();
   }
@@ -98,26 +100,19 @@ export function createReviewController(
     saveLater.clear();
     try {
       if (!(await flush())) return false;
-      if (action === 'submit' && validateDraft) {
-        for (const item of record().items) {
-          if (
-            item.status !== 'pending' ||
-            (items.length > 0 && !items.includes(item.id))
-          )
-            continue;
-          const message = validateDraft(item, record().kind);
-          if (message) {
-            setValidation({ item: item.id, message });
-            return false;
-          }
-        }
-      }
       setValidation(undefined);
       setSaved(
         await actions.decide({ action, revision: saved().revision, items })
       );
       return true;
-    } catch {
+    } catch (failure) {
+      if (
+        failure instanceof ThrownResultError &&
+        thrownResultErrorHasCode(failure, INVALID_REVIEW_DECISION)
+      ) {
+        setValidation(failure.message);
+        return false;
+      }
       setError(
         'The review changed or the request could not be confirmed. Reload its saved status before taking another action.'
       );
@@ -136,6 +131,7 @@ export function createReviewController(
       drafts.clear();
       setValidation(undefined);
       setSaved(next);
+      setGeneration((value) => value + 1);
       setError(undefined);
       return true;
     } catch {
@@ -153,9 +149,22 @@ export function createReviewController(
     error,
     validation,
     stale,
+    generation,
     edit,
     flush,
     decide,
     reload,
   };
+}
+
+function draftsChanged(current: Review, next: Review): boolean {
+  return (
+    next.items.length !== current.items.length ||
+    next.items.some(
+      (item, index) =>
+        item.id !== current.items[index]?.id ||
+        JSON.stringify(item.draft) !==
+          JSON.stringify(current.items[index]?.draft)
+    )
+  );
 }

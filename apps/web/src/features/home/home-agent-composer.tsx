@@ -1,18 +1,14 @@
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { useChatInputContext } from '@core/component/AI/context';
-import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
-import { createEffect, onCleanup } from 'solid-js';
 import '../agents-view/agents-view.css';
-import { buildAgentPrompt } from '@app/features/agents-view/queries/composer-prompt';
-import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createPersistedComposerDraft,
+  HOME_CONVERSATION_ATTACHMENTS_KEY,
   HOME_CONVERSATION_DRAFT_KEY,
 } from '../agents-view/primitives/composer-draft';
 import { createAgentRosterSource } from '../agents-view/queries/agent-roster-source';
@@ -22,11 +18,10 @@ import {
 } from '../agents-view/views/NewChatPage';
 import { useHomeView } from './home-view-context';
 
-/** Home supplies suggestions and its detail pane to the same composer used by Agents. */
+/** Home supplies its saved draft and detail pane to the same composer used by Agents. */
 export function HomeAgentComposer(props: { autoFocus?: boolean }) {
   const panel = useSplitPanelOrThrow();
   const home = useHomeView();
-  const input = useChatInputContext();
   const roster = createAgentRosterSource();
   const settings = useSettingsState();
   const userId = useUserId();
@@ -36,38 +31,6 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
     userId
   );
   let focus: (() => void) | undefined;
-  let draftVersion = 0;
-  onCleanup(() => {
-    // A suggestion started on a previous visit must not overwrite saved text.
-    draftVersion++;
-  });
-  const applySuggestion = async (content: string) => {
-    const version = ++draftVersion;
-    try {
-      const prompt = await buildAgentPrompt({
-        content,
-        attachments: input.attachments.attached(),
-      });
-      if (version !== draftVersion) return;
-      setDraft(prompt);
-      input.attachments.setAttached([]);
-      focus?.();
-    } catch (error) {
-      if (version !== draftVersion) return;
-      setDraft(content);
-      toast.failure(
-        error instanceof Error
-          ? error.message
-          : 'Could not load the suggested context.'
-      );
-    }
-  };
-  createEffect(() => {
-    const requested = input.pendingDraft();
-    if (requested == null) return;
-    input.setPendingDraft(null);
-    fireAndForget(applySuggestion(requested), 'home');
-  });
   registerHotkey({
     hotkey: 'enter',
     scopeId: panel.splitHotkeyScope,
@@ -79,15 +42,15 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
       return true;
     },
   });
-  // The session opens in Home's detail pane rather than Agents; its row joins
-  // the Home list once the create answers.
+  // The session opens in Home's detail pane rather than Agents; the server
+  // lists its row as the viewer's work before the sandbox boots.
   const start = (conversation: StartConversation) => {
     const id = startPendingSession({
       ...conversation,
       userId: userId(),
       submitSurface: 'home',
     });
-    home.openPreview({ type: 'agent_session', id });
+    home.openStartedSession(id);
   };
   return (
     <div class="agents-view-portal min-w-0 [&_.newchat]:p-0">
@@ -96,10 +59,8 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
         rosterLoading={roster.loading()}
         availabilityLoading={roster.availabilityLoading()}
         draft={draft()}
-        onDraftChange={(value) => {
-          draftVersion++;
-          setDraft(value);
-        }}
+        attachmentsKey={HOME_CONVERSATION_ATTACHMENTS_KEY}
+        onDraftChange={setDraft}
         autoFocus={props.autoFocus}
         registerFocus={(callback) => {
           focus = callback;

@@ -27,12 +27,14 @@ fn a_deleted_question_stays_deleted_when_moved_concurrently() {
                             widget: None,
                         },
                     ],
+                    show_when: None,
                 },
                 FormSection::Questions {
                     id: DETAILS,
                     title: "Details".to_owned(),
                     description: String::new(),
                     questions: vec![],
+                    show_when: None,
                 },
             ],
         },
@@ -62,6 +64,7 @@ fn a_deleted_question_stays_deleted_when_moved_concurrently() {
                             widget: None,
                         },
                     ],
+                    show_when: None,
                 },
                 FormSection::Questions {
                     id: DETAILS,
@@ -74,6 +77,7 @@ fn a_deleted_question_stays_deleted_when_moved_concurrently() {
                         required: true,
                         widget: None,
                     }],
+                    show_when: None,
                 },
             ],
         },
@@ -110,12 +114,14 @@ fn a_deleted_question_stays_deleted_when_moved_concurrently() {
                             widget: None,
                         },
                     ],
+                    show_when: None,
                 },
                 FormSection::Questions {
                     id: DETAILS,
                     title: "Details".to_owned(),
                     description: String::new(),
                     questions: vec![],
+                    show_when: None,
                 },
             ],
         },
@@ -144,12 +150,14 @@ fn a_deleted_question_stays_deleted_when_moved_concurrently() {
                         widget: None,
                     },
                 ],
+                show_when: None,
             },
             FormSection::Questions {
                 id: DETAILS,
                 title: "Details".to_owned(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             },
         ],
     };
@@ -210,6 +218,7 @@ fn a_deleted_section_stays_deleted_when_reordered_concurrently() {
                         widget: None,
                     },
                 ],
+                show_when: None,
             }],
         },
     )
@@ -223,6 +232,7 @@ fn a_deleted_section_stays_deleted_when_reordered_concurrently() {
                     title: "Details first".to_owned(),
                     description: String::new(),
                     questions: vec![],
+                    show_when: None,
                 },
                 FormSection::Questions {
                     id: CONTACT,
@@ -251,6 +261,7 @@ fn a_deleted_section_stays_deleted_when_reordered_concurrently() {
                             widget: None,
                         },
                     ],
+                    show_when: None,
                 },
             ],
         },
@@ -291,6 +302,7 @@ fn a_deleted_section_stays_deleted_when_reordered_concurrently() {
                         widget: None,
                     },
                 ],
+                show_when: None,
             }],
         }
     );
@@ -329,6 +341,7 @@ fn a_question_moved_into_a_concurrently_deleted_section_is_left_out() {
                         widget: None,
                     },
                 ],
+                show_when: None,
             }],
         },
     )
@@ -357,6 +370,7 @@ fn a_question_moved_into_a_concurrently_deleted_section_is_left_out() {
                             widget: None,
                         },
                     ],
+                    show_when: None,
                 },
                 FormSection::Questions {
                     id: DETAILS,
@@ -369,6 +383,7 @@ fn a_question_moved_into_a_concurrently_deleted_section_is_left_out() {
                         required: false,
                         widget: None,
                     }],
+                    show_when: None,
                 },
             ],
         },
@@ -408,6 +423,7 @@ fn a_question_moved_into_a_concurrently_deleted_section_is_left_out() {
                         widget: None,
                     },
                 ],
+                show_when: None,
             }],
         }
     );

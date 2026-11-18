@@ -11,6 +11,8 @@ import type { Component } from 'solid-js';
 export const OptionCheckBox: Component<{
   checked: boolean;
   multiselect?: boolean;
+  /** Keep the box's border while unchecked. */
+  visible?: boolean;
 }> = (props) => {
   return (
     <Checkbox
@@ -19,7 +21,9 @@ export const OptionCheckBox: Component<{
       class="shrink-0"
     >
       <Checkbox.Control
-        class={`size-3.5 border-transparent bg-transparent hover:border-accent data-checked:bg-accent data-checked:border-accent ${
+        class={`size-3.5 bg-transparent hover:border-accent data-checked:bg-accent data-checked:border-accent ${
+          props.visible ? 'border-edge-muted' : 'border-transparent'
+        } ${
           props.checked ? '' : 'group-hover:not-hover:border-edge-muted'
         } ${props.multiselect === false ? 'rounded-full' : 'rounded-sm'}`}
       />

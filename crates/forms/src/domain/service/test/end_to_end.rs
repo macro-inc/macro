@@ -51,6 +51,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                 name: "Q4 offsite RSVP".into(),
                 source: CreateSource::NewDatabase {
                     is_hidden_in_drive: false,
+                    anonymous: false,
                 },
             },
         )
@@ -66,6 +67,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
         created,
         FormDetail {
             form: Form {
+                appearance: None,
                 id: form_id,
                 name: "Q4 offsite RSVP".into(),
                 description: "".into(),
@@ -79,9 +81,13 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                 status: FormStatus::Open,
                 closes_at: None,
                 confirmation_message: "".into(),
+                branding: FormBranding::default(),
                 created_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
                 updated_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
+                project_id: None,
                 is_hidden_in_drive: false,
+                responses_visible: false,
+                anonymous: false,
             },
             access: FormAccess::Owner,
             table_gone: false,
@@ -90,6 +96,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                 title: "".into(),
                 description: "".into(),
                 questions: vec![],
+                show_when: None,
             }],
         }
     );
@@ -268,6 +275,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                                 widget: Some(Widget::Date),
                             },
                         ],
+                        show_when: None,
                     },
                     FormSection::Gate {
                         id: ELIGIBILITY,
@@ -306,6 +314,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                             required: false,
                             widget: Some(Widget::Paragraph),
                         }],
+                        show_when: None,
                     },
                 ],
             },
@@ -352,6 +361,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                         widget: Some(Widget::Date),
                     },
                 ],
+                show_when: None,
             },
             FormSectionDetail::Gate {
                 id: ELIGIBILITY,
@@ -392,6 +402,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                     required: false,
                     widget: Some(Widget::Paragraph),
                 }],
+                show_when: None,
             },
         ]
     );
@@ -494,6 +505,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                             }]),
                         },
                     ]],
+                    ids: None,
                 },
             }],
         }

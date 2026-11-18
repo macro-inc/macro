@@ -1,15 +1,17 @@
 /**
  * The agent's reasoning, modeled on the chat block's `ThinkingBlock`
  * (`@core/component/AI/component/message/ThinkingBlock.tsx`): a bare,
- * borderless row — caret, then a "Thinking"/"Thought" label that shimmers
- * while this thought is still the tail of an open turn — expanding to the
- * reasoning text. Earlier thoughts settle the moment the next part arrives,
- * the same rule production chat uses for `ThinkingBlock`.
+ * borderless row — a "Thinking"/"Thought" label that shimmers while this
+ * thought is still the tail of an open turn, then a caret on hover —
+ * expanding to the reasoning text. While live it leads with the working
+ * dots, where `WorkingLine` had them. Earlier thoughts settle the moment the
+ * next part arrives, the same rule production chat uses for `ThinkingBlock`.
  */
 
-import CaretRight from '@icon/system/regular/caret-right.svg';
 import { createSignal, Show } from 'solid-js';
+import { DisclosureCaret } from './DisclosureCaret';
 import { TextShimmer } from './TextShimmer';
+import { WorkingDots } from './WorkingDots';
 
 export interface ThoughtProps {
   text: string;
@@ -22,24 +24,24 @@ export function Thought(props: ThoughtProps) {
   const [expanded, setExpanded] = createSignal(props.defaultOpen ?? false);
 
   return (
-    <div class="relative text-xs leading-5 text-ink-extra-muted">
+    <div class="relative text-sm leading-6 text-ink-extra-muted">
       <button
         type="button"
         aria-expanded={expanded()}
-        class="flex min-h-7 items-center gap-1 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
+        class="group flex min-h-8 items-center gap-2 py-1 text-left text-ink-extra-muted not-touch:hover:text-ink-muted"
         onClick={() => setExpanded((prev) => !prev)}
       >
-        <CaretRight
-          class="size-4 shrink-0"
-          classList={{ 'rotate-90': expanded() }}
-        />
+        <Show when={props.active}>
+          <WorkingDots />
+        </Show>
         <TextShimmer
           text={props.active ? 'Thinking' : 'Thought'}
           active={props.active ?? false}
         />
+        <DisclosureCaret open={expanded()} />
       </button>
       <Show when={expanded()}>
-        <div class="pl-5 text-ink-muted whitespace-pre-wrap wrap-break-word select-text">
+        <div class="text-ink-muted whitespace-pre-wrap wrap-break-word select-text">
           {props.text}
         </div>
       </Show>

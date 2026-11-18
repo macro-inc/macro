@@ -11,6 +11,9 @@ export type UsageSummary = {
     suspended: boolean;
     budget?: AutoReloadBudget;
   };
+  /** The monthly credit limit on one-time purchases and what is left of it;
+   * absent when there is no limit. A team member always has one. */
+  purchaseLimit?: { limitCents: number; remainingCents: number };
 };
 
 export type UsagePreviewPlan = 'free' | 'paid';
@@ -24,8 +27,8 @@ export type AutoReloadSettings = {
 
 export const DEFAULT_AUTO_RELOAD: AutoReloadSettings = {
   enabled: false,
-  minimumBalanceCents: 1_000,
-  targetBalanceCents: 10_000,
+  minimumBalanceCents: 500,
+  targetBalanceCents: 2_500,
   monthlySpendLimitCents: null,
 };
 
@@ -40,14 +43,6 @@ export const MAX_TARGET_BALANCE_CENTS = 500_000;
  * silently raised.
  */
 export const MIN_MONTHLY_SPEND_LIMIT_CENTS = 500;
-
-/** Development remains interactive; production follows the UI rollout flag. */
-export function isUsageAvailable(
-  production: boolean,
-  flagEnabled: boolean | undefined
-) {
-  return !production || flagEnabled === true;
-}
 
 export function monthlyUsagePercent(usedCents: number, includedCents: number) {
   if (includedCents <= 0) return usedCents > 0 ? 100 : 0;

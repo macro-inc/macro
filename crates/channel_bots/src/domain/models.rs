@@ -29,7 +29,7 @@ pub struct BotInvocation {
 pub struct BotEvent {
     /// What triggered the bot.
     pub trigger: BotTrigger,
-    /// The user-authored message that triggered the bot.
+    /// The human or attributed bot message that triggered the bot.
     pub message: MessagePostedMetadata,
     /// Thread the bot should reply in. For a top-level message this is the
     /// message id; for a reply it is the existing thread id.

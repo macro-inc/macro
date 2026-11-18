@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT turn_action_id FROM agent_session WHERE id = $1 AND archived_by IS NULL AND turn_state IN ('starting', 'running', 'blocked')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "turn_action_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "7d57bd1d0aaf1610756ee51c57d461c150aca41f9c7659b63da66cd6a4078a62"
+}

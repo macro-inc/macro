@@ -6,6 +6,8 @@ import { type JSX, Show } from 'solid-js';
 export function LoginCard(props: {
   /** The header yields to the on-screen keyboard on phones. */
   compact: boolean;
+  /** The agent signup page names what it creates. */
+  agentSignup?: boolean;
   children: JSX.Element;
 }) {
   return (
@@ -28,10 +30,12 @@ export function LoginCard(props: {
             tabindex="-1"
             class="mt-8 font-[Roboto_Slab_Variable] text-[30px] font-[315] leading-[1.2] tracking-[-.025em] outline-none [text-wrap:balance] sm:text-[36px]"
           >
-            Welcome to Macro
+            {props.agentSignup ? 'Sign up as an agent' : 'Welcome to Macro'}
           </h1>
           <p class="mt-4 font-[Inter_Variable] text-sm leading-6 text-ink-muted sm:text-[15px]">
-            The open source workspace
+            {props.agentSignup
+              ? 'Use your own Google account or email address. You get an SDK token next.'
+              : 'The open source workspace'}
           </p>
         </Show>
         <div

@@ -1,0 +1,210 @@
+diff --git a/build/src/configuration/convert-legacy-browser-http-options.js b/build/src/configuration/convert-legacy-browser-http-options.js
+--- a/build/src/configuration/convert-legacy-browser-http-options.js
++++ b/build/src/configuration/convert-legacy-browser-http-options.js
+@@ -13,6 +13,7 @@
+ function convertLegacyBrowserHttpOptions(config, signalResourcePath, requiredHeaders) {
+     return (0, otlp_http_configuration_1.mergeOtlpHttpConfigurationWithDefaults)({
+         url: config.url,
++        fetch: config.fetch,
+         timeoutMillis: config.timeoutMillis,
+         headers: (0, convert_legacy_http_options_1.convertLegacyHeaders)(config),
+         concurrencyLimit: config.concurrencyLimit,
+diff --git a/build/src/configuration/otlp-http-configuration.js b/build/src/configuration/otlp-http-configuration.js
+--- a/build/src/configuration/otlp-http-configuration.js
++++ b/build/src/configuration/otlp-http-configuration.js
+@@ -46,6 +46,7 @@
+ function mergeOtlpHttpConfigurationWithDefaults(userProvidedConfiguration, fallbackConfiguration, defaultConfiguration) {
+     return {
+         ...(0, shared_configuration_1.mergeOtlpSharedConfigurationWithDefaults)(userProvidedConfiguration, fallbackConfiguration, defaultConfiguration),
++        fetch: userProvidedConfiguration.fetch ?? fallbackConfiguration.fetch ?? defaultConfiguration.fetch,
+         headers: mergeHeaders(userProvidedConfiguration.headers, fallbackConfiguration.headers, defaultConfiguration.headers),
+         url: validateUserProvidedUrl(userProvidedConfiguration.url) ??
+             fallbackConfiguration.url ??
+diff --git a/build/src/transport/fetch-transport.js b/build/src/transport/fetch-transport.js
+--- a/build/src/transport/fetch-transport.js
++++ b/build/src/transport/fetch-transport.js
+@@ -45,9 +45,9 @@
+         // This creates an indirect endless loop Export -> Span -> Export
+         // By using the `__original` function the instrumentation can't intercept the call
+         // and no Span will be created breaking the vicious cycle
+-        let fetchApi = globalThis.fetch;
++        let fetchApi = this._parameters.fetch ?? globalThis.fetch;
+         // @ts-expect-error -- fetch could be wrapped
+-        if (typeof fetchApi.__original === 'function') {
++        if (!this._parameters.fetch && typeof fetchApi.__original === 'function') {
+             // @ts-expect-error -- fetch could be wrapped
+             fetchApi = fetchApi.__original;
+         }
+diff --git a/build/src/configuration/legacy-base-configuration.d.ts b/build/src/configuration/legacy-base-configuration.d.ts
+--- a/build/src/configuration/legacy-base-configuration.d.ts
++++ b/build/src/configuration/legacy-base-configuration.d.ts
+@@ -1,5 +1,7 @@
+ import type { HeadersFactory } from './otlp-http-configuration';
+ export interface OTLPExporterConfigBase {
++    /** Explicit browser transport; bypasses discovery of wrapped global fetch. */
++    fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+     /**
+      * Custom headers that will be attached to the HTTP request that's sent to the endpoint.
+      *
+diff --git a/build/src/configuration/otlp-http-configuration.d.ts b/build/src/configuration/otlp-http-configuration.d.ts
+--- a/build/src/configuration/otlp-http-configuration.d.ts
++++ b/build/src/configuration/otlp-http-configuration.d.ts
+@@ -2,6 +2,7 @@
+ export type HeadersFactory = () => Promise<Record<string, string>>;
+ export interface OtlpHttpConfiguration extends OtlpSharedConfiguration {
+     url: string;
++    fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+     headers: HeadersFactory;
+ }
+ /**
+diff --git a/build/src/transport/fetch-transport.d.ts b/build/src/transport/fetch-transport.d.ts
+--- a/build/src/transport/fetch-transport.d.ts
++++ b/build/src/transport/fetch-transport.d.ts
+@@ -2,6 +2,7 @@
+ import type { HeadersFactory } from '../configuration/otlp-http-configuration';
+ export interface FetchTransportParameters {
+     url: string;
++    fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+     headers: HeadersFactory;
+ }
+ /**
+diff --git a/build/esm/configuration/convert-legacy-browser-http-options.js b/build/esm/configuration/convert-legacy-browser-http-options.js
+--- a/build/esm/configuration/convert-legacy-browser-http-options.js
++++ b/build/esm/configuration/convert-legacy-browser-http-options.js
+@@ -10,6 +10,7 @@
+ export function convertLegacyBrowserHttpOptions(config, signalResourcePath, requiredHeaders) {
+     return mergeOtlpHttpConfigurationWithDefaults({
+         url: config.url,
++        fetch: config.fetch,
+         timeoutMillis: config.timeoutMillis,
+         headers: convertLegacyHeaders(config),
+         concurrencyLimit: config.concurrencyLimit,
+diff --git a/build/esm/configuration/otlp-http-configuration.js b/build/esm/configuration/otlp-http-configuration.js
+--- a/build/esm/configuration/otlp-http-configuration.js
++++ b/build/esm/configuration/otlp-http-configuration.js
+@@ -43,6 +43,7 @@
+ export function mergeOtlpHttpConfigurationWithDefaults(userProvidedConfiguration, fallbackConfiguration, defaultConfiguration) {
+     return {
+         ...mergeOtlpSharedConfigurationWithDefaults(userProvidedConfiguration, fallbackConfiguration, defaultConfiguration),
++        fetch: userProvidedConfiguration.fetch ?? fallbackConfiguration.fetch ?? defaultConfiguration.fetch,
+         headers: mergeHeaders(userProvidedConfiguration.headers, fallbackConfiguration.headers, defaultConfiguration.headers),
+         url: validateUserProvidedUrl(userProvidedConfiguration.url) ??
+             fallbackConfiguration.url ??
+diff --git a/build/esm/transport/fetch-transport.js b/build/esm/transport/fetch-transport.js
+--- a/build/esm/transport/fetch-transport.js
++++ b/build/esm/transport/fetch-transport.js
+@@ -42,9 +42,9 @@
+         // This creates an indirect endless loop Export -> Span -> Export
+         // By using the `__original` function the instrumentation can't intercept the call
+         // and no Span will be created breaking the vicious cycle
+-        let fetchApi = globalThis.fetch;
++        let fetchApi = this._parameters.fetch ?? globalThis.fetch;
+         // @ts-expect-error -- fetch could be wrapped
+-        if (typeof fetchApi.__original === 'function') {
++        if (!this._parameters.fetch && typeof fetchApi.__original === 'function') {
+             // @ts-expect-error -- fetch could be wrapped
+             fetchApi = fetchApi.__original;
+         }
+diff --git a/build/esm/configuration/legacy-base-configuration.d.ts b/build/esm/configuration/legacy-base-configuration.d.ts
+--- a/build/esm/configuration/legacy-base-configuration.d.ts
++++ b/build/esm/configuration/legacy-base-configuration.d.ts
+@@ -1,5 +1,7 @@
+ import type { HeadersFactory } from './otlp-http-configuration';
+ export interface OTLPExporterConfigBase {
++    /** Explicit browser transport; bypasses discovery of wrapped global fetch. */
++    fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+     /**
+      * Custom headers that will be attached to the HTTP request that's sent to the endpoint.
+      *
+diff --git a/build/esm/configuration/otlp-http-configuration.d.ts b/build/esm/configuration/otlp-http-configuration.d.ts
+--- a/build/esm/configuration/otlp-http-configuration.d.ts
++++ b/build/esm/configuration/otlp-http-configuration.d.ts
+@@ -2,6 +2,7 @@
+ export type HeadersFactory = () => Promise<Record<string, string>>;
+ export interface OtlpHttpConfiguration extends OtlpSharedConfiguration {
+     url: string;
++    fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+     headers: HeadersFactory;
+ }
+ /**
+diff --git a/build/esm/transport/fetch-transport.d.ts b/build/esm/transport/fetch-transport.d.ts
+--- a/build/esm/transport/fetch-transport.d.ts
++++ b/build/esm/transport/fetch-transport.d.ts
+@@ -2,6 +2,7 @@
+ import type { HeadersFactory } from '../configuration/otlp-http-configuration';
+ export interface FetchTransportParameters {
+     url: string;
++    fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+     headers: HeadersFactory;
+ }
+ /**
+diff --git a/build/esnext/configuration/convert-legacy-browser-http-options.js b/build/esnext/configuration/convert-legacy-browser-http-options.js
+--- a/build/esnext/configuration/convert-legacy-browser-http-options.js
++++ b/build/esnext/configuration/convert-legacy-browser-http-options.js
+@@ -10,6 +10,7 @@
+ export function convertLegacyBrowserHttpOptions(config, signalResourcePath, requiredHeaders) {
+     return mergeOtlpHttpConfigurationWithDefaults({
+         url: config.url,
++        fetch: config.fetch,
+         timeoutMillis: config.timeoutMillis,
+         headers: convertLegacyHeaders(config),
+         concurrencyLimit: config.concurrencyLimit,
+diff --git a/build/esnext/configuration/otlp-http-configuration.js b/build/esnext/configuration/otlp-http-configuration.js
+--- a/build/esnext/configuration/otlp-http-configuration.js
++++ b/build/esnext/configuration/otlp-http-configuration.js
+@@ -43,6 +43,7 @@
+ export function mergeOtlpHttpConfigurationWithDefaults(userProvidedConfiguration, fallbackConfiguration, defaultConfiguration) {
+     return {
+         ...mergeOtlpSharedConfigurationWithDefaults(userProvidedConfiguration, fallbackConfiguration, defaultConfiguration),
++        fetch: userProvidedConfiguration.fetch ?? fallbackConfiguration.fetch ?? defaultConfiguration.fetch,
+         headers: mergeHeaders(userProvidedConfiguration.headers, fallbackConfiguration.headers, defaultConfiguration.headers),
+         url: validateUserProvidedUrl(userProvidedConfiguration.url) ??
+             fallbackConfiguration.url ??
+diff --git a/build/esnext/transport/fetch-transport.js b/build/esnext/transport/fetch-transport.js
+--- a/build/esnext/transport/fetch-transport.js
++++ b/build/esnext/transport/fetch-transport.js
+@@ -42,9 +42,9 @@
+         // This creates an indirect endless loop Export -> Span -> Export
+         // By using the `__original` function the instrumentation can't intercept the call
+         // and no Span will be created breaking the vicious cycle
+-        let fetchApi = globalThis.fetch;
++        let fetchApi = this._parameters.fetch ?? globalThis.fetch;
+         // @ts-expect-error -- fetch could be wrapped
+-        if (typeof fetchApi.__original === 'function') {
++        if (!this._parameters.fetch && typeof fetchApi.__original === 'function') {
+             // @ts-expect-error -- fetch could be wrapped
+             fetchApi = fetchApi.__original;
+         }
+diff --git a/build/esnext/configuration/legacy-base-configuration.d.ts b/build/esnext/configuration/legacy-base-configuration.d.ts
+--- a/build/esnext/configuration/legacy-base-configuration.d.ts
++++ b/build/esnext/configuration/legacy-base-configuration.d.ts
+@@ -1,5 +1,7 @@
+ import type { HeadersFactory } from './otlp-http-configuration';
+ export interface OTLPExporterConfigBase {
++    /** Explicit browser transport; bypasses discovery of wrapped global fetch. */
++    fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+     /**
+      * Custom headers that will be attached to the HTTP request that's sent to the endpoint.
+      *
+diff --git a/build/esnext/configuration/otlp-http-configuration.d.ts b/build/esnext/configuration/otlp-http-configuration.d.ts
+--- a/build/esnext/configuration/otlp-http-configuration.d.ts
++++ b/build/esnext/configuration/otlp-http-configuration.d.ts
+@@ -2,6 +2,7 @@
+ export type HeadersFactory = () => Promise<Record<string, string>>;
+ export interface OtlpHttpConfiguration extends OtlpSharedConfiguration {
+     url: string;
++    fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+     headers: HeadersFactory;
+ }
+ /**
+diff --git a/build/esnext/transport/fetch-transport.d.ts b/build/esnext/transport/fetch-transport.d.ts
+--- a/build/esnext/transport/fetch-transport.d.ts
++++ b/build/esnext/transport/fetch-transport.d.ts
+@@ -2,6 +2,7 @@
+ import type { HeadersFactory } from '../configuration/otlp-http-configuration';
+ export interface FetchTransportParameters {
+     url: string;
++    fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+     headers: HeadersFactory;
+ }
+ /**

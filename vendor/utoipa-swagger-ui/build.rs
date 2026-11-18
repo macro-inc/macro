@@ -114,7 +114,7 @@ impl SwaggerZip {
                     let directory = [&target_dir].iter().collect::<PathBuf>();
                     let out_path = directory.join(filepath);
 
-                    if file.name().ends_with('/') {
+                    if file.name()?.ends_with('/') {
                         fs::create_dir_all(&out_path)?;
                     } else {
                         if let Some(p) = out_path.parent() {

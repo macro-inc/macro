@@ -4,10 +4,13 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SettingsReadReceiptsEnabled } from './settingsReadReceiptsEnabled';
 import type { SettingsSignature } from './settingsSignature';
 import type { SettingsSignatureOnRepliesForwards } from './settingsSignatureOnRepliesForwards';
 
 export interface Settings {
+  /** Whether messages sent from this inbox carry an open-tracking pixel. */
+  read_receipts_enabled?: SettingsReadReceiptsEnabled;
   /** The user's email signature content (HTML). On a patch, omit or send
 `null` to leave unchanged (both deserialize to `None`); pass an empty
 string to clear it. The column cannot be set to SQL NULL via patch. */

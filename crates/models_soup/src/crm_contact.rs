@@ -14,12 +14,12 @@ pub struct SoupCrmContact<T = ()> {
     pub id: Uuid,
     /// Team owning this record.
     pub team_id: Uuid,
-    /// Parent company ID.
-    pub company_id: Uuid,
-    /// Parent company's display name.
-    pub company_name: String,
-    /// Full email address.
-    pub email: String,
+    /// Parent company ID; `None` for a contact without a company.
+    pub company_id: Option<Uuid>,
+    /// Parent company's display name; `None` without a company.
+    pub company_name: Option<String>,
+    /// Full email address; `None` for a contact added by name alone.
+    pub email: Option<String>,
     /// Team-local display name, if known.
     pub name: Option<String>,
     /// Whether the contact or parent company is hidden.

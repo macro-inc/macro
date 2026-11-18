@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
@@ -123,9 +124,15 @@ export function useDeleteMcpServerMutation() {
 
 export function useStartMcpAuthMutation() {
   return useMutation(() => ({
-    mutationFn: async (request: StartAuthRequest) =>
+    mutationFn: async ({
+      parentSpan,
+      ...request
+    }: StartAuthRequest & { parentSpan?: TraceContext }) =>
       throwOnErr(
-        async () => await cognitionApiServiceClient.startMcpAuth(request)
+        async () =>
+          await (parentSpan ?? Telemetry.captureContext()).run(() =>
+            cognitionApiServiceClient.startMcpAuth(request)
+          )
       ),
   }));
 }

@@ -7,7 +7,7 @@ publish = false
 [features]
 default = ["inbound", "outbound"]
 # Quota contracts and helper orchestration without enabling session adapters.
-admission = ["dep:ai_billing", "dep:ai_usage", "dep:jev"]
+admission = ["dep:ai_billing", "dep:ai_usage", "dep:feature_flags", "dep:jev"]
 ai_tools = ["inbound", "dep:ai_toolset", "dep:async-trait", "dep:schemars"]
 # The `seed_jsonl` replay binary: an argument parser, and the Postgres
 # adapter it writes through.
@@ -43,11 +43,12 @@ outbound = [
 ]
 # OpenAPI schemas for the vocabulary that reaches an HTTP boundary: the
 # router's DTOs, and the lifecycle events the webhook union carries.
-schema = ["dep:utoipa", "agent_runtime_protocol/utoipa", "macro_user_id/schema"]
+schema = ["activity/schema", "dep:utoipa", "agent_runtime_protocol/utoipa", "macro_user_id/schema", "trigger_context/schema"]
 # Mock and in-memory port implementations, for crates that test against this one.
 test-utils = ["dep:mockall", "agent_fold/test-utils"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 ai_billing = { path = "../ai_billing", optional = true }
 lazy-regex = { workspace = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
@@ -58,6 +59,7 @@ agent-client-protocol = { workspace = true }
 harness_id = { path = "../harness_id" }
 agent = { path = "../agent", optional = true }
 ai_usage = { path = "../ai_usage", optional = true }
+feature_flags = { path = "../feature_flags", optional = true }
 jev = { path = "../jev", optional = true }
 dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
@@ -89,6 +91,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 utoipa = { workspace = true, optional = true }
 rootcause = { workspace = true }
+futures = { workspace = true }
 reqwest = { workspace = true, optional = true }
 macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 uuid = { workspace = true }

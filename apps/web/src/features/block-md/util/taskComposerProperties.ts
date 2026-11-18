@@ -1,6 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { DEFAULT_TASK_COMPOSER_PROPERTY_IDS } from '@app/features/task-composer/property-defaults';
 import { toast } from '@core/component/Toast/Toast';
-import { enableProjects } from '@core/constant/featureFlags';
 import { createTaskWithInitialSnapshot } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import {
@@ -26,17 +25,8 @@ import type { Accessor } from 'solid-js';
 import { createSignal } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 
-/**
- * Props shown in the composer (Linear-style left-to-right order). Project
- * shows only while Projects is enabled.
- */
-export const DEFAULT_TASK_COMPOSER_PROPERTY_IDS = [
-  SYSTEM_PROPERTY_IDS.STATUS,
-  SYSTEM_PROPERTY_IDS.PRIORITY,
-  SYSTEM_PROPERTY_IDS.ASSIGNEES,
-  SYSTEM_PROPERTY_IDS.DUE_DATE,
-  SYSTEM_PROPERTY_IDS.PROJECT,
-];
+export { DEFAULT_TASK_COMPOSER_PROPERTY_IDS } from '@app/features/task-composer/property-defaults';
+
 const COMPOSER_PROPERTY_SET = new Set<string>(
   DEFAULT_TASK_COMPOSER_PROPERTY_IDS
 );
@@ -58,13 +48,11 @@ export function taskComposerWritableDefinitions(
 /** Keep the default order unless a host supplies its own visible property list. */
 export function taskComposerVisiblePropertyIds(
   requested: readonly string[] | undefined,
-  available: readonly PropertyDefinition[],
-  projectsEnabled: boolean
+  available: readonly PropertyDefinition[]
 ): string[] {
   const ids = new Set(available.map((definition) => definition.id));
   return [...new Set(requested ?? DEFAULT_TASK_COMPOSER_PROPERTY_IDS)].filter(
-    (id) =>
-      ids.has(id) && (id !== SYSTEM_PROPERTY_IDS.PROJECT || projectsEnabled)
+    (id) => ids.has(id)
   );
 }
 
@@ -270,6 +258,8 @@ export function createTaskComposerProperties(args: {
   values?: Accessor<Record<string, PropertyApiValues>>;
   additionalPropertyIds?: Accessor<string[]>;
   initialVisiblePropertyIds?: string[];
+  /** Properties a host edits with its own control: no pill, not addable. */
+  hiddenPropertyIds?: readonly string[];
   allDefinitions?: boolean;
 }) {
   const [propertyValues, setPropertyValues] = createStore<
@@ -347,8 +337,6 @@ export function createTaskComposerProperties(args: {
     );
   };
 
-  const projects = useFeatureFlag(enableProjects);
-
   const visibleIds = () =>
     taskComposerVisiblePropertyIds(
       [
@@ -357,14 +345,11 @@ export function createTaskComposerProperties(args: {
           ...(args.additionalPropertyIds?.() ?? []),
         ]),
       ],
-      availableDefinitions(),
-      projects().enabled
-    );
+      availableDefinitions()
+    ).filter((id) => !args.hiddenPropertyIds?.includes(id));
   const addableDefinitions = () =>
     availableDefinitions().filter(
-      (definition) =>
-        !visibleIds().includes(definition.id) &&
-        (definition.id !== SYSTEM_PROPERTY_IDS.PROJECT || projects().enabled)
+      (definition) => !visibleIds().includes(definition.id)
     );
   const addProperty = async (
     id: string,
@@ -382,10 +367,7 @@ export function createTaskComposerProperties(args: {
   };
   const availableProperties = () =>
     availableDefinitions()
-      .filter(
-        (definition) =>
-          definition.id !== SYSTEM_PROPERTY_IDS.PROJECT || projects().enabled
-      )
+      .filter((definition) => !args.hiddenPropertyIds?.includes(definition.id))
       .map((definition) =>
         toPropertyDefinitionDomain(definition, options().get(definition.id))
       );

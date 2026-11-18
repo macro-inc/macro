@@ -5,6 +5,7 @@ import {
   type ExternalChatApi,
   invalidateExternalChat,
   invalidateExternalChatList,
+  invalidateExternalChatMessages,
   refreshExternalChatTimeline,
   useExternalChatDeliveryQuery,
   useExternalChatQueries,
@@ -126,7 +127,10 @@ export function createExternalChatCapabilities(
         return queries.messages.isError;
       },
       refetch: () =>
-        fireAndForget(queries.messages.refetch(), 'external-chat.refresh'),
+        fireAndForget(
+          invalidateExternalChatMessages(userId(), chatId()),
+          'external-chat.refresh'
+        ),
     },
     hasOlder: () => queries.messages.hasNextPage,
     loadingOlder: () => queries.messages.isFetchingNextPage,
@@ -173,6 +177,12 @@ export function createExternalChatCapabilities(
     },
     stopSync: async () => {
       await chatOperation('stop_sync', chatId(), () => api.stopSync(chatId()));
+      invalidateExternalChat(chatId());
+    },
+    importHistory: async () => {
+      await chatOperation('import_history', chatId(), () =>
+        api.importHistory()
+      );
       invalidateExternalChat(chatId());
     },
   };

@@ -1,11 +1,18 @@
 import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
+import { toast } from '@core/component/Toast/Toast';
 import { optimisticContextOf } from '@graphql-cache/exchange/optimistic';
 import type { MutationSettlement } from '@graphql-cache/protocol';
+import { Telemetry } from '@macro-inc/observability';
 import type {
   DeleteEmailDraftMutation,
   SaveEmailDraftMutation,
 } from '@service-storage/graphql/generated/graphql';
-import { type Client, createClient, type Operation } from '@urql/core';
+import {
+  type Client,
+  CombinedError,
+  createClient,
+  type Operation,
+} from '@urql/core';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { map, pipe } from 'wonka';
 import { queryClient } from '../client';
@@ -13,10 +20,15 @@ import { refetchSoupEntity } from '../soup/cache';
 import { markThreadDraftSaved } from './draft-cache';
 import { emailKeys } from './keys';
 import {
+  beginDraftAttempt,
+  emailSendOwnsDraft,
   localDraftMessage,
   readLocalDraft,
+  readLocalEmailSends,
   restoreLocalAttachments,
+  watchLocalEmailSends,
 } from './local-drafts';
+import type { EmailSendIntent } from './send-intent';
 
 const mocks = vi.hoisted(() => ({
   readRecordsByKeys: vi.fn(),
@@ -28,12 +40,8 @@ const mocks = vi.hoisted(() => ({
   assertQueueAvailable: vi.fn(),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: 'graphql-soup',
-  isFeatureEnabled: () => true,
-}));
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: vi.fn() },
+  Telemetry: { error: vi.fn(), info: vi.fn() },
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   assertEmailDraftQueueAvailable: mocks.assertQueueAvailable,
@@ -86,6 +94,15 @@ beforeEach(() => {
   mocks.cacheEnabled = true;
   vi.mocked(queryClient.invalidateQueries).mockResolvedValue(undefined);
   vi.mocked(refetchSoupEntity).mockResolvedValue(undefined);
+  vi.mocked(beginDraftAttempt).mockResolvedValue({
+    kind: 'email-draft',
+    id: 'attempt',
+    draftKey: 'draft',
+    accountId: 'owner',
+    generation: 'generation',
+    revision: 1,
+    operation: 'save',
+  });
 });
 
 async function setup(committed = false) {
@@ -195,13 +212,12 @@ it.each(['save', 'delete'] as const)(
   }
 );
 
-it('keeps local persistence enabled for GraphQL drafts while the queue is unavailable', () => {
+it('keeps local persistence enabled for drafts while the queue is unavailable', () => {
   mocks.cacheEnabled = false;
   mocks.queueBlocked = true;
-  expect(draftQueueActive('graphql')).toBe(true);
-  expect(draftQueueActive('rest')).toBe(false);
+  expect(draftQueueActive()).toBe(true);
   mocks.queueBlocked = false;
-  expect(draftQueueActive('graphql')).toBe(false);
+  expect(draftQueueActive()).toBe(false);
 });
 
 it('uses resolved IDs for an old-handle save without duplicating the cached draft', async () => {
@@ -362,6 +378,9 @@ vi.mock('./local-drafts', () => ({
   beginDraftAttempt: vi.fn(),
   markDraftAttemptQueued: vi.fn(),
   draftSyncPaused: vi.fn(),
+  emailSendOwnsDraft: vi.fn(async () => false),
+  readLocalEmailSends: vi.fn(async () => []),
+  watchLocalEmailSends: vi.fn(() => () => {}),
   localDraftStore: { subscribe: vi.fn(() => () => {}) },
 }));
 
@@ -465,4 +484,130 @@ it('returns the working copy when cache initialization fails during the status r
   expect(await readEmailDraft(serverId, { attachments: false })).toMatchObject({
     local,
   });
+});
+
+/** The first reply, approved on this device and not yet delivered. */
+const delivering: EmailSendIntent = {
+  uuid: 'attempt',
+  dispatchVersion: 2,
+  phase: 'committed',
+  locallyCancelled: false,
+  metadata: {
+    kind: 'email-send-v1',
+    payload: {
+      input: {
+        attempt: { attemptId: 'attempt', linkId: 'inbox' },
+        message: { draftId: 'first-reply', subject: 'Re: Plan' },
+        attachmentIds: [],
+        forwardedAttachmentIds: [],
+      },
+      draft: {
+        draftId: 'first-reply',
+        threadDbId: 'server-thread',
+        subject: 'Re: Plan',
+        senderEmail: 'sender@example.com',
+        senderLinkId: 'inbox',
+        optimisticBodyHtml: null,
+      },
+    },
+  },
+};
+
+it('holds a reply to a message still being delivered and saves it once that settles', async () => {
+  const { operations } = await setup();
+  let sendsChanged = () => {};
+  vi.mocked(watchLocalEmailSends).mockImplementation((changed) => {
+    sendsChanged = changed;
+    return () => {};
+  });
+  vi.mocked(readLocalEmailSends).mockResolvedValue([delivering]);
+  vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('dirty'));
+  const followUp = { ...args, replyingToId: 'first-reply' };
+
+  expect(await saveEmailDraftQueued({ args: followUp })).toEqual({
+    kind: 'queued',
+  });
+  sendsChanged();
+  await vi.waitFor(() => expect(readLocalEmailSends).toHaveBeenCalledTimes(2));
+  expect(operations).toEqual([]);
+
+  vi.mocked(readLocalEmailSends).mockResolvedValue([]);
+  sendsChanged();
+  await vi.waitFor(() => expect(operations).toHaveLength(1));
+  expect(operations[0].variables?.input.replyingToId).toBe('first-reply');
+});
+
+it('drops a held reply save once the reply itself was sent or discarded', async () => {
+  const { operations } = await setup();
+  let sendsChanged = () => {};
+  vi.mocked(watchLocalEmailSends).mockImplementation((changed) => {
+    sendsChanged = changed;
+    return () => {};
+  });
+  vi.mocked(readLocalEmailSends).mockResolvedValue([delivering]);
+  await saveEmailDraftQueued({
+    args: { ...args, replyingToId: 'first-reply' },
+  });
+
+  vi.mocked(readLocalEmailSends).mockResolvedValue([]);
+  vi.mocked(readLocalDraft).mockResolvedValue(undefined);
+  sendsChanged();
+  await vi.waitFor(() => expect(readLocalDraft).toHaveBeenCalledTimes(2));
+  expect(operations).toEqual([]);
+});
+
+it('does not report a save that lost to its own send', async () => {
+  const operations: Operation[] = [];
+  mocks.client = createClient({
+    url: 'http://example.test/graphql',
+    exchanges: [
+      () => (source) =>
+        pipe(
+          source,
+          map((operation) => {
+            operations.push(operation);
+            return {
+              operation,
+              stale: false,
+              hasNext: false,
+              error: new CombinedError({
+                graphQLErrors: [
+                  {
+                    message: 'cancel scheduled delivery before editing',
+                    extensions: { code: 'INVALID' },
+                  },
+                ],
+              }),
+            };
+          })
+        ),
+    ],
+  });
+  mocks.readRecordsByKeys.mockResolvedValue({ revision: '1', records: [] });
+  vi.mocked(emailSendOwnsDraft).mockResolvedValue(true);
+
+  expect(await saveEmailDraftQueued({ args })).toEqual({ kind: 'queued' });
+  expect(operations).toHaveLength(1);
+  expect(toast.failure).not.toHaveBeenCalled();
+
+  vi.mocked(emailSendOwnsDraft).mockResolvedValue(false);
+  expect(await saveEmailDraftQueued({ args })).toEqual({
+    kind: 'rejected',
+    code: 'INVALID',
+  });
+  expect(toast.failure).toHaveBeenCalledOnce();
+});
+
+it('queues nothing for a draft that is being discarded', async () => {
+  const { operations } = await setup();
+  vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('deleting'));
+  // A closed composer's last flush arrives after the discard.
+  vi.mocked(beginDraftAttempt).mockResolvedValue(undefined);
+
+  expect(await saveEmailDraftQueued({ args })).toEqual({ kind: 'queued' });
+  expect(operations).toEqual([]);
+  expect(Telemetry.info).toHaveBeenCalledExactlyOnceWith(
+    'email_draft.save_yielded_to_discard',
+    { 'email_draft.draft_id': handle }
+  );
 });

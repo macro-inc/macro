@@ -34,6 +34,7 @@ properties = { path = "../properties", default-features = false, features = [
 ] }
 regex = { workspace = true }
 schemars = { workspace = true }
+specta = { workspace = true, features = ["uuid"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

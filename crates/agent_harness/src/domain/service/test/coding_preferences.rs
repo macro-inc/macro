@@ -34,6 +34,7 @@ fn assignment_command(kind: AgentKind, harness: &str) -> OpenSession {
     command.runtime.harness = harness.to_owned();
     command.runtime.instructions = "Persona.".to_owned();
     command.origin = SessionOrigin::TaskAssignment(TaskAssignmentOrigin {
+        trigger_origin: trigger_context::TriggerOrigin::Unknown,
         parent: MessageParent::parse("document", "task-1").unwrap(),
         discussion_id: macro_uuid::generate_uuid_v7(),
         actor: sender(),
@@ -185,6 +186,8 @@ async fn a_managed_open_ends_with_both_workflows() {
 
     service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             repo_url: None,
             repo_branch: None,
@@ -214,6 +217,7 @@ async fn an_external_open_ends_with_the_tasks_workflow() {
 
     let session = service
         .open_external_session(OpenExternalAgentSession {
+            origin: trigger_context::TriggerOrigin::Unknown,
             instructions: Some("Ad hoc.".to_owned()),
             ..open_external_request("/srv/agent")
         })

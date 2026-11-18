@@ -11,18 +11,29 @@ import { paneRoute } from '@app/routes/app-route';
 import {
   appRoute,
   companiesRoute,
+  crmItemRoute,
+  crmPipelineItemRoute,
+  crmPipelineRecordFileItemRoute,
+  crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
+  crmPipelineRetiredDatabaseRoute,
+  crmPipelineRetiredRecordDatabasesRoute,
   crmPipelineRoute,
+  crmRecordFileItemRoute,
+  crmRecordItemRoute,
   crmRecordRoute,
+  crmRetiredDatabaseRoute,
+  crmRetiredRecordDatabasesRoute,
   legacyContentRoute,
   notFoundRoute,
+  taskDetailRoute,
 } from '@app/routes/routes';
 import { createAppSplitRouterMiddleware } from '@components/app/split-layout/split-router/app-middleware';
 import { createMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { describe, expect, it, vi } from 'vitest';
 import { pipelineTab } from './core/navigation';
 import type { CrmViewConfig } from './core/saved-view';
-import { crmSearchCodec } from './crm-route';
+import { crmRecordItemParams, crmSearchCodec } from './crm-route';
 import { encodeCrmViewParam } from './queries/saved-view-codec';
 
 vi.mock('@components/app/split-layout/componentRegistry', () => ({
@@ -50,8 +61,23 @@ const routes = createRoutesManifest({
         {
           ...companiesRoute,
           children: [
-            { ...crmPipelineRoute, children: [crmPipelineRecordRoute] },
+            {
+              ...crmPipelineRoute,
+              children: [
+                crmPipelineItemRoute,
+                crmPipelineRecordRoute,
+                crmPipelineRecordItemRoute,
+                crmPipelineRecordFileItemRoute,
+                crmPipelineRetiredDatabaseRoute,
+                crmPipelineRetiredRecordDatabasesRoute,
+              ],
+            },
+            crmItemRoute,
             crmRecordRoute,
+            crmRecordItemRoute,
+            crmRecordFileItemRoute,
+            crmRetiredDatabaseRoute,
+            crmRetiredRecordDatabasesRoute,
           ],
         },
         legacyContentRoute,
@@ -155,6 +181,166 @@ describe('record and pipeline URLs', () => {
     expect(resolveMention(appUrl(`/companies/pipeline/${pipelineId}`))).toEqual(
       { id: pipelineId, block: 'pipeline', params: {} }
     );
+  });
+});
+
+describe('CRM item URLs', () => {
+  const itemId = '01a1212c-74e5-79bd-8767-0d4943d55b18';
+
+  it('claims a CRM task as the same document shown by the Tasks view', () => {
+    expect(
+      crmItemRoute.claim?.({
+        itemType: 'document',
+        itemId,
+        itemFileType: 'md',
+        itemSubType: 'task',
+      })
+    ).toEqual(taskDetailRoute.claim?.({ taskId: itemId }));
+  });
+  it.each([
+    ['tasks', 'document', 'md', 'task', 'task'],
+    ['emails', 'email', undefined, undefined, 'email'],
+    ['calls', 'call', undefined, undefined, 'call'],
+  ])(
+    'decodes a %s record item and references the item, not the record',
+    (section, itemType, itemFileType, itemSubType, block) => {
+      const path = `/companies/contact/${contactId}/${section}/${itemId}`;
+      expect(leafOf(path.slice(1))).toEqual({
+        id: crmRecordItemRoute.id,
+        params: {
+          recordType: 'contact',
+          recordId: contactId,
+          section,
+          itemId,
+          itemType,
+          ...(itemFileType ? { itemFileType } : {}),
+          ...(itemSubType ? { itemSubType } : {}),
+        },
+      });
+      expect(resolveMention(appUrl(path))).toEqual({
+        id: itemId,
+        block,
+        params: {},
+      });
+    }
+  );
+
+  it('claims a compact task as the same document as its generic and Tasks URLs', () => {
+    const decoded = crmRecordItemParams.safeParse(
+      leafOf(`companies/company/${companyId}/tasks/${itemId}`)?.params
+    );
+    expect(decoded.success).toBe(true);
+    if (!decoded.success) throw new Error('Expected a compact task');
+    expect(crmRecordItemRoute.claim?.(decoded.data)).toEqual(
+      taskDetailRoute.claim?.({ taskId: itemId })
+    );
+    expect(crmRecordItemRoute.claim?.(decoded.data)).toEqual(
+      crmItemRoute.claim?.({
+        itemType: 'document',
+        itemId,
+        itemFileType: 'md',
+        itemSubType: 'task',
+      })
+    );
+  });
+
+  it('decodes a pipeline record item and mentions the selected call', () => {
+    const path = `/companies/pipeline/${pipelineId}/company/${companyId}/calls/${itemId}`;
+    expect(leafOf(path.slice(1))).toEqual({
+      id: crmPipelineRecordItemRoute.id,
+      params: {
+        recordType: 'company',
+        recordId: companyId,
+        section: 'calls',
+        itemId,
+        itemType: 'call',
+      },
+    });
+    expect(resolveMention(appUrl(path))).toEqual({
+      id: itemId,
+      block: 'call',
+      params: {},
+    });
+  });
+
+  it.each([
+    [`document/${itemId}/md/task`, 'task'],
+    [`document/${itemId}/md`, 'md'],
+    [`document/${itemId}/pdf`, 'pdf'],
+  ])(
+    'references a Files item with its document metadata: %s',
+    (item, block) => {
+      expect(
+        resolveMention(appUrl(`/companies/company/${companyId}/files/${item}`))
+      ).toEqual({ id: itemId, block, params: {} });
+    }
+  );
+
+  it.each([
+    ['companies', crmItemRoute.id],
+    [`companies/pipeline/${pipelineId}`, crmPipelineItemRoute.id],
+  ])('retains the workspace source of %s', (source, id) => {
+    expect(leafOf(`${source}/email/${itemId}`)).toEqual({
+      id,
+      params: { itemType: 'email', itemId },
+    });
+  });
+
+  it.each([
+    [
+      `companies/company/${companyId}`,
+      crmRecordFileItemRoute.id,
+      'company',
+      companyId,
+      undefined,
+    ],
+    [
+      `companies/company/${companyId}/files`,
+      crmRecordFileItemRoute.id,
+      'company',
+      companyId,
+      'files',
+    ],
+    [
+      `companies/pipeline/${pipelineId}/contact/${contactId}`,
+      crmPipelineRecordFileItemRoute.id,
+      'contact',
+      contactId,
+      undefined,
+    ],
+    [
+      `companies/pipeline/${pipelineId}/contact/${contactId}/files`,
+      crmPipelineRecordFileItemRoute.id,
+      'contact',
+      contactId,
+      'files',
+    ],
+  ])(
+    'retains the Files/Notes source of %s',
+    (source, id, recordType, recordId, section) => {
+      expect(leafOf(`${source}/document/${itemId}/md`)).toEqual({
+        id,
+        params: {
+          recordType,
+          recordId,
+          ...(section ? { section } : {}),
+          itemType: 'document',
+          itemId,
+          itemFileType: 'md',
+        },
+      });
+    }
+  );
+
+  it.each([
+    `companies/company/${companyId}/tasks/document/${itemId}/md/task`,
+    `companies/contact/${contactId}/emails/email/${itemId}`,
+    `companies/company/${companyId}/calls/call/${itemId}`,
+    `companies/pipeline/${pipelineId}/contact/${contactId}/tasks/document/${itemId}/md/task`,
+    `companies/pipeline/${pipelineId}/company/${companyId}/emails/email/${itemId}`,
+  ])('rejects obsolete typed record item URLs: %s', (path) => {
+    expect(leafOf(path)?.id).toBe(notFoundRoute.id);
+    expect(resolveMention(appUrl(`/${path}`))).toBeUndefined();
   });
 });
 
@@ -369,6 +555,28 @@ describe('legacy CRM URLs', () => {
     expect(run(recordEntry('company', companyId))).toBeUndefined();
   });
 
+  it('keeps a record item link inside Customers on touch instead of dropping the item', () => {
+    const entry: Entry = {
+      id: 'entry',
+      location: {
+        route: paneRoute(
+          { id: companiesRoute.id, params: {} },
+          {
+            id: crmRecordItemRoute.id,
+            params: {
+              recordType: 'company',
+              recordId: companyId,
+              section: 'emails',
+              itemType: 'email',
+              itemId: 'thread-1',
+            },
+          }
+        ),
+      },
+    };
+    expect(run(entry, { touch: true })).toBeUndefined();
+  });
+
   it('carries a linked Discussion message into the record on entry', () => {
     const path = `/companies/company/${companyId}`;
     const result = run(recordEntry('company', companyId), {
@@ -380,5 +588,71 @@ describe('legacy CRM URLs', () => {
     const url = new URL(result.to, window.location.origin);
     expect(url.pathname).toBe(path);
     expect(url.searchParams.get('s0.crm-record.commentId')).toBe('message');
+  });
+});
+
+describe('retired Databases links', () => {
+  const itemId = '01a1212c-74e5-79bd-8767-0d4943d55b18';
+  const redirectOf = (path: string) => {
+    const route = decodePane(routes, path.split('/').filter(Boolean));
+    if (!route) throw new Error(`${path} does not decode`);
+    const to: Entry = { id: 'entry', location: { route } };
+    for (const handler of createAppSplitRouterMiddleware({
+      isTouchDevice: () => true,
+    })) {
+      const result = handler({
+        routes,
+        from: undefined,
+        to,
+        path,
+        cause: 'initial',
+        signal: new AbortController().signal,
+        redirect: (destination) => ({ type: 'redirect', to: destination }),
+        cancel: () => ({ type: 'cancel' }),
+      });
+      if (result) return result;
+    }
+    return undefined;
+  };
+
+  it.each([
+    [
+      `/companies/company/${companyId}/databases`,
+      `/companies/company/${companyId}`,
+    ],
+    [
+      `/companies/contact/${contactId}/databases`,
+      `/companies/contact/${contactId}`,
+    ],
+    [
+      `/companies/pipeline/${pipelineId}/company/${companyId}/databases`,
+      `/companies/pipeline/${pipelineId}/company/${companyId}`,
+    ],
+    [
+      `/companies/contact/${contactId}/databases/${itemId}`,
+      `/database/${itemId}`,
+    ],
+    [
+      `/companies/pipeline/${pipelineId}/contact/${contactId}/databases/${itemId}`,
+      `/database/${itemId}`,
+    ],
+    [`/companies/database/${itemId}`, `/database/${itemId}`],
+    [
+      `/companies/pipeline/${pipelineId}/database/${itemId}`,
+      `/database/${itemId}`,
+    ],
+  ])('sends %s to %s', (path, destination) => {
+    expect(redirectOf(path)).toEqual({ type: 'redirect', to: destination });
+  });
+
+  it('keeps pasted links as mentions of what they open', () => {
+    expect(
+      resolveMention(appUrl(`/companies/company/${companyId}/databases`))
+    ).toEqual({ id: companyId, block: 'company', params: {} });
+    expect(resolveMention(appUrl(`/companies/database/${itemId}`))).toEqual({
+      id: itemId,
+      block: 'database',
+      params: {},
+    });
   });
 });

@@ -50,7 +50,7 @@ impl AgentTemporalExtractor {
 }
 
 // Native strict output requires all fields. Missing expressions are omitted from the list.
-fn require_explicit_fields(value: &mut Value) {
+pub(super) fn require_explicit_fields(value: &mut Value) {
     match value {
         Value::Object(object) => {
             for value in object.values_mut() {

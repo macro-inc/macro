@@ -5,14 +5,28 @@
  * OpenAPI spec version: 1.0.0
  */
 
+import type { PipedreamProviderResponse } from './pipedreamProviderResponse';
+import type { PipedreamTokenResponseConnectLinkUrl } from './pipedreamTokenResponseConnectLinkUrl';
+import type { PipedreamTokenResponseConnectUrl } from './pipedreamTokenResponseConnectUrl';
+import type { PipedreamTokenResponseExpiresAt } from './pipedreamTokenResponseExpiresAt';
+import type { PipedreamTokenResponseToken } from './pipedreamTokenResponseToken';
+
 /**
- * Response from creating a Pipedream Connect token.
+ * Response from starting a connect flow: a Pipedream Connect token, or for
+`provider = connect` a Macro Connect URL.
  */
 export interface PipedreamTokenResponse {
-  /** Shareable link that opens the same connect flow in a browser tab. */
-  connect_link_url: string;
-  /** RFC 3339 expiry of the token. */
-  expires_at: string;
-  /** Short-lived token to open the Pipedream Connect UI with. */
-  token: string;
+  /** Shareable link that opens the same connect flow in a browser tab.
+Pipedream only. */
+  connect_link_url?: PipedreamTokenResponseConnectLinkUrl;
+  /** URL to open in a popup or browser tab for Macro Connect's consent
+flow; once it finishes, call `/pipedream/mcp/connect/complete`.
+Connect only. */
+  connect_url?: PipedreamTokenResponseConnectUrl;
+  /** RFC 3339 expiry of the token. Pipedream only. */
+  expires_at?: PipedreamTokenResponseExpiresAt;
+  /** The backend this flow connects through. */
+  provider: PipedreamProviderResponse;
+  /** Short-lived token to open the Pipedream Connect UI with. Pipedream only. */
+  token?: PipedreamTokenResponseToken;
 }

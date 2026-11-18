@@ -4,7 +4,8 @@ import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markMessageSent } from '@core/util/message-send-motion';
-import { Telemetry } from '@macro-inc/observability';
+import { thrownResultErrorHasCode } from '@core/util/result';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   messageReferencesCrmRecord,
   refreshCrmAssociatedSoupQueries,
@@ -401,12 +402,15 @@ export function newMessageId(): string {
 }
 
 type SendMessageParams = {
+  parentSpan?: TraceContext;
   parent: MessageParent;
   message: PostMessage;
   optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
   /** From `newMessageId`; the message's final id, not a placeholder. */
   optimisticId: string;
   senderId: string;
+  /** Called once the optimistic message is in the timeline. */
+  onOptimisticInsert?: () => void;
 };
 
 type SendMessageContext = {
@@ -432,11 +436,22 @@ export function useSendMessageMutation(
     mutationFn: async (vars: SendMessageParams) => {
       // The server keeps optimisticId as the message id, so the optimistic
       // message never changes id; it is also the nonce the server echoes.
-      return entityMessagesClient.post(vars.parent, {
-        ...vars.message,
-        id: vars.optimisticId,
-        nonce: vars.optimisticId,
-      });
+      const parent = vars.parentSpan ?? Telemetry.captureContext();
+      try {
+        return await parent.run(() =>
+          entityMessagesClient.post(vars.parent, {
+            ...vars.message,
+            id: vars.optimisticId,
+            nonce: vars.optimisticId,
+          })
+        );
+      } catch (error) {
+        // A resend after a lost response finds its id already stored.
+        if (!thrownResultErrorHasCode(error, 'CONFLICT')) throw error;
+        return parent.run(() =>
+          entityMessagesClient.get(vars.parent, vars.optimisticId)
+        );
+      }
     },
     ...withCallbacks<
       EntityMessage,
@@ -457,6 +472,7 @@ export function useSendMessageMutation(
             optimisticAttachments: vars.optimisticAttachments,
             ...vars.message,
           });
+          vars.onOptimisticInsert?.();
           const updatedAt =
             vars.parent.type === 'channel'
               ? optimisticUpdateSoupItemUpdatedAt(
@@ -541,7 +557,8 @@ export function useSendMessageMutation(
           );
         },
       },
-      callbacks
+      callbacks,
+      (variables) => variables.parentSpan
     ),
   }));
 }

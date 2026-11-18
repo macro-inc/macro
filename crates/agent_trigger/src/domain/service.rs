@@ -21,15 +21,15 @@ use messages::domain::service::MessageWrite;
 use messages::domain::{events::MessagePostedMetadata, models::MessageParent};
 
 use channel_sender::ChannelSender;
-use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use crate::domain::broker_events::{ThreadMessageKind, TriggerDecision};
 use crate::domain::thread_window::{ThreadMessage, render_transcript, thread_window};
 use crate::domain::yield_event::{
-    AgentSessionEventDecision, NoEventReason, PotentialTriggerEvent, yield_event,
+    AgentSessionEventDecision, NoEventReason, PotentialTriggerEvent, is_own_message, yield_event,
 };
+use messages::domain::agent_hops::{MAX_AGENT_HOPS, agent_hops};
 
 /// Messages kept either side of a point where the agent spoke or was spoken to.
 /// Wide enough to carry the exchange around it, narrow enough that a long
@@ -38,8 +38,15 @@ const WINDOW_RADIUS: usize = 4;
 
 /// Ceiling on transcript length, keeping the most recent messages. A judgement
 /// about the newest message rarely turns on what happened dozens of messages
-/// ago, and the fast model reads a bounded prompt.
+/// ago, and the judge reads a bounded input.
 const TRANSCRIPT_CAP: usize = 40;
+
+/// The judge's probability at or above which a message counts as addressed to
+/// an agent.
+const ADDRESSED_THRESHOLD: f32 = 0.5;
+
+/// Who the judge is told posted a message whose author has no name on record.
+const UNNAMED_AUTHOR: &str = "someone";
 
 /// Bot facts required to decide whether a mention may start an agent session.
 #[cfg_attr(test, mockall::automock)]
@@ -152,18 +159,42 @@ pub trait ThreadHistory: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<ThreadMessage>>> + Send;
 }
 
-/// Judges whether an unmentioned message in a session's thread is addressed
-/// to the agent.
+/// Judges which, if any, of the live agents in a thread an unmentioned
+/// message is addressed to.
 #[cfg_attr(test, mockall::automock)]
 pub trait ImplicitTriggerJudge: Send + Sync + 'static {
-    /// Whether the message reads as directed at the session's agent, read
-    /// against `transcript` - the thread around the agent's participation in
-    /// it, empty when the thread could not be read.
-    fn is_addressed_to_agent(
+    /// For each of the `agents` live in the thread, the probability from 0 to
+    /// 1 that the message is directed at it, in order. `transcript` is the
+    /// thread around the agents' participation, labelling them `agent 1` to
+    /// `agent {agents}` with their names; empty when the thread could not be
+    /// read. `author` names whoever posted the message.
+    fn addressee_probabilities(
         &self,
         posted: &MessagePostedMetadata,
         transcript: &str,
-    ) -> impl Future<Output = Result<bool>> + Send;
+        author: &str,
+        agents: usize,
+    ) -> impl Future<Output = Result<Vec<f32>>> + Send;
+}
+
+/// For hosts without a judge: no unmentioned message is routed by inference.
+impl<J: ImplicitTriggerJudge> ImplicitTriggerJudge for Option<J> {
+    async fn addressee_probabilities(
+        &self,
+        posted: &MessagePostedMetadata,
+        transcript: &str,
+        author: &str,
+        agents: usize,
+    ) -> Result<Vec<f32>> {
+        match self {
+            Some(judge) => {
+                judge
+                    .addressee_probabilities(posted, transcript, author, agents)
+                    .await
+            }
+            None => Ok(vec![0.0; agents]),
+        }
+    }
 }
 
 /// Looks up the session context for a message and evaluates its trigger rule.
@@ -241,7 +272,7 @@ where
         posted: &MessagePostedMetadata,
         bot_id: BotId,
     ) -> Result<bool> {
-        let Some(caller) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+        let Some(caller) = posted.invoking_user() else {
             return Ok(false);
         };
 
@@ -353,19 +384,53 @@ where
         }
     }
 
-    /// The poster's current capability on the message's conversation, for
-    /// reading it as context. `None` when the poster is no user or may no
+    /// The invoking user's current capability on the message's conversation,
+    /// for reading it as context. `None` when nobody invoked it or they may no
     /// longer write there.
     pub async fn invocation(
         &self,
         posted: &MessagePostedMetadata,
     ) -> Result<Option<AuthorizedInvocation>> {
-        let Some(user) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+        let Some(user) = posted.invoking_user() else {
             return Ok(None);
         };
         self.history
             .authorize_invocation(&user, &posted.parent, posted.root_id())
             .await
+    }
+
+    /// Whether a bot's message stays within [`MAX_AGENT_HOPS`] of the last
+    /// person in its thread. Checked before any routing or judging, explicit
+    /// or implicit. An unreadable thread counts as over the limit: an agent
+    /// loop is worse than one missed handoff.
+    async fn within_hop_limit(
+        &self,
+        posted: &MessagePostedMetadata,
+        invocation: &AuthorizedInvocation,
+    ) -> bool {
+        let messages = match self.history.thread_messages(invocation).await {
+            Ok(messages) => messages,
+            Err(error) => {
+                tracing::warn!(error = ?error, "thread read failed; not counting agent hops");
+                return false;
+            }
+        };
+        let senders: Vec<&ChannelSender<'static>> = messages
+            .iter()
+            .take_while(|message| message.id != posted.message_id)
+            .map(|message| &message.sender)
+            .chain(std::iter::once(&posted.sender))
+            .collect();
+        let hops = agent_hops(senders.into_iter());
+        if hops > MAX_AGENT_HOPS {
+            tracing::info!(
+                message_id = %posted.message_id,
+                hops,
+                "agent message exceeds the hop limit; not triggering another agent"
+            );
+            return false;
+        }
+        true
     }
 
     /// Evaluates a posted message for every mentioned bot.
@@ -375,9 +440,15 @@ where
         thread_id = ?posted.thread_id,
         message.scope = tracing::field::Empty,
         agent.mention.bot_count = tracing::field::Empty,
+        agent.trigger.inferred.outcome = tracing::field::Empty,
+        agent.trigger.inferred.agent_count = tracing::field::Empty,
+        agent.trigger.inferred.probabilities = tracing::field::Empty,
+        agent.trigger.inferred.top_probability = tracing::field::Empty,
+        agent.trigger.inferred.threshold = tracing::field::Empty,
+        agent.trigger.inferred.bot_id = tracing::field::Empty,
     ))]
     pub async fn evaluate(&self, posted: &MessagePostedMetadata) -> Result<Vec<TriggerDecision>> {
-        let Some(user) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+        let Some(user) = posted.invoking_user() else {
             return Ok(Vec::new());
         };
         let Some(invocation) = self
@@ -387,6 +458,9 @@ where
         else {
             return Ok(Vec::new());
         };
+        if posted.sender.as_bot().is_some() && !self.within_hop_limit(posted, &invocation).await {
+            return Ok(Vec::new());
+        }
         if let Some(router) = &self.conversations {
             match router.evaluate(posted).await? {
                 ConversationDecision::NotConversation => {}
@@ -411,7 +485,7 @@ where
         if mentioned.is_empty() {
             if let Some(event) = self.evaluate_bot(posted, None, &mut seen_sessions).await? {
                 events.push(event);
-            } else if let Some(event) = self.evaluate_implicit(posted, &invocation).await? {
+            } else if let Some(event) = self.evaluate_implicit(posted, &user, &invocation).await? {
                 events.push(event);
             }
             return Ok(events);
@@ -497,33 +571,35 @@ where
     /// Evaluates an unmentioned message against the sessions rooted at its
     /// thread: an explicit reply that targets a live session's bot, or that
     /// session's originating message, is forwarded outright. Anything else
-    /// only when the judge reads it as addressed to the agent.
+    /// only when the judge reads it as addressed to exactly one live agent.
     ///
-    /// An extracted reply names who and which message it answers, so it can
-    /// pick among several live agents. The inferred path still only fires when
-    /// exactly one agent is live; picking among several by recency would route
-    /// on nothing the author meant.
+    /// When the judge reads the message as addressed to several agents, it
+    /// goes to none: picking one would route on nothing the author meant.
     ///
     /// Extractor and judge failures are treated as "no" rather than propagated:
     /// implicit triggering is best-effort, and an outage must not wedge the
     /// message stream or fabricate forwards.
+    ///
+    /// A bot's message is judged like anyone's, but never against the bot's
+    /// own session; the hop limit has already bounded agent chains.
+    ///
+    /// Every judged message records its outcome, the judge's probabilities
+    /// and the threshold on the `evaluate` span and in one log event, so
+    /// inferred replies can be counted and the threshold tuned from data.
     async fn evaluate_implicit(
         &self,
         posted: &MessagePostedMetadata,
+        _user: &MacroUserIdStr<'static>,
         invocation: &AuthorizedInvocation,
     ) -> Result<Option<TriggerDecision>> {
         let Some(thread_id) = posted.thread_id else {
-            return Ok(None);
-        };
-        // Only a user implicitly addresses an agent; bot traffic must always
-        // mention explicitly, or bots would relay each other forever.
-        let Some(_user) = posted.sender.as_user() else {
             return Ok(None);
         };
         let mut candidates = Vec::new();
         for session in self.sessions.find_all_for_thread(thread_id).await? {
             if session.thread_parent.as_ref() == Some(&posted.parent)
                 && session.thread_id == Some(thread_id)
+                && !is_own_message(session.bot_id, &posted.sender)
                 && self.agent_is_available(posted, session.bot_id).await?
             {
                 candidates.push(session);
@@ -535,27 +611,18 @@ where
         {
             // The reply-target says who it answers on its face, so it needs no
             // thread read at all.
+            tracing::Span::current().record("agent.trigger.inferred.outcome", "explicit_reply");
             return Ok(Some(thread_event(
                 session,
                 ThreadMessageKind::ExplicitReply,
+                None,
                 posted,
             )));
         }
 
-        let session = match candidates.as_slice() {
-            [] => return Ok(None),
-            [session] => session.clone(),
-            sessions => {
-                log_no_event(
-                    posted,
-                    None,
-                    NoEventReason::AmbiguousAgentSessions {
-                        candidates: sessions.len(),
-                    },
-                );
-                return Ok(None);
-            }
-        };
+        if candidates.is_empty() {
+            return Ok(None);
+        }
 
         // The judge may caption attachments before classifying. Admit the whole
         // optional operation before entering that port, never retrying through a
@@ -563,28 +630,55 @@ where
         #[cfg(feature = "admission")]
         if let Err(error) = self.admission.admit(_user, AiFeature::Automation).await {
             tracing::info!(code = error.code(), "skipping agent trigger inference");
+            tracing::Span::current().record("agent.trigger.inferred.outcome", "not_admitted");
             return Ok(None);
         }
 
-        if self
-            .is_addressed_to_agent(posted, &self.transcript(posted, invocation, &session).await)
-            .await
-        {
-            return Ok(Some(thread_event(
-                session,
-                ThreadMessageKind::Inferred,
-                posted,
-            )));
-        }
-
-        log_no_event(
+        let thread = self.transcript(posted, invocation, &candidates).await;
+        let probabilities = self
+            .addressee_probabilities(posted, &thread.transcript, &thread.author, candidates.len())
+            .await;
+        let addressee = addressed_candidate(&probabilities);
+        let routed_to = match addressee {
+            Addressee::One(index) => Some(candidates[index].bot_id),
+            Addressee::None | Addressee::Several => None,
+        };
+        record_judgement(
             posted,
-            None,
-            NoEventReason::NotAddressedToAgent {
-                session_id: session.id,
-            },
+            &probabilities,
+            &addressee,
+            candidates.len(),
+            routed_to,
         );
-        Ok(None)
+
+        match addressee {
+            Addressee::One(index) => Ok(Some(thread_event(
+                candidates.swap_remove(index),
+                ThreadMessageKind::Inferred,
+                probabilities.get(index).copied().map(confidence_percent),
+                posted,
+            ))),
+            Addressee::None => {
+                log_no_event(
+                    posted,
+                    None,
+                    NoEventReason::NotAddressedToAgent {
+                        candidates: candidates.len(),
+                    },
+                );
+                Ok(None)
+            }
+            Addressee::Several => {
+                log_no_event(
+                    posted,
+                    None,
+                    NoEventReason::AmbiguousAgentSessions {
+                        candidates: candidates.len(),
+                    },
+                );
+                Ok(None)
+            }
+        }
     }
 
     /// The live session the extracted reply-target names: either its bot, or
@@ -612,9 +706,10 @@ where
         session_targeted_by_reply(candidates, &reply).cloned()
     }
 
-    /// The thread around the points where the agent took part: its own
-    /// messages, and the message being judged, each with [`WINDOW_RADIUS`]
-    /// messages of surrounding conversation.
+    /// The thread around the points where the candidate agents took part:
+    /// their own messages, and the message being judged, each with
+    /// [`WINDOW_RADIUS`] messages of surrounding conversation, and the name of
+    /// whoever posted the message being judged.
     ///
     /// An unreadable thread yields an empty transcript rather than an error, so
     /// the judge still rules on the message itself instead of the whole path
@@ -623,16 +718,24 @@ where
         &self,
         posted: &MessagePostedMetadata,
         invocation: &AuthorizedInvocation,
-        session: &AgentSession,
-    ) -> String {
+        candidates: &[AgentSession],
+    ) -> JudgedThread {
         let messages = match self.history.thread_messages(invocation).await {
             Ok(messages) => messages,
             Err(error) => {
                 tracing::warn!(error = ?error, "thread read failed; judging without thread context");
-                return String::new();
+                return JudgedThread {
+                    transcript: String::new(),
+                    author: UNNAMED_AUTHOR.to_owned(),
+                };
             }
         };
-        let agent = session.bot_id.into_storage_id();
+        let author = messages
+            .iter()
+            .find(|message| message.id == posted.message_id)
+            .and_then(|message| message.name.clone())
+            .unwrap_or_else(|| UNNAMED_AUTHOR.to_owned());
+        let agents: Vec<BotId> = candidates.iter().map(|session| session.bot_id).collect();
         let anchors: Vec<Uuid> = messages
             .iter()
             .filter(|message| {
@@ -640,29 +743,144 @@ where
                     || message
                         .sender
                         .as_bot()
-                        .is_some_and(|bot| bot.as_ref() == agent.as_ref())
+                        .is_some_and(|bot| agents.contains(&bot.bot_id()))
             })
             .map(|message| message.id)
             .collect();
 
-        render_transcript(
-            &thread_window(&messages, &anchors, WINDOW_RADIUS, TRANSCRIPT_CAP),
-            session.bot_id,
-        )
+        JudgedThread {
+            transcript: render_transcript(
+                &thread_window(&messages, &anchors, WINDOW_RADIUS, TRANSCRIPT_CAP),
+                &agents,
+            ),
+            author,
+        }
     }
 
-    async fn is_addressed_to_agent(
+    /// The judge's probabilities, one per candidate; a failure or a malformed
+    /// answer reads as addressed to nobody.
+    async fn addressee_probabilities(
         &self,
         posted: &MessagePostedMetadata,
         transcript: &str,
-    ) -> bool {
-        self.judge
-            .is_addressed_to_agent(posted, transcript)
+        author: &str,
+        agents: usize,
+    ) -> Vec<f32> {
+        match self
+            .judge
+            .addressee_probabilities(posted, transcript, author, agents)
             .await
-            .inspect_err(|error| {
+        {
+            Ok(probabilities) if probabilities.len() == agents => probabilities,
+            Ok(probabilities) => {
+                tracing::warn!(
+                    expected = agents,
+                    answered = probabilities.len(),
+                    "implicit trigger judge answered for the wrong number of agents; treating as not addressed"
+                );
+                Vec::new()
+            }
+            Err(error) => {
                 tracing::warn!(error = ?error, "implicit trigger judge failed; treating as not addressed");
-            })
-            .unwrap_or(false)
+                Vec::new()
+            }
+        }
+    }
+}
+
+/// Which candidates the judge read a message as addressed to.
+#[derive(Debug, PartialEq, Eq)]
+enum Addressee {
+    None,
+    One(usize),
+    Several,
+}
+
+impl Addressee {
+    /// The outcome as recorded on the span and log.
+    fn outcome(&self) -> &'static str {
+        match self {
+            Self::None => "not_addressed",
+            Self::One(_) => "inferred",
+            Self::Several => "ambiguous",
+        }
+    }
+}
+
+/// The transcript the judge reads, and who posted the message it judges.
+struct JudgedThread {
+    transcript: String,
+    author: String,
+}
+
+/// Records one judgement on the `evaluate` span and as a log event: the
+/// outcome, every probability in candidate order, the highest, the threshold,
+/// and the agent it routed to. An empty probability list means the judge
+/// failed or answered malformed, which reads as not addressed.
+fn record_judgement(
+    posted: &MessagePostedMetadata,
+    probabilities: &[f32],
+    addressee: &Addressee,
+    agent_count: usize,
+    routed_to: Option<BotId>,
+) {
+    let listed = probabilities
+        .iter()
+        .map(|probability| format!("{probability:.2}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let top = probabilities
+        .iter()
+        .copied()
+        .fold(None, |top: Option<f32>, probability| {
+            Some(top.map_or(probability, |top| top.max(probability)))
+        });
+
+    let span = tracing::Span::current();
+    span.record("agent.trigger.inferred.outcome", addressee.outcome());
+    span.record("agent.trigger.inferred.agent_count", agent_count);
+    span.record("agent.trigger.inferred.probabilities", listed.as_str());
+    span.record("agent.trigger.inferred.threshold", ADDRESSED_THRESHOLD);
+    if let Some(top) = top {
+        span.record("agent.trigger.inferred.top_probability", top);
+    }
+    if let Some(bot_id) = routed_to {
+        span.record(
+            "agent.trigger.inferred.bot_id",
+            tracing::field::display(bot_id),
+        );
+    }
+
+    tracing::info!(
+        message_id = %posted.message_id,
+        outcome = addressee.outcome(),
+        agent_count,
+        probabilities = %listed,
+        top_probability = ?top,
+        threshold = ADDRESSED_THRESHOLD,
+        bot_id = ?routed_to,
+        "agent trigger judged an unmentioned message"
+    );
+}
+
+/// A probability as the whole percentage an agent is told it was judged at.
+fn confidence_percent(probability: f32) -> u8 {
+    // The judge's probabilities are validated to 0..=1, so this stays in range;
+    // the clamp keeps a malformed value from wrapping.
+    (probability.clamp(0.0, 1.0) * 100.0).round() as u8
+}
+
+/// The single candidate whose probability reaches [`ADDRESSED_THRESHOLD`].
+fn addressed_candidate(probabilities: &[f32]) -> Addressee {
+    let mut addressed = probabilities
+        .iter()
+        .enumerate()
+        .filter(|(_, probability)| **probability >= ADDRESSED_THRESHOLD)
+        .map(|(index, _)| index);
+    match (addressed.next(), addressed.next()) {
+        (None, _) => Addressee::None,
+        (Some(index), None) => Addressee::One(index),
+        (Some(_), Some(_)) => Addressee::Several,
     }
 }
 
@@ -689,12 +907,14 @@ fn session_id(session: &ThreadSession) -> Option<AgentSessionId> {
 fn thread_event(
     session: AgentSession,
     kind: ThreadMessageKind,
+    confidence: Option<u8>,
     posted: &MessagePostedMetadata,
 ) -> TriggerDecision {
     TriggerDecision::Existing {
         bot_id: session.bot_id,
         session_id: session.id,
         kind,
+        confidence,
         message: posted.clone(),
     }
 }

@@ -3,6 +3,7 @@ import { SupportedNodeTypes } from '@macro-inc/lexical-core';
 import { $getRoot, $isParagraphNode, createEditor } from 'lexical';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  $getCaretRect,
   editorStateAsMarkdown,
   setEditorStateFromHtml,
   setEditorStateFromMarkdown,
@@ -83,5 +84,14 @@ describe('setEditorStateFromMarkdown', () => {
     expect(
       editor.read(() => $getRoot().getTextContent()).includes('\u200b')
     ).toBe(false);
+  });
+});
+
+describe('$getCaretRect', () => {
+  it('returns null when the document has no selection range', () => {
+    const editor = makeEditor();
+    window.getSelection()?.removeAllRanges();
+
+    expect(editor.read(() => $getCaretRect())).toBeNull();
   });
 });

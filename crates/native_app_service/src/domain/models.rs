@@ -86,6 +86,28 @@ pub struct BundleManifest {
     pub app_version: String,
 }
 
+/// Shortest abbreviated SHA trusted to identify a commit.
+const MIN_GIT_SHA_LEN: usize = 7;
+
+impl BundleManifest {
+    /// Whether this bundle was built from the commit `git_sha` names.
+    ///
+    /// Release builds abbreviate SHAs to different lengths, so one may be a
+    /// prefix of the other. Anything shorter than seven hex digits never matches.
+    pub fn built_from(&self, git_sha: &str) -> bool {
+        let Some(own) = self.git_sha.as_deref() else {
+            return false;
+        };
+        let valid =
+            |sha: &str| sha.len() >= MIN_GIT_SHA_LEN && sha.bytes().all(|b| b.is_ascii_hexdigit());
+        if !valid(own) || !valid(git_sha) {
+            return false;
+        }
+        let (own, other) = (own.to_ascii_lowercase(), git_sha.to_ascii_lowercase());
+        own.starts_with(&other) || other.starts_with(&own)
+    }
+}
+
 /// Native build numbers are independent across mobile platforms.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct MobileBuildMinima {
@@ -103,6 +125,9 @@ impl BundleManifest {
             (2, None, _) => Some(self.min_native_build),
             (3, Some(builds), AllTargets::Mobile(MobileTarget::Android)) => Some(builds.android),
             (3, Some(builds), AllTargets::Mobile(MobileTarget::Ios)) => Some(builds.ios),
+            // Desktop keeps the shared minimum; its release numbers come from
+            // hand-typed tags, so they cannot gate updater capabilities.
+            (3, Some(_), AllTargets::Desktop(_)) => Some(self.min_native_build),
             _ => None,
         }
     }
@@ -165,6 +190,12 @@ pub struct BundleUpdateRequest {
     pub current_bundle_build: u64,
     /// the native app build number
     pub native_build: u64,
+    /// The newest bundle manifest schema the updater reads. Desktop updaters
+    /// that predate schema 3 send none and reject it after downloading.
+    pub manifest_schema: Option<u64>,
+    /// Short git SHA of the commit the running bundle was built from, when the
+    /// app knows it. Older apps send none.
+    pub current_git_sha: Option<String>,
 }
 
 /// Server-side compatibility and revocation rules for JS bundle updates.

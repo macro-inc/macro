@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_mailbox_drafts SET lease_id = NULL,lease_until = NULL,updated_at = now(),\n                state = CASE WHEN delete_requested AND NOT $4 THEN 'pending' ELSE $2 END,\n                error_code = CASE WHEN delete_requested AND NOT $4 THEN NULL ELSE $3 END,\n                checkpoint = CASE WHEN delete_requested AND NOT $4 AND checkpoint->>'stage' IS DISTINCT FROM 'creating' THEN NULL ELSE checkpoint END,\n                available_at = CASE WHEN delete_requested AND NOT $4 THEN now() ELSE available_at END\n            WHERE message_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8f79723e03feac3b2c758fcd2ca090c2570443650ed036c84d2213b38416ab45"
+}

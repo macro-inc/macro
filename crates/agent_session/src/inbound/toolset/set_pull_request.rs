@@ -6,7 +6,7 @@ use ai_toolset::{
 };
 use async_trait::async_trait;
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::SessionToolContext;
 
@@ -15,7 +15,7 @@ use super::SessionToolContext;
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "set_pull_request",
-    description = "Set the pull request associated with this coding session. This records the link shown in Macro; it does not create or modify the GitHub PR. Returns the recorded URL."
+    description = "Set the pull request associated with this coding session. This records the link shown in Macro; it does not create or modify the GitHub PR. Returns the recorded URL and this session's Macro link, which belongs in the pull request description."
 )]
 pub struct SetPullRequest {
     /// Link to the PR this session works on.
@@ -25,6 +25,15 @@ pub struct SetPullRequest {
     pub url: String,
 }
 
+/// The recorded pull request and the session that opened it.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct SetPullRequestOutput {
+    /// The pull request URL as recorded.
+    pub pull_request_url: String,
+    /// The calling session in the Macro app, to link from the pull request description.
+    pub session_url: String,
+}
+
 impl ToolAnnotated for SetPullRequest {
     const ANNOTATIONS: ToolAnnotations =
         ToolAnnotations::destructive("Set pull request").with_idempotent();
@@ -32,21 +41,25 @@ impl ToolAnnotated for SetPullRequest {
 
 #[async_trait]
 impl AsyncTool<SessionToolContext> for SetPullRequest {
-    type Output = String;
+    type Output = SetPullRequestOutput;
 
     #[tracing::instrument(skip_all, err)]
     async fn call(
         &self,
         context: ServiceContext<SessionToolContext>,
         request: RequestContext,
-    ) -> ToolResult<String> {
-        context
+    ) -> ToolResult<SetPullRequestOutput> {
+        let pull_request_url = context
             .service
             .set_pull_request(context.session, &request.user_id, &self.url, None)
             .await
             .map_err(|error| ToolCallError {
                 description: error.to_string(),
                 internal_error: error.into(),
-            })
+            })?;
+        Ok(SetPullRequestOutput {
+            pull_request_url,
+            session_url: context.session_url.clone(),
+        })
     }
 }

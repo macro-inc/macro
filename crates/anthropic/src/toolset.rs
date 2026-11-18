@@ -2,13 +2,9 @@ mod bash_code_execution;
 #[cfg(test)]
 mod test;
 mod text_editor_code_execution;
-mod web_fetch;
-mod web_search;
 
 pub use bash_code_execution::BashCodeExecution;
 pub use text_editor_code_execution::TextEditorCodeExecution;
-pub use web_fetch::WebFetch;
-pub use web_search::WebSearch;
 
 use crate::client::Client;
 use crate::types::request::{
@@ -107,8 +103,6 @@ fn response_usage(value: &serde_json::Value) -> UsageEvidence {
 /// Create the Anthropic server tools toolset.
 pub fn anthropic_toolset() -> AsyncToolCollection<AnthropicToolContext> {
     AsyncToolCollection::new()
-        .add_tool::<WebSearch, AnthropicToolContext>()
-        .add_tool::<WebFetch, AnthropicToolContext>()
         .add_tool::<BashCodeExecution, AnthropicToolContext>()
         .add_tool::<TextEditorCodeExecution, AnthropicToolContext>()
 }
@@ -175,7 +169,6 @@ pub(crate) async fn invoke_server_tool(
     // alive after tool cancellation so already-incurred usage can be recorded.
     let (caller_alive, cancelled) = tokio::sync::oneshot::channel::<()>();
     let response = tokio::spawn(async move {
-        let request = crate::types::request::transform_request_web_fetch(request);
         let execution = async {
             let response = client.post_response("/v1/messages", request).await?;
             let status = response.status();

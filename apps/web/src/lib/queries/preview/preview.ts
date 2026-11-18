@@ -1,11 +1,10 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-  LOCAL_ONLY,
-} from '@core/constant/featureFlags';
-import { authKeys } from '@queries/auth/keys';
-import type { UserInfoData } from '@queries/auth/user-info';
+  type EntityAppearance,
+  sameAppearance,
+} from '@app/features/entity-appearance/core/appearance';
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
+import { ThrownResultError } from '@core/util/result';
+import { cachedUserId } from '@queries/auth/cached-user-id';
 import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
@@ -106,7 +105,7 @@ export async function getItemPreview(
   item: ItemEntity,
   options?: { requireFresh?: boolean }
 ): Promise<PreviewItem> {
-  if (isFeatureEnabled(enableGraphqlSoup) && isGraphqlPreviewItem(item)) {
+  if (isGraphqlPreviewItem(item)) {
     try {
       const preview = await getGraphqlItemPreview(item, options);
       if (preview) return defaultNameTransform(preview);
@@ -114,7 +113,12 @@ export async function getItemPreview(
       // Preserve the existing access/deletion result through the REST fallback.
     }
     const fallback = await fetchRestPreviewBatch([item]);
-    return defaultNameTransform(fallback.get(item.id) ?? noAccessPreview(item));
+    // A failed request throws, as the dataloader's read below does.
+    const errors = fallback.failed.get(item.id);
+    if (errors) throw new ThrownResultError(errors);
+    return defaultNameTransform(
+      fallback.previews.get(item.id) ?? noAccessPreview(item)
+    );
   }
 
   const preview = await queryClient.fetchQuery(itemPreviewQueryOptions(item));
@@ -126,18 +130,9 @@ function useItemPreviewQuery(
   restStaleTime = PREVIEW_STALE_TIME,
   includeProperties = true
 ) {
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
-  const graphqlRequested = () => graphqlSoupFlag().enabled;
-  const graphqlQuery = createGraphqlItemPreviewQuery(
-    item,
-    graphqlRequested,
-    includeProperties
-  );
+  const graphqlQuery = createGraphqlItemPreviewQuery(item, includeProperties);
   const usesGraphql = createMemo(
-    () =>
-      graphqlRequested() &&
-      isGraphqlPreviewItem(item()) &&
-      !graphqlQuery.shouldFallback()
+    () => isGraphqlPreviewItem(item()) && !graphqlQuery.shouldFallback()
   );
 
   // Previews render in every message row and building an observer costs more
@@ -280,39 +275,31 @@ const RAW_NAME_STALE_TIME = 5 * 60 * 1000;
 export function useItemRawName(
   item: Accessor<{ id: string; type?: ItemType }>
 ): Accessor<string | undefined> {
-  const query = useItemPreviewQuery(item, RAW_NAME_STALE_TIME, false);
+  const identity = useItemIdentity(item);
+  return () => identity()?.rawName;
+}
 
+/** Reads lightweight identity fields without fetching document properties. */
+export function useItemIdentity(
+  item: Accessor<ItemEntity>
+): Accessor<AccessiblePreviewItem | undefined> {
+  const query = useItemPreviewQuery(item, RAW_NAME_STALE_TIME, false);
   return () => {
     const data = query.data();
-    if (!data || !isAccessiblePreviewItem(data)) return undefined;
-    return data.rawName;
+    return data && isAccessiblePreviewItem(data) ? data : undefined;
   };
 }
 
 /** Revalidates active previews without crossing their selected transport. */
 export function invalidatePreview(itemId?: string) {
-  if (!isFeatureEnabled(enableGraphqlSoup)) {
-    if (!itemId)
-      return queryClient.invalidateQueries({
-        queryKey: previewKeys._def,
-      });
-    return queryClient.invalidateQueries({
-      queryKey: previewKeys.item(itemId).queryKey,
-    });
-  }
-
   const graphqlRefresh = refreshActiveGraphqlPreviewQueries(itemId);
   const restRefresh = queryClient.invalidateQueries({
     queryKey: itemId ? previewKeys.item(itemId).queryKey : previewKeys._def,
-    // Under the GraphQL flag, only REST exceptions and fallbacks have an
-    // active TanStack observer. Disabled fallback queries must stay untouched.
+    // Only REST exceptions and fallbacks have an active TanStack observer.
+    // Disabled fallback queries must stay untouched.
     predicate: (query) => query.isActive(),
   });
   return Promise.all([graphqlRefresh, restRefresh]);
-}
-
-function cachedUserId(): string | undefined {
-  return queryClient.getQueryData<UserInfoData>(authKeys.userInfo.queryKey)?.id;
 }
 
 function runGraphqlPreviewWrite(write: Promise<void>) {
@@ -327,7 +314,7 @@ function getPreviewData(itemId: string): PreviewItem | undefined {
   );
 }
 
-/** Optimistically updates the selected transport's document file type. */
+/** Writes a REST preview cache entry. */
 function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
   return queryClient.setQueryData<PreviewItem>(
     previewKeys.item(itemId).queryKey,
@@ -336,15 +323,24 @@ function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
 }
 
 export function setPreviewFileType(itemId: string, fileType: string) {
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    const userId = cachedUserId();
-    if (!userId) return;
-    return runGraphqlPreviewWrite(
-      setGraphqlPreviewFileType(itemId, fileType, userId)
-    );
-  }
-  const prev = getPreviewData(itemId);
-  if (prev) return setPreviewData(itemId, (prev) => ({ ...prev, fileType }));
+  const userId = cachedUserId();
+  if (!userId) return;
+  return runGraphqlPreviewWrite(
+    setGraphqlPreviewFileType(itemId, fileType, userId)
+  );
+}
+
+/** Patch a loaded REST preview without creating an inaccessible preview. */
+export function setPreviewAppearance(
+  itemId: string,
+  appearance: EntityAppearance | null | undefined,
+  expected?: EntityAppearance
+): { appearance: EntityAppearance | null | undefined } | undefined {
+  const previous = getPreviewData(itemId);
+  if (!previous || !isAccessiblePreviewItem(previous)) return;
+  if (expected && !sameAppearance(previous.appearance, expected)) return;
+  setPreviewData(itemId, (item) => ({ ...item, appearance }));
+  return { appearance: previous.appearance };
 }
 
 /** Optimistically updates a preview name in the selected transport cache. */
@@ -360,7 +356,7 @@ export function setPreviewName({
   itemType?: Exclude<ItemType, 'calendar_event'>;
 }) {
   const item = { id: itemId, type: itemType } satisfies ItemEntity;
-  if (isFeatureEnabled(enableGraphqlSoup) && isGraphqlPreviewItem(item)) {
+  if (isGraphqlPreviewItem(item)) {
     const userId = cachedUserId();
     if (!userId) return;
     return runGraphqlPreviewWrite(setGraphqlPreviewName(item, name, userId));
@@ -461,8 +457,9 @@ export function setPreviewOnCreate({
   subType?: { type: 'task' | 'snippet' | 'skill'; is_completed?: boolean };
 }) {
   if (
-    isFeatureEnabled(enableGraphqlSoup) &&
-    (itemType === 'document' || itemType === 'chat' || itemType === 'project')
+    itemType === 'document' ||
+    itemType === 'chat' ||
+    itemType === 'project'
   ) {
     const userId = cachedUserId();
     if (userId && canWriteGraphqlPreviewCache()) {

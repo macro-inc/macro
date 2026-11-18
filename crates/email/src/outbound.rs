@@ -10,8 +10,14 @@ mod gmail_sender_provider;
 mod gmail_token_provider;
 #[cfg(feature = "outbound")]
 pub mod invitation_pg;
+#[cfg(feature = "outbound")]
+pub mod read_receipts_pg;
 #[cfg(feature = "s3")]
 mod s3_draft_attachment_storage;
+#[cfg(feature = "outbound")]
+mod shared_thread_replies;
+#[cfg(feature = "sqs")]
+mod sqs_enqueuer;
 
 #[cfg(feature = "outbound")]
 pub use email_pg_repo::EmailPgRepo;
@@ -27,3 +33,13 @@ pub use gmail_sender_provider::GmailSenderProvider;
 pub use gmail_token_provider::GmailTokenProviderImpl;
 #[cfg(feature = "s3")]
 pub use s3_draft_attachment_storage::S3DraftAttachmentStorage;
+#[cfg(feature = "outbound")]
+pub use shared_thread_replies::EntityAccessSharedThreadReplies;
+
+/// PostgreSQL statement adapters for label-state rules.
+#[cfg(feature = "outbound")]
+pub mod label_state_pg;
+
+/// Statement adapters for durable delivery and retained deletion.
+#[cfg(all(feature = "outbound", feature = "mailbox"))]
+pub mod scheduled_delivery_pg;

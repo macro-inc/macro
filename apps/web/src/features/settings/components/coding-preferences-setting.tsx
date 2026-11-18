@@ -6,9 +6,10 @@ import {
 } from '@queries/agents/coding-preferences';
 import type { CodingPreferencesBody } from '@service-agent-harness/client';
 import { ToggleSwitch } from '@ui';
+import { DefaultRepository } from '../DefaultRepository';
 import { SettingsCard, SettingsRow, SettingsSection } from '../primitives';
 
-/** What the user's new coding sessions do beyond their assignment. */
+/** Defaults for the user's new coding sessions: repository, tasks, and pull requests. */
 export function CodingPreferencesSetting() {
   const preferences = useCodingPreferencesQuery();
   const setPreferences = useSetCodingPreferencesMutation();
@@ -51,6 +52,7 @@ export function CodingPreferencesSetting() {
   return (
     <SettingsSection title="Coding sessions">
       <SettingsCard>
+        <DefaultRepository />
         <PreferenceRow
           preference="createTasks"
           label="Create tasks"

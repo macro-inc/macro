@@ -16,7 +16,7 @@ test('enables the composer from its rollout flag without a local preference or e
   const dialog = page.getByRole('dialog');
   await dialog
     .getByPlaceholder('Search...', { exact: true })
-    .fill('notification clicks are broken');
+    .fill('notification clicks are broken on iOS');
   await expect(
     dialog.getByRole('button', { name: 'Create task', exact: true })
   ).toBeEnabled();
@@ -31,8 +31,8 @@ test('keeps ordinary Command K search when the rollout flag is off', async ({
     .click();
   const dialog = page.getByRole('dialog');
   const input = dialog.getByPlaceholder('Search...', { exact: true });
-  await input.fill('notification clicks are broken');
-  await expect(input).toHaveValue('notification clicks are broken');
+  await input.fill('notification clicks are broken on iOS');
+  await expect(input).toHaveValue('notification clicks are broken on iOS');
   await expect(
     dialog.getByRole('textbox', { name: 'Your input', exact: true })
   ).not.toBeVisible();

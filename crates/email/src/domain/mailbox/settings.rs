@@ -298,24 +298,30 @@ impl<R: MailboxSettingsRepository, G: MailboxSettingsGateway> MailboxSettingsSer
                 self.outlook_sync,
                 self.outlook_writes,
             )
-            .await?
+            .await
+            .map_err(|error| super::telemetry::claim_failed("settings", error))?
         else {
             return Ok(false);
         };
-        let result = super::maintain_lease(self.execute(&lease), || {
-            self.repository.renew_settings(&lease)
-        })
-        .await;
-        if let Err(error) = &result {
-            let delay = match error {
-                MailboxError::Provider(e) => super::retry_seconds(e),
-                _ => 30,
-            };
-            self.repository
-                .finish_settings(&lease, false, delay, Some("provider_settings_unavailable"))
-                .await?;
+        let link_id = lease.mailbox.key.link_id;
+        async {
+            let result = super::maintain_lease(self.execute(&lease), || {
+                self.repository.renew_settings(&lease)
+            })
+            .await;
+            if let Err(error) = &result {
+                let delay = match error {
+                    MailboxError::Provider(e) => super::retry_seconds(e),
+                    _ => 30,
+                };
+                self.repository
+                    .finish_settings(&lease, false, delay, Some("provider_settings_unavailable"))
+                    .await?;
+            }
+            result.map(|()| true)
         }
-        result.map(|()| true)
+        .await
+        .inspect_err(|error| super::telemetry::log_unit_error(link_id, error))
     }
     async fn execute(&self, lease: &SettingsLease) -> Result<(), MailboxError> {
         match lease.kind.as_str() {

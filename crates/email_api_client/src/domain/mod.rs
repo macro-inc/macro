@@ -10,3 +10,7 @@ pub mod ports;
 /// Provider-neutral email API orchestration.
 #[cfg(feature = "ports")]
 pub mod service;
+
+/// Counts provider requests made inside one unit of work.
+#[cfg(feature = "ports")]
+pub mod request_count;

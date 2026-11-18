@@ -12,6 +12,8 @@ use crate::{
 };
 
 pub const REDIS_CHANNEL: &str = "connection_gateway.messages";
+/// Carries messages for every connection on every instance.
+pub const BROADCAST_CHANNEL: &str = "connection_gateway.broadcast";
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct MessageWithConnection {
@@ -42,6 +44,34 @@ pub async fn post_message(
 
         connection
             .publish::<&str, &str, ()>(REDIS_CHANNEL, message_json.as_str())
+            .await
+            .context("Failed to publish message")
+    }
+    .instrument(span.clone())
+    .await;
+    if let Err(error) = &result {
+        record_span_error(&span, error);
+    }
+    result
+}
+
+/// Publishes a message for every connection on every instance of the
+/// connection gateway, including this one: each instance forwards it to the
+/// connections it holds.
+pub async fn post_broadcast(mut connection: MultiplexedConnection, message: Message) -> Result<()> {
+    let span = tracing::info_span!(
+        "connection_gateway.redis_broadcast_publish",
+        otel.kind = "producer",
+        message_type = %message.message_type,
+        otel.status_code = tracing::field::Empty,
+        otel.status_description = tracing::field::Empty,
+    );
+    let result = async {
+        let message_json = serde_json::to_string(&message.with_current_trace_context())
+            .context("Failed to serialize message")?;
+
+        connection
+            .publish::<&str, &str, ()>(BROADCAST_CHANNEL, message_json.as_str())
             .await
             .context("Failed to publish message")
     }
@@ -109,12 +139,19 @@ async fn subscribe_and_forward(ctx: &ApiContext) -> Result<()> {
         .await
         .context("failed to open redis pub/sub connection")?
         .split();
-    sink.subscribe(REDIS_CHANNEL)
+    sink.subscribe(&[REDIS_CHANNEL, BROADCAST_CHANNEL])
         .await
-        .context("failed to subscribe to redis relay channel")?;
-    tracing::info!(channel = REDIS_CHANNEL, "subscribed to redis relay channel");
+        .context("failed to subscribe to redis relay channels")?;
+    tracing::info!(
+        channels = ?[REDIS_CHANNEL, BROADCAST_CHANNEL],
+        "subscribed to redis relay channels"
+    );
 
     while let Some(maybe_message) = stream.next().await {
+        if maybe_message.get_channel_name() == BROADCAST_CHANNEL {
+            forward_broadcast(ctx, maybe_message.get_payload_bytes()).await;
+            continue;
+        }
         let mut message: MessageWithConnection =
             match maybe_message.get_payload::<MessageWithConnection>() {
                 Ok(msg) => msg,
@@ -164,4 +201,46 @@ async fn subscribe_and_forward(ctx: &ApiContext) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Forwards a broadcast message to every connection this instance holds.
+async fn forward_broadcast(ctx: &ApiContext, payload: &[u8]) {
+    let mut message: Message = match serde_json::from_slice(payload) {
+        Ok(message) => message,
+        Err(err) => {
+            tracing::error!(error=?err, "failed to parse broadcast message");
+            return;
+        }
+    };
+
+    // Collected first so no map shard lock is held across a send.
+    let connection_ids: Vec<String> = ctx
+        .connection_manager
+        .connections
+        .iter()
+        .map(|entry| entry.key().clone())
+        .collect();
+    let span = tracing::info_span!(
+        "connection_gateway.redis_broadcast_dispatch",
+        otel.kind = "consumer",
+        message_type = %message.message_type,
+        connection_count = connection_ids.len(),
+        failed_count = tracing::field::Empty,
+    );
+    if let Some(parent) = message.remote_trace_context() {
+        let _ = span.set_parent(parent);
+    }
+    async {
+        message = message.with_current_trace_context();
+        // A refused send drops only that connection; the rest still get it.
+        let results = futures::future::join_all(connection_ids.iter().map(|id| {
+            ctx.connection_manager
+                .send_message(id.as_str(), message.clone())
+        }))
+        .await;
+        let failed_count = results.iter().filter(|result| result.is_err()).count();
+        tracing::Span::current().record("failed_count", failed_count as u64);
+    }
+    .instrument(span)
+    .await;
 }

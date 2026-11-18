@@ -4,16 +4,26 @@ import {
   OnboardingPending,
   OnboardingSignup,
 } from '@app/features/onboarding/onboarding';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { enableMicrosoftSignup } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { deepEqual } from '@core/util/compareUtils';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { useNavigate, useSearchParams } from '@solidjs/router';
-import { onMount, Show } from 'solid-js';
+import { createMemo, onMount } from 'solid-js';
+import { match } from 'ts-pattern';
 import { AuthProvider, type AuthUser } from './context/auth-context';
 import { sessionTokenParam } from './core/email-code';
+import {
+  AGENT_SETUP_PATH,
+  postAuthTarget,
+  readRedirectParam,
+} from './core/post-auth-target';
+import { ssoFallbackNotice } from './core/sso-fallback';
 import { createAppAuthContext } from './create-app-auth-context';
 import { AuthView } from './views/auth-view';
 import { MobileWebSignupView } from './views/mobile-web-signup-view';
@@ -26,6 +36,7 @@ export function Login(props: { signupMode?: boolean }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const email = typeof params.email === 'string' ? params.email : undefined;
+  const microsoftSignup = useFeatureFlag(enableMicrosoftSignup);
   const desktopSignup = () =>
     props.signupMode === true && !isMobile() && !isNativeMobilePlatform();
   return (
@@ -33,11 +44,15 @@ export function Login(props: { signupMode?: boolean }) {
       <AuthView
         intent={props.signupMode ? 'signup' : 'login'}
         showApple={getNativeMobilePlatform() === 'ios'}
+        showMicrosoft={microsoftSignup().enabled}
         compact={virtualKeyboardVisible()}
         initialEmail={email}
         // Dev persona links (`?email=`) sign straight in against a local backend.
         autoStart={import.meta.env.DEV && email !== undefined}
         token={sessionTokenParam(params.token)}
+        ssoFallbackNotice={ssoFallbackNotice(
+          typeof params.sso_error === 'string' ? params.sso_error : undefined
+        )}
         onVerified={() => {
           const referral = new URLSearchParams(window.location.search).get(
             'referral'
@@ -50,30 +65,90 @@ export function Login(props: { signupMode?: boolean }) {
             : undefined
         }
         onSignIn={() => navigate('/login')}
+        onAgentSignup={() => navigate('/signup/agent')}
         // Desktop sign-up resolves into onboarding's frame either way.
         pending={desktopSignup() ? () => <OnboardingPending /> : undefined}
-        signedIn={(user) => <PostAuthGate user={user()} />}
+        signedIn={(user) => (
+          <PostAuthGate
+            user={user()}
+            redirect={readRedirectParam(params.redirect)}
+          />
+        )}
       />
     </AuthProvider>
   );
 }
 
-function PostAuthGate(props: { user: AuthUser }) {
-  const needsOnboarding = () =>
-    !isMobile() && !isNativeMobilePlatform() && !props.user.tutorialComplete;
+/**
+ * /signup/agent: Google or an emailed code, without the opening slides. An
+ * agent invite links here with `team_invite`, which an existing account still
+ * has to accept; a new agent joins the team during setup.
+ */
+export function AgentSignup() {
+  const [params] = useSearchParams();
+  const teamInvite = () =>
+    typeof params.team_invite === 'string' ? params.team_invite : undefined;
   return (
-    <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
-      <Onboarding />
-    </Show>
+    <AuthProvider value={createAppAuthContext()}>
+      <AuthView
+        intent="agent-signup"
+        showApple={false}
+        compact={virtualKeyboardVisible()}
+        token={sessionTokenParam(params.token)}
+        signedIn={(user) => (
+          <PostLoginRedirect
+            target={agentSignupDestination(user(), teamInvite())}
+          />
+        )}
+      />
+    </AuthProvider>
+  );
+}
+
+function agentSignupDestination(user: AuthUser, teamInvite?: string) {
+  if (needsAgentSetup(user)) return AGENT_SETUP_PATH;
+  if (teamInvite) return `/team-invite?id=${encodeURIComponent(teamInvite)}`;
+  return '/';
+}
+
+function needsAgentSetup(user: AuthUser) {
+  return user.isAgent && !user.tutorialComplete;
+}
+
+/**
+ * Pages that need an account (team and channel invites, meetings) link to
+ * `/login?redirect=`; honor it once signed in, opening an invite before
+ * onboarding so the invitee joins first.
+ */
+function PostAuthGate(props: { user: AuthUser; redirect: unknown }) {
+  // Compared by value so a refreshed user object never remounts onboarding.
+  const target = createMemo(
+    () =>
+      postAuthTarget({
+        tutorialComplete: props.user.tutorialComplete,
+        isAgent: props.user.isAgent,
+        onboardsOnThisDevice: !isMobile() && !isNativeMobilePlatform(),
+        redirect: props.redirect,
+      }),
+    undefined,
+    { equals: deepEqual }
+  );
+  return (
+    <>
+      {match(target())
+        .with({ t: 'onboarding' }, ({ next }) => <Onboarding next={next} />)
+        .with({ t: 'navigate' }, ({ to }) => <PostLoginRedirect target={to} />)
+        .exhaustive()}
+    </>
   );
 }
 
 /** Login init runs in the per-method handlers; this only navigates. */
-function PostLoginRedirect() {
+function PostLoginRedirect(props: { target: string }) {
   const navigate = useNavigate();
   onMount(() => {
     clearSignupDraft();
-    navigate('/', { replace: true });
+    navigate(props.target, { replace: true });
   });
   return <LoadingBlock />;
 }

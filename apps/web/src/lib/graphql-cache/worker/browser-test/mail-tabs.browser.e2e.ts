@@ -65,3 +65,30 @@ test('Drafts, Sent, Calendar and Shared use canonical metadata offline', async (
     await context.setOffline(false);
   }
 });
+
+test('All Mail excludes junk snapshots while Drafts and Sent keep their own membership', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/mail-projection.html?excluded-mail');
+  await expect(page.locator('#result')).toHaveAttribute(
+    'data-status',
+    'ready',
+    { timeout: 60_000 }
+  );
+  await context.setOffline(true);
+  try {
+    const rows = page.locator('#rows li');
+    const view = page.getByRole('combobox', { name: 'View', exact: true });
+    await view.selectOption('ALL');
+    await expect(rows).toHaveCount(10);
+    await expect(rows.filter({ hasText: /Email (68|69) / })).toHaveCount(0);
+    await expect(rows.first()).toContainText('Email 70');
+    await view.selectOption('DRAFTS');
+    await expect(rows.first()).toContainText('Draft 69');
+    await view.selectOption('SENT');
+    await expect(rows.first()).toContainText('Sent 68');
+  } finally {
+    await context.setOffline(false);
+  }
+});

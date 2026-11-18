@@ -1,10 +1,7 @@
 import { MobileFilterDrawer as FilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
-import {
-  type FilterContext,
-  NO_ASSIGNEE,
-} from '@app/features/next-soup/filters';
+import type { FilterContext } from '@app/features/next-soup/filters';
 import {
   buildDocumentTypeQuery,
   getActiveDocumentTypeFilterIds,
@@ -21,25 +18,25 @@ import {
   TASK_SORT_OPTIONS,
 } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  AssigneePickerStatus,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { UserIcon } from '@core/component/UserIcon';
-import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
+import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import { useContacts } from '@queries/contacts/contacts';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ConsolidatedFilterChip } from './consolidated-filter-chip';
 import { useInboxPicker } from './inbox-picker';
 import {
-  buildContactLabel,
   type FilterOption,
   VIEW_FILTER_CATEGORIES,
 } from './unified-filter-dropdown';
@@ -61,11 +58,10 @@ export const MobileFilterDrawer = (props: {
     setInboxFilter,
   } = useSoupView();
   const panel = useSplitPanelOrThrow();
-  const contacts = useContacts();
   const userId = useUserId();
 
   const [assigneeSearch, setAssigneeSearch] = createSignal('');
-  const [createdBySearch, setCreatedBySearch] = createSignal('');
+  const [open, setOpen] = createSignal(false);
 
   const currentView = createMemo((): ListView | undefined => {
     const content = panel.handle.content();
@@ -73,6 +69,10 @@ export const MobileFilterDrawer = (props: {
       return undefined;
     return content.id;
   });
+  const assigneePicker = useAssigneePicker(
+    assigneeFilter,
+    () => currentView() === 'tasks'
+  );
 
   const categories = createMemo(() => {
     const view = currentView();
@@ -108,19 +108,11 @@ export const MobileFilterDrawer = (props: {
     selectedIds: inboxFilter,
     setSelectedIds: setInboxFilter,
   });
-  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const addInbox = useAddInboxFlow();
 
-  // Mirrors the desktop InboxSelector's visibility rule so the "Connect
-  // another account" action stays discoverable with zero or one inbox
-  // connected. Also stays
-  // visible while a scope is active so it can be reset even if the linked
-  // inboxes drop to one.
-  const showInboxSection = () =>
-    currentView() === 'mail' &&
-    (multiInboxFlag().enabled ||
-      picker.hasMultiple() ||
-      inboxFilter() !== undefined);
+  // Mirrors the desktop InboxSelector: always shown in Mail so the "Connect
+  // another account" action stays discoverable with zero or one inbox.
+  const showInboxSection = () => currentView() === 'mail';
 
   const toggleInbox = (id: string) => {
     const current = picker.activeIds();
@@ -204,77 +196,12 @@ export const MobileFilterDrawer = (props: {
     );
   };
 
-  const assigneeOptions = createMemo(() => {
-    const currentUserId = userId();
-    const noAssigneeOption = {
-      id: NO_ASSIGNEE,
-      label: t('viewMenus.unassigned'),
-      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
-    };
-    let meOption: typeof noAssigneeOption | undefined;
-    const otherContactOptions: (typeof noAssigneeOption)[] = [];
-    for (const contact of contacts()) {
-      const opt = {
-        id: contact.id,
-        label: buildContactLabel(contact, currentUserId),
-        icon: () => (
-          <UserIcon
-            id={contact.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      };
-      if (contact.id === currentUserId) {
-        meOption = opt;
-      } else {
-        otherContactOptions.push(opt);
-      }
-    }
-    return [
-      ...(meOption ? [meOption] : []),
-      noAssigneeOption,
-      ...otherContactOptions,
-    ];
-  });
-
   const filteredAssigneeOptions = createMemo(() => {
     const query = assigneeSearch().toLowerCase();
-    if (!query) return assigneeOptions();
-    return assigneeOptions().filter((o) =>
-      o.label.toLowerCase().includes(query)
-    );
-  });
-
-  const createdByOptions = createMemo(() => {
-    const currentUserId = userId();
-    return [...contacts()]
-      .sort((a, b) => {
-        if (a.id === currentUserId) return -1;
-        if (b.id === currentUserId) return 1;
-        return 0;
-      })
-      .map((contact) => ({
-        id: contact.id,
-        label: buildContactLabel(contact, currentUserId),
-        icon: () => (
-          <UserIcon
-            id={contact.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      }));
-  });
-
-  const filteredCreatedByOptions = createMemo(() => {
-    const query = createdBySearch().toLowerCase();
-    if (!query) return createdByOptions();
-    return createdByOptions().filter((option) =>
-      option.label.toLowerCase().includes(query)
-    );
+    if (!query) return assigneePicker.options();
+    return assigneePicker
+      .options()
+      .filter((o) => o.label.toLowerCase().includes(query));
   });
 
   const toggleCreatedBy = (id: string) => {
@@ -291,12 +218,30 @@ export const MobileFilterDrawer = (props: {
   };
 
   const activeCount = () => consolidatedFiltersList().length;
+  const [expandedSections, setExpandedSections] = createSignal([
+    categories()[0]?.id ?? 'assignee',
+  ]);
+  const orderedAssigneeOptions = useSelectedFirst({
+    items: filteredAssigneeOptions,
+    selectedIds: assigneePicker.selectedIdsAtViewEntry,
+    searchQuery: assigneeSearch,
+    getId: (option) => option.id,
+    sortDeps: [assigneePicker.selectedIdsAtViewEntry],
+  });
 
   return (
     <Show when={hasFiltersOrCategories()}>
       <FilterDrawer
+        open={open()}
         class={props.class}
         activeCount={activeCount()}
+        onOpenChange={(open) => {
+          setOpen(open);
+          assigneePicker.onOpenChange(open);
+          if (!open) {
+            setAssigneeSearch('');
+          }
+        }}
         onClear={resetToTabDefaults}
         footer={
           <For each={consolidatedFiltersList()}>
@@ -340,7 +285,16 @@ export const MobileFilterDrawer = (props: {
         <Accordion
           multiple
           collapsible
-          defaultValue={[categories()[0]?.id ?? 'assignee']}
+          value={expandedSections()}
+          onChange={(value) => {
+            const wasOpen = expandedSections().includes('assignee');
+            const isOpen = value.includes('assignee');
+            if (wasOpen !== isOpen) {
+              assigneePicker.onOpenChange(isOpen);
+              if (!isOpen) setAssigneeSearch('');
+            }
+            setExpandedSections(value);
+          }}
         >
           {/* Filter section */}
           <Show
@@ -399,19 +353,17 @@ export const MobileFilterDrawer = (props: {
                   );
                 }}
               </For>
-              <Show when={multiInboxFlag().enabled}>
-                <MobileDrawer.Item
-                  type="button"
-                  onClick={() => fireAndForget(addInbox(), 'add-inbox')}
-                >
-                  <span class="size-4 flex items-center justify-center shrink-0">
-                    <PlusIcon class="size-4 text-ink-muted" />
-                  </span>
-                  <span class="flex-1 truncate">
-                    {t('viewMenus.connectAnotherAccount')}
-                  </span>
-                </MobileDrawer.Item>
-              </Show>
+              <MobileDrawer.Item
+                type="button"
+                onClick={() => fireAndForget(addInbox(), 'add-inbox')}
+              >
+                <span class="size-4 flex items-center justify-center shrink-0">
+                  <PlusIcon class="size-4 text-ink-muted" />
+                </span>
+                <span class="flex-1 truncate">
+                  {t('viewMenus.connectAnotherAccount')}
+                </span>
+              </MobileDrawer.Item>
             </FilterDrawer.Section>
           </Show>
 
@@ -464,22 +416,22 @@ export const MobileFilterDrawer = (props: {
                 <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                 <input
                   type="text"
-                  aria-label={t('viewMenus.searchAssigneesLabel')}
+                  aria-label={assigneePicker.placeholder()}
                   value={assigneeSearch()}
                   onInput={(e) => setAssigneeSearch(e.currentTarget.value)}
-                  placeholder={t('viewMenus.searchAssignees')}
+                  placeholder={assigneePicker.placeholder()}
                   class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
                 />
               </div>
               <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
-                <For each={filteredAssigneeOptions()}>
+                <For each={orderedAssigneeOptions()}>
                   {(option) => {
                     const active = () => assigneeFilter().includes(option.id);
                     return (
                       <FilterDrawer.Option
                         checked={active()}
                         onChange={() => toggleAssignee(option.id)}
-                        icon={option.icon()}
+                        icon={option.icon?.()}
                       >
                         {option.label}
                       </FilterDrawer.Option>
@@ -487,12 +439,12 @@ export const MobileFilterDrawer = (props: {
                   }}
                 </For>
               </div>
-
               <Show when={filteredAssigneeOptions().length === 0}>
                 <div class="px-4 py-2 text-sm text-ink-muted">
                   {t('viewMenus.noResults')}
                 </div>
               </Show>
+              <AssigneePickerStatus picker={assigneePicker} />
             </FilterDrawer.Section>
           </Show>
 
@@ -503,38 +455,16 @@ export const MobileFilterDrawer = (props: {
               label={t('viewMenus.createdBy')}
               activeCount={createdByIds().length}
             >
-              <div class="flex min-h-11 items-center gap-2 rounded-[20px] px-3 py-2 bg-ink/5 mb-1">
-                <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
-                <input
-                  type="text"
-                  aria-label={t('viewMenus.searchCreatorsLabel')}
-                  value={createdBySearch()}
-                  onInput={(e) => setCreatedBySearch(e.currentTarget.value)}
-                  placeholder={t('viewMenus.searchCreators')}
-                  class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
-                />
-              </div>
-              <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
-                <For each={filteredCreatedByOptions()}>
-                  {(option) => {
-                    const active = () => createdByIds().includes(option.id);
-                    return (
-                      <FilterDrawer.Option
-                        checked={active()}
-                        onChange={() => toggleCreatedBy(option.id)}
-                        icon={option.icon()}
-                      >
-                        {option.label}
-                      </FilterDrawer.Option>
-                    );
-                  }}
-                </For>
-              </div>
-              <Show when={filteredCreatedByOptions().length === 0}>
-                <div class="px-4 py-2 text-sm text-ink-muted">
-                  {t('viewMenus.noResults')}
-                </div>
-              </Show>
+              <FilterDrawer.SourceOptions
+                groupId="created-by"
+                createSource={useContactFilterOptions}
+                activeIds={createdByIds}
+                enabled={() =>
+                  open() && expandedSections().includes('created-by')
+                }
+                placeholder={t('viewMenus.searchCreators')}
+                onChange={(id) => toggleCreatedBy(id)}
+              />
             </FilterDrawer.Section>
           </Show>
         </Accordion>

@@ -23,6 +23,8 @@ import type {
   DocumentEntity,
   ForeignEntity,
 } from '@entity';
+import type { WithNotification } from '@entity/types/notification';
+import { newestRowNotification } from '@notifications/row-notification';
 import { untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 
@@ -54,6 +56,7 @@ type ForeignPreviewSelection = Pick<
 /** Selections that render inline through a block. */
 export type PreviewPanelSelection =
   | IdOnlyPreviewSelection
+  | WithNotification<{ type: 'initiative'; id: string }>
   | DocumentPreviewSelection
   | ForeignPreviewSelection
   | ChannelPreviewSelection;
@@ -105,6 +108,21 @@ export function previewBlockTarget(
         };
       }
     )
+    .with({ type: 'initiative' }, (project) => {
+      const notification = untrack(() => newestRowNotification(project));
+      const metadata = notification?.notification_metadata;
+      return {
+        blockType: 'initiative',
+        blockId: project.id,
+        aliasContext: undefined,
+        params: {
+          section: 'overview',
+          ...(metadata?.tag === 'initiative_discussion'
+            ? { discussionId: metadata.content.messageId }
+            : {}),
+        },
+      };
+    })
     .with({ type: 'foreign' }, (foreignEntity) => ({
       blockType:
         USE_MACRO_PR_SUMMARY_BLOCK &&

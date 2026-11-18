@@ -18,7 +18,10 @@ use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::TypeEraseCursor;
-use soup::domain::{models::grouping::NestedSoupGroups, ports::SoupService};
+use soup::domain::{
+    models::{SoupPropertiesField, grouping::build_grouped_response},
+    ports::SoupService,
+};
 use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
 
 use crate::{
@@ -91,14 +94,35 @@ where
     Edges: SoupEntityEdges,
 {
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
+    let viewer = macro_user_id.clone();
     let request = input.into_request(macro_user_id)?;
-    let sort_method = *request.cursor.sort_method();
+    let sort = *request.cursor.sort_method();
     let filters = request.cursor.filter().clone();
-    let items = service.get_user_soup_grouped(request).await?;
-    let groups: NestedSoupGroups<_, _> = items.collect();
-    Ok(GroupedSoup::new(
-        groups.with_next_cursors(sort_method, filters),
-    ))
+    let grouping = request.grouping.clone();
+    // Properties resolve through each entity's property edge, so the page
+    // skips Soup's own property read.
+    let items: Vec<_> = service
+        .get_user_soup_grouped_without_properties(request)
+        .await?
+        .map(|item| item.map_extra(|()| SoupPropertiesField::default()))
+        .collect();
+    let mut keys: Vec<String> = items
+        .iter()
+        .map(|item| item.key.clone())
+        .filter(|key| !key.is_empty())
+        .collect();
+    keys.sort_unstable();
+    keys.dedup();
+    let labels = service.group_labels(viewer, &grouping.field, &keys).await?;
+    let response = build_grouped_response(
+        items,
+        &grouping.field,
+        sort,
+        grouping.group_key,
+        filters,
+        &labels,
+    );
+    Ok(GroupedSoup::from_response(response))
 }
 
 /// Resolve one email thread through the Soup item loader, whose email
@@ -180,9 +204,22 @@ pub async fn resolve_soup_agent_session<Edges>(
 where
     Edges: SoupEntityEdges,
 {
-    let loader = &ctx.data::<AgentSessionEntityLoader>()?.0;
+    let loader = ctx.data::<AgentSessionEntityLoader>()?;
+    load_soup_agent_session(loader, user_id, session_id).await
+}
+
+/// [`resolve_soup_agent_session`] for a caller holding the loader, such as a subscription stream,
+/// which outlives its request context.
+pub async fn load_soup_agent_session<Edges>(
+    loader: &AgentSessionEntityLoader,
+    user_id: MacroUserIdStr<'static>,
+    session_id: uuid::Uuid,
+) -> async_graphql::Result<Option<GraphqlSoupAgentSession<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
     let entity = EntityType::AgentSession.with_entity_string(session_id.to_string());
-    let Some(item) = loader.load_one((user_id, entity)).await? else {
+    let Some(item) = loader.0.load_one((user_id, entity)).await? else {
         return Ok(None);
     };
 
@@ -261,8 +298,8 @@ where
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let Cached(MultiEmailLinkExtractor(links, _)) =
         extract_part::<Cached<MultiEmailLinkExtractor<E, Auth>>, St>(ctx).await?;
-    let link_ids = links.into_iter().map(|link| link.id).collect();
-    let request = input.into_request(macro_user_id, link_ids)?;
+    let link_ids: Vec<_> = links.into_iter().map(|link| link.id).collect();
+    let request = input.into_request(macro_user_id.clone(), link_ids.clone())?;
 
     // Always forward the optional team receipt: Soup uses it for all
     // team-scoped foreign entities, not only CRM-scoped filters.

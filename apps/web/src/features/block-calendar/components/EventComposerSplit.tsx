@@ -4,21 +4,33 @@ import {
   defaultEditorInitialValues,
   type EventEditorInitialValues,
 } from '@app/features/calendar/components/composer/event-form-model';
+import type { EventFormProps } from '@app/features/calendar/components/composer/event-form-state';
+import { MobileEventForm } from '@app/features/calendar/components/composer/MobileEventForm';
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import {
   useCalendarGuestInvitesFlag,
   useCalendarInvitationForwardFlag,
 } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
+import {
+  type CreatedCalendarEvent,
+  useEventEditor,
+} from '@app/features/calendar/hooks/use-event-editor';
 import { useSyncedCalendarEvent } from '@app/features/calendar/hooks/use-synced-calendar-event';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { viewerReplacesGuests } from '@app/features/calendar/utils/event-guest-editing';
 import { EventReplacementAction } from '@app/features/calendar/views/event-replacement';
 import { EventForwardInvitationAction } from '@app/features/calendar-view/components/EventGuests';
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { type Accessor, createMemo, onMount, Show } from 'solid-js';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Spinner } from '@ui';
+import {
+  type Accessor,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 
 /**
  * Forward invitation beside a guest list the viewer cannot add to, as the
@@ -41,36 +53,33 @@ function EditorForwardInvitation(props: {
   );
 }
 
+/** The touch sheet's layout wherever the panel offers the sheet's pinned chrome. */
+function PanelEventForm(props: EventFormProps) {
+  const panel = useSplitPanelOrThrow();
+  return (
+    <Show when={panel.drawerHeader?.()} fallback={<EventForm {...props} />}>
+      {(headerMount) => (
+        <MobileEventForm {...props} headerMount={headerMount()} />
+      )}
+    </Show>
+  );
+}
+
 /** Standalone create/edit event composer hosted in a popover split. */
 type EventComposerSplitProps = {
   event?: CalendarEvent;
   initialValues?: EventEditorInitialValues;
+  /** Values that arrive after the composer opens, applied only to an untouched form. */
+  suggestedValues?: Promise<Partial<EventEditorInitialValues>>;
   onCalendarChange?: (calendarId: string, color: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveSuccess?: () => void;
+  /** Called with a new event once it exists, before the composer closes. */
+  onCreated?: (created: CreatedCalendarEvent) => void;
 };
 
 export function EventComposerSplit(props: EventComposerSplitProps) {
-  const quickCalls = useQuickCallsFlag();
-  const ready = createMemo(
-    (resolved) => resolved || !quickCalls().loading,
-    false
-  );
-  return (
-    <Show
-      when={ready()}
-      fallback={
-        <p role="status" class="p-4">
-          Loading event…
-        </p>
-      }
-    >
-      <EventComposerContent
-        {...props}
-        macroCallsEnabled={() => quickCalls().enabled && !quickCalls().loading}
-      />
-    </Show>
-  );
+  return <EventComposerContent {...props} macroCallsEnabled={() => true} />;
 }
 
 function EventComposerContent(
@@ -91,6 +100,7 @@ function EventComposerContent(
     invitationForwardEnabled,
     syncedEvent: useSyncedCalendarEvent(() => props.event),
     onDetailsLocked: () => controller.resetDetails(),
+    onCreated: (created) => props.onCreated?.(created),
     onSaved: () => {
       props.onSaveSuccess?.();
       close();
@@ -116,10 +126,42 @@ function EventComposerContent(
     panel.handle.setDisplayName(isEdit() ? 'Edit event' : 'New event')
   );
 
+  const [suggesting, setSuggesting] = createSignal(false);
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  // Once the user has changed anything, a late suggestion could overwrite
+  // their edit or a repeat rule the form state does not hold, so it is dropped.
+  const applySuggestions = async (
+    pending: Promise<Partial<EventEditorInitialValues>>
+  ) => {
+    setSuggesting(true);
+    try {
+      const suggested = await pending;
+      if (disposed || controller.isDirty()) return;
+      controller.replaceFromExternal({ ...controller.state(), ...suggested });
+    } finally {
+      if (!disposed) setSuggesting(false);
+    }
+  };
+  if (props.suggestedValues && !isEdit()) {
+    fireAndForget(applySuggestions(props.suggestedValues), 'event-composer');
+  }
+
   return (
     <div ref={attachHotkeys} class="flex h-full min-h-0 flex-col p-4 text-ink">
-      <EventForm
+      <PanelEventForm
         controller={controller}
+        status={
+          <Show when={suggesting()}>
+            <Spinner
+              size="sm"
+              label="Reading the email for a time and place"
+              class="text-ink-extra-muted"
+            />
+          </Show>
+        }
         macroCallsEnabled={macroCallsEnabled()}
         isEdit={isEdit()}
         saveError={editor.saveError()}

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ai_credit_reload (id, user_id, amount_cents, status, kind, purchased_by)\n            VALUES ($1, $2, $3, 'pending', 'purchase', $4)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9f7f82507358d2dfc46c599c91e1add20fa46128ed160a1650db83cbdcb8a9e6"
+}

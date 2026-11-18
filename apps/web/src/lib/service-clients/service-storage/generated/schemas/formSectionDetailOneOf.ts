@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { FilterGroup } from './filterGroup';
 import type { FormQuestionDetail } from './formQuestionDetail';
 import type { FormSectionDetailOneOfKind } from './formSectionDetailOneOfKind';
 
@@ -19,6 +20,10 @@ export type FormSectionDetailOneOf = {
   kind: FormSectionDetailOneOfKind;
   /** Its questions, in order. */
   questions: FormQuestionDetail[];
+  /** When to show it, from earlier shown sections' answers; absent,
+it is always shown. Sent to every caller so a respondent's page
+can skip it. */
+  showWhen?: FilterGroup;
   /** Its title. */
   title: string;
 };

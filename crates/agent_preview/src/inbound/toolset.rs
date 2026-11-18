@@ -13,8 +13,8 @@ use axum::{
 use rmcp::{
     ServerHandler,
     model::{
-        CallToolRequestParams, CallToolResult, Content, ListToolsResult, PaginatedRequestParams,
-        ServerCapabilities, ServerInfo, Tool,
+        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ListToolsResult,
+        PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
     },
     service::RequestContext as McpContext,
     transport::{
@@ -247,8 +247,8 @@ impl Mcp {
     }
 }
 impl ServerHandler for Mcp {
-    fn get_info(&self) -> ServerInfo {
-        let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
+    fn get_info(&self) -> ServerConfig {
+        let mut info = ServerConfig::new(ServerCapabilities::builder().enable_tools().build());
         info.server_info =
             rmcp::model::Implementation::new("macro-preview", env!("CARGO_PKG_VERSION"));
         info.instructions = Some("Use SharePreview to share a local development server with viewers of the current Macro session. Execute the returned SSH script, then continue editing; WebSocket hot reload is forwarded automatically. Credentials must stay in tool execution, never final messages.".into());
@@ -272,7 +272,7 @@ impl ServerHandler for Mcp {
         &self,
         request: CallToolRequestParams,
         context: McpContext<rmcp::RoleServer>,
-    ) -> Result<CallToolResult, rmcp::ErrorData> {
+    ) -> Result<CallToolResponse, rmcp::ErrorData> {
         let identity = self.identity(&context).await?;
         if request.name != "SharePreview" {
             return Err(rmcp::ErrorData::invalid_params(
@@ -294,10 +294,11 @@ impl ServerHandler for Mcp {
                 RequestContext::new(user),
             )
             .await;
-        Ok(match result {
-            Ok(value) => CallToolResult::success(vec![Content::text(value.to_string())]),
-            Err(error) => CallToolResult::error(vec![Content::text(error.to_string())]),
-        })
+        let result = match result {
+            Ok(value) => CallToolResult::success(vec![ContentBlock::text(value.to_string())]),
+            Err(error) => CallToolResult::error(vec![ContentBlock::text(error.to_string())]),
+        };
+        Ok(result.into())
     }
 }
 fn share_preview_tool() -> Result<Tool, rmcp::ErrorData> {
@@ -403,7 +404,7 @@ pub fn router(service: PreviewService, allowed_hosts: Vec<String>) -> Router {
     tracing::info!(hosts = ?allowed_hosts, "preview mcp host allowlist");
     let mut config =
         StreamableHttpServerConfig::default().with_allowed_hosts(allowed_hosts.clone());
-    config.stateful_mode = false;
+    config.legacy_session_mode = false;
     config.json_response = true;
     let transport = StreamableHttpService::new(
         move || Ok(Mcp(service.clone())),

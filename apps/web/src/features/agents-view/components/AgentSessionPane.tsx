@@ -4,16 +4,19 @@ import { AgentConnections } from '@app/features/block-agent/component/AgentConne
 import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { AgentSessionReadMarker } from '@app/features/block-agent/component/AgentSessionReadMarker';
+import { AgentTaskChip } from '@app/features/block-agent/component/AgentTaskChip';
+import { ArchivedSessionFooter } from '@app/features/block-agent/component/ArchivedSessionFooter';
 import {
   agentSessionFileOperations,
   agentSessionTitle,
-} from '@app/features/block-agent/component/AgentSplitHeader';
-import { AgentTaskChip } from '@app/features/block-agent/component/AgentTaskChip';
-import { ArchivedSessionFooter } from '@app/features/block-agent/component/ArchivedSessionFooter';
+  useAgentSessionHeader,
+} from '@app/features/block-agent/component/agent-session-header';
+import { useAutoArchiveFileOperations } from '@app/features/block-agent/component/auto-archive-file-operations';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
 import { createAgentRouteTarget } from '@app/features/block-agent/primitives/create-agent-route-target';
+import { MobileAgentSessionHeader } from '@app/features/block-agent/views/mobile/agent-session-header';
 import { AgentChangesProvider } from '@app/features/changes/agent-session-changes';
 import {
   ChangesHandoff,
@@ -22,7 +25,11 @@ import {
   ReviewNotesDock,
 } from '@app/features/changes/changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
-import { SidePanel } from '@components/app/side-panel';
+import { SessionAgentRuntime } from '@app/features/runtime-sharing/views/SessionAgentRuntime';
+import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
+import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitTitleFileMenu,
@@ -38,6 +45,7 @@ import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { enableAgentSessionActivity } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
@@ -45,12 +53,34 @@ import type { AgentSessionEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import type { NotificationSource } from '@notifications/notification-source';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { EmptyStatePanel } from '@ui';
-import { Show } from 'solid-js';
+import { type ParentProps, Show } from 'solid-js';
 import { changeSessionArchiveState } from '../../block-agent/queries/change-session-archive-state';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
 import { Topbar } from './Topbar';
+
+function SessionClearance(
+  props: ParentProps<{
+    class: string;
+    enabled: boolean;
+    holdsPrompts?: boolean;
+  }>
+) {
+  const sidePanel = useSidePanel();
+  return (
+    <div
+      class={props.class}
+      data-holds-prompts={props.holdsPrompts ? '' : undefined}
+      style={{
+        '--details-clearance': `${props.enabled && sidePanel?.isOpen() && !isTouchDevice() ? SidePanel.FLOATING_CLEARANCE_PX : 0}px`,
+      }}
+    >
+      {props.children}
+    </div>
+  );
+}
 
 function SessionCommands(props: {
   entity: AgentSessionEntity;
@@ -64,6 +94,23 @@ function SessionCommands(props: {
     onDeleted: props.onDeleted,
   });
   return null;
+}
+
+/** The session's own header on touch, the one its block shows. */
+function SessionMobileHeader(props: { onDeleted: () => void }) {
+  const { metadata, session } = useAgentSession();
+  const header = useAgentSessionHeader({
+    session,
+    title: () => metadata()?.title ?? undefined,
+  });
+
+  return (
+    <MobileAgentSessionHeader
+      session={session()}
+      header={header}
+      onDelete={props.onDeleted}
+    />
+  );
 }
 
 function SessionContent(props: {
@@ -83,6 +130,8 @@ function SessionContent(props: {
   const searchTarget = createAgentRouteTarget();
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
+  const activityFlag = useFeatureFlag(enableAgentSessionActivity);
+  const persistentFloating = () => activityFlag().enabled;
 
   const title = () => agentSessionTitle(session(), metadata()?.title);
   const permissions = () =>
@@ -99,7 +148,8 @@ function SessionContent(props: {
       type: 'agent_session',
       id,
       name: title(),
-      isArchived: current.isArchived,
+      archivedBy: current.archivedBy,
+      archivedAt: current.archivedAt,
       ownerId: current.ownerId,
       botId: current.botId,
       status:
@@ -125,8 +175,15 @@ function SessionContent(props: {
     const id = sessionId();
     const current = session();
     if (!id || !current) return;
-    await changeSessionArchiveState(id, !current.isArchived);
+    await changeSessionArchiveState(id, !isSessionArchived(current));
   };
+  const autoArchive = useAutoArchiveFileOperations({
+    sessionId,
+    enabled: () =>
+      permissions() === Permissions.OWNER &&
+      session() !== undefined &&
+      !isSessionArchived(session()),
+  });
   return (
     <>
       <AgentSessionReadMarker
@@ -134,175 +191,221 @@ function SessionContent(props: {
         active={panel.isPanelActive()}
         notificationSource={props.notificationSource}
       />
-      <SidePanel.Root floating defaultOpen={false} persistKey="agent">
-        <Topbar
-          title={title()}
-          titleContent={
-            <>
-              <StaticSplitLabel
-                label={title()}
-                icon={
-                  <Show
-                    when={modelProvider(metadata()?.model ?? session()?.model)}
-                    fallback={
-                      <EntityIcon
-                        targetType="chat"
-                        size="xs"
-                        class="shrink-0"
-                      />
-                    }
-                  >
-                    <ProviderIcon
-                      model={metadata()?.model ?? session()?.model}
-                      class="size-4 shrink-0"
-                    />
-                  </Show>
-                }
-              />
-              <Show when={entity()}>
-                {(current) => (
+      <SidePanel.Root
+        floating
+        persistentFloating={persistentFloating()}
+        defaultOpen={false}
+        persistKey="agent"
+      >
+        {/* Touch shows the session's own header, as a standalone session
+            does at phone width. */}
+        <SplitHeaderScope.Root when={isTouchDevice()}>
+          <Show
+            when={isTouchDevice()}
+            fallback={
+              <Topbar
+                title={title()}
+                titleContent={
                   <>
-                    <SessionCommands
-                      entity={current()}
-                      onDeleted={props.onDeleted}
-                    />
-                    <SplitTitleFileMenu>
-                      <SplitFileMenu
-                        id={current().id}
-                        itemType="agent_session"
-                        entityKind="agent"
-                        name={title()}
-                        entity={current()}
-                        permissions={permissions()}
-                        onDelete={props.onDeleted}
-                        ops={agentSessionFileOperations(
-                          session(),
-                          permissions(),
-                          setArchived
-                        )}
-                        tools={[
-                          {
-                            label: () => {
-                              const provider = session()?.external?.provider;
-                              return provider
-                                ? `Open in ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`
-                                : 'Open externally';
-                            },
-                            icon: ArrowSquareOut,
-                            condition: () => Boolean(session()?.external?.url),
-                            action: () => {
-                              const url = session()?.external?.url;
-                              if (url) openExternalUrl(url);
-                            },
-                          },
-                          {
-                            label: 'Share',
-                            icon: ShareIcon,
-                            action: openShare,
-                          },
-                        ]}
-                      />
-                    </SplitTitleFileMenu>
-                  </>
-                )}
-              </Show>
-            </>
-          }
-        >
-          <Show when={session()?.taskId}>
-            {(taskId) => <AgentTaskChip taskId={taskId()} />}
-          </Show>
-          <Show when={session()?.pullRequestUrl}>
-            {(url) => <AgentPullRequestChip url={url()} />}
-          </Show>
-          <Show when={sessionId()}>
-            {(id) => (
-              <ShareTrigger
-                onClick={openShare}
-                id={id()}
-                blockType="agent"
-                hotkeyScope={panel.splitHotkeyScope}
-              />
-            )}
-          </Show>
-          <ChangesToggle />
-          <SidePanel.Toggle />
-        </Topbar>
-        <div class="relative min-h-0 min-w-0 flex-1">
-          <SidePanel.Layout headerToggle={false} floating>
-            <AgentSidePanelSections />
-            <section
-              class="page pane size-full min-w-0"
-              data-active
-              aria-label="Agent session"
-            >
-              <Show
-                when={!loadFailed()}
-                fallback={
-                  <Show
-                    when={startupError()}
-                    fallback={
-                      <Show
-                        when={accessDenied()}
-                        fallback={
-                          <LoadErrorPanel
-                            title="Unable to load this session"
-                            onRetry={loadRetryable() ? retryLoad : undefined}
+                    <StaticSplitLabel
+                      label={title()}
+                      icon={
+                        <Show
+                          when={modelProvider(
+                            metadata()?.model ?? session()?.model
+                          )}
+                          fallback={
+                            <EntityIcon
+                              targetType="chat"
+                              size="xs"
+                              class="shrink-0"
+                            />
+                          }
+                        >
+                          <ProviderIcon
+                            model={metadata()?.model ?? session()?.model}
+                            class="size-4 shrink-0"
                           />
-                        }
-                      >
-                        <EmptyStatePanel
-                          centered
-                          title="You don't have access to this session"
-                          description="Ask a participant to share it with you."
-                        />
-                      </Show>
-                    }
-                  >
-                    {(error) => (
-                      <EmptyStatePanel
-                        centered
-                        title="The agent could not be started"
-                        description={error()}
-                      />
-                    )}
-                  </Show>
+                        </Show>
+                      }
+                    />
+                    <Show when={entity()}>
+                      {(current) => (
+                        <>
+                          <SessionCommands
+                            entity={current()}
+                            onDeleted={props.onDeleted}
+                          />
+                          <SplitTitleFileMenu>
+                            <SplitFileMenu
+                              id={current().id}
+                              itemType="agent_session"
+                              entityKind="agent"
+                              name={title()}
+                              entity={current()}
+                              permissions={permissions()}
+                              onDelete={props.onDeleted}
+                              ops={agentSessionFileOperations(
+                                session(),
+                                permissions(),
+                                setArchived,
+                                autoArchive()
+                              )}
+                              tools={[
+                                {
+                                  label: () => {
+                                    const provider =
+                                      session()?.external?.provider;
+                                    return provider
+                                      ? `Open in ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`
+                                      : 'Open externally';
+                                  },
+                                  icon: ArrowSquareOut,
+                                  condition: () =>
+                                    Boolean(session()?.external?.url),
+                                  action: () => {
+                                    const url = session()?.external?.url;
+                                    if (url) openExternalUrl(url);
+                                  },
+                                },
+                                {
+                                  label: 'Share',
+                                  icon: ShareIcon,
+                                  action: openShare,
+                                },
+                              ]}
+                            />
+                          </SplitTitleFileMenu>
+                        </>
+                      )}
+                    </Show>
+                  </>
                 }
               >
-                <AgentPreviewBanner />
-                <div class="transcript-host">
-                  <AgentConnections>
-                    <Transcript searchTarget={searchTarget()} />
-                  </AgentConnections>
-                </div>
-                {/* The pane's last row on desktop, where the corner prompt sits. */}
-                <div
-                  class="dock"
-                  data-holds-prompts={isTouchDevice() ? undefined : ''}
-                >
-                  <div class="composer-anchor flex flex-col gap-2">
+                <Show when={session()?.taskId}>
+                  {(taskId) => <AgentTaskChip taskId={taskId()} />}
+                </Show>
+                <Show when={session()?.pullRequestUrl}>
+                  {(url) => <AgentPullRequestChip url={url()} />}
+                </Show>
+                <Show when={sessionId()}>
+                  {(id) => (
+                    <ShareTrigger
+                      onClick={openShare}
+                      id={id()}
+                      blockType="agent"
+                      hotkeyScope={panel.splitHotkeyScope}
+                    />
+                  )}
+                </Show>
+                <ChangesToggle />
+                <SidePanel.Toggle />
+              </Topbar>
+            }
+          >
+            <SplitHeaderScope.TopBar />
+            <SessionMobileHeader onDeleted={props.onDeleted} />
+            <Show when={entity()}>
+              {(current) => (
+                <SessionCommands
+                  entity={current()}
+                  onDeleted={props.onDeleted}
+                />
+              )}
+            </Show>
+          </Show>
+          <div class="relative min-h-0 min-w-0 flex-1">
+            <SidePanel.Layout
+              headerToggle={false}
+              floating
+              persistentFloating={persistentFloating()}
+            >
+              <AgentSidePanelSections />
+              <section
+                class="page pane size-full min-w-0 @container/agent-session"
+                data-active
+                aria-label="Agent session"
+              >
+                <Show
+                  when={!loadFailed()}
+                  fallback={
                     <Show
-                      when={!session()?.isArchived}
+                      when={startupError()}
                       fallback={
-                        <Show when={sessionId()}>
-                          {(id) => <ArchivedSessionFooter sessionId={id()} />}
+                        <Show
+                          when={accessDenied()}
+                          fallback={
+                            <LoadErrorPanel
+                              title="Unable to load this session"
+                              onRetry={loadRetryable() ? retryLoad : undefined}
+                            />
+                          }
+                        >
+                          <EmptyStatePanel
+                            centered
+                            title="You don't have access to this session"
+                            description="Ask a participant to share it with you."
+                          />
                         </Show>
                       }
                     >
-                      <ChangesHandoff />
-                      <ReviewNotesDock />
-                      <AgentComposer
-                        autofocus={!searchTarget()}
-                        input={ChatSessionInput}
-                        modelSelector={SessionModelSelector}
-                      />
+                      {(error) => (
+                        <EmptyStatePanel
+                          centered
+                          title="The agent could not be started"
+                          description={error()}
+                        />
+                      )}
                     </Show>
-                  </div>
-                </div>
-              </Show>
-            </section>
-          </SidePanel.Layout>
-        </div>
+                  }
+                >
+                  <AgentPreviewBanner />
+                  <SessionClearance
+                    enabled={persistentFloating()}
+                    class="transcript-host @min-[900px]/agent-session:pr-(--details-clearance)"
+                  >
+                    <AgentConnections>
+                      <Transcript searchTarget={searchTarget()} />
+                    </AgentConnections>
+                  </SessionClearance>
+                  {/* The pane's last row on desktop, where the corner prompt sits. */}
+                  <SessionClearance
+                    enabled={persistentFloating()}
+                    holdsPrompts={!isTouchDevice()}
+                    class="dock @min-[900px]/agent-session:pr-(--details-clearance)"
+                  >
+                    <div class="composer-anchor flex flex-col gap-2">
+                      <Show
+                        when={!isSessionArchived(session())}
+                        fallback={
+                          <Show when={session()}>
+                            {(current) => (
+                              <ArchivedSessionFooter session={current()} />
+                            )}
+                          </Show>
+                        }
+                      >
+                        <ChangesHandoff />
+                        <ReviewNotesDock />
+                        <LocalRuntimePrompt />
+                        <Show when={session()?.botId}>
+                          {(botId) => (
+                            <SessionAgentRuntime botId={botId()} class="px-1" />
+                          )}
+                        </Show>
+                        <AgentComposer
+                          autofocus={!searchTarget()}
+                          input={ChatSessionInput}
+                          modelSelector={SessionModelSelector}
+                        />
+                      </Show>
+                    </div>
+                  </SessionClearance>
+                </Show>
+              </section>
+            </SidePanel.Layout>
+          </div>
+        </SplitHeaderScope.Root>
       </SidePanel.Root>
     </>
   );

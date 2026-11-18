@@ -18,11 +18,13 @@ type SimpleNotificationEntityType =
   | 'channel'
   | 'chat'
   | 'crm_company'
+  | 'crm_contact'
   | 'document'
   | 'email'
   | 'email_thread'
   | 'foreign'
   | 'foreign_entity'
+  | 'initiative'
   | 'project'
   | 'reminder';
 
@@ -56,11 +58,13 @@ export function toNotificationEntityRef(
     case 'channel':
     case 'chat':
     case 'crm_company':
+    case 'crm_contact':
     case 'document':
     case 'email':
     case 'email_thread':
     case 'foreign':
     case 'foreign_entity':
+    case 'initiative':
     case 'project':
     case 'reminder':
       return { type: entity.type, id: entity.id };
@@ -87,11 +91,13 @@ const ENTITY_TYPE_TO_GRAPHQL = {
   channel: 'CHANNEL',
   chat: 'CHAT',
   crm_company: 'CRM_COMPANY',
+  crm_contact: 'CRM_CONTACT',
   document: 'DOCUMENT',
   email: 'EMAIL_THREAD',
   email_thread: 'EMAIL_THREAD',
   foreign: 'FOREIGN_ENTITY',
   foreign_entity: 'FOREIGN_ENTITY',
+  initiative: 'INITIATIVE',
   project: 'PROJECT',
   reminder: 'REMINDER',
 } as const satisfies Record<SimpleNotificationEntityType, GraphqlEntityType>;

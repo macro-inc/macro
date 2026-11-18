@@ -63,6 +63,7 @@ const userFor = (
   id: `macro|${email}`,
   email,
   tutorialComplete: account?.tutorialComplete ?? false,
+  isAgent: false,
 });
 
 /**
@@ -93,6 +94,9 @@ export function createFakeAuth(
   const [events, setEvents] = createSignal<FakeAuthEvent[]>([]);
   const [notifications, setNotifications] = createSignal<string[]>([]);
   const [calls, setCalls] = createSignal<string[]>([]);
+  const [identifiedUsers, setIdentifiedUsers] = createSignal<
+    Parameters<AuthContext['identify']>[0][]
+  >([]);
   const call = (name: string) => setCalls((list) => [...list, name]);
 
   const update = (change: (draft: FakeAuthWorld) => void) => {
@@ -125,8 +129,8 @@ export function createFakeAuth(
         return options.ssoRedirect(provider, intent, email);
       signIn(email);
     },
-    sendEmailCode: async ({ email, password }) => {
-      call(`sendCode:${email}`);
+    sendEmailCode: async ({ email, password, isAgent }) => {
+      call(isAgent ? `sendAgentCode:${email}` : `sendCode:${email}`);
       const failure = world.failures.sendCode;
       if (failure !== undefined) return { t: 'failed', message: failure };
       const expected = world.passwordAccounts[email];
@@ -183,12 +187,23 @@ export function createFakeAuth(
         ? { t: 'sent', alreadySent: false }
         : { t: outcome };
     },
-    identify: (user) => call(`identify:${user.id}`),
+    identify: (user) => {
+      call(`identify:${user.id}`);
+      setIdentifiedUsers((list) => [...list, user]);
+    },
     trackMobileSignupLead: (email) => call(`lead:${email}`),
     pageView: (name) => call(`pageView:${name}`),
     track: (event, data) => setEvents((list) => [...list, { event, data }]),
     notifyFailure: (message) => setNotifications((list) => [...list, message]),
   };
 
-  return { context, world, update, events, notifications, calls };
+  return {
+    context,
+    world,
+    update,
+    events,
+    notifications,
+    calls,
+    identifiedUsers,
+  };
 }

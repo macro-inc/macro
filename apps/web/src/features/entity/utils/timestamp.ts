@@ -11,6 +11,7 @@ import {
   isSameYear,
   isToday,
   isYesterday,
+  toDate,
 } from 'date-fns';
 
 /**
@@ -20,15 +21,17 @@ import {
  * - Older: Shows full date (e.g., "1/27/24")
  */
 export function formatTimestamp(date: DateValue): string {
-  if (isToday(date)) {
-    return format(date, 'h:mm a');
+  const value = toDate(date);
+  if (Number.isNaN(value.getTime())) return 'Invalid Date';
+  if (isToday(value)) {
+    return format(value, 'h:mm a');
   }
 
-  if (isSameYear(date, new Date())) {
-    return format(date, 'MMM d');
+  if (isSameYear(value, new Date())) {
+    return format(value, 'MMM d');
   }
 
-  return format(date, 'M/d/yy');
+  return format(value, 'M/d/yy');
 }
 
 /**

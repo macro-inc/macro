@@ -2,6 +2,8 @@
 //! Only group traffic becomes [`InboundEvent`]s; the account runner then drops
 //! everything outside adopted groups.
 
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use external_chat::domain::rich::SystemLine;
 use external_chat::domain::{
@@ -11,10 +13,11 @@ use external_chat::domain::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ChatUpdate, HistoryPage, InboundEvent, InboundKind, Media, Message, MessageAnchor, MessageKind,
-    Receipt, ReceiptState, Target,
+    ChatUpdate, HistoryPage, InboundEvent, InboundKind, LookupAnswer, Media, Message,
+    MessageAnchor, MessageKind, Receipt, ReceiptState, Target,
 };
-use whatsapp_linked::domain::models::Identity;
+use whatsapp_linked::domain::jid::PhoneNumber;
+use whatsapp_linked::domain::models::{GroupInfo as Roster, Identity};
 use whatsmeow::Event;
 use whatsmeow::download::{DownloadableMessage, MediaType};
 use whatsmeow::proto::wa_common::MessageKey;
@@ -24,8 +27,11 @@ use whatsmeow::proto::wa_history_sync::conversation::EndOfHistoryTransferType;
 use whatsmeow::proto::wa_history_sync::{Conversation, HistorySync, Pushname};
 use whatsmeow::proto::wa_web::WebMessageInfo;
 use whatsmeow::store::{ContactStore, LidStore, StoreError};
-use whatsmeow::types::events::GroupInfo;
-use whatsmeow::types::{DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, Jid, MessageSource};
+use whatsmeow::types::events::{GroupInfo, Picture};
+use whatsmeow::types::{
+    ContactInfo, DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, IsOnWhatsAppResponse, Jid,
+    MessageSource,
+};
 
 use crate::domain::ports::SessionEvent;
 
@@ -183,6 +189,29 @@ pub async fn phone_chat(lids: &dyn LidStore, chat: Jid) -> Jid {
     }
 }
 
+/// A person's or group's picture changed: the JID and, for a person, the
+/// other half of its phone-number/LID pair, as pictures are tracked by
+/// whichever address was known first. A store failure only loses the other
+/// half.
+pub async fn picture_changed(lids: &dyn LidStore, picture: &Picture) -> SessionEvent {
+    let jid = picture.jid.to_non_ad();
+    let alternate = match jid.server.as_str() {
+        HIDDEN_USER_SERVER => lids.get_pn_for_lid(&jid).await,
+        DEFAULT_USER_SERVER => lids.get_lid_for_pn(&jid).await,
+        _ => Ok(None),
+    };
+    let alternate = alternate.unwrap_or_else(|error| {
+        tracing::debug!(error = %error, "Reading a picture's LID mapping failed");
+        None
+    });
+    let mut jids = vec![jid.to_string()];
+    jids.extend(alternate.map(|alternate| alternate.to_non_ad().to_string()));
+    SessionEvent::PictureChanged {
+        jids,
+        picture_id: (!picture.remove).then(|| picture.picture_id.clone()),
+    }
+}
+
 /// A direct chat as Macro keys it: by phone number when the store knows it.
 pub async fn macro_chat(lids: &dyn LidStore, chat: &str) -> String {
     let Ok(jid) = chat.parse::<Jid>() else {
@@ -260,6 +289,94 @@ pub async fn complete_sender(
     };
     sender.alternate_jid = alternate.as_ref().and_then(person);
     Ok(())
+}
+
+/// What the account's contact store calls someone: the WhatsApp name it
+/// last saw for either address (live messages, push-name history syncs),
+/// else the owner's address-book name, else a verified business name.
+pub async fn contact_name(
+    contacts: &dyn ContactStore,
+    identity: &Identity,
+) -> Result<Option<String>, StoreError> {
+    let mut found = vec![];
+    for jid in [
+        Some(identity.jid.as_str()),
+        identity.alternate_jid.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Ok(jid) = jid.parse::<Jid>()
+            && let Some(contact) = contacts.get_contact(&jid).await?
+        {
+            found.push(contact);
+        }
+    }
+    Ok(best_contact_name(&found))
+}
+
+/// The best name among contact records: own WhatsApp name, then address
+/// book, then business name. `-` is WhatsApp's no-name.
+fn best_contact_name(contacts: &[ContactInfo]) -> Option<String> {
+    let pick = |name: fn(&ContactInfo) -> &str| {
+        contacts
+            .iter()
+            .map(name)
+            .map(str::trim)
+            .find(|name| !name.is_empty() && *name != "-")
+            .map(str::to_owned)
+    };
+    pick(|contact| &contact.push_name)
+        .or_else(|| pick(|contact| &contact.full_name))
+        .or_else(|| pick(|contact| &contact.first_name))
+        .or_else(|| pick(|contact| &contact.business_name))
+}
+
+/// Names a message sender who came without a WhatsApp name (history pages
+/// usually carry none) by [`contact_name`]. `true` when it named them.
+pub async fn complete_sender_name(
+    contacts: &dyn ContactStore,
+    event: &mut InboundEvent,
+) -> Result<bool, StoreError> {
+    let InboundKind::Message(message) = &mut event.kind else {
+        return Ok(false);
+    };
+    if message.sender.display_name.is_some() {
+        return Ok(false);
+    }
+    message.sender.display_name = contact_name(contacts, &message.sender).await?;
+    Ok(message.sender.display_name.is_some())
+}
+
+/// Completes the names WhatsApp's group metadata leaves out (it has none
+/// for LID participants) from the account's contacts, as for senders.
+pub fn complete_participant_names(contacts: &HashMap<Jid, ContactInfo>, group: &mut Roster) {
+    for participant in &mut group.participants {
+        let identity = &mut participant.identity;
+        if identity.display_name.is_some() {
+            continue;
+        }
+        let found: Vec<ContactInfo> = [
+            Some(identity.jid.as_str()),
+            identity.alternate_jid.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter_map(|jid| contacts.get(&jid.parse::<Jid>().ok()?).cloned())
+        .collect();
+        identity.display_name = best_contact_name(&found);
+    }
+}
+
+/// Whether the event is a message whose sender has a name.
+pub fn sender_named(event: &InboundEvent) -> bool {
+    matches!(&event.kind, InboundKind::Message(message) if message.sender.display_name.is_some())
+}
+
+/// A WhatsApp name as messages carry it; `-` means none.
+fn push_name(name: &str) -> Option<String> {
+    let name = name.trim();
+    (!name.is_empty() && name != "-").then(|| name.to_owned())
 }
 
 fn person(jid: &Jid) -> Option<String> {
@@ -716,7 +833,7 @@ fn inbound_message(
     let sender = Identity {
         jid: author.to_owned(),
         alternate_jid: person(&info.sender_alt),
-        display_name: (!info.push_name.is_empty()).then(|| info.push_name.clone()),
+        display_name: push_name(&info.push_name),
     };
     let revision_text = content.revision.to_string();
     let mentions = content
@@ -1228,6 +1345,8 @@ pub fn chat_setting(event: &Event) -> Option<ChatUpdate> {
             })
             .filter(|chat| chat.kind == ExternalChatKind::Direct)
         }
+        // A saved contact is someone to start a chat with, so it is listed
+        // even before anyone wrote.
         Event::Contact(contact) => {
             let action = contact.action.as_ref()?;
             let name = action
@@ -1235,10 +1354,68 @@ pub fn chat_setting(event: &Event) -> Option<ChatUpdate> {
                 .as_deref()
                 .or(action.first_name.as_deref())
                 .filter(|name| !name.trim().is_empty())?;
-            setting_chat(&contact.jid, |chat| chat.name = Some(name.to_owned()))
-                .filter(|chat| chat.kind == ExternalChatKind::Direct)
+            setting_chat(&contact.jid, |chat| {
+                chat.name = Some(name.to_owned());
+                chat.create = true;
+            })
+            .filter(|chat| chat.kind == ExternalChatKind::Direct)
         }
         _ => None,
+    }
+}
+
+/// The address book's saved contacts as direct chats with no activity, so
+/// the chat list offers people never written to. People only seen with a
+/// WhatsApp or business name (in groups, say) are not saved contacts.
+pub fn contact_chats(contacts: &HashMap<Jid, ContactInfo>) -> Vec<ChatUpdate> {
+    contacts
+        .iter()
+        .filter_map(|(jid, contact)| {
+            let name = [&contact.full_name, &contact.first_name]
+                .into_iter()
+                .find(|name| !name.trim().is_empty())?;
+            setting_chat(jid, |chat| {
+                chat.name = Some(name.clone());
+                chat.create = true;
+            })
+            .filter(|chat| chat.kind == ExternalChatKind::Direct)
+        })
+        .collect()
+}
+
+/// WhatsApp's answer to `IsOnWhatsApp` for one number: registered numbers
+/// are found as their phone-number chat, named like any chat (address book,
+/// else the verified business or WhatsApp name).
+pub async fn lookup_answer(
+    lids: &dyn LidStore,
+    contacts: &dyn ContactStore,
+    phone: &PhoneNumber,
+    answers: &[IsOnWhatsAppResponse],
+) -> LookupAnswer {
+    let Some(answer) = answers.iter().find(|answer| answer.is_in) else {
+        return LookupAnswer::NotOnWhatsApp;
+    };
+    let business = answer
+        .verified_name
+        .as_ref()
+        .and_then(|verified| verified.details.as_ref())
+        .and_then(|details| details.verified_name.clone())
+        .filter(|name| !name.trim().is_empty());
+    let mut chats = [ChatUpdate {
+        jid: phone.jid(),
+        kind: ExternalChatKind::Direct,
+        name: business,
+        last_activity_at: None,
+        archived: None,
+        pinned: None,
+        anchor: None,
+        create: true,
+    }];
+    complete_chats(lids, contacts, &mut chats).await;
+    let [chat] = chats;
+    LookupAnswer::Found {
+        jid: chat.jid,
+        name: chat.name,
     }
 }
 

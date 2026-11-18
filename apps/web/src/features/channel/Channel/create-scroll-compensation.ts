@@ -36,12 +36,17 @@ export function createScrollCompensation(options: ScrollCompensationOptions) {
   const scheduleFinish = () => {
     clearTimer();
     if (touchTargets.size > 0) return;
+    const scheduledOffset = options.getElement()?.scrollTop;
     timer = setTimeout(() => {
       const element = options.getElement();
-      // Do not interrupt iOS rubber-banding. Retry even without another scroll event.
+      // WebKit drops a scrollTop write while native momentum is still moving,
+      // jumping the list by the whole adjustment, and a busy main thread can
+      // delay scroll events past the idle period. Commit only once the offset
+      // has also held still. Rubber-banding retries here without a scroll event.
       if (
         element &&
-        (element.scrollTop < 0 ||
+        (element.scrollTop !== scheduledOffset ||
+          element.scrollTop < 0 ||
           element.scrollTop > element.scrollHeight - element.clientHeight)
       ) {
         scheduleFinish();
@@ -86,24 +91,14 @@ export function createScrollCompensation(options: ScrollCompensationOptions) {
       scheduleFinish();
     },
     observeOffset: (offset: number, isScrolling: boolean) => {
-      const element = options.getElement();
       const logicalOffset = offset + adjustment;
-      if (
-        adjustment !== 0 &&
-        element &&
-        offset >= 0 &&
-        offset <= element.scrollHeight - element.clientHeight &&
-        (offset <= 0 ||
-          offset >= element.scrollHeight - element.clientHeight ||
-          logicalOffset <= 0 ||
-          logicalOffset >= element.scrollHeight - element.clientHeight)
-      ) {
-        // Release the shifted origin at either edge so all history remains reachable.
-        finish();
-        reportedOffset = element.scrollTop;
-        return reportedOffset;
+      // iOS sends no touchstart for a fling that begins during momentum, so
+      // native scrolling itself keeps the gesture active. Reaching an edge
+      // also waits to settle: the boundary is where momentum bounces.
+      if (isScrolling) {
+        active = true;
+        scheduleFinish();
       }
-      if (active && isScrolling) scheduleFinish();
       reportedOffset = logicalOffset;
       return logicalOffset;
     },

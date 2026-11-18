@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH due AS (\n                SELECT registration.id,\n                    CASE\n                        WHEN pull_requests.finished THEN 'pull_request_finished'\n                        WHEN session.archived_by IS NOT NULL THEN 'session_archived'\n                        WHEN session.turn_state = 'blocked' THEN 'blocked_timeout'\n                        ELSE 'idle'\n                    END AS reason\n                FROM work_registration registration\n                JOIN agent_session session ON session.id = registration.agent_session_id\n                CROSS JOIN LATERAL (\n                    SELECT COALESCE(\n                        bool_and(COALESCE(pull_request.status IN ('merged', 'closed'), false)),\n                        false\n                    ) AS finished\n                    FROM agent_session_pull_request link\n                    LEFT JOIN github_pull_request pull_request\n                        ON lower(pull_request.github_key) = lower(link.github_key)\n                    WHERE link.agent_session_id = session.id\n                ) pull_requests\n                WHERE registration.ended_at IS NULL\n                  AND (\n                      pull_requests.finished\n                      OR session.archived_by IS NOT NULL\n                      OR (session.turn_state = 'blocked' AND session.modified_at < $2)\n                      OR (session.turn_state IS DISTINCT FROM 'blocked'\n                          AND session.modified_at < $1)\n                  )\n                ORDER BY registration.registered_at\n                LIMIT $3\n            )\n            UPDATE work_registration registration\n            SET ended_at = NOW(),\n                end_reason = due.reason::work_registration_end_reason\n            FROM due\n            WHERE registration.id = due.id AND registration.ended_at IS NULL\n            RETURNING registration.agent_session_id, due.reason AS \"reason!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "reason!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "9c51bc6f44efc4da58b1125d86c051ed98197f89dac0de7044aaf9ccaac60e93"
+}

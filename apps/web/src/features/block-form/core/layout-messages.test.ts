@@ -19,6 +19,7 @@ function section(
     kind,
     gateRules: kind === 'gate' ? { conjunction: 'and', conditions: [] } : null,
     gateMessage: '',
+    showWhen: null,
     bookingTarget: null,
     questions: [],
   };
@@ -51,6 +52,56 @@ describe('routingLine', () => {
     expect(
       routingLine({ sections: [section('only', 'questions')] }, 'only')
     ).toBe('Submit form');
+  });
+});
+
+describe('routingLine past a section shown on a condition', () => {
+  const conditional: FormSection = {
+    ...section('contractors', 'questions'),
+    showWhen: {
+      conjunction: 'and',
+      conditions: [
+        {
+          kind: 'condition',
+          column: 'column-team',
+          test: { kind: 'presence', operator: 'isNotEmpty' },
+        },
+      ],
+    },
+  };
+
+  it('names where a respondent goes when the section is skipped', () => {
+    expect(
+      routingLine(
+        {
+          sections: [
+            section('about', 'questions'),
+            conditional,
+            section('details', 'questions'),
+          ],
+        },
+        'about'
+      )
+    ).toBe('Continue to section 2, or skip to section 3');
+    expect(
+      routingLine(
+        { sections: [section('about', 'questions'), conditional] },
+        'about'
+      )
+    ).toBe('Continue to section 2, or submit');
+    expect(
+      routingLine(
+        {
+          sections: [
+            section('about', 'questions'),
+            conditional,
+            section('fit', 'gate'),
+            section('details', 'questions'),
+          ],
+        },
+        'about'
+      )
+    ).toBe('Continue to section 2, or skip ahead');
   });
 });
 

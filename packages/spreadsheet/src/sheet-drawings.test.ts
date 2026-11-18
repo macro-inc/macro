@@ -53,6 +53,71 @@ describe('sheet drawings', () => {
     expect(validDrawings([chart, image])).toBe(true);
   });
 
+  it("accepts Excel 2016's statistical, flow and hierarchy charts with their options", () => {
+    const options: SheetDrawing = {
+      ...chart,
+      chart: {
+        ...chart.chart,
+        plots: [
+          {
+            kind: 'histogram',
+            binning: {
+              size: 10,
+              underflow: 20,
+              overflow: 90,
+              closedLeft: true,
+            },
+            gapWidth: 0,
+            series: [{ values: 2 }],
+          },
+          {
+            kind: 'pareto',
+            aggregate: true,
+            series: [{ categories: 1, values: 2 }],
+          },
+          {
+            kind: 'waterfall',
+            totals: [0, 5],
+            labels: true,
+            noConnectors: true,
+            series: [{ categories: 1, values: 2 }],
+          },
+          {
+            kind: 'funnel',
+            labels: true,
+            series: [{ categories: 1, values: 2 }],
+          },
+          {
+            kind: 'boxWhisker',
+            quartiles: 'inclusive',
+            meanLine: true,
+            noMeanMarkers: true,
+            innerPoints: true,
+            noOutliers: true,
+            series: [{ categories: 1, values: 2 }],
+          },
+          {
+            kind: 'treemap',
+            parentLabels: 'banner',
+            series: [{ categories: 1, values: 2 }],
+          },
+          { kind: 'sunburst', series: [{ categories: 1, values: 2 }] },
+          {
+            kind: 'pie',
+            ofPie: { type: 'bar', split: 'value', splitAt: 10, size: 60 },
+            series: [{ categories: 1, values: 2 }],
+          },
+          {
+            kind: 'pie',
+            ofPie: { type: 'pie', split: 'custom', custom: [3, 4] },
+            series: [{ categories: 1, values: 2 }],
+          },
+        ],
+      },
+    };
+    expect(validDrawings([options])).toBe(true);
+  });
+
   it.each([
     [
       'a series reading a missing reference',
@@ -62,7 +127,53 @@ describe('sheet drawings', () => {
       'an unknown chart kind',
       {
         ...chart,
-        chart: { ...chart.chart, plots: [{ kind: 'funnel', series: [] }] },
+        chart: { ...chart.chart, plots: [{ kind: 'gauge', series: [] }] },
+      },
+    ],
+    [
+      'a kind named after an object method',
+      {
+        ...chart,
+        chart: {
+          ...chart.chart,
+          plots: [{ kind: 'constructor', ofPie: { type: 'pie' }, series: [] }],
+        },
+      },
+    ],
+    [
+      'bins of no width',
+      {
+        ...chart,
+        chart: {
+          ...chart.chart,
+          plots: [{ kind: 'histogram', binning: { size: 0 }, series: [] }],
+        },
+      },
+    ],
+    [
+      'an option of another kind',
+      {
+        ...chart,
+        chart: {
+          ...chart.chart,
+          plots: [{ kind: 'column', totals: [1], series: [] }],
+        },
+      },
+    ],
+    [
+      'a second plot split at a fraction of a point',
+      {
+        ...chart,
+        chart: {
+          ...chart.chart,
+          plots: [
+            {
+              kind: 'pie',
+              ofPie: { type: 'pie', split: 'position', splitAt: 1.5 },
+              series: [],
+            },
+          ],
+        },
       },
     ],
     [

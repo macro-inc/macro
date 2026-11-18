@@ -18,6 +18,7 @@ use macro_authorization::{
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 use std::sync::Arc;
+use tracing::Level;
 use uuid::Uuid;
 
 /// Shared service and authentication wiring.
@@ -93,6 +94,17 @@ impl TargetPath {
             entity_id: self.entity_id,
         }
     }
+    /// A runtime's access decides who runs code on someone's computer, so it
+    /// takes the owner in person: an agent or API token can ask, never decide.
+    fn require_decider(
+        &self,
+        authorization: &macro_authorization::MacroUserAuthentication,
+    ) -> Result<(), RequestError> {
+        if self.entity_type == ShareEntityType::Harness && !authorization.is_human_session() {
+            return Err(RequestError::Forbidden);
+        }
+        Ok(())
+    }
     fn recipient(&self) -> Result<MacroUserIdStr<'static>, RequestError> {
         MacroUserIdStr::try_from(self.user_id.clone().ok_or(RequestError::NotFound)?)
             .map_err(|_| RequestError::NotFound)
@@ -140,7 +152,7 @@ impl IntoResponse for RequestError {
 #[utoipa::path(get, tag = "access-requests", operation_id = "access_requests_state",
     path = "/entities/{entity_type}/{entity_id}/access-requests", params(("entity_type" = ShareEntityType, Path), ("entity_id" = Uuid, Path), Page),
     responses((status = 200, body = AccessRequestState), (status = 400), (status = 403), (status = 404), (status = 409), (status = 429), (status = 500)))]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn state_handler<R, A, C, Auth>(
     State(state): State<AccessRequestsRouterState<R, A, C, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -165,7 +177,7 @@ where
 #[utoipa::path(put, tag = "access-requests", operation_id = "access_requests_submit",
     path = "/entities/{entity_type}/{entity_id}/access-requests/mine", params(("entity_type" = ShareEntityType, Path), ("entity_id" = Uuid, Path)), request_body = RequestAccess,
     responses((status = 200, body = AccessRequest), (status = 400), (status = 403), (status = 404), (status = 409), (status = 429), (status = 500)))]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn submit_handler<R, A, C, Auth>(
     State(state): State<AccessRequestsRouterState<R, A, C, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -182,7 +194,12 @@ where
     Ok(Json(
         state
             .service
-            .submit(user.authorization.macro_user_id, path.entity(), body)
+            .submit(
+                user.authorization.macro_user_id,
+                path.entity(),
+                body,
+                user.authorization.agent_id.map(|agent| agent.as_uuid()),
+            )
             .await?,
     ))
 }
@@ -191,7 +208,7 @@ where
 #[utoipa::path(delete, tag = "access-requests", operation_id = "access_requests_cancel",
     path = "/entities/{entity_type}/{entity_id}/access-requests/mine", params(("entity_type" = ShareEntityType, Path), ("entity_id" = Uuid, Path), Revision),
     responses((status = 200, body = () ), (status = 400), (status = 403), (status = 404), (status = 409), (status = 429), (status = 500)))]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn cancel_handler<R, A, C, Auth>(
     State(state): State<AccessRequestsRouterState<R, A, C, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -220,7 +237,7 @@ where
 #[utoipa::path(post, tag = "access-requests", operation_id = "access_requests_resolve",
     path = "/entities/{entity_type}/{entity_id}/access-requests/{request_id}/resolve", params(("entity_type" = ShareEntityType, Path), ("entity_id" = Uuid, Path), ("request_id" = Uuid, Path)), request_body = ResolveRequest,
     responses((status = 200, body = AccessRequest), (status = 400), (status = 403), (status = 404), (status = 409), (status = 429), (status = 500)))]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn resolve_handler<R, A, C, Auth>(
     State(state): State<AccessRequestsRouterState<R, A, C, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -234,6 +251,7 @@ where
     C: Clock,
     Auth: MacroAuthorizationService,
 {
+    path.require_decider(&user.authorization)?;
     Ok(Json(
         state
             .service
@@ -251,7 +269,7 @@ where
 #[utoipa::path(get, tag = "access-requests", operation_id = "access_requests_direct",
     path = "/entities/{entity_type}/{entity_id}/direct-access", params(("entity_type" = ShareEntityType, Path), ("entity_id" = Uuid, Path)),
     responses((status = 200, body = Vec<DirectAccess>), (status = 400), (status = 403), (status = 404), (status = 409), (status = 429), (status = 500)))]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn direct_handler<R, A, C, Auth>(
     State(state): State<AccessRequestsRouterState<R, A, C, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -275,7 +293,7 @@ where
 #[utoipa::path(put, tag = "access-requests", operation_id = "access_requests_set_direct",
     path = "/entities/{entity_type}/{entity_id}/direct-access/{user_id}", params(("entity_type" = ShareEntityType, Path), ("entity_id" = Uuid, Path), ("user_id" = String, Path)), request_body = SetDirectAccess,
     responses((status = 200, body = ()), (status = 400), (status = 403), (status = 404), (status = 409), (status = 429), (status = 500)))]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn set_direct_handler<R, A, C, Auth>(
     State(state): State<AccessRequestsRouterState<R, A, C, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -289,6 +307,7 @@ where
     C: Clock,
     Auth: MacroAuthorizationService,
 {
+    path.require_decider(&user.authorization)?;
     Ok(Json(
         state
             .service
@@ -306,7 +325,7 @@ where
 #[utoipa::path(delete, tag = "access-requests", operation_id = "access_requests_remove_direct",
     path = "/entities/{entity_type}/{entity_id}/direct-access/{user_id}", params(("entity_type" = ShareEntityType, Path), ("entity_id" = Uuid, Path), ("user_id" = String, Path)),
     responses((status = 200, body = ()), (status = 400), (status = 403), (status = 404), (status = 409), (status = 429), (status = 500)))]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn remove_direct_handler<R, A, C, Auth>(
     State(state): State<AccessRequestsRouterState<R, A, C, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -318,6 +337,7 @@ where
     C: Clock,
     Auth: MacroAuthorizationService,
 {
+    path.require_decider(&user.authorization)?;
     Ok(Json(
         state
             .service

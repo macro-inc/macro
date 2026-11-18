@@ -22,16 +22,16 @@ app = { path = "../src-tauri", features = ["cef"] }
 tauri = { version = "2.11", features = ["devtools", "protocol-asset"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-tauri-runtime-cef = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1", features = ["devtools"] }
+tauri-runtime-cef = { git = "https://github.com/macro-inc/tauri", rev = "4b8a46f1", features = ["devtools"] }
 
 [patch.crates-io]
 # Tauri's feat/cef branch plus the macro fork patches (macro-inc/tauri macro-cef).
-tauri = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
-tauri-build = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
-tauri-codegen = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
-tauri-macros = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
-tauri-runtime = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
-tauri-utils = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
+tauri = { git = "https://github.com/macro-inc/tauri", rev = "4b8a46f1" }
+tauri-build = { git = "https://github.com/macro-inc/tauri", rev = "4b8a46f1" }
+tauri-codegen = { git = "https://github.com/macro-inc/tauri", rev = "4b8a46f1" }
+tauri-macros = { git = "https://github.com/macro-inc/tauri", rev = "4b8a46f1" }
+tauri-runtime = { git = "https://github.com/macro-inc/tauri", rev = "4b8a46f1" }
+tauri-utils = { git = "https://github.com/macro-inc/tauri", rev = "4b8a46f1" }
 # The CEF runtime builds on winit-gtk4, whose `dpi` must be the one Tauri uses.
 dpi = { git = "https://github.com/tauri-apps/winit-gtk4", rev = "3d7c7cd19d3c752f75762ceea535444e63bdf8de" }
 

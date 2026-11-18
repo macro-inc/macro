@@ -38,7 +38,10 @@ describe('makeArchiveSessionAction', () => {
     expect(archive).toHaveBeenLastCalledWith('s1', true);
 
     await action.execute([
-      session({ isArchived: true } as Partial<EntityData>),
+      session({
+        archivedBy: 'user',
+        archivedAt: '2026-01-01T00:00:00Z',
+      } as Partial<EntityData>),
     ]);
     expect(archive).toHaveBeenLastCalledWith('s1', false);
   });

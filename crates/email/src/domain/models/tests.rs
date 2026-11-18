@@ -67,3 +67,36 @@ fn test_preview_view_deserialization() {
     );
     assert!(serde_json::from_str::<PreviewView>("\"invalid\"").is_err());
 }
+
+fn link_label(provider_label_id: &str, name: &str, type_: LabelType) -> LinkLabel {
+    LinkLabel {
+        id: uuid::Uuid::new_v4(),
+        link_id: uuid::Uuid::nil(),
+        provider_label_id: provider_label_id.to_owned(),
+        name: name.to_owned(),
+        created_at: chrono::Utc::now(),
+        message_list_visibility: MessageListVisibility::Show,
+        label_list_visibility: LabelListVisibility::LabelShow,
+        type_,
+    }
+}
+
+#[test]
+fn labels_are_found_by_system_id_before_display_name_ignoring_case() {
+    let labels = vec![
+        link_label("Label_7", "inbox", LabelType::User),
+        link_label("INBOX", "INBOX", LabelType::System),
+        link_label("Label_9", "Finance", LabelType::User),
+    ];
+    assert_eq!(
+        LinkLabel::find(&labels, " Inbox ").unwrap().id,
+        labels[1].id
+    );
+    assert_eq!(
+        LinkLabel::find(&labels, "finance").unwrap().id,
+        labels[2].id
+    );
+    // A user label is never matched by its provider id.
+    assert!(LinkLabel::find(&labels, "label_9").is_none());
+    assert!(LinkLabel::find(&labels, "Receipts").is_none());
+}

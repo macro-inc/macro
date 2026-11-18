@@ -1,4 +1,4 @@
-import { Match, Switch } from 'solid-js';
+import { type JSX, Match, Switch } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { InlineBooleanEditor } from './InlineBooleanEditor';
 import { InlineLinkEditor } from './InlineLinkEditor';
@@ -10,23 +10,23 @@ import { InlineTextEditor } from './InlineTextEditor';
  * nothing for popover-only types (DATE / SELECT_* / ENTITY) — those need an
  * <EditTrigger> + <PopoverEditor> pair instead.
  */
-export function InlineEditor() {
+export function InlineEditor(props: { emptyValue?: JSX.Element }) {
   const ctx = useProperty();
   const type = () => ctx.property().valueType;
 
   return (
     <Switch>
       <Match when={type() === 'STRING'}>
-        <InlineTextEditor />
+        <InlineTextEditor emptyValue={props.emptyValue} />
       </Match>
       <Match when={type() === 'NUMBER'}>
-        <InlineNumberEditor />
+        <InlineNumberEditor emptyValue={props.emptyValue} />
       </Match>
       <Match when={type() === 'BOOLEAN'}>
         <InlineBooleanEditor />
       </Match>
       <Match when={type() === 'LINK'}>
-        <InlineLinkEditor />
+        <InlineLinkEditor emptyValue={props.emptyValue} />
       </Match>
     </Switch>
   );

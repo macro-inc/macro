@@ -16,7 +16,6 @@ env_vars! {
     pub struct AuthenticationServiceSecretKey;
     pub struct EmailServiceCloudfrontDistributionUrl;
     pub struct EmailServiceCloudfrontSignerPublicKeyId;
-    pub struct ApolloApiKey;
 }
 
 #[derive(macro_config::MacroConfig)]
@@ -31,6 +30,11 @@ pub struct Config {
     /// Pause new provider writes; send outcome reconciliation always continues.
     #[macro_config_default(false)]
     pub outlook_writes_enabled: bool,
+    /// Stop claiming Outlook import work (first imports and re-imports) while
+    /// true; live changes keep importing. Read at startup, so a change takes
+    /// effect when the pubsub workers restart.
+    #[macro_config_default(false)]
+    pub outlook_imports_paused: bool,
     /// Send Gmail label writes as `ModifyMessageLabelsBatch` queue messages.
     /// Enable only after every email-service pubsub worker runs a release that
     /// decodes them; older workers delete the batch form. Off, each message is
@@ -64,16 +68,6 @@ pub struct Config {
     /// Notification-service functionality
     #[macro_config_default(true)]
     pub notifications_enabled: bool,
-
-    /// Use Apollo.io for CRM company enrichment. When `false`, fall back
-    /// to the unfurl-based resolver.
-    #[macro_config_default(false)]
-    pub use_apollo_crm_enrichment: bool,
-
-    /// Apollo.io API key for CRM enrichment. Locally this is the key
-    /// itself; in deployed envs it's the name of the Secrets Manager
-    /// secret holding it (resolved at startup). Empty disables enrichment.
-    pub apollo_api_key: LocalOrRemoteSecret<ApolloApiKey>,
 
     /// The queue max messages per poll
     #[macro_config_default(10)]

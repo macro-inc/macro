@@ -6,6 +6,7 @@ use uuid::Uuid;
 /// All editable rules for one link. Personal links must use the authenticated user as host.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BookingLinkEvent {
     /// Public title.
@@ -54,12 +55,14 @@ pub struct BookingLinkEvent {
 /// Availability copied into a dedicated schedule when it changes; other links retain their hours.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BookingLinkSchedule {
     /// Display name.
     pub name: String,
     /// IANA time zone.
     #[cfg_attr(feature = "ai_tools", schemars(with = "String"))]
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub time_zone: chrono_tz::Tz,
     /// Weekly windows.
     pub weekly: Vec<WeeklyDay>,
@@ -70,6 +73,7 @@ pub struct BookingLinkSchedule {
 /// Complete proposal reviewed and validated before saving.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BookingLinkDraft {
     /// Public details, hosts, booking rules and questions.
@@ -81,6 +85,7 @@ pub struct BookingLinkDraft {
 /// Saved link with actual identities and revision for subsequent edits.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BookingLink {
     /// Owning profile.
@@ -96,6 +101,7 @@ pub struct BookingLink {
 /// Authorized discovery results including reusable availability.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BookingLinkListing {
     /// Current team identities that can be used to discover team links.

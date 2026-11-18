@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT registration.id, registration.account_id, registration.agent_session_id,\n                   registration.registered_at,\n                   registration.ended_at IS NOT NULL AS \"ended!\",\n                   session.archived_by IS NOT NULL AS \"session_archived!\"\n            FROM work_registration registration\n            JOIN agent_session session ON session.id = registration.agent_session_id\n            WHERE registration.agent_session_id = ANY($1)\n              AND registration.account_id = ANY($2)\n              AND (registration.ended_at IS NULL OR registration.ended_at > $3)\n            ORDER BY (registration.ended_at IS NULL), registration.registered_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "registered_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "ended!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "session_archived!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "3c6402a09e4af8bf76d46830e410bb62629726946df5a5023f986e62cc3799b4"
+}

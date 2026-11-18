@@ -25,7 +25,8 @@ import type { ChannelLabel } from '@service-storage/generated/schemas/channelLab
 import { createDroppable } from '@thisbeyond/solid-dnd';
 import { cn, Dropdown } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
-import { canLabelChannel } from '../../core/channel-label-eligibility';
+import { canLabelChannel as canLabelConversation } from '../../core/channel-label-eligibility';
+import { ChannelCountPill } from './ChannelCountPill';
 import { isPrimaryMouseDown } from './ChannelRailItems';
 import {
   type ChannelLabelDropData,
@@ -35,6 +36,9 @@ import {
 import { useChannelRailLabelState } from './hooks/useChannelRailState';
 
 type MenuIcon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+
+const canLabelChannel = (channel: ChannelEntity) =>
+  channel.channelType === 'team' && canLabelConversation(channel);
 
 /** A dropdown row in the house style: muted icon, muted label. */
 function MenuRow(props: {
@@ -50,17 +54,6 @@ function MenuRow(props: {
       </span>
       <span class="flex-1 truncate text-ink-muted">{props.label}</span>
     </Dropdown.Item>
-  );
-}
-
-/** Count pill used by section headings, reused so labels read the same way. */
-function UnreadPill(props: { count: number }) {
-  return (
-    <Show when={props.count > 0}>
-      <span class="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none tabular-nums text-accent-contrast">
-        {props.count}
-      </span>
-    </Show>
   );
 }
 
@@ -123,7 +116,7 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
         }}
       >
         <span class="min-w-0 flex-1 truncate">{props.label.name}</span>
-        <UnreadPill count={state().unreadCount} />
+        <ChannelCountPill count={state().unreadCount} />
       </ViewSidebar.Item>
       <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2 items-center gap-0.5">
         <Dropdown placement="bottom-end">

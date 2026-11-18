@@ -3,10 +3,10 @@ import { context, ROOT_CONTEXT } from '@opentelemetry/api';
 import { logs } from '@opentelemetry/api-logs';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import type { InMemoryLogRecordExporter } from '@opentelemetry/sdk-logs';
+import { StackContextManager } from '@opentelemetry/sdk-trace-web';
 import { afterEach, expect, test, vi } from 'vitest';
 import { Logging } from './logging';
 import { suppressUserId } from './privacy';
-import { ZoneContextManager } from './zone';
 
 const exporters: InMemoryLogRecordExporter[] = [];
 vi.mock('@opentelemetry/exporter-logs-otlp-http', async () => {
@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 test('the production log provider suppresses identity only in anonymous contexts', async () => {
-  context.setGlobalContextManager(new ZoneContextManager().enable());
+  context.setGlobalContextManager(new StackContextManager().enable());
   const logging = new Logging();
   logging.init(
     {

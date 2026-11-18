@@ -4,6 +4,8 @@ query GroupSoup($input: GroupedSoupInput!) {
 		groupSoup(input: $input) {
 			bins {
 				key
+				displayOrder
+				label
 				totalCount
 				nextCursor
 				items {

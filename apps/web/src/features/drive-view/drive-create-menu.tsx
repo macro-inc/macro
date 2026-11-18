@@ -86,7 +86,7 @@ export function DriveCreateMenu(props: {
           'form',
         ].includes(block.blockName) &&
         isEnabled(block.blockName) &&
-        // Databases and forms have no folder membership.
+        // New databases and forms start at the root; they are moved in after.
         ((block.blockName !== 'database' && block.blockName !== 'form') ||
           !state.projectId())
     );

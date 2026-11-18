@@ -1,0 +1,47 @@
+{
+  "status": "blocked",
+  "summary": "Implementation and review fixes are complete, pushed, audited, and CI is green. Appending the PR tracking section to the Macro task remains blocked by authentication.",
+  "task_id": "01a1792e-7744-7f48-9367-959546cb7cdb",
+  "pr_url": "https://github.com/macro-inc/macro/pull/9168",
+  "head_commit": "83e7ed3f27c5b99d0b85cf4e02f48ff492f35968",
+  "pr_state": "OPEN",
+  "ready_for_review": true,
+  "mergeable": true,
+  "merged": false,
+  "validation": {
+    "database_tests": {
+      "files_passed": 34,
+      "tests_passed": 148
+    },
+    "browser_tests": {
+      "passed": 2,
+      "surfaces": [
+        "desktop",
+        "phone"
+      ],
+      "browser": "own headless Chromium"
+    },
+    "typecheck": "passed",
+    "just_check": "passed",
+    "privacy": "passed",
+    "auditor": "passed",
+    "ci": {
+      "status": "passed",
+      "passed": 22,
+      "skipped": 13,
+      "failed": 0,
+      "pending": 0
+    },
+    "live_backend_trace": "not verified; browser tests use local fixtures"
+  },
+  "task_status": "In Progress (set in prior execution)",
+  "task_tracking_updated": false,
+  "blockers": [
+    {
+      "step": "Append Agent tracking section to Macro task using SDK",
+      "error": "Macro MCP ExecuteCode request returns HTTP 401 Unauthorized; production OAuth credential has no refresh token.",
+      "required_action": "Restore Macro authentication, then append the tracking section without rewriting the existing task body."
+    }
+  ],
+  "verified_at": "2026-10-30T01:40:10.061688+00:00"
+}

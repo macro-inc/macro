@@ -106,9 +106,16 @@ export function isEmojiOnly(text: string): boolean {
 }
 
 /** Whether every query token appears in `text` as an ordered character
- * subsequence, case-insensitively. Mirrors cache-core/search.rs matching. */
+ * subsequence, case-insensitively. Whitespace and commas separate tokens.
+ * Mirrors cache-core/search.rs matching. */
 export function matchesTokenSubsequences(text: string, query: string) {
-  const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const tokens = query
+    .toLowerCase()
+    .trim()
+    .split(/[\s,]+/)
+    .filter(Boolean);
+  if (tokens.length === 0) return !query.trim();
+
   const haystack = text.toLowerCase();
   return tokens.every((token) => {
     let position = 0;

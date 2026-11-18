@@ -92,6 +92,14 @@ impl BillingService for FakeBilling {
         unreachable!()
     }
 
+    async fn purchase_credits(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+        _amount_cents: i64,
+    ) -> Result<crate::domain::CreditPurchase> {
+        unreachable!()
+    }
+
     async fn create_credit_checkout(
         &self,
         _user: &MacroUserIdStr<'_>,
@@ -128,6 +136,7 @@ impl BillingService for FakeBilling {
     async fn mark_credit_reload_invoice(
         &self,
         _stripe_invoice_id: &str,
+        _reload_id: Option<macro_uuid::Uuid>,
         _paid: bool,
     ) -> Result<()> {
         unreachable!()
@@ -188,6 +197,7 @@ async fn record_with_policy(
             5_000,
             chargeable_cents,
             Default::default(),
+            0,
             0,
             AiPricing::testing(),
         ),

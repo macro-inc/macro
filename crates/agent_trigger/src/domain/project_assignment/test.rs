@@ -28,6 +28,7 @@ fn update(
     project: Option<InitiativeId>,
 ) -> EntityPropertyUpdatedMetadata {
     EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::now_v7(),
         entity_id: "task".to_owned(),
         entity_type: PropertyEntityType::Task,
@@ -35,6 +36,7 @@ fn update(
         actor_user_id: Some(user()),
         actor: None,
         on_behalf_of: None,
+        source: None,
         value: project_value(project),
         previous_value: project_value(previous),
         updated_at: Utc::now(),

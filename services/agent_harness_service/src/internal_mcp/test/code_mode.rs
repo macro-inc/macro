@@ -10,6 +10,20 @@ use code_execution::{
 };
 use serde_json::json;
 
+/// Programs here return no images.
+struct NoImages;
+
+#[async_trait]
+impl agent_code_mode::domain::ModelImages for NoImages {
+    async fn load_png(
+        &self,
+        _: &agent_code_mode::domain::StaticFileId,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> anyhow::Result<agent_code_mode::domain::ModelImage> {
+        anyhow::bail!("no images in this test")
+    }
+}
+
 struct NoAppEgress;
 
 impl agent_egress::domain::service::EgressService for NoAppEgress {
@@ -29,12 +43,14 @@ struct Credentials;
 impl agent_code_mode::domain::ExecutionCredentials for Credentials {
     async fn issue(
         &self,
-        _: &agent_code_mode::domain::ExecutionIdentity,
+        identity: &agent_code_mode::domain::ExecutionIdentity,
         _: &str,
         _: tokio_util::sync::CancellationToken,
-    ) -> Result<code_execution::domain::RunEnvironment, agent_code_mode::domain::CodeModeError>
-    {
-        Ok(code_execution::domain::RunEnvironment::default())
+    ) -> Result<agent_code_mode::domain::IssuedRun, agent_code_mode::domain::CodeModeError> {
+        Ok(agent_code_mode::domain::IssuedRun {
+            environment: code_execution::domain::RunEnvironment::default(),
+            acting_user: identity.owner.clone(),
+        })
     }
 }
 
@@ -78,6 +94,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
                 ),
             ),
         )),
+        Arc::new(NoImages),
     ));
     let repo = InMemoryAgentSessionRepo::new();
     let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(
@@ -89,7 +106,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .unwrap();
     let app = router(
         Arc::new(repo.clone()),
-        "localhost".into(),
+        vec!["localhost".into()],
         InternalTools {
             service: Arc::new(SessionPullRequestService::new(
                 repo.clone(),
@@ -101,6 +118,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
             cognition: None,
             reviews: Arc::new(std::sync::OnceLock::new()),
             gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+            app_url: "https://macro.com".into(),
         },
     );
     assert_eq!(
@@ -294,7 +312,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
     let running = tokio::spawn(async move {
         rpc(app, Some("session-secret"), "tools/call", json!({"name": "ExecuteCode", "arguments": {
             "acting_as": "owner", "turn_id": "00000000-0000-0000-0000-000000000003", "execution_id": cancelled_id,
-            "source": "export async function main() { await new Promise(r => setTimeout(r, 10000)); return {data:true,reviews:[]}; }"
+            "source": "export function main() { while (true) {} }"
         }})).await
     });
     tokio::time::timeout(std::time::Duration::from_secs(5), async {

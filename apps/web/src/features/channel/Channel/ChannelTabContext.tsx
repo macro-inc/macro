@@ -1,3 +1,4 @@
+import { beginInteraction } from '@app/observability/flow';
 import {
   type Accessor,
   createContext,
@@ -19,13 +20,30 @@ export function ChannelTabProvider(
     setActiveTab: (tab: ChannelTabId) => void;
   }>
 ) {
+  const changeTab = (tab: ChannelTabId) => {
+    if (tab === props.activeTab()) return;
+    const interaction = beginInteraction('channel.tab', {
+      attributes: { 'channel.tab': tab },
+      closeOnJoin: true,
+    });
+    try {
+      props.setActiveTab(tab);
+    } finally {
+      // Tab controls commit their selected panel at the end of the event batch.
+      queueMicrotask(interaction.end);
+    }
+  };
   return (
     <ChannelTabContext.Provider
-      value={{ activeTab: props.activeTab, setActiveTab: props.setActiveTab }}
+      value={{ activeTab: props.activeTab, setActiveTab: changeTab }}
     >
       {props.children}
     </ChannelTabContext.Provider>
   );
+}
+
+export function useChannelTabOptional() {
+  return useContext(ChannelTabContext);
 }
 
 export function useChannelTab(): ChannelTabContextValue {

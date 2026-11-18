@@ -149,8 +149,8 @@ async fn recovered_completion_publishes_canonical_thread_and_keeps_message_ident
         "confirmed-thread",
     )
     .await?;
-    assert!(super::delivery::complete_delivery(&mut tx, &claim).await?);
-    super::process_sent_message(&mut tx, &mut sent).await?;
+    assert!(super::delivery::complete_delivery(&mut *tx, &claim).await?);
+    super::process_sent_message(&mut *tx, &mut sent).await?;
     tx.commit().await?;
 
     // The worker publishes its message_sent event from this updated value.

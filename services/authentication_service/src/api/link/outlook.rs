@@ -1,12 +1,13 @@
-use crate::domain::microsoft::MicrosoftAuthError;
+use crate::domain::microsoft::{MicrosoftAuth, MicrosoftAuthError};
 use axum::{
     Json,
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
@@ -106,7 +107,7 @@ pub(crate) enum OutlookConsentScopes {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%authorization.authorization.user.user_context.user_id, fusion_user_id=%authorization.authorization.user.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%authorization.authorization.user.user_context.user_id, fusion_user_id=%authorization.authorization.user.user_context.fusion_user_id, outlook.flag = tracing::field::Empty), err)]
 pub async fn init_outlook_link_handler(
     State(ctx): State<ApiContext>,
     Query(InitOutlookLinkQueryParams {
@@ -115,7 +116,7 @@ pub async fn init_outlook_link_handler(
         reconnect_link_id,
     }): Query<InitOutlookLinkQueryParams>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Json<InitOutlookLinkResponse>, InitOutlookLinkError> {
     let service = ctx
         .microsoft_auth
@@ -131,20 +132,45 @@ pub async fn init_outlook_link_handler(
     let owner =
         uuid::Uuid::parse_str(&authorization.authorization.user.user_context.fusion_user_id)
             .map_err(|error| InitOutlookLinkError::InternalError(error.into()))?;
+    start_outlook_link(
+        service.as_ref(),
+        owner,
+        &authorization.authorization.user.macro_user_id,
+        format_redirect_uri("microsoft"),
+        original_url.map(String::from),
+        ctx.calendar_scope_enabled && matches!(scopes, OutlookConsentScopes::MailAndCalendar),
+        reconnect_link_id,
+    )
+    .await
+    .map(Json)
+}
+
+/// A new connection that the deployment switch or the user's flag refuses
+/// answers 404, the same as an unconfigured provider.
+async fn start_outlook_link(
+    service: &dyn MicrosoftAuth,
+    owner: uuid::Uuid,
+    user: &MacroUserIdStr<'_>,
+    redirect_uri: String,
+    original_url: Option<String>,
+    calendar_requested: bool,
+    reconnect_link_id: Option<uuid::Uuid>,
+) -> Result<InitOutlookLinkResponse, InitOutlookLinkError> {
     let started = service
         .start_link(
             owner,
-            format_redirect_uri("microsoft"),
-            original_url.map(String::from),
-            ctx.calendar_scope_enabled && matches!(scopes, OutlookConsentScopes::MailAndCalendar),
+            user,
+            redirect_uri,
+            original_url,
+            calendar_requested,
             reconnect_link_id,
         )
         .await
         .map_err(map_domain_error)?;
-    Ok(Json(InitOutlookLinkResponse {
+    Ok(InitOutlookLinkResponse {
         authorization_url: started.authorization_url,
         link_id: started.id,
-    }))
+    })
 }
 
 fn map_domain_error(error: MicrosoftAuthError) -> InitOutlookLinkError {
@@ -156,10 +182,12 @@ fn map_domain_error(error: MicrosoftAuthError) -> InitOutlookLinkError {
     }
 }
 
-/// Actual deployment availability for the provider selector.
+/// What the provider selector offers the requesting user.
 #[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct EmailConnectionProviders {
     pub gmail: bool,
+    /// Whether this user may start a new Outlook connection: the deployment
+    /// switch and their `enable-outlook` flag.
     pub outlook: bool,
     /// Where a Microsoft 365 administrator approves Macro for their whole
     /// directory. Present when Outlook is configured and the request named an
@@ -183,13 +211,16 @@ pub(crate) struct EmailConnectionProvidersQueryParams {
     responses(
         (status = 200, body = EmailConnectionProviders),
         (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
     )
 )]
+#[tracing::instrument(skip_all, fields(fusion_user_id=%authorization.authorization.user.user_context.fusion_user_id, outlook.flag = tracing::field::Empty), err)]
 pub async fn email_connection_providers(
     State(ctx): State<ApiContext>,
     Query(EmailConnectionProvidersQueryParams { original_url }): Query<
         EmailConnectionProvidersQueryParams,
     >,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Json<EmailConnectionProviders>, InitOutlookLinkError> {
     if original_url
         .as_ref()
@@ -197,14 +228,32 @@ pub async fn email_connection_providers(
     {
         return Err(InitOutlookLinkError::InvalidReturnUrl);
     }
+    Ok(Json(
+        connection_providers(
+            ctx.microsoft_auth.as_deref(),
+            &authorization.authorization.user.macro_user_id,
+            original_url,
+            ctx.calendar_scope_enabled,
+        )
+        .await,
+    ))
+}
+
+async fn connection_providers(
+    microsoft_auth: Option<&dyn MicrosoftAuth>,
+    user: &MacroUserIdStr<'_>,
+    original_url: Option<Url>,
+    calendar_scope_enabled: bool,
+) -> EmailConnectionProviders {
     // The consent URL is an optional extra; a failure to sign it must not hide
-    // which providers are available.
-    let outlook_admin_consent_url = match (&ctx.microsoft_auth, original_url) {
+    // which providers are available. It stays independent of the flag: an
+    // inbox being reconnected can still need an administrator's approval.
+    let outlook_admin_consent_url = match (microsoft_auth, original_url) {
         (Some(service), Some(original_url)) => service
             .admin_consent_url(
                 &format_redirect_uri("microsoft"),
                 original_url.as_str(),
-                ctx.calendar_scope_enabled,
+                calendar_scope_enabled,
             )
             .inspect_err(|error| {
                 tracing::warn!(error=?error, "unable to build Outlook admin-consent URL");
@@ -212,12 +261,13 @@ pub async fn email_connection_providers(
             .ok(),
         _ => None,
     };
-    Ok(Json(EmailConnectionProviders {
+    let outlook = match microsoft_auth {
+        Some(service) => service.new_connections_enabled(user).await,
+        None => false,
+    };
+    EmailConnectionProviders {
         gmail: true,
-        outlook: ctx
-            .microsoft_auth
-            .as_ref()
-            .is_some_and(|service| service.new_connections_enabled()),
+        outlook,
         outlook_admin_consent_url,
-    }))
+    }
 }

@@ -8,7 +8,9 @@
 /**
  * Explicit GitHub repository for a managed Cursor session, as one of the
 urls `GET /agent-repositories` lists for the caller. Access is checked
-for the session owner. For external sessions this is informational:
+for the session owner. On a managed request that names no `botId`,
+this starts the session as Cursor — the only managed persona that
+honors a repository. For external sessions this is informational:
 cloning it is the runtime operator's job.
  */
 export type CreateAgentSessionRequestRepoUrl = string | null;

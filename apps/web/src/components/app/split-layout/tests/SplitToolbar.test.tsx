@@ -1,7 +1,7 @@
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createPriorityCollapseController } from '../components/PriorityCollapseOverflowSensor';
+import { createPriorityCollapseController } from '../../../priority-collapse/PriorityCollapseOverflowSensor';
 import { SplitToolbar } from '../components/SplitToolbar';
 
 const panel = vi.hoisted(() => ({

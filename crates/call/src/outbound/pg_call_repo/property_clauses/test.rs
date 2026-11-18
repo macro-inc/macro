@@ -151,3 +151,29 @@ fn oversized_filters_drop_their_property_conditions() {
     });
     assert!(clauses_of(expr).is_empty());
 }
+
+#[test]
+fn date_literals_match_nothing_and_preserve_negation() {
+    let date = Expr::Literal(CallLiteral::Property(PropertiesLiteral {
+        property_definition_id: Uuid::from_u128(4),
+        entity_type: None,
+        value: PropertyMatchValue::DateRange(item_filters::ast::properties::DateRange {
+            start: None,
+            end: None,
+        }),
+    }));
+    assert_eq!(clauses_of(date.clone()), vec![Vec::<PropertyTerm>::new()]);
+    assert!(clauses_of(Expr::is_not(date.clone())).is_empty());
+    assert_eq!(
+        clauses_of(Expr::or(date.clone(), company("a"))),
+        vec![vec![has("a")]]
+    );
+    assert_eq!(
+        clauses_of(Expr::and(date.clone(), company("a"))),
+        vec![Vec::<PropertyTerm>::new()]
+    );
+    assert_eq!(
+        clauses_of(Expr::and(Expr::is_not(date), company("a"))),
+        vec![vec![has("a")]]
+    );
+}

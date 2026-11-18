@@ -34,7 +34,7 @@ function MentionContainer(props: { icon: JSX.Element; text: JSX.Element }) {
       <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
         {props.icon}
       </span>
-      <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+      <span class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         {props.text}
       </span>
     </span>

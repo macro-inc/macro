@@ -3,6 +3,7 @@
 use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
+use databases::domain::models::Viewer;
 use databases::domain::receipt::database_receipt;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
@@ -37,7 +38,7 @@ pub struct ListFormsQuery {
     responses((status = 201, body = FormDetail), (status = 400, body = FormErrorResponse),
         (status = 401, body = FormErrorResponse), (status = 403, body = FormErrorResponse),
         (status = 404, body = FormErrorResponse), (status = 500, body = FormErrorResponse)))]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err, skip_all, fields(acting_bot = tracing::field::Empty))]
 pub async fn create_form_handler<Service, EntityAccess, Authorization>(
     State(state): State<FormsRouterState<Service, EntityAccess, Authorization>>,
     user: SignedIn<Authorization>,
@@ -49,8 +50,28 @@ where
     Authorization: MacroAuthorizationService,
 {
     let creator = viewer_of(&user);
+    // An agent's SDK token (code mode) creates as its user, attributed to the
+    // agent like the native tool's creations, so channel delivery can share
+    // what it made for the request.
+    let acting_bot = user.user.authorization.user.agent_id;
+    tracing::Span::current().record(
+        "acting_bot",
+        tracing::field::display(
+            acting_bot.map_or_else(|| "none".to_owned(), |bot| bot.to_string()),
+        ),
+    );
+    let attributed_creator = Viewer {
+        acting_bot,
+        ..creator.clone()
+    };
     let source = match request.source {
-        FormSource::New { is_hidden_in_drive } => CreateSource::NewDatabase { is_hidden_in_drive },
+        FormSource::New {
+            is_hidden_in_drive,
+            anonymous,
+        } => CreateSource::NewDatabase {
+            is_hidden_in_drive,
+            anonymous,
+        },
         FormSource::Table {
             database_id,
             table_id,
@@ -67,7 +88,7 @@ where
     let detail = state
         .service
         .create_form(
-            creator,
+            attributed_creator,
             CreateFormCommand {
                 name: request.name,
                 source,
@@ -209,4 +230,30 @@ where
     Authorization: MacroAuthorizationService,
 {
     Ok(Json(state.service.collaborate_form(access.receipt).await?))
+}
+
+/// Replace a form's icon and color without changing its content timestamp.
+#[utoipa::path(put, tag = "forms", operation_id = "set_form_appearance", path = "/forms/{id}/appearance",
+    params(("id" = Uuid, Path, description = "Form id")),
+    request_body = model_entity::EntityAppearance,
+    responses((status = 200, body = model_entity::EntityAppearance), (status = 400, body = FormErrorResponse),
+        (status = 401, body = FormErrorResponse), (status = 403, body = FormErrorResponse),
+        (status = 404, body = FormErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn set_form_appearance<Service, EntityAccess, Authorization>(
+    access: FormReceipt<EditAccessLevel, EntityAccess, Authorization>,
+    State(state): State<FormsRouterState<Service, EntityAccess, Authorization>>,
+    Json(appearance): Json<model_entity::EntityAppearance>,
+) -> Result<Json<model_entity::EntityAppearance>, FormsApiError>
+where
+    Service: FormsService,
+    EntityAccess: EntityAccessService,
+    Authorization: MacroAuthorizationService,
+{
+    Ok(Json(
+        state
+            .service
+            .set_appearance(access.receipt, appearance)
+            .await?,
+    ))
 }

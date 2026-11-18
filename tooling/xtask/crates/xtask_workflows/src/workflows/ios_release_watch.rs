@@ -1,12 +1,13 @@
 //! `iOS Release Watch` — half-hourly cron closing the loop of the `iOS
 //! Native Check` gate (a job of [`super::web_app_check_main`]): that check
-//! fails on a PR with breaking native changes until the matching iOS version
-//! is live on the App Store, and nothing on GitHub's side notices when Apple
-//! releases it. This workflow looks at every open PR labeled `ios-update`
-//! (the label that started the [`super::ios_app_store_release`] run), asks
-//! App Store Connect whether the version + build committed at the PR head is
-//! live (built from the native tree of the PR's merge result, like the gate
-//! checks), and when it is, re-runs the PR's failed `iOS Native Check` job so
+//! fails on a PR with breaking native changes until Apple approves the
+//! matching iOS version, and nothing on GitHub's side notices when Apple
+//! does. This workflow looks at every open PR labeled `ios-update` (the label
+//! that started the [`super::ios_app_store_release`] run), asks App Store
+//! Connect whether Apple approved the version + build committed at the PR
+//! head (built from the native tree of the PR's merge result, like the gate
+//! checks), and when it did, re-runs failed `iOS Native Check` jobs from PR CI
+//! and the earlier standalone web workflow on that head so
 //! the gate turns green on its own. Re-running an existing job is how this
 //! stays within GitHub's rule that events created with the workflow token
 //! never start workflows.
@@ -25,6 +26,9 @@ use gh_workflow::{
 };
 
 use crate::workflows::{runners, steps, vars};
+
+#[cfg(test)]
+mod test;
 
 /// `true` when the first step found at least one PR to look at.
 const HAS_PRS: &str = "steps.prs.outputs.count != '0'";
@@ -46,7 +50,7 @@ pub fn ios_release_watch() -> Workflow {
 
 fn watch_job() -> Job {
     Job::default()
-        .name("Re-run the iOS Native Check once the App Store release is live")
+        .name("Re-run the iOS Native Check once Apple approves the App Store release")
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(15u32)
         .add_env(("GH_TOKEN", "${{ github.token }}"))
@@ -55,7 +59,7 @@ fn watch_job() -> Job {
         .add_step(steps::checkout(false, false).if_condition(gated()))
         .add_step(setup_bun())
         .add_step(fetch_credentials())
-        .add_step(rerun_live_checks())
+        .add_step(rerun_approved_checks())
 }
 
 fn gated() -> Expression {
@@ -97,10 +101,11 @@ fn fetch_credentials() -> Step<Run> {
         .add_env(("DOPPLER_TOKEN", vars::IOS_RELEASE_DOPPLER_TOKEN))
 }
 
-fn rerun_live_checks() -> Step<Run> {
-    Step::new("Re-run the check on PRs whose release is live")
+fn rerun_approved_checks() -> Step<Run> {
+    Step::new("Re-run the check on PRs whose release Apple approved")
         .run(concat!(
             include_str!("scripts/ios_native_tree.sh"),
+            include_str!("scripts/pr_ci_run.sh"),
             include_str!("scripts/ios_release_watch.sh")
         ))
         .shell("bash")

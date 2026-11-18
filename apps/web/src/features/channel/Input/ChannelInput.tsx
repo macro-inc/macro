@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
@@ -22,6 +23,7 @@ import { isMacroAgentId } from '@core/constant/macroAgent';
 import { isMacroNewId } from '@core/constant/macroNew';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createMessageComposer } from '@core/messages/create-message-composer';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -35,6 +37,7 @@ import type { EntityData } from '@entity';
 import AtIcon from '@icon/system/regular/at.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
+import FormatIcon from '@icon/system/regular/text-aa.svg';
 import ChartBarIcon from '@phosphor/chart-bar-horizontal.svg';
 import GifIcon from '@phosphor/gif.svg';
 import type { MessageParent } from '@service-storage/messages';
@@ -62,10 +65,11 @@ import {
 } from '../../dictation/components/dictation-controls';
 import { createComposerDictation } from '../../dictation/composer-dictation';
 import type { DictationController } from '../../dictation/core/types';
-import { useAgentMentionUsers } from '../use-agent-mention-users';
+import { useAgentMentionUserTransform } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { useMessageParticipants } from '../use-message-participants';
-import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
+import { channelFilePickerAccept } from './accepted-file-types';
+import { CollapsedAttachmentPreview } from './CollapsedAttachmentPreview';
 import {
   ComposerAddDrawer,
   ComposerAddMenu,
@@ -113,6 +117,8 @@ type ChannelInputFeatures = {
   gifs: boolean;
   /** Blocks plain-text hosts can't carry: headings, checklists, tables, math, embeds. */
   richBlocks: boolean;
+  attachments: boolean;
+  dictation: boolean;
 };
 
 const ALL_FEATURES: ChannelInputFeatures = {
@@ -120,6 +126,8 @@ const ALL_FEATURES: ChannelInputFeatures = {
   createItems: true,
   gifs: true,
   richBlocks: true,
+  attachments: true,
+  dictation: true,
 };
 
 /** Slash actions behind each switchable feature. */
@@ -145,8 +153,8 @@ export type ChannelInputProps = InputCallbacks & {
   attachmentTracker?: InputAttachmentTracker;
   /**
    * People surfaced in the `@`-mention typeahead. Defaults to the `parent`'s
-   * own people: a channel's participants, or the workspace contacts a
-   * document's composers offer.
+   * scope: channel participants, CRM teammates, or bounded personal suggestions
+   * on documents, projects and calls. An explicit empty list never widens.
    */
   participants?: Accessor<IUser[]>;
   /** Channel bots surfaced in the `@`-mention typeahead alongside users. */
@@ -160,7 +168,8 @@ export type ChannelInputProps = InputCallbacks & {
   onStartCall?: () => void;
   /** A call is live in the channel, so the add menu offers to join it. */
   callInProgress?: boolean;
-  children?: JSX.Element;
+  /** Custom action rows can place the composer's shared add menu. */
+  children?: JSX.Element | ((addMenu: JSX.Element) => JSX.Element);
   /** Whether to auto-focus the input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
   /**
@@ -186,6 +195,7 @@ export type ChannelInputProps = InputCallbacks & {
 function WebDefaultActions(props: {
   input: InputData;
   dictation: DictationController;
+  showDictation: boolean;
   addMenu: JSX.Element;
 }) {
   return (
@@ -197,7 +207,9 @@ function WebDefaultActions(props: {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
-        <DictationButton dictation={props.dictation} />
+        <Show when={props.showDictation}>
+          <DictationButton dictation={props.dictation} />
+        </Show>
         <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
@@ -224,6 +236,7 @@ function IosDefaultActions(props: { input: InputData; addMenu: JSX.Element }) {
 function DefaultActions(props: {
   input: InputData;
   dictation: DictationController;
+  showDictation: boolean;
   addMenu: JSX.Element;
 }) {
   return (
@@ -233,6 +246,7 @@ function DefaultActions(props: {
         <WebDefaultActions
           input={props.input}
           dictation={props.dictation}
+          showDictation={props.showDictation}
           addMenu={props.addMenu}
         />
       }
@@ -273,6 +287,7 @@ export function ChannelInput(props: ChannelInputProps) {
     restoreEditor: (snapshot) => restoreFailedSend(snapshot),
     trackTyping: () => acceptTyping,
     attachFiles: async (files) => {
+      if (!features().attachments) return;
       await uploadInputAttachments({
         files,
         tracker: attachmentTracker,
@@ -299,7 +314,7 @@ export function ChannelInput(props: ChannelInputProps) {
         options?: RestoreSnapshotOptions;
       }
     | undefined;
-  let pendingFocus = false;
+  let pendingFocus: (() => boolean) | undefined;
   // Caret placement requested by a `cursor: 'trailing-paragraph'` restore.
   // Applied on the next programmatic focus rather than at restore time.
   let pendingCursor: RestoreSnapshotOptions['cursor'];
@@ -337,39 +352,49 @@ export function ChannelInput(props: ChannelInputProps) {
     markdownEditor.controls.focus();
   };
 
-  const focusEditor = () => {
+  const focusEditor = (when: () => boolean = () => true) => {
+    if (!when()) return;
     if (!isEditorConnected) {
-      pendingFocus = true;
+      pendingFocus = when;
       return;
     }
     focusEditorNow();
   };
 
   const flushPendingFocus = () => {
-    if (!pendingFocus) return;
-    pendingFocus = false;
-    queueMicrotask(() => focusEditorNow());
+    const when = pendingFocus;
+    pendingFocus = undefined;
+    if (!when) return;
+    queueMicrotask(() => {
+      if (when()) focusEditorNow();
+    });
   };
 
+  // The editor is configured once, at mount.
+  const initialFeatures = features();
   const parentBots =
-    !props.bots && props.parent
+    initialFeatures.mentions !== false && !props.bots && props.parent
       ? useMessageBotMentionUsers(() => props.parent!)
       : () => [];
   const parentParticipants =
-    !props.participants && props.parent
+    initialFeatures.mentions !== false && !props.participants && props.parent
       ? useMessageParticipants(() => props.parent!)
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
-  // useAgentMentionUsers; participants and parent agents feed it here.
-  // The editor is configured once, at mount.
-  const initialFeatures = features();
+  // useAgentMentionUserTransform; it decorates only the current directory
+  // window or the explicit participant roster.
   const participantsOnly = initialFeatures.mentions === 'participants';
   const mentionUsers = participantsOnly
     ? () => props.participants?.() ?? []
-    : useAgentMentionUsers(() => [
-        ...(props.participants?.() ?? parentParticipants()),
-        ...(props.bots?.() ?? parentBots()),
-      ]);
+    : () => props.participants?.() ?? parentParticipants();
+  const withAgents =
+    participantsOnly || initialFeatures.mentions === false
+      ? undefined
+      : useAgentMentionUserTransform();
+  const transformUsers = withAgents
+    ? (users: readonly IUser[]) =>
+        withAgents([...users, ...(props.bots?.() ?? parentBots())])
+    : undefined;
 
   const groupMentions =
     !participantsOnly && (!props.parent || props.parent.type === 'channel');
@@ -387,6 +412,7 @@ export function ChannelInput(props: ChannelInputProps) {
       ...(initialFeatures.gifs ? [] : ['gif']),
     ],
     users: mentionUsers,
+    transformUsers,
     scrollContainer,
     onMentionCreate: (mention) => {
       mentionsTracker.onMentionCreate(mention);
@@ -403,6 +429,7 @@ export function ChannelInput(props: ChannelInputProps) {
     },
     sendMessage: () => fireAndForget(commands.send(), 'channel-input'),
     onPasteFilesAndDirs: (files, directories) => {
+      if (!features().attachments) return;
       fireAndForget(
         handleFileFolderDrop(files, directories, (entries) =>
           inputState.commands.attachFiles(entries.map((entry) => entry.file))
@@ -410,7 +437,11 @@ export function ChannelInput(props: ChannelInputProps) {
         'channel-input'
       );
     },
-    onAttachFromDisk: (files) => inputState.commands.attachFiles(files),
+    onAttachFromDisk: (files) => {
+      if (features().attachments) {
+        fireAndForget(inputState.commands.attachFiles(files), 'channel-input');
+      }
+    },
   });
   const markdownHandle = markdownEditor.buildHandle();
   const lexicalEditor = () => markdownHandle.lexical;
@@ -465,7 +496,7 @@ export function ChannelInput(props: ChannelInputProps) {
   // Whichever Macro the `@macro` typeahead offers: the classic chat reply or
   // the agent-session bot, depending on rollout.
   const macroUser = () =>
-    mentionUsers().find(
+    (transformUsers ? transformUsers([]) : (mentionUsers() ?? [])).find(
       (user) => isMacroAgentId(user.id) || isMacroNewId(user.id)
     );
   const addMenuGroups = (): ComposerAddMenuGroup[] => {
@@ -495,7 +526,7 @@ export function ChannelInput(props: ChannelInputProps) {
       return [
         {
           id: 'gif',
-          label: 'GIF',
+          label: t('channelComposer.gif'),
           icon: <GifIcon class="size-5" />,
           onSelect: () =>
             runInEditor((editor) => action.action(editor, actionContext), {
@@ -515,7 +546,7 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'mention',
-                  label: 'Mention',
+                  label: t('channelComposer.mention'),
                   icon: <AtIcon class="size-5" />,
                   hint: '@',
                   onSelect: () =>
@@ -524,38 +555,57 @@ export function ChannelInput(props: ChannelInputProps) {
                 },
               ]
             : []),
-          {
-            id: 'attach',
-            label: 'Attach files',
-            icon: <PaperclipIcon class="size-5" />,
-            onSelect: () => collapsedInput.attach(),
-          },
+          ...(isMobile()
+            ? [
+                {
+                  id: 'format-text',
+                  label: t('channelComposer.formatText'),
+                  icon: <FormatIcon class="size-5" />,
+                  onSelect: () => {
+                    collapsedInput.expand();
+                    focusEditor();
+                    commands.toggleFormatRibbon();
+                  },
+                  focusesEditor: true,
+                },
+              ]
+            : []),
+          ...(features().attachments
+            ? [
+                {
+                  id: 'attach',
+                  label: t('channelComposer.attachFiles'),
+                  icon: <PaperclipIcon class="size-5" />,
+                  onSelect: () => collapsedInput.attach(),
+                },
+              ]
+            : []),
           ...gif(),
         ],
       },
       {
-        label: 'Create',
+        label: t('channelComposer.create'),
         items: !features().createItems
           ? []
           : [
               ...create(
                 'task',
-                'New task',
+                t('channelComposer.newTask'),
                 <EntityIcon targetType="task" size="xs" />
               ),
               ...create(
                 'poll',
-                'New poll',
+                t('channelComposer.newPoll'),
                 <ChartBarIcon class="size-3.5 text-violet" />
               ),
               ...create(
                 'form',
-                'New form',
+                t('channelComposer.newForm'),
                 <EntityIcon targetType="form" size="xs" />
               ),
               ...create(
                 'document',
-                'New document',
+                t('channelComposer.newDocument'),
                 <EntityIcon targetType="md" size="xs" />
               ),
             ],
@@ -566,7 +616,7 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'ask-macro',
-                  label: 'Ask Macro',
+                  label: t('channelComposer.askMacro'),
                   icon: <EntityIcon targetType="agent" size="xs" />,
                   hint: '@macro',
                   onSelect: () =>
@@ -596,7 +646,9 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'call',
-                  label: callInProgress ? 'Join call' : 'Start a call',
+                  label: callInProgress
+                    ? t('channelComposer.joinCall')
+                    : t('channelComposer.startCall'),
                   icon: (
                     <PhoneIcon
                       class={cn('size-3.5', callInProgress && 'text-success')}
@@ -611,12 +663,15 @@ export function ChannelInput(props: ChannelInputProps) {
     ];
   };
   const [addDrawerOpen, setAddDrawerOpen] = createSignal(false);
+  // A host with every add action switched off (a call guest) gets no menu.
   const addMenu = (pill?: boolean) => (
-    <ComposerAddMenu
-      groups={addMenuGroups()}
-      onOpenDrawer={() => setAddDrawerOpen(true)}
-      class={pill ? 'not-touch:light-mode:text-composer-ink' : undefined}
-    />
+    <Show when={addMenuGroups().some((group) => group.items.length > 0)}>
+      <ComposerAddMenu
+        groups={addMenuGroups()}
+        onOpenDrawer={() => setAddDrawerOpen(true)}
+        class={pill ? 'not-touch:light-mode:text-composer-ink' : undefined}
+      />
+    </Show>
   );
 
   const { isCompact: oneLineInput } = createComposerLayout(lexicalEditor(), {
@@ -703,14 +758,17 @@ export function ChannelInput(props: ChannelInputProps) {
   props.onReady?.({
     snapshot: inputState.snapshot,
     clear: () => markdownEditor.controls.clear(),
-    focus: () => {
+    focus: (options) => {
+      if (options?.when?.() === false) return;
       // A collapsed pill hides the editor; programmatic focus implies intent
       // to type, so expand first.
       collapsedInput.expand();
-      focusEditor();
+      focusEditor(options?.when);
     },
     send: commands.send,
-    attachFiles: (files) => inputState.commands.attachFiles(files),
+    attachFiles: async (files) => {
+      if (features().attachments) await inputState.commands.attachFiles(files);
+    },
     insertEntityMention,
     previewEntityMentionInsertion,
     clearEntityMentionInsertionPreview,
@@ -738,6 +796,9 @@ export function ChannelInput(props: ChannelInputProps) {
       // Block upstream escape handlers when ESC should close inline menus.
       if (markdownEditor.controls.isInlineMenuOpen()) return true;
       if (!props.onEscape) return false;
+      // Lexical's blur, as its own Esc does: it also drops the DOM selection,
+      // which would otherwise pull focus back when the selection next syncs.
+      markdownEditor.lexical.blur();
       props.onEscape();
       return true;
     },
@@ -746,6 +807,7 @@ export function ChannelInput(props: ChannelInputProps) {
   const renderSurfaceContent = () => {
     return (
       <Input.DropZone
+        enabled={features().attachments}
         onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
         onDragEnd={() => inputState.setIsDraggedOver(false)}
       >
@@ -755,9 +817,16 @@ export function ChannelInput(props: ChannelInputProps) {
           inert={dictation.active()}
           classList={{ invisible: dictation.active() }}
         >
-          <Input.DropOverlay />
+          <Show when={features().attachments}>
+            <Input.DropOverlay />
+          </Show>
           <Input.Layout.Body>
-            <Input.FormatRibbon>
+            <Input.FormatRibbon
+              class="overflow-x-auto"
+              data-keep-keyboard
+              onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+            >
               <FormatButtons
                 selectionState={() => markdownEditor.selection}
                 onInlineFormat={(format) =>
@@ -801,15 +870,22 @@ export function ChannelInput(props: ChannelInputProps) {
                 />
               </Input.Editor>
             </Input.Layout.Editor>
-            <Input.Attachments kind="media" />
-            <Input.Attachments kind="document" />
+            <Show when={features().attachments}>
+              <Input.Attachments kind="media" />
+              <Input.Attachments kind="document" />
+            </Show>
           </Input.Layout.Body>
           <Switch>
-            <Match when={props.children}>{props.children}</Match>
+            <Match when={props.children}>
+              {typeof props.children === 'function'
+                ? props.children(addMenu())
+                : props.children}
+            </Match>
             <Match when>
               <DefaultActions
                 input={inputState.view()}
                 dictation={dictation}
+                showDictation={features().dictation}
                 // The collapsed pill carries the + while collapsed; one + at
                 // a time, so the menu never anchors to a hidden one.
                 addMenu={<Show when={!isCollapsed()}>{addMenu()}</Show>}
@@ -841,9 +917,10 @@ export function ChannelInput(props: ChannelInputProps) {
         type="file"
         class="hidden"
         multiple
-        accept={props.fileAccept ?? CHANNEL_FILE_PICKER_ACCEPT}
+        accept={props.fileAccept ?? channelFilePickerAccept()}
         onChange={collapsedInput.onFilePickerChange}
         data-collapsed-input-file-picker
+        disabled={!features().attachments}
       />
       <Show when={isCollapsed()}>
         <CollapsedInput
@@ -860,6 +937,11 @@ export function ChannelInput(props: ChannelInputProps) {
           // mount, but the placeholder can update (e.g. channel name loads).
           placeholder={props.input.placeholder}
           attachmentCount={inputState.view().attachments?.length ?? 0}
+          attachmentPreview={
+            <CollapsedAttachmentPreview
+              attachments={inputState.view().attachments}
+            />
+          }
           pending={inputState.view().hasPendingAttachments}
           disabled={!hasSendableInputContent(inputState.view())}
           getFocusTarget={() => lexicalEditor().getRootElement()}
@@ -887,9 +969,13 @@ export function ChannelInput(props: ChannelInputProps) {
         )}
       >
         {renderSurfaceContent()}
-        <DictationPanel dictation={dictation} />
+        <Show when={features().dictation}>
+          <DictationPanel dictation={dictation} />
+        </Show>
       </Dynamic>
-      <DictationFeedback dictation={dictation} />
+      <Show when={features().dictation}>
+        <DictationFeedback dictation={dictation} />
+      </Show>
     </Input.Root>
   );
 }

@@ -1,5 +1,4 @@
 import '@entity/composed/ListEntity.css';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SwipableRow,
   SwipableRowContext,
@@ -17,26 +16,21 @@ import {
   unreadFilterFn,
   useIsShared,
 } from '@entity';
-import { NarrowLayout } from '@entity/composed/list-entity/narrow-layout';
 import {
   type BaseListEntityProps,
   hasSearchContentHits,
   useCharacterCount,
-  useListLayout,
 } from '@entity/composed/list-entity/shared';
 import type { EntityRowConfig } from '@entity/extractors-notification';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
-import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
-  enqueueDocumentWakeup,
-  isWakeableDocument,
-} from '@queries/preview';
+import { enqueueDocumentWakeup, isWakeableDocument } from '@queries/preview';
 import {
   getStreamState,
   subscribeToStreamState,
 } from '@service-connection/stream-events';
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui/utils/classname';
+import type { Accessor } from 'solid-js';
 import {
   createEffect,
   createSignal,
@@ -46,10 +40,12 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
+import type { DateBucketBoundaries } from '../../core/task-due-date';
 import { TaskGridLayout } from './TaskGridLayout';
 
 type TaskListEntityProps = Omit<BaseListEntityProps, 'entity'> & {
   entity: TaskEntityWithProperties;
+  calendar: Accessor<DateBucketBoundaries>;
   rowId?: string;
   showUnrollNotifications?: boolean;
   /** Show the Project column (Projects enabled). */
@@ -57,6 +53,8 @@ type TaskListEntityProps = Omit<BaseListEntityProps, 'entity'> & {
   referencePropertyIds?: readonly string[];
   /** Called when "filter by tag" is clicked on an entity row tag. */
   onFilterByTag?: (optionId: string) => void;
+  /** Called when "Filter by" is clicked in an assignee's hover card. */
+  onFilterByAssignee?: (userId: string) => void;
 };
 
 function MaybeEntityRow(props: {
@@ -81,17 +79,14 @@ function MaybeEntityRow(props: {
 }
 
 /**
- * Task-specific list entity that renders properties (Status, Priority,
- * Assignees, Due Date) in fixed-width grid columns so they line up
- * vertically across rows in a list.
+ * Task-specific list entity with leading Priority and Status controls and aligned
+ * Project, Assignees, Due date, Updated, and Created by grid columns.
  */
 export function TaskListEntity(props: TaskListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
-  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
   createEffect(() => {
-    if (!bulkWakeupEnabled().enabled) return;
     if (!isWakeableDocument(props.entity)) return;
 
     enqueueDocumentWakeup(props.entity);
@@ -121,6 +116,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
 
   const layoutProps = () => ({
     entity: props.entity,
+    calendar: props.calendar,
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
     onChecked: props.onChecked,
@@ -135,14 +131,13 @@ export function TaskListEntity(props: TaskListEntityProps) {
     showProject: props.showProject,
     referencePropertyIds: props.referencePropertyIds,
     onFilterByTag: props.onFilterByTag,
+    onFilterByAssignee: props.onFilterByAssignee,
   });
 
   const draggable = createEntityDraggable({
     entity: props.entity,
     splitId: useSplitPanel()?.handle?.id,
   });
-
-  const isWide = useListLayout()?.isWide ?? (() => true);
 
   return (
     <Entity.Root
@@ -160,7 +155,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
       }}
       ref={mergeRefs(props.ref, draggable)}
       class={cn(
-        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 rounded-xl',
+        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 mobile:py-0 rounded-xl',
         {
           'min-h-10 mx-1': !isMobile(),
           'bg-list-selected': props.checked,
@@ -175,7 +170,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
       onMouseMove={props.onMouseMove}
     >
       <Switch>
-        <Match when={isWide()}>
+        <Match when={!isMobile()}>
           <MaybeEntityRow
             entityId={props.entity.id}
             config={props.entityRowConfig}
@@ -188,7 +183,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <NarrowLayout {...layoutProps()} />
+            <TaskGridLayout {...layoutProps()} compact />
             <Show when={props.referencePropertyIds}>
               {(ids) => (
                 <div class="px-3 pb-1">

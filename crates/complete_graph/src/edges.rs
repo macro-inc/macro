@@ -33,6 +33,7 @@ use predicate_index::{RecordKey, utc_timestamp_micros};
 use soup_filter_projection::{
     MailCacheProjectionFacts, SoupCacheProjectionSupplement, encode_cache_projection_supplement,
 };
+use tracing::Instrument;
 use uuid::Uuid;
 
 /// The types of the edge readers for soup
@@ -113,7 +114,17 @@ where
         let projection = load_email_thread_mail_projection::<ER>(ctx, thread_id).await?;
         let facts = &projection.cache_facts;
         let record_key = RecordKey::new(format!("GraphqlSoupEmailThread:{thread_id}"))?;
-        let supplement = SoupCacheProjectionSupplement::mail(
+        let build_supplement = if ctx
+            .data_opt::<crate::MailCacheProfile>()
+            .copied()
+            .unwrap_or_default()
+            .is_current()
+        {
+            SoupCacheProjectionSupplement::mail
+        } else {
+            SoupCacheProjectionSupplement::mail_legacy_v2
+        };
+        let supplement = build_supplement(
             record_key,
             MailCacheProjectionFacts::new(
                 facts.latest_non_spam_message_ts.map(utc_timestamp_micros),
@@ -259,7 +270,7 @@ where
         AgentSessionBotLoader {
             load_batch: Arc::new(load_batch),
         },
-        tokio::spawn,
+        |batch| tokio::spawn(batch.in_current_span()),
     )
 }
 
@@ -457,7 +468,7 @@ where
         AgentSessionLogLoader {
             load_batch: Arc::new(load_batch),
         },
-        tokio::spawn,
+        |batch| tokio::spawn(batch.in_current_span()),
     )
 }
 
@@ -570,6 +581,13 @@ where
         Ok(metadata
             .latest_inbound_message_ts
             .map(|timestamp| timestamp.to_rfc3339()))
+    }
+
+    /// Whether any message was received rather than drafted or sent. Only
+    /// threads with received mail can return to the inbox.
+    async fn has_received_mail(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(metadata.has_received_mail)
     }
 
     /// Most recent explicit return from an email reminder.

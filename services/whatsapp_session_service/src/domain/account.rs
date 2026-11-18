@@ -5,26 +5,28 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use external_chat::domain::models::{BackfillState, ExternalChatError};
+use external_chat::domain::models::ExternalChatError;
 use external_chat::domain::ports::ExternalChatResult;
 use tokio::sync::{Notify, Semaphore, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    BackfillWork, ClaimedSend, HistoryPage, Lease, OutgoingContent, PairingUpdate, PairingWork,
-    SendOutcome, SessionScope,
+    ClaimedSend, Lease, OutgoingContent, PairingUpdate, PairingWork, SendOutcome, SessionScope,
 };
 use whatsapp_linked::domain::models::{AccountState, GroupInfo, PairingState};
 use whatsapp_linked::domain::session::SessionService;
 
 use super::inbound::InboundGate;
 use super::media::{MEDIA_LIMIT_BYTES, MediaImports, TRANSFERS_PER_ACCOUNT};
+use super::pictures::{PictureChecks, PicturePacing};
 use super::ports::{
     AccountControl, AccountExit, AccountRunner, AccountSignal, SendFailure, SessionConnector,
     SessionError, SessionEvent, Traced, UploadedMedia, WhatsAppSession,
 };
 
+mod backfill;
+mod lookups;
 #[cfg(test)]
 mod test;
 
@@ -41,12 +43,8 @@ pub const GROUPS_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
 pub const BACKFILL_PAGE: u32 = 50;
 
 /// A page request the phone has not answered after this is unanswered: the
-/// import waits for the phone.
+/// import waits until the owner starts it again.
 pub const BACKFILL_TIMEOUT: Duration = Duration::from_secs(60);
-
-/// How often an import waiting for the phone asks again (reconnecting asks
-/// at once).
-pub const BACKFILL_RETRY: Duration = Duration::from_secs(5 * 60);
 
 /// Timings and batch sizes for one account.
 #[derive(Debug, Clone, Copy)]
@@ -64,8 +62,8 @@ pub struct AccountConfig {
     pub groups_refresh_interval: Duration,
     /// [`BACKFILL_TIMEOUT`] in production.
     pub backfill_timeout: Duration,
-    /// [`BACKFILL_RETRY`] in production.
-    pub backfill_retry: Duration,
+    /// Pacing of profile-picture queries.
+    pub pictures: PicturePacing,
 }
 
 /// Runs leased accounts against the linked-devices domain.
@@ -181,6 +179,21 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
         let media_wake = Arc::new(Notify::new());
         let (connected, connected_receiver) = watch::channel(false);
         let media_stop = CancellationToken::new();
+        let picture_wake = Arc::new(Notify::new());
+        // Aborted if this runner is, like the import loop.
+        let picture_checks = tokio_util::task::AbortOnDropHandle::new(tokio::spawn(
+            PictureChecks {
+                sessions: self.sessions.clone(),
+                scope: lease.scope,
+                session: Arc::clone(&session),
+                wake: Arc::clone(&picture_wake),
+                connected: connected_receiver.clone(),
+                every: self.config.tick_every,
+                pacing: self.config.pictures,
+                fenced: gate.fenced.clone(),
+            }
+            .run(media_stop.clone()),
+        ));
         // Aborted if this runner is: the import loop never outlives it.
         let imports = tokio_util::task::AbortOnDropHandle::new(tokio::spawn(
             MediaImports {
@@ -203,6 +216,7 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
             gate,
             transfers,
             media_wake,
+            picture_wake,
             connected,
             pairing,
             reconnecting: false,
@@ -212,8 +226,16 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
         };
         let exit = running.serve(events, control).await;
         media_stop.cancel();
+        // A check holds nothing that needs finishing (an interrupted claim
+        // is due again after its hold), so the account never waits on one.
+        picture_checks.abort();
         if exit == AccountExit::Stopped {
             imports.abort();
+        }
+        if let Err(error) = picture_checks.await
+            && error.is_panic()
+        {
+            tracing::error!(error = %error, "The WhatsApp picture check loop panicked");
         }
         match imports.await {
             Err(error) if error.is_panic() => {
@@ -306,6 +328,8 @@ struct Running<'service, Session> {
     transfers: Arc<Semaphore>,
     /// Wakes the import loop after ingestion.
     media_wake: Arc<Notify>,
+    /// Wakes the picture check loop when a picture changed.
+    picture_wake: Arc<Notify>,
     connected: watch::Sender<bool>,
     pairing: Option<PairingWork>,
     reconnecting: bool,
@@ -431,18 +455,11 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                 Next::Exit(AccountExit::Failed)
             }
             SessionEvent::Chats(chats) => {
-                let result = async {
-                    let anchored = survive(
-                        self.sessions.update_chats(self.scope, &chats).await,
-                        "update_chats",
-                    )?;
-                    // A chat waiting for its first message got one: import now.
-                    if anchored == Some(true) {
-                        Box::pin(self.backfill(false)).await?;
-                    }
-                    Ok(())
-                }
-                .await;
+                let result = survive(
+                    self.sessions.update_chats(self.scope, &chats).await,
+                    "update_chats",
+                )
+                .map(drop);
                 self.exit_on(result)
             }
             SessionEvent::HistoryPage(page) => {
@@ -451,6 +468,17 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             }
             SessionEvent::GroupChanged { group_jid, info } => {
                 let result = self.group_changed(&group_jid, info.map(|info| *info)).await;
+                self.exit_on(result)
+            }
+            SessionEvent::PictureChanged { jids, picture_id } => {
+                let result = survive(
+                    self.sessions
+                        .picture_changed(self.scope, &jids, picture_id.as_deref())
+                        .await,
+                    "picture_changed",
+                )
+                .map(drop);
+                self.picture_wake.notify_one();
                 self.exit_on(result)
             }
         }
@@ -520,6 +548,8 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                 AccountSignal::Pairing(pairing) => self.check_pairing(pairing).await,
                 AccountSignal::Send => self.dispatch_sends().await,
                 AccountSignal::Groups => self.requested_refresh().await,
+                AccountSignal::Lookup => self.answer_lookups().await,
+                AccountSignal::History => Box::pin(self.backfill()).await,
                 AccountSignal::Changed => self.account_changed().await,
                 AccountSignal::Resync => self.resync().await,
             }
@@ -537,7 +567,8 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             self.replay().await?;
             if self.is_connected() {
                 self.dispatch_sends().await?;
-                Box::pin(self.backfill(false)).await?;
+                self.answer_lookups().await?;
+                Box::pin(self.backfill()).await?;
             }
             Ok(())
         }
@@ -588,8 +619,9 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
         self.refresh_groups().await?;
         self.replay().await?;
         self.dispatch_sends().await?;
-        // The phone may have been the reason pages went unanswered.
-        Box::pin(self.backfill(true)).await
+        self.answer_lookups().await?;
+        // An import the owner started while the connection was down.
+        Box::pin(self.backfill()).await
     }
 
     /// The phone shows a code: surface it on the pairing row, then confirm.
@@ -718,8 +750,7 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             Ok(Some(AccountState::LoggedOut) | None) => Err(AccountExit::Idle),
             Ok(Some(AccountState::Pairing | AccountState::Connected)) => {
                 self.gate.reload().await;
-                // A group added just now starts importing its earlier messages.
-                Box::pin(self.backfill(false)).await
+                Ok(())
             }
             Err(report) => {
                 tracing::warn!(error = %report, "Reading the WhatsApp account state failed");
@@ -727,128 +758,6 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                 Ok(())
             }
         }
-    }
-
-    /// Imports earlier messages of the owner's newly added groups from the
-    /// phone, a page at a time: asks for the next page of every group that
-    /// has none outstanding, marks unanswered requests as waiting for the
-    /// phone, and asks again after [`AccountConfig::backfill_retry`] (at once
-    /// with `retry_now`, after reconnecting).
-    async fn backfill(&mut self, retry_now: bool) -> Result<(), AccountExit> {
-        if !self.is_connected() {
-            return Ok(());
-        }
-        let Some(work) = survive(
-            self.sessions.backfill_work(self.scope).await,
-            "backfill_work",
-        )?
-        else {
-            return Ok(());
-        };
-        let now = chrono::Utc::now();
-        let elapsed = |at: Option<chrono::DateTime<chrono::Utc>>| {
-            at.and_then(|at| (now - at).to_std().ok())
-                .unwrap_or(Duration::MAX)
-        };
-        for group in work {
-            match group.state {
-                BackfillState::Running if group.requested_at.is_some() => {
-                    if elapsed(group.requested_at) >= self.config.backfill_timeout {
-                        tracing::info!(
-                            account_id = %self.scope.account_id,
-                            chat_id = %group.chat_id,
-                            "The phone did not answer a history request; waiting for it"
-                        );
-                        survive(
-                            self.sessions
-                                .backfill_unanswered(self.scope, group.chat_id)
-                                .await,
-                            "backfill_unanswered",
-                        )?;
-                    }
-                }
-                BackfillState::WaitingForPhone
-                    if !retry_now && elapsed(group.requested_at) < self.config.backfill_retry => {}
-                _ => Box::pin(self.request_page(&group)).await?,
-            }
-        }
-        Ok(())
-    }
-
-    /// Asks the phone for the page before the group's cursor (first: before
-    /// the chat's newest message, which is asked for itself when it came
-    /// before the group was added and so was not kept).
-    async fn request_page(&mut self, group: &BackfillWork) -> Result<(), AccountExit> {
-        let Some(before) = group.cursor.as_ref().or(group.anchor.as_ref()) else {
-            // No message known in this chat yet: the first one starts it.
-            if group.state != BackfillState::WaitingForMessage {
-                survive(
-                    self.sessions
-                        .backfill_waiting_for_message(self.scope, group.chat_id)
-                        .await,
-                    "backfill_waiting_for_message",
-                )?;
-            }
-            return Ok(());
-        };
-        let span = tracing::info_span!(
-            "whatsapp.backfill.request",
-            account_id = %self.scope.account_id,
-            chat_id = %group.chat_id,
-            imported = group.imported,
-            first = group.cursor.is_none(),
-            outcome = tracing::field::Empty,
-        );
-        async {
-            let first = group.cursor.is_none();
-            if first
-                && before.at <= group.adopted_at + chrono::Duration::seconds(10)
-                && let Err(error) = self.session.request_message(&group.group_jid, before).await
-            {
-                tracing::warn!(error = %error, "Asking the phone for a chat's newest message failed");
-            }
-            match self
-                .session
-                .request_history(&group.group_jid, before, BACKFILL_PAGE)
-                .await
-            {
-                Ok(()) => {
-                    tracing::Span::current().record("outcome", "requested");
-                    survive(
-                        self.sessions
-                            .backfill_requested(self.scope, group.chat_id)
-                            .await,
-                        "backfill_requested",
-                    )?;
-                }
-                Err(SessionError::Fenced) => return Err(AccountExit::Fenced),
-                Err(error) => {
-                    tracing::Span::current().record("outcome", "send_failed");
-                    tracing::warn!(error = %error, "Asking the phone for earlier messages failed");
-                }
-            }
-            Ok(())
-        }
-        .instrument(span)
-        .await
-    }
-
-    /// The phone answered with a page: record it, then ask for the next one.
-    async fn history_page(&mut self, page: &HistoryPage) -> Result<(), AccountExit> {
-        // The page's messages were queued first; ingest them before counting.
-        self.replay().await?;
-        let states = survive(
-            self.sessions.backfill_page(self.scope, page).await,
-            "backfill_page",
-        )?
-        .unwrap_or_default();
-        if states
-            .iter()
-            .any(|(_, state)| *state == BackfillState::Running)
-        {
-            Box::pin(self.backfill(false)).await?;
-        }
-        Ok(())
     }
 
     /// A page asked for fresh groups: refresh unless that happened recently.

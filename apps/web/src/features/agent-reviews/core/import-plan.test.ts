@@ -312,22 +312,33 @@ describe('importReviewPhase', () => {
       importReviewPhase({ presentedAt: null }, undefined, undefined)
     ).toEqual({ kind: 'preparing' });
     expect(
-      importReviewPhase({ presentedAt: 1 }, { status: 'pending' }, progress)
+      importReviewPhase(
+        { presentedAt: 1 },
+        { status: 'pending', error: null },
+        progress
+      )
     ).toEqual({ kind: 'plan' });
     expect(
       importReviewPhase(
         { presentedAt: 1 },
-        { status: 'pending' },
+        { status: 'pending', error: null },
         { ...progress, status: 'running' }
       )
     ).toEqual({ kind: 'planning' });
     expect(
-      importReviewPhase({ presentedAt: 1 }, { status: 'dismissed' }, undefined)
+      importReviewPhase(
+        { presentedAt: 1 },
+        { status: 'dismissed', error: null },
+        undefined
+      )
     ).toEqual({ kind: 'dismissed' });
   });
 
   it('follows the run once the plan is approved', () => {
-    const completed = { status: 'completed' as const };
+    const completed: { status: 'completed'; error: null } = {
+      status: 'completed',
+      error: null,
+    };
     expect(importReviewPhase({ presentedAt: 1 }, completed, progress)).toEqual({
       kind: 'importing',
     });

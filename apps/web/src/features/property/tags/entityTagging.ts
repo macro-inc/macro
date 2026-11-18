@@ -44,7 +44,9 @@ export function tagEntityType(
         'calendar_event',
         'foreign',
         'database',
-        'form'
+        'form',
+        'harness',
+        'team'
       ),
       () => undefined
     )

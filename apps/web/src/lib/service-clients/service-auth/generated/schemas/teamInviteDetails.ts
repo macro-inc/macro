@@ -18,6 +18,8 @@ export interface TeamInviteDetails {
   id: string;
   /** The user who sent the invitation */
   invited_by: string;
+  /** Whether the invite creates an agent account */
+  is_agent: boolean;
   /** When the invite was last sent */
   last_sent_at: string;
   /** The team id */

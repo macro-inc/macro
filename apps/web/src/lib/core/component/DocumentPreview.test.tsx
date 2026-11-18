@@ -66,7 +66,7 @@ vi.mock('@app/features/calendar-view/components/SharedEventActions', () => ({
   ),
 }));
 
-import { DocumentPreviewContent } from './DocumentPreview';
+import { DocumentPreviewContent, PopupPreview } from './DocumentPreview';
 import { DocumentPreviewSheet } from './DocumentPreviewSheet';
 
 function calendarItem(event: Partial<CalendarMentionEvent>): PreviewItem {
@@ -234,6 +234,84 @@ describe('calendar mention preview card', () => {
   });
 });
 
+describe('calendar mention card for a Macro call', () => {
+  const callUrl = 'https://macro.com/app/meet/join/abcdefghijklmnop';
+  const call = {
+    location: callUrl,
+    description: `<p>Agenda</p><p>Join Macro call: <a href="${callUrl}">${callUrl}</a></p>`,
+  };
+
+  it('joins from one row instead of printing the link', () => {
+    mocks.item = calendarItem(call);
+    const view = renderCard();
+
+    expect(view.container.textContent).not.toContain('/meet/join/');
+    expect(view.container.textContent).toContain('Agenda');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join Macro call' }));
+    expect(mocks.openExternalUrl).toHaveBeenCalledWith(callUrl);
+  });
+
+  it('keeps a typed location beside the join row', () => {
+    mocks.item = calendarItem({ ...call, location: 'Room 2' });
+    const view = renderCard();
+
+    expect(view.container.textContent).toContain('Room 2');
+    expect(
+      screen.getByRole('button', { name: 'Join Macro call' })
+    ).toBeTruthy();
+  });
+
+  // Channel shares carry the meeting, not a way into its call: the .ics
+  // download and the imported snapshot leave the link out the same way.
+  it('gives a channel-shared meeting neither the link nor a join row', () => {
+    mocks.item = calendarItem({ ...call, viewerEventId: null });
+    const view = renderCard();
+
+    expect(view.container.textContent).not.toContain('/meet/join/');
+    expect(view.container.textContent).toContain('Agenda');
+    expect(
+      screen.queryByRole('button', { name: 'Join Macro call' })
+    ).toBeNull();
+  });
+
+  it('leaves a Google Meet link where it was', () => {
+    const meetUrl = 'https://meet.google.com/abc-defg-hij';
+    mocks.item = calendarItem({ location: meetUrl });
+    const view = renderCard();
+
+    expect(view.container.textContent).toContain(meetUrl);
+    expect(
+      screen.queryByRole('button', { name: 'Join Macro call' })
+    ).toBeNull();
+  });
+
+  // Native apps route the link in-app, behind the sheet.
+  it('closes the phone sheet once Join has left it', async () => {
+    mocks.item = calendarItem(call);
+    const onOpenChange = vi.fn();
+    render(() => (
+      <DocumentPreviewSheet
+        open
+        onOpenChange={onOpenChange}
+        documentInfo={{
+          id: 'mentioned-event',
+          type: 'calendar',
+          params: {},
+          isOpenable: true,
+        }}
+      />
+    ));
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Join Macro call' })
+    );
+
+    expect(mocks.openExternalUrl).toHaveBeenCalledWith(callUrl);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
 describe('calendar mention card for a meeting the viewer holds', () => {
   it.each([
     ['snapshot', 'Your copy is on your calendar'],
@@ -272,10 +350,12 @@ describe('calendar mention card for a meeting the viewer holds', () => {
     mocks.item = calendarItem({ viewerCopy: 'snapshot' });
     mocks.openCalendarEventSplit.mockResolvedValueOnce(true);
     const onOpenChange = vi.fn();
+    const onOpened = vi.fn();
     render(() => (
       <DocumentPreviewSheet
         open
         onOpenChange={onOpenChange}
+        onOpened={onOpened}
         documentInfo={{
           id: 'mentioned-event',
           type: 'calendar',
@@ -291,16 +371,19 @@ describe('calendar mention card for a meeting the viewer holds', () => {
       expect.objectContaining({ eventId: 'viewer-copy' })
     );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(onOpened).toHaveBeenCalledOnce();
   });
 
   it('keeps the phone sheet up when nothing could open', async () => {
     mocks.item = calendarItem({ viewerCopy: 'snapshot' });
     mocks.openCalendarEventSplit.mockResolvedValueOnce(false);
     const onOpenChange = vi.fn();
+    const onOpened = vi.fn();
     render(() => (
       <DocumentPreviewSheet
         open
         onOpenChange={onOpenChange}
+        onOpened={onOpened}
         documentInfo={{
           id: 'mentioned-event',
           type: 'calendar',
@@ -317,6 +400,31 @@ describe('calendar mention card for a meeting the viewer holds', () => {
     );
     await Promise.resolve();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(onOpened).not.toHaveBeenCalled();
+  });
+
+  it('forwards a successful hover-preview open to its host', async () => {
+    mocks.item = calendarItem({ viewerCopy: 'snapshot' });
+    mocks.openCalendarEventSplit.mockResolvedValueOnce(true);
+    const onOpened = vi.fn();
+    render(() => (
+      <PopupPreview
+        mouseEnter={() => {}}
+        mouseLeave={() => {}}
+        onOpened={onOpened}
+        documentInfo={{
+          id: 'mentioned-event',
+          type: 'calendar',
+          params: {},
+          isOpenable: true,
+        }}
+      />
+    ));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+
+    await waitFor(() => expect(onOpened).toHaveBeenCalledOnce());
+    expect(mocks.openCalendarEventSplit).toHaveBeenCalledOnce();
   });
 
   it('adds nothing to a mention of the viewer’s own copy', () => {

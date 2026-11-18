@@ -5,6 +5,7 @@ use crate::context::ApiContext;
 use crate::model::connection::StoredConnectionEntity;
 use crate::model::message::Message;
 use crate::model::sender::MessageReceipt;
+use crate::service::connection::SendOutcome;
 use crate::service::redis::MessageWithConnection;
 use anyhow::Result;
 use futures::future::join_all;
@@ -92,12 +93,13 @@ async fn send_messages_to_connections(
 
         async move {
             let instant = Instant::now();
-            let active = api_context
-                .connection_manager
-                .send_message(connection.connection_id.as_str(), message.clone())
-                .await
-                .is_ok()
-                && connection.is_active_in_threshold(Some(DEFAULT_TIMEOUT_THRESHOLD));
+            let active = matches!(
+                api_context
+                    .connection_manager
+                    .send_message(connection.connection_id.as_str(), message.clone())
+                    .await,
+                Ok(SendOutcome::Queued)
+            ) && connection.is_active_in_threshold(Some(DEFAULT_TIMEOUT_THRESHOLD));
 
             tracing::trace!(
                 "sent message to connection directly in {:?}",

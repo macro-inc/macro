@@ -1,7 +1,7 @@
 import { useMaybeBlockId } from '@core/block';
-import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import type { Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { cn, Layer } from '@ui';
@@ -40,7 +40,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
             <Layer depth={2}>
               {/* Stop clicks from bubbling to the row (which opens the entity). */}
               <div
-                class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full hover:bg-surface/50 text-left @max-[840px]/u-list:hidden"
+                class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full hover:bg-button-tertiary-hover hover:text-ink text-left @max-[840px]/u-list:hidden"
                 onClick={(e) => e.stopPropagation()}
                 role="presentation"
               >
@@ -55,6 +55,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
 
   return (
     <Property.Root
+      class="min-w-0 max-w-full @max-[840px]/u-list:w-full"
       property={props.property}
       canEdit={ctx.canEdit}
       onSave={ctx.saveHandler.saveProperty}
@@ -83,18 +84,21 @@ function ListPropertyPill(props: { property: Accessor<PropertyT> }) {
         <Layer depth={2}>
           <Property.Pill
             class={cn(
-              'list-property-cell w-full min-w-0 overflow-hidden',
-              '@max-[840px]/u-list:justify-center',
-              userCount() > 1
-                ? '@max-[840px]/u-list:px-1'
-                : '@max-[840px]/u-list:w-6 @max-[840px]/u-list:p-0'
+              'list-property-cell w-full min-w-0 overflow-hidden @max-[840px]/u-list:p-1',
+              isUserEntity()
+                ? '@max-[840px]/u-list:justify-start'
+                : '@max-[840px]/u-list:justify-center @max-[840px]/u-list:w-6'
             )}
           >
             <Show
               when={!isEmpty()}
               fallback={
                 <>
-                  <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />
+                  <PropertyEmptyIcon
+                    muted
+                    propertyDefinitionId={props.property().propertyDefinitionId}
+                    class="text-ink-extra-muted"
+                  />
                   <span class="truncate flex-1 opacity-50 @max-[840px]/u-list:hidden">
                     {props.property().displayName}
                   </span>
@@ -110,7 +114,7 @@ function ListPropertyPill(props: { property: Accessor<PropertyT> }) {
                 }
               >
                 <Match when={userCount() > 1}>
-                  {/* Wide: 2 avatars; narrow: collapse to 1 to fit the cell. */}
+                  {/* Compact pairs retain both avatars; larger groups keep the count. */}
                   <div class="@max-[840px]/u-list:hidden">
                     <Property.UserStack
                       property={props.property()}
@@ -120,7 +124,7 @@ function ListPropertyPill(props: { property: Accessor<PropertyT> }) {
                   <div class="hidden @max-[840px]/u-list:flex">
                     <Property.UserStack
                       property={props.property()}
-                      maxUsers={1}
+                      maxUsers={userCount() === 2 ? 2 : 1}
                       avatarClass="@max-[840px]/u-list:size-4"
                     />
                   </div>

@@ -17,7 +17,7 @@
 import { BebopView, BebopRuntimeError, BebopRecord, BebopJson, BebopTypeGuard, Guid, GuidMap } from "bebop";
 
 export const BEBOP_SCHEMA = new Uint8Array ([
-3, 25, 0, 0, 0, 80, 101, 101, 114, 85, 112, 100, 97, 116,
+3, 26, 0, 0, 0, 80, 101, 101, 114, 85, 112, 100, 97, 116,
 101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116,
 101, 115, 0, 242, 255, 255, 255, 1, 254, 255, 255, 255, 0,
 105, 100, 0, 245, 255, 255, 255, 0, 80, 101, 101, 114, 65,
@@ -31,74 +31,78 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 115, 104, 111, 116, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 80, 101,
 101, 114, 82, 101, 103, 105, 115, 116, 101, 114, 73, 100,
 0, 1, 0, 0, 8, 0, 0, 0, 1, 1, 112, 101, 101, 114, 105,
-100, 0, 249, 255, 255, 255, 0, 70, 114, 111, 109, 80, 101,
-101, 114, 0, 3, 0, 5, 0, 0, 0, 5, 1, 0, 0, 0, 0, 2, 1, 0,
-0, 0, 3, 2, 0, 0, 0, 4, 3, 0, 0, 0, 5, 4, 0, 0, 0, 82,
-101, 109, 111, 116, 101, 73, 110, 105, 116, 105, 97, 108,
-83, 121, 110, 99, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 115, 110,
-97, 112, 115, 104, 111, 116, 0, 242, 255, 255, 255, 0,
-254, 255, 255, 255, 0, 97, 119, 97, 114, 101, 110, 101,
-115, 115, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0,
-82, 101, 109, 111, 116, 101, 85, 112, 100, 97, 116, 101,
-0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 117, 112, 100, 97, 116, 101,
-0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82, 101,
-109, 111, 116, 101, 65, 119, 97, 114, 101, 110, 101, 115,
-115, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 97, 119, 97, 114, 101,
-110, 101, 115, 115, 0, 242, 255, 255, 255, 0, 254, 255,
-255, 255, 0, 82, 101, 109, 111, 116, 101, 83, 110, 97,
-112, 115, 104, 111, 116, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1,
+100, 0, 249, 255, 255, 255, 0, 80, 101, 101, 114, 67, 111,
+109, 109, 101, 110, 116, 85, 112, 100, 97, 116, 101, 0, 1,
+0, 0, 8, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116, 101, 115,
+0, 242, 255, 255, 255, 1, 254, 255, 255, 255, 0, 105, 100,
+0, 245, 255, 255, 255, 0, 70, 114, 111, 109, 80, 101, 101,
+114, 0, 3, 0, 5, 0, 0, 0, 6, 1, 0, 0, 0, 0, 2, 1, 0, 0, 0,
+3, 2, 0, 0, 0, 4, 3, 0, 0, 0, 5, 4, 0, 0, 0, 6, 5, 0, 0,
+0, 82, 101, 109, 111, 116, 101, 73, 110, 105, 116, 105,
+97, 108, 83, 121, 110, 99, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2,
 115, 110, 97, 112, 115, 104, 111, 116, 0, 242, 255, 255,
-255, 0, 254, 255, 255, 255, 0, 82, 101, 109, 111, 116,
-101, 85, 112, 100, 97, 116, 101, 65, 99, 107, 0, 1, 0, 0,
-4, 0, 0, 0, 0, 1, 105, 100, 0, 245, 255, 255, 255, 0, 82,
-101, 109, 111, 116, 101, 85, 112, 100, 97, 116, 101, 83,
-105, 110, 99, 101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 117, 112,
-100, 97, 116, 101, 0, 242, 255, 255, 255, 0, 254, 255,
-255, 255, 0, 118, 118, 0, 242, 255, 255, 255, 0, 254, 255,
-255, 255, 0, 70, 114, 111, 109, 82, 101, 109, 111, 116,
-101, 0, 3, 0, 9, 0, 0, 0, 6, 1, 6, 0, 0, 0, 2, 7, 0, 0, 0,
-3, 8, 0, 0, 0, 4, 9, 0, 0, 0, 5, 10, 0, 0, 0, 6, 11, 0, 0,
-0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 0, 1, 0, 0,
-12, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116, 101, 0, 242,
-255, 255, 255, 0, 254, 255, 255, 255, 0, 116, 105, 109,
-101, 115, 116, 97, 109, 112, 0, 243, 255, 255, 255, 0, 79,
-112, 101, 114, 97, 116, 105, 111, 110, 76, 111, 103, 0, 1,
-0, 0, 4, 0, 0, 0, 0, 1, 111, 112, 101, 114, 97, 116, 105,
-111, 110, 115, 0, 242, 255, 255, 255, 0, 13, 0, 0, 0, 0,
-73, 110, 105, 116, 105, 97, 108, 105, 122, 101, 70, 114,
-111, 109, 83, 110, 97, 112, 115, 104, 111, 116, 82, 101,
-113, 117, 101, 115, 116, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1,
-115, 110, 97, 112, 115, 104, 111, 116, 0, 242, 255, 255,
-255, 0, 254, 255, 255, 255, 0, 82, 111, 117, 116, 101,
-114, 83, 117, 98, 115, 99, 114, 105, 98, 101, 0, 1, 0, 0,
-8, 0, 0, 0, 0, 2, 100, 111, 99, 73, 100, 0, 245, 255, 255,
-255, 0, 116, 111, 107, 101, 110, 0, 245, 255, 255, 255, 0,
-82, 111, 117, 116, 101, 114, 85, 110, 115, 117, 98, 115,
-99, 114, 105, 98, 101, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 100,
-111, 99, 73, 100, 0, 245, 255, 255, 255, 0, 82, 111, 117,
-116, 101, 114, 70, 114, 97, 109, 101, 0, 1, 0, 0, 8, 0, 0,
+255, 0, 254, 255, 255, 255, 0, 97, 119, 97, 114, 101, 110,
+101, 115, 115, 0, 242, 255, 255, 255, 0, 254, 255, 255,
+255, 0, 82, 101, 109, 111, 116, 101, 85, 112, 100, 97,
+116, 101, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 117, 112, 100, 97,
+116, 101, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0,
+82, 101, 109, 111, 116, 101, 65, 119, 97, 114, 101, 110,
+101, 115, 115, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 97, 119, 97,
+114, 101, 110, 101, 115, 115, 0, 242, 255, 255, 255, 0,
+254, 255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 83,
+110, 97, 112, 115, 104, 111, 116, 0, 1, 0, 0, 4, 0, 0, 0,
+0, 1, 115, 110, 97, 112, 115, 104, 111, 116, 0, 242, 255,
+255, 255, 0, 254, 255, 255, 255, 0, 82, 101, 109, 111,
+116, 101, 85, 112, 100, 97, 116, 101, 65, 99, 107, 0, 1,
+0, 0, 4, 0, 0, 0, 0, 1, 105, 100, 0, 245, 255, 255, 255,
+0, 82, 101, 109, 111, 116, 101, 85, 112, 100, 97, 116,
+101, 83, 105, 110, 99, 101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2,
+117, 112, 100, 97, 116, 101, 0, 242, 255, 255, 255, 0,
+254, 255, 255, 255, 0, 118, 118, 0, 242, 255, 255, 255, 0,
+254, 255, 255, 255, 0, 70, 114, 111, 109, 82, 101, 109,
+111, 116, 101, 0, 3, 0, 9, 0, 0, 0, 6, 1, 7, 0, 0, 0, 2,
+8, 0, 0, 0, 3, 9, 0, 0, 0, 4, 10, 0, 0, 0, 5, 11, 0, 0, 0,
+6, 12, 0, 0, 0, 79, 112, 101, 114, 97, 116, 105, 111, 110,
+0, 1, 0, 0, 12, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116,
+101, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 116,
+105, 109, 101, 115, 116, 97, 109, 112, 0, 243, 255, 255,
+255, 0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 76,
+111, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 111, 112, 101,
+114, 97, 116, 105, 111, 110, 115, 0, 242, 255, 255, 255,
+0, 14, 0, 0, 0, 0, 73, 110, 105, 116, 105, 97, 108, 105,
+122, 101, 70, 114, 111, 109, 83, 110, 97, 112, 115, 104,
+111, 116, 82, 101, 113, 117, 101, 115, 116, 0, 1, 0, 0, 4,
+0, 0, 0, 0, 1, 115, 110, 97, 112, 115, 104, 111, 116, 0,
+242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82, 111,
+117, 116, 101, 114, 83, 117, 98, 115, 99, 114, 105, 98,
+101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 100, 111, 99, 73, 100,
+0, 245, 255, 255, 255, 0, 116, 111, 107, 101, 110, 0, 245,
+255, 255, 255, 0, 82, 111, 117, 116, 101, 114, 85, 110,
+115, 117, 98, 115, 99, 114, 105, 98, 101, 0, 1, 0, 0, 4,
+0, 0, 0, 0, 1, 100, 111, 99, 73, 100, 0, 245, 255, 255,
+255, 0, 82, 111, 117, 116, 101, 114, 70, 114, 97, 109,
+101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 100, 111, 99, 73, 100,
+0, 245, 255, 255, 255, 0, 112, 97, 121, 108, 111, 97, 100,
+0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 84, 111,
+82, 111, 117, 116, 101, 114, 0, 3, 0, 9, 0, 0, 0, 3, 1,
+17, 0, 0, 0, 2, 18, 0, 0, 0, 3, 19, 0, 0, 0, 82, 111, 117,
+116, 101, 114, 83, 117, 98, 115, 99, 114, 105, 98, 101,
+100, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 100, 111, 99, 73, 100,
+0, 245, 255, 255, 255, 0, 82, 111, 117, 116, 101, 114, 83,
+117, 98, 115, 99, 114, 105, 98, 101, 70, 97, 105, 108,
+101, 100, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 100, 111, 99, 73,
+100, 0, 245, 255, 255, 255, 0, 114, 101, 97, 115, 111,
+110, 0, 245, 255, 255, 255, 0, 82, 111, 117, 116, 101,
+114, 68, 111, 99, 70, 114, 97, 109, 101, 0, 1, 0, 0, 8, 0,
+0, 0, 0, 2, 100, 111, 99, 73, 100, 0, 245, 255, 255, 255,
+0, 112, 97, 121, 108, 111, 97, 100, 0, 242, 255, 255, 255,
+0, 254, 255, 255, 255, 0, 82, 111, 117, 116, 101, 114, 68,
+111, 99, 67, 108, 111, 115, 101, 100, 0, 1, 0, 0, 8, 0, 0,
 0, 0, 2, 100, 111, 99, 73, 100, 0, 245, 255, 255, 255, 0,
-112, 97, 121, 108, 111, 97, 100, 0, 242, 255, 255, 255, 0,
-254, 255, 255, 255, 0, 84, 111, 82, 111, 117, 116, 101,
-114, 0, 3, 0, 9, 0, 0, 0, 3, 1, 16, 0, 0, 0, 2, 17, 0, 0,
-0, 3, 18, 0, 0, 0, 82, 111, 117, 116, 101, 114, 83, 117,
-98, 115, 99, 114, 105, 98, 101, 100, 0, 1, 0, 0, 4, 0, 0,
-0, 0, 1, 100, 111, 99, 73, 100, 0, 245, 255, 255, 255, 0,
-82, 111, 117, 116, 101, 114, 83, 117, 98, 115, 99, 114,
-105, 98, 101, 70, 97, 105, 108, 101, 100, 0, 1, 0, 0, 8,
-0, 0, 0, 0, 2, 100, 111, 99, 73, 100, 0, 245, 255, 255,
-255, 0, 114, 101, 97, 115, 111, 110, 0, 245, 255, 255,
-255, 0, 82, 111, 117, 116, 101, 114, 68, 111, 99, 70, 114,
-97, 109, 101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 100, 111, 99,
-73, 100, 0, 245, 255, 255, 255, 0, 112, 97, 121, 108, 111,
-97, 100, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0,
-82, 111, 117, 116, 101, 114, 68, 111, 99, 67, 108, 111,
-115, 101, 100, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 100, 111, 99,
-73, 100, 0, 245, 255, 255, 255, 0, 114, 101, 97, 115, 111,
-110, 0, 245, 255, 255, 255, 0, 70, 114, 111, 109, 82, 111,
-117, 116, 101, 114, 0, 3, 0, 9, 0, 0, 0, 4, 1, 20, 0, 0,
-0, 2, 21, 0, 0, 0, 3, 22, 0, 0, 0, 4, 23, 0, 0, 0, 0, 0,
-0, 0
+114, 101, 97, 115, 111, 110, 0, 245, 255, 255, 255, 0, 70,
+114, 111, 109, 82, 111, 117, 116, 101, 114, 0, 3, 0, 9, 0,
+0, 0, 4, 1, 21, 0, 0, 0, 2, 22, 0, 0, 0, 3, 23, 0, 0, 0,
+4, 24, 0, 0, 0, 0, 0, 0, 0
 ]);
 
 export interface IPeerUpdate extends BebopRecord {
@@ -592,12 +596,131 @@ export class PeerRegisterId implements IPeerRegisterId {
 }
 
 
+export interface IPeerCommentUpdate extends BebopRecord {
+
+  readonly updates: Array<Uint8Array>;
+
+  readonly id: string;
+}
+
+export class PeerCommentUpdate implements IPeerCommentUpdate {
+  public readonly discriminator: number = 6 as 6;
+  public static readonly discriminator: number = 6 as 6;
+  public readonly updates: Array<Uint8Array>;
+  public readonly id: string;
+
+  constructor(record: IPeerCommentUpdate) {
+    this.updates = record.updates;
+    this.id = record.id;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return PeerCommentUpdate.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IPeerCommentUpdate): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    PeerCommentUpdate.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link PeerCommentUpdate}.
+   */
+  public static validateCompatibility(record: IPeerCommentUpdate): void {
+    BebopTypeGuard.ensureArray(record.updates, (element) => BebopTypeGuard.ensureArray(element, BebopTypeGuard.ensureUint8));
+    BebopTypeGuard.ensureString(record.id)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link PeerCommentUpdate} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IPeerCommentUpdate {
+      return new PeerCommentUpdate(record);
+  }
+
+  /**
+   * Creates a new {@link PeerCommentUpdate} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IPeerCommentUpdate {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`PeerCommentUpdate.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    PeerCommentUpdate.validateCompatibility(parsed);
+    return PeerCommentUpdate.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return PeerCommentUpdate.encode(this);
+  }
+
+  public static encode(record: IPeerCommentUpdate): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    PeerCommentUpdate.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IPeerCommentUpdate, view: BebopView): number {
+    const before = view.length;
+    {
+      const length0 = record.updates.length;
+      view.writeUint32(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        view.writeBytes(record.updates[i0]);
+      }
+    }
+    view.writeString(record.id);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IPeerCommentUpdate {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return PeerCommentUpdate.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IPeerCommentUpdate {
+    let field0: Array<Uint8Array>;
+    {
+      let length0 = view.readUint32();
+      field0 = new Array<Uint8Array>(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        let x0: Uint8Array;
+        x0 = view.readBytes();
+        field0[i0] = x0;
+      }
+    }
+    let field1: string;
+    field1 = view.readString();
+    let message: IPeerCommentUpdate = {
+      updates: field0,
+      id: field1,
+    };
+    return new PeerCommentUpdate(message);
+  }
+}
+
+
 export type IFromPeerType
   = { discriminator: 1, value: IPeerUpdate }
   | { discriminator: 2, value: IPeerAwareness }
   | { discriminator: 3, value: IPeerRequestSince }
   | { discriminator: 4, value: IPeerRequestSnapshot }
-  | { discriminator: 5, value: IPeerRegisterId };
+  | { discriminator: 5, value: IPeerRegisterId }
+  | { discriminator: 6, value: IPeerCommentUpdate };
 
 export interface IFromPeer extends BebopRecord {
   readonly data: IFromPeerType;
@@ -658,6 +781,14 @@ export class FromPeer implements IFromPeer {
     return this.data.value instanceof PeerRegisterId;
   }
 
+  public static fromPeerCommentUpdate(value: IPeerCommentUpdate) {
+    return new FromPeer({ discriminator: 6, value: new PeerCommentUpdate(value)});
+  }
+
+  public isPeerCommentUpdate(): this is { value: PeerCommentUpdate } & { data: Extract<IFromPeerType, { discriminator: 6 }> } {
+    return this.data.value instanceof PeerCommentUpdate;
+  }
+
 
   /**
    * Serializes the current instance into a JSON-Over-Bebop string
@@ -708,6 +839,10 @@ export class FromPeer implements IFromPeer {
         PeerRegisterId.validateCompatibility(record.data.value);
         break;
       }
+      case 6: {
+        PeerCommentUpdate.validateCompatibility(record.data.value);
+        break;
+      }
       default: {
         throw new Error(`Unknown discriminator for FromPeer: ${discriminator}`);
       }
@@ -734,6 +869,9 @@ export class FromPeer implements IFromPeer {
         }
         case 5: {
           return new FromPeer({ discriminator: 5, value: PeerRegisterId.unsafeCast(record.value) });
+        }
+        case 6: {
+          return new FromPeer({ discriminator: 6, value: PeerCommentUpdate.unsafeCast(record.value) });
         }
       }
       throw new BebopRuntimeError(`Failed to unsafely cast union from discriminator: ${discriminator}`);
@@ -782,6 +920,9 @@ export class FromPeer implements IFromPeer {
       case 5:
         PeerRegisterId.encodeInto(record.data.value, view);
         break;
+      case 6:
+        PeerCommentUpdate.encodeInto(record.data.value, view);
+        break;
     }
     const end = view.length;
     view.fillMessageLength(pos, end - start);
@@ -809,6 +950,8 @@ export class FromPeer implements IFromPeer {
         return this.fromPeerRequestSnapshot(PeerRequestSnapshot.readFrom(view));
       case 5:
         return this.fromPeerRegisterId(PeerRegisterId.readFrom(view));
+      case 6:
+        return this.fromPeerCommentUpdate(PeerCommentUpdate.readFrom(view));
       default:
         view.index = end;
         throw new BebopRuntimeError("Unrecognized discriminator while decoding FromPeer");

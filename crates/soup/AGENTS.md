@@ -13,11 +13,14 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   its repository/collaborator traits.
 - `src/domain/models.rs` (+ `grouping.rs`, `exclusions.rs`, `contact_listing.rs`):
   the unified `SoupItem`/grouping/exclusion shapes.
+- `src/domain/models/sort.rs`: property/timestamp sort descriptors and ordinary
+  position cursors; timestamp encodings remain backward-compatible.
 - `src/domain/service/favorites.rs`, `agent_metadata.rs`: entity-kind-specific
   query logic layered onto the core service.
 - `src/outbound/pg_soup_repo.rs`: the Postgres repo, split by entity kind
   (`database_row.rs`, `calendar_event.rs`, `agent_session.rs`, `initiative.rs`,
-  `work_feed.rs`, `notified.rs`, `touched.rs`) and by shape
+  `harness.rs`, `team.rs`,
+  `attention.rs`, `notified.rs`, `touched.rs`) and by shape
   (`expanded/` hydrated, `unexpanded/` id-only).
 - `src/inbound/axum_router.rs` + `src/inbound/toolset/list_entities.rs`: the
   HTTP route and the AI-tool surface over the same service.
@@ -35,8 +38,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Depends on: `entity_access`, `properties`, `crm`, `item_filters`,
   `filter_ast`, `favorites`, `frecency`, `channels`, `email`, `call`,
   `github_pull_requests`, `foreign_entity`, `activity`, `agent_changes`.
-- Used by: `ai_tools`, `complete_graph`, `databases_sql`, `graphql_initiative`,
-  `graphql_soup`, `graphql_work_feed`, `memory`, `skills`, `work_feed`,
+- Used by: `ai_tools`, `attention_feed`, `complete_graph`, `databases_sql`,
+  `graphql_initiative`, `graphql_soup`, `graphql_work_feed`, `memory`, `skills`,
   `soup_filter_projection`.
 
 ## Recipes
@@ -47,8 +50,16 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   collaborator is needed.
 - Add a filter/sort option: `item_filters`/`filter_ast` (the filter language) →
   `src/domain/models.rs` → the matching `src/outbound/pg_soup_repo/*` query.
-- Change what the work feed/Signal surfaces: `src/domain/service/tests/work_feed.rs`
-  → `src/outbound/pg_soup_repo/work_feed.rs`.
+- Change which candidates attention feeds (Home's work feed, the
+  notifications inbox) page:
+  `src/domain/service/tests/attention.rs` → `src/outbound/pg_soup_repo/attention.rs`
+  (`attention/query.sql`). Channel-thread keying applies only to
+  `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
+  `keying.rs`.
+- Give a kind with no list of its own (runtimes, teams) inbox rows: an
+  attention-only kind like `pg_soup_repo/harness.rs` or `team.rs`, a gate in
+  `attention/query.sql`'s attention stream only, a by-ids leg, and the type in
+  `requested_types` (as CRM records are).
 
 ## Tool contracts
 
@@ -68,19 +79,80 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 
 - Project grouping uses the system Project property (initiative membership),
   including canonical TASK assignments, rather than legacy folder `project_id`.
+  `SoupService::group_labels` names the groups a grouping field leaves
+  unlabeled (today, project groups, from the initiative names the caller can
+  read); REST group meta and GraphQL bins carry the result as `GroupLabels`,
+  and a key it leaves out keeps itself as its label.
 
+- Attention feeds admit visible CRM records through current team membership,
+  independently of mailbox contribution consent or the retired team CRM switch.
+  Hidden companies, their contacts, and hidden company-less contacts stay out.
 - `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
   Activity uses property edges rather than references and matches email within
-  the caller's mailbox. Keep browser requests bounded; never expand every CRM
-  record into client-side filters or raise ingress limits to fit them.
+  the caller's mailbox. It reads only what the request's sources can return
+  (`ActivityReads`): a source pinned to the nil id (`exclusions`) reads
+  nothing, so each Sales view reads one source, and the edges come from one
+  statement that probes the Companies and Contacts property indexes with the
+  scope's record ids (`CrmService::activity_property_edges`), without its
+  domains, addresses or database rows. A request that reads database rows
+  still takes the record path. Keep browser requests bounded; never expand
+  every CRM record into client-side filters or raise ingress limits to fit
+  them.
+- Property edges reach database-row cells from the requested records through
+  `idx_ep_database_row_references_gin`: keep that arm's literal
+  `entity_type = 'DATABASE_ROW' AND values->>'type' = 'EntityReference'` so the
+  partial index applies, and join the row by the guarded uuid cast, never
+  `r.id::text = ep.entity_id`, which reads every row cell of every database.
 
+- A `crm_domains` (`ecd`) scope that email rejects as not found or not
+  permitted (archived company, email sync off) leaves email threads out of the
+  page instead of failing it; `handle_email_request` matches those two errors
+  only. Email's precheck is the only gate on the team-wide widening, so never
+  drop just the failing domains and keep the scope.
+- Agent sessions named by id (an `Id` literal in `cursor_soup`, which GraphQL
+  `agentSession` and its log use, and `by_ids`) also accept a grant on the
+  document or call whose live thread the session runs in, and the session's
+  public or team link share, matching `entity_access`. Broad lists use
+  session grants only, and leave out
+  `hidden` sessions (thread-started, DM contexts) except for their followers
+  (`agent_session_follower`, people who prompted the session from the session
+  itself), who may also read them through the thread's parent. The notified
+  and work feeds share that rule through `notified::agent_session_gate`.
+- A source pinned to the nil id (how CRM tabs, Home, Tasks, and GraphQL
+  hydration leave a source out) runs no statement: `exclusions.rs` drops the
+  email, channel, channel-thread (by thread or channel id), call, and
+  foreign-entity requests, the calendar and agent-session legs return early,
+  and a dynamic query that can return no row (`DynamicArms::can_match`) skips
+  its transaction and source-id read. A project parent pinned to nil counts
+  only there: a union with another live arm keeps that project arm, because
+  dropping it leaves one read of `TopItems`, Postgres inlines the CTE, and
+  CRM record Files then scanned `document_sub_type` once per page row.
+  The CRM company request is dropped when the ids its extractor collects are
+  all nil, read from the extract because it unions `And`ed ids; a
+  hidden-company request keeps the leg so the admin check still answers it.
+  Prove a new pin impossible the same way; `nil OR real id` must keep its leg.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.
+- Extend the existing dynamic query for property sorts and date-range groups; do not rebuild its source UNION in a candidate pipeline.
+- Keep property definition IDs unchecked like existing filters/grouping; enforce item visibility through the existing source access gates.
+- Order property pages by typed key with explicit ASC/DESC and NULLS LAST, then update timestamp and descending ID; keep timestamp SQL unchanged.
+- Validate caller DATE ranges in REST/GraphQL input conversion; render typed UTC bounds with `to_rfc3339()` and map numeric range indices to caller keys in Rust.
+- Preserve projection-backed hydration, the UUID-keyed item/fact pools, and per-group total/has-more metadata through the shared grouped response.
+- Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions; grouped reads retain calendar events and timestamp queries retain their existing sources.
+- The `Name` sort rides the same selected-sort path: each union arm contributes `lower(<its name column>) COLLATE "und-x-icu"` as `sort_name`, hydrated rows order on their own `name` through the same `name_sort_key`, and the cursor carries the stored spelling SQL lowers again. ICU root, not the libc default, so the web's `compareSoupNames` (`localeCompare(…, 'und')`) shows the order the pages arrive in. An empty name sorts first ascending; database rows have no name there and sort last.
+- Preserve deployed timestamp cursor encodings; client query keys restart pages when ranges or selections change.
+- Keep flat timestamp top clauses lightweight; bind the caller's source ids, then document-ID arrays, after the sort's fixed parameters and skip subtype namespace joins when the filter proves TASK-only unless other predicates need them.
+- The dynamic query's document, chat, and project arms match `entity_access.source_id = ANY(<bound source ids>)`, not a join to the `user_source_ids` CTE: Postgres costs a CTE join at the average source's grant count and probed the item table once per grant for callers holding hundreds of thousands. The query runs in a transaction that raises `parallel_setup_cost`, because parallel plans made callers with a few thousand grants twice as slow.
+- A document arm whose filter admits only ids it names, at most `MAX_NAMED_CANDIDATES` of them (`named_document_bound`: CRM Tasks, Notes, References) checks access after its own filters (`DocumentArmAccess::AfterFilters`): the candidates and their sub-type, file-type and property filters sit behind an `OFFSET 0` fence, the `properties_filter` `EXISTS` run once per candidate (`PropertyProbe::PerCandidate`) instead of as a bitmap over every row the property holds (a `DocumentLiteral::Property` inside the document filter keeps `PropertyProbe::Planned`), and each survivor probes `entity_access` by uuid over its two partial unique indexes, in page order and past the cursor so a flat timestamp page stops at its `LIMIT`. Broad arms and longer lists keep the semi-join. An id OR'ed with any other literal does not bound the arm.
+- OR'ed select options of one definition and entity type render as one `EXISTS` over `?| ARRAY[...]` (`option_membership_predicate`), always fenced with `PER_CANDIDATE` whatever the `PropertyProbe`: unfenced, Postgres pulls that single `EXISTS` up into a semi-join and drives a broad list (the Tasks view, every task by status) from the property index's matches across every entity, about ten times slower warm and a full read of every matching task cold.
+- Read grouping/sort definition types through uncorrelated scalar lookups; join grouping options once outside the value expansion and preserve missing-option groups.
+- Build option-sort order maps with an uncorrelated `jsonb_object_agg` lookup using the sort definition bind; ignore unknown option IDs and keep unknown-only values missing.
+- Materialize grouped `TopItems` only for property sorts so the sort key is computed before multi-value group expansion; leave timestamp CTEs inlineable.
 - With `with_source_items_enabled`, flat listings read document, chat and
   project candidates from the trigger-maintained `source_items` table
-  (`expanded/dynamic/feed.rs`) instead of the item tables, per arm, when the
-  arm's filter lets a source scan stop at the page (`served_by_scan`) and does
+  (`expanded/dynamic/feed.rs`) instead of the item tables, per arm, under a timestamp sort `source_items`
+  can order (not `CreatedAt`, property or name sorts) when the arm's filter lets a source scan stop at the page (`served_by_scan`) and does
   not fold to false (`matches_nothing`, over the `*_literal_constant` functions
   beside each renderer). A page with owner or source scans asks for the bound
   first (`ScanBound`): the whole query reads the item tables when the session
@@ -103,15 +175,32 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Calendar access is `owner_id = $1 OR source_link_id = ANY(ARRAY(...))`, not
   an `EXISTS` over `macro_user_links`, so the planner can index both sides of
   the OR.
-- Queries over a known id list (`*/by_ids.rs`, hydration) and the initiative
-  listing (`initiative_access_clause`) check access per row with `EXISTS` on
+- Queries over a known id list (`*/by_ids.rs`, hydration, candidate gates
+  such as `initiative_gate`) check access per row with `EXISTS` on
   `entity_access`, matching sources with `= ANY(ARRAY(SELECT ...))` so they are
-  collected once rather than semi-joined per row. Building the caller's whole
-  accessible set first scans `entity_access` once per source, so cost grows
-  with the table and the caller's channels, not the page. A listing `EXISTS`
-  also needs `PER_CANDIDATE`, or Postgres hashes it back into the whole set.
+  collected once rather than semi-joined per row; cost follows the ids passed
+  in. A gate `EXISTS` also needs `PER_CANDIDATE`, or Postgres hashes it back
+  into the caller's whole accessible set.
+- The initiative listing starts from the caller's access instead
+  (`INITIATIVE_LISTING_ACCESS`): one `(source_id, entity_type, entity_id)`
+  index descent per source returns only that source's initiative grants, and
+  the owner's team link is reached through the caller's own `team_user` rows,
+  checking every initiative their teammates own. The set and the teammates are
+  collected with `= ANY(ARRAY(...))`, which keeps `initiative` on its indexes
+  under stale statistics; a plain `IN` or join was planned as sequential scans
+  of `initiative` there. The per-row form
+  tests every initiative in the table, each against every source. Never match
+  `team_user.team_id::text` against the source array: no index serves it, so
+  it reads all of `team_user`. A filter that names its ids (GraphQL
+  hydration, and the nil id every other hydration passes) keeps the per-row
+  form (`names_initiative_ids`): the set costs a descent per source even when
+  one row comes back. Detail joins compare the bare uuid
+  (`i.id = (CASE ... END)::uuid`); `i.id::text = t.id` read the table once per
+  page row.
 
 ## Related
 
 - Skill: `database-core`, `cloud-storage-hexagonal-architecture` · Rules:
   `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md`
+
+- CRM list, association, and attention visibility includes effective per-member CRM access; team membership alone is insufficient. Current primary-backed gates also protect cached-source reads.

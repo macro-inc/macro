@@ -250,6 +250,62 @@ async fn resyncing_an_unchanged_thread_rewrites_no_messages(
     Ok(())
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn synced_threads_record_whether_they_have_received_mail(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::messages::insert::test::SyncedMessage;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let ts = chrono::DateTime::<Utc>::from_timestamp(1_790_000_000, 0).expect("valid timestamp");
+    for (provider_id, to, is_sent, expected) in [
+        ("sent-only", "user1@macro.com", true, false),
+        ("sent-to-self", "sender@macro.com", true, true),
+        ("received", "user1@macro.com", false, true),
+    ] {
+        let thread_db_id = Uuid::now_v7();
+        let mut message = SyncedMessage {
+            provider_id,
+            global_id: provider_id,
+            in_reply_to: None,
+            to: &[to],
+            cc: &[],
+            labels: &[],
+            body: "body",
+        }
+        .build(link_id, thread_db_id);
+        message.is_sent = is_sent;
+        let thread = thread::Thread {
+            db_id: thread_db_id,
+            provider_id: Some(provider_id.to_string()),
+            link_id,
+            inbox_visible: false,
+            is_read: true,
+            latest_inbound_message_ts: None,
+            latest_outbound_message_ts: None,
+            latest_non_spam_message_ts: Some(ts),
+            created_at: ts,
+            updated_at: ts,
+            messages: vec![message],
+        };
+
+        let thread_id = insert_thread_and_messages(&pool, thread, link_id).await?;
+
+        let has_received_mail = sqlx::query_scalar!(
+            "SELECT has_received_mail FROM email_threads WHERE id = $1",
+            thread_id
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(has_received_mail, expected, "{provider_id}");
+    }
+
+    Ok(())
+}
+
 /// The live inbox-sync path funnels through here, so it needs the same
 /// protection from unstorable provider values as the backfill path.
 #[sqlx::test(

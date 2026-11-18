@@ -12,6 +12,7 @@ use std::sync::Mutex;
 
 use futures::{FutureExt, StreamExt, stream};
 use import_notion::domain::inventory::{all_rows, full_markdown};
+use import_notion::domain::macro_cells::{PeopleMap, capped_name, derived_id};
 use import_notion::domain::model::NotionId;
 use import_notion::domain::ports::NotionApi;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -26,7 +27,7 @@ use crate::domain::ports::{
     WrittenObjects,
 };
 
-use super::values::{PeopleMap, capped_name, derived_id, task_body, task_properties};
+use super::values::{task_body, task_properties};
 
 mod database;
 pub(super) use database::{WrittenDatabase, link_relations, recorded_database, write_database};
@@ -368,7 +369,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
 ) -> anyhow::Result<Uuid> {
-    let rows = all_rows(api, &item.notion_id).await?;
+    let rows = all_rows(api, &item.notion_id).await?.rows;
     let tasks_folder = folder_once(
         writer,
         user,

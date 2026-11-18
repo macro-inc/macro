@@ -6,8 +6,10 @@ import type {
 } from '@service-storage/messages';
 
 export type MessageData = {
+  /** Set on a call's root, which stands for the call rather than a message. */
+  kind?: 'message' | 'call_root';
   parent?: MessageParent;
-  imported_author?: { name: string } | null;
+  imported_author?: { name: string; avatar_url?: string | null } | null;
   guest_name?: string | null;
   id: string;
   content: string;
@@ -33,11 +35,13 @@ export type MessageActionContext = {
   selectedText?: string;
   /** Resolved text exposed by a dynamic decorator for use in reply previews. */
   renderedText?: string;
+  /** Copy controls acknowledge success inline instead of showing a toast. */
+  silent?: boolean;
 };
 
 export type MessageActionHandler = (
   context: MessageActionContext
-) => void | Promise<void>;
+) => void | boolean | Promise<void | boolean>;
 
 export type MessageActions = {
   onReply?: MessageActionHandler;

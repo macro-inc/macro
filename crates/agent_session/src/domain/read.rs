@@ -26,14 +26,20 @@ pub struct SessionConversation {
     pub owner_id: String,
     /// Agent persona id.
     pub bot_id: uuid::Uuid,
-    /// Whether the session is archived and read-only.
-    pub is_archived: bool,
+    /// Who or what archived the session, or `None` while it is active. An archived session
+    /// is read-only.
+    pub archived_by: Option<super::model::ArchiveCause>,
+    /// When the session was archived.
+    pub archived_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Configured runtime.
     pub harness: String,
     /// Selected model.
     pub model: String,
     /// Last runtime status.
     pub status: String,
+    /// What opened the session: who or what started it, and what it is about.
+    #[cfg_attr(feature = "ai_tools", schemars(with = "serde_json::Value"))]
+    pub origin: trigger_context::TriggerOrigin,
     /// Messages in the requested turn, or the latest messages, oldest first.
     pub messages: Vec<SessionConversationMessage>,
     /// Number of messages matching the requested turn before bounding.
@@ -145,9 +151,11 @@ fn conversation(
         name: session.name.clone(),
         owner_id: session.owner_id.to_string(),
         bot_id: session.bot_id.as_uuid(),
-        is_archived: session.is_archived,
+        archived_by: session.archived.map(|archive| archive.by),
+        archived_at: session.archived.map(|archive| archive.at),
         harness: session.harness.clone(),
         model: session.model.clone(),
+        origin: session.origin.clone(),
         status: match &session.status {
             super::model::SessionStatus::Event(event) => event.as_str().to_string(),
             status => status.as_ref().to_string(),

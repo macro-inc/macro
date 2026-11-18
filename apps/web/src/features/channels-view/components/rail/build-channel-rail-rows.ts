@@ -50,7 +50,9 @@ export function buildChannelSectionRows(options: {
       .map((id) => options.channelsById.get(id))
       .filter(
         (channel): channel is ChannelEntity =>
-          channel !== undefined && canLabelChannel(channel)
+          channel !== undefined &&
+          channel.channelType === 'team' &&
+          canLabelChannel(channel, label)
       )
       .sort(compareChannelName);
 
@@ -63,7 +65,7 @@ export function buildChannelSectionRows(options: {
   }
 
   for (const channel of options.channels) {
-    if (labelled.has(channel.id)) continue;
+    if (channel.channelType !== 'team' || labelled.has(channel.id)) continue;
     rows.push({ kind: 'conversation', channel });
   }
 

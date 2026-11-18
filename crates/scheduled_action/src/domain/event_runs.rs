@@ -13,7 +13,8 @@ use rootcause::Report;
 use serde::{Deserialize, Serialize};
 
 use super::event_trigger::{
-    EventEntityType, EventFilters, EventId, EventReference, EventRejection, IncomingEvent,
+    EventEntityType, EventFilters, EventId, EventReference, EventRejection, EventSource,
+    IncomingEvent,
 };
 use super::models::{ActionExecutionRecord, ScheduledAction};
 
@@ -22,7 +23,7 @@ pub mod condition;
 pub mod dispatch;
 
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 
 /// Independent of `updated_at`, which execution bookkeeping also changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,6 +64,8 @@ impl From<ConfigurationRevision> for i64 {
 
 /// A fresh token for each execution, including cron/manual claims. Release and
 /// finalization must compare it, so an expired worker cannot release a new run.
+/// It is also the run's id: its history record and the agent session its Ask
+/// AI step opens take it, so it is an identifier, never a secret.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "Uuid", into = "Uuid")]
 pub struct ClaimToken(Uuid);
@@ -144,6 +147,8 @@ pub enum CancellationReason {
     ConditionNotMet,
     /// The condition could not be checked before the retry window closed.
     ConditionUnavailable,
+    /// The owner is not in the event routines rollout.
+    NotEnabled,
 }
 
 /// All outcomes are terminal. In particular, failure and interruption never
@@ -210,6 +215,11 @@ pub enum EventAccessCapability {
     Channel(EntityAccessReceipt<ViewOnly>),
     EmailThread(EntityAccessReceipt<ViewAccessLevel>),
     Call(EntityAccessReceipt<ViewAccessLevel>),
+    /// The owner has a claim to the GitHub App installation that delivered.
+    GithubInstallation {
+        owner: MacroUserIdStr<'static>,
+        installation_id: u64,
+    },
 }
 
 impl EventAccessCapability {
@@ -229,6 +239,19 @@ impl EventAccessCapability {
             (Self::Call(receipt), EventEntityType::Call) => {
                 receipt_matches(receipt, owner, event, EntityType::Call)
             }
+            (
+                Self::GithubInstallation {
+                    owner: claimant,
+                    installation_id,
+                },
+                EventEntityType::GithubInstallation,
+            ) => {
+                claimant == owner
+                    && matches!(
+                        event.source(),
+                        EventSource::Github(delivery) if delivery.installation_id == *installation_id
+                    )
+            }
             _ => false,
         }
     }
@@ -244,7 +267,9 @@ fn receipt_matches<T: RequiredPermission>(
         .get_authenticated_user()
         .is_ok_and(|user| user == owner)
         && receipt.entity().entity_type == kind
-        && Uuid::parse_str(&receipt.entity().entity_id).ok() == Some(event.entity_id())
+        && event
+            .entity_id()
+            .is_some_and(|id| Uuid::parse_str(&receipt.entity().entity_id).ok() == Some(id))
 }
 
 /// Receipt minted for the current action owner and triggering entity.
@@ -384,7 +409,8 @@ pub trait EventRunRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<ClaimedEventRun>, Report>> + Send;
 
     /// Idempotent bookkeeping only: history, terminal outcome and fenced action
-    /// release must commit together. Retain the deduplication row until deletion.
+    /// release must commit together. Retain the deduplication row until deletion,
+    /// without an external delivery's payload: nothing reads a finished run's event.
     fn finalize(
         &self,
         run: FinalizeEventRun,

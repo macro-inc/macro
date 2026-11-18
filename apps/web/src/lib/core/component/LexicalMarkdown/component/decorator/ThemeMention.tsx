@@ -56,7 +56,7 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
           </span>
         )}
       </Show>
-      <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+      <span class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         {props.name}
       </span>
     </span>

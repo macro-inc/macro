@@ -1,4 +1,5 @@
 import type { ConsentScopes } from '@service-auth/client';
+import type { InboxAddition } from './link-outcome';
 
 const RETURN_LAYOUT_KEY = 'macro:inbox-link:return-layout';
 
@@ -8,7 +9,7 @@ const CONSENT_SCOPES: ReadonlyArray<ConsentScopes> = [
   'calendar',
 ];
 
-/** Where the app should land once the inbox consent round trip comes back. */
+/** What the callback needs once the inbox consent round trip comes back. */
 export type InboxLinkReturn = {
   /**
    * The base-relative layout URL the flow started from — path plus query and
@@ -22,12 +23,15 @@ export type InboxLinkReturn = {
    * mailbox and calendar together).
    */
   scopes?: ConsentScopes;
+  /** Set only for a plain add; see {@link InboxAddition}. */
+  addition?: InboxAddition;
 };
 
 type StoredInboxLinkReturn = InboxLinkReturn & { linkId: string };
 
 /**
- * Remember where to return once inbox consent completes.
+ * Remember where to return once inbox consent completes, and for a plain add
+ * which inboxes were already connected.
  *
  * Web consent is a full page navigation; desktop opens the system browser and
  * its return deep link replaces the app route with the callback URL.
@@ -54,9 +58,9 @@ export function rememberInboxLinkReturn(
 }
 
 /**
- * Read the layout stashed by {@link rememberInboxLinkReturn} for this link
- * without clearing it. Returns undefined when nothing was stashed or the stash
- * belongs to a different flow.
+ * What {@link rememberInboxLinkReturn} stashed for this link, left in place.
+ * Returns undefined when nothing was stashed or the stash belongs to a
+ * different flow.
  */
 export function readInboxLinkReturn(
   linkId: string
@@ -73,32 +77,26 @@ export function readInboxLinkReturn(
   try {
     stored = JSON.parse(raw) as Partial<StoredInboxLinkReturn>;
   } catch {
-    stored = undefined;
+    return undefined;
   }
 
   if (!stored || stored.linkId !== linkId || typeof stored.url !== 'string') {
     return undefined;
   }
   const scopes = CONSENT_SCOPES.find((value) => value === stored.scopes);
-  return scopes ? { url: stored.url, scopes } : { url: stored.url };
+  return { url: stored.url, scopes, addition: stored.addition };
 }
 
-/**
- * Read and clear the layout stashed by {@link rememberInboxLinkReturn} for
- * this link. Returns undefined when nothing was stashed or the stash belongs
- * to a different flow.
- */
+/** Read and clear the stash, as {@link readInboxLinkReturn} reads it. */
 export function consumeInboxLinkReturn(
   linkId: string
 ): InboxLinkReturn | undefined {
   const stored = readInboxLinkReturn(linkId);
-
   // A stash that can't be matched is dead weight either way, so drop it.
   try {
     sessionStorage.removeItem(RETURN_LAYOUT_KEY);
   } catch {
-    // Nothing to do — the read already happened.
+    // Storage is unavailable, so there is nothing left to clear.
   }
-
   return stored;
 }

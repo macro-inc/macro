@@ -1,5 +1,10 @@
 //! The TUI's read/act client against the harness APIs, as the harness.
 
+#[cfg(test)]
+mod test;
+
+use std::time::Duration;
+
 use harnesses::domain::models::{Harness, HarnessAgent, HarnessSession};
 use reqwest::StatusCode;
 use rootcause::prelude::ResultExt as _;
@@ -8,6 +13,34 @@ use crate::config::Config;
 use crate::config::HarnessCredentials;
 
 const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
+
+/// A dashboard read that takes longer than this is not worth waiting on: the
+/// next refresh asks again.
+const READ_TIMEOUT: Duration = Duration::from_secs(10);
+/// The ceiling for any call, including removing the harness.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Short, so a connection pooled before a Wi-Fi or VPN change is dropped
+/// rather than reused for the next refresh.
+const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// The one client the dashboard sends over for the panel's lifetime.
+pub fn dashboard_client() -> rootcause::Result<reqwest::Client> {
+    http_client(REQUEST_TIMEOUT)
+}
+
+fn http_client(request_timeout: Duration) -> rootcause::Result<reqwest::Client> {
+    Ok(reqwest::Client::builder()
+        .timeout(request_timeout)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .pool_idle_timeout(POOL_IDLE_TIMEOUT)
+        // hickory reads the system DNS config once, when the client is built;
+        // the system resolver follows a VPN or network change for the life of
+        // this long-lived client.
+        .no_hickory_dns()
+        .build()
+        .context("could not build the dashboard's HTTP client")?)
+}
 
 /// What the server currently knows about this daemon.
 #[derive(Debug, Clone, Default)]
@@ -28,10 +61,11 @@ pub struct HarnessSelfApi {
 }
 
 impl HarnessSelfApi {
-    /// A client for the deployment the config names, with this credential.
-    pub fn new(config: &Config, credentials: &HarnessCredentials) -> Self {
+    /// A client for the deployment the config names, with this credential,
+    /// sending over `http`.
+    pub fn new(config: &Config, credentials: &HarnessCredentials, http: reqwest::Client) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http,
             base: config
                 .macro_api
                 .storage_url
@@ -50,9 +84,15 @@ impl HarnessSelfApi {
             .http
             .get(format!("{}{path}", self.base))
             .header(HARNESS_TOKEN_HEADER, &self.token)
+            .timeout(READ_TIMEOUT)
             .send()
             .await
-            .context(format!("could not reach the service to {what}"))?;
+            .map_err(|error| {
+                rootcause::report!(
+                    "could not reach the service to {what}: {}",
+                    transport_failure(error)
+                )
+            })?;
         // A dead credential (revoked harness) answers 401; surface that as
         // "no harness" rather than an error so the UI offers re-pairing.
         if response.status() == StatusCode::UNAUTHORIZED
@@ -113,4 +153,19 @@ impl HarnessSelfApi {
         }
         Ok(())
     }
+}
+
+/// A transport error with its causes on one line. reqwest's own message stops at
+/// "error sending request for url", leaving out the reason, and the URL it leads
+/// with would push the reason out of the one-line footer that shows this.
+fn transport_failure(error: reqwest::Error) -> String {
+    let error = error.without_url();
+    let mut failure = error.to_string();
+    let mut source = std::error::Error::source(&error);
+    while let Some(cause) = source {
+        failure.push_str(": ");
+        failure.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    failure
 }

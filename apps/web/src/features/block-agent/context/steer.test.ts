@@ -71,7 +71,7 @@ describe('createSteering', () => {
 
     steering.steer('first');
     steering.steer('second');
-    steering.sendNext();
+    steering.steer('third');
     steering.steer('first');
 
     expect(expectAction.mock.calls).toEqual([

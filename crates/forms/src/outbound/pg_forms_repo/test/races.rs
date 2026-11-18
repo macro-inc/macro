@@ -19,6 +19,7 @@ fn file_question(table: &Table) -> FormLayout {
                 required: false,
                 widget: Some(Widget::File),
             }],
+            show_when: None,
         }],
     }
 }
@@ -246,6 +247,7 @@ async fn a_layout_reusing_another_forms_ids_is_refused_by_id_and_both_layouts_st
             title: "Mine".into(),
             description: "".into(),
             questions: vec![],
+            show_when: None,
         }],
     };
     assert_eq!(
@@ -266,6 +268,7 @@ async fn a_layout_reusing_another_forms_ids_is_refused_by_id_and_both_layouts_st
                 required: false,
                 widget: None,
             }],
+            show_when: None,
         }],
     };
     assert_eq!(
@@ -309,6 +312,7 @@ async fn two_forms_putting_one_new_id_at_once_leave_it_with_exactly_one(pool: Pg
             title: "".into(),
             description: "".into(),
             questions: vec![],
+            show_when: None,
         }],
     };
 

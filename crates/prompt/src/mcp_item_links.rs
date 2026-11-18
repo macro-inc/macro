@@ -10,7 +10,7 @@
 //!
 //! This is scoped to the model's chat replies only. It does not govern content
 //! the model writes *into* a Macro document (e.g. via `CreateDocument` or
-//! `EditDocument`) — see [`crate::document_content_links`] for that, which
+//! `EditDocument`) — see `DocumentNamespace`'s `@agent` guidance in the SDK, which
 //! still requires `<m-document-mention>` tags even over MCP, since that content
 //! is rendered by the Macro app itself, not by the MCP client.
 //!

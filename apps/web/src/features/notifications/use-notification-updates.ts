@@ -2,8 +2,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshSharedAccess } from '@queries/access-requests/requests';
 import { calendarKeys } from '@queries/calendar/keys';
 import { queryClient } from '@queries/client';
+import { computerKeys } from '@queries/computers/keys';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
+import { harnessKeys } from '@queries/harnesses/keys';
 import { messageKeys } from '@queries/messages/keys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { refreshEmailFollowup } from '@queries/reminders/email-refresh';
@@ -15,6 +17,8 @@ import { teamKeys } from '@queries/team/keys';
 import { onCleanup } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
+import { passwordKeys } from '../passwords/queries/keys';
+import { scheduledActionKeys } from '../routines/queries/keys';
 import type { NotificationSource } from './notification-source';
 import type { UnifiedNotification } from './types';
 
@@ -125,6 +129,12 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
         queryKey: calendarKeys.joinRequests(content.eventId).queryKey,
       });
     })
+    // An open item's pane lists the new agent request.
+    .with({ tag: 'password_access_requested' }, () => {
+      queryClient.invalidateQueries({
+        queryKey: passwordKeys.agentRequests._def,
+      });
+    })
     .with({ tag: 'crm_discussion' }, () => {
       const parent = {
         type: notification.entity_type,
@@ -142,9 +152,13 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
         'notifications'
       );
     })
-    .with({ tag: 'channel_invite' }, () => {
-      refreshChannel(notification);
-    })
+    .with(
+      { tag: 'channel_invite' },
+      { tag: 'channel_access_requested' },
+      () => {
+        refreshChannel(notification);
+      }
+    )
     .with({ tag: 'channel_message_send' }, () => {
       refreshChannel(notification);
     })
@@ -168,6 +182,27 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     })
     .with({ tag: 'inbox_reauth_required' }, () => {
       invalidateEmailLinks();
+    })
+    .with({ tag: 'routine_run_finished' }, () => {
+      queryClient.invalidateQueries({
+        queryKey: scheduledActionKeys.list.queryKey,
+      });
+    })
+    // The computer's row in Runtimes shows its Claude account.
+    .with({ tag: 'agent_sign_in_expiry' }, () => {
+      queryClient.invalidateQueries({ queryKey: harnessKeys.list.queryKey });
+    })
+    // The computer's row and the setup dialog show its setup state.
+    .with({ tag: 'computer_setup' }, (metadata) => {
+      queryClient.invalidateQueries({ queryKey: computerKeys.list.queryKey });
+      queryClient.invalidateQueries({ queryKey: harnessKeys.list.queryKey });
+      // Loaded on demand: the notice pulls in the settings UI.
+      fireAndForget(
+        import('./computer-setup-toast').then(({ showComputerSetupToast }) =>
+          showComputerSetupToast(metadata.content)
+        ),
+        'notifications'
+      );
     })
     .with({ tag: 'invite_to_team' }, () => {
       queryClient.invalidateQueries({

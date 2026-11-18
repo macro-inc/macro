@@ -1,13 +1,17 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
+import type { EmailMessageAction } from '../../email-message/components/message-actions';
 import { isPersonalMessage } from '../../email-message/core/is-personal-message';
 import { EmailMessageView } from '../../email-message/views/email-message';
 import { DraftReplyPreview } from '../components/draft-reply-preview';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 import { draftPreviewText } from '../core/draft-preview';
-import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
+import {
+  offersReplyAll,
+  openEmailReplyComposerForMessage,
+} from '../primitives/reply-actions';
 import {
   revealMessageAfterLayout,
   scrollFocusedCardIntoView,
@@ -26,7 +30,11 @@ interface MessageContainerProps {
 }
 
 export function MessageContainer(props: MessageContainerProps) {
-  const { thread: threadContext, rendering } = useEmailThreadViewContext();
+  const {
+    thread: threadContext,
+    rendering,
+    compose,
+  } = useEmailThreadViewContext();
   const isTouchDevice = threadContext.isTouch;
   const context = useEmailThreadState();
   const draftChild = createMemo(() => {
@@ -59,11 +67,13 @@ export function MessageContainer(props: MessageContainerProps) {
 
   // Touch replies open full screen, so a saved one would otherwise be invisible.
   const touchDraft = () =>
-    isTouchDevice() && context.permissions().isOwner ? draftChild() : undefined;
+    isTouchDevice() && context.permissions().canReply
+      ? draftChild()
+      : undefined;
 
   const showInlineReplyArea = createMemo(
     () =>
-      context.permissions().isOwner &&
+      context.permissions().canReply &&
       (showInlineReplyInput() || showDesktopLastReplyControls())
   );
 
@@ -84,6 +94,19 @@ export function MessageContainer(props: MessageContainerProps) {
     }
   };
 
+  const hiddenActions = () => {
+    const hidden: EmailMessageAction[] = [];
+    const showReplyAll = offersReplyAll(
+      props.message,
+      threadContext.viewerEmail(),
+      compose.accounts.inboxes(),
+      compose.accounts.primaryId()
+    );
+    if (!showReplyAll) hidden.push('reply-all');
+    if (!context.permissions().isOwner) hidden.push('forward');
+    return hidden;
+  };
+
   // The card selects itself; expanding is the collapsed row's extra behaviour.
   const handleExpand = () => {
     const messageId = props.message.db_id;
@@ -102,6 +125,8 @@ export function MessageContainer(props: MessageContainerProps) {
       renderInvitation={rendering.renderInvitation}
       renderAvatar={rendering.renderAvatar}
       renderOperation={rendering.renderOperation}
+      readReceipt={rendering.readReceipt?.(props.message)}
+      showReadReceiptPixel={rendering.showReadReceiptPixel?.(props.message)}
       viewerEmail={threadContext.viewerEmail()}
       isTouch={threadContext.isTouch()}
       isPersonal={isPersonalMessage(
@@ -132,8 +157,9 @@ export function MessageContainer(props: MessageContainerProps) {
       onFocus={scrollFocusedCardIntoView}
       onOpenAttachment={rendering.openAttachment}
       onDownloadAttachment={rendering.downloadAttachment}
+      hiddenActions={hiddenActions()}
       onReply={
-        context.permissions().isOwner
+        context.permissions().canReply
           ? (replyType) =>
               openEmailReplyComposerForMessage({
                 ctx: context,

@@ -1,6 +1,5 @@
 /** File modifications: +/− badge in the row, Pierre-rendered diffs in the body. */
 
-import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import { createMemo, Show } from 'solid-js';
 import { countDiffChanges } from '../../state/session-summary';
@@ -16,7 +15,6 @@ export function EditToolCall(props: {
 
   return (
     <ToolCard
-      icon={<PencilIcon class="size-4" />}
       title={props.common.label}
       subtitle={pathsSubtitle(props.detail.diffs.map((diff) => diff.path))}
       trailing={

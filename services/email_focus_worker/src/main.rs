@@ -1,10 +1,12 @@
 #![recursion_limit = "256"]
-//! Classifies signal email threads for the Focus view.
+//! Classifies email threads for the Focus view.
 //!
-//! Reads `macro.email` for new and sent messages, asks Jev about each thread
-//! in an allowlisted inbox with the owner's stored memory as context, and
-//! stores the verdict in `email_thread_focus`. An hourly sweep catches what
-//! the event stream missed.
+//! Reads `macro.email` for new and sent messages, asks Jev about each signal
+//! thread and key mail in an allowlisted inbox with the owner's stored memory
+//! as context, asks the agent harness for the day a thread that can be in Focus
+//! is due, stores both in `email_thread_focus`, and tells the inbox's readers
+//! through the connection gateway. An hourly sweep catches what the
+//! event stream missed.
 
 mod config;
 mod inbound {
@@ -12,24 +14,34 @@ mod inbound {
     pub mod sweep;
 }
 mod outbound {
+    pub mod gateway_notifier;
+    pub mod harness_due_dates;
     pub mod jev_classifier;
     pub mod memory_profile;
 }
 
 use std::{sync::Arc, time::Duration};
 
+use calendar_events::outbound::pg::PgCalendarRepository;
+use connection_gateway_client::ConnectionGatewayClient;
 use email::{domain::focus::FocusService, outbound::FocusPgRepository};
 use jev::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
+use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl, TypesafeApiUrl};
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use rootcause::Report;
 use sqlx::postgres::PgPoolOptions;
-use tokio_util::sync::CancellationToken;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use crate::{
     config::Config,
     inbound::{kafka_consumer::run_focus_consumer, sweep::run_sweeps},
-    outbound::{jev_classifier::JevFocusClassifier, memory_profile::MemoryProfiles},
+    outbound::{
+        gateway_notifier::{CoalescingNotifier, GatewayDelivery},
+        harness_due_dates::HarnessDueDates,
+        jev_classifier::JevFocusClassifier,
+        memory_profile::MemoryProfiles,
+    },
 };
 
 #[tokio::main]
@@ -42,7 +54,10 @@ async fn main() -> Result<(), Report> {
     let provider = config
         .typesafe_api_key
         .value()
-        .map(SystemOneJev::typesafe)
+        .map(|api_key| -> Result<_, Report> {
+            let url = TypesafeApiUrl::new()?;
+            Ok(SystemOneJev::typesafe_at(api_key, url.as_ref())?)
+        })
         .transpose()?;
     let Some(provider) = provider.filter(|_| !domains.is_empty()) else {
         // Off until both are configured; stay up so the deployment stays healthy.
@@ -59,13 +74,31 @@ async fn main() -> Result<(), Report> {
         .max_connections(5)
         .connect(config.macro_db_url.as_ref())
         .await?;
+    let shutdown = CancellationToken::new();
+    let notifications = TaskTracker::new();
+    let gateway = ConnectionGatewayClient::new(
+        config.internal_api_key.to_string(),
+        ConnectionGatewayUrl::new()?.to_string(),
+    );
     let service = Arc::new(FocusService::new(
         FocusPgRepository(db.clone()),
-        MemoryProfiles::new(PgMemoryRepo::new(db.clone())),
+        MemoryProfiles::new(
+            PgMemoryRepo::new(db.clone()),
+            PgCalendarRepository::new(db.clone()),
+        ),
         JevFocusClassifier::new(JevClassifier::new(
             provider,
-            ai_usage::pg_recorder_with_enforcement(db, enforcement),
+            ai_usage::pg_recorder_with_enforcement(db.clone(), enforcement),
         )),
+        CoalescingNotifier::new(
+            GatewayDelivery::new(gateway, db),
+            notifications.clone(),
+            shutdown.clone(),
+        ),
+        HarnessDueDates::new(
+            AgentHarnessServiceUrl::new()?.as_ref(),
+            config.internal_api_key.as_ref(),
+        )?,
         domains,
     ));
     tracing::info!(
@@ -74,7 +107,6 @@ async fn main() -> Result<(), Report> {
         "email focus worker started"
     );
 
-    let shutdown = CancellationToken::new();
     tokio::spawn({
         let shutdown = shutdown.clone();
         async move {
@@ -83,11 +115,7 @@ async fn main() -> Result<(), Report> {
         }
     });
     let brokers = config.kafka_brokers.to_string();
-    let consumer = run_focus_consumer(
-        &brokers,
-        Arc::clone(&service),
-        shutdown.clone().cancelled_owned(),
-    );
+    let consumer = run_focus_consumer(&brokers, Arc::clone(&service), shutdown.clone());
     let sweeps = run_sweeps(
         service,
         // A zero interval would panic the timer.
@@ -98,5 +126,7 @@ async fn main() -> Result<(), Report> {
     // Either loop ending with an error stops the worker so it restarts fresh.
     let result = tokio::try_join!(consumer, sweeps).map(|_| ());
     shutdown.cancel();
+    notifications.close();
+    notifications.wait().await;
     result
 }

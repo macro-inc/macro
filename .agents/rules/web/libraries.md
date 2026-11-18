@@ -66,9 +66,10 @@ under `services/` throw and validate with zod; elsewhere in `apps/web` and
 - **FE-44** Dates: `date-fns` (and `@date-fns/tz`) for arithmetic and the house
   `@core/util/date` / `@core/util/time` helpers; `Intl.DateTimeFormat` for
   locale display. No dayjs, luxon, moment, or Temporal.
-- **FE-45** Virtualized lists use `virtua`, not `@tanstack/solid-virtual`.
-  Persisted UI state uses `makePersistedState` (`src/lib/persistence`) with a
-  zod schema, not raw `localStorage` calls.
+- **FE-45** Default virtualized lists to `virtua`; use `@tanstack/solid-virtual`
+  for the redesigned Chat sidebar's nested, scroll-aware lists. Persisted UI
+  state uses `makePersistedState` (`src/lib/persistence`) with a zod schema,
+  not raw `localStorage` calls.
 - **FE-46** Reuse the house helpers instead of re-implementing them: `deepEqual`
   (`@core/util/compareUtils`), `structuredClone` for copies, and
   `@tanstack/pacer` (`AsyncBatcher`, `Queuer`) for request coalescing. `effect`

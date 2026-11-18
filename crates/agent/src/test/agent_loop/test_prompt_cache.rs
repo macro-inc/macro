@@ -7,11 +7,12 @@
 //! layout build every byte the API would see.
 
 use super::util;
-use crate::SystemPrompt;
 use crate::model::anthropic_prompt_layout::AnthropicPromptLayout;
 use crate::model::router::ModelRouter;
 use crate::stream::ToolResponse;
 use crate::types::{ChatMessage, ChatMessageContent, Role};
+use crate::{PromptSection, SystemPrompt};
+use ai_toolset::tool_search::{LoadToolsResponse, ToolMatch};
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ServiceContext,
     ToolAnnotated, ToolAnnotations, ToolResult, ToolSet as AiToolSet, ToolSetError,
@@ -136,7 +137,7 @@ impl ToolAnnotated for LoadToolsStandIn {
 
 #[async_trait]
 impl AsyncTool<()> for LoadToolsStandIn {
-    type Output = Value;
+    type Output = LoadToolsResponse;
 
     async fn call(
         &self,
@@ -149,10 +150,14 @@ impl AsyncTool<()> for LoadToolsStandIn {
             .filter(|tool| self.names.contains(&tool.name))
             .cloned()
             .collect();
+        let loaded = matched.iter().map(ToolMatch::of).collect();
         if let Some(loader) = request_context.tool_loader.as_ref() {
             loader.load(matched);
         }
-        Ok(json!({ "loaded": self.names }))
+        Ok(LoadToolsResponse {
+            loaded,
+            not_found: Vec::new(),
+        })
     }
 }
 
@@ -250,10 +255,13 @@ const MODEL_LINE: &str = "\n\nYou are the anthropic/claude-opus-4-8 model. If th
                           cutoff — trust this id over your training data when identifying yourself.";
 
 fn split_prompt(task: &str) -> SystemPrompt {
-    SystemPrompt::split(
-        "# Identity\nYou are Macro.\n",
-        format!("\n<session_instructions>\n{task}\n</session_instructions>"),
-    )
+    let mut prompt = SystemPrompt::default();
+    prompt.push_shared(PromptSection::Identity, "# Identity\nYou are Macro.\n");
+    prompt.push(
+        PromptSection::SessionInstructions,
+        &format!("\n<session_instructions>\n{task}\n</session_instructions>"),
+    );
+    prompt
 }
 
 #[tokio::test]
@@ -324,7 +332,7 @@ async fn loading_a_tool_keeps_every_request_prefix() {
             {"type": "tool_result", "tool_use_id": "toolu_load", "content": [
                 {"type": "tool_reference", "tool_name": "EditPresentation"},
             ]},
-            {"type": "text", "text": "<tool_result_text tool_use_id=\"toolu_load\">{\"loaded\":[\"EditPresentation\"]}</tool_result_text>"},
+            {"type": "text", "text": "<tool_result_text tool_use_id=\"toolu_load\">{\"loaded\":[{\"name\":\"EditPresentation\",\"description\":\"Edit a presentation.\"}],\"not_found\":[]}</tool_result_text>"},
         ]})
     );
 }
@@ -359,12 +367,17 @@ async fn sessions_with_different_instructions_share_the_shared_system_block() {
 }
 
 /// The next turn replays this one from its persisted parts. It must send the
-/// same bytes the live requests did, tool call ids included, or the cache
+/// same bytes the live requests did, tool call ids included and the tools a
+/// `LoadTools` call loaded still referenced from its result, or the cache
 /// misses from the first tool call on.
 #[tokio::test]
 async fn a_replayed_turn_repeats_its_live_requests() {
     let transport = ScriptedProvider::new([
-        tool_use_response("toolu_load", "LoadTools", json!({"names": []})),
+        tool_use_response(
+            "toolu_load",
+            "LoadTools",
+            json!({"names": ["EditPresentation"]}),
+        ),
         text_response("done"),
         text_response("again"),
     ]);
@@ -372,7 +385,7 @@ async fn a_replayed_turn_repeats_its_live_requests() {
         &transport,
         "anthropic/claude-opus-4-8",
         split_prompt("task A"),
-        "load nothing",
+        "load the editor",
     )
     .await;
     assert!(collected.error.is_none(), "{:?}", collected.error);
@@ -382,7 +395,7 @@ async fn a_replayed_turn_repeats_its_live_requests() {
     }
     let history = [
         ChatMessage {
-            content: ChatMessageContent::Text("load nothing".to_owned()),
+            content: ChatMessageContent::Text("load the editor".to_owned()),
             role: Role::User,
             attachments: None,
         },
@@ -434,7 +447,11 @@ async fn the_turn_part_comes_after_the_model_line() {
     let (bodies, _) = run_session(
         &transport,
         "anthropic/claude-opus-4-8",
-        split_prompt("task A").with_turn("\n<macro_sdk>docs</macro_sdk>"),
+        {
+            let mut prompt = split_prompt("task A");
+            prompt.push_turn(PromptSection::SdkDocs, "\n<macro_sdk>docs</macro_sdk>");
+            prompt
+        },
         "hi",
     )
     .await;

@@ -2,13 +2,10 @@ import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
 } from '@app/features/calendar/components/TurnOffCalendarDialog';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
-  enableMultiInbox,
 } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
 import {
@@ -20,6 +17,7 @@ import {
   calendarConsentScopes,
   reconnectScopes,
 } from '@core/email-link/consent';
+import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
 import type { EmailProvider } from '@core/email-link/ProviderDialog';
 import { fireAndForget } from '@core/util/fireAndForget';
 import GmailIcon from '@icon/gmail-color.svg';
@@ -27,7 +25,10 @@ import OutlookIcon from '@icon/outlook-color.svg';
 import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg?component-solid';
 import CalendarSlashIcon from '@icon/system/regular/calendar-slash.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
-import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
+import {
+  fetchEmailConnectionProviders,
+  useOutlookAvailable,
+} from '@queries/auth/outlook-link';
 import {
   type BackfillProgress,
   estimateEtaSeconds,
@@ -69,7 +70,7 @@ export function useConnectInbox(): (provider?: EmailProvider) => void {
           toast.failure('New Outlook connections are temporarily unavailable.');
           return;
         }
-        await startAddInbox({ provider });
+        await span.run(() => startAddInbox({ provider }));
         span.setAttr('email.link.outcome', 'started');
       } finally {
         addingInbox = false;
@@ -84,12 +85,11 @@ export function useConnectInbox(): (provider?: EmailProvider) => void {
 
 /**
  * Connected inboxes, one row each, followed by rows to connect another Google
- * Workspace or Outlook account.
+ * Workspace account, or an Outlook account when the server offers Outlook.
  */
 export function EmailCard(props: { class?: string } = {}) {
   const email = useEmail();
   const userId = useUserId();
-  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
 
   const { query: emailLinksQuery, resyncInbox } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
@@ -126,11 +126,9 @@ export function EmailCard(props: { class?: string } = {}) {
   });
 
   const onConnectEmail = useConnectInbox();
+  const outlookOffered = useOutlookAvailable();
   const hasInbox = () =>
     Boolean(inboxes().primary) || inboxes().others.length > 0;
-  // Further inboxes are behind multi-inbox; the first is always offered.
-  const canAddInbox = () => !emailActive() || multiInboxFlag().enabled;
-
   const handleResyncInbox = async (linkId: string) => {
     setResyncingIds((prev) => new Set(prev).add(linkId));
     await resyncInbox(linkId).match(
@@ -260,28 +258,29 @@ export function EmailCard(props: { class?: string } = {}) {
             )}
           </For>
         </Show>
-        <Show when={canAddInbox()}>
-          <SettingsSurface>
-            <IntegrationRow
-              icon={<GmailIcon />}
-              title={
-                hasInbox()
-                  ? 'Connect another Google Workspace account'
-                  : 'Connect a Google Workspace account'
-              }
-              description="Sync a Gmail or Google Workspace inbox into Macro Email."
-            >
-              <ConnectAction
-                label="Connect"
-                ariaLabel="Connect a Google Workspace account"
-                onClick={() => onConnectEmail('GMAIL')}
-              />
-            </IntegrationRow>
-          </SettingsSurface>
+        <SettingsSurface>
+          <IntegrationRow
+            icon={<GmailIcon />}
+            title={
+              hasInbox()
+                ? 'Connect another Google Workspace account'
+                : 'Connect a Google Workspace account'
+            }
+            description="Sync a Gmail or Google Workspace inbox into Macro Email."
+          >
+            <ConnectAction
+              label="Connect"
+              ariaLabel="Connect a Google Workspace account"
+              onClick={() => onConnectEmail('GMAIL')}
+            />
+          </IntegrationRow>
+        </SettingsSurface>
+        <Show when={outlookOffered()}>
           <SettingsSurface>
             <IntegrationRow
               icon={<OutlookIcon />}
               title="Connect an Outlook account"
+              badge={<OutlookBetaBadge />}
               description="Sync an Outlook.com or Microsoft 365 inbox into Macro Email."
             >
               <ConnectAction
@@ -345,7 +344,10 @@ export function EmailCard(props: { class?: string } = {}) {
   );
 }
 
-/** Whether new Outlook connections are open; the provider chooser checks the same. */
+/**
+ * Whether new Outlook connections are open at click time, in case they closed
+ * after the row was shown; the provider chooser checks the same.
+ */
 async function outlookAvailable(): Promise<boolean> {
   try {
     return (await fetchEmailConnectionProviders()).outlook;
@@ -469,7 +471,6 @@ function InboxRow(props: {
   onRemove: () => void;
   onTurnOffCalendar: () => void;
 }) {
-  const calendarUiEnabled = useCalendarUiFlag();
   return (
     <SettingsSurface class="flex flex-col">
       <div class="flex flex-wrap items-center justify-between gap-3 min-h-14 py-3 px-4">
@@ -486,11 +487,15 @@ function InboxRow(props: {
               <Chip label="Shared" />
             </Show>
           </div>
-          <span class="text-xs text-ink-muted">
-            {props.link.provider === 'OUTLOOK'
-              ? 'Outlook / Microsoft 365'
-              : 'Gmail'}
-          </span>
+          <Show
+            when={props.link.provider === 'OUTLOOK'}
+            fallback={<span class="text-xs text-ink-muted">Gmail</span>}
+          >
+            <span class="flex items-center gap-2 text-xs text-ink-muted">
+              Outlook / Microsoft 365
+              <OutlookBetaBadge />
+            </span>
+          </Show>
           <Show when={ENABLE_INBOX_SYNC_STATUS}>
             <Switch
               fallback={
@@ -535,9 +540,7 @@ function InboxRow(props: {
           </Show>
           {/* Explicitly enabling calendar also restores mailbox access when
               the Google grant has expired. */}
-          <Show
-            when={calendarUiEnabled() && props.link.needs_calendar_permission}
-          >
+          <Show when={props.link.needs_calendar_permission}>
             <Button
               variant="secondary"
               size="md"
@@ -554,7 +557,6 @@ function InboxRow(props: {
               set still has events to remove. */}
           <Show
             when={
-              calendarUiEnabled() &&
               props.isOwn &&
               (!props.link.needs_calendar_permission ||
                 props.link.has_calendar_data)

@@ -7,25 +7,6 @@ import type {
   ImportProgress,
 } from '../core/import-plan';
 
-const importDraftSchema = z.object({
-  source: z.enum(['notion', 'linear', 'jira']),
-  excluded: z.array(z.string()).optional(),
-  shared: z.array(z.string()).optional(),
-  personal: z.array(z.string()).optional(),
-});
-
-/** The saved draft of an import review; `undefined` when it is not one. */
-export function decodeImportDraft(draft: unknown): ImportDraft | undefined {
-  const parsed = importDraftSchema.safeParse(draft);
-  if (!parsed.success) return undefined;
-  return {
-    source: parsed.data.source,
-    excluded: parsed.data.excluded ?? [],
-    shared: parsed.data.shared ?? [],
-    personal: parsed.data.personal ?? [],
-  };
-}
-
 const planMetadataSchema = z.object({
   title: z.string(),
   plan: z.object({

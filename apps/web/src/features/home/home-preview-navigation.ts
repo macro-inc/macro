@@ -28,7 +28,10 @@ import {
   type PreviewPanelSelection,
   previewBlockTarget,
 } from '@components/app/previewTarget';
-import type { HomePreviewRouteParams } from './home-route-schema';
+import {
+  type HomePreviewRouteParams,
+  homeProjectSearch,
+} from './home-route-schema';
 
 type DetailSearch = Record<string, SerializedSearchParams | undefined>;
 
@@ -48,6 +51,7 @@ export function homeDetailSearch(
     channel?: SerializedSearchParams;
     document?: SerializedSearchParams;
     calendar?: SerializedSearchParams;
+    project?: SerializedSearchParams;
   } = {}
 ): DetailSearch {
   return {
@@ -59,6 +63,7 @@ export function homeDetailSearch(
     [channelsSearch.namespace]: detail.channel,
     [driveSearch.namespace]: detail.document,
     [CALENDAR_SEARCH_NAMESPACE]: detail.calendar,
+    [homeProjectSearch.namespace]: detail.project,
   };
 }
 
@@ -70,7 +75,8 @@ function targetParam(target: PreviewBlockTarget, key: string): string {
 function documentDetailSearch(
   target: PreviewBlockTarget
 ): SerializedSearchParams | undefined {
-  if (target.blockType === 'channel') return;
+  if (target.blockType === 'channel' || target.blockType === 'initiative')
+    return;
   return driveSearchCodec.serialize({
     ...driveSearch.defaults,
     commentId:
@@ -107,6 +113,13 @@ export function homePreviewTargetNavigation(
     search: homeDetailSearch({
       channel: channelTargetSearch(target),
       document: documentDetailSearch(target),
+      project:
+        target.blockType === 'initiative'
+          ? {
+              section: [targetParam(target, 'section') || 'overview'],
+              discussionId: [targetParam(target, 'discussionId')],
+            }
+          : undefined,
     }),
   };
 }

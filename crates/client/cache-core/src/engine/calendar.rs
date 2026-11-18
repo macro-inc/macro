@@ -98,6 +98,18 @@ impl<S: CalendarRangeStorage> Engine<S> {
         }
         let affected_ops = self.deps.ops_for_keys(changed.iter());
         let revision = self.advance_revision()?;
+        // Coverage/sync metadata does not change predicate membership. Record
+        // every normalized deletion instead of leaving an unknown journal gap.
+        self.live_queries.record(
+            revision,
+            super::live_query::Changes {
+                records: changed.clone(),
+                projections: changed
+                    .iter()
+                    .filter_map(|key| predicate_index::RecordKey::new(key.to_string()).ok())
+                    .collect(),
+            },
+        );
         Ok(WriteResult {
             // Deletions carry no values, so invalidation is exact even beneath
             // optimistic layers.

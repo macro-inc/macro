@@ -160,6 +160,11 @@ export function createMockFormContext(options: {
       exportCsv: () => okAsync(undefined),
     },
     uploadFile: () => okAsync('https://static.example.com/file/1'),
+    branding: {
+      uploadImage: () => okAsync('00000000-0000-0000-0000-00000000f11e'),
+      imageUrl: (fileId, size) =>
+        `https://static.example.com/file/${fileId}?size=${size}`,
+    },
     booking: {
       available: () => booking.available ?? true,
       createLinks: () => ({
@@ -207,6 +212,7 @@ export function createMockFormContext(options: {
       renderEntityLabel: (entity) => entity.entityId,
       renderEditors: (props) =>
         `${props.peers.map((peer) => peer.userId).join(', ')} on ${props.selected}`,
+      renderPerson: (userId) => userId,
     },
     ...options.overrides,
   };

@@ -64,6 +64,7 @@ import {
   GateCard,
   RoutingFooter,
   SectionCard,
+  SectionCondition,
   SectionMenu,
 } from '../components/builder/section-card';
 import {
@@ -83,10 +84,10 @@ import type { Box, MeasuredSection } from '../core/drop-target';
 import { placementOf, stepPlacement } from '../core/drop-target';
 import {
   bookingStep,
-  brokenGateColumns,
-  gateColumns,
+  brokenRuleColumns,
   type QuestionPlacement,
   questionNumbers,
+  ruleColumns,
 } from '../core/form-layout';
 import type {
   FormBookingTarget,
@@ -94,6 +95,7 @@ import type {
   FormDetail,
   FormLayout,
   FormSection,
+  GateRules,
   SectionKind,
 } from '../core/form-model';
 import { availabilityLine, formAvailability } from '../core/form-status';
@@ -283,6 +285,43 @@ function BuilderCanvas(
     </Show>
   );
   const [editingRules, setEditingRules] = createSignal<string>();
+  /** The filter editor over the questions before a section, for its gate rules or condition. */
+  const rulesEditor = (
+    sectionId: string,
+    rules: () => GateRules | null,
+    onChange: (rules: GateRules | null) => void
+  ) => (
+    <div class="flex flex-col gap-2 rounded-lg border border-edge-muted bg-surface p-3">
+      {
+        // Rendered once per opening, its props read live: a save must not
+        // remount the editor and drop a condition still being filled.
+        untrack(() =>
+          context.ui.renderConditionEditor({
+            get columns() {
+              return ruleColumns(layout(), sectionId).flatMap(
+                (columnId): FormColumn[] => {
+                  const found = builder.column(columnId);
+                  return found ? [found] : [];
+                }
+              );
+            },
+            get rules() {
+              return rules();
+            },
+            onChange,
+          })
+        )
+      }
+      <Button
+        size="sm"
+        variant="ghost"
+        class="self-end"
+        onClick={() => setEditingRules(undefined)}
+      >
+        Done
+      </Button>
+    </div>
+  );
   const [choosingBooking, setChoosingBooking] = createSignal(false);
   let afterMenuClose: (() => void) | undefined;
   const sectionAddTriggers = new Map<string, HTMLButtonElement>();
@@ -762,6 +801,14 @@ function BuilderCanvas(
                       onMoveDown={() =>
                         builder.moveSection(sectionId, index() + 1)
                       }
+                      onAddCondition={
+                        section()?.kind === 'questions' &&
+                        !section()?.showWhen &&
+                        editingRules() !== sectionId &&
+                        ruleColumns(layout(), sectionId).length > 0
+                          ? () => setEditingRules(sectionId)
+                          : undefined
+                      }
                       onDelete={() => {
                         const current = section();
                         if (current)
@@ -823,13 +870,13 @@ function BuilderCanvas(
                                 dragging={drag.isDragging(sectionTarget)}
                                 editingRules={editingRules() === sectionId}
                                 brokenRules={
-                                  brokenGateColumns(layout(), sectionId).length
+                                  brokenRuleColumns(layout(), sectionId).length
                                 }
-                                onRepair={() => builder.repairGate(sectionId)}
+                                onRepair={() => builder.repairRules(sectionId)}
                                 handle={handle()}
                                 menu={menu()}
                                 noQuestionsBefore={
-                                  gateColumns(layout(), sectionId).length === 0
+                                  ruleColumns(layout(), sectionId).length === 0
                                 }
                                 onEditRules={() => setEditingRules(sectionId)}
                                 onTitle={(title) =>
@@ -840,49 +887,17 @@ function BuilderCanvas(
                                     gateMessage,
                                   })
                                 }
-                                ruleEditor={
-                                  <div class="flex flex-col gap-2 rounded-lg border border-edge-muted bg-surface p-3">
-                                    {
-                                      // Rendered once per opening, its props read
-                                      // live: a save must not remount the editor
-                                      // and drop a condition still being filled.
-                                      untrack(() =>
-                                        context.ui.renderConditionEditor({
-                                          get columns() {
-                                            return gateColumns(
-                                              layout(),
-                                              sectionId
-                                            ).flatMap(
-                                              (columnId): FormColumn[] => {
-                                                const found =
-                                                  builder.column(columnId);
-                                                return found ? [found] : [];
-                                              }
-                                            );
-                                          },
-                                          get rules() {
-                                            return current().gateRules;
-                                          },
-                                          onChange: (gateRules) =>
-                                            builder.updateSection(sectionId, {
-                                              gateRules: gateRules ?? {
-                                                conjunction: 'and',
-                                                conditions: [],
-                                              },
-                                            }),
-                                        })
-                                      )
-                                    }
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      class="self-end"
-                                      onClick={() => setEditingRules(undefined)}
-                                    >
-                                      Done
-                                    </Button>
-                                  </div>
-                                }
+                                ruleEditor={rulesEditor(
+                                  sectionId,
+                                  () => current().gateRules,
+                                  (gateRules) =>
+                                    builder.updateSection(sectionId, {
+                                      gateRules: gateRules ?? {
+                                        conjunction: 'and',
+                                        conditions: [],
+                                      },
+                                    })
+                                )}
                               />
                             </Match>
                             <Match
@@ -998,6 +1013,47 @@ function BuilderCanvas(
                                 handle={handle()}
                                 menu={menu()}
                                 editors={editors(sectionId, null)}
+                                condition={
+                                  <Show
+                                    when={
+                                      current().showWhen ||
+                                      editingRules() === sectionId
+                                    }
+                                  >
+                                    <SectionCondition
+                                      sentence={rulesSentence(
+                                        current().showWhen,
+                                        builder.columns()
+                                      )}
+                                      editing={editingRules() === sectionId}
+                                      brokenRules={
+                                        brokenRuleColumns(layout(), sectionId)
+                                          .length
+                                      }
+                                      onRepair={() =>
+                                        builder.repairRules(sectionId)
+                                      }
+                                      onEdit={() => setEditingRules(sectionId)}
+                                      onRemove={() =>
+                                        builder.updateSection(sectionId, {
+                                          showWhen: null,
+                                        })
+                                      }
+                                      editor={rulesEditor(
+                                        sectionId,
+                                        () => current().showWhen,
+                                        (rules) =>
+                                          builder.updateSection(sectionId, {
+                                            showWhen:
+                                              rules &&
+                                              rules.conditions.length > 0
+                                                ? rules
+                                                : null,
+                                          })
+                                      )}
+                                    />
+                                  </Show>
+                                }
                                 onTitle={(title) =>
                                   builder.updateSection(sectionId, { title })
                                 }

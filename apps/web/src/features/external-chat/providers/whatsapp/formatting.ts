@@ -4,6 +4,7 @@
  * renderer speak Markdown. These convert at the send and display edges.
  */
 
+import { mentionPattern } from '../../core/mentions';
 import type { Mention } from '../../core/rich';
 
 const FENCE = /^```/;
@@ -99,15 +100,6 @@ function urlLink(url: string): string {
   return `[${literal(url)}](${href})`;
 }
 const MARKDOWN_FOR: Record<string, string> = { '*': '**', _: '*', '~': '~~' };
-
-/** `@<token>` for one of `mentions`, not inside a longer word or number. */
-function mentionPattern(mentions: Mention[]): RegExp | undefined {
-  if (mentions.length === 0) return undefined;
-  const tokens = [...new Set(mentions.map((mention) => mention.token))]
-    .sort((a, b) => b.length - a.length)
-    .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  return new RegExp(`@(${tokens.join('|')})(?![\\p{L}\\p{N}])`, 'gu');
-}
 
 /** `macro|ana@example.com` → its email; the mention chip resolves the name. */
 function macroEmail(userId: string): string | undefined {

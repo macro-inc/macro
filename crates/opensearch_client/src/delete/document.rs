@@ -1,6 +1,9 @@
 use models_opensearch::SearchIndex;
 
-use crate::{Result, error::OpensearchClientError};
+use crate::{
+    Result,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 /// Deletes all document nodes with the specified document_id
 #[tracing::instrument(skip(client))]
@@ -25,22 +28,19 @@ pub async fn delete_document_by_id(
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some("delete_document_by_id".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::DeleteDocumentById, &err)
         })?;
 
     let status_code = response.status_code();
 
     if !status_code.is_success() {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some("delete_document_by_id".to_string()),
-                })?;
+        let body = response.text().await.map_err(|err| {
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::DeleteDocumentById,
+                &err,
+            )
+        })?;
 
         tracing::error!(
             status_code = ?status_code,
@@ -51,7 +51,7 @@ pub async fn delete_document_by_id(
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("delete_document_by_id".to_string()),
+            operation: OpensearchOperation::DeleteDocumentById,
         });
     }
 
@@ -92,22 +92,22 @@ pub async fn delete_document_by_owner_id(
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some("delete_document_by_owner_id".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(
+                OpensearchOperation::DeleteDocumentByOwnerId,
+                &err,
+            )
         })?;
 
     let status_code = response.status_code();
 
     if !status_code.is_success() {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some("delete_document_by_owner_id".to_string()),
-                })?;
+        let body = response.text().await.map_err(|err| {
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::DeleteDocumentByOwnerId,
+                &err,
+            )
+        })?;
 
         tracing::error!(
             status_code = ?status_code,
@@ -118,7 +118,7 @@ pub async fn delete_document_by_owner_id(
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("delete_document_by_owner_id".to_string()),
+            operation: OpensearchOperation::DeleteDocumentByOwnerId,
         });
     }
 

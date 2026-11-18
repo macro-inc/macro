@@ -1,25 +1,19 @@
 import { type InferType, schema } from '@loro-mirror/core';
 import type { Matrix } from '../core/affine';
-import type { ShapeGeometryMap, ShapeKind } from '../core/model';
 import { type ShapeLabel, validShapeLabel } from '../core/shapes/label';
-import { isShapeKind, shapeDefinitions } from '../core/shapes/registry';
 
+/** Geometry is validated per kind when projected, so newer kinds stay readable. */
 type Pose = {
   parentId: string;
   transform: Matrix;
   world: Matrix;
-  geometry: ShapeGeometryMap[ShapeKind] | null;
+  geometry: object | null;
 };
 function isMatrix(value: unknown): value is Matrix {
   return (
     Array.isArray(value) &&
     value.length === 6 &&
     value.every((v) => typeof v === 'number' && Number.isFinite(v))
-  );
-}
-function isGeometry(value: unknown): value is ShapeGeometryMap[ShapeKind] {
-  return Object.values(shapeDefinitions).some((definition) =>
-    definition.validateGeometry(value)
   );
 }
 function isPose(value: unknown): value is Pose {
@@ -33,7 +27,7 @@ function isPose(value: unknown): value is Pose {
     'world' in value &&
     isMatrix(value.world) &&
     'geometry' in value &&
-    (value.geometry === null || isGeometry(value.geometry))
+    (value.geometry === null || typeof value.geometry === 'object')
   );
 }
 function isLabelStyle(
@@ -47,12 +41,12 @@ function isLabelStyle(
   );
 }
 
-/** Preserve the deployed map registers; pose and label style remain atomic JSON. */
+/** Preserve the deployed map registers; pose and label style remain atomic JSON.
+ * Kinds are open: clients skip and preserve kinds added after they shipped. */
 export const canvasNodeSchema = schema.LoroMap({
   id: schema.String({ required: true }),
   kind: schema.Value(
-    (value): value is ShapeKind | 'group' =>
-      value === 'group' || isShapeKind(value),
+    (value): value is string => typeof value === 'string' && !!value,
     { required: true }
   ),
   pose: schema.Value(isPose, { required: true }),
@@ -70,6 +64,16 @@ export const canvasNodeSchema = schema.LoroMap({
   ),
   opacity: schema.Number(),
   cornerRadius: schema.Number(),
+  /** Artifact HTML and presentation sort key, independent of pose; null on
+   * other kinds. Like text, the HTML is one whole-string register. */
+  html: schema.Value(
+    (value): value is string | null =>
+      value === null || typeof value === 'string'
+  ),
+  presentOrder: schema.Value(
+    (value): value is string | null =>
+      value === null || typeof value === 'string'
+  ),
 });
 export type NodeData = InferType<typeof canvasNodeSchema>;
 export const canvasSchema = schema(

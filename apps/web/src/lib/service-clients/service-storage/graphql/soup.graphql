@@ -132,6 +132,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		properties { ...SoupPropertyFields }
 	}
 	... on GraphqlSoupInitiative {
+        appearance
 		metadata { ownerId createdAt updatedAt viewedAt }
 		viewerPermission {
 			__typename
@@ -140,6 +141,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		properties { ...SoupPropertyFields }
 	}
 	... on GraphqlSoupDocument {
+        appearance
 		documentName: name
 		ownerId
 		fileType
@@ -188,6 +190,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		providerId
 		ownerId
 		inboxVisible
+		hasReceivedMail
 		linkId
 		latestInboundMessageTs
 		latestOutboundMessageTs
@@ -318,6 +321,16 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 			...SoupPropertyFields
 		}
 	}
+	... on GraphqlSoupHarness {
+		harnessName: name
+		ownerId
+		createdAt
+		updatedAt
+	}
+	... on GraphqlSoupTeam {
+		teamName: name
+		ownerId
+	}
 	... on GraphqlSoupForeignEntity {
 		foreignEntityId
 		foreignEntitySource
@@ -351,7 +364,8 @@ fragment SoupEntityCoreFields on GraphqlSoupEntity {
 # the session reports a committed change: see AgentSessionRow.
 fragment SoupAgentSessionFields on GraphqlSoupAgentSession {
 	sessionName: name
-	isArchived
+	archivedBy
+	archivedAt
 	ownerId
 	botId
 	harness
@@ -554,6 +568,13 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		entityAccessGrantedFileType: fileType
 		entityAccessGrantedAccessLevel: accessLevel
 	}
+	... on GraphqlRuntimeAccessRemovedMetadata {
+		runtimeAccessRemovedRuntimeName: runtimeName
+		runtimeAccessRemovedAgents: agents {
+			botId
+			name
+		}
+	}
 	... on GraphqlCommentedOnDocumentMetadata {
 		commentedOnDocumentDocumentName: documentName
 		commentedOnDocumentOwner: owner
@@ -604,6 +625,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		channelMessageReactionChannelName: channelName
 		channelMessageReactionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
+	... on GraphqlChannelAccessRequestedMetadata {
+		channelAccessRequestedRequestId: requestId
+		channelAccessRequestedChannelType: channelType
+		channelAccessRequestedChannelName: channelName
+		channelAccessRequestedSenderProfilePictureUrl: senderProfilePictureUrl
+	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId
 		channelReplyMessageId: messageId
@@ -625,6 +652,27 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	}
 	... on GraphqlInboxReauthRequiredMetadata {
 		inboxReauthRequiredEmailAddress: emailAddress
+	}
+	... on GraphqlRoutineRunFinishedMetadata {
+		routineRunFinishedRoutineId: routineId
+		routineRunFinishedRoutineName: routineName
+		routineRunFinishedSucceeded: succeeded
+	}
+	... on GraphqlAgentSignInExpiryMetadata {
+		agentSignInExpiryAgent: agent
+		agentSignInExpiryHarnessId: harnessId
+		agentSignInExpiryComputerName: computerName
+		agentSignInExpiryStage: stage
+		agentSignInExpiryExpiresAt: expiresAt
+	}
+	... on GraphqlComputerSetupMetadata {
+		computerSetupComputerId: computerId
+		computerSetupHarnessId: harnessId
+		computerSetupComputerName: computerName
+		computerSetupAgentUserId: agentUserId
+		computerSetupAgentName: agentName
+		computerSetupOutcome: outcome
+		computerSetupFailureReason: failureReason
 	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName
@@ -660,6 +708,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		calendarEventJoinRequestRequestId: requestId
 		calendarEventJoinRequestEventId: eventId
 		calendarEventJoinRequestTitle: title
+	}
+	... on GraphqlPasswordAccessRequestedMetadata {
+		passwordAccessRequestedRequestId: requestId
+		passwordAccessRequestedTeamId: teamId
+		passwordAccessRequestedItemId: itemId
+		passwordAccessRequestedItemName: itemName
 	}
 	... on GraphqlAiResponseMetadata {
 		aiResponseSummary: summary

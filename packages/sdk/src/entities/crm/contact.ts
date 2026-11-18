@@ -4,24 +4,28 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { FavoritableEntity } from '../entity';
 import {
+  DiscussionComment,
+  type DiscussionParent,
+  type DiscussionThread,
+  listDiscussionThreads,
+  postDiscussionComment,
+} from '../messages/discussion';
+import {
   MessageThread,
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
-import {
-  CrmComment,
-  type CrmCommentParent,
-  type CrmCommentThread,
-  listCrmCommentThreads,
-  postCrmComment,
-} from './comment';
 import { Company } from './company';
 
 type ContactDetail = GetContactResponses[200];
 
 /** A CRM contact: a person observed interacting with the team. */
 export class Contact extends FavoritableEntity<ContactDetail> {
-  /** A shared message thread scoped to this resource. */
+  /**
+   * A shared message thread scoped to this resource.
+   *
+   * @readonly
+   */
   messageThreadById(id: string): MessageThread {
     return MessageThread.byId(
       this.client,
@@ -30,13 +34,17 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
-  /** A mixed message and activity timeline page. */
-  timelinePage(selection?: TimelineOptions<CrmComment>) {
+  /**
+   * A mixed message and activity timeline page.
+   *
+   * @readonly
+   */
+  timelinePage(selection?: TimelineOptions<DiscussionComment>) {
     return timeline(
       this.client,
       { type: 'crm_contact', entity: this },
       (record) =>
-        CrmComment.from(
+        DiscussionComment.from(
           this.client,
           { type: 'crm_contact', id: this.id },
           record,
@@ -69,12 +77,33 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   /** The contact's display name, if one has been observed. */
   readonly name = this.field('name');
 
-  /** The contact's email address. */
+  /** The contact's primary email address; absent for a contact added by name alone. */
   readonly email = this.field('email');
 
-  /** The CRM company this contact belongs to. */
+  /** Every address the contact is known by: the primary first, then the rest oldest first. */
+  readonly emails = this.mappedField('emails', (emails) => emails ?? []);
+
+  /**
+   * Whether the contact has an address on one of its company's domains. Such a
+   * contact cannot be unlinked from the company or moved to another.
+   */
+  readonly companyDomain = this.mappedField(
+    'companyDomain',
+    (companyDomain) => companyDomain ?? false,
+  );
+
+  /**
+   * The addresses on one of the company's domains. The last one cannot be
+   * removed while the contact is linked to the company.
+   */
+  readonly companyDomainEmails = this.mappedField(
+    'companyDomainEmails',
+    (emails) => emails ?? [],
+  );
+
+  /** The CRM company this contact belongs to, if it has one. */
   readonly company = this.mappedField('companyId', (id) =>
-    Company.byId(this.client, id),
+    id ? Company.byId(this.client, id) : undefined,
   );
 
   /** Whether the contact is hidden from CRM listings. */
@@ -92,12 +121,22 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   /** When the team last interacted with this contact. */
   readonly lastInteraction = this.field('lastInteraction');
 
-  /** Hide the contact from CRM listings. Display-only; reversible with {@link unhide}. */
+  /**
+   * Hide the contact from CRM listings. Display-only; reversible with {@link unhide}.
+   *
+   * @write
+   * @idempotent
+   */
   async hide(): Promise<void> {
     await this.setHidden(true);
   }
 
-  /** Un-hide the contact, restoring it to CRM listings. */
+  /**
+   * Un-hide the contact, restoring it to CRM listings.
+   *
+   * @write
+   * @idempotent
+   */
   async unhide(): Promise<void> {
     await this.setHidden(false);
   }
@@ -111,7 +150,12 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
-  /** Rename the contact for the caller's current team. */
+  /**
+   * Rename the contact for the caller's current team.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.setCrmContactName({
@@ -121,14 +165,100 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
+  /**
+   * Make an address the contact's primary, adding it when the contact does not
+   * hold it yet. The previous primary stays on the contact.
+   *
+   * @write
+   * @idempotent
+   */
+  async setEmail(email: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setCrmContactEmail({
+        path: { contact_id: this.id },
+        body: { email },
+      }),
+    );
+  }
+
+  /**
+   * Add a further address the contact is known by. It must not belong to
+   * another contact in the team, and becomes the primary only when the contact
+   * has none.
+   *
+   * @write
+   * @idempotent
+   */
+  async addEmail(email: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.addCrmContactEmail({
+        path: { contact_id: this.id },
+        body: { email },
+      }),
+    );
+  }
+
+  /**
+   * Remove one of the contact's addresses. Nothing else is deleted: the contact
+   * stops showing that address's email history. Removing the primary promotes
+   * the oldest address left. The last address on a domain of the contact's
+   * company cannot be removed while the contact is linked to it.
+   *
+   * @destructive
+   * @idempotent
+   */
+  async removeEmail(email: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.removeCrmContactEmail({
+        path: { contact_id: this.id },
+        body: { email },
+      }),
+    );
+  }
+
+  /**
+   * Link or switch the company of a contact whose primary address is on a
+   * personal provider. Rejected for a contact on its company's domain.
+   *
+   * @write
+   * @idempotent
+   */
+  async setCompany(company: Company): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setCrmContactCompany({
+        path: { contact_id: this.id },
+        body: { companyId: company.id },
+      }),
+    );
+  }
+
+  /**
+   * Remove the contact's company link, leaving a contact without a company.
+   * Rejected for a contact on its company's domain.
+   *
+   * @write
+   * @idempotent
+   */
+  async unlinkCompany(): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.unlinkCrmContactCompany({
+        path: { contact_id: this.id },
+      }),
+    );
+  }
+
   /** The CRM record this contact's discussions hang off. */
-  private get commentParent(): CrmCommentParent {
+  private get commentParent(): DiscussionParent {
     return { type: 'crm_contact', id: this.id };
   }
 
-  /** The comment threads on this contact, newest thread first. */
-  async comments(): Promise<CrmCommentThread[]> {
-    return listCrmCommentThreads(this.client, this.commentParent);
+  /**
+   * The comment threads on this contact, newest thread first.
+   *
+   * @readonly
+   */
+  async comments(): Promise<DiscussionThread[]> {
+    return listDiscussionThreads(this.client, this.commentParent);
   }
 
   /**
@@ -136,16 +266,22 @@ export class Contact extends FavoritableEntity<ContactDetail> {
    * `threadId` (the thread's root comment id) is given.
    *
    * @param body - Plain text, or a rich body composed with {@link msg}.
+   *
+   * @write
    */
   async comment(
     body: string | RichMessage,
     opts?: { threadId?: string },
-  ): Promise<CrmComment> {
-    return postCrmComment(this.client, this.commentParent, body, opts);
+  ): Promise<DiscussionComment> {
+    return postDiscussionComment(this.client, this.commentParent, body, opts);
   }
 
-  /** A handle to one of this contact's comments by id. */
-  commentById(id: string): CrmComment {
-    return CrmComment.byId(this.client, this.commentParent, id);
+  /**
+   * A handle to one of this contact's comments by id.
+   *
+   * @readonly
+   */
+  commentById(id: string): DiscussionComment {
+    return DiscussionComment.byId(this.client, this.commentParent, id);
   }
 }

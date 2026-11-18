@@ -40,7 +40,7 @@ export type RespondView =
       kind: 'answering';
       /** Absent for a form that can be submitted without questions. */
       section: FormSection | undefined;
-      /** 1-based among questions sections. */
+      /** 1-based among the questions sections the answers so far show. */
       position: number;
       total: number;
       isFirst: boolean;
@@ -148,7 +148,11 @@ export function createRespond(options: RespondOptions) {
     );
   // Signed in, on either audience, a respondent keeps their identity and can
   // edit while the form is open; anonymous visitors cannot.
-  const canEdit = () => options.signedIn() && availability().kind === 'open';
+  // A response to an anonymous form is final.
+  const canEdit = () =>
+    options.signedIn() &&
+    availability().kind === 'open' &&
+    !options.detail().form.anonymous;
 
   const firstSectionIndex = () => {
     const step = nextStep(layout(), -1, answers());
@@ -223,7 +227,7 @@ export function createRespond(options: RespondOptions) {
     if (current?.kind === 'stopped')
       return { kind: 'stopped', message: current.message };
     const sectionIndex = currentIndex();
-    const indices = questionSectionIndices(layout());
+    const indices = questionSectionIndices(layout(), answers());
     const section =
       sectionIndex === undefined ? undefined : layout().sections[sectionIndex];
     if (sectionIndex === undefined) {
@@ -241,8 +245,9 @@ export function createRespond(options: RespondOptions) {
       total: indices.length,
       isFirst:
         sectionIndex === undefined ||
-        previousSectionIndex(layout(), sectionIndex) === undefined,
-      // Structural: a gate that would stop someone still shows "Next".
+        previousSectionIndex(layout(), sectionIndex, answers()) === undefined,
+      // A gate that would stop someone still shows "Next"; a section the
+      // answers so far skip does not.
       isLast: position === indices.length,
       submitting: submitting(),
       uploading: uploads() > 0,
@@ -308,7 +313,7 @@ export function createRespond(options: RespondOptions) {
   function back() {
     const index = currentIndex();
     if (index === undefined) return;
-    const previous = previousSectionIndex(layout(), index);
+    const previous = previousSectionIndex(layout(), index, answers());
     if (previous === undefined) return;
     setProblems({});
     showSection(previous);
@@ -347,7 +352,7 @@ export function createRespond(options: RespondOptions) {
             ? { kind: 'booking', booking: outcome.booking, preview: false }
             : {
                 kind: 'confirmation',
-                answers: { ...answers() },
+                answers: answersOf(sent),
                 submittedAt: options.now().toISOString(),
                 booking: null,
               }
@@ -415,7 +420,12 @@ export function createRespond(options: RespondOptions) {
       setPhase(
         booking
           ? { kind: 'booking', booking, preview: true }
-          : { kind: 'preview-complete', answers: { ...answers() } }
+          : {
+              kind: 'preview-complete',
+              answers: answersOf(
+                submissionAnswers(layout(), answers(), 'create')
+              ),
+            }
       );
       return;
     }

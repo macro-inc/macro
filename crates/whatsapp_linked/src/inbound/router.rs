@@ -60,22 +60,90 @@ pub struct DisconnectRequest {
     pub authorization_generation: i64,
 }
 
+/// A phone number to start a direct chat with.
+#[derive(Deserialize, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = WhatsAppLookupRequest)]
+pub struct LookupRequest {
+    /// E.164: `+`, the country code and the number, without spacing.
+    pub phone_number: String,
+}
+
 /// The caller's WhatsApp account, pairing and chat list, under `/whatsapp`.
 pub fn whatsapp_router<Auth, S>(state: WhatsAppRouterState<Auth>) -> Router<S>
 where
     Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
+    let people_only = axum::middleware::from_fn_with_state(
+        state.authorization_state.clone(),
+        refuse_programs::<Auth>,
+    );
     no_store(
         Router::new()
             .route("/account", get(account::<Auth>))
-            .route("/connect", post(connect::<Auth>))
+            .route("/connect", post(connect::<Auth>).layer(people_only.clone()))
             .route("/disconnect", post(disconnect::<Auth>))
-            .route("/pairing/{id}", get(pairing::<Auth>).delete(cancel::<Auth>))
-            .route("/pairing/{id}/passkey", post(passkey::<Auth>))
-            .route("/chats", get(chats::<Auth>)),
+            .route(
+                "/pairing/{id}",
+                get(pairing::<Auth>)
+                    .layer(people_only.clone())
+                    .delete(cancel::<Auth>),
+            )
+            .route(
+                "/pairing/{id}/passkey",
+                post(passkey::<Auth>).layer(people_only),
+            )
+            .route("/chats", get(chats::<Auth>))
+            .route("/lookups", post(start_lookup::<Auth>))
+            .route("/lookups/{id}", get(lookup::<Auth>))
+            .route("/history-import", post(import_history::<Auth>)),
     )
     .with_state(state)
+}
+
+/// A pairing links a WhatsApp phone to the account for as long as it stays
+/// linked, and its QR code or passkey is all a phone needs, so only a person
+/// starts one or reads its code: never an agent's program (a credential
+/// signed for an agent or a routine run, or the code-mode header). A
+/// credential that does not verify is rejected here.
+async fn refuse_programs<Auth: MacroAuthorizationService>(
+    State(authorization): State<macro_authorization::MacroAuthorizationState<Auth>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::{extract::FromRequestParts as _, response::IntoResponse as _};
+    let (mut parts, body) = request.into_parts();
+    let principal = match macro_authorization::OptionalMacroAuthorizationExtractor::<
+        Auth,
+        macro_authorization::AnyPrincipal,
+    >::from_request_parts(&mut parts, &authorization)
+    .await
+    {
+        Ok(extractor) => extractor.authorization,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let program = match &principal {
+        Some(macro_authorization::MacroAuthorization::User(user)) => {
+            macro_authorization::is_program_run(user.attribution(), &parts.headers)
+        }
+        _ => parts
+            .headers
+            .contains_key(macro_authorization::CODE_EXECUTION_HEADER),
+    };
+    if program {
+        tracing::warn!("refused a WhatsApp pairing to a program");
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "code": "forbidden",
+                "message": "An agent's program cannot pair WhatsApp. Tell the user to connect it themselves in Macro, under Settings.",
+            })),
+        )
+            .into_response();
+    }
+    next.run(axum::extract::Request::from_parts(parts, body))
+        .await
 }
 
 /// The caller's own account.
@@ -198,6 +266,64 @@ pub async fn chats<Auth: MacroAuthorizationService>(
         state
             .service
             .chats(&auth.authorization.macro_user_id)
+            .await?,
+    ))
+}
+
+/// Ask whether a phone number has a WhatsApp account, to start a direct chat
+/// with it; poll the lookup until it is no longer `pending`. Found numbers
+/// join the chat list, so `POST /external-chats` adds them.
+#[utoipa::path(post, path = "/whatsapp/lookups", operation_id = "whatsapp_start_lookup", request_body = LookupRequest, responses((status = 200, body = Lookup)))]
+pub async fn start_lookup<Auth: MacroAuthorizationService>(
+    State(state): State<WhatsAppRouterState<Auth>>,
+    auth: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Json(body): Json<LookupRequest>,
+) -> Result<Json<Lookup>, ApiError> {
+    Ok(Json(
+        state
+            .service
+            .lookup(
+                &auth.authorization.macro_user_id,
+                &body.phone_number,
+                authority(&auth.authorization),
+            )
+            .await?,
+    ))
+}
+
+/// Import earlier messages of the caller's chats that wait for their phone
+/// (`backfill.state` `waiting_for_phone`). WhatsApp must be open on the phone.
+#[utoipa::path(post, path = "/whatsapp/history-import", operation_id = "whatsapp_import_history", responses((status = 200, body = HistoryImport)))]
+pub async fn import_history<Auth: MacroAuthorizationService>(
+    State(state): State<WhatsAppRouterState<Auth>>,
+    auth: MacroAuthorizationExtractor<Auth, UserOnly>,
+) -> Result<Json<HistoryImport>, ApiError> {
+    Ok(Json(
+        state
+            .service
+            .import_history(
+                &auth.authorization.macro_user_id,
+                authority(&auth.authorization),
+            )
+            .await?,
+    ))
+}
+
+/// Poll the caller's phone-number lookup.
+#[utoipa::path(get, path = "/whatsapp/lookups/{id}", operation_id = "whatsapp_lookup", params(("id" = Uuid, Path)), responses((status = 200, body = Lookup)))]
+pub async fn lookup<Auth: MacroAuthorizationService>(
+    State(state): State<WhatsAppRouterState<Auth>>,
+    auth: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Lookup>, ApiError> {
+    Ok(Json(
+        state
+            .service
+            .lookup_state(
+                &auth.authorization.macro_user_id,
+                id,
+                authority(&auth.authorization),
+            )
             .await?,
     ))
 }

@@ -36,6 +36,7 @@ fn asking_for_a_file() -> FormLayout {
                 required: false,
                 widget: Some(Widget::File),
             }],
+            show_when: None,
         }],
     }
 }
@@ -140,6 +141,7 @@ async fn a_layout_reusing_another_forms_id_is_a_repeated_id_and_the_old_layout_s
                 title: "Someone else's".into(),
                 description: "".into(),
                 questions: vec![],
+                show_when: None,
             }],
         },
     );
@@ -153,6 +155,7 @@ async fn a_layout_reusing_another_forms_id_is_a_repeated_id_and_the_old_layout_s
                     title: "Mine".into(),
                     description: "".into(),
                     questions: vec![],
+                    show_when: None,
                 }],
             },
         )

@@ -38,7 +38,7 @@ test('expected release requirement includes instructions and the committed floor
   } });
   assert.equal(writes.length, 1);
   assert.equal(writes[0].type, 'create');
-  assert.match(writes[0].body, /2\.0\.10 \(build 188\) must be live/);
+  assert.match(writes[0].body, /2\.0\.10 \(build 188\) must be approved/);
   assert.match(writes[0].body, /add \*\*`ios-update`\*\*/);
   assert.match(writes[0].body, /build \*\*185\*\*/);
   assert.match(writes[0].body, /runs\/456\/attempts\/2/);
@@ -50,28 +50,24 @@ test('infrastructure failures never claim that the release is missing', async ()
     const { writes } = await run({ steps: { ...native, [id]: { outcome: 'failure' } } });
     assert.match(writes[0].body, /could not complete/);
     assert.match(writes[0].body, /does not establish whether/);
-    assert.doesNotMatch(writes[0].body, /must be live before/);
+    assert.doesNotMatch(writes[0].body, /must be approved before/);
   }
 });
 
-test('waiting and live results update the existing bot comment', async () => {
-  for (const kind of ['waiting', 'live']) {
+test('waiting and approved results update the existing bot comment', async () => {
+  for (const [kind, state] of [['waiting', 'IN_REVIEW'], ['approved', 'PENDING_DEVELOPER_RELEASE']]) {
     const { writes } = await run({ comments: [{ id: 99, user: { login: 'github-actions[bot]' }, body: marker }],
-      steps: { ...native, live: { outcome: kind === 'live' ? 'success' : 'failure', outputs: {
-        gate_result: JSON.stringify({ ...release, kind, reason: 'In review.', state: 'IN_REVIEW' }),
+      steps: { ...native, live: { outcome: kind === 'approved' ? 'success' : 'failure', outputs: {
+        gate_result: JSON.stringify({ ...release, kind, reason: 'In review.', state }),
       } } },
     });
     assert.equal(writes[0].type, 'update');
     assert.equal(writes[0].comment_id, 99);
-    assert.match(writes[0].body, kind === 'live' ? /live and verified/ : /Wait for Apple/);
+    assert.match(writes[0].body, kind === 'approved' ? /approved and verified/ : /Wait for Apple/);
   }
 });
 
-test('manual release and mismatched build need action rather than waiting', async () => {
-  const waiting = await run({ steps: { ...native, live: { outputs: { gate_result: JSON.stringify({
-    ...release, kind: 'waiting', state: 'PENDING_DEVELOPER_RELEASE', reason: 'Approved.',
-  }) } } } });
-  assert.match(waiting.writes[0].body, /Release the approved version in App Store Connect/);
+test('mismatched build needs action rather than waiting', async () => {
   const mismatch = await run({ steps: { ...native, live: { outputs: { gate_result: JSON.stringify({
     ...release, kind: 'mismatch', reason: 'Wrong native tree.',
   }) } } } });

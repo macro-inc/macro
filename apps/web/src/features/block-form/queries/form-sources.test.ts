@@ -39,7 +39,10 @@ vi.mock('@queries/storage/forms', () => ({
         status: 'open',
         closesAt: null,
         tallyVisible: true,
+        responsesVisible: false,
+        anonymous: false,
         confirmationMessage: '',
+        branding: { logoFileId: null, coverFileId: null, accentColor: null },
         submittedColumnId: null,
         respondentColumnId: null,
       },
@@ -226,10 +229,7 @@ describe('createTallySource', () => {
       { value: { kind: 'option', option: 'option-1' }, count: 1 },
       { value: JSON.parse('{"kind":"rating","stars":5}'), count: 1 },
     ];
-    const source = createTallySource(
-      () => 'form-1',
-      () => true
-    );
+    const source = createTallySource(() => 'form-1');
     expect(source.value()).toEqual([
       {
         questionId: 'question-1',

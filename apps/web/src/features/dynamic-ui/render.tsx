@@ -2,15 +2,21 @@ import { Telemetry } from '@macro-inc/observability';
 import { createMemo, ErrorBoundary, For, type JSX, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
 import { Col, Row, View } from './core/Layout';
+import { titledWidgets } from './core/view-title';
 import type {
   View as ComposedView,
   Widget,
   WidgetOf,
   WidgetType,
-} from './schema';
+} from './view';
+import { AgentUpdates } from './widgets/AgentUpdates';
+import { BotCredential } from './widgets/BotCredential';
+import { Cards } from './widgets/Cards';
 import { ChannelMessage } from './widgets/ChannelMessage';
+import { Events } from './widgets/Events';
 import { List } from './widgets/List';
 import { Md } from './widgets/Md';
+import { Tags } from './widgets/Tags';
 import { Timeline } from './widgets/Timeline';
 
 /**
@@ -26,6 +32,11 @@ export function Render(props: { node: Widget }): JSX.Element {
     .with({ type: 'timeline' }, (n) => <Timeline {...n} />)
     .with({ type: 'channelMessage' }, (n) => <ChannelMessage {...n} />)
     .with({ type: 'list' }, (n) => <List {...n} />)
+    .with({ type: 'events' }, (n) => <Events {...n} />)
+    .with({ type: 'cards' }, (n) => <Cards {...n} />)
+    .with({ type: 'tags' }, (n) => <Tags {...n} />)
+    .with({ type: 'agentUpdates' }, (n) => <AgentUpdates {...n} />)
+    .with({ type: 'botCredential' }, (n) => <BotCredential {...n} />)
     .with({ type: 'container' }, (n) => <Container node={n} />)
     .exhaustive();
 }
@@ -35,7 +46,12 @@ export function Render(props: { node: Widget }): JSX.Element {
  * share a horizontal row, so e.g. a `list` dropped into a `row` still renders
  * full-width on its own line instead of being squished into a column.
  */
-const FULL_WIDTH_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>(['list']);
+const FULL_WIDTH_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>([
+  'list',
+  'events',
+  'tags',
+  'agentUpdates',
+]);
 
 /**
  * Renders a `container` node: picks {@link RowLayout} or {@link Col} by
@@ -113,6 +129,7 @@ function RowLayout(props: { node: WidgetOf<'container'> }): JSX.Element {
  * makes per-widget boundaries unnecessary).
  */
 export function Compose(props: { view: ComposedView }): JSX.Element {
+  const shown = createMemo(() => titledWidgets(props.view));
   return (
     <ErrorBoundary
       fallback={(err) => {
@@ -132,8 +149,8 @@ export function Compose(props: { view: ComposedView }): JSX.Element {
       <Suspense
         fallback={<div class="text-ink-muted p-3 text-sm">Loading…</div>}
       >
-        <View title={props.view.title}>
-          <For each={props.view.widgets}>
+        <View title={shown().title}>
+          <For each={shown().widgets}>
             {(widget) => <Render node={widget} />}
           </For>
         </View>

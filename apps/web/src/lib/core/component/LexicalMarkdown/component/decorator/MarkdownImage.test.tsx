@@ -55,6 +55,50 @@ describe('markdown media loading', () => {
     );
   });
 
+  it('loads a selected GIF directly with CORS instead of proxy authentication', () => {
+    const src = 'https://static.klipy.com/media/example/medium.gif';
+    const view = render(() => (
+      <MarkdownImage
+        {...unsetMedia}
+        key="selected-gif"
+        url={src}
+        alt="Selected GIF"
+        width={320}
+        height={240}
+      />
+    ));
+    const image = view.container.querySelector('img')!;
+    expect(image.getAttribute('src')).toBe(src);
+    expect(image.crossOrigin).toBe('anonymous');
+  });
+  it('sends the session cookie to the image proxy', () => {
+    const view = render(() => (
+      <MarkdownImage
+        {...unsetMedia}
+        key="proxied"
+        url="https://example.com/shot.gif"
+        alt="Shot"
+      />
+    ));
+    expect(
+      view.container.querySelector('img')!.getAttribute('crossorigin')
+    ).toBe('use-credentials');
+  });
+
+  it('loads a static file anonymously', () => {
+    const view = render(() => (
+      <MarkdownImage
+        {...unsetMedia}
+        key="static"
+        url={`${SERVER_HOSTS['static-file']}/file/299c189c-df42-4a9a-b42b-7220264b607b`}
+        alt="Static"
+      />
+    ));
+    expect(
+      view.container.querySelector('img')!.getAttribute('crossorigin')
+    ).toBe('anonymous');
+  });
+
   it('shows a reserved image card while the file has no size yet', () => {
     render(() => (
       <MarkdownImage

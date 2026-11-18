@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import {
   createEffect,
+  createSignal,
   For,
   type JSX,
   lazy,
@@ -301,6 +302,20 @@ it('opts a mounted view into leave guards for its search namespace', () => {
   expect(screen.getByRole('button', { name: 'sort:date' })).toBeTruthy();
 });
 describe('split router Solid bindings', () => {
+  it('renders the root fallback while no pane is available', () => {
+    const [panes, setPanes] = createSignal<readonly PaneId[]>([]);
+    const { router } = renderRouter('/home', (router) => (
+      <SplitRouterProvider router={{ ...router, panes }}>
+        <Outlet fallback={() => <p>waiting for a pane</p>} />
+      </SplitRouterProvider>
+    ));
+    expect(screen.getByText('waiting for a pane')).toBeTruthy();
+    setPanes(router.panes());
+    expect(screen.getByText('home')).toBeTruthy();
+    setPanes([]);
+    expect(screen.getByText('waiting for a pane')).toBeTruthy();
+  });
+
   it('keeps a view mounted while its remount key holds and updates params in place', async () => {
     const { router } = renderPanes('/drive/md/d1');
     const pane = router.panes()[0]!;

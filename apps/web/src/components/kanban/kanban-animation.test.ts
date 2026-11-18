@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  createKanbanAnimation,
-  type KanbanAnimationItem,
-} from './kanban-animation';
+  createLayoutAnimation,
+  type LayoutAnimationItem,
+} from '../drag-drop/create-layout-animation';
 
 const cleanups: (() => void)[] = [];
 let animate: ReturnType<typeof vi.fn>;
@@ -44,8 +44,8 @@ function fixture() {
   const viewport = document.createElement('div');
   viewport.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600);
   document.body.append(viewport);
-  let items: KanbanAnimationItem[] = [];
-  const motion = createKanbanAnimation({
+  let items: LayoutAnimationItem[] = [];
+  const motion = createLayoutAnimation({
     viewport: () => viewport,
     items: () => items,
   });

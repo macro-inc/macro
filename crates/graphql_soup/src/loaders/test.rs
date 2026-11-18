@@ -137,6 +137,15 @@ impl SoupService for RecordingSoupService {
         Ok(Vec::<ItemGroupingInfo<SoupPropertiesField>>::new().into_iter())
     }
 
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<soup::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _user_id: MacroUserIdStr<'a>,
@@ -181,6 +190,7 @@ fn document(id: Uuid) -> SoupItem<()> {
 /// Build a document Soup item with an explicit name.
 fn document_named(id: Uuid, name: impl Into<String>) -> SoupItem<()> {
     SoupItem::Document(SoupDocument {
+        appearance: None,
         id,
         document_version_id: 1,
         owner_id: Owner::from_principal_str("macro|owner@example.com").expect("valid owner"),

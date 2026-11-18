@@ -15,6 +15,7 @@ export function fixtureMailAccount(
   return {
     id,
     macroId: USER_ID,
+    provider: 'GMAIL',
     emailAddress,
     photoUrl: null,
     isPrimary,
@@ -55,6 +56,7 @@ export const mail = [4, 6, 8, 9, 10, 12].map((n) => {
     isSignal: n % 3 === 0,
     isImportant: n % 3 === 0,
     isDraft: false,
+    hasReceivedMail: true,
     snippet: `Fixture message ${n}`,
     senderEmail: 'sender@example.com',
     senderName: 'Fixture sender',
@@ -66,6 +68,7 @@ export const mail = [4, 6, 8, 9, 10, 12].map((n) => {
     viewedAt: null,
     notifications: [],
     participants: [],
+    senders: [],
     attachments: [],
     labels: [],
     properties: [],

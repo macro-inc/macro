@@ -1,8 +1,8 @@
 import { EphemeralStore } from 'loro-crdt';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  AI_NAMES,
   aiLabel,
+  DEFAULT_EDITOR_NAME,
   realAwarenessSource,
   resolveTextOwner,
 } from './awareness-source';
@@ -23,8 +23,8 @@ describe('aiLabel', () => {
     expect(label).toBe(`${'x'.repeat(64)} (AI)`);
   });
 
-  it('is what the pooled names are built with', () => {
-    for (const name of AI_NAMES) expect(name.endsWith('(AI)')).toBe(true);
+  it('labels an edit that names no editor as Macro', () => {
+    expect(aiLabel(DEFAULT_EDITOR_NAME)).toBe('Macro (AI)');
   });
 });
 

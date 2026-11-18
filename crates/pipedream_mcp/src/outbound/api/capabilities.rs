@@ -24,6 +24,7 @@ impl ConnectorCapabilities for PipedreamClient {
             server_name: app_slug.to_owned(),
             account_id: String::new(),
             enabled: false,
+            provider: crate::domain::models::ConnectionProvider::Pipedream,
         };
         tokio::time::timeout(Duration::from_secs(30), async {
             let client = self.connect(&record).await?;

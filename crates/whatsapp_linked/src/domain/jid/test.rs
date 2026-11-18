@@ -37,3 +37,26 @@ fn only_phone_number_jids_have_a_number() {
     assert_eq!(phone_number("987654321@lid"), None);
     assert_eq!(phone_number("120363000000000001@g.us"), None);
 }
+
+#[test]
+fn phone_numbers_are_strict_e164() {
+    let digits = |count: usize| "1".repeat(count);
+    for (text, valid) in [
+        (format!("+{}", digits(*PHONE_DIGITS.start())), true),
+        (format!("+{}", digits(*PHONE_DIGITS.end())), true),
+        (format!("+{}", digits(PHONE_DIGITS.start() - 1)), false),
+        (format!("+{}", digits(PHONE_DIGITS.end() + 1)), false),
+        ("+0555000".to_owned(), false),
+        ("5550001".to_owned(), false),
+        ("+555 0001".to_owned(), false),
+        ("+555-0001".to_owned(), false),
+        ("++5550001".to_owned(), false),
+        ("+".to_owned(), false),
+        (String::new(), false),
+    ] {
+        assert_eq!(PhoneNumber::parse(&text).is_some(), valid, "{text}");
+    }
+    let phone = PhoneNumber::parse("+5550001").unwrap();
+    assert_eq!(phone.as_str(), "+5550001");
+    assert_eq!(phone.jid(), format!("{}@s.whatsapp.net", "5550001"));
+}

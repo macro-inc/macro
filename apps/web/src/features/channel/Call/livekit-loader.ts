@@ -75,10 +75,12 @@ export const LK_TRACK_SOURCE = {
   Camera: 'camera' as Track.Source.Camera,
   Microphone: 'microphone' as Track.Source.Microphone,
   ScreenShare: 'screen_share' as Track.Source.ScreenShare,
+  ScreenShareAudio: 'screen_share_audio' as Track.Source.ScreenShareAudio,
 } as const;
 
 export const LK_ROOM_EVENT = {
   Disconnected: 'disconnected' as RoomEvent.Disconnected,
+  DataReceived: 'dataReceived' as RoomEvent.DataReceived,
 } as const;
 
 // DisconnectReason is a protobuf enum; the numeric values are wire-stable.

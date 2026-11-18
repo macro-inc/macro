@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
-/** HTTPS works even when the Play Store app is absent. */
-export function nativeUpdateLink(platform: 'ios' | 'android'): string {
+/** Store listing for the app; HTTPS works even when the Play Store app is absent. */
+export function storeListingUrl(platform: 'ios' | 'android'): string {
   return platform === 'android'
     ? 'https://play.google.com/store/apps/details?id=com.macro.workspace.mobile'
     : 'https://apps.apple.com/us/app/macro-app/id6743133649';
@@ -12,7 +12,7 @@ export async function openNativeUpdateLink(
   platform: 'ios' | 'android'
 ): Promise<boolean> {
   try {
-    await invoke('plugin:opener|open_url', { url: nativeUpdateLink(platform) });
+    await invoke('plugin:opener|open_url', { url: storeListingUrl(platform) });
     return true;
   } catch (error) {
     console.error('[native-update] unable to open store', error);

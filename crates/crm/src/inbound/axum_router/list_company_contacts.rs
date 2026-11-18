@@ -26,10 +26,30 @@ use super::CrmRouterState;
 pub struct CrmContactResponse {
     /// The id of the contact record.
     pub id: Uuid,
-    /// The id of the company the contact belongs to.
-    pub company_id: Uuid,
-    /// The contact's email address.
-    pub email: String,
+    /// The id of the company the contact belongs to; absent for a
+    /// contact without a company.
+    pub company_id: Option<Uuid>,
+    /// The contact's primary email address; absent for contacts added by
+    /// name alone.
+    pub email: Option<String>,
+    /// Every address the contact is known by: the primary first, then the
+    /// rest oldest first. Older servers omit it; clients then show `email`.
+    #[schema(required = false)]
+    pub emails: Vec<String>,
+    /// Whether the primary address uses a known personal provider. Linking
+    /// or switching the company needs this and `companyDomain = false`.
+    /// Older servers omit this classification; clients must then keep it read-only.
+    #[schema(required = false)]
+    pub personal_email: bool,
+    /// Whether the contact has an address on one of its company's domains.
+    /// Such a contact cannot be unlinked from the company or moved to another.
+    /// Older servers omit this classification; clients must then keep it read-only.
+    #[schema(required = false)]
+    pub company_domain: bool,
+    /// The addresses on one of the company's domains. The last one cannot be
+    /// removed while the contact is linked to the company.
+    #[schema(required = false)]
+    pub company_domain_emails: Vec<String>,
     /// Display name observed for the contact, if any.
     pub name: Option<String>,
     /// Whether the contact is hidden from CRM listings for the
@@ -52,7 +72,11 @@ impl From<CrmContact> for CrmContactResponse {
         Self {
             id: c.id,
             company_id: c.company_id,
+            personal_email: c.has_personal_email(),
+            company_domain: c.is_company_domain(),
             email: c.email,
+            emails: c.emails,
+            company_domain_emails: c.company_domain_emails,
             name: c.name,
             hidden: c.hidden,
             first_interaction: c.first_interaction,

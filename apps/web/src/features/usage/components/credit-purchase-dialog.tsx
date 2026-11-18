@@ -5,6 +5,8 @@ import { formatCreditBalance } from '../core/usage';
 
 export function CreditPurchaseDialog(props: {
   sharedWithTeam?: boolean;
+  /** A team member buying on the team owner's card. */
+  teamCard?: boolean;
   selection: number | 'other';
   customAmount: string;
   amountCents: number | undefined;
@@ -12,7 +14,7 @@ export function CreditPurchaseDialog(props: {
   onCustomAmount: (amount: string) => void;
   onClose: () => void;
   onRestoreFocus?: () => void;
-  onCheckout: () => void;
+  onBuy: () => void;
   onViewPlans?: () => void;
   pending: boolean;
   disabled: boolean;
@@ -97,8 +99,9 @@ export function CreditPurchaseDialog(props: {
             </div>
           </div>
           <p class="text-xs text-ink-muted">
-            Choose or add your payment method and review your purchase in Stripe
-            Checkout.
+            {props.teamCard
+              ? "Charged right away to your team owner's card on file."
+              : 'Charged right away to your card on file.'}
           </p>
           <Show when={props.notice}>
             <p class="text-sm text-ink-muted" role="status">
@@ -120,9 +123,11 @@ export function CreditPurchaseDialog(props: {
                 <Button
                   variant="primary"
                   disabled={props.disabled || props.pending}
-                  onClick={props.onCheckout}
+                  onClick={props.onBuy}
                 >
-                  {props.pending ? 'Opening checkout…' : 'Continue to checkout'}
+                  {props.pending
+                    ? 'Charging…'
+                    : `Buy ${formatCreditBalance(props.amountCents ?? 0)} in credits`}
                 </Button>
               }
             >

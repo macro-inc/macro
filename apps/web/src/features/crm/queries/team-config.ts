@@ -59,6 +59,7 @@ export function useTeamCrmConfig(deps: CrmQueryDependencies) {
       legacyStageIds: data.legacy_stage_ids ?? undefined,
       teamViews: parseTeamViews(data.team_views),
       defaultTeamViewId: data.default_team_view_id ?? undefined,
+      excludePersonalEmails: data.exclude_personal_emails,
     };
   });
 
@@ -88,6 +89,7 @@ export function useTeamCrmConfig(deps: CrmQueryDependencies) {
           ...(patch.defaultTeamViewId !== undefined
             ? { default_team_view_id: patch.defaultTeamViewId }
             : {}),
+          exclude_personal_emails: patch.excludePersonalEmails,
         };
         return await throwOnErr(() => deps.storage.updateCrmTeamSettings(body));
       },

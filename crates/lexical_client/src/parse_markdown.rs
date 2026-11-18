@@ -286,6 +286,10 @@ pub struct AgentActivityRow {
     pub detail: Option<String>,
     /// Where it got to.
     pub status: AgentActivityStatus,
+    /// What the step put in front of the person, in the session fold's card
+    /// shape: a view the agent presented.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card: Option<agent_fold::domain::model::ActivityCard>,
 }
 
 /// Where one step of an agent's work got to.
@@ -330,6 +334,17 @@ pub struct AgentContextPerson<'a> {
     pub name: &'a str,
 }
 
+/// The agent a prompt is for, so it knows the name people call it by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct AgentContextAgent<'a> {
+    /// Its sender id, `bot|{id}`.
+    pub id: &'a str,
+    /// Its display name.
+    pub name: &'a str,
+    /// Its `@` handle, without the `@`.
+    pub handle: &'a str,
+}
+
 /// Whose access an agent session runs with, and who sent the prompt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub struct AgentContextPeople<'a> {
@@ -340,14 +355,31 @@ pub struct AgentContextPeople<'a> {
     pub sender: Option<AgentContextPerson<'a>>,
 }
 
+/// When a prompt was sent, as the person reading the reply keeps time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentContextCurrentTime<'a> {
+    /// ISO 8601 timestamp carrying the time zone's UTC offset.
+    pub iso: &'a str,
+    /// The same instant written out for a reader.
+    pub local: &'a str,
+    /// IANA zone `iso` is in; absent when unknown and `iso` is UTC.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<&'a str>,
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentContextRequest<'a> {
     prompt_markdown: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     instructions: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent: Option<&'a AgentContextAgent<'a>>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     people: Option<&'a AgentContextPeople<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    current_time: Option<&'a AgentContextCurrentTime<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     trigger: Option<&'a TriggerContext>,
 }
@@ -672,12 +704,14 @@ impl LexicalClient {
     /// Sanitizes an agent prompt and optionally composes it with why the
     /// agent was called via the lexical service, so internal nodes and
     /// escaping are handled by Lexical rather than by the caller.
-    #[tracing::instrument(skip(self, prompt_markdown, trigger), err)]
+    #[tracing::instrument(skip(self, prompt_markdown, current_time, trigger), err)]
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
+        agent: Option<&AgentContextAgent<'_>>,
         people: Option<&AgentContextPeople<'_>>,
+        current_time: Option<&AgentContextCurrentTime<'_>>,
         trigger: Option<&TriggerContext>,
     ) -> Result<String> {
         let url = format!("{}/agent-context", self.url);
@@ -687,7 +721,9 @@ impl LexicalClient {
                 .json(&AgentContextRequest {
                     prompt_markdown,
                     instructions,
+                    agent,
                     people,
+                    current_time,
                     trigger,
                 })
                 .send()

@@ -1,15 +1,19 @@
 use models_email::gmail::{HistoryListResponse, HistoryRecord};
 
-use crate::domain::models::{ChangeBatch, InboxChanges, SyncCursor};
+use crate::domain::models::{ChangePage, InboxChanges, SyncCursor};
 
-pub(crate) fn map_history_list_response_to_changes(response: HistoryListResponse) -> ChangeBatch {
+pub(crate) fn map_history_page(response: HistoryListResponse) -> ChangePage {
     let mut changes = InboxChanges::default();
 
     for record in response.history.unwrap_or_default() {
         apply_history_record(&mut changes, &record);
     }
 
-    ChangeBatch::new(changes, SyncCursor::gmail(response.history_id))
+    ChangePage {
+        changes,
+        cursor: (!response.history_id.is_empty()).then(|| SyncCursor::gmail(response.history_id)),
+        next_page_token: response.next_page_token,
+    }
 }
 
 fn apply_history_record(changes: &mut InboxChanges, record: &HistoryRecord) {

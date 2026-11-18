@@ -1,7 +1,7 @@
 import type { MacroClient } from '../../utils/client';
 import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
-import type { SearchOpts } from '../search';
+import type { SearchOpts } from '../search/options';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
 import { type SimilarTask, Task, type TaskSummary } from './task';
@@ -11,6 +11,11 @@ import { type SimilarTask, Task, type TaskSummary } from './task';
  * `summaries` call reads many names (`name()` loads each whole document).
  * Creating a task needs only what the request states; don't research what it
  * describes unless asked.
+ *
+ * @routing Use when creating, assigning or updating tasks, or reporting on tasks such as open or overdue ones; not reminders, which are routines.
+ *
+ * @agent
+ * Never edit, merge or delete the tasks `findSimilar` matches unless the user asks.
  */
 export class TaskNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -23,6 +28,8 @@ export class TaskNamespace {
   /**
    * Create a task, with its initiative, assignees and due date in the same
    * request. The task starts Not started.
+   *
+   * @write
    */
   create(opts: {
     name: string;
@@ -45,15 +52,21 @@ export class TaskNamespace {
   /**
    * Names and state of many tasks in one request, in the order given. Tasks
    * that no longer exist are left out.
+   *
+   * @readonly
    */
   summaries(tasks: Task[]): Promise<TaskSummary[]> {
     return Task.summaries(this.client, tasks);
   }
 
   /**
-   * Existing tasks of yours or your team's that look like the same work as a
-   * task with this title and body, most similar first. Call it before
-   * `create`; if one is a likely duplicate, ask the user instead of creating.
+   * Existing tasks like a task with this `title` and `body` (not `create`'s
+   * `name` and `markdown`), yours or your team's, most similar first. Call it
+   * in the same program as `create`: create only when nothing is a likely
+   * duplicate, and otherwise return the matches and ask the user instead of
+   * creating.
+   *
+   * @readonly
    */
   findSimilar(opts: { title: string; body?: string }): Promise<SimilarTask[]> {
     return Task.findSimilar(this.client, opts);
@@ -61,12 +74,18 @@ export class TaskNamespace {
 
   /**
    * The tasks the GitHub pull request at `url` references, oldest link first.
+   *
+   * @readonly
    */
   forPullRequest(url: string): Promise<Task[]> {
     return Task.forPullRequest(this.client, url);
   }
 
-  /** Search tasks by name and content, most relevant first, auto-paginated. */
+  /**
+   * Search tasks by name and content, most relevant first, auto-paginated.
+   *
+   * @readonly
+   */
   search(query: string, opts?: SearchOpts): AsyncGenerator<Task> {
     return Task.search(this.client, query, opts);
   }

@@ -96,6 +96,10 @@ fn test_router() -> Router {
             post(message::batch_send_unique_messages_handler),
         )
         .route(
+            "/message/broadcast",
+            post(message::broadcast_message_handler),
+        )
+        .route(
             "/track/{entity_type}/{entity_id}",
             get(entities::get_entity_handler),
         )
@@ -132,6 +136,7 @@ async fn internal_routes_reject_missing_and_incorrect_keys_before_other_extracti
         (Method::POST, "/message/send/user/macro%7Ctest@example.com"),
         (Method::POST, "/message/batch_send"),
         (Method::POST, "/message/batch_send_unique"),
+        (Method::POST, "/message/broadcast"),
         (Method::GET, "/track/user/macro%7Ctest@example.com"),
     ];
 

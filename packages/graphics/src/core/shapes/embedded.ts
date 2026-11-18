@@ -30,7 +30,10 @@ export const validMediaSource = (v: unknown): v is MediaSource =>
     (v.type === 'url' &&
       typeof v.url === 'string' &&
       /^(https?:\/\/|\/(?!\/))[^\s]+$/i.test(v.url)));
-function definition<K extends 'image' | 'video' | 'document'>(
+/** Shared contract for kinds that occupy a plain resizable box. */
+export function boxShapeDefinition<
+  K extends 'image' | 'video' | 'document' | 'artifact',
+>(
   type: K,
   label: string,
   validate: (v: unknown) => v is ShapeGeometryMap[K]
@@ -76,9 +79,9 @@ const validMedia = (v: unknown): v is MediaGeometry =>
   validMediaSource(v.source) &&
   'name' in v &&
   typeof v.name === 'string';
-export const imageDefinition = definition('image', 'Image', validMedia);
-export const videoDefinition = definition('video', 'Video', validMedia);
-export const documentDefinition = definition(
+export const imageDefinition = boxShapeDefinition('image', 'Image', validMedia);
+export const videoDefinition = boxShapeDefinition('video', 'Video', validMedia);
+export const documentDefinition = boxShapeDefinition(
   'document',
   'Document',
   (v): v is DocumentGeometry =>

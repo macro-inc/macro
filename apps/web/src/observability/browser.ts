@@ -1,13 +1,18 @@
+import { DEVELOPMENT_PROXY_PREFIX } from '@core/constant/developmentProxy';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isIgnorableError } from '@core/util/ignorableErrors';
 import { getPlatform, isTauri } from '@core/util/platform';
+import { webviewFetch } from '@core/util/platformFetch';
 import { recordBrowserTursoCacheNavigation } from '@graphql-cache/rollout-observability';
-import { Telemetry } from '@macro-inc/observability';
-import { createWebTracingProvider } from '@macro-inc/observability/web';
-// This static import loads the zone.js Promise patch before application modules run.
-import { ZoneContextManager } from '@macro-inc/observability/zone';
+import { Telemetry, type TelemetryInitConfig } from '@macro-inc/observability';
+import {
+  createWebTracingProvider,
+  StackContextManager,
+} from '@macro-inc/observability/web';
+import { startBootTrace } from './boot';
 import {
   createDesktopMemoryRecording,
+  type DesktopSnapshot,
   desktopResourceAttributes,
   readDesktopDiagnostics,
 } from './desktop';
@@ -16,6 +21,10 @@ import { frontendInstanceId } from './frontend-instance';
 import { configureNativeCallTracing } from './native-call-tracing';
 import { startNativeDiagnostics } from './native-diagnostics';
 import { recordNativeWebviewStart } from './native-lifecycle';
+import { osType } from './os-type';
+import { startRuntimeResourceSampling } from './runtime-resources';
+import { samplingKey, samplingRates } from './sampling';
+import { startTypingBurstTelemetry } from './typing-burst';
 import { initializeUiOperationTelemetry } from './ui-operation';
 
 async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
@@ -56,79 +65,138 @@ async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
   });
 }
 
+/**
+ * A local stack's analytics proxy forwards to the collector; the standalone
+ * dev server against hosted dev reaches it through its own proxy.
+ */
+function localDevelopmentTracesUrl(): string {
+  const standalone =
+    import.meta.env.VITE_DEV_PROXY === true ||
+    import.meta.env.VITE_DEV_PROXY === 'true';
+  return standalone
+    ? `${DEVELOPMENT_PROXY_PREFIX}/otlp/v1/traces`
+    : 'http://localhost:8098/i/otlp/v1/traces';
+}
+
 /** Initialize browser telemetry and its application-level lifecycle hooks. */
-export async function initializeBrowserObservability(): Promise<void> {
+export async function initializeBrowserObservability(
+  onProviderReady?: () => void
+): Promise<void> {
   const lifecycle = isTauri() ? startDocumentLifecycle() : undefined;
   import.meta.hot?.dispose(() => lifecycle?.dispose());
   let browserEnabled = false;
-  const desktop = await readDesktopDiagnostics();
-  const disposeNativeDiagnostics = startNativeDiagnostics(desktop);
-  import.meta.hot?.dispose(disposeNativeDiagnostics);
-  const recording = desktop?.identity.recordingId
-    ? createDesktopMemoryRecording(desktop)
-    : undefined;
+  const native = isTauri();
+  const desktopReady = native
+    ? Promise.resolve().then(() => readDesktopDiagnostics())
+    : Promise.resolve(undefined);
+  let desktop: DesktopSnapshot | undefined;
+  let recording: ReturnType<typeof createDesktopMemoryRecording> | undefined;
+  let disposed = false;
+  import.meta.hot?.dispose(() => {
+    disposed = true;
+  });
   const configuredTracesUrl =
-    desktop?.identity.tracesUrl ??
     import.meta.env.VITE_OTEL_EXPORTER_URL ??
-    (import.meta.hot ? 'http://localhost:8098/i/otlp/v1/traces' : undefined);
+    (import.meta.hot ? localDevelopmentTracesUrl() : undefined);
   // Local stacks use a same-origin path; exporters expect an absolute URL.
-  const tracesUrl = configuredTracesUrl
+  const fallbackTracesUrl = configuredTracesUrl
     ? new URL(configuredTracesUrl, window.location.origin).href
     : undefined;
-  const telemetryConfig = {
+  const startup = desktopReady.then((snapshot) => {
+    desktop = snapshot;
+    recording = snapshot?.identity.recordingId
+      ? createDesktopMemoryRecording(snapshot)
+      : undefined;
+    if (!disposed) {
+      const dispose = startNativeDiagnostics(snapshot);
+      import.meta.hot?.dispose(dispose);
+    }
+    const destination = snapshot?.identity.tracesUrl ?? fallbackTracesUrl;
+    const tracesUrl = destination
+      ? new URL(destination, window.location.origin).href
+      : undefined;
+    return {
+      recording: Boolean(recording),
+      tracesUrl,
+      logsUrl: tracesUrl?.replace(/\/v1\/traces\/?$/, '/v1/logs'),
+    };
+  });
+  const environment =
+    import.meta.env.VITE_OTEL_ENV ??
+    (import.meta.env.MODE === 'production' ? 'prod' : 'dev');
+  let enablement: Promise<boolean> | undefined;
+  async function resolveEnablement(): Promise<boolean> {
+    const settings = await startup;
+    browserEnabled = settings.recording
+      ? true
+      : await browserTelemetryEnabled(Boolean(settings.tracesUrl));
+    return browserEnabled;
+  }
+  const telemetryConfig: TelemetryInitConfig = {
     serviceName: 'web-app',
-    environment:
-      import.meta.env.VITE_OTEL_ENV ??
-      (import.meta.env.MODE === 'production' ? 'prod' : 'dev'),
-    tracesUrl,
-    logsUrl: tracesUrl?.replace(/\/v1\/traces\/?$/, '/v1/logs'),
-    contextManager: new ZoneContextManager(),
+    environment,
+    sampling: samplingRates(environment),
+    samplingKey,
+    tracesUrl: fallbackTracesUrl,
+    logsUrl: fallbackTracesUrl?.replace(/\/v1\/traces\/?$/, '/v1/logs'),
+    exportFetch: (input, init) =>
+      webviewFetch(input, { ...init, credentials: 'omit' }),
+    startup: native ? startup : undefined,
+    contextManager: new StackContextManager(),
     resourceAttributes: {
       'service.version': import.meta.env.__APP_VERSION__,
       frontend_instance_id: frontendInstanceId,
       'app.runtime': isTauri() ? 'tauri' : 'browser',
       'app.platform': getPlatform(),
-      ...(desktop && desktopResourceAttributes(desktop)),
+      'os.type': osType(),
+      ...(native && desktopResourceAttributes(desktopReady)),
     },
-    recording: Boolean(recording),
     spanAttributes: () => ({
       ...recording?.attributes(),
       frontend_instance_id: frontendInstanceId,
       native_instance_id: desktop?.identity.instanceId,
     }),
-    enabled: async () => {
-      browserEnabled = recording
-        ? true
-        : await browserTelemetryEnabled(Boolean(tracesUrl));
-      return browserEnabled;
-    },
+    enabled: () => (enablement ??= resolveEnablement()),
   };
 
-  await Telemetry.init({
+  const initialization = Telemetry.init({
     ...telemetryConfig,
-    tracingProvider: (resource, getUserId) =>
-      createWebTracingProvider(telemetryConfig, resource, getUserId),
+    tracingProvider: (resource, getUserId, sampling) =>
+      createWebTracingProvider(telemetryConfig, resource, getUserId, sampling),
   });
+  // Capture early UI operations locally while the exporter awaits enablement.
+  const disposeUiTelemetry = initializeUiOperationTelemetry();
+  import.meta.hot?.dispose(disposeUiTelemetry);
+  startBootTrace();
+  onProviderReady?.();
+  await initialization;
+  const { tracesUrl } = await startup;
+  if (disposed) return;
   await configureNativeCallTracing({
     enabled: browserEnabled,
     tracesUrl,
     environment: telemetryConfig.environment,
   }).catch(() => Telemetry.warn('Native call tracing configuration failed'));
   if (isTauri()) recordNativeWebviewStart(desktop, lifecycle?.attributes);
-  if (recording && desktop) {
-    recording.accept(desktop);
+  const memoryRecording = recording;
+  if (memoryRecording && desktop) {
+    memoryRecording.accept(desktop);
     Telemetry.info('Desktop memory recording enabled', {
       'macro.recording.id': desktop.identity.recordingId ?? undefined,
       'service.instance.id': desktop.identity.instanceId,
     });
-    fireAndForget(recording.start(), 'desktop-memory-recording');
-    import.meta.hot?.dispose(() => recording.dispose());
+    fireAndForget(memoryRecording.start(), 'desktop-memory-recording');
+    import.meta.hot?.dispose(() => memoryRecording.dispose());
+  }
+  if (browserEnabled) {
+    const disposeTyping = startTypingBurstTelemetry();
+    import.meta.hot?.dispose(disposeTyping);
+    const disposeResources = startRuntimeResourceSampling(
+      recording?.attributes
+    );
+    import.meta.hot?.dispose(disposeResources);
   }
   recordBrowserTursoCacheNavigation();
-  if (browserEnabled) {
-    const disposeUiTelemetry = initializeUiOperationTelemetry();
-    import.meta.hot?.dispose(disposeUiTelemetry);
-  }
 
   window.addEventListener('pagehide', () =>
     fireAndForget(Telemetry.flush(), 'telemetry-flush')

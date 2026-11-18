@@ -37,6 +37,8 @@ export type ExternalChatCapabilities = {
   fileUrl: (fileId: string) => string;
   markRead: (messageId: string) => Promise<unknown>;
   stopSync: () => Promise<unknown>;
+  /** Asks the owner's phone for this chat's earlier messages. */
+  importHistory: () => Promise<unknown>;
 };
 const Context = createContext<ExternalChatCapabilities>();
 export function ExternalChatContextProvider(

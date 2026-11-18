@@ -7,6 +7,9 @@
 use crate::domain::{model::TeamError, team_crm_settings_repo::TeamCrmSettingsRepository};
 use sqlx::PgPool;
 
+#[cfg(test)]
+mod test;
+
 /// Macrodb-backed [`TeamCrmSettingsRepository`].
 #[derive(Clone, Debug)]
 pub struct TeamCrmSettingsRepositoryImpl {
@@ -84,6 +87,11 @@ impl TeamCrmSettingsRepository for TeamCrmSettingsRepositoryImpl {
         // FK cascade clears crm_domains / crm_contacts /
         // crm_contact_sources owned by these companies.
         sqlx::query!(r#"DELETE FROM crm_companies WHERE team_id = $1"#, team_id,)
+            .execute(&mut *tx)
+            .await?;
+
+        // Contacts without a company belong to the team directly.
+        sqlx::query!(r#"DELETE FROM crm_contacts WHERE team_id = $1"#, team_id,)
             .execute(&mut *tx)
             .await?;
 

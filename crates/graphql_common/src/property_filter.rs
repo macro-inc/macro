@@ -37,7 +37,7 @@ pub struct GraphqlPropertiesLiteral {
 
 impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<PropertiesLiteral>> {
-        Ok(Expr::val(PropertiesLiteral {
+        let literal = PropertiesLiteral {
             property_definition_id: parse_id(self.property_definition_id, "propertyDefinitionId")?,
             entity_type: self
                 .entity_type
@@ -50,7 +50,8 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
                 })
                 .transpose()?,
             value: self.value.into_ast()?,
-        }))
+        };
+        Ok(Expr::val(literal))
     }
 }
 
@@ -61,6 +62,17 @@ pub enum GraphqlPropertyMatchValue {
     SelectOption(ID),
     /// Entity reference id to match.
     EntityRef(String),
+    /// Match a DATE property in a UTC interval.
+    DateRange(GraphqlPropertyDateRange),
+}
+
+/// UTC interval for a DATE property.
+#[derive(async_graphql::InputObject)]
+pub struct GraphqlPropertyDateRange {
+    /// Inclusive start, or no lower bound.
+    start: Option<String>,
+    /// Exclusive end, or no upper bound.
+    end: Option<String>,
 }
 
 impl GraphqlPropertyMatchValue {
@@ -74,6 +86,28 @@ impl GraphqlPropertyMatchValue {
                 PropertyMatchValue::EntityRef(EntityRefId::new(value).map_err(|err| {
                     async_graphql::Error::new(format!("invalid entityRef: {err}"))
                 })?)
+            }
+            Self::DateRange(range) => {
+                PropertyMatchValue::DateRange(item_filters::ast::properties::DateRange {
+                    start: range
+                        .start
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| {
+                            async_graphql::Error::new(format!("invalid dateRange.start: {err}"))
+                        })?
+                        .map(|value| value.with_timezone(&chrono::Utc)),
+                    end: range
+                        .end
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| {
+                            async_graphql::Error::new(format!("invalid dateRange.end: {err}"))
+                        })?
+                        .map(|value| value.with_timezone(&chrono::Utc)),
+                })
             }
         })
     }
@@ -157,6 +191,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
     fn try_from(value: GraphqlPropertyEntityType) -> Result<Self, Self::Error> {
         Ok(match value {
             GraphqlPropertyEntityType::CalendarEvent => Self::CalendarEvent,
+            GraphqlPropertyEntityType::CallRecord => Self::CallRecord,
             GraphqlPropertyEntityType::Channel => Self::Channel,
             GraphqlPropertyEntityType::Chat => Self::Chat,
             GraphqlPropertyEntityType::Company => Self::Company,
@@ -167,8 +202,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
             GraphqlPropertyEntityType::Initiative => Self::Initiative,
-            other
-            @ (GraphqlPropertyEntityType::CallRecord | GraphqlPropertyEntityType::Contact) => {
+            other @ GraphqlPropertyEntityType::Contact => {
                 return Err(other);
             }
         })

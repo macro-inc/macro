@@ -149,6 +149,27 @@ export function useUpdateAiAutoReloadMutation() {
   }));
 }
 
+/** Buy a credit pack on the payer's card on file; updates the summary. */
+export function usePurchaseAiCreditsMutation() {
+  return useMutation(() => ({
+    mutationFn: async (args: { amountCents: number }) =>
+      await throwOnErr(
+        async () => await authServiceClient.purchaseAiCredits(args)
+      ),
+    onSuccess: (result) => {
+      if (result.snapshot) {
+        queryClient.setQueryData(
+          authKeys.aiBillingSummary.queryKey,
+          result.snapshot
+        );
+        return;
+      }
+      // The purchase happened but its summary could not be read.
+      fireAndForget(invalidateAiBillingSummary(), 'ai-billing');
+    },
+  }));
+}
+
 /** Start a Stripe Checkout for a credit pack; resolves to the hosted URL. */
 export function useCreateAiCreditCheckoutMutation() {
   return useMutation(() => ({

@@ -29,6 +29,10 @@
         };
       };
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
+      # The embedded bundle's commit, so the updater can tell the server it
+      # already runs the bundle deployed from it. `desktop-release.mjs prepare`
+      # records it, because the file it rewrites leaves the flake without a rev.
+      bundleGitSha = desktopRelease.gitSha or "";
 
       # Vite inlines `import.meta.env.VITE_*` at build time, so the desktop
       # bundle only reaches PostHog — and therefore only resolves feature
@@ -86,7 +90,7 @@
           && !(lib.hasPrefix "apps/web/dist/" rel)
           && !(lib.hasPrefix "apps/web/tauri/target/" rel)
           && !(lib.hasPrefix "apps/web/src/lib/graphql-cache/wasm/" rel)
-          && !(lib.hasPrefix "apps/web/src/lib/core/agent-fold/wasm/" rel)
+          && builtins.match "apps/web/src/lib/core/[^/]+/wasm(/.*)?" rel == null
           && !(lib.hasPrefix "packages/lexical-core/node_modules/" rel)
           && !(lib.hasPrefix "services/lexical-service/node_modules/" rel)
           && !(lib.hasPrefix "packages/loro-mirror/node_modules/" rel)
@@ -97,8 +101,7 @@
           && rel != "apps/web/node_modules"
           && rel != "apps/web/dist"
           && rel != "apps/web/tauri/target"
-          && rel != "apps/web/src/lib/graphql-cache/wasm"
-          && rel != "apps/web/src/lib/core/agent-fold/wasm";
+          && rel != "apps/web/src/lib/graphql-cache/wasm";
       };
 
       rootCargoVendorDir = craneLib.vendorCargoDeps {
@@ -142,75 +145,172 @@
         src = jsRoot;
       };
 
-      agentFoldWasmPackage = craneLib.mkCargoDerivation {
-        pname = "macro-agent-fold-wasm";
-        version = appVersion;
-        src = jsSrc;
-        cargoArtifacts = null;
-        cargoVendorDir = rootCargoVendorDir;
-        nativeBuildInputs = [
-          pkgs.binaryen
-          pkgs.wasm-bindgen-cli_0_2_126
-          pkgs.wasm-pack
-        ];
-        doCheck = false;
-        preBuild = cacheWasmPackage.preBuild;
-        buildPhaseCargoCommand = ''
-          wasm-pack build crates/folds/agent_fold \
-            --target web \
-            --release \
-            --mode no-install \
-            --out-dir "$PWD/apps/web/src/lib/core/agent-fold/wasm" \
-            -- --no-default-features
-        '';
-        installPhaseCommand = ''
-          mkdir -p $out
-          cp -a apps/web/src/lib/core/agent-fold/wasm/. $out/
-        '';
-        doInstallCargoArtifacts = false;
-      };
+      # Builds one wasm-pack package into apps/web/src/lib/core/<dir>/wasm,
+      # the way its `build-*-wasm` recipe in apps/web/justfile does.
+      mkCoreWasmPackage =
+        {
+          name,
+          crate,
+          dir,
+          simd ? false,
+          profile ? null,
+          cargoArgs ? "",
+        }:
+        let
+          outDir = "apps/web/src/lib/core/${dir}/wasm";
+        in
+        craneLib.mkCargoDerivation (
+          {
+            pname = "macro-${dir}-wasm";
+            version = appVersion;
+            src = jsSrc;
+            cargoArtifacts = null;
+            cargoVendorDir = rootCargoVendorDir;
+            nativeBuildInputs = [
+              pkgs.binaryen
+              pkgs.wasm-bindgen-cli_0_2_126
+              pkgs.wasm-pack
+            ];
+            doCheck = false;
+            preBuild = cacheWasmPackage.preBuild;
+            buildPhaseCargoCommand = ''
+              wasm-pack build ${crate} \
+                --target web \
+                ${if profile == null then "--release" else "--profile ${profile}"} \
+                --mode no-install \
+                --out-dir "$PWD/${outDir}" ${cargoArgs}
+            '';
+            installPhaseCommand = ''
+              mkdir -p $out
+              cp -a ${outDir}/. $out/
+            '';
+            doInstallCargoArtifacts = false;
+            passthru = { inherit dir; wasmName = name; };
+          }
+          // lib.optionalAttrs simd {
+            CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS = "-C target-feature=+simd128";
+          }
+        );
+
+      # Every package `just build-wasm` builds besides the cache. Vite leaves a
+      # missing package's `new URL()` unchanged, so one left out here ships a
+      # desktop bundle that cannot open that kind of file.
+      coreWasmPackages = map mkCoreWasmPackage [
+        {
+          name = "agent_fold";
+          crate = "crates/folds/agent_fold";
+          dir = "agent-fold";
+          cargoArgs = "-- --no-default-features";
+        }
+        {
+          name = "database_sql";
+          crate = "crates/database_sql";
+          dir = "database-sql";
+        }
+        {
+          name = "natural_time";
+          crate = "crates/natural_time";
+          dir = "natural-time";
+        }
+        {
+          name = "pptx_engine";
+          crate = "crates/pptx_engine";
+          dir = "pptx-engine";
+          simd = true;
+        }
+        {
+          name = "docx_engine";
+          crate = "crates/docx_engine";
+          dir = "docx-engine";
+          simd = true;
+        }
+        {
+          name = "fig_engine";
+          crate = "crates/fig_engine";
+          dir = "fig-engine";
+          simd = true;
+          profile = "fig-engine-wasm";
+        }
+        {
+          name = "psd_engine";
+          crate = "crates/psd_engine";
+          dir = "psd-engine";
+          simd = true;
+          profile = "psd-engine-wasm";
+        }
+        {
+          name = "ai_engine";
+          crate = "crates/ai_engine";
+          dir = "ai-engine";
+          simd = true;
+          profile = "ai-engine-wasm";
+        }
+        {
+          name = "password_import_wasm";
+          crate = "crates/password_import_wasm";
+          dir = "password-import";
+        }
+      ];
+
+      # A binary of the root workspace (not the nested Tauri one), built
+      # natively for this platform.
+      workspaceBinary =
+        {
+          pname,
+          package,
+        }:
+        craneLib.mkCargoDerivation {
+          inherit pname;
+          version = appVersion;
+          src = jsSrc;
+          cargoArtifacts = null;
+          cargoVendorDir = rootCargoVendorDir;
+          nativeBuildInputs = [
+            # aws-lc-sys (rustls' crypto provider) and bundled librdkafka build
+            # their C sources with cmake; see the matching notes on `libraries`
+            # in cloud-storage.nix.
+            pkgs.cmake
+            pkgs.git
+            pkgs.perl
+            pkgs.pkg-config
+          ];
+          buildInputs = [
+            pkgs.openssl
+            pkgs.openssl.dev
+            # librdkafka 2.12's bundled cmake-build needs curl headers even with
+            # WITH_CURL=0 (headers only; nothing links against libcurl).
+            pkgs.curl.dev
+            pkgs.libclang
+            pkgs.xz.out
+          ]
+          ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
+          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+          OPENSSL_NO_VENDOR = "1";
+          doCheck = false;
+          SQLX_OFFLINE = "true";
+          buildPhaseCargoCommand = ''
+            cargo build --release --package ${package} --bin ${pname}
+          '';
+          installPhaseCommand = ''
+            install -Dm0755 target/release/${pname} "$out/bin/${pname}"
+          '';
+          doInstallCargoArtifacts = false;
+        };
 
       # The macrod agent daemon, bundled with the desktop app as a Tauri
       # sidecar so "run agents on this computer" needs no separate download.
-      # Built from the root workspace (not the nested Tauri one), natively for
-      # the bundle's platform; the standalone release tarballs keep their own
-      # musl/darwin pipeline in build_agent_daemon_on_tag.yml.
-      macrodBinary = craneLib.mkCargoDerivation {
+      # The standalone release tarballs keep their own musl/darwin pipeline in
+      # build_agent_daemon_on_tag.yml.
+      macrodBinary = workspaceBinary {
         pname = "macrod";
-        version = appVersion;
-        src = jsSrc;
-        cargoArtifacts = null;
-        cargoVendorDir = rootCargoVendorDir;
-        nativeBuildInputs = [
-          # aws-lc-sys (rustls' crypto provider) and bundled librdkafka build
-          # their C sources with cmake; see the matching notes on `libraries`
-          # in cloud-storage.nix.
-          pkgs.cmake
-          pkgs.git
-          pkgs.perl
-          pkgs.pkg-config
-        ];
-        buildInputs = [
-          pkgs.openssl
-          pkgs.openssl.dev
-          # librdkafka 2.12's bundled cmake-build needs curl headers even with
-          # WITH_CURL=0 (headers only; nothing links against libcurl).
-          pkgs.curl.dev
-          pkgs.libclang
-          pkgs.xz.out
-        ]
-        ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
-        LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-        OPENSSL_NO_VENDOR = "1";
-        doCheck = false;
-        SQLX_OFFLINE = "true";
-        buildPhaseCargoCommand = ''
-          cargo build --release --package coding_agent_worker --bin macrod
-        '';
-        installPhaseCommand = ''
-          install -Dm0755 target/release/macrod "$out/bin/macrod"
-        '';
-        doInstallCargoArtifacts = false;
+        package = "coding_agent_worker";
+      };
+
+      # The agent sign-in daemon baked into the Macro computer image
+      # (nix/macro-box).
+      harnessdBinary = workspaceBinary {
+        pname = "harnessd";
+        package = "harnessd";
       };
 
       # Tauri sidecar sources carry the target triple in the file name; the
@@ -257,13 +357,15 @@
           printf production > apps/web/tauri/src-tauri/.macro-tauri-env
           mkdir -p apps/web/src/lib/graphql-cache/wasm
           cp -a ${cacheWasmPackage}/. apps/web/src/lib/graphql-cache/wasm/
-          mkdir -p apps/web/src/lib/core/agent-fold/wasm
-          cp -a ${agentFoldWasmPackage}/. apps/web/src/lib/core/agent-fold/wasm/
+          ${lib.concatMapStrings (pkg: ''
+            mkdir -p apps/web/src/lib/core/${pkg.dir}/wasm
+            cp -a ${pkg}/. apps/web/src/lib/core/${pkg.dir}/wasm/
+          '') coreWasmPackages}
           (
             cd apps/web
             MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
             printf '${appVersion}+${gitRev}\n' > dist/semver.txt
-            BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
+            GIT_SHA='${bundleGitSha}' BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
           )
 
           # A supplied key that never reaches the bundle means PostHog — and
@@ -284,15 +386,20 @@
         doCheck = true;
         checkPhase = ''
           runHook preCheck
-          for asset in apps/web/dist/assets/agent_fold-*.js apps/web/dist/assets/agent_fold_bg-*.wasm; do
-            test -s "$asset" || { echo "Missing agent fold bundle asset: $asset" >&2; exit 1; }
+          for name in ${lib.concatMapStringsSep " " (pkg: pkg.wasmName) coreWasmPackages}; do
+            for asset in "apps/web/dist/assets/$name-"*.js "apps/web/dist/assets/''${name}_bg-"*.wasm; do
+              test -s "$asset" || { echo "Missing $name wasm bundle asset: $asset" >&2; exit 1; }
+            done
           done
           runHook postCheck
         '';
 
+        # The app streams web-hosted/ (videos) from the web deploy, like the
+        # mobile apps (`build-tauri`), so the desktop bundle leaves it out.
         installPhase = ''
           runHook preInstall
           cp -r apps/web/dist "$out"
+          rm -rf "$out/web-hosted"
           runHook postInstall
         '';
       };
@@ -321,8 +428,8 @@
         outputHashes = webauthnOutputHashes // {
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
-          "git+https://github.com/macro-inc/plugins-workspace?rev=bc6ec3b8e80eed80ef4969f4463a357d46adb3b1#bc6ec3b8e80eed80ef4969f4463a357d46adb3b1" =
-            "sha256-IdhZM/B8EyC/4/3HxQjkzNkrJeA68+43+rKity+iGLY=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=5896804dbd481f14bb17e8cadc1828ff5619aa1e#5896804dbd481f14bb17e8cadc1828ff5619aa1e" =
+            "sha256-xoMJo7EejK3Ql+348K1+35siC7XHTgxhGU9pHhGBm+k=";
           "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2" =
             "sha256-7Noz7RMN+4nhlU5BBLzxZZ53nNFGewrr8BFMO1adkCo=";
           "git+https://github.com/seanaye/tauri?rev=95a7521b#95a7521b8c565cfba568319ddd8ba79c9ce244e2" =
@@ -346,6 +453,8 @@
         # Non-Cargo inputs must be added explicitly to crane's app fileset.
         extraFileset = lib.fileset.unions [
           ../static_assets/schema.graphql
+          # cache-turso embeds its SQL with `include_str!`.
+          (lib.fileset.fileFilter (file: file.hasExt "sql") ../crates/client/cache-turso/src)
           ../apps/web/tauri/src-tauri/tauri.macos.conf.json
         ];
         inherit frontend;
@@ -882,12 +991,12 @@
         cargoLock = ../apps/web/tauri/desktop-cef/Cargo.lock;
         overrideVendorGitCheckout = vendorWebauthnGitCheckout;
         outputHashes = webauthnOutputHashes // {
-          "git+https://github.com/macro-inc/plugins-workspace?rev=bc6ec3b8e80eed80ef4969f4463a357d46adb3b1#bc6ec3b8e80eed80ef4969f4463a357d46adb3b1" =
-            "sha256-IdhZM/B8EyC/4/3HxQjkzNkrJeA68+43+rKity+iGLY=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=5896804dbd481f14bb17e8cadc1828ff5619aa1e#5896804dbd481f14bb17e8cadc1828ff5619aa1e" =
+            "sha256-xoMJo7EejK3Ql+348K1+35siC7XHTgxhGU9pHhGBm+k=";
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
-          "git+https://github.com/macro-inc/tauri?rev=285fb6b1#285fb6b1cb2fc20666da1688f4c74e240a100035" =
-            "sha256-++WQc4YpvoMPBFTuDj//856BguC1ArS6AeLTbIOn38Q=";
+          "git+https://github.com/macro-inc/tauri?rev=4b8a46f1#4b8a46f15c0a54a5c06a1486cd5432d444c17bd8" =
+            "sha256-nRfbjAGUWsbN5CBhFgfARFMEWquvCHvgsTH9a8BqA1g=";
           "git+https://github.com/tauri-apps/winit-gtk4?rev=3d7c7cd19d3c752f75762ceea535444e63bdf8de#3d7c7cd19d3c752f75762ceea535444e63bdf8de" =
             "sha256-2mFNnZcPnVqPQ2iakMoXSKXrlHiIv+HuQZ7iOwtrKb4=";
           "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2" =
@@ -931,6 +1040,12 @@
         root = ../.;
         fileset = lib.fileset.unions [
           cefCargoSources
+          # Crates `include_str!` their SQL, JSON and Markdown (cache-turso's
+          # contact_search.sql); commonCargoSources keeps only Rust and Cargo
+          # files, so the build died on the first one it could not read. A
+          # flake source holds tracked files only, so these are not build output.
+          ../crates
+          ../apps/web/tauri
           ../static_assets/schema.graphql
           ../apps/web/tauri/desktop-cef/tauri.conf.json
           ../apps/web/tauri/desktop-cef/entitlements.plist
@@ -954,6 +1069,46 @@
           cef.embed = true;
         };
       };
+      # CEF CDN builds omit H.264, HEVC, and AAC, so the app could not play
+      # most videos. The `Build CEF with codecs` workflow publishes the same
+      # CEF version built with proprietary codecs; lay it out the way
+      # `cef-dll-sys` caches a download (`<CEF_PATH>/<version>/cef_macos_aarch64`
+      # plus `archive.json`), which the CEF Tauri CLI also reads, so neither
+      # downloads from the CDN.
+      cefCodecs = builtins.fromJSON (builtins.readFile ../apps/web/tauri/desktop-cef/cef-codecs.json);
+      cefCodecsVersion = builtins.head (lib.splitString "+" cefCodecs.cefVersion);
+      # The `cef` crate's build metadata is the CEF version it loads. A crate
+      # bump without a new manifest would fall back to the codec-less CDN build.
+      cefCrateVersion =
+        let
+          lock = builtins.fromTOML (builtins.readFile ../apps/web/tauri/desktop-cef/Cargo.lock);
+          cef = lib.findFirst (p: p.name == "cef") null lock.package;
+        in
+        lib.last (lib.splitString "+" cef.version);
+      # An empty sha256 means the codec build for a new CEF version is still
+      # pending; build with the CDN CEF meanwhile rather than block releases.
+      cefCodecsPinned =
+        assert lib.assertMsg (cefCodecsVersion == cefCrateVersion)
+          "desktop-cef loads CEF ${cefCrateVersion} but cef-codecs.json pins ${cefCodecsVersion}; update the manifest and rebuild";
+        lib.warnIf (cefCodecs.sha256 == "")
+          "apps/web/tauri/desktop-cef/cef-codecs.json has no sha256; building with the CDN CEF, which cannot play H.264, HEVC, or AAC"
+          (cefCodecs.sha256 != "");
+      cefCodecsArchive = pkgs.fetchurl {
+        url = "https://github.com/macro-inc/macro/releases/download/${cefCodecs.releaseTag}/${cefCodecs.asset}";
+        inherit (cefCodecs) sha256;
+      };
+      cefCodecsDistribution = pkgs.runCommand "cef-codecs-${cefCodecsVersion}" { } ''
+        tar -xjf ${cefCodecsArchive}
+        src=$(echo cef_binary_*_macosarm64_minimal)
+        dest="$out/${cefCodecsVersion}/cef_macos_aarch64"
+        mkdir -p "$(dirname "$dest")"
+        mv "$src/Release" "$dest"
+        for entry in CMakeLists.txt cmake include libcef_dll CREDITS.html; do
+          mv "$src/$entry" "$dest/$entry"
+        done
+        printf '{"type":"minimal","name":"%s","sha1":""}' "$src" > "$dest/archive.json"
+        test -d "$dest/Chromium Embedded Framework.framework"
+      '';
       tauriDesktopCefApp = cefCraneLib.mkCargoDerivation {
         pname = "macro-tauri-desktop-cef-app";
         version = appVersion;
@@ -980,6 +1135,13 @@
         preBuild = ''
           export PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
           export CEF_PATH="$TMPDIR/tauri-cef"
+        ''
+        + lib.optionalString cefCodecsPinned ''
+          mkdir -p "$CEF_PATH"
+          cp -R ${cefCodecsDistribution}/. "$CEF_PATH/"
+          chmod -R u+w "$CEF_PATH"
+        ''
+        + ''
           cp ${../apps/web/package.json} apps/web/package.json
           rm -rf apps/web/dist
           cp -r ${frontend} apps/web/dist
@@ -1346,6 +1508,7 @@
       packages = {
         js-node-modules = nodeModules;
         macrod = macrodBinary;
+        harnessd = harnessdBinary;
       }
       // lib.optionalAttrs isLinux {
         tauri-frontend = frontend;

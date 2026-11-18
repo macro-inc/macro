@@ -11,6 +11,9 @@ export type NotificationType = NotifEvent['tag'];
 
 type NotificationTypePreferences = GetNotificationTypePreferencesResponses[200];
 
+/**
+ * @routing Use when reading the user's notifications or marking them seen, such as catching up on what they missed; not sending messages.
+ */
 export class NotificationNamespace {
   constructor(private readonly client: MacroClient) {}
 
@@ -19,12 +22,21 @@ export class NotificationNamespace {
     return Notification.byId(this.client, id);
   }
 
-  /** The viewer's notification feed, most recent first, auto-paginated. */
+  /**
+   * The viewer's notification feed, most recent first, auto-paginated.
+   *
+   * @readonly
+   */
   list(opts?: { pageSize?: number }): AsyncGenerator<Notification> {
     return Notification.list(this.client, opts);
   }
 
-  /** Mark a batch of notifications as seen. */
+  /**
+   * Mark a batch of notifications as seen.
+   *
+   * @write
+   * @idempotent
+   */
   async markSeen(ids: string[]): Promise<void> {
     unwrap(
       await this.client.notification.bulkMarkNotificationsSeen({
@@ -33,7 +45,12 @@ export class NotificationNamespace {
     );
   }
 
-  /** Mark a batch of notifications as done. */
+  /**
+   * Mark a batch of notifications as done.
+   *
+   * @write
+   * @idempotent
+   */
   async markDone(ids: string[]): Promise<void> {
     unwrap(
       await this.client.notification.bulkMarkNotificationsDone({
@@ -42,7 +59,12 @@ export class NotificationNamespace {
     );
   }
 
-  /** Delete a batch of notifications. */
+  /**
+   * Delete a batch of notifications.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(ids: string[]): Promise<void> {
     unwrap(
       await this.client.notification.bulkDeleteUserNotificationsV2({
@@ -51,14 +73,23 @@ export class NotificationNamespace {
     );
   }
 
-  /** The viewer's notification type preferences (disabled types). */
+  /**
+   * The viewer's notification type preferences (disabled types).
+   *
+   * @readonly
+   */
   async preferences(): Promise<NotificationTypePreferences> {
     return unwrap(
       await this.client.notification.getNotificationTypePreferences(),
     );
   }
 
-  /** Re-enable delivery of a notification type. */
+  /**
+   * Re-enable delivery of a notification type.
+   *
+   * @write
+   * @idempotent
+   */
   async enableType(type: NotificationType): Promise<void> {
     unwrap(
       await this.client.notification.enableNotificationType({
@@ -67,7 +98,12 @@ export class NotificationNamespace {
     );
   }
 
-  /** Disable delivery of a notification type. */
+  /**
+   * Disable delivery of a notification type.
+   *
+   * @write
+   * @idempotent
+   */
   async disableType(type: NotificationType): Promise<void> {
     unwrap(
       await this.client.notification.disableNotificationType({

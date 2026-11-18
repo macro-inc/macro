@@ -28,7 +28,7 @@ pub use get_thread::{GetThread, GetThreadResponse};
 pub use list_inboxes::{ListInboxes, ListInboxesResponse, ToolInbox};
 pub use list_labels::{ListLabels, ListLabelsResponse, ToolLabel};
 pub use send_confirmed_email::SendConfirmedEmail;
-pub use send_email::{EmailAttachment, SendEmail, SendEmailResponse};
+pub use send_email::{EmailAttachment, EmailRecipient, SendEmail, SendEmailResponse};
 pub use set_sender_policy::{SetSenderPolicy, SetSenderPolicyResponse, ToolSenderPolicy};
 pub use update_thread_labels::{UpdateThreadLabels, UpdateThreadLabelsResponse};
 

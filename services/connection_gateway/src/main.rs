@@ -18,6 +18,7 @@ use axum::http::{
 };
 use config::Config;
 use constants::ORIGINS;
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{
     domain::services::{EventIngestorImpl, PullAggregatorImpl},
     inbound::polling_aggregator::FrecencyAggregatorWorkerHandle,
@@ -117,6 +118,9 @@ async fn main() -> Result<()> {
     let fanout_gateway_id: Arc<str> = Arc::from(uuid::Uuid::new_v4().to_string());
     let context = context::ApiContext {
         connection_manager,
+        entity_access: Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            pgpool.clone(),
+        ))),
         fanout_gateway_id: Arc::clone(&fanout_gateway_id),
         redis_client: Arc::clone(&redis_client),
         redis_connection,
@@ -134,7 +138,7 @@ async fn main() -> Result<()> {
 
     let config = Arc::new(config);
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
-        MacroAuthJwtValidator::new(jwt_args),
+        MacroAuthJwtValidator::new(jwt_args.clone()),
         InternalAuthConfig {
             api_key: config.internal_api_key.to_string(),
             default_user_id: None,
@@ -143,6 +147,7 @@ async fn main() -> Result<()> {
         PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(pgpool.clone())),
     )));
 
+    let correlation = agent_correlation::inbound::CorrelationState::new(pgpool.clone(), jwt_args);
     let app = router(AppState {
         context,
         config: Arc::clone(&config),
@@ -153,7 +158,11 @@ async fn main() -> Result<()> {
         )),
     })
     .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
-    .layer(cors);
+    .layer(cors)
+    .layer(axum::middleware::from_fn_with_state(
+        correlation,
+        agent_correlation::inbound::propagate,
+    ));
 
     tracing::info!(
         "connection gateway is up and running with environment {:?} on port {}",

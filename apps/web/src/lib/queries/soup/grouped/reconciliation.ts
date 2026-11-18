@@ -4,7 +4,10 @@ import type { GroupMeta } from './types';
 export type ReconciledSoupBin = Pick<
   GroupMeta,
   'key' | 'totalCount' | 'itemIds' | 'nextCursor'
->;
+> & {
+  /** The server's display name for the group, when it resolved one. */
+  label?: string | null;
+};
 
 /** One loaded row, in locally evaluated sort order. */
 export type GroupedSoupMembership = {

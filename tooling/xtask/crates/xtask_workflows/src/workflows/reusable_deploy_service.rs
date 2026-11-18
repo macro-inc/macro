@@ -23,6 +23,7 @@ pub fn reusable_deploy_service() -> Workflow {
         .add_job("setup", setup())
         .add_job("build-service-binaries", build_service_binaries())
         .add_job("build-lambda-artifacts", build_lambda_artifacts())
+        .add_job("check-migrations", check_migrations())
         .add_job("deploy", deploy())
 }
 
@@ -117,6 +118,7 @@ fn build_job(name: &str, gate_output: &str) -> Job {
         )))
         .runs_on(runners::Runner::Mid.to_string())
         .add_step(steps::checkout_v4().add_with(("clean", false)))
+        .add_step(steps::setup_bun_pinned())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
 }
@@ -189,9 +191,17 @@ fn log_lambda_receipt() -> Step<Run> {
         .shell("bash")
 }
 
-/// A build job is skipped when the service has no binaries/lambdas (and a
-/// service may legitimately have neither). Proceed as long as nothing
-/// actually failed or was cancelled — skipped needs are expected here.
+fn check_migrations() -> Job {
+    steps::check_macro_db_migrations_job(
+        "Check ${{ inputs.service-name }} migrations are applied",
+        "needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true'",
+    )
+}
+
+/// A build or migration-check job is skipped when it does not apply to the
+/// service (and a service may legitimately have neither binaries nor lambdas).
+/// Proceed as long as nothing actually failed or was cancelled — skipped needs
+/// are expected here.
 /// Deploys via Pulumi + Docker; AWS auth is via explicit static keys.
 fn deploy() -> Job {
     Job::default()
@@ -200,6 +210,7 @@ fn deploy() -> Job {
             "setup".to_string(),
             "build-service-binaries".to_string(),
             "build-lambda-artifacts".to_string(),
+            "check-migrations".to_string(),
         ])
         .cond(Expression::new("${{ !failure() && !cancelled() }}"))
         .runs_on(runners::Runner::Small.to_string())

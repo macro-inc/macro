@@ -59,8 +59,8 @@ export function createGraphqlGroupedSoupProjection(
       const resolved = resolveGroupMetaForKey(groupBy(), bin.key, first);
       return {
         key: bin.key,
-        label: resolved?.label ?? bin.key,
-        displayOrder: resolved?.displayOrder ?? null,
+        label: resolved?.label ?? bin.label ?? bin.key,
+        displayOrder: bin.displayOrder ?? resolved?.displayOrder ?? null,
         totalCount: bin.totalCount,
         itemIds,
         nextCursor: bin.nextCursor ?? null,

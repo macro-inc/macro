@@ -7,7 +7,7 @@ version = "0.1.0"
 [features]
 # Calendar invitation extraction and resolution against the viewer's calendar.
 calendar_invitations = ["dep:calendar_events", "dep:chrono-tz", "dep:ical", "dep:url"]
-mailbox = ["ports", "dep:email_api_client", "dep:models_email", "dep:calendar_events", "dep:subtle"]
+mailbox = ["ports", "dep:email_api_client", "dep:models_email", "dep:calendar_events", "dep:subtle", "dep:url"]
 all = [
   "ai_tools",
   "gmail_token",
@@ -16,6 +16,7 @@ all = [
   "outbound",
   "ports",
   "s3",
+  "sqs",
 ]
 attachment = [
   "dep:attachment",
@@ -26,7 +27,9 @@ ai_schema = ["dep:schemars"]
 ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
+  "dep:email_validator",
   "dep:schemars",
+  "dep:specta",
   "ports",
 ]
 axum = [
@@ -41,12 +44,15 @@ gmail_senders = ["gmail_token", "dep:gmail_client", "dep:models_email"]
 gmail_token = ["dep:authentication_service_client", "dep:google_token", "dep:redis", "ports"]
 http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
-outbound = ["dep:calendar_events", "dep:sqlx", "ports"]
-ports = ["crm/ports", "dep:tokio", "frecency/ports"]
+outbound = ["dep:calendar_events", "dep:entity_access_db_utils", "dep:sqlx", "ports"]
+sqs = ["dep:models_email", "dep:sqs_client", "ports"]
+ports = ["crm/ports", "dep:chrono-tz", "dep:tokio", "frecency/ports"]
 # The S3 adapter for staged draft attachments.
 s3 = ["dep:aws-sdk-s3", "ports"]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 subtle = { workspace = true, optional = true }
 calendar_events = { path = "../calendar_events", optional = true }
 ical = { version = "0.11", default-features = false, features = ["ical"], optional = true }
@@ -61,6 +67,7 @@ async-trait = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 base64 = { workspace = true }
 lexical_client = { path = "../lexical_client" }
+email_validator = { path = "../email_validator", optional = true }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
   "ports",
@@ -93,10 +100,13 @@ non_empty = { path = "../non_empty", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination" }
 models_email = { path = "../models_email", optional = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = ["email"], optional = true }
+rand = { workspace = true }
 recursion = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }
+specta = { workspace = true, optional = true, features = ["uuid"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
@@ -105,17 +115,21 @@ redis = { workspace = true, features = ["tokio-rustls-comp"], optional = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros"], optional = true }
+tokio = { workspace = true, features = ["macros", "time"], optional = true }
+opentelemetry = { workspace = true, features = ["trace"] }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 models_email = { path = "../models_email" }
 email_db_client = { path = "../email_db_client" }
 crm = { path = "../crm", features = ["outbound"] }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }

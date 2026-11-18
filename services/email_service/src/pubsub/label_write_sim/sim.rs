@@ -666,18 +666,21 @@ impl<'w> Sim<'w> {
                 .email
                 .change_thread_mailbox_state(owner, thread(*t), MailboxAction::Read(*value))
                 .await
+                .map(|_| ())
                 .map_err(|error| format!("{error:?}")),
             Action::Star(t, value) => self
                 .world
                 .email
                 .change_thread_mailbox_state(owner, thread(*t), MailboxAction::Flagged(*value))
                 .await
+                .map(|_| ())
                 .map_err(|error| format!("{error:?}")),
             Action::Trash(t, value) => self
                 .world
                 .email
                 .change_thread_mailbox_state(owner, thread(*t), MailboxAction::Trashed(*value))
                 .await
+                .map(|_| ())
                 .map_err(|error| format!("{error:?}")),
             Action::Label(t, value) => self
                 .world

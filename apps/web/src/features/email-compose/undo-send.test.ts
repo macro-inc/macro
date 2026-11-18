@@ -100,9 +100,9 @@ it('keeps unconfirmed cancellation locked, gives feedback, and allows a confirme
   await runQueuedUndoSend(options);
   expect(onUndone).not.toHaveBeenCalled();
   expect(mocks.failure).not.toHaveBeenCalled();
-  expect(mocks.alert).toHaveBeenCalledWith(
-    'Cancellation pending — waiting for confirmation'
-  );
+  expect(mocks.alert).toHaveBeenCalledWith('Cancellation pending', {
+    subtext: 'Waiting for confirmation',
+  });
   await runQueuedUndoSend(options);
   expect(onUndone).toHaveBeenCalledOnce();
   expect(mocks.success).toHaveBeenCalledWith('Send cancelled');
@@ -111,20 +111,26 @@ it('keeps unconfirmed cancellation locked, gives feedback, and allows a confirme
 it.each([
   [
     new EmailSendCancellationTooLate(),
-    'Too late to undo — delivery has already started',
+    'Too late to undo',
+    { subtext: 'Delivery has already started' },
   ],
-  [new Error('storage unavailable'), 'Failed to undo send'],
-  [new Error('restore failed'), 'Failed to undo send'],
+  [new Error('storage unavailable'), 'Failed to undo send', undefined],
+  [new Error('restore failed'), 'Failed to undo send', undefined],
   [
     new EmailSendDeliveryUnconfirmed(),
     'Delivery unconfirmed; check your sent mail. We will not resend automatically.',
+    undefined,
   ],
 ])(
   'shows cancellation failures and allows retry: %s',
-  async (error, message) => {
+  async (error, message, toastOptions) => {
     mocks.confirm.mockRejectedValueOnce(error);
     await runQueuedUndoSend(options);
-    expect(mocks.failure).toHaveBeenCalledWith(message);
+    if (toastOptions) {
+      expect(mocks.failure).toHaveBeenCalledWith(message, toastOptions);
+    } else {
+      expect(mocks.failure).toHaveBeenCalledWith(message);
+    }
     expect(mocks.error).toHaveBeenCalledWith(error);
     expect(mocks.success).not.toHaveBeenCalled();
     expect(onUndone).not.toHaveBeenCalled();

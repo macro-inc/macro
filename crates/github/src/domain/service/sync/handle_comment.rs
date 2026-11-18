@@ -124,7 +124,8 @@ impl<
 
         // Only update status if the PR is open
         if let Some(status) = event.task_status_for_event() {
-            self.update_task_statuses(&resolved.doc_ids, status).await;
+            self.update_task_statuses(event, &resolved.doc_ids, status)
+                .await;
         } else {
             tracing::trace!("no status update warranted for this event");
         }

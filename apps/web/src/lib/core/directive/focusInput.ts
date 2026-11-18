@@ -3,6 +3,17 @@ import { isPlatform } from '@core/util/platform';
 import { isIOS } from '@solid-primitives/platform';
 import { type Accessor, onCleanup } from 'solid-js';
 
+const STAND_IN_ATTRIBUTE = 'data-focus-stand-in';
+
+/**
+ * Whether focus is on `triggerFocusInput`'s stand-in, holding the phone
+ * keyboard for an input still mounting. Overlays opening meanwhile leave focus
+ * there rather than taking it and dropping the keyboard.
+ */
+export function focusStandInActive() {
+  return document.activeElement?.hasAttribute(STAND_IN_ATTRIBUTE) ?? false;
+}
+
 type FocusInputOptions = {
   getTarget: () => HTMLElement | null | undefined;
   positionNear?: HTMLElement;
@@ -63,6 +74,11 @@ export function triggerFocusInput(
     // click gesture so the virtual keyboard opens, then transfer focus to
     // the real target once it appears in the DOM.
     tempEl = document.createElement('input');
+    tempEl.setAttribute(STAND_IN_ATTRIBUTE, '');
+    // Kobalte's focus trap leaves top-layer elements alone. Without this, a
+    // menu still open during the tap (a sidebar folder's long-press menu)
+    // pulls focus straight back, and the keyboard never opens.
+    tempEl.setAttribute('data-kb-top-layer', '');
     // Use fixed positioning (viewport-relative) so focusing the temp element
     // doesn't cause the page to scroll.
     const anchorRect = anchor?.getBoundingClientRect();
@@ -84,6 +100,24 @@ export function triggerFocusInput(
 
   timeoutId = setTimeout(cleanup, 5000);
   window.addEventListener('beforeunload', cleanup, { once: true });
+}
+
+/**
+ * Focuses the next element matching `selector` to mount, through
+ * `triggerFocusInput`, so call it synchronously in the tap that opens it.
+ * Matches already on the page are skipped: a closing sheet's field lingers
+ * through its exit animation, and an open composer shares the new one's id.
+ * `touchOnly` leaves desktop focus to the opened view. Does nothing while
+ * another stand-in already holds the keyboard.
+ */
+export function triggerFocusNewElement(
+  selector: string,
+  options: { touchOnly?: boolean } = {}
+) {
+  if ((options.touchOnly && !isTouchDevice()) || focusStandInActive()) return;
+  const matches = () => document.querySelectorAll<HTMLElement>(selector);
+  const present = new Set(matches());
+  triggerFocusInput(() => Array.from(matches()).find((el) => !present.has(el)));
 }
 
 /**

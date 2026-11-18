@@ -63,6 +63,7 @@ fn layout_of(detail: &FormDetail) -> FormLayout {
                     title,
                     description,
                     questions,
+                    show_when,
                 } => FormSection::Questions {
                     id: *id,
                     title: title.clone(),
@@ -77,6 +78,7 @@ fn layout_of(detail: &FormDetail) -> FormLayout {
                             widget: question.widget,
                         })
                         .collect(),
+                    show_when: show_when.clone(),
                 },
                 FormSectionDetail::Booking {
                     id,

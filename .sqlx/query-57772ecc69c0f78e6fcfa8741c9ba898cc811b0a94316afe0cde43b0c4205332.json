@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, amount_cents, stripe_invoice_id\n            FROM ai_credit_reload\n            WHERE user_id = $1\n              AND kind = 'purchase'\n              AND status = 'failed'\n              AND stripe_invoice_id IS NOT NULL\n            ORDER BY created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "stripe_invoice_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "57772ecc69c0f78e6fcfa8741c9ba898cc811b0a94316afe0cde43b0c4205332"
+}

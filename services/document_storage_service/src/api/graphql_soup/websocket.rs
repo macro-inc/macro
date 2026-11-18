@@ -89,7 +89,9 @@ impl<S: Send + Sync> FromRequestParts<S> for GraphqlWebSocketUpgrade {
 impl GraphqlWebSocketUpgrade {
     /// Start the subscription transport with the handler's authorized context.
     pub(super) fn serve(self, executor: impl Executor, data: Data) -> Response {
-        tokio::spawn(async move {
+        // The socket outlives the upgrade request's task; capture its
+        // attribution so mutations sent over the socket stamp their events too.
+        tokio::spawn(agent_correlation::context::capture(async move {
             let upgraded = match self.on_upgrade.await {
                 Ok(upgraded) => upgraded,
                 Err(error) => {
@@ -106,7 +108,7 @@ impl GraphqlWebSocketUpgrade {
             )
             .await;
             serve(socket, executor, data, self.protocol).await;
-        });
+        }));
         self.response
     }
 }
@@ -128,7 +130,17 @@ async fn serve(
                 _ => None,
             })
         });
-    let output = WebSocket::new(executor, input, protocol).connection_data(data);
+    let output = WebSocket::new(executor, input, protocol)
+        .connection_data(data)
+        .on_connection_init(|payload: serde_json::Value| async move {
+            let mut capabilities = Data::default();
+            capabilities.insert(complete_graph::MailCacheProfile::from_advertised(
+                payload
+                    .get("mailCacheProfile")
+                    .and_then(serde_json::Value::as_str),
+            ));
+            Ok(capabilities)
+        });
     futures::pin_mut!(output);
     while let Some(message) = output.next().await {
         let message = match message {

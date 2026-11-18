@@ -1,10 +1,12 @@
 import type { DateValue } from '@core/util/date';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { cn } from '@ui';
 import {
   type Accessor,
   createContext,
   createEffect,
+  createMemo,
   createSignal,
   type JSX,
   onCleanup,
@@ -15,7 +17,11 @@ import {
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
 import type { EntityRowConfig } from '../../extractors-notification';
-import type { EntityData, ProjectEntity } from '../../types/entity';
+import type {
+  EntityData,
+  EntityWithProperties,
+  ProjectEntity,
+} from '../../types/entity';
 import type { WithNotification } from '../../types/notification';
 import type { ContentHitData, SearchLocation } from '../../types/search';
 import { isSearchEntity } from '../../types/search';
@@ -36,6 +42,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   hovered?: boolean;
   /** Caller-owned quick actions, revealed on pointer hover or keyboard focus. */
   actions?: JSX.Element;
+  /** Persistent controls for touch devices, before the timestamp. */
+  touchActions?: JSX.Element;
   /** Persistent status/action immediately before the timestamp. */
   leadingAction?: JSX.Element;
   /** Caller-owned marker between the icon and the title, e.g. a priority. */
@@ -48,6 +56,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   meta?: JSX.Element;
   /** Caller-owned metadata after the entity's own, in wide rows only. */
   metaEnd?: JSX.Element;
+  /** Caller-owned marker ahead of the preview, in stacked email rows only. */
+  previewLeading?: JSX.Element;
   hideContentHits?: boolean;
   /** Resolved app display name for a linked GitHub PR author, when available. */
   authorDisplayName?: string;
@@ -72,12 +82,25 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   /** The row visually closes its group (or the list) — the next row is a
    * group header or absent. Layouts use it to drop a trailing divider. */
   isLastInGroup?: boolean;
+  /** The row opens its group (or the list): the row before it is a group
+   * header or absent. Classic email rows draw a line on its top edge. */
+  isFirstInGroup?: boolean;
+  /** How email rows look; other entities ignore it. Defaults to `minimalist`. */
+  rowStyle?: EmailRowStyle;
 }
+
+/**
+ * How an email row looks. `minimalist` marks unread mail with a dot;
+ * `classic` separates rows with a line, lifts unread rows onto a raised
+ * surface with bolder sender, subject and date, and always shows the
+ * selection checkbox in place of the dot.
+ */
+export type EmailRowStyle = 'minimalist' | 'classic';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
 export interface LayoutProps {
-  entity: WithNotification<EntityData>;
+  entity: WithNotification<EntityWithProperties<EntityData>>;
   /** Persistent schedule metadata, including on touch and notification rows. */
   scheduleStatus?: JSX.Element;
   actions?: JSX.Element;
@@ -89,6 +112,7 @@ export interface LayoutProps {
   titleTrailing?: JSX.Element;
   meta?: JSX.Element;
   metaEnd?: JSX.Element;
+  previewLeading?: JSX.Element;
   /** Stored reference values alongside the existing property pills. */
   referenceProperties?: JSX.Element;
   checked?: boolean;
@@ -110,6 +134,17 @@ export interface LayoutProps {
   ) => void;
   /** Show a task's Project with its other properties (Projects enabled). */
   showProject?: boolean;
+  /**
+   * An email row in the Classic style: the selection checkbox always shows in
+   * place of the unread dot, and sender, subject and date are bolder while
+   * unread (`classicWeight`).
+   */
+  classic?: boolean;
+}
+
+/** Classic rows' sender, subject and date weight; the preview keeps its own. */
+export function classicWeight(unread: boolean) {
+  return unread ? 'font-semibold' : 'font-normal';
 }
 
 /**
@@ -134,18 +169,23 @@ const ListLayoutContext = createContext<ListLayoutContextValue>();
 export function ListLayoutProvider(props: {
   ref: Accessor<HTMLElement | undefined>;
   narrowLayout?: NarrowLayoutVariant;
+  /** The list width, in px, from which rows use columns. */
+  wideBreakpoint?: number;
   /** Responsive rows have a nonzero width and their layout can be restored. */
   onMeasured?: () => void;
   children: JSX.Element;
 }) {
-  const [isWide, setIsWide] = createSignal(true);
+  const [listWidth, setListWidth] = createSignal(Number.POSITIVE_INFINITY);
+  const isWide = createMemo(
+    () => listWidth() >= (props.wideBreakpoint ?? WIDE_BREAKPOINT)
+  );
 
   createEffect(() => {
     const el = props.ref();
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      setIsWide(width >= WIDE_BREAKPOINT);
+      setListWidth(width);
       if (width > 0) props.onMeasured?.();
     });
     observer.observe(el);
@@ -220,8 +260,14 @@ export function RowIndicator(props: {
   );
 }
 
-export function InboxDivider() {
+/** `hidden` keeps the line's pixel for a line the row draws itself. */
+export function InboxDivider(props: { hidden?: boolean }) {
   return (
-    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-divider" />
+    <div
+      class={cn(
+        'col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px',
+        props.hidden ? 'invisible' : 'bg-edge-divider'
+      )}
+    />
   );
 }

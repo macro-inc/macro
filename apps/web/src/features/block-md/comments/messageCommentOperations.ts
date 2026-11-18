@@ -44,28 +44,40 @@ export function useCreateMessageComment(): MessageCommentOperations['createComme
       console.error('Unable to comment');
       return null;
     }
+    const anchorId = draft.anchorId;
 
     // Read the mark now rather than when the draft was made: what the comment
     // is about is whatever it still covers as the comment is posted.
+    const publication = marks[anchorId]?.publication;
     const markedText =
-      editor?.read(() => $getCommentMarkText(draft.anchorId)) || undefined;
+      publication?.text() ||
+      editor?.read(() => $getCommentMarkText(anchorId)) ||
+      undefined;
 
-    const response = await createMarkedMessage(
-      message.content,
-      draft.anchorId,
-      markedText,
-      message.mentions,
-      message.attachments
-    );
+    if (publication && !(await publication.publish())) return null;
+    if (publication && marks[anchorId]?.publication !== publication)
+      return null;
+
+    const send = () =>
+      createMarkedMessage(
+        message.content,
+        anchorId,
+        markedText,
+        message.mentions,
+        message.attachments
+      );
+    const response = publication ? await publication.post(send) : await send();
     if (!response) return null;
+    if (publication && marks[anchorId]?.publication !== publication)
+      return response;
 
-    if (marks[draft.anchorId]) {
-      setMarks(draft.anchorId, 'existsOnServer', true);
-      setMarks(draft.anchorId, 'isDraft', false);
+    if (marks[anchorId]) {
+      setMarks(anchorId, 'existsOnServer', true);
+      setMarks(anchorId, 'isDraft', false);
     }
     setActiveThread(response.id);
     editor?.dispatchCommand(COMMIT_COMMENT_MARK_COMMAND, {
-      markId: draft.anchorId,
+      markId: anchorId,
     });
     deleteNewComments();
     return response;

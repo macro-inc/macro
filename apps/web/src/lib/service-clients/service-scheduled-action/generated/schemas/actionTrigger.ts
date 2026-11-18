@@ -7,6 +7,7 @@
  */
 import type { ActionTriggerOneOf } from './actionTriggerOneOf';
 import type { ActionTriggerOneOfFive } from './actionTriggerOneOfFive';
+import type { ActionTriggerOneOfSeven } from './actionTriggerOneOfSeven';
 import type { ActionTriggerOneOfThree } from './actionTriggerOneOfThree';
 
 /**
@@ -15,4 +16,5 @@ import type { ActionTriggerOneOfThree } from './actionTriggerOneOfThree';
 export type ActionTrigger =
   | ActionTriggerOneOf
   | ActionTriggerOneOfThree
-  | ActionTriggerOneOfFive;
+  | ActionTriggerOneOfFive
+  | ActionTriggerOneOfSeven;

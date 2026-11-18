@@ -38,7 +38,7 @@ const state = {
       setMessageId(undefined);
     },
   },
-  permissions: () => ({ isOwner: true }),
+  permissions: () => ({ isOwner: true, canReply: true }),
   messages: { unfiltered: () => [parent], setBottomReplyOpen: vi.fn() },
   drafts: {
     getDraftForMessage: () =>
@@ -162,11 +162,9 @@ it('routes Escape to draft choices and dismisses those before the composer', asy
   fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
   fireEvent.keyDown(document, { key: 'Escape' });
   const save = await screen.findByRole('button', { name: 'Save Draft' });
-  await waitFor(() =>
-    expect(document.activeElement).toBe(
-      screen.getByRole('button', { name: 'Delete Draft' })
-    )
-  );
+  // The choices sheet takes focus, not its first row, so no row opens ringed.
+  const choices = save.closest('[data-corvu-drawer-content]');
+  await waitFor(() => expect(document.activeElement).toBe(choices));
   fireEvent.keyDown(save, { key: 'Escape' });
   await waitFor(() =>
     expect(screen.queryByRole('button', { name: 'Save Draft' })).toBeNull()

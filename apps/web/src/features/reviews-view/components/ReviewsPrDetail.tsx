@@ -15,6 +15,7 @@ import {
   usePrDetail,
 } from '@block-pr/views/PrDetail';
 import { SidePanel } from '@components/app/side-panel';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -106,9 +107,13 @@ export function ReviewsPrDetail(props: { foreignEntityId: string }) {
         />
         <ChangesSplit>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-            <ViewShell.TopBar class="touch:flex touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
-              <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-              <ViewBreadcrumbs.Outlet aria-label="Pull request location" />
+            <ViewShell.TopBar class="touch:flex touch:flex-wrap touch:gap-y-2">
+              <HeaderIsland class="px-1">
+                <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+              </HeaderIsland>
+              <ViewShell.TopBarTitle>
+                <ViewBreadcrumbs.Outlet aria-label="Pull request location" />
+              </ViewShell.TopBarTitle>
               <PrDetailActions detail={detail.data()} actions={actions} />
             </ViewShell.TopBar>
             <PrDetailContent

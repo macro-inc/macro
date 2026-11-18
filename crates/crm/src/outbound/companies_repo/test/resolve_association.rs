@@ -63,9 +63,6 @@ async fn invisible_records_do_not_resolve(pool: PgPool) {
         CrmAssociation::Contact(id(1003)),
         // Hidden from a plain member of team 12.
         CrmAssociation::Contact(id(1007)),
-        // Team 13 has CRM disabled.
-        CrmAssociation::Company(id(103)),
-        CrmAssociation::Contact(id(1009)),
         // Unknown ids.
         CrmAssociation::Company(id(999)),
         CrmAssociation::Contact(id(9999)),
@@ -133,26 +130,51 @@ async fn team_scope_is_restricted_to_its_team(pool: PgPool) {
         resolve(&repo, team(true), CrmAssociation::Company(id(101))).await,
         None
     );
-    // A CRM-disabled team's own records do not resolve either.
-    let disabled = || CrmContactListScope::Team {
-        team_id: id(13),
-        include_hidden: true,
-    };
-    assert_eq!(
-        resolve(&repo, disabled(), CrmAssociation::Company(id(103))).await,
-        None
-    );
-    assert_eq!(
-        resolve(&repo, disabled(), CrmAssociation::Contact(id(1009))).await,
-        None
-    );
 }
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures("fixtures/contact_listing.sql")
 )]
-async fn activity_preserves_duplicate_contacts_and_excludes_hidden_and_disabled(pool: PgPool) {
+async fn legacy_email_settings_do_not_hide_associated_records(pool: PgPool) {
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    for remove_settings in [false, true] {
+        if remove_settings {
+            sqlx::query!("DELETE FROM team_crm_settings WHERE team_id = $1", id(13))
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        // Team 13's legacy flag is false, then its settings row is absent.
+        // Neither state requires a mailbox or email contribution consent.
+        for team_scope in [false, true] {
+            let scope = || {
+                if team_scope {
+                    CrmContactListScope::Team {
+                        team_id: id(13),
+                        include_hidden: false,
+                    }
+                } else {
+                    CrmContactListScope::Viewer(VIEWER)
+                }
+            };
+            assert_eq!(
+                resolve(&repo, scope(), CrmAssociation::Company(id(103))).await,
+                Some(CrmRecordAssociation::company(id(103), vec![id(1009)]))
+            );
+            assert_eq!(
+                resolve(&repo, scope(), CrmAssociation::Contact(id(1009))).await,
+                Some(CrmRecordAssociation::contact(id(1009)))
+            );
+        }
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures("fixtures/contact_listing.sql")
+)]
+async fn activity_preserves_duplicates_without_consent_and_excludes_hidden(pool: PgPool) {
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     sqlx::query!(
         "INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, 'EXAMPLE.com')",
@@ -166,10 +188,10 @@ async fn activity_preserves_duplicate_contacts_and_excludes_hidden_and_disabled(
         .resolve_activity(CrmContactListScope::Viewer(VIEWER))
         .await
         .unwrap();
-    assert_eq!(scope.company_ids, vec![id(101), id(102)]);
+    assert_eq!(scope.company_ids, vec![id(101), id(102), id(103)]);
     assert_eq!(
         scope.contact_ids,
-        [1001, 1002, 1004, 1005, 1010, 1011].map(id)
+        [1001, 1002, 1004, 1005, 1009, 1010, 1011].map(id)
     );
     assert_eq!(scope.domains, vec!["example.com"]);
     assert!(scope.addresses.contains(&"pat@example.com".to_string()));
@@ -184,7 +206,7 @@ async fn activity_preserves_duplicate_contacts_and_excludes_hidden_and_disabled(
             .contains(&"hidden-parent@example.com".to_string())
     );
     assert!(
-        !scope
+        scope
             .addresses
             .contains(&"disabled@example.com".to_string())
     );
@@ -205,14 +227,82 @@ async fn activity_preserves_duplicate_contacts_and_excludes_hidden_and_disabled(
             .company_ids
             .is_empty()
     );
-    assert!(
+    assert_eq!(
         repo.resolve_activity(CrmContactListScope::Team {
             team_id: id(13),
             include_hidden: true,
         })
         .await
         .unwrap()
-        .company_ids
-        .is_empty()
+        .company_ids,
+        vec![id(103)]
     );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures("fixtures/contact_listing.sql")
+)]
+async fn activity_returns_every_address_of_visible_contacts(pool: PgPool) {
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    // A visible contact without a company, in team 11.
+    sqlx::query!(
+        r#"INSERT INTO crm_contacts (id, team_id, email, first_interaction, last_interaction)
+           VALUES ($1, $2, 'lin@personal.example.com', now(), now())"#,
+        id(2001),
+        id(11)
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // Second addresses: a company contact (1004), the company-less contact,
+    // a hidden contact (1008) and a contact under a hidden company (1006).
+    for (contact, address) in [
+        (1004, "lone1.personal@personal.example.com"),
+        (2001, "lin@other.example.com"),
+        (1008, "hidden-admin.personal@personal.example.com"),
+        (1006, "hidden-parent.personal@personal.example.com"),
+    ] {
+        sqlx::query!(
+            "INSERT INTO crm_contact_emails (contact_id, email) VALUES ($1, $2)",
+            id(contact),
+            address
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    for scope in [
+        CrmContactListScope::Viewer(VIEWER),
+        CrmContactListScope::Team {
+            team_id: id(11),
+            include_hidden: true,
+        },
+    ] {
+        let activity = repo.resolve_activity(scope).await.unwrap();
+        for address in [
+            "lone1@example.com",
+            "lone1.personal@personal.example.com",
+            "lin@personal.example.com",
+            "lin@other.example.com",
+        ] {
+            assert!(
+                activity.addresses.contains(&address.to_string()),
+                "{address}"
+            );
+        }
+        for address in [
+            "hidden-admin@example.com",
+            "hidden-admin.personal@personal.example.com",
+            "hidden-parent@example.com",
+            "hidden-parent.personal@personal.example.com",
+        ] {
+            assert!(
+                !activity.addresses.contains(&address.to_string()),
+                "{address}"
+            );
+        }
+        assert!(activity.contact_ids.contains(&id(2001)));
+    }
 }

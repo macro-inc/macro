@@ -95,7 +95,7 @@ fn search_is_uncapped() {
 fn search_and_stage_loads_matched_tools() {
     let (loader, loaded) = recording_loader();
 
-    let response = search_and_stage(&catalog(), "linear gmail", Some(&loader));
+    let response = search_and_stage(&catalog(), &[], "linear gmail", Some(&loader));
 
     assert_eq!(
         match_names(&response.results),
@@ -118,7 +118,7 @@ fn search_and_stage_caps_auto_loading_and_reports_the_rest() {
         .collect();
     let (loader, loaded) = recording_loader();
 
-    let response = search_and_stage(&big, "tool", Some(&loader));
+    let response = search_and_stage(&big, &[], "tool", Some(&loader));
 
     // Only the top matches (in rank order) are auto-loaded...
     assert_eq!(response.results.len(), MAX_AUTO_LOADED_MATCHES);
@@ -141,7 +141,7 @@ fn search_and_stage_caps_auto_loading_and_reports_the_rest() {
 
 #[test]
 fn search_and_stage_without_loader_still_returns_matches() {
-    let response = search_and_stage(&catalog(), "linear", None);
+    let response = search_and_stage(&catalog(), &[], "linear", None);
     assert_eq!(
         match_names(&response.results),
         vec!["mcp__linear__create_issue"]
@@ -152,10 +152,52 @@ fn search_and_stage_without_loader_still_returns_matches() {
 fn search_and_stage_response_always_includes_both_fields() {
     // The generated frontend schema marks both fields required, so the wire
     // format must include `additional_matches` even when empty.
-    let response = search_and_stage(&catalog(), "linear", None);
+    let response = search_and_stage(&catalog(), &[], "linear", None);
     let json = serde_json::to_value(&response).unwrap();
     assert!(json.get("results").is_some());
     assert_eq!(json["additional_matches"], serde_json::json!([]));
+}
+
+#[test]
+fn search_names_a_matching_tool_that_is_already_advertised() {
+    // ExecuteCode is sent with every request, so it is never in the catalog; a
+    // search for it once returned nothing and the model concluded it was gone.
+    let advertised = [ToolMatch {
+        name: "ExecuteCode".to_string(),
+        description: "Run JavaScript against the Macro SDK".to_string(),
+    }];
+    let (loader, loaded) = recording_loader();
+    let response = search_and_stage(&catalog(), &advertised, "ExecuteCode", Some(&loader));
+
+    assert!(response.results.is_empty());
+    assert_eq!(response.already_available, vec!["ExecuteCode".to_string()]);
+    assert!(loaded.lock().unwrap().is_empty());
+    let json = serde_json::to_value(&response).unwrap();
+    assert_eq!(
+        json["already_available"],
+        serde_json::json!(["ExecuteCode"])
+    );
+}
+
+#[test]
+fn search_omits_already_available_when_nothing_advertised_matches() {
+    let advertised = [ToolMatch {
+        name: "ExecuteCode".to_string(),
+        description: "Run JavaScript against the Macro SDK".to_string(),
+    }];
+    let response = search_and_stage(&catalog(), &advertised, "linear", None);
+    let json = serde_json::to_value(&response).unwrap();
+    assert!(json.get("already_available").is_none());
+}
+
+#[test]
+fn blank_search_names_no_already_available_tools() {
+    let advertised = [ToolMatch {
+        name: "ExecuteCode".to_string(),
+        description: "Run JavaScript against the Macro SDK".to_string(),
+    }];
+    let response = search_and_stage(&catalog(), &advertised, "  ", None);
+    assert!(response.already_available.is_empty());
 }
 
 // --- load (registers named tools via the loader) ---
@@ -206,4 +248,24 @@ fn load_without_loader_still_reports() {
         vec!["mcp__gmail__list_threads"]
     );
     assert!(result.not_found.is_empty());
+}
+
+// --- names the agent loop reads loads back by ---
+
+#[test]
+fn tools_are_named_as_the_agent_loop_reads_them() {
+    let tools = ai_toolset::AsyncToolCollection::<ToolServiceContext>::new()
+        .add_tool::<SearchTools, ToolServiceContext>()
+        .add_tool::<LoadTools, ToolServiceContext>();
+
+    assert!(
+        tools
+            .tools
+            .contains_key(ai_toolset::tool_search::SEARCH_TOOLS)
+    );
+    assert!(
+        tools
+            .tools
+            .contains_key(ai_toolset::tool_search::LOAD_TOOLS)
+    );
 }

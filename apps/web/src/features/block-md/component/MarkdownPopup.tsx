@@ -1,4 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
+import { useFlow } from '@app/observability/flow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
@@ -42,10 +43,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_MARKDOWN_COMMENTS,
-  enableInlineAiEditing,
-} from '@core/constant/featureFlags';
+import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -59,7 +57,6 @@ import { getScrollParentElement } from '@core/util/scrollParent';
 import CheckIcon from '@icon/system/bold/check-bold.svg?component-solid';
 import SparkleIcon from '@icon/system/bold/sparkle-bold.svg?component-solid';
 import LoadingIcon from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
-import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg?component-solid';
 import GridIcon from '@icon/system/regular/grid-four.svg';
 import LinkIcon from '@icon/system/regular/link.svg?component-solid';
@@ -104,6 +101,7 @@ import {
   $insertAtSavedPoint,
   type SavedPoint,
 } from '../util/insertAtSavedPoint';
+import { CommentButton } from './CommentButton';
 import { FormatTools } from './FormatTools';
 import { TouchSelectionToolbar } from './TouchSelectionToolbar';
 
@@ -112,6 +110,7 @@ export function MarkdownPopup(props: {
   highlightLayerRef: HTMLDivElement;
   lexicalMapping: NodeIdMappings;
 }) {
+  const flow = useFlow();
   const { documentId, permissions, state, persistedName, fallbackName } =
     useMarkdownDocument();
   const { canEdit, canComment } = permissions;
@@ -202,7 +201,6 @@ export function MarkdownPopup(props: {
     setNativeEditMenuSuppressed(false);
   });
 
-  const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
   const currentUserId = useUserId();
 
   const [locationCopied, setLocationCopied] = createSignal(false);
@@ -369,17 +367,20 @@ export function MarkdownPopup(props: {
     // Fast mode: one model edits the whole document directly, no supervisor.
     // Apply ops locally so the edit lands in this client's undo stack.
     fireAndForget(
-      requestAiEditWithToast(
-        {
-          documentId: blockId,
-          prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
-          mode: 'fast',
-          onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
-        },
-        () => {
-          setAiEditLocation(null);
-          setAiEditRunning(false);
-        }
+      flow.span.span('doc.edit', (parentSpan) =>
+        requestAiEditWithToast(
+          {
+            documentId: blockId,
+            parentSpan,
+            prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
+            mode: 'fast',
+            onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
+          },
+          () => {
+            setAiEditLocation(null);
+            setAiEditRunning(false);
+          }
+        )
       ),
       'markdown-ai-edit'
     );
@@ -430,8 +431,7 @@ export function MarkdownPopup(props: {
   const shouldShowTableButton = () =>
     Boolean(canEdit() && convertibleListKey());
 
-  const shouldShowEditWithAiButton = () =>
-    inlineAiEditing().enabled && canEdit();
+  const shouldShowEditWithAiButton = () => canEdit();
 
   /** Resolves to the point after the inserted mention, or null if it failed. */
   const insertTaskMention = async (
@@ -511,6 +511,10 @@ export function MarkdownPopup(props: {
         type: 'component',
         id: 'task-compose',
         params: {
+          composerContext: taskSourceComposerContext({
+            entity_type: 'DOCUMENT',
+            entity_id: blockId,
+          }),
           initialTitle: text.length > 70 ? `${text.slice(0, 70)}...` : text,
           initialContent: buildMentionMarkdownString({
             type: 'document',
@@ -722,14 +726,7 @@ export function MarkdownPopup(props: {
               <Toolbar.Divider />
             </Show>
             <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>
-              <Toolbar.Button
-                aria-label="Comment"
-                size="icon-sm"
-                onClick={handleInsertComment}
-                tooltip="Comment"
-              >
-                <ChatTeardrop class="size-4" />
-              </Toolbar.Button>
+              <CommentButton onClick={handleInsertComment} />
             </Show>
             <Toolbar.Button
               aria-label="Copy link to snippet"

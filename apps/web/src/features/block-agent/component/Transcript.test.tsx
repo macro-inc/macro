@@ -15,6 +15,7 @@ const session = vi.hoisted(() => ({
   turn: (): TurnState => 'idle',
   messages: () => [] as FoldedMessage[],
   quoteSelection: vi.fn(),
+  runtimeRefusal: (): string | undefined => undefined,
   touch: false,
   top: () => 40,
   bottom: (): number => 80,
@@ -62,6 +63,7 @@ vi.mock('./ReplyToSelection', () => ({
 const message = (turn: number, text = 'hello'): FoldedMessage =>
   ({
     agentSessionId: 'session',
+    key: `${turn}:agent`,
     turn,
     author: { kind: 'agent' },
     parts: [{ kind: 'text', text }],
@@ -102,6 +104,7 @@ beforeEach(() => {
   rowHeight = 96;
   session.touch = false;
   session.turn = () => 'idle';
+  session.runtimeRefusal = () => undefined;
   session.bottom = () => 80;
   vi.stubGlobal(
     'ResizeObserver',
@@ -219,10 +222,31 @@ describe('Transcript live turn', () => {
     session.turn = () => 'running';
     const view = mount([
       message(0),
-      { ...message(1), author: { kind: 'user', userId: 'u' } } as FoldedMessage,
+      {
+        ...message(1),
+        key: '1:user',
+        author: { kind: 'user', userId: 'u' },
+      } as FoldedMessage,
     ]);
     await settle();
     expect(inFlight(view)).toEqual(['0:agent=false', '1:user=false']);
+  });
+
+  it('says why a prompt did not run after the last message', async () => {
+    session.runtimeRefusal = () =>
+      'This agent has stopped: its owner no longer has access to Build box.';
+    const view = mount([message(0)]);
+    await settle();
+    const refusal = view.getByRole('status');
+    expect(refusal.textContent).toContain(
+      'its owner no longer has access to Build box'
+    );
+    const rows = [
+      ...view.container.querySelectorAll<HTMLElement>(
+        '[data-message], [data-runtime-refusal]'
+      ),
+    ];
+    expect(rows.at(-1)?.hasAttribute('data-runtime-refusal')).toBe(true);
   });
 });
 
@@ -258,6 +282,7 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     setMessages([
       {
         ...message(0),
+        key: '0:user',
         author: { kind: 'user', userId: 'owner' },
       } as FoldedMessage,
       ...Array.from({ length: 80 }, (_, turn) => message(turn)),

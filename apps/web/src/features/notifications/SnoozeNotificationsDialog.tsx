@@ -1,7 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { useMuteItemMutation } from '@queries/notification/unsubscribes';
+import { Telemetry } from '@macro-inc/observability';
+import { useBulkNotificationPreferencesMutation } from '@queries/notification/unsubscribes';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import {
   type ManagedDialogProps,
@@ -20,7 +22,9 @@ import { createSnoozeController } from './primitives/create-snooze-controller';
 function SnoozeNotificationsDialog(
   props: ManagedDialogProps & { items: UserUnsubscribe[] }
 ) {
-  const mutation = useMuteItemMutation();
+  const userId = useUserId();
+  const actorId = userId();
+  const mutation = useBulkNotificationPreferencesMutation();
   const [query, setQuery] = createSignal('');
   const dates = useDateSearch({ query, defaultTime: { hours: 9, minutes: 0 } });
   const options = (): SnoozeOption[] => {
@@ -49,15 +53,46 @@ function SnoozeNotificationsDialog(
   };
   const controller = createSnoozeController({
     items: props.items,
-    saveItem: (item, until) =>
-      mutation.mutateAsync({ ...item, snoozed_until: until }),
+    saveItems: async (items, until) => {
+      if (!actorId || actorId !== userId()) {
+        return [...items];
+      }
+      const result = await mutation.mutateAsync({
+        actorId,
+        items,
+        muted: true,
+        snoozedUntil: until,
+      });
+      return result.failed;
+    },
     onSaved: (until, count) => {
+      if (actorId !== userId()) return;
       props.onOpenChange(false);
       toast.success(
         `Snoozed ${count} ${count === 1 ? 'item' : 'items'} until ${formatSnoozeDeadline(until)}`
       );
     },
   });
+
+  const submit = (until: Date) =>
+    Telemetry.span('notifications.snooze', async (span) => {
+      span.setAttr(
+        'notification.item_ids',
+        props.items.map((item) => item.item_id)
+      );
+      span.setAttr('notification.count', controller.remainingCount());
+
+      await controller.submit(until);
+
+      const error = controller.error();
+
+      if (error) {
+        span.error(error);
+      } else {
+        span.setAttr('notification.snoozed_until', until.toISOString());
+      }
+    });
+
   return (
     <SnoozePicker
       {...props}
@@ -67,9 +102,7 @@ function SnoozeNotificationsDialog(
       options={options()}
       pending={controller.pending()}
       error={controller.error()}
-      onSelect={(until) =>
-        fireAndForget(controller.submit(until), 'notifications')
-      }
+      onSelect={(until) => fireAndForget(submit(until), 'notifications')}
     />
   );
 }

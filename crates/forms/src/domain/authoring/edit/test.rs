@@ -17,6 +17,7 @@ fn help_text_edit_changes_only_requested_fields_in_the_current_layout() {
                 required: false,
                 widget: None,
             }],
+            show_when: None,
         }],
     };
     let mut latest = base.clone();
@@ -66,12 +67,14 @@ fn a_batch_can_move_then_edit_a_question_without_losing_either_change() {
                     required: false,
                     widget: None,
                 }],
+                show_when: None,
             },
             FormSection::Questions {
                 id: second,
                 title: String::new(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             },
         ],
     };
@@ -106,6 +109,7 @@ fn a_batch_can_add_then_edit_a_question() {
             title: String::new(),
             description: String::new(),
             questions: vec![],
+            show_when: None,
         }],
     };
     let changes = vec![
@@ -133,4 +137,113 @@ fn a_batch_can_add_then_edit_a_question() {
         panic!("questions")
     };
     assert!(questions[0].required);
+}
+
+#[test]
+fn show_when_is_set_kept_by_unrelated_edits_cleared_by_null_and_only_on_questions_sections() {
+    use models_databases::views::{
+        Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, PresenceOperator,
+    };
+    let first = FormSectionId::new();
+    let second = FormSectionId::new();
+    let gate = FormSectionId::new();
+    let column = ColumnId::new();
+    let rules = FilterGroup {
+        conjunction: Conjunction::And,
+        conditions: vec![FilterNode::Condition(FilterCondition {
+            column,
+            test: FilterTest::Presence {
+                operator: PresenceOperator::IsNotEmpty,
+            },
+        })],
+    };
+    let base = FormLayout {
+        sections: vec![
+            FormSection::Questions {
+                id: first,
+                title: "About you".into(),
+                description: String::new(),
+                questions: vec![QuestionLayout {
+                    id: FormQuestionId::new(),
+                    column,
+                    help_text: String::new(),
+                    required: false,
+                    widget: None,
+                }],
+                show_when: None,
+            },
+            FormSection::Questions {
+                id: second,
+                title: "Follow-up".into(),
+                description: String::new(),
+                questions: vec![],
+                show_when: None,
+            },
+            FormSection::Gate {
+                id: gate,
+                title: String::new(),
+                description: String::new(),
+                rules: rules.clone(),
+                message: "No".into(),
+            },
+        ],
+    };
+
+    let set = apply(
+        &base,
+        &[
+            Change::SetShowWhen {
+                section_id: second,
+                show_when: Some(rules.clone()),
+            },
+            Change::SetSectionText {
+                section_id: second,
+                title: Some("More".into()),
+                description: None,
+                message: None,
+            },
+        ],
+    )
+    .unwrap();
+
+    assert_eq!(
+        set.sections[1],
+        FormSection::Questions {
+            id: second,
+            title: "More".into(),
+            description: String::new(),
+            questions: vec![],
+            show_when: Some(rules.clone()),
+        }
+    );
+    let cleared = apply(
+        &set,
+        &[Change::SetShowWhen {
+            section_id: second,
+            show_when: None,
+        }],
+    )
+    .unwrap();
+    assert_eq!(
+        cleared.sections[1],
+        FormSection::Questions {
+            id: second,
+            title: "More".into(),
+            description: String::new(),
+            questions: vec![],
+            show_when: None,
+        }
+    );
+    assert_eq!(
+        apply(
+            &base,
+            &[Change::SetShowWhen {
+                section_id: gate,
+                show_when: Some(rules),
+            }],
+        )
+        .unwrap_err()
+        .code,
+        Code::InvalidEdit
+    );
 }

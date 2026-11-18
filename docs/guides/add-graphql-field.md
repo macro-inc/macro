@@ -66,7 +66,9 @@ domain operation doesn't exist, add it to the domain crate first.
   `null` for shared ones. See the [security rules](../../.agents/rules/rust/security.md).
 - **Batch per-entity edges with a DataLoader.** A field resolved once per list row
   goes through a keyed `Loader` (copy `crates/graphql_crm/src/loaders.rs`). Poll
-  hydration futures concurrently so the loader can batch them.
+  hydration futures concurrently so the loader can batch them, and spawn its
+  batches with `|batch| tokio::spawn(batch.in_current_span())` so they stay in
+  the request's trace.
 - **Typed errors.** Set `extensions.code` with the crate's helper (copy `bad_input`
   / `unavailable` in `crates/graphql_calendar/src/lib.rs`, or `mutation_error` in
   `src/mutation.rs`). Log internal details and return a generic message. The web
@@ -77,9 +79,15 @@ domain operation doesn't exist, add it to the domain crate first.
   An archive mutation whose post-write reload found nothing once retried hundreds
   of times and blocked every queued write behind it. If the write committed but
   the reload is empty, return a terminal `NOT_FOUND`.
-- **Skip unknown variants instead of erroring.** An error on a non-null field
-  nulls its parents up to `user` and blanks the screen. Loaders that met an
-  unknown entity type used to fail the whole response; log and omit instead.
+- **Skip unknown variants instead of erroring.** async-graphql 7.2 answers an
+  errored field, nullable or not, by omitting it next to the error and keeping
+  its parent (upstream issue #1801), so a client reads `undefined` from a field
+  its generated type calls non-null. Loaders that met an unknown entity type
+  used to fail the whole response; log and omit instead.
+- **A missing or hidden entity is null, not an error.** Single-entity reads
+  return a nullable field that is null when the viewer cannot see the entity
+  (`soupEntity`, `emailThread`, `visibleInitiative`). The web cache never stores
+  an errored result, so every open of a gone entity would ask again.
 - **Keep payloads off spans.** Use `#[tracing::instrument(skip_all, err(Debug))]` as
   the calendar resolvers do ([observability rule](../../.agents/rules/observability.md)).
 - **Cross-domain fields on Soup entities.** `graphql_soup` can't depend on your
@@ -117,15 +125,20 @@ Nothing checks this at compile time. A missing insert surfaces only when a clien
 selects the field, as a "data does not exist" error. The `complete_graph` tests
 insert their own data, so they don't catch it.
 
-**Replica or primary.** Ordinary queries, lists, and subscription hydration read
-the replica (`readonly_db`). In production it lags 1–9 s. Mutation replies, and
-anything read right after a write (a just-created entity, a subscribe-then-query
-log), need a primary-backed loader. Copy `AgentSessionEntityLoader` in
-`crates/graphql_soup/src/loaders.rs` or `email_mutation_thread_loader` in
-`crates/graphql_soup/src/mutation_thread.rs`. A new agent session read from the
-replica came back `null` and the client reported "not accessible". Local stacks
-can't reproduce this because their replica URL is the primary, so decide
-deliberately.
+**Replica or primary.** Ordinary queries and lists read the replica
+(`readonly_db`). In production it lags 1–9 s. Mutation replies, `soupUpdates`
+hydration, and anything read right after a write (a just-created entity, a
+subscribe-then-query log), need a primary-backed loader. Copy
+`AgentSessionEntityLoader` in `crates/graphql_soup/src/loaders.rs` or
+`email_mutation_thread_loader` in `crates/graphql_soup/src/mutation_thread.rs`.
+A new agent session read from the replica came back `null` and the client
+reported "not accessible". Local stacks can't reproduce this because their
+replica URL is the primary, so decide deliberately.
+
+**Team access.** Build Soup entity loaders with their `::new` constructors or
+`soup_item_loader_with_team_access`. GitHub pull requests and CRM records are
+stored for the team, so a loader without the viewer's team returns sessions
+whose PR state is unknown. The client then caches that state over the list's.
 
 ## 5. Regenerate the SDL (required)
 

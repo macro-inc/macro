@@ -22,6 +22,8 @@ embedded-fonts = []
 cli = ["dep:clap", "embedded-fonts"]
 # JSON Schemas for the edit operations (AI tool definitions).
 schema = ["dep:schemars"]
+# OpenAPI schemas for the edit operations (the presentation HTTP routes).
+openapi = ["dep:utoipa"]
 
 [[bin]]
 name = "pptx_corpus"
@@ -39,6 +41,7 @@ serde_json = { workspace = true }
 skrifa = { workspace = true }
 thiserror = { workspace = true }
 tiny-skia = { workspace = true }
+utoipa = { workspace = true, optional = true }
 zune-core = { workspace = true }
 zune-jpeg = { workspace = true }
 

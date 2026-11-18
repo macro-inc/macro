@@ -12,6 +12,7 @@ use utoipa_swagger_ui::SwaggerUi;
 // Utilities
 mod citations;
 mod completions;
+mod confirmed_actions;
 pub mod context;
 mod decisions;
 mod health;
@@ -76,12 +77,51 @@ fn prefixed_openapi() -> utoipa::openapi::OpenApi {
 fn api_router(api_context: ApiContext) -> Router {
     let memory_service = api_context.memory_service.clone();
     let usage_service = api_context.usage_service.clone();
-    let ai_projections_service = api_context.ai_projections_service.clone();
     let import_service = api_context.import_service.clone();
     let onboarding_service = api_context.onboarding_service.clone();
     let authorization_state = api_context.authorization_state.clone();
 
     let mcp_state = api_context.mcp_state.clone();
+
+    let image_generation_state =
+        image_generation::inbound::axum_router::ImageGenerationRouterState {
+            service: std::sync::Arc::new(
+                image_generation::domain::service::AdmittedImageGenerationService::new(
+                    api_context
+                        .tool_service_context
+                        .image_generation_tool_context
+                        .service
+                        .clone(),
+                    api_context.ai_admission.clone(),
+                ),
+            ),
+            authorization_state: authorization_state.clone(),
+            non_user_owners: api_context.non_user_owners,
+        };
+
+    let web_state = web_search::inbound::axum_router::WebRouterState::new(
+        std::sync::Arc::new(web_search::domain::service::WebSearchService::new(
+            api_context.tool_service_context.web_search_provider.clone(),
+            api_context.ai_admission.clone(),
+            api_context.tool_service_context.recorder.clone(),
+        )),
+        api_context.web_rate_limiter.clone(),
+        authorization_state.clone(),
+    );
+
+    let activity_state = activity::inbound::axum_router::ActivityRouterState::new(
+        api_context.tool_service_context.activity_service.clone(),
+        authorization_state.clone(),
+    );
+
+    let skill_state = skills::inbound::axum_router::SkillRouterState::new(
+        api_context
+            .tool_service_context
+            .skill_tool_context
+            .service
+            .clone(),
+        authorization_state.clone(),
+    );
 
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
@@ -91,6 +131,14 @@ fn api_router(api_context: ApiContext) -> Router {
             post(structured_completion::structured_completion),
         )
         .route("/decisions", decisions::route())
+        .route(
+            "/email/send-confirmed",
+            post(confirmed_actions::send_confirmed_email),
+        )
+        .route(
+            "/calendar/events/create-confirmed",
+            post(confirmed_actions::create_confirmed_calendar_event),
+        )
         .route("/chat/completions", post(completions::handler))
         .route(
             "/database-query",
@@ -124,12 +172,14 @@ fn api_router(api_context: ApiContext) -> Router {
                 authorization_state: authorization_state.clone(),
             },
         ))
-        .merge(ai_projections::inbound::axum_router::ai_projections_router(
-            ai_projections::inbound::axum_router::AiProjectionRouterState {
-                service: ai_projections_service,
-                authorization_state,
-            },
+        .merge(
+            image_generation::inbound::axum_router::image_generation_router(image_generation_state),
+        )
+        .merge(web_search::inbound::axum_router::web_router(web_state))
+        .merge(activity::inbound::axum_router::activity_router(
+            activity_state,
         ))
+        .merge(skills::inbound::axum_router::skills_router(skill_state))
         .merge(mcp_client::inbound::mcp_router(mcp_state.clone()))
         .merge(pipedream_mcp::inbound::pipedream_mcp_router(
             api_context.pipedream_state.clone(),
@@ -145,7 +195,9 @@ fn api_router(api_context: ApiContext) -> Router {
         .merge(mcp_client::inbound::mcp_oauth_callback_router(mcp_state))
         .merge(granola_sync::inbound::webhook_router(
             api_context.granola_sync.clone(),
-        ));
+        ))
+        // Macro Connect's consent finishes on this page; it records nothing.
+        .merge(pipedream_mcp::inbound::pipedream_connect_callback_router());
 
     match api_context.config.pipedream_webhook_secret.value() {
         Some(secret) => app.merge(pipedream_mcp::inbound::pipedream_webhook_router(

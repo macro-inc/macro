@@ -219,6 +219,26 @@ impl FakeAgent {
             .expect("fake agent frame history should remain open");
     }
 
+    /// Wait until the harness has sent at least `count` requests of `method`.
+    pub async fn wait_for_method_requests(&self, method: &str, count: usize) {
+        let mut received = self.received.subscribe();
+        received
+            .wait_for(|frames| {
+                frames
+                    .iter()
+                    .filter(|frame| {
+                        matches!(
+                            frame,
+                            RawJsonRpcMessage::Request(request) if request.method.as_ref() == method
+                        )
+                    })
+                    .count()
+                    >= count
+            })
+            .await
+            .expect("fake agent frame history should remain open");
+    }
+
     /// Wait until the harness has answered at least `count` of this agent's
     /// own requests.
     pub async fn wait_for_responses(&self, count: usize) {
@@ -298,6 +318,13 @@ impl FakeAgent {
                     {
                         progress.opening = Some(request.id.clone());
                     }
+                    // An external runtime's connection carries many
+                    // sessions: another one loads after the first is open.
+                    ClientRequest::LoadSessionRequest(_)
+                        if progress.stage == Stage::SessionOpen =>
+                    {
+                        progress.opening = Some(request.id.clone());
+                    }
                     ClientRequest::NewSessionRequest(_)
                     | ClientRequest::LoadSessionRequest(_)
                     | ClientRequest::ResumeSessionRequest(_) => {
@@ -308,6 +335,15 @@ impl FakeAgent {
                             request.method
                         );
                         progress.opening = Some(request.id.clone());
+                    }
+                    // The connection lists sessions right after it initializes.
+                    ClientRequest::ListSessionsRequest(_) => {
+                        assert_ne!(
+                            progress.stage,
+                            Stage::Fresh,
+                            "harness sent {} before initialize completed",
+                            request.method
+                        );
                     }
                     ClientRequest::PromptRequest(_) => {
                         assert_eq!(

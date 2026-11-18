@@ -27,8 +27,35 @@ vi.mock('@ui', () => ({
   ),
   ActionDialogShell: (props: ParentProps) => <div>{props.children}</div>,
 }));
+vi.mock('@core/component/TopBar/ShareDialog', async () => ({
+  ShareDialog: (await import('@ui')).Dialog,
+}));
+const share = vi.hoisted(() => ({
+  dismiss: vi.fn(),
+  views: [] as { onFinish: () => void; onCancel: () => void }[],
+}));
+vi.mock('@app/features/sharing/share-delivery/bulk-share', () => ({
+  BulkShare: (props: {
+    onFinish: () => void;
+    onCancel: () => void;
+    ref: (handle: { dismiss: () => void }) => void;
+  }) => {
+    share.views.push(props);
+    props.ref({ dismiss: share.dismiss });
+    return <div data-testid="share-view" />;
+  },
+}));
 vi.mock('./BulkMoveToProjectView', () => ({
-  BulkMoveToProjectView: () => null,
+  BulkMoveToProjectView: (props: {
+    onMoved: (folder: { id: string; name: string }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() => props.onMoved({ id: 'folder', name: 'Folder' })}
+    >
+      Move
+    </button>
+  ),
 }));
 vi.mock('./BulkRenameEntitiesView', () => ({
   BulkRenameEntitiesView: () => null,
@@ -64,6 +91,26 @@ vi.mock('./BulkDeleteView', () => ({
 
 afterEach(cleanup);
 
+describe('move-to-folder modal wiring', () => {
+  it('reports the destination once the dialog has closed', () => {
+    const entity = { id: 'moved', type: 'document' } as EntityData;
+    const onMoved = vi.fn(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    const onFinish = vi.fn();
+    openBulkEditModal({
+      view: 'moveToProject',
+      entities: [entity],
+      onMoved,
+      onFinish,
+    });
+    render(() => <GlobalBulkEditEntityModal />);
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    expect(onMoved).toHaveBeenCalledWith({ id: 'folder', name: 'Folder' });
+    expect(onFinish).toHaveBeenCalledOnce();
+  });
+});
+
 describe('bulk-delete modal progress wiring', () => {
   it.each(['Cancel', 'Dismiss'])(
     'forwards progress without completing the batch before %s',
@@ -93,4 +140,50 @@ describe('bulk-delete modal progress wiring', () => {
       expect(screen.queryByTestId('delete-view')).toBeNull();
     }
   );
+});
+
+describe('bulk-share modal dismissal', () => {
+  const rows = [
+    { id: 'doc-1', type: 'document' },
+    { id: 'doc-2', type: 'document' },
+  ] as EntityData[];
+
+  afterEach(() => {
+    share.dismiss.mockReset();
+    share.views = [];
+  });
+
+  it('lets the share view decide what a dismissal means', () => {
+    const onFinish = vi.fn();
+    const onCancel = vi.fn();
+    openBulkEditModal({ view: 'share', entities: rows, onFinish, onCancel });
+    render(() => <GlobalBulkEditEntityModal />);
+    share.dismiss.mockImplementation(() => share.views[0].onFinish());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(share.dismiss).toHaveBeenCalledOnce();
+    expect(onFinish).toHaveBeenCalledOnce();
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('share-view')).toBeNull();
+  });
+
+  it('ignores a finish from a dialog that already closed', () => {
+    const first = { onFinish: vi.fn(), onCancel: vi.fn() };
+    const second = { onFinish: vi.fn(), onCancel: vi.fn() };
+    openBulkEditModal({ view: 'share', entities: rows, ...first });
+    render(() => <GlobalBulkEditEntityModal />);
+    const [stale] = share.views;
+    stale.onCancel();
+    openBulkEditModal({ view: 'share', entities: rows, ...second });
+
+    stale.onFinish();
+    stale.onCancel();
+
+    expect(first.onCancel).toHaveBeenCalledOnce();
+    expect(first.onFinish).not.toHaveBeenCalled();
+    expect(second.onFinish).not.toHaveBeenCalled();
+    expect(second.onCancel).not.toHaveBeenCalled();
+    expect(screen.getByTestId('share-view')).toBeTruthy();
+  });
 });

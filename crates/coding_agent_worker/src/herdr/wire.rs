@@ -24,6 +24,22 @@ impl AgentState {
             Self::Blocked => "blocked",
         }
     }
+
+    /// The state as an OSC 7501 report, how a program tells herdr-core and
+    /// the herdr app what it is doing. A blocked session waits on a
+    /// permission answer.
+    pub(crate) fn osc_7501(self, message: Option<&str>) -> String {
+        use base64::Engine as _;
+        let mut fields = vec![format!("state={}", self.as_herdr()), "app=macro".to_owned()];
+        if self == Self::Blocked {
+            fields.push("kind=permission".to_owned());
+        }
+        if let Some(message) = message.filter(|message| !message.is_empty()) {
+            let message = base64::engine::general_purpose::STANDARD.encode(message);
+            fields.push(format!("msg={message}"));
+        }
+        format!("\x1b]7501;{}\x1b\\", fields.join(":"))
+    }
 }
 
 /// One answer an agent offered to a permission request.

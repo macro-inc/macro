@@ -1,6 +1,11 @@
 //! Independent address-book synchronization. Missing optional contact consent
 //! must never stop mail delivery, and only a completed scan can retire records.
 
+/// Contact listing across accessible inboxes.
+pub mod list;
+/// URL-backed contact-photo uploads and self-contact refresh policy.
+pub mod sfs_upload;
+
 use super::*;
 use email_api_client::domain::models::{
     AddressBookContact, AddressBookPage, ContactFolderCatalog, ContactPhoto,
@@ -141,33 +146,39 @@ impl<R: AddressBookRepository, G: AddressBookGateway, S: ContactPhotoStorage>
         let Some(work) = self
             .repository
             .claim(macro_uuid::generate_uuid_v7())
-            .await?
+            .await
+            .map_err(|error| super::telemetry::claim_failed("contacts", error))?
         else {
             return Ok(false);
         };
-        let result = maintain_lease(self.sync(&work), || self.repository.renew(&work)).await;
-        match result {
-            Err(MailboxError::Provider(EmailApiError::OutdatedCursor))
-                if work.kind == AddressBookWorkKind::Folder =>
-            {
-                self.repository.reset(&work).await?
+        let link_id = work.stream.mailbox.link_id;
+        async {
+            let result = maintain_lease(self.sync(&work), || self.repository.renew(&work)).await;
+            match result {
+                Err(MailboxError::Provider(EmailApiError::OutdatedCursor))
+                    if work.kind == AddressBookWorkKind::Folder =>
+                {
+                    self.repository.reset(&work).await?
+                }
+                Err(MailboxError::Provider(EmailApiError::NotFound))
+                    if work.kind == AddressBookWorkKind::Folder =>
+                {
+                    self.repository.retire_folder(&work).await?
+                }
+                Err(MailboxError::Provider(error)) => {
+                    // Consent/policy failures are confined to this capability.
+                    self.repository
+                        .release(&work, retry_seconds(&error).max(60))
+                        .await?;
+                    return Err(error.into());
+                }
+                Err(error) => return Err(error),
+                Ok(()) => {}
             }
-            Err(MailboxError::Provider(EmailApiError::NotFound))
-                if work.kind == AddressBookWorkKind::Folder =>
-            {
-                self.repository.retire_folder(&work).await?
-            }
-            Err(MailboxError::Provider(error)) => {
-                // Consent/policy failures are confined to this capability.
-                self.repository
-                    .release(&work, retry_seconds(&error).max(60))
-                    .await?;
-                return Err(error.into());
-            }
-            Err(error) => return Err(error),
-            Ok(()) => {}
+            Ok(true)
         }
-        Ok(true)
+        .await
+        .inspect_err(|error| super::telemetry::log_unit_error(link_id, error))
     }
     async fn sync(&self, work: &AddressBookWork) -> Result<(), MailboxError> {
         match work.kind {
@@ -202,41 +213,47 @@ impl<R: AddressBookRepository, G: AddressBookGateway, S: ContactPhotoStorage>
         let Some(lease) = self
             .repository
             .claim_photo(macro_uuid::generate_uuid_v7())
-            .await?
+            .await
+            .map_err(|error| super::telemetry::claim_failed("contact_photos", error))?
         else {
             return Ok(false);
         };
-        let operation = async {
-            let photo = self
-                .gateway
-                .photo(
-                    lease.mailbox,
-                    lease.folder.as_ref().map(|folder| (folder, &lease.contact)),
-                )
-                .await?;
-            let Some(photo) = photo else {
-                return self.repository.commit_photo(&lease, None, None).await;
+        let link_id = lease.mailbox.link_id;
+        async {
+            let operation = async {
+                let photo = self
+                    .gateway
+                    .photo(
+                        lease.mailbox,
+                        lease.folder.as_ref().map(|folder| (folder, &lease.contact)),
+                    )
+                    .await?;
+                let Some(photo) = photo else {
+                    return self.repository.commit_photo(&lease, None, None).await;
+                };
+                let hash = format!("{:x}", Sha256::digest(&photo.bytes));
+                let url = if lease.photo_hash.as_deref() == Some(&hash)
+                    && let Some(url) = &lease.photo_url
+                {
+                    url.clone()
+                } else {
+                    self.storage.store(lease.mailbox, &hash, photo).await?
+                };
+                self.repository
+                    .commit_photo(&lease, Some(&hash), Some(&url))
+                    .await
             };
-            let hash = format!("{:x}", Sha256::digest(&photo.bytes));
-            let url = if lease.photo_hash.as_deref() == Some(&hash)
-                && let Some(url) = &lease.photo_url
-            {
-                url.clone()
-            } else {
-                self.storage.store(lease.mailbox, &hash, photo).await?
-            };
-            self.repository
-                .commit_photo(&lease, Some(&hash), Some(&url))
-                .await
-        };
-        let result = maintain_lease(operation, || self.repository.renew_photo(&lease)).await;
-        if let Err(error) = &result {
-            let delay = match error {
-                MailboxError::Provider(error) => retry_seconds(error).max(60),
-                _ => 60,
-            };
-            self.repository.release_photo(&lease, delay).await?;
+            let result = maintain_lease(operation, || self.repository.renew_photo(&lease)).await;
+            if let Err(error) = &result {
+                let delay = match error {
+                    MailboxError::Provider(error) => retry_seconds(error).max(60),
+                    _ => 60,
+                };
+                self.repository.release_photo(&lease, delay).await?;
+            }
+            result.map(|()| true)
         }
-        result.map(|()| true)
+        .await
+        .inspect_err(|error| super::telemetry::log_unit_error(link_id, error))
     }
 }

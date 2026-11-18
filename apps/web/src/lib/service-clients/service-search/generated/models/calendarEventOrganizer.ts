@@ -8,8 +8,10 @@ import type { CalendarEventOrganizerEmail } from './calendarEventOrganizerEmail'
 import type { CalendarEventOrganizerName } from './calendarEventOrganizerName';
 
 /**
- * The event's organizer — its creator, in Google's model. Either field can be
-absent when the source does not name it.
+ * The organizer the provider names on the event. Either field can be absent
+when the source does not name it. On a read-only Outlook calendar, such as
+its holidays, Microsoft names the mailbox owner on every event, so this
+does not say the user organized anything: `role` does.
  */
 export interface CalendarEventOrganizer {
   /** Organizer email address, when known. */

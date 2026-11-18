@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
-import { staticFileReferenceEndpoint } from '@core/constant/servers';
+import {
+  EMAIL_SERVICE_EMBEDDED_HOSTS,
+  staticFileReferenceEndpoint,
+} from '@core/constant/servers';
 import { $generateNodesFromDOM } from '@lexical/html';
 import { DocumentMentionNode } from '@macro-inc/lexical-core';
 import { $getRoot, $nodesOfType, createEditor } from 'lexical';
@@ -49,6 +52,33 @@ function quotedImageSources(html: string) {
 }
 
 describe('prepareEmailBodyFromHtml', () => {
+  it.each([
+    { body: '<p><br></p><h1>Agenda</h1>', written: true },
+    { body: '<p><br></p><ul><li>First point</li></ul>', written: true },
+    { body: '<p><img src="https://example.com/chart.png"></p>', written: true },
+    { body: '<p><br></p>', written: false },
+    {
+      body: '<p><br></p><div class="macro_quote"><p>Shown quote</p></div>',
+      written: false,
+    },
+    {
+      body: '<p><br></p><span class="macro-watermark-node">-- Sent with Macro</span>',
+      written: false,
+    },
+    {
+      body: '<p><br></p><div><span class="macro-watermark-node">-- Sent with Macro</span></div>',
+      written: false,
+    },
+  ])('finds written content in $body', ({ body, written }) => {
+    expect(prepareEmailBodyFromHtml(body).hasWrittenContent).toBe(written);
+  });
+  it('does not count the quote it appends to a reply as written content', () => {
+    const prepared = prepareEmailBodyFromHtml('<p><br></p>', {
+      replyType: 'reply',
+      replyingTo,
+    });
+    expect(prepared.hasWrittenContent).toBe(false);
+  });
   it.each(['reply', 'forward'] as const)(
     'keeps quoted Macro document links re-importable as rich mentions in a %s',
     (replyType) => {
@@ -136,6 +166,36 @@ describe('prepareEmailBodyFromHtml', () => {
       'cid:missing',
     ]);
   });
+  it.each(['reply', 'forward'] as const)(
+    'drops Macro read-receipt pixels from a quoted %s',
+    (replyType) => {
+      const pixel = `${EMAIL_SERVICE_EMBEDDED_HOSTS[0]}/opens/token`;
+      const original = {
+        ...replyingTo,
+        body_html_sanitized: `<p>Original</p><img src="${pixel}" width="1" height="1"><img src="https://example.com/logo.png">`,
+      };
+      const prepared = prepareEmailBodyFromHtml('<p>My reply</p>', {
+        replyType,
+        replyingTo: original,
+      });
+      expect(quotedImageSources(decodeBase64Utf8(prepared.bodyHtml))).toEqual([
+        null,
+        'https://example.com/logo.png',
+      ]);
+      const editor = createEmailEditor('My reply');
+      registerToggleAppendedThread(editor);
+      editor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+        replyingTo: original,
+        replyType,
+        visible: true,
+      });
+      const fromEditor = prepareEmailBody(editor, {
+        replyType,
+        replyingTo: original,
+      });
+      expect(decodeBase64Utf8(fromEditor!.bodyHtml)).not.toContain('/opens/');
+    }
+  );
   it('does not add a quote block without appendReply (undo-send restore)', () => {
     const prepared = prepareEmailBodyFromHtml('<p>hi there</p>');
     const decoded = decodeBase64Utf8(prepared.bodyHtml);

@@ -8,6 +8,7 @@
 export class Lazy<T> {
   private value?: T;
   private inflight?: Promise<T>;
+  private generation = 0;
 
   constructor(
     private readonly loader: () => Promise<T>,
@@ -18,8 +19,9 @@ export class Lazy<T> {
 
   get(): Promise<T> {
     if (this.value !== undefined) return Promise.resolve(this.value);
+    const generation = this.generation;
     this.inflight ??= this.loader().then((v) => {
-      this.value = v;
+      if (generation === this.generation) this.value = v;
       return v;
     });
     return this.inflight;
@@ -30,8 +32,19 @@ export class Lazy<T> {
     return this.value;
   }
 
-  /** Drop the cached value so the next read refetches. */
+  /**
+   * Replace the cached value with one known to be current, such as a write's
+   * response, and fence older loads so they cannot overwrite it.
+   */
+  set(value: T): void {
+    this.generation++;
+    this.value = value;
+    this.inflight = undefined;
+  }
+
+  /** Drop cached detail and fence older loads so the next read refetches. */
   clear(): void {
+    this.generation++;
     this.value = undefined;
     this.inflight = undefined;
   }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import type { ReviewRecord } from '../generated/agent-harness/types.gen';
+import type { ReviewRecord_Serialize } from '../generated/agent-reviews';
 import { Macro } from '../src/macro';
 
 const originalFetch = globalThis.fetch;
@@ -7,10 +7,13 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 const executionId = '0198a4cc-e138-7670-a308-a6b766602788';
-const fixture: ReviewRecord = {
+const fixture: ReviewRecord_Serialize = {
   id: '0198a4cc-e138-7670-a308-a6b766602799',
   sessionId: '0198a4cc-e138-7670-a308-a6b766602700',
+  actingUser: 'macro|owner@example.test',
   executionId,
+  presentedAt: null,
+  decision: null,
   kind: 'email',
   title: 'Draft',
   revision: 0,
@@ -108,18 +111,24 @@ describe('persistent review handles', () => {
     expect(requests).toHaveLength(0);
     const [item] = await review.items();
     await item.edit({
-      subject: 'Updated subject',
-      body: 'Updated draft',
-      to: [{ email: 'recipient@example.test' }],
+      kind: 'email',
+      draft: {
+        subject: 'Updated subject',
+        body: 'Updated draft',
+        to: [{ email: 'recipient@example.test' }],
+      },
     });
     expect(requests[1].body).toEqual({
       action: 'edit',
       revision: 0,
       item: item.id,
       draft: {
-        subject: 'Updated subject',
-        body: 'Updated draft',
-        to: [{ email: 'recipient@example.test' }],
+        kind: 'email',
+        draft: {
+          subject: 'Updated subject',
+          body: 'Updated draft',
+          to: [{ email: 'recipient@example.test' }],
+        },
       },
     });
     expect(requests[1].request.url).toContain(

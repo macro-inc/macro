@@ -3,15 +3,19 @@ import {
   normalizeContentId,
   staticFileIdsByContentId,
 } from '@app/features/email-message/core/inline-images';
+import { readReceiptPixelPrefixes } from '@app/features/email-message/core/read-receipt';
 import { convertBookingLinkMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertBookingLinkMentionsToLinks';
 import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
-import { staticFileReferenceEndpoint } from '@core/constant/servers';
+import {
+  EMAIL_SERVICE_EMBEDDED_HOSTS,
+  staticFileReferenceEndpoint,
+} from '@core/constant/servers';
 import { encodeBase64UrlUtf8 } from '@core/util/base64';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode, $isQuoteNode } from '@lexical/rich-text';
 import { $dfsIterator } from '@lexical/utils';
-import { sanitizeEmailHtml } from '@macro-inc/email-renderer';
+import { type ImagePolicy, sanitizeEmailHtml } from '@macro-inc/email-renderer';
 import type { DocumentMentionInfo } from '@macro-inc/lexical-core';
 import {
   $createClassedBlockNode,
@@ -37,6 +41,13 @@ import { TOGGLE_APPEND_EMAIL_THREAD_COMMAND } from './email-editor-commands';
 import { flattenConsecutiveParagraphs } from './flatten-consecutive-paragraphs';
 
 export { TOGGLE_APPEND_EMAIL_THREAD_COMMAND } from './email-editor-commands';
+
+// Quotes always drop Macro pixels: the composer would count an open, and a
+// reply or forward must not carry the original's pixel to new recipients.
+const QUOTED_IMAGES: ImagePolicy = {
+  remote: 'allow',
+  hiddenUrlPrefixes: readReceiptPixelPrefixes(EMAIL_SERVICE_EMBEDDED_HOSTS),
+};
 
 export function clearEmailBody(editor: LexicalEditor | undefined) {
   if (!editor) return;
@@ -193,7 +204,7 @@ const $appendPreviousEmail = (
   } else {
     const parser = new DOMParser();
     const dom = parser.parseFromString(
-      sanitizeEmailHtml(replyingToBodyHTML),
+      sanitizeEmailHtml(replyingToBodyHTML, QUOTED_IMAGES),
       'text/html'
     );
     linkInlineImages(dom, replyingTo);
@@ -400,7 +411,7 @@ function getAppendedReplyElement(
     quote.textContent = replyingTo.body_text ?? '';
   } else {
     const innerDom = new DOMParser().parseFromString(
-      sanitizeEmailHtml(replyingToBodyHTML),
+      sanitizeEmailHtml(replyingToBodyHTML, QUOTED_IMAGES),
       'text/html'
     );
     linkInlineImages(innerDom, replyingTo);
@@ -446,6 +457,7 @@ export function prepareEmailBody(
 ): {
   bodyHtml: string;
   bodyText: string;
+  hasWrittenContent: boolean;
   mentions: DocumentMentionInfo[];
 } | null {
   if (!editor) return null;
@@ -467,6 +479,7 @@ export function prepareEmailBodyFromHtml(
 ): {
   bodyHtml: string;
   bodyText: string;
+  hasWrittenContent: boolean;
   mentions: DocumentMentionInfo[];
 } {
   const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
@@ -501,8 +514,40 @@ export function prepareEmailBodyFromHtml(
   const html = encodeBase64UrlUtf8(parsed.body.outerHTML);
   const bodyHtml = html;
   const bodyText = parsed.body.firstChild?.textContent ?? '';
+  const hasWrittenContent = bodyHasWrittenContent(parsed.body);
 
-  return { bodyHtml, bodyText, mentions };
+  return { bodyHtml, bodyText, hasWrittenContent, mentions };
+}
+
+/** Media that is content on its own, with no text around it. */
+const STANDALONE_MEDIA_SELECTOR = 'img, video, audio, iframe, svg';
+
+/**
+ * Whether any block outside the quoted thread holds text or media. Every
+ * block counts, not just the first: a reply can open with an image, an empty
+ * line before a list, or a heading. The free plan's watermark, which Send
+ * Later saves with the draft and a reopened draft wraps in a block, is not
+ * the user's writing either.
+ */
+function bodyHasWrittenContent(body: HTMLElement): boolean {
+  return Array.from(body.childNodes).some((block) => {
+    if (block instanceof Element) {
+      if (block.classList.contains('macro_quote')) return false;
+
+      const isMedia =
+        block.matches(STANDALONE_MEDIA_SELECTOR) ||
+        block.querySelector(STANDALONE_MEDIA_SELECTOR) !== null;
+      if (isMedia) return true;
+    }
+
+    return textWithoutWatermark(block).trim() !== '';
+  });
+}
+
+function textWithoutWatermark(node: Node): string {
+  if (!(node instanceof Element)) return node.textContent ?? '';
+  if (node.classList.contains('macro-watermark-node')) return '';
+  return Array.from(node.childNodes).map(textWithoutWatermark).join('');
 }
 
 /**
@@ -512,12 +557,11 @@ export function prepareEmailBodyFromHtml(
  * alive — reply recipients are auto-derived, so the reply path omits it.
  */
 export function hasDraftContent(
-  bodyText: string,
+  hasBody: boolean,
   subject: string | undefined,
   attachmentCount: number,
   recipientCount?: number
 ): boolean {
-  const hasBody = bodyText.trim() !== '';
   const hasAttachments = attachmentCount > 0;
   const hasRecipients = (recipientCount ?? 0) > 0;
   const trimmedSubject = subject?.trim() ?? '';

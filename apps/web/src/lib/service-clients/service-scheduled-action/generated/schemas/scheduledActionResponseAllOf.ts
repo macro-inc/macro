@@ -5,10 +5,12 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { ScheduledActionResponseAllOfLastRun } from './scheduledActionResponseAllOfLastRun';
 import type { ScheduledActionResponseAllOfSchedule } from './scheduledActionResponseAllOfSchedule';
 import type { ScheduledActionResponseAllOfTimezone } from './scheduledActionResponseAllOfTimezone';
 
 export type ScheduledActionResponseAllOf = {
+  last_run?: ScheduledActionResponseAllOfLastRun;
   /**
    * Deprecated: use `trigger.schedule`. Present only for cron actions.
    * @deprecated

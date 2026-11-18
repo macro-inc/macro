@@ -19,11 +19,19 @@ pub struct MessageNotificationSender<N>(pub std::sync::Arc<N>);
 impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N> {
     async fn send(&self, n: DiscussionNotification<'_>) -> Result<(), rootcause::Report> {
         let sender_id = n.message.sender_id.as_user().cloned();
+        // A bot post a user made through a client, such as an MCP client, is
+        // named after that client.
         let sender_display_name = n
             .message
-            .bot_profile
-            .as_ref()
-            .map(|profile| profile.name.clone())
+            .sender_id
+            .as_bot()
+            .and(n.message.triggered_via.clone())
+            .or_else(|| {
+                n.message
+                    .bot_profile
+                    .as_ref()
+                    .map(|profile| profile.name.clone())
+            })
             .or_else(|| n.message.sender_id.as_bot().map(|_| "Agent".to_owned()));
         let recipient_ids =
             std::collections::HashSet::from([MacroUserIdStr::try_from(n.recipient)?]);

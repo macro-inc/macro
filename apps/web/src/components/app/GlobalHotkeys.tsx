@@ -11,14 +11,14 @@ import {
 } from '@app/features/command/Launcher';
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { inEnglish, t } from '@app/lib/i18n';
+import { beginInteraction } from '@app/observability/flow';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { useLogout } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';
-import { enableSnippets, LOCAL_ONLY } from '@core/constant/featureFlags';
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -207,6 +207,14 @@ async function toggleKeyboardShortcuts(sheet: ShortcutSheet) {
 
 export default function GlobalShortcuts() {
   const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
+  /** Room to split the active split toward `side`; with none active, room at the end. */
+  const canSplitActive = (side: 'right' | 'below') => {
+    const manager = globalSplitManager();
+    const active = manager?.activeSplitId();
+    if (!manager || !active) return canFit();
+
+    return manager.canSplit(active, side);
+  };
 
   const analytics = useAnalytics();
   const undoCtx = useMutationUndoContext();
@@ -218,16 +226,22 @@ export default function GlobalShortcuts() {
   const logout = useLogout();
 
   const handleFileUpload = useHandleFileUpload();
-  const snippetsFlag = useFeatureFlag(enableSnippets);
 
-  const handleCommandMenu = () => {
+  const handleCommandMenu = (event?: KeyboardEvent) => {
     const willOpen = !CommandState.isOpen();
 
     if (willOpen) {
       analytics.track('command_menu_open', { from: 'global_hotkey' });
     }
 
-    CommandState.toggle();
+    const interaction = willOpen
+      ? beginInteraction('quick_access.open', { event })
+      : undefined;
+    try {
+      CommandState.toggle();
+    } finally {
+      interaction?.end();
+    }
   };
 
   registerHotkey({
@@ -260,9 +274,7 @@ export default function GlobalShortcuts() {
       scopeId: CREATE_MENU_COMMAND_SCOPE,
       description: item.description,
       condition: () =>
-        (item.condition?.() ?? true) &&
-        (item.enabled?.() ?? true) &&
-        (item.blockName !== 'snippet' || snippetsFlag().enabled),
+        (item.condition?.() ?? true) && (item.enabled?.() ?? true),
       // Entries that deliberately share a key (the flagged agent pair) opt
       // into 'add' so both survive registration and the dispatcher picks the
       // one whose condition passes, rather than the later silently winning.
@@ -271,9 +283,7 @@ export default function GlobalShortcuts() {
       icon: Plus,
       tags: item.tags,
       keywords: item.keywords,
-      hide: () =>
-        !(item.enabled?.() ?? true) ||
-        (item.blockName === 'snippet' && !snippetsFlag().enabled),
+      hide: () => !(item.enabled?.() ?? true),
       runWithInputFocused: item.runWithInputFocused ?? true,
     });
   });
@@ -315,9 +325,9 @@ export default function GlobalShortcuts() {
       CommandState.isOpen()
         ? t('commands.closeCommandMenu')
         : t('commands.openCommandMenu'),
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
       console.log('## CMD K - global');
-      handleCommandMenu();
+      handleCommandMenu(event);
       return true;
     },
     displayPriority: 10,
@@ -356,24 +366,29 @@ export default function GlobalShortcuts() {
 
   const { openWithSplit } = useSplitLayout();
 
-  const createNewSplit = () => {
-    analytics.track('split_created', { from: 'global_hotkey' });
+  /** Opens Home splitting the active split toward `side`. */
+  const splitActive = (side: 'right' | 'below') => {
+    const active = globalSplitManager()?.activeSplitId();
+    analytics.track('split_created', { from: 'global_hotkey', side });
     openWithSplit(
       { type: 'component', id: 'home' },
       {
         referredFrom: 'hotkey',
         allowDuplicate: true,
         preferNewSplit: true,
+        beside: active && { split: active, side },
       }
     );
     return true;
   };
+  const createNewSplit = () => splitActive('right');
+  const createNewSplitBelow = () => splitActive('below');
 
   registerHotkey({
     hotkey: 'cmd+\\',
     scopeId: 'global',
     description: () => t('commands.createNewSplit'),
-    condition: canFit,
+    condition: () => canSplitActive('right'),
     keyDownHandler: createNewSplit,
     runWithInputFocused: true,
   });
@@ -383,8 +398,26 @@ export default function GlobalShortcuts() {
     hotkey: '\\',
     scopeId: 'global',
     description: () => t('commands.createNewSplit'),
-    condition: canFit,
+    condition: () => canSplitActive('right'),
     keyDownHandler: createNewSplit,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+\\',
+    scopeId: 'global',
+    description: () => t('commands.createNewSplitBelow'),
+    condition: () => canSplitActive('below'),
+    keyDownHandler: createNewSplitBelow,
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.createNewSplitBelow,
+    hotkey: 'shift+\\',
+    scopeId: 'global',
+    description: () => t('commands.createNewSplitBelow'),
+    condition: () => canSplitActive('below'),
+    keyDownHandler: createNewSplitBelow,
   });
 
   // Open settings to a specific tab, switching the page in place if settings

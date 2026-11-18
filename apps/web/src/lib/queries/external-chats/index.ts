@@ -8,6 +8,7 @@ import type {
 } from '@app/features/external-chat/core/chat';
 import {
   infiniteQueryOptions,
+  type QueryKey,
   queryOptions,
   useInfiniteQuery,
   useQuery,
@@ -36,6 +37,11 @@ export type ExternalChatApi = {
   ) => Promise<Result<{ uploadId: string; audio: boolean }, SendFailure>>;
   markRead: (chatId: string, messageId: string) => Promise<unknown>;
   stopSync: (chatId: string) => Promise<unknown>;
+  /**
+   * Asks the owner's phone for the earlier messages of their chats waiting
+   * for it (WhatsApp imports per account, not per chat).
+   */
+  importHistory: () => Promise<unknown>;
 };
 
 // DSS pushes `external_chat_changed` through the connection gateway (`./sync`);
@@ -140,12 +146,55 @@ export function invalidateExternalChat(chatId: string) {
     predicate: (query) => query.queryKey.at(-1) === chatId,
   });
 }
+/**
+ * How long a refresh waits for an older page. The request has no timeout of its
+ * own, so a hung one would otherwise block every refresh of this chat.
+ */
+const OLDER_PAGE_WAIT_MS = 10_000;
+
+/**
+ * Waits while an older page loads. Looks again after each wait, because loading
+ * history can replace the fetch that was being waited on (a quote click does).
+ * The limit covers the whole wait, so replacements can't extend it.
+ */
+async function waitForOlderPage(queryKey: QueryKey) {
+  const deadline = Date.now() + OLDER_PAGE_WAIT_MS;
+  for (;;) {
+    const query = queryClient.getQueryCache().find({ queryKey });
+    const loadingOlder =
+      query?.state.fetchStatus === 'fetching' &&
+      query.state.fetchMeta?.fetchMore;
+    const remaining = deadline - Date.now();
+    if (!loadingOlder || remaining <= 0) return;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      Promise.allSettled([query.promise]),
+      new Promise((done) => {
+        timer = setTimeout(done, remaining);
+      }),
+    ]);
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Refetches one chat's timeline. A refetch cancels whatever fetch is in flight,
+ * and when that is the older page a viewer asked for, the page is lost and the
+ * button just reappears, so wait for it first, up to a limit.
+ */
+export async function invalidateExternalChatMessages(
+  userId: string,
+  chatId: string
+) {
+  const queryKey = externalChatsKeys.messages(userId, chatId).queryKey;
+  await waitForOlderPage(queryKey);
+  return queryClient.invalidateQueries({ queryKey });
+}
 /** A send was recorded: its row and the chat's place in lists follow. */
 export function refreshExternalChatTimeline(userId: string, chatId: string) {
   return Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: externalChatsKeys.messages(userId, chatId).queryKey,
-    }),
+    invalidateExternalChatMessages(userId, chatId),
     queryClient.invalidateQueries({
       queryKey: externalChatsKeys.delivery(userId, chatId).queryKey,
     }),

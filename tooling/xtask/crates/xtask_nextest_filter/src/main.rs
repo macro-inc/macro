@@ -40,6 +40,7 @@ use tempfile::TempDir;
 #[cfg(test)]
 use xtask_graph::build_graph;
 use xtask_graph::build_graph_at;
+use xtask_graph::build_graph_with_saved_metadata;
 
 #[cfg(test)]
 mod test;
@@ -97,13 +98,25 @@ fn main() -> Result<()> {
             let base_revision = base_revision
                 .to_str()
                 .context("base revision is not valid UTF-8")?;
-            run(Path::new(changed_files_path), base_revision)
+            run(Path::new(changed_files_path), base_revision, None)
         }
-        _ => bail!("usage: cargo x nextest-filter <changed-files-path> <base-revision>"),
+        [changed_files_path, base_revision, metadata_file] => {
+            let base_revision = base_revision
+                .to_str()
+                .context("base revision is not valid UTF-8")?;
+            run(
+                Path::new(changed_files_path),
+                base_revision,
+                Some(Path::new(metadata_file)),
+            )
+        }
+        _ => bail!(
+            "usage: cargo x nextest-filter <changed-files-path> <base-revision> [metadata-file]"
+        ),
     }
 }
 
-fn run(changed_files_path: &Path, base_revision: &str) -> Result<()> {
+fn run(changed_files_path: &Path, base_revision: &str, metadata_file: Option<&Path>) -> Result<()> {
     let changed_files = std::fs::read_to_string(changed_files_path).with_context(|| {
         format!(
             "reading changed files from {}",
@@ -118,7 +131,10 @@ fn run(changed_files_path: &Path, base_revision: &str) -> Result<()> {
 
     let workspace_dir = xtask_paths::workspace_root();
     if !changed_files.iter().any(|path| changes_cargo_graph(path)) {
-        let graph = build_graph_at(&workspace_dir, true)?;
+        let graph = match metadata_file {
+            Some(file) => build_graph_with_saved_metadata(&workspace_dir, file)?,
+            None => build_graph_at(&workspace_dir, true)?,
+        };
         println!(
             "{}",
             select_by_paths(&graph, &changed_files, &repository_rules()?)?

@@ -6,12 +6,7 @@ import {
   sameMatrix,
 } from '../core/affine';
 import { resolveAppearance } from '../core/appearance';
-import type {
-  GraphicsDocument,
-  GraphicsItem,
-  ShapeGeometryMap,
-  ShapeKind,
-} from '../core/model';
+import type { GraphicsDocument, GraphicsItem, ShapeKind } from '../core/model';
 import { sortKeysBetween } from '../core/ordering';
 import {
   children,
@@ -20,7 +15,7 @@ import {
   worldMatrix,
 } from '../core/scene';
 import { canLabel } from '../core/shapes/label';
-import { isShape, shapePayload } from '../core/shapes/registry';
+import { isShape, isShapeKind, shapePayload } from '../core/shapes/registry';
 import type { CanvasForest, NodeData } from './schema';
 
 export function readScene(forest: CanvasForest, rootId: string) {
@@ -37,6 +32,10 @@ export function readScene(forest: CanvasForest, rootId: string) {
         pose = node.data.pose;
       if (!id || !kind || !pose || Object.hasOwn(items, id))
         throw new Error('Invalid shared scene node');
+
+      // A newer client's kind: leave it, and its subtree, out of this projection.
+      if (kind !== 'group' && !isShapeKind(kind)) return;
+
       const matchingFrame = pose.parentId === parentId;
       const transform = matchingFrame
         ? pose.transform
@@ -57,12 +56,7 @@ export function readScene(forest: CanvasForest, rootId: string) {
           ...spatial,
           ...shapePayload(
             kind,
-            restoreText(
-              kind,
-              pose.geometry,
-              node.data.textContent ?? null,
-              node.data.labelStyle ?? null
-            )
+            restoreRegisters(kind, pose.geometry, node.data)
           ),
           appearance: {
             fill,
@@ -89,24 +83,39 @@ function textContent(node: GraphicsItem | undefined): string | null {
 function poseGeometry(node: GraphicsItem | undefined) {
   if (!isShape(node)) return null;
   if (node.type === 'text') return { ...node.geometry, content: '' };
+  if (node.type === 'artifact') {
+    const { html: _html, presentOrder: _order, ...pose } = node.geometry;
+    return pose;
+  }
   if (canLabel(node)) {
     const { label: _label, ...box } = node.geometry;
     return box;
   }
   return node.geometry;
 }
-function restoreText(
-  kind: ShapeKind,
-  geometry: ShapeGeometryMap[ShapeKind],
-  content: string | null,
-  labelStyle: NodeData['labelStyle']
-) {
+function restoreRegisters(kind: ShapeKind, geometry: object, data: NodeData) {
+  const content = data.textContent ?? null;
+  const labelStyle = data.labelStyle ?? null;
   if (kind === 'text') return { ...geometry, content };
+  if (kind === 'artifact')
+    return {
+      ...geometry,
+      html: data.html ?? '',
+      presentOrder: data.presentOrder ?? '',
+    };
   if (kind === 'rectangle' || kind === 'ellipse' || kind === 'connector')
     return content !== null && labelStyle
       ? { ...geometry, label: { ...labelStyle, content } }
       : geometry;
   return geometry;
+}
+
+function artifactRegisters(node: GraphicsItem) {
+  if (node.type !== 'artifact') return { html: null, presentOrder: null };
+  return {
+    html: node.geometry.html,
+    presentOrder: node.geometry.presentOrder,
+  };
 }
 
 function labelStyle(node: GraphicsItem | undefined): NodeData['labelStyle'] {
@@ -124,9 +133,13 @@ export function writeScene(
   if (before.rootId !== next.rootId || next.surface)
     throw new Error('Shared graphics backend supports one unbounded surface');
   const data = new Map<string, NodeData>();
+  const previousChildren = new Map<string, CanvasForest>([
+    [before.rootId, forest],
+  ]);
   function collect(nodes: CanvasForest) {
     for (const node of nodes) {
       data.set(node.data.id, node.data);
+      previousChildren.set(node.data.id, node.children);
       collect(node.children);
     }
   }
@@ -136,6 +149,12 @@ export function writeScene(
       throw new Error('Shared node kinds are immutable');
   }
   function project(parent: string): CanvasForest {
+    return keepNewerKinds(
+      previousChildren.get(parent) ?? [],
+      projectKnown(parent)
+    );
+  }
+  function projectKnown(parent: string): CanvasForest {
     return children(next, parent).map((id) => {
       const node = next.items[id]!,
         old = before.items[id],
@@ -174,6 +193,7 @@ export function writeScene(
             textContent: textContent(node),
             labelStyle: labelStyle(node),
             ...appearance,
+            ...artifactRegisters(node),
           };
       if (poseChanged)
         nextData.pose = {
@@ -184,26 +204,56 @@ export function writeScene(
         };
       nextData.textContent = textContent(node);
       nextData.labelStyle = labelStyle(node);
-      if (isShape(node)) {
-        const oldAppearance = isShape(old)
-          ? resolveAppearance(old.appearance)
-          : undefined;
-        if (!oldAppearance || oldAppearance.fill !== appearance.fill)
-          nextData.fill = appearance.fill;
-        if (!oldAppearance || oldAppearance.stroke !== appearance.stroke)
-          nextData.stroke = appearance.stroke;
-        if (
-          !oldAppearance ||
-          oldAppearance.strokeStyle !== appearance.strokeStyle
-        )
-          nextData.strokeStyle = appearance.strokeStyle;
-        for (const key of ['strokeWidth', 'opacity', 'cornerRadius'] as const) {
-          if (!oldAppearance || oldAppearance[key] !== appearance[key])
-            nextData[key] = appearance[key];
-        }
-      }
+      if (node.type === 'artifact')
+        Object.assign(nextData, artifactRegisters(node));
+      if (isShape(node)) writeChangedAppearance(nextData, old, appearance);
       return { data: nextData, children: project(id) };
     });
   }
   return project(next.rootId);
+}
+
+/** Write only changed style registers, so concurrent restyles merge per field. */
+function writeChangedAppearance(
+  nextData: NodeData,
+  old: GraphicsItem | undefined,
+  appearance: ReturnType<typeof resolveAppearance>
+) {
+  const oldAppearance = isShape(old)
+    ? resolveAppearance(old.appearance)
+    : undefined;
+  if (!oldAppearance || oldAppearance.fill !== appearance.fill)
+    nextData.fill = appearance.fill;
+  if (!oldAppearance || oldAppearance.stroke !== appearance.stroke)
+    nextData.stroke = appearance.stroke;
+  if (!oldAppearance || oldAppearance.strokeStyle !== appearance.strokeStyle)
+    nextData.strokeStyle = appearance.strokeStyle;
+  for (const key of ['strokeWidth', 'opacity', 'cornerRadius'] as const) {
+    if (!oldAppearance || oldAppearance[key] !== appearance[key])
+      nextData[key] = appearance[key];
+  }
+}
+
+const isNewerKind = (node: CanvasForest[number]) =>
+  node.data.kind !== 'group' && !isShapeKind(node.data.kind);
+
+/** Nodes of kinds this client cannot read keep their registers, subtree and
+ * place after the sibling that preceded them; writing the projection alone
+ * would delete them. */
+function keepNewerKinds(previous: CanvasForest, known: CanvasForest) {
+  if (!previous.some(isNewerKind)) return known;
+
+  const result = [...known];
+  let insertAt = 0;
+  for (const node of previous) {
+    if (isNewerKind(node)) {
+      result.splice(insertAt, 0, node);
+      insertAt += 1;
+      continue;
+    }
+
+    const index = result.findIndex((item) => item.data.id === node.data.id);
+    if (index !== -1) insertAt = index + 1;
+  }
+  return result;
 }

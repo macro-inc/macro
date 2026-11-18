@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import type { MentionsOptions } from '@core/component/LexicalMarkdown/builder/types';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
 import {
@@ -16,12 +17,13 @@ import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const editorMocks = vi.hoisted(() => ({
-  agentsEnabled: false,
   codexEnabled: false,
   cursorEnabled: false,
   clear: vi.fn(),
   focus: vi.fn(),
+  blur: vi.fn(),
   mentionUsers: undefined as (() => IUser[]) | undefined,
+  mentionScope: vi.fn<() => IUser[] | undefined>(),
   emitChange: undefined as ((markdown: string) => void) | undefined,
   onEnter: undefined as (() => boolean) | undefined,
   inlineMenuOpen: false,
@@ -44,17 +46,6 @@ vi.mock('@core/hotkey/hotkeys', async (importOriginal) => {
       }
       return actual.registerHotkey(options);
     },
-  };
-});
-
-// These slots render the microphone, so they run with dictation rolled out.
-// Other flags keep their real values.
-vi.mock('@core/constant/featureFlags', async (original) => {
-  const actual = await original<typeof import('@core/constant/featureFlags')>();
-  return {
-    ...actual,
-    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      flag === actual.enableDictation || actual.isFeatureEnabled(flag),
   };
 });
 
@@ -130,9 +121,6 @@ vi.mock('@core/codex/flag', () => ({
 }));
 vi.mock('@core/cursor/flag', () => ({
   useCursorAgentsAccess: () => () => editorMocks.cursorEnabled,
-}));
-vi.mock('../../use-chat-v3-agents-flag', () => ({
-  useChatV3AgentsFlag: () => () => editorMocks.agentsEnabled,
 }));
 
 // Several service clients in StaticMarkdown's import graph build websocket
@@ -263,6 +251,7 @@ vi.mock(
       };
       const lexical = {
         focus: vi.fn(),
+        blur: editorMocks.blur,
         dispatchCommand: vi.fn(),
         getElementByKey: vi.fn(),
         getRootElement: vi.fn(),
@@ -277,8 +266,13 @@ vi.mock(
       };
       const builder: any = {
         namespace: () => builder,
-        withMentions: (options: { users?: () => IUser[] }) => {
-          editorMocks.mentionUsers = options.users;
+        withMentions: (options: MentionsOptions) => {
+          editorMocks.mentionScope.mockImplementation(() => options.users?.());
+          editorMocks.mentionUsers = () => {
+            // Stand in for one loaded window, not a whole directory.
+            const users = options.users?.() ?? [CONTACT];
+            return options.transformUsers?.(users) ?? users;
+          };
           return builder;
         },
         withEmojis: () => builder,
@@ -338,9 +332,6 @@ vi.mock('../FormatButtons', () => ({
   FormatButtons: () => <div data-testid="format-buttons" />,
 }));
 
-const peopleMocks = vi.hoisted(() => ({
-  contactsEnabled: undefined as boolean | undefined,
-}));
 const CONTACT = {
   id: 'macro|ann@macro.test',
   name: 'Ann',
@@ -348,12 +339,6 @@ const CONTACT = {
 };
 const CHANNEL_MEMBER = { user_id: 'macro|bo@macro.test' };
 
-vi.mock('@queries/contacts/contacts', () => ({
-  useContacts: (enabled?: () => boolean) => {
-    peopleMocks.contactsEnabled = enabled?.() ?? true;
-    return () => [CONTACT];
-  },
-}));
 vi.mock('@queries/channel/channel-participants', () => ({
   useChannelParticipantsQuery: (channelId: () => string) => ({
     isLoading: false,
@@ -374,7 +359,6 @@ vi.mock('@queries/messages/typing', () => ({
   usePostTypingUpdateMutation: () => ({ mutate: vi.fn() }),
 }));
 
-import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import { codexMentionUser, cursorMentionUser } from '../../macroAi';
 import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
@@ -407,16 +391,17 @@ function render(ui: () => JSX.Element) {
 
 describe('Input slots', () => {
   beforeEach(() => {
-    editorMocks.agentsEnabled = false;
     editorMocks.codexEnabled = false;
     editorMocks.cursorEnabled = false;
     editorMocks.clear.mockClear();
     editorMocks.focus.mockClear();
+    editorMocks.blur.mockClear();
     editorMocks.emitChange = undefined;
     editorMocks.onEnter = undefined;
     editorMocks.inlineMenuOpen = false;
     editorMocks.onEscape = undefined;
     editorMocks.mentionUsers = undefined;
+    editorMocks.mentionScope.mockReset();
     device.touch = false;
     editorMocks.ignoredActions = [];
     vi.mocked(isMobile).mockReturnValue(false);
@@ -466,10 +451,13 @@ describe('Input slots', () => {
     editorMocks.inlineMenuOpen = true;
     expect(editorMocks.onEscape?.()).toBe(true);
     expect(closeHost).not.toHaveBeenCalled();
+    expect(editorMocks.blur).not.toHaveBeenCalled();
 
     editorMocks.inlineMenuOpen = false;
     expect(editorMocks.onEscape?.()).toBe(true);
     expect(closeHost).toHaveBeenCalledOnce();
+    // The editor lets go of its selection, so it cannot pull focus back.
+    expect(editorMocks.blur).toHaveBeenCalledOnce();
   });
 
   it('lets Escape continue when there is no menu, dictation, or host handler', () => {
@@ -496,6 +484,34 @@ describe('Input slots', () => {
     ).toBeNull();
   });
 
+  it('previews a collapsed draft’s attachments before its text and opens the composer from them', async () => {
+    const user = userEvent.setup();
+    device.touch = true;
+    vi.mocked(isMobile).mockReturnValue(true);
+    const { container } = render(() => (
+      <ChannelInput
+        input={{ ...baseInput, value: 'see attached' }}
+        attachmentTracker={createInputAttachmentTracker({
+          initialAttachments: [
+            { id: 'image-1', name: 'photo.png', kind: 'image' },
+            { id: 'doc-1', name: 'notes.pdf', kind: 'document' },
+            { id: 'image-2', name: 'photo-2.png', kind: 'image' },
+          ],
+        })}
+        collapsible
+      />
+    ));
+
+    const preview = screen.getByRole('img', { name: '3 attachments' });
+    expect(preview.textContent).toBe('3');
+    const collapsedInput = preview.closest('button');
+    expect(collapsedInput?.textContent).toContain('see attached');
+    expect(screen.queryByRole('button', { name: '3 attachments' })).toBeNull();
+
+    await user.click(collapsedInput as HTMLElement);
+    expect(container.querySelector('[data-composer-collapsed]')).toBeNull();
+  });
+
   it('offers Cursor and Codex within their rollouts before account setup', () => {
     editorMocks.cursorEnabled = true;
     editorMocks.codexEnabled = true;
@@ -505,43 +521,27 @@ describe('Input slots', () => {
     );
   });
 
-  it.each([false, true])(
-    'offers one Macro entry in call chat with agents rollout %s',
-    (enabled) => {
-      editorMocks.agentsEnabled = enabled;
-      render(() => (
-        <ChannelInput
-          input={baseInput}
-          parent={{ type: 'call', id: 'call-1' }}
-          bots={() => [
-            { id: 'bot|owned', name: 'Owned agent', email: 'Owned agent' },
-            { id: 'bot|team', name: 'Team agent', email: 'Team agent' },
-          ]}
-        />
-      ));
-      const users = editorMocks.mentionUsers?.() ?? [];
-      expect(
-        users.filter((user) => user.name === 'Macro').map((user) => user.id)
-      ).toEqual([enabled ? MACRO_NEW_PRINCIPAL_ID : MACRO_AGENT_PRINCIPAL_ID]);
-      expect(users.map((user) => user.id)).toEqual(
-        expect.arrayContaining(['bot|owned', 'bot|team'])
-      );
-    }
-  );
-
-  it('offers a single Macro mention, aimed by the agents rollout', () => {
-    render(() => <ChannelInput input={baseInput} />);
+  it('offers one Macro entry in call chat', () => {
+    render(() => (
+      <ChannelInput
+        input={baseInput}
+        parent={{ type: 'call', id: 'call-1' }}
+        bots={() => [
+          { id: 'bot|owned', name: 'Owned agent', email: 'Owned agent' },
+          { id: 'bot|team', name: 'Team agent', email: 'Team agent' },
+        ]}
+      />
+    ));
+    const users = editorMocks.mentionUsers?.() ?? [];
     expect(
-      editorMocks.mentionUsers?.().filter((user) => user.name === 'Macro')
-    ).toEqual([
-      {
-        id: MACRO_AGENT_PRINCIPAL_ID,
-        name: 'Macro',
-        email: 'Macro',
-      },
-    ]);
+      users.filter((user) => user.name === 'Macro').map((user) => user.id)
+    ).toEqual([MACRO_NEW_PRINCIPAL_ID]);
+    expect(users.map((user) => user.id)).toEqual(
+      expect.arrayContaining(['bot|owned', 'bot|team'])
+    );
+  });
 
-    editorMocks.agentsEnabled = true;
+  it('offers a single Macro mention aimed at the agent bot', () => {
     render(() => <ChannelInput input={baseInput} />);
     expect(
       editorMocks.mentionUsers?.().filter((user) => user.name === 'Macro')
@@ -621,6 +621,24 @@ describe('Input slots', () => {
     editorMocks.emitChange?.('user typed');
     expect(onStartTyping).toHaveBeenCalledTimes(1);
   });
+
+  it.each([false, true])(
+    'rechecks deferred focus before editor connection (current: %s)',
+    async (current) => {
+      let focusCurrent = true;
+      render(() => (
+        <ChannelInput
+          input={baseInput}
+          onReady={(handle) => {
+            handle.focus({ when: () => focusCurrent });
+            focusCurrent = current;
+          }}
+        />
+      ));
+      await Promise.resolve();
+      expect(editorMocks.focus).toHaveBeenCalledTimes(current ? 1 : 0);
+    }
+  );
 
   it('does not refocus the editor when a portaled editor control is clicked', async () => {
     const user = userEvent.setup();
@@ -860,13 +878,13 @@ describe('mention people', () => {
 
   beforeEach(() => {
     editorMocks.mentionUsers = undefined;
-    peopleMocks.contactsEnabled = undefined;
+    editorMocks.mentionScope.mockReset();
   });
 
-  it('offers a document composer the workspace contacts', () => {
+  it('delegates a document composer to the bounded workspace window', () => {
     render(() => <ChannelInput input={baseInput} parent={documentParent} />);
-
     expect(mentionIds()).toContain(CONTACT.id);
+    expect(editorMocks.mentionScope()).toBeUndefined();
   });
 
   it('offers a channel composer its participants, not the workspace contacts', () => {
@@ -874,8 +892,9 @@ describe('mention people', () => {
 
     expect(mentionIds()).toContain(CHANNEL_MEMBER.user_id);
     expect(mentionIds()).not.toContain(CONTACT.id);
-    // A channel never shows them, so it should not fetch them either.
-    expect(peopleMocks.contactsEnabled).toBe(false);
+    expect(editorMocks.mentionScope()?.map((user) => user.id)).toContain(
+      CHANNEL_MEMBER.user_id
+    );
   });
 
   it('keeps an explicitly supplied participants list', () => {

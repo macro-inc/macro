@@ -18,7 +18,8 @@ validate the rules rather than teaching the classifier each expected answer.
 | `search_<type>_<field>_prompt.txt` | Type-specific search filter guidance; field names and schemas derive from the selected Rust response model. |
 | `temporal_prompt.txt` | Temporal facts, source-span rules, and structured examples. |
 | `temporal_task_prompt.txt` | Task-specific deadline instructions appended to the temporal prompt. |
-| `temporal_output_prompt.txt` | Output instruction preceding the generated temporal schema. |
+| `temporal_thread_prompt.txt` | Deadline and closure facts read from an email thread for Focus; never used by Command K. |
+| `temporal_output_prompt.txt` | Output instruction preceding the generated temporal and thread fact schemas. |
 
 Rust assembles these instructions with generated schemas and task-property data.
 Prompt files are embedded at compile time; rebuild the harness after editing

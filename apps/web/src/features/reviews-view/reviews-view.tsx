@@ -4,8 +4,10 @@ import {
   useViewShell,
   ViewBreadcrumbs,
   ViewShell,
+  ViewSidebar,
   ViewSwitchTrigger,
 } from '@app/components/view-shell';
+import { CollectionPanes } from '@app/components/view-shell/CollectionPanes';
 import {
   ListHeader,
   ListHeaderSearch,
@@ -17,6 +19,7 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { reviewsPrRoute, reviewsSplitRoute } from '@app/routes/routes';
 import { PR_ORIGIN_TOOLS } from '@block-pr/data/pr-origin';
 import {
@@ -177,6 +180,7 @@ function ReviewsRoot() {
     }),
     listEnabled
   );
+  usePending('reviews.items', source.isLoading);
   const facets = useReviewsFacetsQuery();
   const changeFilter = (
     group: ReviewsFilterId,
@@ -372,7 +376,7 @@ function ReviewsRoot() {
               label="Search reviews"
               value={search()}
               onValueChange={setSearch}
-              onEscape={() => panel.panelRef()?.focus()}
+              focusResults={() => panel.panelRef()?.focus()}
               registerFocus={(focus) => (focusSearch = focus)}
             />
           </ListHeader>
@@ -384,7 +388,12 @@ function ReviewsRoot() {
             <div class="h-10 min-w-0 flex-1">
               <PillTabs
                 scrollable
-                leading={<ReviewsFilterDrawer {...controls()} />}
+                leading={
+                  <>
+                    <ViewSidebar.Toggle action="expand" presentation="pill" />
+                    <ReviewsFilterDrawer {...controls()} />
+                  </>
+                }
                 items={REVIEW_SCOPE_TABS}
                 value={scope()}
                 onChange={selectScope}
@@ -533,6 +542,7 @@ function ReviewsRoot() {
       <SplitPanel.Root>
         <SplitPanel.Body>
           <ViewShell.Root
+            contentLayout="collection"
             asidePreferenceKey="reviews"
             resizable
             aside={{ preserveDuringResize: false }}
@@ -555,7 +565,7 @@ function ReviewsRoot() {
                 activeForeignEntityId={params.foreignEntityId}
               />
             </ViewShell.Aside>
-            <ViewShell.Main>
+            <CollectionPanes hasDetail={!!params.foreignEntityId} list={list()}>
               <Suspense
                 fallback={
                   <div
@@ -566,9 +576,9 @@ function ReviewsRoot() {
                   </div>
                 }
               >
-                <SplitRouter.Outlet fallback={list} />
+                <SplitRouter.Outlet />
               </Suspense>
-            </ViewShell.Main>
+            </CollectionPanes>
           </ViewShell.Root>
         </SplitPanel.Body>
       </SplitPanel.Root>

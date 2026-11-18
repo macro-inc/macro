@@ -15,6 +15,7 @@ const party: DatabaseDetail = {
     owner_id: 'macro|owner@databases.test',
     created_at: '2026-01-01T00:00:00Z',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'edit',
   tables: [
@@ -329,6 +330,7 @@ const catalog: Catalog = {
 
 const noSource = {
   markdown: false,
+  link: false,
   options: [],
   tag: false,
   target: null,
@@ -336,6 +338,47 @@ const noSource = {
 };
 
 describe('databaseSqlAnswer', () => {
+  it('marks a URL column’s values as links', () => {
+    const answer = databaseSqlAnswer(
+      {
+        columns: [{ name: 'Website', column: 'def-website', kind: 'text' }],
+        rows: [[{ type: 'text', value: 'https://example.com' }]],
+        rowIds: ['row-acme'],
+        readTables: ['table-vendors'],
+        truncated: false,
+        insertedRowIds: [],
+        changesApplied: 0,
+      },
+      {
+        tables: [
+          {
+            id: 'table-vendors',
+            databaseId: 'database-pipeline',
+            database: 'Pipeline',
+            name: 'Vendors',
+            columns: [
+              {
+                id: 'def-website',
+                placement: 'column-website',
+                name: 'Website',
+                kind: { kind: 'link' },
+              },
+            ],
+          },
+        ],
+      },
+      []
+    );
+
+    expect(answer.columns).toEqual([
+      {
+        name: 'Website',
+        kind: 'text',
+        source: { ...noSource, link: true },
+      },
+    ]);
+  });
+
   it('keeps the typed cells and says what each column was read from', () => {
     const answer = databaseSqlAnswer(
       {
@@ -498,6 +541,7 @@ describe('databaseSqlAnswer', () => {
         kind: 'row',
         source: {
           markdown: false,
+          link: false,
           options: [],
           tag: false,
           target: null,

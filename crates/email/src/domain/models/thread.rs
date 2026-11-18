@@ -9,6 +9,8 @@ pub struct EmailThreadMetadata {
     pub thread_id: uuid::Uuid,
     /// Canonical email link that owns the thread.
     pub link_id: uuid::Uuid,
+    /// Whether any message was received rather than drafted or sent.
+    pub has_received_mail: bool,
     /// Timestamp of the latest inbound message, when one exists.
     pub latest_inbound_message_ts: Option<DateTime<Utc>>,
     /// Timestamp of the latest outbound message, when one exists: the SENT view's sort key.
@@ -33,6 +35,9 @@ pub struct ThreadRow {
     pub inbox_visible: bool,
     /// Whether the thread has been read.
     pub is_read: bool,
+    /// Whether any message was received rather than drafted or sent, the
+    /// condition for returning the thread to the inbox.
+    pub has_received_mail: bool,
     /// Timestamp of the latest inbound message.
     pub latest_inbound_message_ts: Option<DateTime<Utc>>,
     /// Timestamp of the latest outbound message.

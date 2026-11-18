@@ -952,6 +952,7 @@ async fn an_insert_naming_an_unknown_label_of_a_shared_property_is_refused_and_c
                         column: priority.id,
                         value: CellValue::Options(vec![OptionRef::Label("Someday".into())]),
                     }]],
+                    ids: None,
                 },
             }]),
         )

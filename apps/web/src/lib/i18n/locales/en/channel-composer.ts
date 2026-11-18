@@ -1,0 +1,15 @@
+export default {
+  addToMessage: 'Add to message',
+  mention: 'Mention',
+  formatText: 'Format text',
+  attachFiles: 'Attach files',
+  gif: 'GIF',
+  create: 'Create',
+  newTask: 'New task',
+  newPoll: 'New poll',
+  newForm: 'New form',
+  newDocument: 'New document',
+  askMacro: 'Ask Macro',
+  joinCall: 'Join call',
+  startCall: 'Start a call',
+};

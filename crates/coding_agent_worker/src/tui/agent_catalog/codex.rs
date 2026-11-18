@@ -7,6 +7,7 @@ const ADAPTER: NpmAdapter = NpmAdapter {
     bin: "codex-acp",
     cli: "codex",
     cli_path_env: "CODEX_PATH",
+    cli_spawned_by_node: false,
 };
 
 pub(super) struct Codex;

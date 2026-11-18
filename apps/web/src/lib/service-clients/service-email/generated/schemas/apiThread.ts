@@ -19,6 +19,9 @@ export interface ApiThread {
   access_level: AccessLevel;
   created_at: string;
   db_id: string;
+  /** Whether any message was received rather than drafted or sent. Only
+threads with received mail can return to the inbox. */
+  has_received_mail: boolean;
   inbox_visible: boolean;
   is_read: boolean;
   latest_inbound_message_ts?: ApiThreadLatestInboundMessageTs;

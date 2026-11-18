@@ -3,6 +3,7 @@ import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
+import { calendarEventLocation } from '../utils/macro-call-link';
 import {
   formatCompactCalendarTime,
   formatCompactCalendarTimeRange,
@@ -119,10 +120,12 @@ export function EventContent(props: EventContentProps) {
             </span>
           )}
         </Show>
-        <Show when={showLocation() && props.event.location}>
-          <span class="calendar-event-metadata calendar-event-location mt-1 shrink-0 truncate leading-tight opacity-80">
-            {props.event.location}
-          </span>
+        <Show when={showLocation() && calendarEventLocation(props.event)}>
+          {(location) => (
+            <span class="calendar-event-metadata calendar-event-location mt-1 shrink-0 truncate leading-tight opacity-80">
+              {location()}
+            </span>
+          )}
         </Show>
       </div>
     </div>

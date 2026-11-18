@@ -9,16 +9,20 @@ use github::domain::{
     models::{GithubError, GithubLinkStatus},
     ports::GithubLinkService,
 };
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
 use model::response::{EmptyResponse, ErrorResponse};
 use serde_utils::urlencode::UrlEncoded;
+use upstream_error::{UpstreamError, UpstreamErrorResponse};
 use url::Url;
 
 use crate::{
     account_link_state::{AccountLinkState, LinkProvider, sign_account_link_state},
     api::context::{ApiContext, AuthorizationService},
 };
+
+#[cfg(test)]
+mod test;
 
 pub const REAUTHENTICATION_REQUIRED_MESSAGE: &str = "ReauthenticationRequired";
 
@@ -58,14 +62,21 @@ pub enum InitGithubLinkError {
     /// The identity provider was not found
     #[error("identity provider not found")]
     IdentityProviderNotFound,
+    /// The sign-in service could not be reached to look up the provider.
+    #[error(transparent)]
+    Upstream(UpstreamError),
 }
 
 impl IntoResponse for InitGithubLinkError {
     fn into_response(self) -> Response {
         let message = self.to_string();
-        let status_code: StatusCode = match &self {
+        let status_code: StatusCode = match self {
             InitGithubLinkError::InvalidUserId(_) => StatusCode::BAD_REQUEST,
             InitGithubLinkError::TooManyInProgressLinks => StatusCode::TOO_MANY_REQUESTS,
+            InitGithubLinkError::Upstream(error)
+            | InitGithubLinkError::GithubServiceError(GithubError::Upstream(error)) => {
+                return error.into_response();
+            }
             InitGithubLinkError::InternalError(_)
             | InitGithubLinkError::GithubServiceError(_)
             | InitGithubLinkError::IdentityProviderNotFound => StatusCode::INTERNAL_SERVER_ERROR,
@@ -101,7 +112,10 @@ pub enum GithubLinkStatusError {
 
 impl IntoResponse for GithubLinkStatusError {
     fn into_response(self) -> Response {
-        let Self::Github(error) = &self;
+        let Self::Github(error) = self;
+        if let GithubError::Upstream(error) = error {
+            return error.into_response();
+        }
         tracing::error!(error=?error, "failed to check GitHub link status");
         error_response(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
     }
@@ -118,13 +132,15 @@ impl IntoResponse for GithubLinkStatusError {
             (status = 404, body=ErrorResponse),
             (status = 428, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
+            (status = 502, body=UpstreamErrorResponse),
+            (status = 503, body=UpstreamErrorResponse),
         )
     )]
 #[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%authorization.authorization.user.macro_user_id), err)]
 pub async fn check_github_link_status_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Response, GithubLinkStatusError> {
     let user_id = &authorization.authorization.user.macro_user_id;
     let status = ctx
@@ -173,6 +189,8 @@ pub(crate) struct InitGithubLinkQueryParams {
             (status = 429, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
+            (status = 502, body=UpstreamErrorResponse),
+            (status = 503, body=UpstreamErrorResponse),
         )
     )]
 #[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%authorization.authorization.user.user_context.user_id, fusion_user_id=%authorization.authorization.user.user_context.fusion_user_id), err)]
@@ -180,7 +198,7 @@ pub async fn init_github_link_handler(
     State(ctx): State<ApiContext>,
     query: Query<InitGithubLinkQueryParams>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Json<InitGithubLinkResponse>, InitGithubLinkError> {
     let Query(InitGithubLinkQueryParams { original_url }) = query;
     let fusion_user_id = &authorization.authorization.user.user_context.fusion_user_id;
@@ -211,7 +229,13 @@ pub async fn init_github_link_handler(
         .auth_client
         .get_identity_provider_id_by_name("github")
         .await
-        .map_err(|_| InitGithubLinkError::IdentityProviderNotFound)?;
+        .map_err(|error| match error.upstream() {
+            Some(upstream) => InitGithubLinkError::Upstream(upstream),
+            None => {
+                tracing::error!(error=?error, "failed to look up the github identity provider");
+                InitGithubLinkError::IdentityProviderNotFound
+            }
+        })?;
 
     // Build the signed OAuth state. The callback refuses state it did not sign,
     // state issued for another provider, and state whose pending link belongs
@@ -254,7 +278,10 @@ pub enum DeleteGithubLinkError {
 impl IntoResponse for DeleteGithubLinkError {
     fn into_response(self) -> Response {
         let message = self.to_string();
-        let status_code: StatusCode = match &self {
+        let status_code: StatusCode = match self {
+            DeleteGithubLinkError::GithubServiceError(GithubError::Upstream(error)) => {
+                return error.into_response();
+            }
             DeleteGithubLinkError::InternalError(_)
             | DeleteGithubLinkError::GithubServiceError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -279,13 +306,15 @@ impl IntoResponse for DeleteGithubLinkError {
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
+            (status = 502, body=UpstreamErrorResponse),
+            (status = 503, body=UpstreamErrorResponse),
         )
     )]
 #[tracing::instrument(skip(ctx, ip_context, authorization), fields(client_ip=%ip_context, user_id=%authorization.authorization.user.macro_user_id), err)]
 pub async fn delete_github_link_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Json<EmptyResponse>, DeleteGithubLinkError> {
     ctx.github_link_service
         .delete_user_link(&authorization.authorization.user.macro_user_id)

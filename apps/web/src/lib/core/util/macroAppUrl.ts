@@ -49,12 +49,14 @@ export function isValidMacroAppHostname(hostname: string): boolean {
 type InternalAppLink = {
   path: string;
   query: string;
+  fragment?: string;
 };
 
 /**
  * Parses an absolute URL pointing at the Macro web app (e.g.
- * `https://macro.com/app/channel/<id>?message=<id>`) into a router path and
- * query. Returns null for anything that is not a Macro `/app` URL.
+ * `https://macro.com/app/channel/<id>?message=<id>`) into a router path, query
+ * and fragment; a booking receipt link keeps its private token in the fragment.
+ * Returns null for anything that is not a Macro `/app` URL.
  *
  * The `/app` prefix is stripped because the Tauri router uses `/` as its
  * base (mirrors `MacroScheme::from_url` on the Rust side).
@@ -76,5 +78,6 @@ export function parseInternalAppLink(url: string): InternalAppLink | null {
   return {
     path: pathname.slice('/app'.length) || '/',
     query: parsed.search.slice(1),
+    fragment: parsed.hash.slice(1) || undefined,
   };
 }

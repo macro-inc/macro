@@ -1,7 +1,11 @@
 import { ENABLE_PROXY_EMAIL_IMAGES } from '@core/constant/featureFlags';
-import { SERVER_HOSTS } from '@core/constant/servers';
+import {
+  EMAIL_SERVICE_EMBEDDED_HOSTS,
+  SERVER_HOSTS,
+} from '@core/constant/servers';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import type { EmailRenderingContextValue } from './context/email-rendering-context';
+import { readReceiptPixelPrefixes } from './core/read-receipt';
 import { fetchImagesViaPlatform, resolveCidImages } from './image-adapter';
 import { createEmailTheme } from './theme';
 
@@ -15,6 +19,7 @@ export function createEmailRenderingContext(): EmailRenderingContextValue {
         ? `${SERVER_HOSTS['image-proxy-service']}/proxy`
         : undefined,
     },
+    readReceiptPixels: readReceiptPixelPrefixes(EMAIL_SERVICE_EMBEDDED_HOSTS),
     prepareLinks: interceptMailtoLinks,
     async resolveImages(root, attachments, lifetime) {
       const blobUrls: string[] = [];

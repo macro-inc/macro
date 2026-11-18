@@ -8,8 +8,8 @@
 mod test;
 
 use ::activity::{
-    Action, Activity, ActivitySource, Actor, CommonAction, DomainActivity, EntityType, Ingest,
-    ParticipantChange, event_time,
+    AccessRequest, Action, Activity, ActivitySource, Actor, CommonAction, DomainActivity,
+    EntityType, Ingest, ParticipantChange, event_time,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -38,6 +38,13 @@ pub enum ChannelAction {
     ParticipantRemoved {
         /// The removed principal.
         participant: Actor<'static>,
+    },
+    /// Someone outside the channel asked to join it.
+    AccessRequested {
+        /// The attempt, whose current outcome the channel domain serves.
+        request_id: Uuid,
+        /// The requester's profile name when they asked, if they had one.
+        requester_name: Option<String>,
     },
 }
 
@@ -69,6 +76,13 @@ impl DomainActivity for ChannelActivity {
             ChannelAction::ParticipantRemoved { participant } => {
                 Action::ParticipantRemoved(ParticipantChange { participant })
             }
+            ChannelAction::AccessRequested {
+                request_id,
+                requester_name,
+            } => Action::AccessRequested(AccessRequest {
+                request_id,
+                requester_name,
+            }),
         }
     }
 }
@@ -154,7 +168,10 @@ pub fn ingest_message_event(event_id: Uuid, event: &MessageTopicEvent) -> Ingest
             };
             // For agent (bot) messages, `triggered_by` is the user whose
             // authority the message was sent under — the activity's subject.
-            let on_behalf_of = m.triggered_by.as_deref().and_then(|id: &str| {
+            // A person's message with `triggered_by` came from their account
+            // manager, and remains that person's activity.
+            let bot_trigger = m.sender.as_bot().and(m.triggered_by.as_deref());
+            let on_behalf_of = bot_trigger.and_then(|id: &str| {
                 MacroUserIdStr::try_from(id.to_string())
                     .inspect_err(|e| {
                         // Fall back to the sender as subject, but loudly: the
@@ -272,6 +289,18 @@ impl ActivitySource for ChannelTopicEvent {
                 now(),
                 |participant| ChannelAction::ParticipantRemoved { participant },
             ),
+            ChannelTopicEvent::AccessRequested(m) => Ingest::Insert(vec![exclusive(
+                event_id,
+                0,
+                Actor::new_from_user(m.requester_id.clone()),
+                None,
+                m.channel_id,
+                ChannelAction::AccessRequested {
+                    request_id: m.request_id,
+                    requester_name: m.requester_name.clone(),
+                },
+                now(),
+            )]),
         }
     }
 }

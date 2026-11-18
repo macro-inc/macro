@@ -43,7 +43,8 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   non-zero so ECS replaces it), release announcements, and discovery through
   `SessionService` (`discoverable_accounts`, `fleet_health`).
 - `outbound/signals.rs`: `LISTEN` for `whatsapp_{account_released,
-  pairing_requested, send_requested, groups_requested, account_changed}`.
+  pairing_requested, send_requested, roster_requested, lookup_requested,
+  account_changed}`.
   Payloads are `external_chat::signals::Signal` JSON; each
   one's `traceparent` parents a `whatsapp.signal.receive` span that travels
   with the signal (`ports::Traced`): the supervisor's work and the runner's
@@ -66,7 +67,16 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   `events::complete_addresses` fills the other half of a sender's and a
   direct chat's phone-number/LID pair from the account's LID store (pairing,
   group participant lists, message addressing); `from_me` carries WhatsApp's
-  own-message flag. If the LID store can't be read, the event is left
+  own-message flag. A sender with no push name (history pages rarely carry
+  one; `-` means none) is named from the contact store
+  (`events::complete_sender_name`: push name for either address, else
+  address book, else business name), and roster reads name participants the
+  same way (`complete_participant_names`, one `get_all_contacts` per read).
+  `whatsapp.inbound.ingest` records the sender's shape
+  (`chat_kind`, `sender_address`, `sender_alternate`, `sender_named`,
+  `history`; never an address or a name) and `whatsapp.history.page` counts
+  senders `push_named` / `contact_named` (named from the contact store) /
+  `unnamed`. If the LID store can't be read, the event is left
   unacknowledged (WhatsApp redelivers it) rather than gated without its
   other address. History requests name a direct chat by LID
   (`events::phone_chat`), as phones key it. Adopted groups stay cached until `whatsapp_account_changed`;
@@ -87,15 +97,38 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   sync bundles, live messages (any chat) and contact/archive/pin events into
   `ChatUpdate`s (`events.rs`: `history_chats`, `message_chat`,
   `chat_setting`; direct chats by phone number) that the runner stores with
-  `update_chats`. On-demand history answers are parsed with
+  `update_chats`. The device store's saved contacts (`events::contact_chats`:
+  address-book names only, not people merely seen in groups) are listed on
+  `Connected` and every `AppStateSyncComplete`, and a `Contact` event lists
+  its contact, so the owner can start a chat with them.
+- Phone-number lookups (`domain/account/lookups.rs`): on
+  `whatsapp_lookup_requested`, on connect and on every tick, the runner
+  answers pending lookups with one `IsOnWhatsApp` usync each
+  (`WhatsAppSession::look_up`; whatsmeow stores the number's LID pairing, so a
+  later message by LID lands in the same chat) and records the answer
+  (`events::lookup_answer` names it like any chat). Only explicit owner
+  lookups, rate-limited in DSS: WhatsApp bans bulk usync. On-demand history answers are parsed with
   `Client::parse_web_message`, ingested as history events through the inbound
-  gate, then reported as a `HistoryPage`. The runner's `backfill` asks the
-  phone for pages of added groups (`request_history`, plus `request_message`
-  for an anchor that predates adoption), marks a group with no anchor
-  `waiting_for_message` (an `update_chats` that gives it one returns true and
-  the runner imports at once), marks unanswered requests
-  `waiting_for_phone` after `backfill_timeout` and retries after
-  `backfill_retry` or on reconnect.
+  gate, then reported as a `HistoryPage`. The runner's `backfill`
+  (`domain/account/backfill.rs`) only continues imports the owner started
+  (`pending`, on `whatsapp_history_requested`, connect and tick): it asks the
+  phone for pages (`request_history`, plus `request_message` for an anchor
+  that predates adoption), the next one as each answer lands, and marks a
+  request unanswered after `backfill_timeout` `waiting_for_phone`. It never
+  asks the phone on its own: each request wakes WhatsApp on the phone (on
+  iOS, a "syncing stopped" notification when it can't finish).
+- Profile pictures (`domain/pictures.rs`): a per-account loop, started
+  `PICTURE_WARMUP` after connecting, claims one due check at a time
+  (`claim_picture_checks`; the hourly and daily budget is the domain's),
+  asks `WhatsAppSession::profile_picture` (`outbound/whatsapp/pictures.rs`:
+  one `w:profile:picture` preview query with the stored id, so an unchanged
+  picture downloads nothing, and the common added group for a person; a new
+  picture's URL expires, so its bytes are downloaded at once, ≤ 1 MiB and
+  `image/*`), and records the answer. Queries are `PICTURE_SPACING` (3 s)
+  apart; a 429 pauses them `PICTURE_BACKOFF` (15 min), doubling up to 6 h.
+  `Event::Picture` becomes `SessionEvent::PictureChanged` (with the other
+  half of a person's phone-number/LID pair) and wakes the loop; a group's
+  change also stays a system line.
 - QR pairing: whatsmeow rotates codes (60 s, then 20 s each) and then
   times out; that timeout ends the pairing as `expired`
   (`SessionEvent::PairExpired`), not `failed`, so the web starts a new one.
@@ -126,14 +159,19 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
 Spans: `whatsapp.account.{lease,release,rescan,connect}`,
 `whatsapp.inbound.ingest`, `whatsapp.media.import`, `whatsapp.send.dispatch`
 (parented on the trace of the request that recorded the send),
-`whatsapp.groups.{refresh,event}`, `whatsapp.signal.receive`,
+`whatsapp.groups.{refresh,event}`, `whatsapp.contacts.sync`, `whatsapp.lookup`
+(outcome `found`/`not_on_whatsapp`/`failed`), `whatsapp.signal.receive`,
 `whatsapp.account.signal`, `whatsapp.drain`,
-`whatsapp.history.{sync,page}`, `whatsapp.backfill.request`
+`whatsapp.history.{sync,page}`, `whatsapp.backfill.request`,
+`whatsapp.picture.check` (`kind` person/group, `offered_existing`,
+`outcome` `unchanged`/`stored`/`hidden`/`not_set`/`rate_limited`/`failed`,
+`bytes`) with `whatsapp.picture.download`
 (`whatsapp.inbound.ingest` records the message `kind`; `whatsapp.history.page`
 counts what a page stored, could not parse and skipped, by stub type). Log events read by `infra/stacks/monitoring/monitors/
 whatsapp-session.ts` (`telemetry_event` = `whatsapp_session_health`,
 `whatsapp_session_reconnect`, `whatsapp_send_outcome`,
-`whatsapp_session_drain`): keep their field names. Opaque ids only; never
+`whatsapp_session_drain`; `whatsapp_picture_rate_limited` with
+`pause_seconds`): keep their field names. Opaque ids only; never
 JIDs, phone numbers, QR codes or message text.
 
 ## Runbook

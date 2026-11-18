@@ -120,6 +120,39 @@ describe('extractFileSystemEntries', () => {
     expect(result.directoryEntries).toEqual([]);
   });
 
+  test('reads a pasted image whose WebKit entry cannot load it', async () => {
+    const pastedFile = new File(['image content'], 'image.png', {
+      type: 'image/png',
+    });
+    const unreadableEntry = {
+      isFile: true,
+      isDirectory: false,
+      name: 'image.png',
+      fullPath: '/image.png',
+      filesystem: {} as FileSystem,
+      getParent: () => {},
+      file: (
+        _success: (file: File) => void,
+        failure?: (error: DOMException) => void
+      ) => failure?.(new DOMException('Path does not exist', 'NotFoundError')),
+    } as FileSystemFileEntry;
+    const dataTransfer = createMockDataTransfer([
+      {
+        kind: 'file',
+        webkitGetAsEntry: () => unreadableEntry,
+        getAsFile: () => pastedFile,
+      },
+    ]);
+
+    const result = extractFileSystemEntries(dataTransfer);
+    expect(result.fileEntries).toHaveLength(1);
+
+    const readFile = await new Promise<File>((resolve, reject) => {
+      result.fileEntries[0].file(resolve, reject);
+    });
+    expect(readFile).toBe(pastedFile);
+  });
+
   test('synthetic file entry returns correct file via file() method', async () => {
     const mockFile = new File(['image content'], 'pasted-image.png', {
       type: 'image/png',

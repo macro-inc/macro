@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
 
 use crate::api::context::{ApiContext, AuthorizationService};
@@ -37,7 +37,7 @@ pub struct Params {
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
     extract::Path(Params { code }): extract::Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("verify_merge_request");

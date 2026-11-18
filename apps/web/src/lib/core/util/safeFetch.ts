@@ -1,8 +1,9 @@
 import { SERVER_HOSTS, SYNC_SERVICE_HOSTS } from '@core/constant/servers';
-import { type Span, Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { err, ok, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
 import { platformFetch } from './platformFetch';
+import { timeResponseBody } from './responseBodyTiming';
 import type { ObjectLike, ResultError } from './result';
 import { sleep } from './sleep';
 import { redactLinkTokens } from './telemetryUrl';
@@ -37,31 +38,44 @@ function requestUrl(input: RequestInfo): URL | undefined {
   }
 }
 
-function tracedFetch(
+interface TracedResponse {
+  response: Response;
+  /** Call once the caller is done with the body, read or not. */
+  releaseBody: () => void;
+}
+
+async function tracedFetch(
   input: RequestInfo,
   init: RequestInit & { headers: Record<string, string> },
   traceOptions?: SafeFetchTraceOptions
-): Promise<Response> {
+): Promise<TracedResponse> {
   const url = requestUrl(input);
-  if (!url) return platformFetch(input, init);
+  if (!url)
+    return {
+      response: await platformFetch(input, init),
+      releaseBody: () => {},
+    };
   const method = (init.method ?? 'GET').toUpperCase();
   const path = redactLinkTokens(url.pathname);
   const span = traceOptions?.parentSpan
     ? traceOptions.parentSpan.run(() =>
-        Telemetry.clientSpan(`http ${method} ${path}`)
+        Telemetry.span(`http ${method} ${path}`, { kind: 'client' })
       )
-    : Telemetry.clientSpan(`http ${method} ${path}`);
+    : Telemetry.span(`http ${method} ${path}`, { kind: 'client' });
   const started = performance.now();
   span.setAttr('http.method', method);
   // Path only: query strings can carry tokens.
   span.setAttr('http.url', `${url.origin}${path}`);
   return span.run(async () => {
+    let response: Response;
+    let headersAt: number;
     try {
       if (isTracedOrigin(url)) {
         span.injectTraceHeaders(init.headers);
       }
-      const response = await platformFetch(input, init);
-      span.setAttr('http.response_headers_ms', performance.now() - started);
+      response = await platformFetch(input, init);
+      headersAt = performance.now();
+      span.setAttr('http.response_headers_ms', headersAt - started);
       span.setAttr('http.timing_scope', 'until_response_headers');
       span.setAttr('http.status_code', response.status);
       if (!response.ok) {
@@ -70,16 +84,15 @@ function tracedFetch(
         );
         if (expected) {
           span.setAttr('http.expected_status', true);
-          return response;
+        } else {
+          const message = `HTTP ${response.status} for ${method} ${path}`;
+          span.error({
+            name: 'HttpError',
+            message,
+            stack: new Error(message).stack,
+          });
         }
-        const message = `HTTP ${response.status} for ${method} ${path}`;
-        span.error({
-          name: 'HttpError',
-          message,
-          stack: new Error(message).stack,
-        });
       }
-      return response;
     } catch (error) {
       span.error(
         error instanceof Error
@@ -90,10 +103,22 @@ function tracedFetch(
             }
           : redactLinkTokens(String(error))
       );
-      throw error;
-    } finally {
       span.end();
+      throw error;
     }
+
+    // The span still ends at the response headers, so its duration keeps its
+    // meaning; it is exported once the body settles, with `http.body_ms`. The
+    // end is a `performance.now()` value, which the SDK maps onto the span's
+    // own start clock: an epoch time would skew after the device slept.
+    const endedAt = performance.now();
+    const body = timeResponseBody(response, span, {
+      prefix: 'http',
+      headersAt,
+      signal: init.signal,
+      onSettled: () => span.end(endedAt),
+    });
+    return { response, releaseBody: body.release };
   });
 }
 
@@ -177,7 +202,7 @@ export interface RetryConfig {
 /** Trace context and response classification, never forwarded to fetch. */
 export interface SafeFetchTraceOptions {
   /** Restore the action's parent after async auth or mutation scheduling. */
-  parentSpan?: Span;
+  parentSpan?: TraceContext;
   /** Non-OK responses that should not mark the HTTP span as failed. */
   expectedStatusCodes?: readonly number[];
 }
@@ -282,7 +307,11 @@ export async function safeFetch<
   init?: SafeFetchInit,
   errorResponseHandler?: ErrorResponseHandler<CustomErrorCode>
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
-  const { retry, trace, ...fetchInit } = init || {};
+  const { retry, trace: suppliedTrace, ...fetchInit } = init || {};
+  const trace = {
+    ...suppliedTrace,
+    parentSpan: suppliedTrace?.parentSpan ?? Telemetry.captureContext(),
+  };
   const maxTries = retry?.maxTries ?? 1;
   const delay = retry?.delay ?? 0;
   type ErrorCode = BaseFetchErrorCode | CustomErrorCode;
@@ -291,8 +320,10 @@ export async function safeFetch<
   let lastError: Result<T, ResultError<ErrorCode>[]> | undefined;
 
   for (let attempt = 1; attempt <= maxTries; attempt++) {
+    let responded = false;
+    let releaseBody: (() => void) | undefined;
     try {
-      const response = await tracedFetch(
+      const traced = await tracedFetch(
         input,
         {
           ...fetchInit,
@@ -310,6 +341,9 @@ export async function safeFetch<
         },
         trace
       );
+      const response = traced.response;
+      releaseBody = traced.releaseBody;
+      responded = true;
 
       if (!response.ok) {
         if (errorResponseHandler) {
@@ -333,6 +367,8 @@ export async function safeFetch<
 
         if (
           contentType.includes('application/octet-stream') ||
+          contentType.startsWith('audio/') ||
+          contentType.startsWith('image/') ||
           contentType.includes('text/calendar') ||
           contentType.includes('message/rfc822')
         ) {
@@ -343,10 +379,16 @@ export async function safeFetch<
         return ok(data as T);
       }
     } catch (error) {
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        lastError = fetchErr([
+      // Fetch rejects every network failure with a TypeError, whose message
+      // differs by browser ("Failed to fetch", "Load failed") and transport.
+      // Once a response arrived the server may have acted on the request, so
+      // a failure reading it is not retried.
+      if (error instanceof TypeError) {
+        const failure = fetchErr([
           { code: 'NETWORK_ERROR', message: 'Network error occurred' },
         ]);
+        if (responded) return failure;
+        lastError = failure;
       } else if (error instanceof SyntaxError) {
         return fetchErr([
           { code: 'INVALID_JSON', message: 'Invalid JSON in response' },
@@ -359,6 +401,10 @@ export async function safeFetch<
           },
         ]);
       }
+    } finally {
+      // Every read this attempt makes has settled: a body still unread now
+      // never will be, so its span ends instead of waiting for it.
+      releaseBody?.();
     }
 
     if (attempt < maxTries) {

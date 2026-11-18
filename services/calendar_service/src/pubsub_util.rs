@@ -58,6 +58,29 @@ pub async fn cg_refresh_calendar(
     }
 }
 
+/// Tell one requester their request to join `event_id` was answered. It names
+/// the event, whose id they hold, and not the sharer's inbox.
+#[tracing::instrument(skip(client, requester_id), level = "debug")]
+pub async fn cg_refresh_join_request(
+    client: &ConnectionGatewayClient,
+    requester_id: &str,
+    event_id: uuid::Uuid,
+) {
+    if !cfg!(feature = "connection_gateway") {
+        return;
+    }
+    let payload = serde_json::to_value(
+        calendar_events::domain::models::RefreshCalendarEvent::JoinRequestAnswered { event_id },
+    )
+    .unwrap_or_default();
+    let _ = client
+        .refresh_calendar(requester_id, payload)
+        .await
+        .inspect_err(
+            |e| tracing::error!(%event_id, "Failed to refresh the requester's calendar: {e}"),
+        );
+}
+
 /// Invalidate teammate projections without exposing the underlying inbox IDs.
 /// `notify_sharers` also refreshes `shared_by` themselves, for changes no
 /// inbox refresh reaches them with, such as their own sharing setting.

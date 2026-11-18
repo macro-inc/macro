@@ -61,7 +61,37 @@ fn pipedream(app_slug: &str, enabled: bool) -> PipedreamConnection {
         server_name: format!("{app_slug} (Pipedream)"),
         account_id: "apn_1".into(),
         enabled,
+        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
     }
+}
+
+#[tokio::test]
+async fn a_connect_grant_outranks_an_overlay() {
+    let connect = |enabled| PipedreamConnection {
+        provider: pipedream_mcp::domain::models::ConnectionProvider::Connect,
+        server_name: "Sentry (Connect)".into(),
+        ..pipedream("sentry", enabled)
+    };
+    let apps = PipedreamConnectedApps::new(
+        Arc::new(Connections(vec![connect(true)])),
+        Arc::new(Native(None)),
+    );
+    assert_eq!(
+        apps.connected_app_name(&user(), "sentry").await.unwrap(),
+        Some("Sentry (Connect)".into())
+    );
+
+    let disabled = PipedreamConnectedApps::new(
+        Arc::new(Connections(vec![connect(false)])),
+        Arc::new(Native(Some("Sentry"))),
+    );
+    assert_eq!(
+        disabled
+            .connected_app_name(&user(), "sentry")
+            .await
+            .unwrap(),
+        None
+    );
 }
 
 #[tokio::test]

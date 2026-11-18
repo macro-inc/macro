@@ -3,7 +3,9 @@ export {
   InlineEntityTagsPill,
   InlineFetchedEntityTagsPill,
   InlineTagsPill,
+  InlineTagsSheetPill,
 } from './EntityRowTags';
+export { EntityTagSubmenu } from './EntityTagSubmenu';
 export {
   canTagEntity,
   isTaggableEntityType,

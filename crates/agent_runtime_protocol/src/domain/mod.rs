@@ -12,6 +12,8 @@ pub mod connection;
 pub mod context;
 /// The physical transport port.
 pub mod ports;
+/// The log frame a saved review leaves each time it changes.
+pub mod review;
 /// Versioned protocol message types.
 pub mod schema;
 /// The log frame an MCP tool call held for the owner's approval leaves.

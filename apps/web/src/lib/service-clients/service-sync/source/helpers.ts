@@ -1,4 +1,3 @@
-import { resumeDocumentSpan } from '@block-md/observability';
 import { isFeatureEnabled, syncViaGateway } from '@core/constant/featureFlags';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import type {
@@ -19,6 +18,7 @@ import {
 } from '@macro-inc/collaboration/sync-service/source';
 import type { UrlResolver } from '@macro-inc/collaboration/websocket';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
+import type { Span } from '@macro-inc/observability';
 import { storageServiceClient } from '@service-storage/client';
 import type { ResultAsync } from 'neverthrow';
 import { resolveSyncRouterWsUrl } from '../websocket-url';
@@ -86,7 +86,8 @@ export function createTokenRefreshingSocket(
 export function createSyncServiceSocket(
   documentId: string,
   initialToken: string | undefined,
-  authorization?: DocumentSyncAuthorization
+  authorization?: DocumentSyncAuthorization,
+  parentSpan?: Span
 ): SyncWebsocket {
   return createTokenRefreshingSocket(
     documentId,
@@ -103,7 +104,7 @@ export function createSyncServiceSocket(
         }
         return response.value.token;
       }),
-    () => resumeDocumentSpan(documentId)?.traceparent()
+    () => parentSpan?.traceparent()
   );
 }
 
@@ -125,7 +126,8 @@ async function refreshPermissionToken(documentId: string): Promise<string> {
 export const createSyncServiceSource = (
   documentId: string,
   token: string | undefined,
-  authorization?: DocumentSyncAuthorization
+  authorization?: DocumentSyncAuthorization,
+  parentSpan?: Span
 ): {
   source: LiveSyncSource;
   doInitialSync: () => ResultAsync<InitialSync, SyncError>;
@@ -138,7 +140,7 @@ export const createSyncServiceSource = (
         authorization ? undefined : token,
         authorization?.getToken ?? (() => refreshPermissionToken(documentId))
       )
-    : createSyncServiceSocket(documentId, token, authorization);
+    : createSyncServiceSocket(documentId, token, authorization, parentSpan);
   const state = createWebsocketStateSignal(ws);
   const source = new SyncServiceSource(ws, documentId, {
     status: () => mapToSyncStatus(state()),

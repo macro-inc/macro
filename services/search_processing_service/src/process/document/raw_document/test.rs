@@ -3,6 +3,7 @@ use super::*;
 #[tokio::test]
 async fn test_generate_upsert() {
     let document_info = DocumentMetadata {
+        appearance: None,
         document_id: "AAA".to_string(),
         document_version_id: 0,
         owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),
@@ -35,8 +36,8 @@ async fn test_generate_upsert() {
         },
     ];
 
-    let upserts =
-        generate_upserts(document_info, markdown_result).expect("Could not generate upserts");
+    let upserts = generate_upserts(document_info, markdown_result, false)
+        .expect("Could not generate upserts");
 
     assert!(!upserts.is_empty());
     assert_eq!(upserts.len(), 2);
@@ -48,6 +49,7 @@ async fn test_generate_upsert_with_sub_type() {
     use document_sub_type::DocumentSubType;
 
     let document_info = DocumentMetadata {
+        appearance: None,
         document_id: "BBB".to_string(),
         document_version_id: 0,
         owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),
@@ -73,8 +75,8 @@ async fn test_generate_upsert_with_sub_type() {
         content: "Task content".to_string(),
     }];
 
-    let upserts =
-        generate_upserts(document_info, markdown_result).expect("Could not generate upserts");
+    let upserts = generate_upserts(document_info, markdown_result, false)
+        .expect("Could not generate upserts");
 
     assert_eq!(upserts.len(), 1);
     assert_eq!(upserts[0].sub_type, Some("task".to_string()));
@@ -82,6 +84,7 @@ async fn test_generate_upsert_with_sub_type() {
 
 fn parent_only_document_info(file_type: Option<&str>) -> DocumentMetadata {
     DocumentMetadata {
+        appearance: None,
         document_id: "CCC".to_string(),
         document_version_id: 0,
         owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),
@@ -114,7 +117,7 @@ fn generate_upserts_preserves_a_bot_owner_principal() {
         content: "Bot document".to_string(),
     }];
 
-    let upserts = generate_upserts(document_info, markdown_result).expect("valid upsert");
+    let upserts = generate_upserts(document_info, markdown_result, false).expect("valid upsert");
 
     assert_eq!(upserts.len(), 1);
     assert_eq!(upserts[0].owner_id, BOT_PRINCIPAL);
@@ -122,7 +125,7 @@ fn generate_upserts_preserves_a_bot_owner_principal() {
 
 #[test]
 fn test_generate_parent_only_upsert() {
-    let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")))
+    let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")), false)
         .expect("could not generate parent-only upsert")
         .expect("expected upsert args");
 
@@ -135,6 +138,38 @@ fn test_generate_parent_only_upsert() {
     assert_eq!(args.content, "");
     assert_eq!(args.raw_content, None);
     assert!(args.properties.is_empty());
+    assert!(!args.is_email_attachment);
+}
+
+#[test]
+fn a_parent_only_upsert_carries_the_email_attachment_flag() {
+    let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")), true)
+        .expect("could not generate parent-only upsert")
+        .expect("expected upsert args");
+
+    assert!(args.is_email_attachment);
+}
+
+#[test]
+fn every_markdown_chunk_carries_the_email_attachment_flag() {
+    let markdown_result = vec![
+        MarkdownParseResult {
+            node_id: "node1".to_string(),
+            raw_content: "# Forwarded".to_string(),
+            content: "Forwarded".to_string(),
+        },
+        MarkdownParseResult {
+            node_id: "node2".to_string(),
+            raw_content: "Body".to_string(),
+            content: "Body".to_string(),
+        },
+    ];
+
+    let upserts = generate_upserts(parent_only_document_info(Some("md")), markdown_result, true)
+        .expect("valid upserts");
+
+    assert_eq!(upserts.len(), 2);
+    assert!(upserts.iter().all(|upsert| upsert.is_email_attachment));
 }
 
 #[test]
@@ -144,7 +179,7 @@ fn test_canvas_routes_to_parent_only_indexing() {
 
 #[test]
 fn test_generate_canvas_parent_only_upsert_has_no_content_chunk() {
-    let args = generate_parent_only_upsert(parent_only_document_info(Some("canvas")))
+    let args = generate_parent_only_upsert(parent_only_document_info(Some("canvas")), false)
         .expect("could not generate parent-only upsert")
         .expect("expected upsert args");
 
@@ -160,7 +195,7 @@ fn test_generate_canvas_parent_only_upsert_has_no_content_chunk() {
 
 #[test]
 fn test_generate_parent_only_upsert_without_file_type() {
-    let args = generate_parent_only_upsert(parent_only_document_info(None))
+    let args = generate_parent_only_upsert(parent_only_document_info(None), false)
         .expect("could not generate parent-only upsert");
 
     assert!(args.is_none());
@@ -350,7 +385,7 @@ async fn a_message_for_a_version_the_pdf_is_not_served_from_changes_nothing(pool
     assert_eq!(*requests.lock().unwrap(), Vec::new());
 }
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 #[sqlx::test(
     migrations = "../../crates/macro_db_client/migrations",
     fixtures(
@@ -388,6 +423,174 @@ async fn an_unreadable_pdf_is_indexed_by_name_only(pool: sqlx::PgPool) {
     assert_eq!(bulk.len(), 2, "only the parent doc is written: {bulk:?}");
     assert_eq!(bulk[1]["document_name"], "test_document_name");
     assert_eq!(bulk[1]["document_relation"], "document");
+}
+
+/// Indexes a `text_documents` fixture document whose stored content is
+/// `object`, and returns the storage and search requests made, with each
+/// `_bulk` body parsed into its lines.
+async fn index_text_file(
+    pool: &sqlx::PgPool,
+    document_id: &str,
+    file_type: FileType,
+    object: &'static [u8],
+) -> (Vec<String>, Vec<serde_json::Value>) {
+    let (endpoint, requests) = fake_storage(object).await;
+    let message = SearchExtractorMessage {
+        user_id: String::new(),
+        document_id: document_id.to_string(),
+        file_type,
+        document_version_id: None,
+        index_override: None,
+    };
+
+    update_search_with_raw_document(
+        &fake_opensearch(&endpoint),
+        pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &message,
+    )
+    .await
+    .expect("a text file is indexed without an error to retry");
+
+    let requests = requests.lock().unwrap().clone();
+    let lines = requests.iter().map(|(line, _)| line.clone()).collect();
+    let bulk = requests
+        .iter()
+        .filter(|(line, _)| line.ends_with("/_bulk"))
+        .flat_map(|(_, body)| body.lines().map(|line| serde_json::from_str(line).unwrap()))
+        .collect();
+    (lines, bulk)
+}
+
+fn indexed_content(bulk: &[serde_json::Value]) -> Vec<&str> {
+    bulk.iter()
+        .filter_map(|line| line["content"].as_str())
+        .filter(|content| !content.is_empty())
+        .collect()
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn html_in_a_legacy_charset_is_indexed_by_its_text(pool: sqlx::PgPool) {
+    let (lines, bulk) = index_text_file(
+        &pool,
+        "htm-document",
+        FileType::Htm,
+        b"<meta charset=windows-1252><p>Caf\xe9 \x93menu\x94</p>",
+    )
+    .await;
+
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert!(
+        lines[0].starts_with(&format!("GET /{BUCKET}/")),
+        "{lines:?}"
+    );
+    assert_eq!(lines[1], "POST /documents/_bulk");
+    assert_eq!(
+        indexed_content(&bulk),
+        ["<meta charset=windows-1252><p>Café \u{201c}menu\u{201d}</p>"]
+    );
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn html_with_invalid_utf8_is_indexed_instead_of_failing(pool: sqlx::PgPool) {
+    let (lines, bulk) = index_text_file(
+        &pool,
+        "htm-document",
+        FileType::Htm,
+        b"<html><title>Quarterly report\x92s summary</title></html>",
+    )
+    .await;
+
+    assert_eq!(lines[1..], ["POST /documents/_bulk"], "{lines:?}");
+    assert_eq!(
+        indexed_content(&bulk),
+        ["<html><title>Quarterly report\u{fffd}s summary</title></html>"]
+    );
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn valid_utf8_html_is_indexed_unchanged(pool: sqlx::PgPool) {
+    let html = "<meta charset=\"utf-8\"><p>naïve café — 東京</p>";
+
+    let (lines, bulk) =
+        index_text_file(&pool, "html-document", FileType::Html, html.as_bytes()).await;
+
+    assert_eq!(lines[1..], ["POST /documents/_bulk"], "{lines:?}");
+    assert_eq!(indexed_content(&bulk), [html]);
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn a_binary_file_named_as_html_is_indexed_by_name_only(pool: sqlx::PgPool) {
+    let (lines, bulk) = index_text_file(
+        &pool,
+        "htm-document",
+        FileType::Htm,
+        b"\x1f\x8b\x08\x00\xd4\xe1\xfa\xff\x80\x81\xfe\xb0\xc0\xf5",
+    )
+    .await;
+
+    assert_eq!(
+        lines[1..],
+        ["POST /documents/_delete_by_query", "POST /documents/_bulk"],
+        "{lines:?}"
+    );
+    assert_eq!(bulk.len(), 2, "only the parent doc is written: {bulk:?}");
+    assert_eq!(bulk[1]["document_name"], "saved page");
+    assert!(indexed_content(&bulk).is_empty(), "{bulk:?}");
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn legacy_markdown_with_invalid_utf8_is_indexed(pool: sqlx::PgPool) {
+    let (lines, bulk) = index_text_file(
+        &pool,
+        "md-document",
+        FileType::Md,
+        b"{\"root\":{\"children\":[{\"$\":{\"id\":\"n1\",\"searchText\":\"Caf\xe9 notes\"}}]}}",
+    )
+    .await;
+
+    assert_eq!(
+        lines[1..],
+        ["POST /documents/_delete_by_query", "POST /documents/_bulk"],
+        "{lines:?}"
+    );
+    assert_eq!(indexed_content(&bulk), ["Caf\u{fffd} notes"]);
+}
+
+/// The parent doc among the lines of a `_bulk` body.
+fn indexed_parent(bulk: &[serde_json::Value]) -> &serde_json::Value {
+    bulk.iter()
+        .find(|line| line["document_relation"] == "document")
+        .expect("a parent doc is written")
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("email_attachment_documents"))
+)]
+async fn a_full_index_marks_only_email_attachments(pool: sqlx::PgPool) {
+    let (_, attachment) =
+        index_text_file(&pool, "attachment-a", FileType::Html, b"<p>forwarded</p>").await;
+    let (_, own) = index_text_file(&pool, "plain-d", FileType::Html, b"<p>mine</p>").await;
+
+    assert_eq!(indexed_parent(&attachment)["is_email_attachment"], true);
+    assert_eq!(indexed_parent(&own)["is_email_attachment"], false);
 }
 
 #[tokio::test]

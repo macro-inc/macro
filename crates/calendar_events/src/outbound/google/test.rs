@@ -3,6 +3,7 @@ use super::*;
 mod all_day;
 mod import;
 mod points;
+mod truncate;
 
 #[test]
 fn calendar_access_role_is_reflected_on_mapped_events() {

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO memory_profile (user_id, content, through_date, revision) VALUES ($1, '', $2, 0) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6aedf48895b7032151d38ee877845c525d37c3b2319739bc96568edb063c449a"
+}

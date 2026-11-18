@@ -22,21 +22,39 @@ const MENTION = buildAgentSessionMentionMarkdown({
   label: LABEL,
 });
 
+// Agents often leave out the empty documentName their instructions show.
+const UNNAMED_MENTIONS = [
+  ['calendar-event', 'calendar', {}],
+  ['email-thread', 'email', {}],
+  ['call-record', 'call', {}],
+  ['channel', 'channel', { channel_message_id: 'channel-message' }],
+  ['document', 'md', {}],
+]
+  .map(
+    ([documentId, blockName, blockParams]) =>
+      `- <m-document-mention>${JSON.stringify({ documentId, blockName, blockParams })}</m-document-mention>`
+  )
+  .join('\n');
+
 function Fixture() {
   const [stopped, setStopped] = createSignal(
     new URLSearchParams(location.search).has('stopped')
   );
   const literal = new URLSearchParams(location.search).has('literal');
+  const unnamed = new URLSearchParams(location.search).has('unnamed');
   const reply = (): FoldedMessage => ({
     agentSessionId: 'fixture',
+    key: '1:agent',
     turn: 1,
     author: { kind: 'agent' },
     parts: [
       {
         kind: 'text',
-        text: literal
-          ? 'Use `<m-document-mention>` as the tag name.'
-          : `Here is ${MENTION}. The next reference is <m-document-mention>{"documentId":"unfinished`,
+        text: unnamed
+          ? UNNAMED_MENTIONS
+          : literal
+            ? 'Use `<m-document-mention>` as the tag name.'
+            : `Here is ${MENTION}. The next reference is <m-document-mention>{"documentId":"unfinished`,
       },
     ],
     stop: stopped() ? { kind: 'cancelled' } : null,
@@ -57,25 +75,23 @@ function Fixture() {
     client.clear();
   });
   const setAccess = (accessible: boolean) => {
-    for (const graphql of [false, true]) {
-      client.setQueryData(
-        agentSessionKeys.preview(SESSION_ID, graphql).queryKey,
-        accessible
-          ? {
-              access: 'access',
-              data: {
-                id: SESSION_ID,
-                name: LABEL,
-                ownerId: 'fixture-owner',
-                botId: 'fixture-bot',
-                status: { kind: 'disconnected' },
-                createdAt: '',
-                updatedAt: '',
-              },
-            }
-          : { access: 'no_access' }
-      );
-    }
+    client.setQueryData(
+      agentSessionKeys.preview(SESSION_ID).queryKey,
+      accessible
+        ? {
+            access: 'access',
+            data: {
+              id: SESSION_ID,
+              name: LABEL,
+              ownerId: 'fixture-owner',
+              botId: 'fixture-bot',
+              status: { kind: 'disconnected' },
+              createdAt: '',
+              updatedAt: '',
+            },
+          }
+        : { access: 'no_access' }
+    );
   };
   setAccess(true);
   return (

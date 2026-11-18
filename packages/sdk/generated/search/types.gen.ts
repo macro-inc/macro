@@ -24,7 +24,7 @@ export type AgentSessionFilters = {
      */
     include?: boolean;
     /**
-     * Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by session owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
      * owner.
      */
@@ -81,6 +81,11 @@ export type AgentSessionSearchResult = {
 };
 
 /**
+ * A kind of attachment a thread's messages carry, by MIME type.
+ */
+export type AttachmentKind = 'pdf' | 'image' | 'document';
+
+/**
  * Filters for canonical calendar-event entities.
  */
 export type CalendarEventFilters = {
@@ -119,15 +124,33 @@ export type CalendarEventFilters = {
  */
 export type CalendarEventMetadata = {
     /**
+     * Display name of the calendar holding this copy. Absent on an event
+     * shared with the user, which is on none of their calendars.
+     */
+    calendarName?: string | null;
+    /**
      * Direct conference join URL when known.
      */
     conferenceUrl?: string | null;
+    /**
+     * Whether a calendar holding this copy is on the user's schedule. The
+     * user can see calendars that are not theirs, such as a colleague's: a
+     * row without this, and that they do not attend, says what that calendar
+     * shows, not where the user is.
+     */
+    contributesToAvailability?: boolean | null;
     createdAt: string;
     /**
      * Free-text description, when the event carries one. May contain HTML from
      * the source; clients render a plain-text preview.
      */
     description?: string | null;
+    /**
+     * The connected inbox syncing that calendar. It stays the user's own
+     * address on a colleague's calendar, so it never says whose calendar it
+     * is.
+     */
+    inbox?: string | null;
     /**
      * Whether the canonical source prohibits mutation.
      */
@@ -139,6 +162,7 @@ export type CalendarEventMetadata = {
     isRecurring: boolean;
     occurrence?: null | CalendarEventSearchOccurrence;
     organizer?: null | CalendarEventOrganizer;
+    role?: null | CalendarEventSearchRole;
     /**
      * Canonical status (`confirmed`, `tentative`, `cancelled`).
      */
@@ -151,8 +175,10 @@ export type CalendarEventMetadata = {
 };
 
 /**
- * The event's organizer — its creator, in Google's model. Either field can be
- * absent when the source does not name it.
+ * The organizer the provider names on the event. Either field can be absent
+ * when the source does not name it. On a read-only Outlook calendar, such as
+ * its holidays, Microsoft names the mailbox owner on every event, so this
+ * does not say the user organized anything: `role` does.
  */
 export type CalendarEventOrganizer = {
     /**
@@ -218,6 +244,11 @@ export type CalendarEventSearchResult = {
      */
     score?: number | null;
 };
+
+/**
+ * What the user is on one copy of an event, through the inbox holding it.
+ */
+export type CalendarEventSearchRole = 'organizer' | 'guest';
 
 /**
  * Which calendar events a unified search covers.
@@ -658,9 +689,9 @@ export type ChatFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by chat owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -905,9 +936,9 @@ export type DocumentFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by document owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -1054,6 +1085,11 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_descrip
  */
 export type EmailFilters = {
     /**
+     * Only threads with at least one attachment of one of these kinds, by
+     * MIME type, on any of their messages. Empty applies no constraint.
+     */
+    attachments?: Array<AttachmentKind>;
+    /**
      * Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC.
      */
     bcc?: Array<string>;
@@ -1073,7 +1109,8 @@ export type EmailFilters = {
      * fully-qualified addresses. Each address is authorized against
      * `crm_contacts` + `crm_companies` (contact must not be hidden, company
      * must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_domains`.
+     * Mutually exclusive with `crm_domains`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_addresses?: Array<string>;
     /**
@@ -1082,9 +1119,16 @@ export type EmailFilters = {
      * domains (in any of sender/cc/bcc/recipient). Each domain is authorized
      * against `crm_domains` + `crm_companies` (must exist for the caller's
      * team, company must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_addresses`.
+     * Mutually exclusive with `crm_addresses`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_domains?: Array<string>;
+    /**
+     * Filter by whether the thread is done: true for threads out of the
+     * inbox (archived), false for threads still in it. This is the mailbox
+     * state the Email view's Done filter uses, independent of notifications.
+     */
+    done?: boolean | null;
     /**
      * Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads.
      */
@@ -1119,7 +1163,14 @@ export type EmailFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * A list of project ids to search within. Empty to ignore project filtering.
+     * Drive folder (project) ids to search within: threads filed in any of
+     * these folders. Besides the caller's own threads, it reaches every
+     * thread in a folder shared with the caller, whoever's inbox holds it,
+     * as the folder's list does. Search takes at most 50 folders and
+     * rejects more with a 400, and matches the query against at most 10,000
+     * of their threads in all; threads past that are not searched, unless
+     * `email_thread_ids` names them, and at most 10,000 named threads are
+     * searched in all. Empty to ignore project filtering.
      */
     project_ids?: Array<string>;
     /**
@@ -1135,6 +1186,7 @@ export type EmailFilters = {
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    view?: null | EmailSearchView;
 };
 
 /**
@@ -1292,6 +1344,11 @@ export type EmailSearchResult = {
      */
     sent_at?: string | null;
 };
+
+/**
+ * A mailbox view the Email list scopes a search to, as its tabs do.
+ */
+export type EmailSearchView = 'sent' | 'drafts';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -1538,9 +1595,9 @@ export type ProjectFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by project owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -1636,6 +1693,20 @@ export type ProjectSearchResult = {
 };
 
 /**
+ * UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.
+ */
+export type PropertyDateFilterRange = {
+    /**
+     * Exclusive UTC upper bound, omitted for an open end.
+     */
+    end?: string | null;
+    /**
+     * Inclusive UTC lower bound, omitted for an open start.
+     */
+    start?: string | null;
+};
+
+/**
  * Property definition model (service representation).
  */
 export type PropertyDefinition = {
@@ -1667,6 +1738,7 @@ export type PropertyDefinition = {
  * Multiple filters are AND'd together.
  */
 export type PropertyFilter = {
+    date_range?: null | PropertyDateFilterRange;
     /**
      * Entity reference IDs to match. Multiple values are OR'd together.
      */
@@ -1676,6 +1748,10 @@ export type PropertyFilter = {
      * When None, matches across all entity types.
      */
     entity_type?: string | null;
+    /**
+     * Flat Soup/search presence filter: true expands to an open date range, false to its negation.
+     */
+    has_date?: boolean | null;
     /**
      * Select option UUIDs to match. Multiple values are OR'd together.
      */
@@ -2453,6 +2529,11 @@ export type TaskFilters = {
     include_cbm_atm_nc?: boolean | null;
 };
 
+/**
+ * How a query of several terms matches document content.
+ */
+export type TermMatching = 'all' | 'dynamic';
+
 export type UnifiedSearchRequest = {
     /**
      * Which calendar events to search. Defaults to `own`: events on the
@@ -2478,13 +2559,19 @@ export type UnifiedSearchRequest = {
      */
     match_type: MatchType;
     /**
-     * The search query string. Must be at least 3 characters.
+     * The search query string. Must not be empty; one character is enough.
      */
     query: string;
     /**
      * Fields to search on (Name, Content, NameContent). Defaults to Content
      */
     search_on?: SearchOn;
+    /**
+     * How a query of several terms matches document content. Defaults to
+     * `all`, the strict AND that AI tools and the SDK rely on; the web
+     * app's Search view asks for `dynamic`.
+     */
+    term_matching?: TermMatching;
 };
 
 export type UnifiedSearchResponse = {

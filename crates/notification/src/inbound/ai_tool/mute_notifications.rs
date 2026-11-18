@@ -153,6 +153,11 @@ where
                     ItemNotificationPreferenceError::InvalidDeadline => {
                         invalid("snoozeUntil must be in the future")
                     }
+                    error @ (ItemNotificationPreferenceError::TooManyItems
+                    | ItemNotificationPreferenceError::ConflictingTypes
+                    | ItemNotificationPreferenceError::MentionsOnlyUnsupported) => {
+                        invalid(&error.to_string())
+                    }
                     error @ ItemNotificationPreferenceError::Repository(_) => ToolCallError {
                         description: "failed to update notification preferences".to_string(),
                         internal_error: anyhow::anyhow!("{error}"),

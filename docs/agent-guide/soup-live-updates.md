@@ -136,8 +136,8 @@ registration/layout measurement.
 
 Shared list-filter menus in Home, Tasks, Drive, Email, Reviews, and CRM, plus
 searchable filter dropdowns, use the [multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
-checkbox toggles stay open, row activation adds and closes, and Shift/Only
-replaces the current group's selection without closing. Single-select controls,
+clicking a row or its checkbox toggles and stays open, Enter adds and closes,
+and Shift/Only replaces the current group's selection without closing. Single-select controls,
 independent settings, and mobile filter drawers retain their existing behavior.
 
 Channels use the same general Soup reconciliation path, not a separate local page
@@ -160,6 +160,12 @@ these postings atomically; rollback does not restore unrelated property values.
 Checkpoint v14 rehydrates older projections without wiping normalized records or
 queued mutations. General Soup still uses its existing server pagination; filter-only
 offline checks use an ungrouped view with a created/updated timestamp sort.
+
+The email Focus list is not a Soup list the cache maintains: membership comes from
+the worker's classifications, so it reads `user.emailFocus` again when told to. See
+the [Focus walkthrough](email.md) and `useEmailFocusQuery`. A list like it pushes
+over the connection gateway and refreshes through `createVisibleRefresh`, which
+holds a hidden tab to one read when it next shows.
 
 Realtime Soup batches coalesce repeated entity IDs (including entity type), keeping
 that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.

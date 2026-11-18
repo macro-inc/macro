@@ -1,3 +1,5 @@
+/// Agent-to-agent handoff counting for loop limits.
+pub mod agent_hops;
 /// Existing PDF annotation use cases and authorization.
 #[cfg(feature = "annotations")]
 pub mod annotations;

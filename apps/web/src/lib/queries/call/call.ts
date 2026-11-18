@@ -10,10 +10,7 @@ import type { SharePermissionV2 } from '@service-storage/generated/schemas/share
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import {
-  updateEntitySharePolicy,
-  usesGraphqlSharePolicy,
-} from '../storage/entity-mutations';
+import { updateEntitySharePolicy } from '../storage/entity-mutations';
 import { callKeys } from './keys';
 
 function activeCallQueryOptions(channelId: string) {
@@ -29,14 +26,19 @@ export function useActiveCallQuery(channelId: Accessor<string>) {
   return useQuery(() => activeCallQueryOptions(channelId()));
 }
 
-/** Fresh lookups keep recovery from re-creating a call that already ended. */
+/** Fresh lookups resolve channel-only joins and verify recovery targets. */
 export function fetchActiveCall(channelId: string) {
   return throwOnErr(() => callServiceClient.checkActiveCall(channelId));
 }
 
-/** Each join attempt owns its request, including retries after a timeout. */
-export function requestCallToken(channelId: string) {
+/** Only explicit Start actions may create a call. */
+export function requestStartCallToken(channelId: string) {
   return throwOnErr(() => callServiceClient.getOrCreateCall(channelId));
+}
+
+/** Each join attempt is bound to one session, including retries. */
+export function requestCallToken(callId: string) {
+  return throwOnErr(() => callServiceClient.joinCall(callId));
 }
 
 /**
@@ -150,6 +152,22 @@ function isNotFoundResultError(error: unknown) {
   );
 }
 
+/**
+ * Refetches the record of the channel's call after the user leaves it, even
+ * while unmounted, so the Call tab doesn't list them in the call. Runs before
+ * the active-call invalidation, whose refetch may clear the call id.
+ */
+export function refetchLeftCallRecord(channelId: string) {
+  const callId = queryClient.getQueryData<CallActiveResponse | null>(
+    callKeys.active(channelId).queryKey
+  )?.callId;
+  if (!callId) return;
+  queryClient.invalidateQueries({
+    queryKey: callKeys.record(callId).queryKey,
+    refetchType: 'all',
+  });
+}
+
 export function useLeaveCallMutation() {
   return useMutation(() => ({
     gcTime: 0,
@@ -164,7 +182,8 @@ export function useLeaveCallMutation() {
         throw error;
       }
     },
-    onSuccess() {
+    onSuccess(_result, channelId) {
+      refetchLeftCallRecord(channelId);
       fireAndForget(invalidateActiveCallQueries(), 'call-membership');
     },
     onError(error: Error) {
@@ -188,6 +207,20 @@ function callRecordQueryOptions(callId: string) {
 
 export function useCallRecordQuery(callId: Accessor<string>) {
   return useQuery(() => callRecordQueryOptions(callId()));
+}
+
+function liveCallRecordQueryOptions(callId: string) {
+  return queryOptions({
+    ...callRecordQueryOptions(callId),
+    // Participants join and leave without an event; poll like the active call.
+    staleTime: 0,
+    refetchInterval: 15_000,
+  });
+}
+
+/** The call record with current participants, for presence in a live call. */
+export function useLiveCallRecordQuery(callId: Accessor<string>) {
+  return useQuery(() => liveCallRecordQueryOptions(callId()));
 }
 
 export function fetchCallRecord(
@@ -234,16 +267,11 @@ export function buildCallTeamSharePayload(
 }
 
 export function updateCallTeamShare(callId: string, shared: boolean) {
-  if (usesGraphqlSharePolicy('call'))
-    return updateEntitySharePolicy(
-      'call',
-      callId,
-      buildCallTeamSharePayload(shared)
-    );
-  return callServiceClient.editCallRecord({
+  return updateEntitySharePolicy(
+    'call',
     callId,
-    sharePermission: buildCallTeamSharePayload(shared),
-  });
+    buildCallTeamSharePayload(shared)
+  );
 }
 
 function patchCachedCallTeamShare(

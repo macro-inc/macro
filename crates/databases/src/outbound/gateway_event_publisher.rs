@@ -50,6 +50,9 @@ pub struct AwarenessRelay {
     pub database_id: DatabaseId,
     /// The viewer.
     pub user_id: String,
+    /// Whether the viewer's grant lets them edit; a viewer who cannot is
+    /// shown as viewing.
+    pub can_edit: bool,
     /// Where the viewer is.
     pub state: Awareness,
     /// When the server relayed it, in milliseconds since the Unix epoch.
@@ -127,6 +130,7 @@ impl TableEventPublisher for GatewayTableEventPublisher {
         &self,
         database_id: DatabaseId,
         user_id: &MacroUserIdStr<'_>,
+        can_edit: bool,
         state: &Awareness,
     ) -> Result<(), Self::Error> {
         self.client
@@ -136,6 +140,7 @@ impl TableEventPublisher for GatewayTableEventPublisher {
                 serde_json::to_value(AwarenessRelay {
                     database_id,
                     user_id: user_id.as_ref().to_string(),
+                    can_edit,
                     state: state.clone(),
                     relayed_at: Utc::now(),
                 })
@@ -172,6 +177,7 @@ impl TableEventPublisher for NoOpTableEventPublisher {
         &self,
         _database_id: DatabaseId,
         _user_id: &MacroUserIdStr<'_>,
+        _can_edit: bool,
         _state: &Awareness,
     ) -> Result<(), Self::Error> {
         Ok(())
@@ -230,12 +236,17 @@ impl TableEventPublisher for MaybeGatewayTableEventPublisher {
         &self,
         database_id: DatabaseId,
         user_id: &MacroUserIdStr<'_>,
+        can_edit: bool,
         state: &Awareness,
     ) -> Result<(), Self::Error> {
         match self {
-            Self::Gateway(publisher) => publisher.awareness(database_id, user_id, state).await,
+            Self::Gateway(publisher) => {
+                publisher
+                    .awareness(database_id, user_id, can_edit, state)
+                    .await
+            }
             Self::NoOp(publisher) => publisher
-                .awareness(database_id, user_id, state)
+                .awareness(database_id, user_id, can_edit, state)
                 .await
                 .map_err(|never| match never {}),
         }

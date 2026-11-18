@@ -46,7 +46,8 @@ impl SettlementCandidates for PgSettlementCandidates {
                 UNION ALL
                 SELECT user_id
                 FROM ai_credit_reload
-                WHERE status = 'pending'
+                WHERE kind = 'automatic'
+                  AND status = 'pending'
                   AND stripe_invoice_id IS NULL
                   AND updated_at < $2::timestamptz - INTERVAL '10 minutes'
                 UNION ALL

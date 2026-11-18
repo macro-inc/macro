@@ -139,17 +139,21 @@ function RegularMessageLayout(props: {
         <Message.SenderIcon />
       </Message.Slot>
       <Message.Slot placement="header" class="flex flex-col gap-0.5 min-w-0">
-        <div class="flex items-baseline gap-1 min-w-0">
-          <Message.SenderName />
-          <Message.AgentBadge />
-          <Message.Timestamp
-            class="shrink-0"
-            format={
-              props.timestampFormat ??
-              (props.parent?.type === 'channel' ? 'time' : 'dateAndTime')
-            }
-          />
-          <Message.EditedIndicator class="shrink-0" />
+        {/* In a narrow card (a document comment) the session link wraps to
+            its own line rather than running past the card's edge. */}
+        <div class="flex flex-wrap items-baseline gap-x-1 gap-y-0.5 min-w-0">
+          <div class="flex items-baseline gap-1 min-w-0">
+            <Message.SenderName />
+            <Message.AgentBadge />
+            <Message.Timestamp
+              class="shrink-0"
+              format={
+                props.timestampFormat ??
+                (props.parent?.type === 'channel' ? 'time' : 'dateAndTime')
+              }
+            />
+            <Message.EditedIndicator class="shrink-0" />
+          </div>
           <Message.AgentSessionLink class="ml-auto" />
         </div>
         <Show when={!props.hideTriggeredBy}>

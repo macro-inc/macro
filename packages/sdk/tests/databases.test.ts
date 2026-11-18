@@ -4,6 +4,8 @@ import type {
   DatabaseDetail,
   Table,
 } from '../generated/storage/types.gen';
+import { DatabaseTable } from '../src/entities/databases/table';
+import { DatabaseView } from '../src/entities/databases/view';
 import { Macro, MacroOpRefusedError } from '../src/macro';
 
 const originalFetch = globalThis.fetch;
@@ -33,6 +35,7 @@ const support: DatabaseDetail = {
     owner_id: 'owner',
     created_at: '2026-10-01T00:00:00Z',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'owner',
   tables: [
@@ -89,6 +92,46 @@ afterEach(() => {
 });
 
 describe('Database', () => {
+  test('links a table and a view, opening the database on them', () => {
+    const database = new Macro({
+      token: 'user-token',
+      hosts: { storage: host },
+      webAppUrl: 'https://app.example.test',
+    }).databases.byId(databaseId);
+    const table = DatabaseTable.byId(database, tableId);
+    const view = DatabaseView.byId(table, 'view-1');
+    expect(table.webUrl()).toBe(
+      `https://app.example.test/app/database/${databaseId}?tableId=${tableId}`,
+    );
+    expect(view.webUrl()).toBe(
+      `https://app.example.test/app/database/${databaseId}?tableId=${tableId}&viewId=view-1`,
+    );
+    expect(JSON.parse(JSON.stringify(view))).toEqual({
+      id: 'view-1',
+      tableId,
+      url: view.webUrl(),
+    });
+  });
+
+  test('creates a database with its first table named', async () => {
+    const writes: { url: string; body: unknown }[] = [];
+    intercept(async (request) => {
+      writes.push({ url: request.url, body: await request.json() });
+      return Response.json(support.database, { status: 201 });
+    });
+    const database = await client().databases.create({
+      name: 'Support',
+      firstTable: 'Tickets',
+    });
+    expect(database.id).toBe(databaseId);
+    expect(writes).toEqual([
+      {
+        url: `${host}/databases`,
+        body: { name: 'Support', firstTable: 'Tickets' },
+      },
+    ]);
+  });
+
   test('renames a table by op with the previously read name and reloads the schema', async () => {
     let current = support;
     let reads = 0;
@@ -619,6 +662,47 @@ describe('Database', () => {
       client().databases.byId('other').deleteTable(tickets),
     ).rejects.toThrow('does not belong');
     expect(writes).toHaveLength(2);
+  });
+
+  test('duplicates a database into a handle on the copy, named or not', async () => {
+    const copyId = '0198a4cc-e138-7670-a308-a6b766602799';
+    const requests: { method: string; path: string; body: unknown }[] = [];
+    intercept(async (request) => {
+      requests.push({
+        method: request.method,
+        path: new URL(request.url).pathname,
+        body: await request.json(),
+      });
+      return Response.json(
+        {
+          id: copyId,
+          name: 'Support copy',
+          owner_id: 'viewer',
+          created_at: '2026-11-02T00:00:00Z',
+          trashed_at: null,
+        },
+        { status: 201 },
+      );
+    });
+    const database = client().databases.byId(databaseId);
+
+    const named = await database.duplicate({ name: 'Support 2027' });
+    const unnamed = await database.duplicate();
+
+    expect(named.id).toBe(copyId);
+    expect(unnamed.id).toBe(copyId);
+    expect(requests).toEqual([
+      {
+        method: 'POST',
+        path: `/databases/${databaseId}/duplicate`,
+        body: { name: 'Support 2027' },
+      },
+      {
+        method: 'POST',
+        path: `/databases/${databaseId}/duplicate`,
+        body: {},
+      },
+    ]);
   });
 
   test('creates a table under a client-minted UUIDv7 and returns its handle', async () => {

@@ -23,9 +23,6 @@ vi.mock('@channel/Input/message-payload', () => ({}));
 vi.mock('@channel/use-channel-bot-mention-users', () => ({
   useMessageBotMentionUsers: () => [],
 }));
-vi.mock('@queries/contacts/contacts', () => ({
-  useContacts: () => () => [],
-}));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({
@@ -109,14 +106,17 @@ function setup(initialTargetId?: string) {
   });
   const [canWrite, setCanWrite] = createSignal(true);
   const [targetId, setTargetId] = createSignal(initialTargetId);
+  const [requestKey, setRequestKey] = createSignal(0);
   return {
     setCanWrite,
     setTargetId,
+    setRequestKey,
     ...render(() => (
       <ProjectDiscussion
         projectId={projectId}
         canWrite={canWrite()}
         targetId={targetId()}
+        targetRequestKey={requestKey()}
       />
     )),
   };
@@ -167,6 +167,19 @@ describe('project discussion uses the task conversation', () => {
     expect(url.pathname).toBe(
       `/app/component/initiative-view~${projectId}~overview~${oldId}`
     );
+  });
+
+  it('re-aims the same comment without replacing the composer', () => {
+    const view = setup(oldId);
+    const comment = view.getByText('Old comment').closest('article')!;
+    const composer = view.getByRole('textbox');
+    fireEvent.input(composer, { target: { value: 'Unsent reply' } });
+    fireEvent.click(comment);
+    expect(comment.dataset.target).toBeUndefined();
+    view.setRequestKey(1);
+    expect(comment.dataset.target).toBe(oldId);
+    expect(view.getByRole('textbox')).toBe(composer);
+    expect((composer as HTMLTextAreaElement).value).toBe('Unsent reply');
   });
 
   it('dismisses a linked comment highlight without changing the loaded timeline', () => {

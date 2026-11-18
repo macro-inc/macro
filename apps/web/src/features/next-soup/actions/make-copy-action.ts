@@ -12,7 +12,8 @@ export const makeCopyAction = () => {
   const canExecute = (entity: EntityData): boolean =>
     (entity.type === 'document' ||
       entity.type === 'chat' ||
-      entity.type === 'project') &&
+      entity.type === 'project' ||
+      entity.type === 'database') &&
     canDuplicateItemType(entity.type);
 
   const execute = async (entities: EntityData[]) => {

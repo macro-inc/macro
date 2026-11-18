@@ -496,7 +496,6 @@ function FuzzEditor(props: {
               syncSource={props.syncSource}
               sourceReady={() => true}
               canEdit={() => true}
-              canComment={() => false}
               editorError={editorError}
             />
           )}

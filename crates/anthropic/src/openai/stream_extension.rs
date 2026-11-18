@@ -3,8 +3,6 @@ use crate::types::response::Citation;
 use crate::types::response::code_execution::{
     BashCodeExecutionResponse, TextEditorCodeExecutionResponse,
 };
-use crate::types::response::web_fetch::WebFetchResponse;
-use crate::types::response::web_search::WebSearchResponse;
 use async_openai::error::OpenAIError;
 use async_openai::types::chat::CreateChatCompletionStreamResponse;
 use futures::Stream;
@@ -14,8 +12,6 @@ use std::pin::Pin;
 #[derive(Clone, Debug, PartialEq)]
 pub enum AnthropicResponseExtension {
     Citation(Citation),
-    WebSearchToolResponse(WebSearchResponse),
-    WebFetchToolResponse(WebFetchResponse),
     BashCodeExecutionToolResponse(BashCodeExecutionResponse),
     TextEditorCodeExecutionToolResponse(TextEditorCodeExecutionResponse),
     ServerToolUse(ServerToolUse),

@@ -172,7 +172,7 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
-        MacroAuthJwtValidator::new(jwt_args),
+        MacroAuthJwtValidator::new(jwt_args.clone()),
         InternalAuthConfig {
             api_key: config.internal_api_key.to_string(),
             default_user_id: None,
@@ -318,17 +318,10 @@ async fn main() -> anyhow::Result<()> {
         ));
     }
     let api_result = calendar_service::api::setup_and_serve(ApiContext {
+        correlation: agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args),
         config: Arc::new(config),
         authorization_state,
         calendar_service,
-        calendar_notes: Arc::new(calendar_events::domain::notes::MeetingNotes::new(
-            calendar_events::outbound::pg_notes::PgNoteRepository::new(db.clone()),
-        )),
-        note_access: Arc::new(
-            entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(db.clone()),
-            ),
-        ),
         calendar_mutation_service,
         calendar_team_service,
         scheduling_service,

@@ -1,24 +1,28 @@
 import { promptActionOf } from '@app/features/block-agent/component/prompt-action';
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
+import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request-access';
+import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
+import { t } from '@app/lib/i18n';
 import {
-  createInputAttachmentTracker,
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
-import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
+import { catalogModelLabel } from '@core/component/AI/constant/model-label';
+import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
-  acceleratedSpeed,
-  speedForModel,
-} from '@core/component/AI/constant/speed';
-import { fastModeEnabled } from '@core/component/AI/signal/speed';
+  preferredSpeed,
+  setPreferredSpeed,
+} from '@core/component/AI/signal/speed';
+import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAttachmentMention';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
+import type { AgentSessionEntity } from '@entity';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
 import AutoIcon from '@icon/system/regular/sparkle.svg';
@@ -28,12 +32,21 @@ import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createMemo, createSignal, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  on,
+  Show,
+} from 'solid-js';
+import { AgentUpdatesStack } from '../../agent-updates/views/AgentUpdatesStack';
 import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
   type EffortChoice,
   effortConfigOption,
   effortLabel,
+  selectConfigOption,
 } from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
 import { type AgentKind, kindForMode } from '../core/agent-kind';
@@ -42,13 +55,16 @@ import {
   agentsModeLabel,
   type ComposerMode,
 } from '../core/mode';
-import { defaultBranchFor } from '../core/repository';
+import { defaultBranchFor, sameRepository } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import {
+  createPersistedComposerAttachments,
   createPersistedComposerDraft,
   NEW_CONVERSATION_ATTACHMENTS_KEY,
 } from '../primitives/composer-draft';
+import { createPreferredEffort } from '../primitives/preferred-effort';
 import { createPreferredInmemModel } from '../primitives/preferred-inmem-model';
+import { createPreferredRepository } from '../primitives/preferred-repository';
 import { createRecentRepositories } from '../primitives/recent-repositories';
 import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { createComposerModels } from '../queries/composer-models';
@@ -57,6 +73,9 @@ import { createRepositoryBranches } from '../queries/repository-branches';
 import { AGENTS_TOUR } from '../tour';
 import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
+
+/** Another surface asking the composer to select an agent. */
+export type AgentRequest = { agentId: string; request: string };
 
 /** What the composer hands the workspace to start a session with. */
 export type StartConversation = {
@@ -82,6 +101,8 @@ export function NewChatPage(props: {
   workspaceId?: string;
   draft?: string;
   onDraftChange?: (draft: string) => void;
+  /** Override the New conversation attachment store. Home uses its own key. */
+  attachmentsKey?: string;
   autoFocus?: boolean;
   registerFocus?: (focus: () => void) => void;
   roster: RosterAgent[];
@@ -91,12 +112,23 @@ export function NewChatPage(props: {
    */
   mode?: ComposerMode;
   onModeChange?: (mode: ComposerMode) => void;
+  /**
+   * An agent to select, e.g. one just set up on a Macro computer. Each
+   * request selects it again, also after the user picked another; one not in
+   * the roster yet is selected once it arrives.
+   */
+  requestedAgent?: AgentRequest;
   rosterLoading: boolean;
   /** Agents are listed but whether they can start is still unknown. */
   availabilityLoading?: boolean;
   onStart: (start: StartConversation) => void;
   /** Opens the roster page on the given kind's tab. */
   onOpenRoster: (kind: AgentKind) => void;
+  updateSessions?: readonly AgentSessionEntity[];
+  onOpenUpdateSession?: (sessionId: string) => void;
+  showUpdates?: boolean;
+  /** Centered under the composer, such as the Agents tutorial pill. */
+  belowComposer?: JSX.Element;
 }) {
   const userId = useUserId();
   const billing = useAiBillingSummaryQuery();
@@ -104,6 +136,7 @@ export function NewChatPage(props: {
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
   const preferredInmem = createPreferredInmemModel(userId());
+  const preferredEffort = createPreferredEffort(userId());
   const ownMode = createWorkspaceMode();
   const mode = () => props.mode ?? ownMode.mode();
   const auto = () => mode() === 'auto';
@@ -113,19 +146,34 @@ export function NewChatPage(props: {
     props.roster.filter((agent) => agent.kind === kindForMode(kind));
   const options = () => optionsFor(agentsMode());
   const [agentId, setAgentId] = createSignal<string>();
+  createEffect(
+    on(
+      () => props.requestedAgent,
+      (requested) => {
+        if (requested) setAgentId(requested.agentId);
+      }
+    )
+  );
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
+  const [speedPickerOpen, setSpeedPickerOpen] = createSignal(false);
   const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
-  // A new conversation starts on Automatic until the caller picks a repository.
-  const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
+  const preferredRepository = createPreferredRepository(userId());
+  // An explicit Auto-detect pick must override a saved repository, too.
+  const [repositoryOverride, setRepositoryOverride] = createSignal<{
+    url?: string;
+  }>();
   const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const draft = () => props.draft ?? persistedDraft.draft();
   const setDraft = (text: string) =>
     props.onDraftChange
       ? props.onDraftChange(text)
       : persistedDraft.setDraft(text);
-  const [branchOverride, setBranchOverride] = createSignal<string>();
+  const [branchOverride, setBranchOverride] = createSignal<{
+    repository: string;
+    branch: string;
+  }>();
   /** The picked agent, else the last one used, else Macro, else any that can start. */
   const preferredAgent = (kind: AgentsMode, picked?: string) => {
     const options = optionsFor(kind);
@@ -178,20 +226,45 @@ export function NewChatPage(props: {
     effortConfigOption(
       capabilities.isSuccess ? capabilities.data.configOptions : []
     );
-  const [effortSelection, setEffortSelection] = createSignal<{
-    target: string;
-    configId: string;
-    value: string;
-    name: string;
-  }>();
+  /** The selected model's tier option, when Macro's agent offers more than standard. */
+  const speedOption = () => {
+    if (capabilityTarget()?.harness !== 'in-memory') return;
+    const option = selectConfigOption(
+      capabilities.isSuccess ? capabilities.data.configOptions : [],
+      'speed',
+      'speed'
+    );
+    const offered = nativeSpeeds(
+      option?.options.map((choice) => choice.value) ?? []
+    );
+    return option && offered ? { option, offered } : undefined;
+  };
+  const speedOverride = () => {
+    const tiers = speedOption();
+    if (!tiers) return;
+    return {
+      configId: tiers.option.id,
+      value: resolveSpeed(preferredSpeed(), tiers.offered),
+    };
+  };
+  /** The last effort picked for the selected runtime and model, while it is still offered. */
   const selectedEffort = () => {
-    const selection = effortSelection();
-    return selection?.target === JSON.stringify(capabilityTarget())
-      ? selection
+    const target = capabilityTarget();
+    if (!target) return;
+    const choice = preferredEffort.effort(JSON.stringify(target));
+    const config = effort();
+    // Retain it while the selected model's discovery refreshes; startup
+    // revalidates against the runtime.
+    if (!choice || !config) return choice;
+    return config.id === choice.configId &&
+      config.options.some((option) => option.value === choice.value)
+      ? choice
       : undefined;
   };
-  // The submenu already validated this choice. Retain it while the selected
-  // model's discovery refreshes; startup revalidates against the runtime.
+  const rememberEffort = (choice: EffortChoice) => {
+    const target = capabilityTarget();
+    if (target) preferredEffort.remember(JSON.stringify(target), choice);
+  };
   const effortOverride = () => {
     const config = effort();
     const minimum =
@@ -217,28 +290,67 @@ export function NewChatPage(props: {
   const blocked = () => {
     if (choosingMode()) return 'Choosing Chat or Code…';
     const agent = selected();
-    return agent ? agent.unavailableReason : 'Choose an agent to start';
+    if (!agent) return 'Choose an agent to start';
+    if (agent.unavailableReason) return agent.unavailableReason;
+    // A paid tier would otherwise be dropped silently while the model's
+    // options are still loading.
+    if (
+      capabilityTarget()?.harness === 'in-memory' &&
+      capabilities.isPending &&
+      preferredSpeed() !== 'standard'
+    ) {
+      return t('agentControls.loadingTiers');
+    }
+    if (canSelectRepository() && repoUrl()) {
+      if (reachable.loading()) return 'Loading repositories';
+      if (reachable.error()) return 'Retry loading repositories before sending';
+    }
+    return undefined;
   };
   // Listed only while the drawer can show them: chat agents never ask.
   const reachable = createReachableRepositories(coding);
+  const repoUrl = () => {
+    const override = repositoryOverride();
+    if (override) return override.url;
+    const preferred = preferredRepository.repository();
+    if (!preferred) return undefined;
+    // Keep the saved label while loading; never submit a stale default.
+    if (reachable.loading() || reachable.error()) return preferred;
+    return reachable
+      .repositories()
+      .find((repo) => sameRepository(repo.url, preferred))?.url;
+  };
   // Listed only while a repository is chosen: listing costs a GitHub call.
   const reachableBranches = createRepositoryBranches(() =>
     coding() && !localRuntime() ? repoUrl() : undefined
   );
   // A chosen branch, or where the selected repository's own clones start.
-  const repoBranch = () =>
-    localRuntime()
-      ? 'main'
-      : (branchOverride() ??
-        defaultBranchFor(reachable.repositories(), repoUrl()));
+  const repoBranch = () => {
+    if (localRuntime()) return 'main';
+    const override = branchOverride();
+    return override && override.repository === repoUrl()
+      ? override.branch
+      : defaultBranchFor(reachable.repositories(), repoUrl());
+  };
+  const selectBranch = (branch: string) => {
+    const repository = repoUrl();
+    if (repository) setBranchOverride({ repository, branch });
+  };
   const selectRepository = (url: string | undefined) => {
     // Another repository starts on its own default branch, not the last one's.
     if (url !== repoUrl()) setBranchOverride(undefined);
-    setRepoUrl(url);
+    setRepositoryOverride({ url });
     if (url) repositories.remember(url);
   };
 
   const connect = (agent: RosterAgent) => {
+    if (agent.needsRuntimeAccess && agent.harnessId) {
+      fireAndForget(
+        requestRuntimeAccess(agent.harnessId),
+        'runtime-sharing.request'
+      );
+      return;
+    }
     // Both land on Settings → Runtimes: Cursor to save an API key, macrod to
     // restart the local runtime (one click on desktop) or re-pair it.
     if (agent.harness === 'cursor' || agent.harness === 'macrod') {
@@ -246,16 +358,13 @@ export function NewChatPage(props: {
     }
   };
 
-  const attachmentTracker = createMemo(() => {
-    const identity = userId();
-    return createInputAttachmentTracker({
-      // Home owns its attachments; unknown identities never read shared storage.
-      persistenceKey:
-        !props.onDraftChange && identity
-          ? `${NEW_CONVERSATION_ATTACHMENTS_KEY}:${encodeURIComponent(identity)}`
-          : undefined,
-    });
-  });
+  // Parents may own the text draft without owning files; those still persist here.
+  const attachmentTracker = createMemo(() =>
+    createPersistedComposerAttachments(
+      props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY,
+      userId()
+    )
+  );
   const attachFiles = (files: File[]) =>
     fireAndForget(
       uploadInputAttachments({
@@ -344,18 +453,13 @@ export function NewChatPage(props: {
         ? { modelFallback: true }
         : {}),
       effortOverride: coder ? undefined : effortOverride(),
-      ...(model && inMemory && acceleratedSpeed(model)
-        ? {
-            speedOverride: {
-              configId: 'speed',
-              value: speedForModel(model, fastModeEnabled()),
-            },
-          }
+      ...(inMemory && speedOverride()
+        ? { speedOverride: speedOverride() }
         : {}),
     });
-    // Macro's preferred model stays; coding-agent submenu picks are one-shot.
+    // Macro's preferred model and the picked efforts stay; coding-agent model
+    // picks are one-shot.
     setModelOverride(undefined);
-    setEffortSelection(undefined);
   };
 
   const selectAgent = (
@@ -372,14 +476,21 @@ export function NewChatPage(props: {
     } else {
       setModelOverride(model);
     }
-    setEffortSelection(
-      selection
-        ? { ...selection, target: JSON.stringify(capabilityTarget()) }
-        : undefined
-    );
+    if (selection) rememberEffort(selection);
   };
 
   let focusInput: (() => void) | undefined;
+  const chatAboutUpdate = (sessionId: string, sessionName: string) => {
+    const mention = chatAttachmentMentionToMarkdown({
+      documentId: sessionId,
+      documentName: sessionName,
+      blockName: 'agent',
+    });
+    setDraft(
+      `${draft().trim()}${draft().trim() ? '\n\n' : ''}${mention}\nAbout this update: `
+    );
+    focusInput?.();
+  };
   const restoreInputFocus = (event: Event) => {
     event.preventDefault();
     focusInput?.();
@@ -403,9 +514,8 @@ export function NewChatPage(props: {
   );
 
   const setMode = (next: ComposerMode) => {
-    // A model or effort picked for the other mode's agent does not carry over.
+    // A model picked for the other mode's agent does not carry over.
     setModelOverride(undefined);
-    setEffortSelection(undefined);
     if (props.onModeChange) props.onModeChange(next);
     else ownMode.setMode(next);
   };
@@ -455,7 +565,7 @@ export function NewChatPage(props: {
       onRetryBranches={reachableBranches.retry}
       onConnectGitHub={() => openSettings('Connected')}
       onSelectRepository={selectRepository}
-      onSelectBranch={setBranchOverride}
+      onSelectBranch={selectBranch}
     />
   );
 
@@ -463,7 +573,9 @@ export function NewChatPage(props: {
     <ChatComposer
       autoFocus={props.autoFocus}
       collapseOnBlur={props.compact}
-      controlsOpen={repositoryPickerOpen() || effortPickerOpen()}
+      controlsOpen={
+        repositoryPickerOpen() || effortPickerOpen() || speedPickerOpen()
+      }
       registerFocus={(focus) => {
         focusInput = focus;
         props.registerFocus?.(focus);
@@ -481,20 +593,16 @@ export function NewChatPage(props: {
             config={effort()}
             value={effortOverride()?.value}
             disabled={Boolean(blocked())}
-            onChange={(choice) =>
-              setEffortSelection({
-                ...choice,
-                target: JSON.stringify(capabilityTarget()),
-              })
-            }
+            onChange={rememberEffort}
           />
-          <Show
-            when={['macro-inmem', 'in-memory'].includes(
-              selected()?.harness ?? ''
-            )}
-          >
-            <SpeedToggle model={composerModelOverride() ?? ''} />
-          </Show>
+          <SpeedSelector
+            onCloseAutoFocus={restoreInputFocus}
+            onOpenChange={setSpeedPickerOpen}
+            offered={speedOption()?.option.options ?? []}
+            value={speedOverride()?.value ?? 'standard'}
+            disabled={Boolean(blocked())}
+            onChange={setPreferredSpeed}
+          />
         </div>
       }
       drawer={
@@ -510,11 +618,9 @@ export function NewChatPage(props: {
       drawerOpen
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
-      modelName={modelLabel(
+      modelName={catalogModelLabel(
         composerModelOverride(),
-        selectedCatalog
-          .models()
-          .find((model) => model.id === composerModelOverride())?.name
+        selectedCatalog.models()
       )}
       supportsImages={
         selectedCatalog
@@ -554,9 +660,25 @@ export function NewChatPage(props: {
               data-agent-new-composer={props.workspaceId}
               class="agents-view-portal touch:px-(--mobile-chrome-gutter) pointer-events-auto min-w-0"
             >
+              <LocalRuntimePrompt />
               {composer()}
             </div>
           </FloatRegionOrInline>
+          {props.belowComposer}
+          <Show
+            when={
+              props.showUpdates &&
+              props.updateSessions &&
+              props.onOpenUpdateSession
+            }
+          >
+            <AgentUpdatesStack
+              home
+              sessions={props.updateSessions ?? []}
+              onOpenSession={(id) => props.onOpenUpdateSession?.(id)}
+              onChatAbout={chatAboutUpdate}
+            />
+          </Show>
         </div>
       </section>
     </Show>

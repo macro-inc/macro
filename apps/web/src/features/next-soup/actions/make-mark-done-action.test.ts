@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
     async (_args: DoneWriteArgs) => [] as string[]
   ),
   executeMarkEntitiesUndone: vi.fn(async (_args: DoneWriteArgs) => {}),
-  graphqlSoupEnabled: vi.fn(() => false),
   mutateAsync: vi.fn(async (_variables: unknown) => {}),
   openEntityInSplitFromUnifiedList: vi.fn(async () => {}),
   resolveMarkEntitiesDoneVariables: vi.fn(() => ({
@@ -48,11 +47,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => ({ handle: mocks.splitHandle }),
-}));
-
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: mocks.graphqlSoupEnabled,
 }));
 
 vi.mock(
@@ -97,7 +91,6 @@ vi.mock('@tanstack/solid-query', () => ({
 }));
 
 vi.mock('@app/features/next-soup/utils', () => ({
-  applyEntitiesDoneOptimistic: mocks.applyOptimistic,
   executeMarkEntitiesDone: async (args: DoneWriteArgs) => {
     const [result] = await Promise.allSettled([
       mocks.executeMarkEntitiesDone(args),
@@ -210,7 +203,6 @@ describe('makeMarkDoneAction', () => {
     mocks.executeMarkEntitiesDone.mockClear();
     mocks.executeMarkEntitiesDone.mockResolvedValue([]);
     mocks.executeMarkEntitiesUndone.mockClear();
-    mocks.graphqlSoupEnabled.mockReturnValue(false);
     mocks.mutateAsync.mockReset();
     mocks.mutateAsync.mockResolvedValue(undefined);
     mocks.pushUndo.mockClear();
@@ -239,8 +231,7 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
-  it('uses the agent-session entity target while GraphQL Soup is enabled', async () => {
-    mocks.graphqlSoupEnabled.mockReturnValue(true);
+  it('uses the agent-session entity target', async () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['agent-notification'],
@@ -257,9 +248,11 @@ describe('makeMarkDoneAction', () => {
     expect(mocks.toNotificationEntityRef).toHaveBeenCalledWith(session);
     expect(mocks.mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({
-        exactNotificationIds: { current: [] },
+        notificationIds: [],
         notificationEntities: [{ type: 'agent_session', id: 'session-1' }],
-        optimisticNotificationIds: ['agent-notification'],
+        notificationIdsByEntity: new Map([
+          ['agent_session:session-1', ['agent-notification']],
+        ]),
       })
     );
     dispose();
@@ -306,28 +299,7 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
-  it('keeps notification writes ID-scoped while GraphQL Soup is disabled', async () => {
-    mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
-      emailIds: ['current'],
-      notificationIds: ['notification-1'],
-    });
-    const { action, dispose } = createAction();
-
-    await action.execute([currentEntity]);
-
-    expect(mocks.mutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({
-        exactNotificationIds: { current: ['notification-1'] },
-        notificationEntities: [],
-        optimisticNotificationIds: ['notification-1'],
-      })
-    );
-    expect(mocks.toNotificationEntityRef).not.toHaveBeenCalled();
-    dispose();
-  });
-
-  it('uses entity targets while GraphQL Soup is enabled', async () => {
-    mocks.graphqlSoupEnabled.mockReturnValue(true);
+  it('uses entity targets', async () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: ['current'],
       notificationIds: ['notification-1'],
@@ -342,16 +314,18 @@ describe('makeMarkDoneAction', () => {
 
     expect(mocks.mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({
-        exactNotificationIds: { current: [] },
+        emailIds: ['current'],
+        notificationIds: [],
         notificationEntities: [{ type: 'email', id: 'current' }],
-        optimisticNotificationIds: ['notification-1'],
+        notificationIdsByEntity: new Map([
+          ['email:current', ['notification-1']],
+        ]),
       })
     );
     dispose();
   });
 
   it('keeps whole-channel inbox writes ID-based to exclude thread rows', async () => {
-    mocks.graphqlSoupEnabled.mockReturnValue(true);
     mocks.splitHandle.content.mockReturnValue({ id: 'home' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
@@ -368,7 +342,7 @@ describe('makeMarkDoneAction', () => {
 
     expect(mocks.mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({
-        exactNotificationIds: { current: ['channel-notification'] },
+        notificationIds: ['channel-notification'],
         notificationEntities: [],
       })
     );
@@ -376,7 +350,6 @@ describe('makeMarkDoneAction', () => {
   });
 
   it('uses the canonical message entity for inbox channel-thread rows', async () => {
-    mocks.graphqlSoupEnabled.mockReturnValue(true);
     mocks.splitHandle.content.mockReturnValue({ id: 'home' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
@@ -398,7 +371,7 @@ describe('makeMarkDoneAction', () => {
 
     expect(mocks.mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({
-        exactNotificationIds: { current: [] },
+        notificationIds: [],
         notificationEntities: [
           {
             type: 'channel_thread',
@@ -411,86 +384,7 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
-  it('applies Undo before its server reply and settles only afterwards', async () => {
-    const { dispose } = createAction();
-    const variables = {
-      emailIds: ['current'],
-      exactNotificationIds: { current: ['exact-id'] },
-    };
-    const context = {
-      applyUndone: vi.fn(),
-      reapply: vi.fn(),
-      settle: vi.fn(),
-      releaseGraphql: vi.fn(),
-    };
-    const options = mocks.mutationOptionsFactory() as {
-      onSuccess: (
-        data: void,
-        input: typeof variables & { entities: EntityData[] },
-        ctx: typeof context
-      ) => void;
-    };
-    options.onSuccess(
-      undefined,
-      { ...variables, entities: [currentEntity] },
-      context
-    );
-    context.settle.mockClear();
-    let finish!: () => void;
-    mocks.executeMarkEntitiesUndone.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          finish = resolve;
-        })
-    );
-    const undo = mocks.pushUndo.mock.calls[0][0].undo();
-    expect(context.applyUndone).toHaveBeenCalledOnce();
-    expect(context.settle).not.toHaveBeenCalled();
-    finish();
-    await undo;
-    expect(context.settle).toHaveBeenCalledWith(['exact-id']);
-    dispose();
-  });
-
-  it('does not pin guessed GraphQL state after a partially failed reversal', async () => {
-    const { dispose } = createAction();
-    const variables = {
-      emailIds: ['current'],
-      exactNotificationIds: { current: ['exact-id'] },
-    };
-    const context = {
-      applyUndone: vi.fn(),
-      reapply: vi.fn(),
-      settle: vi.fn(),
-      releaseGraphql: vi.fn(),
-    };
-    const options = mocks.mutationOptionsFactory() as {
-      onSuccess: (
-        data: void,
-        input: typeof variables & { entities: EntityData[] },
-        ctx: typeof context
-      ) => void;
-    };
-    options.onSuccess(
-      undefined,
-      { ...variables, entities: [currentEntity] },
-      context
-    );
-    context.settle.mockClear();
-    mocks.executeMarkEntitiesUndone.mockRejectedValueOnce(
-      new Error('partial failure')
-    );
-    await expect(mocks.pushUndo.mock.calls[0][0].undo()).rejects.toThrow(
-      'partial failure'
-    );
-    expect(context.reapply).toHaveBeenCalledOnce();
-    expect(context.releaseGraphql).toHaveBeenCalledOnce();
-    expect(context.settle).not.toHaveBeenCalled();
-    dispose();
-  });
-
   it('retains authoritative entity results for exact undo and ID-scoped redo', async () => {
-    mocks.graphqlSoupEnabled.mockReturnValue(true);
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: ['current'],
       notificationIds: ['optimistic-notification'],
@@ -506,18 +400,16 @@ describe('makeMarkDoneAction', () => {
     await action.execute([currentEntity]);
     const variables = mocks.mutateAsync.mock.calls[0]?.[0] as {
       emailIds: string[];
-      exactNotificationIds: { current: string[] };
+      notificationIds: string[];
       notificationEntities: Array<{ type: string; id: string }>;
     };
     const mutationOptions = mocks.mutationOptionsFactory() as {
-      onMutate: (
-        input: typeof variables
-      ) => ReturnType<typeof mocks.applyOptimistic>;
+      onMutate: (input: typeof variables) => unknown;
       mutationFn: (input: typeof variables) => Promise<void>;
       onSuccess: (
         data: void,
         input: typeof variables,
-        context: ReturnType<typeof mocks.applyOptimistic>
+        context: unknown
       ) => void;
     };
 

@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE entity_properties\n            SET values = cell.value, updated_at = NOW()\n            FROM UNNEST($1::text[], $2::jsonb[]) AS cell(entity_id, value)\n            WHERE entity_properties.entity_type = $3\n              AND entity_properties.property_definition_id = $4\n              AND entity_properties.entity_id = cell.entity_id\n              AND entity_properties.values IS DISTINCT FROM cell.value\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "JsonbArray",
+        {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT",
+                "INITIATIVE",
+                "CONTACT",
+                "DATABASE_ROW"
+              ]
+            }
+          }
+        },
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4af6a0999eb209c36f581a632a63b15bae8de290de2c2d1e81ef6620ce6211ea"
+}

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.id, c.channel_id, c.room_name, c.created_by, c.created_at, c.egress_id\n            FROM calls c\n            WHERE EXISTS (\n                SELECT 1 FROM comms_channel_participants p\n                WHERE p.channel_id = c.channel_id AND p.user_id = $1 AND p.left_at IS NULL\n            ) OR (c.channel_id IS NULL AND EXISTS (\n                SELECT 1 FROM call_meetings m\n                WHERE m.id = c.meeting_id AND m.cancelled_at IS NULL\n                  AND (m.user_id = $1 OR EXISTS (\n                      SELECT 1 FROM call_participants p WHERE p.call_id = c.id AND p.user_id = $1\n                  ) OR EXISTS (\n                      SELECT 1 FROM call_invitees i WHERE i.call_id = c.id AND i.user_id = $1\n                  ))\n            ))\n            ORDER BY c.created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "room_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "egress_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "e6f56a896d5fb0845c33946a8d72c6ca111a17c70ae4e836042e8f1bd767236e"
+}

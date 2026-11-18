@@ -250,46 +250,61 @@ it('does not let a notification callback failure stop persistence or the next ev
   }
 });
 
-it('marks failed persistence in the receipt trace without failing or replaying delivery', async () => {
-  const receipt = new RecordedSpan('receipt');
-  vi.spyOn(Telemetry, 'span').mockReturnValueOnce(receipt);
-  const failure = new Error('private cache failure details');
-  const onCacheError = vi.fn();
-  const delivered = Promise.withResolvers<void>();
-  const onPatch = vi.fn();
-  const stream = subscribe(
-    [
-      normalizedCacheExchange(
-        {
-          ...createNoopCacheHost(),
-          async writeQuery() {
-            throw failure;
+it.each([
+  { message: 'private cache failure details', code: 'unknown' },
+  {
+    message: 'graphql cache ipc timeout: graphql_cache_write',
+    code: 'timeout',
+  },
+])(
+  'marks $code persistence failures without failing or replaying delivery',
+  async ({ message, code }) => {
+    const receipt = new RecordedSpan('receipt');
+    vi.spyOn(Telemetry, 'span').mockReturnValueOnce(receipt);
+    const failure = new Error(message);
+    const onCacheError = vi.fn();
+    const delivered = Promise.withResolvers<void>();
+    const onPatch = vi.fn();
+    const stream = subscribe(
+      [
+        normalizedCacheExchange(
+          {
+            ...createNoopCacheHost(),
+            async writeQuery() {
+              throw failure;
+            },
           },
-        },
-        { onCacheError }
-      ),
-      notificationReceiptExchange(onPatch),
-    ],
-    () => delivered.resolve()
-  );
-  try {
-    await stream.attached;
-    stream.emit(NEW_NOTIFICATION);
-    await delivered.promise;
-    expect(onPatch).toHaveBeenCalledOnce();
-    expect(onCacheError).toHaveBeenCalledWith(failure, expect.any(Object));
-    expect(receipt.ends).toBe(1);
-    expect(receipt.errors).toEqual([]);
-    expect(receipt.children.map((span) => span.ends)).toEqual([1, 1]);
-    expect(receipt.children[1].errors).toEqual([
-      'Subscription cache effect failed',
-    ]);
-    expect(receipt.children[1].attributes['cache.effects_applied']).toBe(false);
-    expect(JSON.stringify(receipt)).not.toContain(failure.message);
-  } finally {
-    stream.dispose();
+          { onCacheError }
+        ),
+        notificationReceiptExchange(onPatch),
+      ],
+      () => delivered.resolve()
+    );
+    try {
+      await stream.attached;
+      stream.emit(NEW_NOTIFICATION);
+      await delivered.promise;
+      expect(onPatch).toHaveBeenCalledOnce();
+      expect(onCacheError).toHaveBeenCalledWith(failure, expect.any(Object));
+      expect(receipt.ends).toBe(1);
+      expect(receipt.errors).toEqual([]);
+      expect(receipt.children.map((span) => span.ends)).toEqual([1, 1]);
+      expect(receipt.children[1].errors).toEqual([
+        'Subscription cache effect failed',
+      ]);
+      expect(receipt.children[1].attributes['cache.effects_applied']).toBe(
+        false
+      );
+      expect(receipt.children[1].attributes['cache.failure']).toBe(code);
+      expect(receipt.children[1].children[0].attributes['cache.failure']).toBe(
+        code
+      );
+      expect(JSON.stringify(receipt)).not.toContain(failure.message);
+    } finally {
+      stream.dispose();
+    }
   }
-});
+);
 
 it('delivers without a cache and stops receipt when the subscription is disposed', async () => {
   const onPatch = vi.fn();

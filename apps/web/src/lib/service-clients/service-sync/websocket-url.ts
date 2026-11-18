@@ -1,6 +1,6 @@
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { fetchToken } from '@core/util/fetchWithToken';
+import { ensureFreshSession } from '@core/util/fetchWithToken';
 import { Telemetry } from '@macro-inc/observability';
 import { getMacroApiToken } from '@service-auth/fetch';
 
@@ -16,7 +16,7 @@ export async function resolveSyncRouterWsUrl(): Promise<string> {
       if (!token) throw new Error('No Macro API token');
       url.searchParams.set('macro-api-token', token);
     } else {
-      const refreshed = await fetchToken();
+      const refreshed = await ensureFreshSession();
       if (refreshed.isErr()) throw new Error('Unable to refresh sync session');
     }
     const traceparent = span.traceparent();

@@ -127,3 +127,54 @@ fn signed_url_roundtrips_on_both_public_hosts() {
         assert!(SignedUrl::verify(signed.as_ref().clone(), secret.clone()).is_some());
     }
 }
+
+#[test]
+fn unsubscribe_placeholders_become_signed_links_for_the_recipient() {
+    let secret = make_secret(b"test-secret");
+    let base = Url::parse("https://notifications.example.com").unwrap();
+    let body = format!(
+        "<a href=\"{}\">Unsubscribe</a>",
+        unsubscribe_placeholder("colleague_joined_macro")
+    );
+
+    let signed = sign_unsubscribe_placeholders(&body, &base, "macro|bob@acme.com", &secret)
+        .expect("the body has a placeholder");
+
+    assert!(!signed.contains(UNSUBSCRIBE_PLACEHOLDER_PREFIX));
+    let href = signed
+        .strip_prefix("<a href=\"")
+        .and_then(|s| s.split('"').next())
+        .unwrap()
+        .replace("&amp;", "&");
+    let url = Url::parse(&href).unwrap();
+    assert_eq!(
+        url.path(),
+        "/user_notifications/preferences/colleague_joined_macro/disable"
+    );
+    assert!(
+        url.query_pairs()
+            .any(|(k, v)| k == "id" && v == "macro|bob@acme.com")
+    );
+    assert!(SignedUrl::verify(url, secret).is_some());
+}
+
+#[test]
+fn bodies_without_a_placeholder_are_left_alone() {
+    let secret = make_secret(b"test-secret");
+    let base = Url::parse("https://notifications.example.com").unwrap();
+    assert!(sign_unsubscribe_placeholders("<p>hi</p>", &base, "macro|a@b.com", &secret).is_none());
+}
+
+#[test]
+fn hyphenated_type_names_are_signed_whole() {
+    let secret = make_secret(b"test-secret");
+    let base = Url::parse("https://notifications.example.com").unwrap();
+    let body = format!(
+        "<a href=\"{}\">x</a>",
+        unsubscribe_placeholder("email-digest-notification")
+    );
+
+    let signed = sign_unsubscribe_placeholders(&body, &base, "macro|a@b.com", &secret).unwrap();
+
+    assert!(signed.contains("/preferences/email-digest-notification/disable"));
+}

@@ -197,3 +197,80 @@ it.each(['base@example.com', 'resident@example.com'])(
       }
     })
 );
+
+it("replies to a shared thread from the viewer's inbox, not its owner's", () =>
+  createRoot((dispose) => {
+    try {
+      const shared = message('shared', {
+        link_id: 'owner-inbox',
+        from: { email: 'owner@example.com' },
+        to: [{ email: 'base@example.com' }],
+      });
+      const form = createEmailFormState(
+        { viewerEmail: () => 'base@example.com', inboxes: () => [primary] },
+        { type: 'replying_to', messageId: 'shared' },
+        {
+          getMessageById: () => shared,
+          getDraftForMessageReply: () => undefined,
+        }
+      );
+      expect(form.selectedInboxId()).toBeUndefined();
+      expect(form.recipients().to.map((item) => item.data.email)).toEqual([
+        'owner@example.com',
+      ]);
+    } finally {
+      dispose();
+    }
+  }));
+
+it('replies from the inbox holding the message when it is the viewer’s', () =>
+  createRoot((dispose) => {
+    try {
+      const form = createEmailFormState(
+        { viewerEmail: () => 'base@example.com', inboxes: () => [primary] },
+        { type: 'replying_to', messageId: 'parent' },
+        {
+          getMessageById: () => parent,
+          getDraftForMessageReply: () => undefined,
+        }
+      );
+      expect(form.selectedInboxId()).toBe('inbox');
+    } finally {
+      dispose();
+    }
+  }));
+
+it('judges a shared-thread reply against the inbox it sends from', () =>
+  createRoot((dispose) => {
+    try {
+      const sending: SenderInbox = {
+        id: 'viewer-inbox',
+        email_address: 'viewer-inbox@example.com',
+      };
+      // The viewer wrote this message from their own inbox to the owner, who
+      // shared the thread back.
+      const shared = message('shared', {
+        link_id: 'owner-inbox',
+        from: { email: 'viewer-inbox@example.com' },
+        to: [{ email: 'owner@example.com' }],
+      });
+      const form = createEmailFormState(
+        {
+          viewerEmail: () => 'base@example.com',
+          inboxes: () => [sending],
+          primaryInboxId: () => 'viewer-inbox',
+        },
+        { type: 'replying_to', messageId: 'shared' },
+        {
+          getMessageById: () => shared,
+          getDraftForMessageReply: () => undefined,
+        }
+      );
+      expect(form.senderEmail()).toBe('viewer-inbox@example.com');
+      expect(form.recipients().to.map((item) => item.data.email)).toEqual([
+        'owner@example.com',
+      ]);
+    } finally {
+      dispose();
+    }
+  }));

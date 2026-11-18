@@ -148,6 +148,21 @@ impl QueryRoot {
             edges: std::marker::PhantomData,
         }
     }
+
+    /// Return a successful outcome whose effects touch only entities listed outside Soup.
+    async fn database_and_form_effects(&self) -> super::GraphqlMutationSuccess<TestSoupEdges> {
+        super::GraphqlMutationSuccess {
+            effects: vec![
+                EntityMutationEffect::updated(
+                    EntityType::Database.with_entity_string("database-1".to_string()),
+                ),
+                EntityMutationEffect::deleted(
+                    EntityType::Form.with_entity_string("form-1".to_string()),
+                ),
+            ],
+            edges: std::marker::PhantomData,
+        }
+    }
 }
 
 #[tokio::test]
@@ -226,6 +241,24 @@ async fn unsupported_soup_deletion_is_a_graphql_error() {
         response.errors[0]
             .message
             .contains("cannot be represented as a Soup cache deletion")
+    );
+}
+
+#[tokio::test]
+async fn database_and_form_effects_have_no_soup_patches() {
+    let actor = EntityMutationActor {
+        user_id: MacroUserIdStr::parse_from_str("macro|graphql-test@example.com").unwrap(),
+        organization_id: Some(42),
+    };
+    let response = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription)
+        .finish()
+        .execute(Request::new("{ databaseAndFormEffects { effects { __typename } } }").data(actor))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data,
+        value!({ "databaseAndFormEffects": { "effects": [] } })
     );
 }
 

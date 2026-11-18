@@ -4,9 +4,15 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { PropertiedEntity } from '../entity';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
+import {
+  type SharePermissionOptions,
+  sharePermissionBody,
+} from '../sharing/permissions';
 
 type ProjectDetail = GetProjectHandlerResponses[200]['data']['projectMetadata'];
 
@@ -15,7 +21,11 @@ type ProjectItem =
 
 /** A Macro project: a folder-like container for documents, chats, and subprojects. */
 export class Project extends PropertiedEntity<ProjectDetail> {
-  /** Read this project's sharing configuration. */
+  /**
+   * Read this project's sharing configuration.
+   *
+   * @readonly
+   */
   async sharePermissions() {
     return unwrap(
       await this.client.storage.getProjectPermissionsV2({
@@ -24,7 +34,28 @@ export class Project extends PropertiedEntity<ProjectDetail> {
     );
   }
 
-  /** Read the caller's effective access level. */
+  /**
+   * Change who can open the project and its contents: the link share and its
+   * access level, the owner's team, and channel grants. Omitted fields are
+   * left as they are.
+   *
+   * @write
+   * @idempotent
+   */
+  async updateSharePermissions(options: SharePermissionOptions): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.editProjectV2({
+        path: { id: this.id },
+        body: { sharePermission: sharePermissionBody(options) },
+      }),
+    );
+  }
+
+  /**
+   * Read the caller's effective access level.
+   *
+   * @readonly
+   */
   async accessLevel() {
     return unwrap(
       await this.client.storage.getProjectUserAccessLevel({
@@ -39,6 +70,18 @@ export class Project extends PropertiedEntity<ProjectDetail> {
   /** Favorites identify projects as `project`. */
   readonly entityType = 'project';
 
+  /**
+   * Share this project with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * project; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'project', this.id);
+  }
+
   /** The properties service identifies projects as `PROJECT`. */
   protected readonly propertyEntityType = 'PROJECT';
 
@@ -49,6 +92,20 @@ export class Project extends PropertiedEntity<ProjectDetail> {
       }),
     );
     return data.projectMetadata;
+  }
+
+  /**
+   * The project's URL in the Macro web app; hand it to users as the link.
+   *
+   * @readonly
+   */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/project/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** A handle to a project by id. Details load on first access. */
@@ -83,7 +140,13 @@ export class Project extends PropertiedEntity<ProjectDetail> {
   /** When the project was created (RFC 3339 timestamp). */
   readonly createdAt = this.field('createdAt');
 
-  /** The items (documents, chats, subprojects) directly inside this project. */
+  /**
+   * The items (documents, chats, subprojects) directly inside this project.
+   * Agent sessions are never project items; link one from a document in the
+   * project instead (see `ProjectNamespace`).
+   *
+   * @readonly
+   */
   async items(): Promise<ProjectItem[]> {
     const { data } = unwrap(
       await this.client.storage.getProjectContentHandler({
@@ -93,7 +156,12 @@ export class Project extends PropertiedEntity<ProjectDetail> {
     return data.map((entry) => entry.item);
   }
 
-  /** Rename the project. */
+  /**
+   * Rename the project.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.editProjectV2({
@@ -106,6 +174,9 @@ export class Project extends PropertiedEntity<ProjectDetail> {
   /**
    * Delete the project and its contents. Soft by default (reversible with
    * {@link restore}); pass `permanent: true` to delete irreversibly.
+   *
+   * @destructive
+   * @idempotent
    */
   async delete(opts?: { permanent?: boolean }): Promise<void> {
     await this.mutate<unknown>((c) =>
@@ -115,7 +186,12 @@ export class Project extends PropertiedEntity<ProjectDetail> {
     );
   }
 
-  /** Restore a soft-deleted project. */
+  /**
+   * Restore a soft-deleted project.
+   *
+   * @write
+   * @idempotent
+   */
   async restore(): Promise<void> {
     await this.mutate((c) =>
       c.storage.revertDeleteProject({ path: { id: this.id } }),

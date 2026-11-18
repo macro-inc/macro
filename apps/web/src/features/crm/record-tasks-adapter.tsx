@@ -6,10 +6,6 @@ import {
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import {
-  enableCrmActivity,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import { Show } from 'solid-js';
@@ -20,6 +16,7 @@ import {
   CrmListSkeleton,
 } from './components/list-state';
 import { RecordSection } from './components/record-section';
+import { useOptionalCrmWorkspace } from './context/workspace-context';
 import type { CrmRecordScope } from './core/record';
 import { crmTaskComposerContext } from './task-composer';
 
@@ -31,6 +28,7 @@ import { crmTaskComposerContext } from './task-composer';
  */
 export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
   const layout = useSplitLayout();
+  const workspace = useOptionalCrmWorkspace();
   return (
     <Show when={props.scope} keyed>
       {(scope) => (
@@ -40,6 +38,19 @@ export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
             restoreEntryState
             scopeKey={`crm:${scope.type}:${scope.id}:tasks`}
             onOpenTask={(task, options) => {
+              if (
+                workspace?.host.record.openItem(
+                  {
+                    type: 'document',
+                    id: task.id,
+                    name: task.fallbackName ?? 'Task',
+                    fileType: 'md',
+                    subType: { type: 'task' },
+                  },
+                  options?.event
+                )
+              )
+                return true;
               layout.openWithSplit(
                 { type: 'task', id: task.id },
                 { preferNewSplit: options?.event?.shiftKey }
@@ -68,17 +79,13 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
   let listElement: HTMLDivElement | undefined;
 
   const composeTask = () => {
-    const context = crmTaskComposerContext(props.scope);
-    const adaptive = isFeatureEnabled(enableCrmActivity);
     layout.popoverSplit({
       type: 'component',
       id: 'task-compose',
       params: {
-        // Record identity/associations must survive a restart even with the
-        // standard property row; they cannot live only in a create callback.
-        composerContext: adaptive
-          ? context
-          : { ...context, visiblePropertyIds: undefined },
+        // Record identity/associations must survive a restart; they cannot
+        // live only in a create callback.
+        composerContext: crmTaskComposerContext(props.scope),
       },
     });
   };

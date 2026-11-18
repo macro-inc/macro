@@ -1,3 +1,4 @@
+import { meetingEmail } from './email-demo-story';
 import { homepagePeople } from './homepage-demo-people';
 
 export type DemoMention = {
@@ -10,24 +11,46 @@ export type DemoMention = {
     | 'agent'
     | 'channel'
     | 'spreadsheet'
-    | 'email';
+    | 'email'
+    | 'contact';
   photo?: string;
   shortName?: string;
   detail?: string;
   status?: 'Not Started' | 'In Progress' | 'In Review';
 };
 
+export const emailSharingMentions = {
+  email: { id: 'shared-email', label: meetingEmail.subject, kind: 'email' },
+  contact: {
+    id: 'shared-contact',
+    label: homepagePeople.austin.name,
+    kind: 'contact',
+    detail: 'Contact record',
+  },
+} satisfies Record<string, DemoMention>;
+
 /** The same fictional reference set is available in every writable demo. */
 export const demoMentions: DemoMention[] = [
-  ...(['julia', 'teo', 'jacob', 'valentina', 'gabriel', 'macro'] as const).map(
-    (id) => ({
-      id,
-      label: homepagePeople[id].name,
-      kind: 'person' as const,
-      photo: homepagePeople[id].photo,
-      shortName: homepagePeople[id].shortName,
-    })
-  ),
+  ...(
+    [
+      'peter',
+      'wolf',
+      'eric',
+      'rahul',
+      'austin',
+      'julia',
+      'teo',
+      'jacob',
+      'gabriel',
+      'macro',
+    ] as const
+  ).map((id) => ({
+    id,
+    label: homepagePeople[id].name,
+    kind: 'person' as const,
+    photo: homepagePeople[id].photo,
+    shortName: homepagePeople[id].shortName,
+  })),
   { id: 'plan', label: 'Website launch plan', kind: 'document' },
   {
     id: 'announcement',
@@ -56,6 +79,7 @@ export const demoMentions: DemoMention[] = [
   { id: 'launch', label: 'launch', kind: 'channel' },
   { id: 'engineers', label: 'engineers', kind: 'channel' },
   { id: 'product', label: 'product', kind: 'channel' },
+  ...Object.values(emailSharingMentions),
 ];
 
 export function mentionAtCaret(text: string, caret: number) {

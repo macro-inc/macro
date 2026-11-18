@@ -6,6 +6,7 @@ mod contacts;
 mod drafts;
 mod invitations;
 mod messages;
+mod route;
 mod rules;
 mod sync;
 mod transport;
@@ -16,18 +17,27 @@ mod test;
 
 use std::time::Duration;
 
+use macro_service_urls::MicrosoftGraphUrl;
 use reqwest::Client;
 use url::Url;
 
 use crate::domain::models::EmailApiError;
 use crate::domain::{
     models::MailboxAccess,
-    ports::{MailboxRejectedTokenRefresh, MailboxRequestGate, ScopedMailboxRepository},
+    ports::{
+        MailboxRejectedTokenRefresh, MailboxRequestCount, MailboxRequestGate,
+        ScopedMailboxRepository,
+    },
 };
 use std::sync::Arc;
 
-const GRAPH_ROOT: &str = "https://graph.microsoft.com/v1.0/";
 const IMMUTABLE_ID_PREFERENCE: &str = "IdType=\"ImmutableId\"";
+/// Graph reads `$top` on a delta request as a cap on the whole round, not a
+/// page size: it stops at that many items and hands back the deltaLink, so
+/// the rest of the folder is never listed. Delta pages are sized with this
+/// preference instead, sent as its own `Prefer` line so the immutable-id one
+/// stays as it is.
+const DELTA_PAGE_PREFERENCE: &str = "odata.maxpagesize=100";
 
 /// Microsoft Graph provider adapter with no embedded credential or mailbox identity.
 #[derive(Clone)]
@@ -55,9 +65,22 @@ impl OutlookApiClientRepository {
         repository.gate = Some(gate);
         Ok(repository)
     }
-    /// Build a public-cloud Graph adapter with redirects and automatic retries disabled.
+    /// Build a Graph adapter with redirects and automatic retries disabled.
+    /// It calls Microsoft's public cloud unless `OVERRIDE_MICROSOFT_GRAPH_URL`
+    /// names another root, such as `crates/outlook_emulator`'s.
     pub fn new() -> Result<Self, EmailApiError> {
-        let root = Url::parse(GRAPH_ROOT).map_err(|_| transport::invalid_response())?;
+        let url = MicrosoftGraphUrl::new().map_err(|error| EmailApiError::Permanent {
+            message: error.to_string(),
+        })?;
+        Self::for_graph_url(&url)
+    }
+
+    /// Build an adapter for a given Graph API root.
+    pub fn for_graph_url(url: &MicrosoftGraphUrl) -> Result<Self, EmailApiError> {
+        // Endpoints are built by adding segments to the root's path.
+        let root = format!("{}/", url.as_str().trim_end_matches('/'));
+        let root = Url::parse(&root)
+            .map_err(|_| transport::invalid_response("Graph root is not a URL"))?;
         Self::with_root(root)
     }
 
@@ -84,6 +107,12 @@ impl OutlookApiClientRepository {
     #[cfg(test)]
     fn for_test(root: &str) -> Self {
         Self::with_root(Url::parse(root).unwrap()).unwrap()
+    }
+}
+
+impl MailboxRequestCount for OutlookApiClientRepository {
+    async fn admitted_requests(&self, mailbox: MailboxAccess) -> Option<u64> {
+        self.gate.as_ref()?.admitted(mailbox).await
     }
 }
 

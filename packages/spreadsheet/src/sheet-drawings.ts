@@ -40,6 +40,14 @@ export const CHART_KINDS = [
   'bubble',
   'stock',
   'surface',
+  // Excel 2016's charts, saved as `cx:` chart parts.
+  'histogram',
+  'pareto',
+  'waterfall',
+  'funnel',
+  'boxWhisker',
+  'treemap',
+  'sunburst',
 ] as const;
 export type ChartKind = (typeof CHART_KINDS)[number];
 export const CHART_GROUPINGS = [
@@ -69,6 +77,39 @@ export type ChartSeries = {
   sizes?: number;
 };
 
+/**
+ * How a histogram groups its values: bins of a width, or a number of bins,
+ * else as wide as Scott's rule makes them, as Excel's automatic bins.
+ */
+export type ChartBinning = {
+  size?: number;
+  count?: number;
+  /** Values at or below this share the first bin. */
+  underflow?: number;
+  /** Values above this share the last bin. */
+  overflow?: number;
+  /** Bins hold their lower edge rather than their upper edge. */
+  closedLeft?: true;
+};
+
+/**
+ * A pie with some of its points moved to a second, smaller pie or a bar,
+ * as Excel's pie of pie and bar of pie.
+ */
+export type ChartOfPie = {
+  type: 'pie' | 'bar';
+  /**
+   * Which points move: the last `splitAt` points, those below `splitAt`, or
+   * below `splitAt` percent of the total; `custom` lists them. Excel's
+   * automatic split moves the last third.
+   */
+  split?: 'position' | 'value' | 'percent' | 'custom';
+  splitAt?: number;
+  custom?: number[];
+  /** The second plot's size, in percent of the first's. */
+  size?: number;
+};
+
 /** Series drawn the same way, on the primary or the secondary value axis. */
 export type ChartPlot = {
   kind: ChartKind;
@@ -79,6 +120,28 @@ export type ChartPlot = {
   /** A stock chart's lines from high to low, and bars from open to close. */
   hiLow?: boolean;
   upDown?: boolean;
+  /** A histogram's or pareto chart's bins. */
+  binning?: ChartBinning;
+  /** A histogram or pareto chart sums values by category instead of binning. */
+  aggregate?: true;
+  /** The gap between bars, in percent of a bar's width. */
+  gapWidth?: number;
+  /** A waterfall's points that are totals, measured from zero. */
+  totals?: number[];
+  /** A waterfall without lines from each bar to the next. */
+  noConnectors?: true;
+  /** Values written on a waterfall's or funnel's bars. */
+  labels?: true;
+  /** A box and whisker chart's quartiles: exclusive unless inclusive. */
+  quartiles?: 'inclusive';
+  meanLine?: true;
+  noMeanMarkers?: true;
+  /** Points inside the whiskers, drawn as markers. */
+  innerPoints?: true;
+  noOutliers?: true;
+  /** Where a treemap writes its parents' names; overlapping by default. */
+  parentLabels?: 'banner' | 'none';
+  ofPie?: ChartOfPie;
   series: ChartSeries[];
 };
 
@@ -386,24 +449,126 @@ function validSeries(value: unknown, references: number): boolean {
   );
 }
 
+const finite = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value);
+const pointIndex = (value: unknown) =>
+  Number.isInteger(value) &&
+  (value as number) >= 0 &&
+  (value as number) < 100_000;
+
+function validBinning(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const binning = value as Record<string, unknown>;
+  return (
+    Object.keys(binning).every((key) =>
+      ['size', 'count', 'underflow', 'overflow', 'closedLeft'].includes(key)
+    ) &&
+    (binning.size === undefined ||
+      (finite(binning.size) && (binning.size as number) > 0)) &&
+    (binning.count === undefined ||
+      (Number.isInteger(binning.count) &&
+        (binning.count as number) >= 1 &&
+        (binning.count as number) <= 1_000)) &&
+    (binning.underflow === undefined || finite(binning.underflow)) &&
+    (binning.overflow === undefined || finite(binning.overflow)) &&
+    (binning.closedLeft === undefined || binning.closedLeft === true)
+  );
+}
+
+function validOfPie(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const ofPie = value as Record<string, unknown>;
+  return (
+    Object.keys(ofPie).every((key) =>
+      ['type', 'split', 'splitAt', 'custom', 'size'].includes(key)
+    ) &&
+    (ofPie.type === 'pie' || ofPie.type === 'bar') &&
+    (ofPie.split === undefined ||
+      ['position', 'value', 'percent', 'custom'].includes(
+        ofPie.split as string
+      )) &&
+    (ofPie.splitAt === undefined ||
+      (ofPie.split === 'position'
+        ? pointIndex(ofPie.splitAt)
+        : finite(ofPie.splitAt))) &&
+    (ofPie.custom === undefined ||
+      (Array.isArray(ofPie.custom) &&
+        ofPie.custom.length <= 1_000 &&
+        ofPie.custom.every(pointIndex))) &&
+    (ofPie.size === undefined ||
+      (finite(ofPie.size) &&
+        (ofPie.size as number) >= 5 &&
+        (ofPie.size as number) <= 200))
+  );
+}
+
+/** Options every kind may carry, as charts were first stored. */
+const SHARED_PLOT_OPTIONS = [
+  'grouping',
+  'secondary',
+  'filled',
+  'hiLow',
+  'upDown',
+];
+/** Options only some kinds take. */
+const KIND_OPTIONS: Partial<Record<ChartKind, string[]>> = {
+  pie: ['ofPie'],
+  histogram: ['binning', 'aggregate', 'gapWidth'],
+  pareto: ['binning', 'aggregate', 'gapWidth'],
+  waterfall: ['totals', 'noConnectors', 'labels', 'gapWidth'],
+  funnel: ['labels', 'gapWidth'],
+  boxWhisker: [
+    'quartiles',
+    'meanLine',
+    'noMeanMarkers',
+    'innerPoints',
+    'noOutliers',
+    'gapWidth',
+  ],
+  treemap: ['parentLabels'],
+};
+
 function validPlot(value: unknown, references: number): boolean {
   if (!value || typeof value !== 'object') return false;
   const plot = value as Record<string, unknown>;
+  const options =
+    (typeof plot.kind === 'string' && Object.hasOwn(KIND_OPTIONS, plot.kind)
+      ? KIND_OPTIONS[plot.kind as ChartKind]
+      : undefined) ?? [];
   return (
-    Object.keys(plot).every((key) =>
-      [
-        'kind',
-        'grouping',
-        'secondary',
-        'filled',
-        'hiLow',
-        'upDown',
-        'series',
-      ].includes(key)
+    Object.keys(plot).every(
+      (key) =>
+        key === 'kind' ||
+        key === 'series' ||
+        SHARED_PLOT_OPTIONS.includes(key) ||
+        options.includes(key)
     ) &&
-    ['filled', 'hiLow', 'upDown'].every(
-      (key) => plot[key] === undefined || plot[key] === true
-    ) &&
+    [
+      'filled',
+      'hiLow',
+      'upDown',
+      'aggregate',
+      'noConnectors',
+      'labels',
+      'meanLine',
+      'noMeanMarkers',
+      'innerPoints',
+      'noOutliers',
+    ].every((key) => plot[key] === undefined || plot[key] === true) &&
+    (plot.binning === undefined || validBinning(plot.binning)) &&
+    (plot.gapWidth === undefined ||
+      (finite(plot.gapWidth) &&
+        (plot.gapWidth as number) >= 0 &&
+        (plot.gapWidth as number) <= 500)) &&
+    (plot.totals === undefined ||
+      (Array.isArray(plot.totals) &&
+        plot.totals.length <= 100_000 &&
+        plot.totals.every(pointIndex))) &&
+    (plot.quartiles === undefined || plot.quartiles === 'inclusive') &&
+    (plot.parentLabels === undefined ||
+      plot.parentLabels === 'banner' ||
+      plot.parentLabels === 'none') &&
+    (plot.ofPie === undefined || validOfPie(plot.ofPie)) &&
     (CHART_KINDS as readonly unknown[]).includes(plot.kind) &&
     (plot.grouping === undefined ||
       (CHART_GROUPINGS as readonly unknown[]).includes(plot.grouping)) &&

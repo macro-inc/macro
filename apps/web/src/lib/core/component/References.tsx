@@ -9,7 +9,7 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { compareDateDesc, type DateValue } from '@core/util/date';
@@ -97,25 +97,19 @@ interface ReferenceRowProps {
   source: JSX.Element;
   senderAvatar?: JSX.Element;
   senderName?: string;
-  timestamp?: DateValue;
-  timestampLabel?: string;
-  ariaLabel?: string;
+  timestamp: DateValue;
   body?: JSX.Element;
   onClick?: (e: KeyboardEvent | MouseEvent) => void;
 }
 
-export function ReferenceRow(props: ReferenceRowProps) {
+function ReferenceRow(props: ReferenceRowProps) {
   const navHandlers = useSplitNavigationHandler<HTMLDivElement>((e) => {
     props.onClick?.(e);
   });
-  const timestamp = () =>
-    props.timestampLabel ??
-    (props.timestamp ? formatRelativeTimestamp(props.timestamp) : undefined);
 
   return (
     <div
       role="button"
-      aria-label={props.ariaLabel}
       tabIndex={0}
       class="group/ref-row flex min-w-0 flex-col overflow-hidden rounded-lg py-1 hover:bg-hover/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
       onMouseDown={navHandlers.onMouseDown}
@@ -140,18 +134,12 @@ export function ReferenceRow(props: ReferenceRowProps) {
             {props.source}
           </div>
         </div>
-        <Show when={timestamp()}>
-          {(label) => (
-            <>
-              <span aria-hidden class="shrink-0 text-ink-extra-muted">
-                ·
-              </span>
-              <span class="shrink-0 text-ink-extra-muted tabular-nums">
-                {label()}
-              </span>
-            </>
-          )}
-        </Show>
+        <span aria-hidden class="shrink-0 text-ink-extra-muted">
+          ·
+        </span>
+        <span class="shrink-0 text-ink-extra-muted tabular-nums">
+          {formatRelativeTimestamp(props.timestamp)}
+        </span>
       </div>
 
       <Show when={props.body}>
@@ -401,12 +389,10 @@ export function References(props: ReferenceProps) {
     event?: KeyboardEvent | MouseEvent
   ) => {
     if (isAccessiblePreviewItem(item) && item.type === 'document') {
-      const blockId = item.id;
-      const blockType = fileTypeToBlockName(item.fileType);
       navigateToItem({
         event,
-        blockName: blockType,
-        blockId,
+        blockName: itemToBlockName(item),
+        blockId: item.id,
       });
     } else {
       toast.failure('Failed to open reference');

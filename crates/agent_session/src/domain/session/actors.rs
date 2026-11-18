@@ -71,11 +71,17 @@ pub(crate) enum SessionMessage {
     Action(SessionCommand),
     /// Hand the agent these MCP servers from now on.
     ReplaceMcpServers(Vec<McpServer>),
+    /// Answer the agent's permission requests this way from now on.
+    SetPermissionPolicy(PermissionPolicy),
+    /// Stop without a trace if nothing is open; see
+    /// [`crate::domain::service::AgentSessionService::release_session`].
+    Release(oneshot::Sender<Result<crate::domain::model::SessionRelease>>),
 }
 
 /// An actor-owned operation or an input to the runtime protocol machine.
 pub(crate) enum ActorInput {
     Protocol(Input<SessionCompletion>),
+    Release(oneshot::Sender<Result<crate::domain::model::SessionRelease>>),
     PresentTool {
         presentation: crate::domain::model::SessionToolPresentation,
         completed: oneshot::Sender<Result<()>>,
@@ -120,7 +126,8 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     handshake_span: Option<tracing::Span>,
     handshake_deadline: Instant,
     /// Told when the machine reports a turn over, so the harness can dispatch
-    /// its next queued prompt.
+    /// its next queued prompt, and when the runtime reports its session
+    /// deliberately closed.
     turn_observer: Arc<dyn SessionTurnObserver>,
     /// GenAI spans for the turns and tool calls this connection carries, fed
     /// every frame the effects below send or log. See [`super::telemetry`].
@@ -132,6 +139,9 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     mcp_servers: Vec<McpServer>,
     /// Whether the listing has been started; it runs once per connection.
     tools_listed: bool,
+    /// Told once the ACP session opens (`true`) or the handshake fails
+    /// (`false`), for whoever is waiting to know the restore finished.
+    opened: watch::Sender<Option<bool>>,
 }
 
 impl<Connector, Logs> SessionActor<Connector, Logs>
@@ -200,7 +210,14 @@ where
             tool_catalog,
             mcp_servers,
             tools_listed: false,
+            opened: watch::Sender::new(None),
         }
+    }
+
+    /// Report the handshake's outcome to `opened` once it has one.
+    pub(crate) fn with_opened(mut self, opened: watch::Sender<Option<bool>>) -> Self {
+        self.opened = opened;
+        self
     }
 
     /// Apply an explicit starting model before a new session becomes live.
@@ -264,6 +281,8 @@ where
                     return ActorInput::PresentTool { presentation, completed };
                 },
                 Some(SessionMessage::ReplaceMcpServers(servers)) => Input::ReplaceMcpServers(servers),
+                Some(SessionMessage::SetPermissionPolicy(policy)) => Input::SetPermissionPolicy(policy),
+                Some(SessionMessage::Release(completed)) => return ActorInput::Release(completed),
                 Some(SessionMessage::Action(SessionCommand { user_id, action, action_id, completed, span, enqueued_at })) => {
                     span.record(
                         "agent.command.queue_wait_ms",
@@ -308,6 +327,7 @@ where
     pub(crate) async fn dispatch_input(&mut self, input: ActorInput) -> Stepped {
         match input {
             ActorInput::Protocol(input) => self.dispatch(input).await,
+            ActorInput::Release(completed) => self.release(completed).await,
             ActorInput::PresentTool {
                 presentation,
                 completed,
@@ -319,7 +339,14 @@ where
                 let result = self
                     .logs
                     .present_tool(self.machine.id(), session_id, presentation)
-                    .await;
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(
+                            error = ?error,
+                            id = %self.machine.id(),
+                            "agent session failed to persist a tool presentation"
+                        );
+                    });
                 let failed = result.is_err();
                 let _ = completed.send(result);
                 if failed {
@@ -504,6 +531,11 @@ where
                         .await
                         .unwrap_or_else(|_| Err(AgentSessionError::LogTimedOut(self.machine.id())));
                     if let Err(error) = result {
+                        tracing::error!(
+                            error = ?error,
+                            id = %self.machine.id(),
+                            "agent session failed to persist its shared initialization"
+                        );
                         self.fail_remaining_completions(&mut effects, error);
                         effects.extend(self.machine.handle(Input::Closed(CloseReason::LogFailed)));
                     }
@@ -551,6 +583,18 @@ where
                             .record("otel.status_description", tracing::field::display(error));
                     }
                     let _ = token.completed.send(result);
+                }
+                Effect::RuntimeClosed => {
+                    let _closed = tracing::info_span!(
+                        "agent.session.runtime_closed",
+                        agent.session.id = %self.machine.id(),
+                    )
+                    .entered();
+                    tracing::info!(
+                        id = %self.machine.id(),
+                        "agent session runtime was deliberately closed"
+                    );
+                    self.turn_observer.runtime_closed(self.machine.id());
                 }
                 Effect::Stop { reason } => {
                     self.telemetry.on_stopped(&reason);
@@ -603,6 +647,41 @@ where
         }
 
         stepped
+    }
+
+    /// Stop silently when nothing is open. Unlike every other stop, this one
+    /// leaves no `disconnected` frame and closes no telemetry: the session is
+    /// not over for anyone watching it, only for this process's memory.
+    /// Frames still buffered are written first, so none is lost.
+    async fn release(
+        &mut self,
+        completed: oneshot::Sender<Result<crate::domain::model::SessionRelease>>,
+    ) -> Stepped {
+        if !self.machine.is_idle() {
+            let _ = completed.send(Ok(crate::domain::model::SessionRelease::Busy));
+            return Stepped::Continue;
+        }
+        // Bounded like a delivery: a store that does not answer keeps the
+        // session's command worker waiting behind this.
+        let flushed = match tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, self.logs.flush()).await
+        {
+            Ok(flushed) => flushed,
+            Err(_) => Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                "timed out flushing buffered log frames before a release"
+            ))),
+        };
+        if let Err(error) = flushed {
+            tracing::error!(
+                error = ?error,
+                id = %self.machine.id(),
+                "agent session failed to flush buffered log frames before a release"
+            );
+            let _ = completed.send(Err(error));
+            return self.dispatch(Input::Closed(CloseReason::LogFailed)).await;
+        }
+        let _ = completed.send(Ok(crate::domain::model::SessionRelease::Released));
+        tracing::info!(id = %self.machine.id(), "agent session released while idle");
+        Stepped::Stopped(StopReason::Closed(CloseReason::Released))
     }
 
     /// Log then send: the log entry is written first so the session's history
@@ -728,9 +807,17 @@ where
         match self.machine.status() {
             RuntimeStatus::Live { .. } => {
                 self.handshake_span.take();
+                self.opened.send_replace(Some(true));
                 self.list_tools_once();
             }
             RuntimeStatus::Dead => {
+                self.opened.send_if_modified(|opened| {
+                    let first = opened.is_none();
+                    if first {
+                        *opened = Some(false);
+                    }
+                    first
+                });
                 if let Some(span) = self.handshake_span.take() {
                     span.record("otel.status_code", "ERROR");
                     span.record("otel.status_description", "ACP handshake failed");
@@ -800,7 +887,8 @@ where
                 | Effect::Log { .. }
                 | Effect::EstablishInitialization { .. }
                 | Effect::PersistAcpSession { .. }
-                | Effect::Initialized { .. } => {}
+                | Effect::Initialized { .. }
+                | Effect::RuntimeClosed => {}
             }
         }
         if let Some(stop) = stop {

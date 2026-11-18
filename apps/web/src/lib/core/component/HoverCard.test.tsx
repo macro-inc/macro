@@ -2,13 +2,19 @@
  * @vitest-environment jsdom
  */
 
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { HoverCard as StyledHoverCard } from '../../../components/ui/components/HoverCard';
 import { HoverCard } from './HoverCard';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
-  isTouchDevice: () => false,
+  isTouchDevice: vi.fn(() => false),
 }));
+
+afterEach(() => {
+  vi.mocked(isTouchDevice).mockReturnValue(false);
+});
 
 async function renderOpenCard(
   keepOpenOnTriggerPress?: boolean,
@@ -37,6 +43,81 @@ async function renderOpenCard(
 }
 
 describe('HoverCard', () => {
+  it.each([false, true])(
+    'keeps a standalone keyboard action enabled (touch: %s)',
+    async (touch) => {
+      vi.mocked(isTouchDevice).mockReturnValue(touch);
+      const activate = vi.fn();
+      render(() => (
+        <HoverCard
+          open
+          openDelay={0}
+          trigger={<span>Thread subject</span>}
+          triggerOnKeyDown={(event) => {
+            if (event.key === 'Enter') activate(event.shiftKey);
+          }}
+          content={<div>Thread preview</div>}
+        />
+      ));
+
+      const trigger = screen.getByRole('link', { name: 'Thread subject' });
+      expect(trigger.tabIndex).toBe(0);
+      expect(trigger.getAttribute('aria-disabled')).not.toBe('true');
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'Enter', shiftKey: true });
+      expect(activate).toHaveBeenCalledExactlyOnceWith(true);
+      if (touch) expect(screen.queryByText('Thread preview')).toBeNull();
+      else expect(await screen.findByText('Thread preview')).toBeTruthy();
+    }
+  );
+
+  it('keeps the same button action without a hover preview on touch', () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const activate = vi.fn();
+    render(() => (
+      <StyledHoverCard
+        as="button"
+        triggerAriaLabel="Folder"
+        triggerOnClick={activate}
+        content={<div>Folder preview</div>}
+      >
+        Folder name
+      </StyledHoverCard>
+    ));
+
+    const trigger = screen.getByRole('button', { name: 'Folder' });
+    expect(trigger.getAttribute('type')).toBe('button');
+    expect(screen.queryByText('Folder preview')).toBeNull();
+    fireEvent.click(trigger);
+    expect(activate).toHaveBeenCalledOnce();
+  });
+
+  it('uses one non-submitting button for keyboard preview and activation', async () => {
+    const activate = vi.fn();
+    const submit = vi.fn();
+    render(() => (
+      <form onSubmit={submit}>
+        <HoverCard
+          triggerAs="button"
+          triggerAriaLabel="Folder"
+          triggerOnClick={activate}
+          openDelay={0}
+          trigger={<span>Folder name</span>}
+          content={<div>Folder preview</div>}
+        />
+      </form>
+    ));
+
+    const trigger = screen.getByRole('button', { name: 'Folder' });
+    expect(trigger.getAttribute('type')).toBe('button');
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+
+    trigger.focus();
+    expect(await screen.findByText('Folder preview')).toBeTruthy();
+    fireEvent.click(trigger);
+    expect(activate).toHaveBeenCalledOnce();
+    expect(submit).not.toHaveBeenCalled();
+  });
   it('dismisses when its trigger is pressed', async () => {
     const onOpenChange = await renderOpenCard();
 

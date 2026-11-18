@@ -13,6 +13,7 @@ fn thread(len: u128) -> Vec<ThreadMessage> {
                     .expect("a valid user id")
                     .into_owned(),
             ),
+            name: Some("Ada Lovelace".to_owned()),
             content: format!("message {index}"),
             created_at: Utc
                 .timestamp_opt(1_700_000_000 + index as i64, 0)
@@ -126,7 +127,9 @@ fn a_capped_transcript_still_reports_what_it_dropped() {
 fn bot_thread() -> Vec<ThreadMessage> {
     let mut messages = thread(3);
     messages[1].sender = ChannelSender::new_from_bot(BotId::TEST_A);
+    messages[1].name = Some("pickle".to_owned());
     messages[2].sender = ChannelSender::new_from_bot(BotId::TEST_B);
+    messages[2].name = Some("Macro".to_owned());
     messages
 }
 
@@ -136,17 +139,51 @@ fn a_rendered_transcript_marks_the_agents_own_messages() {
 
     let rendered = render_transcript(
         &thread_window(&messages, &anchors(&[1]), 2, 60),
-        BotId::TEST_A,
+        &[BotId::TEST_A],
     );
 
     assert_eq!(
         rendered,
-        format!(
-            "[user macro|thread-window-test@macro.com] message 0\n\
-             [agent] message 1\n\
-             [bot {}] message 2\n",
-            BotId::TEST_B.into_storage_id()
-        )
+        "[Ada Lovelace] message 0\n\
+         [agent 1 (pickle)] message 1\n\
+         [bot (Macro)] message 2\n"
+    );
+}
+
+#[test]
+fn a_rendered_transcript_numbers_each_candidate_agent() {
+    let messages = bot_thread();
+
+    let rendered = render_transcript(
+        &thread_window(&messages, &anchors(&[1]), 2, 60),
+        &[BotId::TEST_B, BotId::TEST_A],
+    );
+
+    assert_eq!(
+        rendered,
+        "[Ada Lovelace] message 0\n\
+         [agent 2 (pickle)] message 1\n\
+         [agent 1 (Macro)] message 2\n"
+    );
+}
+
+#[test]
+fn a_sender_with_no_name_on_record_is_never_named_by_id() {
+    let mut messages = bot_thread();
+    messages[0].name = None;
+    messages[1].name = None;
+    messages[2].name = None;
+
+    let rendered = render_transcript(
+        &thread_window(&messages, &anchors(&[1]), 2, 60),
+        &[BotId::TEST_A],
+    );
+
+    assert_eq!(
+        rendered,
+        "[someone] message 0\n\
+         [agent 1] message 1\n\
+         [bot] message 2\n"
     );
 }
 
@@ -156,7 +193,7 @@ fn a_rendered_transcript_says_where_messages_were_dropped() {
 
     let rendered = render_transcript(
         &thread_window(&messages, &anchors(&[15]), 1, 60),
-        BotId::TEST_A,
+        &[BotId::TEST_A],
     );
 
     assert!(
@@ -171,7 +208,7 @@ fn a_single_dropped_message_reads_as_one() {
 
     let rendered = render_transcript(
         &thread_window(&messages, &anchors(&[1]), 0, 60),
-        BotId::TEST_A,
+        &[BotId::TEST_A],
     );
 
     assert!(

@@ -41,6 +41,7 @@ mod delete_table;
 mod derived_columns;
 mod discovery;
 mod domain_events;
+mod duplicate;
 mod fakes;
 mod infer_column_type;
 mod metadata;
@@ -196,6 +197,7 @@ async fn insert_names(seeded: &Seeded, names: &[&str]) -> Vec<RowId> {
                             }]
                         })
                         .collect(),
+                    ids: None,
                 },
             }]),
         )
@@ -237,6 +239,7 @@ async fn seeded() -> Seeded {
             name: "Offsite".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -326,6 +329,7 @@ async fn seeded() -> Seeded {
                             value: CellValue::Number(2.0),
                         },
                     ]],
+                    ids: None,
                 },
             }]),
         )

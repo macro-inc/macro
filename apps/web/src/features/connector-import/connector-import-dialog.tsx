@@ -43,6 +43,7 @@ function useProductionContext(
           const { authorization_url } = await startMcpAuth.mutateAsync({
             server_url: app.mcpUrl,
             server_name: app.name,
+            parentSpan: span,
           });
           assignOauthUrl(popup, authorization_url);
           span.setAttr('connector.outcome', 'started');

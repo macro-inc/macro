@@ -1,6 +1,9 @@
 use tauri::{Manager, Runtime};
 use tauri_plugin_device_info::DeviceInfoExt;
 
+#[cfg(target_os = "ios")]
+use super::fs::exclude_from_backup;
+
 use crate::domain::{
     models::{Arch, NativeAppInfo, Target},
     ports::SystemQuery,
@@ -10,14 +13,20 @@ use crate::domain::{
 pub struct SystemInfo<R: Runtime> {
     app_handle: tauri::AppHandle<R>,
     native_build: u64,
+    embedded_git_sha: Option<&'static str>,
 }
 
 impl<R: Runtime> SystemInfo<R> {
     /// Create a new system info query bound to the given app handle.
-    pub fn new(app_handle: tauri::AppHandle<R>, native_build: u64) -> Self {
+    pub fn new(
+        app_handle: tauri::AppHandle<R>,
+        native_build: u64,
+        embedded_git_sha: Option<&'static str>,
+    ) -> Self {
         Self {
             app_handle,
             native_build,
+            embedded_git_sha,
         }
     }
 
@@ -43,10 +52,36 @@ impl<R: Runtime> SystemInfo<R> {
     }
 }
 
+/// Return persistent storage for downloaded bundles and their markers.
+///
+/// iOS deliberately ignores the legacy cache contents. Startup falls back to
+/// the embedded bundle and downloads the current bundle into Application
+/// Support instead. Other platforms retain their existing cache location.
+pub(crate) fn bundle_storage_dir<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<std::path::PathBuf, std::io::Error> {
+    #[cfg(target_os = "ios")]
+    let path = app
+        .path()
+        .app_data_dir()
+        .map(|dir| dir.join("bundle-updates"));
+    #[cfg(not(target_os = "ios"))]
+    let path = app.path().app_cache_dir();
+
+    let path = path.map_err(|error| std::io::Error::new(std::io::ErrorKind::NotFound, error))?;
+    #[cfg(target_os = "ios")]
+    {
+        std::fs::create_dir_all(&path)?;
+        exclude_from_backup(&path)?;
+    }
+    Ok(path)
+}
+
 impl<R: Runtime> SystemQuery for SystemInfo<R> {
     async fn get_native_app_info(&self) -> Result<NativeAppInfo, rootcause::Report> {
         Ok(NativeAppInfo {
             native_build: self.native_build,
+            embedded_git_sha: self.embedded_git_sha.map(str::to_owned),
             arch: self.get_arch(),
             target: self.get_target(),
         })
@@ -62,10 +97,7 @@ impl<R: Runtime> SystemQuery for SystemInfo<R> {
     }
 
     async fn get_update_dir(&self) -> Result<std::path::PathBuf, std::io::Error> {
-        self.app_handle
-            .path()
-            .app_cache_dir()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))
+        bundle_storage_dir(&self.app_handle)
     }
 }
 

@@ -60,7 +60,7 @@ export function FormatButtons(props: FormatButtonsProps) {
       >
         <TextCodeIcon class="size-4" />
       </FormatButton>
-      <div class="w-px h-5 bg-edge-muted" />
+      <div class="w-px h-5 shrink-0 bg-edge-muted" />
       <FormatButton
         label="Bulleted list"
         active={elementsInRange()?.has('list-bullet')}
@@ -108,8 +108,10 @@ function FormatButton(props: FormatButtonProps) {
       aria-label={props.label}
       variant="ghost"
       size="icon-sm"
-      class={props.active ? 'bg-active text-ink' : ''}
+      class="shrink-0"
+      aria-pressed={!!props.active}
       onPointerDown={(event: PointerEvent) => event.preventDefault()}
+      onMouseDown={(event: MouseEvent) => event.preventDefault()}
       onClick={() => props.onClick()}
     >
       {props.children}

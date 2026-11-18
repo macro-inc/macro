@@ -298,3 +298,64 @@ async fn assignment_snapshot_waits_for_writers_using_only_row_locks(
     assert_eq!(reassigned.value, Some(assignment()));
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn one_statement_sets_and_clears_a_property_across_entities(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let [first, second, third] = [(); 3].map(|_| Uuid::now_v7().to_string());
+    let definition = SystemPropertyKey::ASSIGNEES_UUID;
+    let mut tx = pool.begin().await?;
+    let created = set_entity_values_in_transaction(
+        &mut tx,
+        EntityType::Task,
+        definition,
+        &[
+            (first.clone(), Some(PropertyValue::Num(1.0))),
+            (second.clone(), Some(PropertyValue::Num(2.0))),
+        ],
+    )
+    .await?;
+    assert_eq!(created, 2);
+    // First changes, second is cleared, third is new.
+    let changed = set_entity_values_in_transaction(
+        &mut tx,
+        EntityType::Task,
+        definition,
+        &[
+            (first.clone(), Some(PropertyValue::Num(3.0))),
+            (second.clone(), None),
+            (third.clone(), Some(PropertyValue::Num(4.0))),
+        ],
+    )
+    .await?;
+    assert_eq!(changed, 3);
+    let unchanged = set_entity_values_in_transaction(
+        &mut tx,
+        EntityType::Task,
+        definition,
+        &[
+            (first.clone(), Some(PropertyValue::Num(3.0))),
+            (third.clone(), Some(PropertyValue::Num(4.0))),
+        ],
+    )
+    .await?;
+    assert_eq!(unchanged, 0);
+
+    let mut stored = entity_values_in_transaction(
+        &mut tx,
+        EntityType::Task,
+        &[first.clone(), second, third.clone()],
+        Some(&[definition]),
+    )
+    .await?;
+    stored.sort_by(|left, right| left.0.cmp(&right.0));
+    assert_eq!(
+        stored,
+        vec![
+            (first, definition, PropertyValue::Num(3.0)),
+            (third, definition, PropertyValue::Num(4.0)),
+        ]
+    );
+    Ok(())
+}

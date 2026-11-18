@@ -1,5 +1,6 @@
 import { useEmail } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useInboxEmail } from '@queries/email/inbox-email';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import {
   blockSenderWithToast,
@@ -18,16 +19,19 @@ export function createThreadActionAdapter(
   threadSource: Accessor<EmailThread | undefined>
 ): EmailThreadCommands {
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
-  const completion = createThreadCompletionAdapter(
-    threadSource,
-    toHeaderLinkId
-  );
-  const read = createThreadReadAdapter(threadId, threadSource, toHeaderLinkId);
-  const currentUserEmail = useEmail();
+  const completion = createThreadCompletionAdapter(threadSource);
+  const read = createThreadReadAdapter(threadId, threadSource);
+  const viewerEmail = useInboxEmail(() => threadSource()?.link_id);
+  const loginEmail = useEmail();
 
+  // Mail sent from the Macro login is the viewer's own too, even in an inbox
+  // linked under another address. Until the inbox address loads, no sender
+  // is known.
   const getSenderEmail = (): string | undefined => {
     const thread = threadSource();
-    return thread ? selectThreadSender(thread, currentUserEmail()) : undefined;
+    return thread
+      ? selectThreadSender(thread, viewerEmail(), loginEmail())
+      : undefined;
   };
 
   const blockSender = () => {
@@ -72,6 +76,7 @@ export function createThreadActionAdapter(
   return {
     ...completion,
     ...read,
+    canActOnSender: () => getSenderEmail() !== undefined,
     blockSender,
     markSenderSignal,
     markSenderNoise,

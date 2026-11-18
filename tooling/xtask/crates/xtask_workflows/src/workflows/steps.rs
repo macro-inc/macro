@@ -7,7 +7,7 @@
 use gh_workflow::{Env, Expression, Job, Run, Step, Use};
 use xtask_paths::{RepoDir, RuntimePath};
 
-use crate::workflows::vars;
+use crate::workflows::{runners, vars};
 
 #[cfg(test)]
 mod test;
@@ -82,6 +82,51 @@ pub fn setup_bun() -> Step<Use> {
     Step::new("Setup Bun").uses("oven-sh", "setup-bun", "v2")
 }
 
+/// `oven-sh/setup-bun`, SHA-pinned with an exact Bun version, for the native
+/// release workflows that run the `apps/web/scripts` release helpers.
+pub fn setup_bun_pinned() -> Step<Use> {
+    Step::new("Setup Bun")
+        .uses(
+            "oven-sh",
+            "setup-bun",
+            "0c5077e51419868618aeaa5fe8019c62421857d6",
+        ) // v2.2.0
+        .add_with(("bun-version", "1.3.13"))
+}
+
+/// Keyless Google Play access (Workload Identity Federation through the
+/// repository variables `GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER` /
+/// `GOOGLE_PLAY_SERVICE_ACCOUNT`), as step `auth`: an `androidpublisher`
+/// access token, plus a credentials file for actions that want one. The job
+/// needs `id-token: write`. Google's provider admits only workflows that run
+/// `main`'s copy (see "Keyless publishing credentials" in
+/// docs/development/android.md), so never use this in a `pull_request` job:
+/// it would run the PR's code with the publishing identity, and the provider
+/// rejects it anyway.
+pub fn google_play_auth(credentials_file: bool) -> Step<Use> {
+    Step::new("Authenticate to Google Play")
+        .uses(
+            "google-github-actions",
+            "auth",
+            "7c6bc770dae815cd3e89ee6cdf493a5fab2cc093",
+        ) // v3
+        .id("auth")
+        .add_with((
+            "workload_identity_provider",
+            "${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}",
+        ))
+        .add_with(("service_account", "${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}"))
+        .add_with(("token_format", "access_token"))
+        .add_with((
+            "access_token_scopes",
+            "https://www.googleapis.com/auth/androidpublisher",
+        ))
+        .when(!credentials_file, |step| {
+            step.add_with(("create_credentials_file", false))
+        })
+        .add_with(("export_environment_variables", false))
+}
+
 /// Install the Rust toolchain only (no sccache, no cache) — for the lightweight
 /// `path-check` and workflow-drift jobs.
 pub fn setup_rust_light() -> Step<Use> {
@@ -91,6 +136,27 @@ pub fn setup_rust_light() -> Step<Use> {
     )
     .add_with(("sccache", "false"))
     .add_with(("rust-cache", "false"))
+}
+
+/// A `bash` step whose output the job's closing "Comment on the PR" step
+/// quotes when the job fails. The step records its name in
+/// `$RUNNER_TEMP/last-step.name` and tees its stdout and stderr into
+/// `$RUNNER_TEMP/last-step.log`, both truncated at the step's start, so the
+/// files describe the failed step when the comment step runs (it checks the
+/// name against the API's failed step first: an unlogged step may have
+/// failed since). Only for steps whose output is messages — the comment is
+/// not secret-masked the way the log is, so a step that handles credentials
+/// or runs a build stays an ordinary step.
+pub fn logged_run(name: &str, script: impl AsRef<str>) -> Step<Run> {
+    Step::new(name)
+        .run(format!(
+            "printf '%s\\n' \"$LOGGED_STEP\" > \"$RUNNER_TEMP/last-step.name\"\n\
+             exec > >(tee \"$RUNNER_TEMP/last-step.log\") 2>&1\n\
+             {}",
+            script.as_ref()
+        ))
+        .shell("bash")
+        .add_env(("LOGGED_STEP", name))
 }
 
 /// Install Nix on a macOS runner. The Linux [`setup_nix`] action doesn't apply
@@ -124,6 +190,13 @@ pub fn setup_nix_with_cache() -> Step<Use> {
         .add_with(("nix-cache-public-key", vars::NIX_CACHE_PUBLIC_KEY))
         .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
         .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
+}
+
+/// [`setup_nix`] restoring `/nix` from Namespace's HTTP cache when the volume is
+/// empty. PR jobs write that copy, so this is only for PR check jobs: never a job
+/// that deploys or holds deploy secrets.
+pub fn setup_nix_with_seed() -> Step<Use> {
+    setup_nix().add_with(("seed-cache", vars::CI_SCCACHE_NAME))
 }
 
 /// Push built store paths to the private S3 binary cache, signing on upload —
@@ -180,22 +253,32 @@ pub fn setup_dev_shell_named(name: &str) -> Step<Use> {
     setup_dev_shell().add_with(("shell", name))
 }
 
-/// Mount the Namespace profile's persisted cache volume: `cache: rust` persists
-/// the cargo registry/git, and `path:` persists the Nix store. Compiled objects
-/// deliberately use Namespace's official remote sccache instead of this volume.
+/// Mount the Namespace profile's persisted cache volume: cargo's registry, git
+/// checkouts and `target/`, and the Nix store. Listing the paths mounts in under a
+/// second, where the action's `cache: rust` mode took about 12 s to find the same
+/// ones. Compiled objects deliberately use Namespace's official remote sccache
+/// instead of this volume.
 /// `continue-on-error` because the volume is a pure optimization — a failure
 /// just means cold Cargo/Nix state, never a wrong build.
 pub fn mount_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "rust"))
-        .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
+    nscloud_cache_action("Mount Namespace cache volume").add_with((
+        "path",
+        "/nix\n./target\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n/home/runner/.cargo/.global-cache",
+    ))
 }
 
-/// Mount only `path` from the profile's cache volume, without a framework
-/// mode. Unlike [`mount_cache_volume`] (`cache: rust` plus `/nix`, ~11 s on
-/// `linux-rust-ci`), a plain path mounts in under a second.
-pub fn mount_path_cache_volume(name: &str, path: RuntimePath<'_>) -> Step<Use> {
-    nscloud_cache_action(name).add_with(("path", path.as_str()))
+/// Mount a scratch directory for building the nextest filter, plus cargo's registry
+/// and git checkouts. `cargo metadata` fetches every crate in the lockfile, which took
+/// most of the filter's time when `path-check` had no registry to start from.
+pub fn mount_nextest_filter_cache(filter_cache_dir: RuntimePath<'_>) -> Step<Use> {
+    let paths = format!(
+        "{}\n{}\n{}",
+        filter_cache_dir.as_str(),
+        xtask_paths::runtime_path!("/home/runner/.cargo/registry").as_str(),
+        xtask_paths::runtime_path!("/home/runner/.cargo/git").as_str(),
+    );
+
+    nscloud_cache_action("Mount nextest-filter and cargo registry cache").add_with(("path", paths))
 }
 
 /// The pinned `nscloud-cache-action`, shared by every mount helper below.
@@ -260,6 +343,11 @@ if nsc cache sccache setup --cache_name {cache_name} > "$env_file"; then
     esac
   done < "$env_file"
   cat "$env_file" >> "$GITHUB_ENV"
+  # The server checks the WebDAV backend before it reports ready, and the
+  # client's default 10s wait can run out. This limit has no env var.
+  sccache_conf="$RUNNER_TEMP/sccache.toml"
+  echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+  echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
   # Force the next compiler invocation to start a server with the new remote
   # backend even if a setup hook happened to launch one already.
   sccache --stop-server >/dev/null 2>&1 || true
@@ -293,7 +381,20 @@ pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
         })
 }
 
-/// [`mount_web_cache_volume`] plus Vitest's module cache, so the web `Test`
+/// [`mount_web_cache_volume`] for PR check jobs, which also keep the
+/// workspace's [`vars::NODE_MODULES_VOLUME_DIR`] on the volume, so their
+/// `bun install` finds the tree in place. Never for deploy jobs.
+pub fn mount_web_check_cache_volume(with_rust: bool) -> Step<Use> {
+    let mut paths = vec![vars::BUN_CACHE_VOLUME_DIR, vars::NODE_MODULES_VOLUME_DIR];
+    if with_rust {
+        paths.extend(["/home/runner/.cargo/registry", "/home/runner/.cargo/git"]);
+    }
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with(("path", paths.join("\n")))
+}
+
+/// [`mount_web_check_cache_volume`] plus Vitest's module cache, so the web `Test`
 /// job reuses transforms from earlier runs instead of redoing them all.
 pub fn mount_web_test_cache_volume() -> Step<Use> {
     nscloud_cache_action("Mount Namespace cache volume")
@@ -301,44 +402,37 @@ pub fn mount_web_test_cache_volume() -> Step<Use> {
         .add_with((
             "path",
             format!(
-                "{}\n{}",
+                "{}\n{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}\n{}",
                 vars::BUN_CACHE_VOLUME_DIR,
+                vars::NODE_MODULES_VOLUME_DIR,
+                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
                 vars::VITEST_MODULE_CACHE_VOLUME_DIR,
-            ),
-        ))
-}
-
-/// [`mount_web_cache_volume`] for jobs that compile the browser wasm packages
-/// (`just build-*`). Cargo registry/git feed wasm-pack; `.wasm-pack` is the
-/// downloaded `wasm-opt` the same way [`mount_wasm_cache_volume`] keeps the
-/// worker build warm. Compiled objects use Namespace remote sccache.
-pub fn mount_web_build_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "nix"))
-        .add_with((
-            "path",
-            format!(
-                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}",
-                vars::BUN_CACHE_VOLUME_DIR,
-                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
-            ),
-        ))
-}
-
-/// [`mount_web_build_cache_volume`] plus [`vars::WASM_PKG_CACHE_DIR`], for the PR
-/// build that reuses unchanged wasm packages. Deploy builds always rebuild them.
-pub fn mount_web_build_check_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "nix"))
-        .add_with((
-            "path",
-            format!(
-                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}",
-                vars::BUN_CACHE_VOLUME_DIR,
-                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
                 vars::WASM_PKG_CACHE_DIR,
             ),
         ))
+}
+
+/// [`mount_web_cache_volume`] for the PR jobs that compile the browser wasm
+/// packages (`just build-*`). `node_modules` adds [`vars::NODE_MODULES_VOLUME_DIR`]
+/// for a job that holds no deploy credentials. Cargo registry/git feed wasm-pack; `.wasm-pack`
+/// is the downloaded `wasm-opt` the same way [`mount_wasm_cache_volume`] keeps
+/// the worker build warm; [`vars::WASM_PKG_CACHE_DIR`] holds the unchanged
+/// packages it reuses. Deploy builds keep theirs in an Actions cache instead
+/// (`build_web_app`) and mount none of these, since PR jobs write this volume.
+pub fn mount_web_build_check_cache_volume(node_modules: bool) -> Step<Use> {
+    let mut paths = vec![vars::BUN_CACHE_VOLUME_DIR];
+    if node_modules {
+        paths.push(vars::NODE_MODULES_VOLUME_DIR);
+    }
+    paths.extend([
+        "/home/runner/.cargo/registry",
+        "/home/runner/.cargo/git",
+        xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
+        vars::WASM_PKG_CACHE_DIR,
+    ]);
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with(("path", paths.join("\n")))
 }
 
 /// The web-app composite: Nix dev shell (bun, biome, just) + `bun install`.
@@ -352,11 +446,56 @@ pub fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
     .when(playwright, |step| step.add_with(("playwright", "true")))
 }
 
+/// Build the code-mode assets (`crates/code_mode_assets`) in Nix, or restore them
+/// from Namespace's remote cache, and point later cargo steps at them, so Rust jobs
+/// need no bun install. Any job that compiles that crate or a dependent (DSS, the
+/// agent harness) needs this. Goes after [`configure_namespace_sccache`], whose
+/// credentials it reuses.
+pub fn code_mode_assets() -> Step<Run> {
+    Step::new("Build code-mode assets").run(include_str!("scripts/code_mode_assets.sh"))
+}
+
 /// Start the server before parallel compiler invocations can race to launch it.
 /// Keep this in a separate step after remote configuration so `GITHUB_ENV`
 /// has supplied the selected backend's credentials to the process.
 pub fn start_sccache_server() -> Step<Run> {
     Step::new("Start sccache server").run("sccache --start-server")
+}
+
+/// Run embedded TypeScript on the hosted image's Node, which strips types
+/// itself, so the step needs no checkout, build or dependency. The script
+/// exports `main`.
+pub fn node_script(source: &str) -> String {
+    format!(
+        "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n{source}\nawait main();\nNODE_SCRIPT\n"
+    )
+}
+
+/// Post to the Macro Alerts channel through its webhook
+/// ([`vars::MACRO_BUILD_ALERT_WEBHOOK_URL`], with
+/// [`vars::MACRO_BUILD_ALERT_BOT_TOKEN`]). `set_message` is bash that sets
+/// `message`, which the channel renders as markdown. Needs `jq` and `curl`,
+/// which [`runners::Runner::Small`] has.
+pub fn post_to_macro_alerts(name: &str, set_message: &str) -> Step<Run> {
+    let post = indoc::indoc! {r#"
+        if [[ -z "$MACRO_WEBHOOK_URL" || -z "$MACRO_BOT_TOKEN" ]]; then
+          echo 'Configure the Macro Alerts webhook URL and bot token' >&2
+          exit 1
+        fi
+        jq -n --arg content "$message" '{content: $content}' |
+          curl --fail-with-body --silent --show-error --retry 3 \
+            --header 'Content-Type: application/json' \
+            --header "x-macro-channel-bot-token: $MACRO_BOT_TOKEN" \
+            --data-binary @- "$MACRO_WEBHOOK_URL"
+    "#};
+    Step::new(name)
+        .run(format!(
+            "set -euo pipefail\n{}\n{post}",
+            set_message.trim_end()
+        ))
+        .shell("bash")
+        .add_env(("MACRO_WEBHOOK_URL", vars::MACRO_BUILD_ALERT_WEBHOOK_URL))
+        .add_env(("MACRO_BOT_TOKEN", vars::MACRO_BUILD_ALERT_BOT_TOKEN))
 }
 
 /// `sccache --show-stats` at the end of a job (never fails the job).
@@ -366,14 +505,14 @@ pub fn show_sccache_stats() -> Step<Run> {
         .if_condition(Expression::new("always()"))
 }
 
-/// Base for jobs gated behind `path-check`: depends on it and runs only on
-/// non-draft PRs where the path filter matched. Shared by `check` and `test`.
+/// Base for jobs gated behind `path-check`: depends on it and runs only where
+/// the path filter matched. Shared by `check` and `test`.
 pub fn gated_job() -> Job {
     Job::default()
         .needs(vec!["path-check".to_string()])
         .cond(Expression::new(
-        "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false",
-    ))
+            "needs.path-check.outputs.should_run == 'true'",
+        ))
 }
 
 // ---------------------------------------------------------------------------
@@ -393,6 +532,28 @@ pub fn checkout_v4() -> Step<Use> {
         .add_with(("persist-credentials", false))
 }
 
+/// A deploy that ships code built from this commit is blocked until every
+/// migration in the commit is applied to the environment it deploys to:
+/// single-service deploys apply none, and code running against a schema it is
+/// ahead of fails at runtime. `ships_code` is the `setup` job's expression for
+/// whether the deploy carries binaries or Lambdas; the deploy job must list
+/// this job in its `needs`.
+pub fn check_macro_db_migrations_job(name: &str, ships_code: &str) -> Job {
+    Job::default()
+        .name(name)
+        .needs(vec!["setup".to_string()])
+        .cond(Expression::new(format!("${{{{ {ships_code} }}}}")))
+        .runs_on(runners::DB_MIGRATOR)
+        .add_step(checkout_v4().add_with(("sparse-checkout", ".github/")))
+        .add_step(
+            uses_local(
+                "Check migrations",
+                xtask_paths::repo_dir!(".github/actions/check-macro-db-migrations"),
+            )
+            .add_with(("environment", "${{ inputs.environment }}")),
+        )
+}
+
 /// Build Nix targets using Namespace's mounted `/nix` cache volume.
 pub fn nix_build(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
     Step::new(name)
@@ -408,7 +569,10 @@ pub fn nix_build(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
 /// stale uploads; the deploy job logs the same hash on read.
 pub fn upload_handoff_artifact(file: &str, service_expr: &str) -> Step<Run> {
     Step::new("Upload handoff artifact")
-        .run(format!("nsc artifact upload {file} \"$DEST\" --expires_in=24h"))
+        .run(format!(
+            "bun .github/scripts/upload-handoff-artifact.ts {file} \"$DEST\""
+        ))
+        .timeout_minutes(20u32)
         .shell("bash")
         .add_env(Env::new(
             "DEST",

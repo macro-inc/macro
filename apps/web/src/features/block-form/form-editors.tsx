@@ -43,3 +43,13 @@ export function FormEditors(props: EditorsProps) {
     </AvatarGroup>
   );
 }
+
+/** A person as the app shows people: their avatar and name. */
+export function FormPerson(props: { userId: string }) {
+  return (
+    <span class="flex min-w-0 items-center gap-1.5">
+      <UserIcon id={props.userId} size="sm" suppressClick />
+      <span class="truncate">{nameOf(props.userId)}</span>
+    </span>
+  );
+}

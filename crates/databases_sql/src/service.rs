@@ -3,7 +3,7 @@
 
 mod schema;
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -331,6 +331,7 @@ where
                 DatabaseError::NotFound | DatabaseError::Unauthorized => SqlError::NotFound,
                 // Refusals of a write: a listing returning one is a broken service.
                 other @ (DatabaseError::InvalidSchemaOperation(_)
+                | DatabaseError::InvalidAppearance(_)
                 | DatabaseError::InvalidSharing(_)
                 | DatabaseError::VersionConflict
                 | DatabaseError::RowInUse

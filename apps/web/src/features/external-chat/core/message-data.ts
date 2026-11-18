@@ -5,11 +5,10 @@ import type { ChatMessage } from './chat';
 /**
  * A chat message in the shape the shared channel rows render. Macro users
  * show as themselves (Macro name and avatar); everyone else by their
- * provider name.
+ * provider name and picture.
  */
 export function chatMessageData(
   message: ChatMessage,
-  viewerId: string | undefined,
   /** The provider's received-text converter; the body is untrusted. */
   toMarkdown: ChatProvider['formatting']['toMarkdown']
 ): MessageData {
@@ -19,7 +18,10 @@ export function chatMessageData(
     sender_id: message.sender.userId ?? '',
     imported_author:
       !message.sender.userId && message.sender.name.trim()
-        ? { name: message.sender.name }
+        ? {
+            name: message.sender.name,
+            avatar_url: message.sender.pictureUrl ?? null,
+          }
         : null,
     created_at: message.sentAt,
     updated_at: message.sentAt,
@@ -28,19 +30,16 @@ export function chatMessageData(
     // Attachments are static files the view renders itself: media inline,
     // other files as chips that open them.
     attachments: [],
-    // Providers report counts, not reactors; others stay unnamed.
+    // Macro users react as themselves; anyone else by their provider name.
     reactions: message.reactions.map((reaction) => {
-      const mine = reaction.mine && viewerId ? [viewerId] : [];
-      return {
-        emoji: reaction.emoji,
-        users: [
-          ...mine,
-          ...Array.from(
-            { length: Math.max(0, reaction.count - mine.length) },
-            (_, index) => `external-reactor:${index}`
-          ),
-        ],
-      };
+      const names: Record<string, string> = {};
+      const users = reaction.reactors.map((reactor, index) => {
+        if (reactor.userId) return reactor.userId;
+        const id = `external-reactor:${index}`;
+        names[id] = reactor.name;
+        return id;
+      });
+      return { emoji: reaction.emoji, users, names };
     }),
   };
 }

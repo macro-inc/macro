@@ -1,11 +1,9 @@
-import {
-  useCalendarPromptAllowed,
-  useCalendarUiFlag,
-} from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { t } from '@app/lib/i18n';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 
 /**
@@ -31,32 +29,30 @@ import { useEmailLinksQuery } from '@queries/email/link';
  * per-inbox "Enable calendar" button for whenever the user wants it.
  */
 export function CalendarPermissionPrompt() {
-  const calendarUiEnabled = useCalendarUiFlag();
-  const promptAllowed = useCalendarPromptAllowed();
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
   const startAddInbox = useAddInboxFlow();
 
   useKeyedPersistentToasts({
     items: () =>
-      calendarUiEnabled() && promptAllowed()
-        ? (linksQuery.isSuccess ? linksQuery.data.links : []).filter(
-            (link) =>
-              link.macro_id === userId() &&
-              link.needs_calendar_permission &&
-              !link.needs_reauth &&
-              !link.calendar_disabled
-          )
-        : [],
+      (linksQuery.isSuccess ? linksQuery.data.links : []).filter(
+        (link) =>
+          link.macro_id === userId() &&
+          link.needs_calendar_permission &&
+          !link.needs_reauth &&
+          !link.calendar_disabled
+      ),
     key: (link) => link.id,
     persistKey: 'macro:calendar-prompt:dismissed',
-    // Until the flag, the links and the viewer's id resolve, the empty list
+    // Until the links and the viewer's id resolve, the empty list
     // above means "don't know yet", not "no inbox needs this" — stored
     // dismissals must survive that window.
-    itemsLoaded: () =>
-      calendarUiEnabled() && linksQuery.isSuccess && userId() !== undefined,
+    itemsLoaded: () => linksQuery.isSuccess && userId() !== undefined,
     toast: (link, dismiss) => ({
       title: 'Enable calendar',
+      icon: CalendarIcon,
+      color: 'var(--color-accent)',
+      dismissLabel: t('common.notNow'),
       content(): string {
         return `Macro can now sync your calendar. Grant calendar access for ${link.email_address} to turn it on.`;
       },

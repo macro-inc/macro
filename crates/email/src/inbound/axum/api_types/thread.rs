@@ -34,6 +34,9 @@ pub struct ApiThread {
     pub link_id: Uuid,
     pub inbox_visible: bool,
     pub is_read: bool,
+    /// Whether any message was received rather than drafted or sent. Only
+    /// threads with received mail can return to the inbox.
+    pub has_received_mail: bool,
     pub access_level: AccessLevel,
     pub latest_inbound_message_ts: Option<DateTime<Utc>>,
     pub latest_outbound_message_ts: Option<DateTime<Utc>>,
@@ -52,6 +55,7 @@ impl ApiThread {
             link_id: t.row.link_id,
             inbox_visible: t.row.inbox_visible,
             is_read: t.row.is_read,
+            has_received_mail: t.row.has_received_mail,
             access_level,
             latest_inbound_message_ts: t.row.latest_inbound_message_ts,
             latest_outbound_message_ts: t.row.latest_outbound_message_ts,

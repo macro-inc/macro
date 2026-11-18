@@ -1,17 +1,26 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
+import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { EntityAppearanceMenu } from '@app/features/entity-appearance/appearance-menu';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId } from '@core/block';
 import { defaultModelForPlan } from '@core/component/AI/constant';
+import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
-import { enableRoutineSharing } from '@core/constant/featureFlags';
+import {
+  enableEntityAppearance,
+  enableRoutineSharing,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { getOwner, onMount, Show } from 'solid-js';
-import type { ScheduleDraft } from './core/draft';
+import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
 import { getErrorMessage } from './core/routine-draft';
 import {
   createAgentHistoryMetadata,
@@ -21,20 +30,23 @@ import { createRoutineDetailSource } from './queries/routine-sources';
 import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
+import { createRoutineStepAuthor } from './routine-step-author';
 import {
-  openShareTemplateDialog,
+  openShareRoutineDialog,
   RoutineTemplatePage,
 } from './routine-template';
 import { RoutineTriggers } from './routine-triggers';
 import { RoutineDetailView } from './views/routine-detail';
+
+/** The built-in skill for composing routines (crates/system_skills). */
+const COMPOSE_ROUTINES_SKILL = 'Compose Routines';
 
 export function Routine() {
   const scheduleId = useBlockId();
   const layout = useSplitLayout();
   onMount(() => {
     if (scheduleId === 'new') {
-      layout.popoverSplit({ type: 'component', id: 'routine-compose' });
-      openAgentsPage(layout, 'routines');
+      openAgentsPage(layout, 'routines', { routineId: 'new' });
     }
   });
   return (
@@ -55,6 +67,7 @@ export function RoutineDetail(props: {
   const userId = useUserId();
   const hasPaidAccess = useHasPaidAccess();
   const sharing = useFeatureFlag(enableRoutineSharing);
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const back = () =>
     props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
   const open = (id: string) =>
@@ -68,13 +81,20 @@ export function RoutineDetail(props: {
       toast.success('Duplicated');
       open(id);
     },
+    onKept: () => toast.success(t('subRoutines.kept')),
   });
   const remove = () => {
     const entity = source.entity();
     if (!entity || entity.ownerId !== userId()) return;
+    // Its sub-routines are deleted with it: say how many.
+    const created = source.subRoutines().length;
     openBulkEditModal({
       view: 'delete',
       entities: [entity],
+      note:
+        created > 0
+          ? t('subRoutines.deleteNote', { count: created })
+          : undefined,
       onFinish: () => {
         toast.success('Deleted');
         back();
@@ -83,19 +103,43 @@ export function RoutineDetail(props: {
     });
   };
   const owner = getOwner();
-  const shareTemplate = () => {
+  const share = () => {
     const routine = source.routine();
     if (!routine) return;
-    openShareTemplateDialog(
+    openShareRoutineDialog(
       {
         routineId: routine.id,
         name: routine.name,
-        prompt: routine.draft?.prompt ?? '',
-        timezone: scheduleTimezone(routine.draft),
-        ownerId: routine.ownerId,
       },
       owner
     );
+  };
+  const systemSkills = useSystemSkillsQuery();
+  /**
+   * Ask AI, as on other surfaces: a new conversation with this routine and
+   * the Compose Routines skill attached, waiting for what to change.
+   */
+  const compose = () => {
+    const routine = source.routine();
+    if (!routine) return;
+    // System skills carry no slug to the client; their names are fixed.
+    const skill = systemSkills
+      .skills()
+      .find((skill) => skill.name === COMPOSE_ROUTINES_SKILL);
+    const mentions = [
+      skill &&
+        chatAttachmentMentionToMarkdown({
+          documentId: skill.id,
+          documentName: skill.name,
+          blockName: 'skill',
+        }),
+      chatAttachmentMentionToMarkdown({
+        documentId: routine.id,
+        documentName: routine.name,
+        blockName: 'routine',
+      }),
+    ].filter(Boolean);
+    fireAndForget(openChatWithInput(`${mentions.join(' ')} `), 'routines');
   };
   // Routines run as their owner, so everyone else sees the shared template.
   const ownedByViewer = () => {
@@ -112,7 +156,27 @@ export function RoutineDetail(props: {
       <RoutineDetailView
         source={source}
         userId={userId}
+        identityIcon={
+          <Show when={source.entity()}>
+            {(entity) => (
+              <EntityAppearanceTrigger
+                entity={entity()}
+                editable={ownedByViewer()}
+              />
+            )}
+          </Show>
+        }
+        appearanceMenu={
+          <Show
+            when={
+              appearanceFlag().enabled && ownedByViewer() && source.entity()
+            }
+          >
+            {(entity) => <EntityAppearanceMenu entity={entity()} />}
+          </Show>
+        }
         defaultModel={defaultModelForPlan(hasPaidAccess())}
+        decisionsEnabled
         initialTab={props.initialTab}
         onBack={back}
         onDelete={remove}
@@ -125,32 +189,32 @@ export function RoutineDetail(props: {
             preferNewSplit: newSplit,
           })
         }
+        onOpenItem={(item, newSplit) =>
+          layout.openWithSplit(
+            { type: item.block, id: item.id },
+            { activate: true, preferNewSplit: newSplit }
+          )
+        }
         onCopyPrompt={async (prompt) => {
-          if (await writeClipboardData({ 'text/plain': prompt }))
-            toast.success('Prompt copied');
-          else toast.alert('Could not copy prompt');
+          const copied = await writeClipboardData({ 'text/plain': prompt });
+          if (!copied) toast.alert('Could not copy prompt');
+          return copied;
         }}
-        onShareTemplate={sharing().enabled ? shareTemplate : undefined}
+        onShare={sharing().enabled ? share : undefined}
+        onCompose={compose}
         onOpenTemplate={sharing().enabled ? open : undefined}
+        onOpenRoutine={open}
         slots={{
           PromptEditor: RoutinePromptEditor,
           ExecutionPicker: RoutineExecutionPicker,
           Triggers: RoutineTriggers,
           Apps: RoutineApps,
           createConnectedApps: createRoutineConnectedApps,
+          createStepAuthor: createRoutineStepAuthor,
           createChatMetadata: createChatHistoryMetadata,
           createAgentMetadata: createAgentHistoryMetadata,
         }}
       />
     </Show>
   );
-}
-
-/** The time zone a routine's schedules run in, for sharing it as a template. */
-function scheduleTimezone(draft: ScheduleDraft | undefined) {
-  const schedule = draft?.triggers?.find(
-    (trigger) => trigger.kind === 'schedule'
-  );
-  if (schedule?.kind === 'schedule') return schedule.timezone;
-  return draft?.triggers ? undefined : draft?.timezone;
 }

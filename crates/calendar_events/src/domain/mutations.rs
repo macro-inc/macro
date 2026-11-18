@@ -133,9 +133,10 @@ where
         if retired.is_empty() {
             return;
         }
+        let team_ooo_changed = retired.iter().any(|event| event.team_ooo_changed);
         self.publish_retirements(retired);
         self.refresh
-            .calendar_changed(owner_id, email_link_id, true)
+            .calendar_changed(owner_id, email_link_id, team_ooo_changed)
             .await;
     }
 

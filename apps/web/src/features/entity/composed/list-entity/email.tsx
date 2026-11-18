@@ -2,7 +2,7 @@ import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useEmailLinksContext } from '@core/context/emailLinks';
 import { cn } from '@ui';
-import { type Accessor, createMemo, Show } from 'solid-js';
+import { type Accessor, createMemo, type JSX, Show } from 'solid-js';
 import { DraftBadge } from '../../components/Badges';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
@@ -99,19 +99,28 @@ export function EmailNarrowBody(props: {
   chars: number;
   showHitSnippet: boolean;
   setContainerRef: (el: HTMLElement) => void;
+  previewLeading?: JSX.Element;
+  /** The subject's weight, when the row style sets one; the preview keeps its own. */
+  subjectClass?: string;
 }) {
   return (
-    <Entity.Slot placement="body" class="flex flex-col pb-2 min-h-[2lh] pr-4">
+    <Entity.Slot
+      placement="body"
+      class={cn('flex flex-col pb-2 min-h-[2lh] pr-4', props.subjectClass)}
+    >
       <Entity.Title entity={props.entity} />
-      <span
-        ref={props.setContainerRef}
-        class="text-ink/50 font-medium truncate"
-      >
-        <EmailSnippet
-          entity={props.entity}
-          showHitSnippet={props.showHitSnippet}
-          chars={props.chars}
-        />
+      <span class="flex min-w-0 items-center gap-1.5">
+        {props.previewLeading}
+        <span
+          ref={props.setContainerRef}
+          class="min-w-0 flex-1 truncate font-medium text-ink/50"
+        >
+          <EmailSnippet
+            entity={props.entity}
+            showHitSnippet={props.showHitSnippet}
+            chars={props.chars}
+          />
+        </span>
       </span>
     </Entity.Slot>
   );
@@ -123,18 +132,24 @@ export function EmailNarrowSnippet(props: {
   chars: number;
   showHitSnippet: boolean;
   setContainerRef: (el: HTMLElement) => void;
+  previewLeading?: JSX.Element;
 }) {
   return (
     <Entity.Slot
       placement="body"
-      ref={props.setContainerRef}
-      class="ph-no-capture min-w-0 truncate pr-3 pb-2.5 text-ink/50"
+      class="ph-no-capture flex min-w-0 items-center gap-1.5 pr-3 pb-2.5"
     >
-      <EmailSnippet
-        entity={props.entity}
-        showHitSnippet={props.showHitSnippet}
-        chars={props.chars}
-      />
+      {props.previewLeading}
+      <span
+        ref={props.setContainerRef}
+        class="min-w-0 flex-1 truncate text-ink/50"
+      >
+        <EmailSnippet
+          entity={props.entity}
+          showHitSnippet={props.showHitSnippet}
+          chars={props.chars}
+        />
+      </span>
     </Entity.Slot>
   );
 }
@@ -144,21 +159,28 @@ export function EmailWideContent(props: {
   chars: number;
   showHitSnippet: boolean;
   setContainerRef: (el: HTMLElement) => void;
+  /** The sender's and subject's weight, when the row style sets one. */
+  textClass?: string;
 }) {
   return (
     <>
       <span class="w-(--title-width) shrink-0 flex items-center gap-2">
-        <span class="truncate max-w-32 flex gap-2 items-center">
+        <span
+          class={cn(
+            'truncate max-w-32 flex gap-2 items-center',
+            props.textClass
+          )}
+        >
           <EmailIdentity entity={props.entity} />
         </span>
         <EmailInboxChip entity={props.entity} class="ml-auto" />
       </span>
-      <span class="truncate">
+      <span class={cn('truncate', props.textClass)}>
         <Entity.Title entity={props.entity} />
       </span>
       <span
         ref={props.setContainerRef}
-        class="text-ink/50 font-medium truncate flex-1 inline-flex items-center"
+        class="text-ink/50 font-medium truncate flex-1"
       >
         <EmailSnippet
           entity={props.entity}

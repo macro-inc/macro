@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT event.id AS \"id!\"\n        FROM comms_channel_participants participant\n        JOIN entity_access grant_row\n          ON grant_row.source_id = participant.channel_id::text\n         AND grant_row.source_type = 'channel'\n         AND grant_row.entity_type = 'calendar_event'\n        JOIN calendar_events event ON event.id = grant_row.entity_id\n        WHERE participant.user_id = $1\n          AND participant.left_at IS NULL\n          AND event.status <> 'cancelled'\n          AND event.visibility IN ('default', 'public')\n          AND NOT EXISTS (\n                SELECT 1\n                FROM calendar_events held\n                WHERE calendar_meeting_uid(held.ical_uid)\n                    = calendar_meeting_uid(event.ical_uid)\n                  AND held.status <> 'cancelled'\n                  AND (\n                        held.owner_id = $1\n                        OR EXISTS (\n                            SELECT 1\n                            FROM macro_user_links link\n                            WHERE link.link_id = held.source_link_id\n                              AND link.primary_macro_id = $1\n                        )\n                  )\n          )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7400849a711418e11e6f7ee24ad84446bc71a0e0cfe5d6b379e191d1be1f831e"
+}

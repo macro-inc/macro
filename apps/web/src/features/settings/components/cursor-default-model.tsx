@@ -2,6 +2,7 @@ import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCata
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
+import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import { useAgentModelsQuery } from '@queries/agents/models';
 import {
   useCursorApiKeyStatusQuery,
@@ -9,10 +10,17 @@ import {
 } from '@queries/auth/cursor-api-key';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
+import { EffortSelector } from '../../block-agent/component/EffortSelector';
+import {
+  type EffortChoice,
+  effortConfigOption,
+} from '../../block-agent/state/session-config';
 
 /**
- * The model new Cursor sessions start on. Saves on change; renders loading,
- * error, and unsupported states in place of the picker.
+ * The model and reasoning effort new Cursor sessions start on. Saves on
+ * change; renders loading, error, and unsupported states in place of the
+ * picker. The effort stops are the selected model's own, so a saved effort the
+ * model no longer offers shows the model's default instead.
  */
 export function CursorDefaultModel(props: { triggerClass?: string }) {
   const cursorStatus = useCursorApiKeyStatusQuery();
@@ -55,14 +63,49 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
     modelOptions()[0]?.id ??
     null;
 
+  const capabilities = useAgentCapabilitiesQuery(() => {
+    const model = selectedModelId();
+    if (!registered() || modelData()?.status !== 'available' || !model) return;
+    return { harness: 'cursor', model } as const;
+  });
+  const effort = () =>
+    effortConfigOption(
+      capabilities.isPending ? [] : (capabilities.data?.configOptions ?? [])
+    );
+  const selectedEffort = () => {
+    const config = effort();
+    const saved = cursorStatus.isSuccess
+      ? cursorStatus.data.defaultEffort
+      : null;
+    if (saved && config?.options.some((option) => option.value === saved)) {
+      return saved;
+    }
+    return config?.currentValue;
+  };
+
+  // A model saved alone clears the effort, which belonged to the old model.
   const changeModel = async (modelId: string) => {
     try {
-      await setDefaultModel.mutateAsync(modelId);
+      await setDefaultModel.mutateAsync({ modelId });
       toast.success('Default model updated');
     } catch (error) {
       toast.failure(
         (error instanceof ThrownResultError && error.message) ||
           'Failed to set your default model'
+      );
+    }
+  };
+
+  const changeEffort = async (choice: EffortChoice) => {
+    const modelId = selectedModelId();
+    if (!modelId) return;
+    try {
+      await setDefaultModel.mutateAsync({ modelId, effort: choice.value });
+      toast.success('Default effort updated');
+    } catch (error) {
+      toast.failure(
+        (error instanceof ThrownResultError && error.message) ||
+          'Failed to set your default effort'
       );
     }
   };
@@ -111,18 +154,32 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
             </p>
           }
         >
-          <ModelCatalogPicker
-            value={selectedModelId()}
-            options={catalogOptions()}
-            onSelect={(id) => fireAndForget(changeModel(id), 'cursor-connect')}
-            disabled={setDefaultModel.isPending}
-            ariaLabel="Default model"
-            triggerClass={
-              props.triggerClass ??
-              'h-9 w-full justify-between text-base [&>span]:flex-1'
-            }
-            placement="bottom-start"
-          />
+          <div class="flex w-full min-w-0 items-center gap-1">
+            <div class="min-w-0 flex-1">
+              <ModelCatalogPicker
+                value={selectedModelId()}
+                options={catalogOptions()}
+                onSelect={(id) =>
+                  fireAndForget(changeModel(id), 'cursor-connect')
+                }
+                disabled={setDefaultModel.isPending}
+                ariaLabel="Default model"
+                triggerClass={
+                  props.triggerClass ??
+                  'h-9 w-full justify-between text-base [&>span]:flex-1'
+                }
+                placement="bottom-start"
+              />
+            </div>
+            <EffortSelector
+              config={effort()}
+              value={selectedEffort()}
+              disabled={setDefaultModel.isPending}
+              onChange={(choice) =>
+                fireAndForget(changeEffort(choice), 'cursor-connect')
+              }
+            />
+          </div>
         </Show>
       </Show>
     </Show>

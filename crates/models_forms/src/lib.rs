@@ -4,6 +4,7 @@
 //! a view of one database table, so answers are `models_databases` cells and
 //! gate rules are `models_databases` filters.
 
+mod branding;
 mod collaboration;
 mod detail;
 mod error;
@@ -15,6 +16,7 @@ mod response;
 mod test;
 mod widget;
 
+pub use branding::{AccentColor, FormBranding, InvalidAccentColor};
 pub use collaboration::{FormCollaboration, FormPublicationProblem};
 pub use detail::{FormDetail, FormQuestionDetail, FormSectionDetail, QuestionOption};
 pub use error::{FormErrorCode, FormErrorResponse, LayoutProblem};

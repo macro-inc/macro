@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use macro_user_id::user_id::MacroUserIdStr;
+use pipedream_mcp::domain::models::ConnectionProvider;
 use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays, OverlayConnections};
 
 use crate::domain::app_connections::ConnectedApps;
@@ -47,6 +48,18 @@ where
         app_slug: &str,
     ) -> Result<Option<String>, ConnectionLookupError> {
         let lookup = |error: &dyn std::fmt::Debug| ConnectionLookupError(format!("{error:?}"));
+        let connection = self
+            .connections
+            .load(user, app_slug)
+            .await
+            .map_err(|error| lookup(&error))?;
+        // A Macro Connect grant outranks an overlay; a Pipedream grant doesn't.
+        if let Some(connection) = connection
+            .as_ref()
+            .filter(|connection| connection.provider == ConnectionProvider::Connect)
+        {
+            return Ok(connection.enabled.then(|| connection.server_name.clone()));
+        }
         if let Some(overlay) = self
             .connections
             .overlay(app_slug)
@@ -59,11 +72,6 @@ where
                 .await
                 .map_err(|error| lookup(&error));
         }
-        let connection = self
-            .connections
-            .load(user, app_slug)
-            .await
-            .map_err(|error| lookup(&error))?;
         Ok(connection
             .filter(|connection| connection.enabled)
             .map(|connection| connection.server_name))

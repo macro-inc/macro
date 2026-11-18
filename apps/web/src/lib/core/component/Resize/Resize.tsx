@@ -36,6 +36,8 @@ type ZoneProps = {
   gutter?: number;
   /** Paint a divider in each gutter. Defaults to true. */
   showDividers?: boolean;
+  /** Also paint dividers for touch layouts. Defaults to false. */
+  showTouchDividers?: boolean;
   minSize?: number;
   class?: string;
   id?: string;
@@ -217,10 +219,13 @@ function Zone(props: ParentProps<ZoneProps>) {
               return (
                 <Show when={visibleIndex < visibleLayouts().length - 1}>
                   <Gutter
+                    direction={direction()}
+                    gutterSize={gutterPx()}
                     offset={panel().offset + panel().size}
                     index={actualIndex}
                     resizable={gutterEnabled()}
                     showDivider={props.showDividers ?? true}
+                    showTouchDivider={props.showTouchDividers}
                     nudge={solver.moveHandle}
                     onChangeStart={beginResizeChange}
                     onChangeEnd={endResizeChange}
@@ -268,6 +273,8 @@ type PanelProps = {
    */
   target?: number | PanelSizeSpec;
   collapsed?: () => boolean;
+  /** Fill the zone without taking a slot in the resize layout. */
+  overlay?: boolean;
   hidden?: () => boolean;
   /** The index position for this panel in the layout order */
   index?: number;
@@ -328,7 +335,7 @@ function Panel(props: ParentProps<PanelProps>) {
     const collapsed = props.collapsed?.() ?? false;
     const hidden = props.hidden?.() ?? false;
 
-    if (collapsed || (hidden && !props.persistent)) {
+    if (props.overlay || collapsed || (hidden && !props.persistent)) {
       ctx.unregister(next.id);
       return;
     }
@@ -362,6 +369,7 @@ function Panel(props: ParentProps<PanelProps>) {
   const size = createMemo(ctx.sizeOf(props.id));
 
   const styles = createMemo(() => {
+    if (props.overlay) return { inset: '0px', 'z-index': 1 };
     if (ctx.direction() === 'horizontal') {
       return {
         top: '0px',
@@ -398,14 +406,20 @@ function Panel(props: ParentProps<PanelProps>) {
 }
 
 /**
- * Props for the Gutter component (internal).
+ * Props for the Gutter component. It fills its positioned parent across the
+ * axis, so a zone, or any layout that positions its own panels, can place one.
  *
+ * @property direction - The flow of the panels it separates
+ * @property gutterSize - The layout gap it sits in, in pixels
  * @property offset - The offset position of the gutter in pixels
  * @property index - The index of the gutter in the layout
  * @property nudge - Function to call when the gutter is moved, with index and movement amount
  */
 type GutterProps = {
+  direction: 'horizontal' | 'vertical';
+  gutterSize: number;
   showDivider: boolean;
+  showTouchDivider?: boolean;
   offset: number;
   index: number;
   /** Draggable and keyboard-focusable; otherwise a static divider. */
@@ -423,15 +437,15 @@ type GutterProps = {
  */
 const GUTTER_HIT_AREA = 8;
 
-function Gutter(props: GutterProps) {
-  const ctx = useContext(ResizeZoneContext)!;
+export function Gutter(props: GutterProps) {
+  const horizontal = () => props.direction === 'horizontal';
   const hitSize = () =>
     props.resizable
-      ? Math.max(ctx.gutterSize(), GUTTER_HIT_AREA)
-      : ctx.gutterSize();
+      ? Math.max(props.gutterSize, GUTTER_HIT_AREA)
+      : props.gutterSize;
   const styles = createMemo(() => {
-    const inset = (hitSize() - ctx.gutterSize()) / 2;
-    if (ctx.direction() === 'horizontal') {
+    const inset = (hitSize() - props.gutterSize) / 2;
+    if (horizontal()) {
       return {
         top: '0px',
         bottom: '0px',
@@ -461,17 +475,15 @@ function Gutter(props: GutterProps) {
     if (!root) return 1;
 
     const rect = root.getBoundingClientRect();
-    const visualSize =
-      ctx.direction() === 'horizontal' ? rect.width : rect.height;
-    const layoutSize =
-      ctx.direction() === 'horizontal' ? root.offsetWidth : root.offsetHeight;
+    const visualSize = horizontal() ? rect.width : rect.height;
+    const layoutSize = horizontal() ? root.offsetWidth : root.offsetHeight;
 
     if (visualSize <= 0 || layoutSize <= 0) return 1;
     return visualSize / layoutSize;
   }
 
   function eventPosition(ev: PointerEvent) {
-    return ctx.direction() === 'horizontal' ? ev.clientX : ev.clientY;
+    return horizontal() ? ev.clientX : ev.clientY;
   }
 
   function onPointerDown(ev: PointerEvent) {
@@ -535,7 +547,7 @@ function Gutter(props: GutterProps) {
   });
 
   function onKeyDown(ev: KeyboardEvent) {
-    if (ctx?.direction() === 'horizontal') {
+    if (horizontal()) {
       if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
     } else {
       if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
@@ -547,7 +559,7 @@ function Gutter(props: GutterProps) {
 
     const step = ev.shiftKey ? 100 : 20;
     props.onChangeStart();
-    if (ctx?.direction() === 'horizontal') {
+    if (horizontal()) {
       const sign = ev.key === 'ArrowLeft' ? -1 : 1;
       props.nudge(props.index, sign * step);
     } else {
@@ -557,7 +569,6 @@ function Gutter(props: GutterProps) {
     queueMicrotask(props.onChangeEnd);
   }
 
-  const horizontal = () => ctx.direction() === 'horizontal';
   // Centre a bar of the given thickness on the gutter axis.
   const barStyle = (thickness: string) => ({
     left: horizontal() ? '50%' : '0',
@@ -569,7 +580,7 @@ function Gutter(props: GutterProps) {
 
   return (
     <div
-      class={cn('group', !props.resizable && 'pointer-events-none')}
+      class="group"
       role="separator"
       aria-orientation={horizontal() ? 'vertical' : 'horizontal'}
       aria-hidden={!props.resizable}
@@ -577,6 +588,8 @@ function Gutter(props: GutterProps) {
       aria-label={props.resizable ? `resize at ${props.index}` : undefined}
       style={{
         position: 'absolute',
+        // Inline, so a gutter inside a pass-through box still takes the drag.
+        'pointer-events': props.resizable ? 'auto' : 'none',
         cursor: props.resizable
           ? horizontal()
             ? 'col-resize'
@@ -591,8 +604,10 @@ function Gutter(props: GutterProps) {
       {/* Match the enclosing Surface border; spaced panels can omit the divider. */}
       <Show when={props.showDivider}>
         <div
+          data-resize-divider
           class={cn(
-            'absolute border-edge touch:hidden',
+            'absolute border-edge',
+            !props.showTouchDivider && 'touch:hidden',
             horizontal() ? 'border-l-[1px]' : 'border-t-[1px]'
           )}
           style={barStyle('1px')}

@@ -22,11 +22,10 @@ import {
   setShared,
   sharingSummary,
   visiblePlanNodes,
+  withRowLists,
 } from '../core/import-plan';
 import type { Review, ReviewActions } from '../core/review';
-import { decodeImportDraft } from '../queries/import-plan';
 import { createReviewController } from './review-controller';
-import { validateReviewDraft } from './review-draft-validation';
 
 export type ImportReviewSources = {
   review: Accessor<Review>;
@@ -45,17 +44,20 @@ export type ImportReviewSources = {
  * progress. Edits go through the review controller, which serializes saves.
  */
 export function createImportReview(sources: ImportReviewSources) {
-  const controller = createReviewController(
-    sources.review,
-    sources.actions,
-    validateReviewDraft
-  );
+  const controller = createReviewController(sources.review, sources.actions);
   const record = controller.record;
-  const item = () => record().items[0];
+  const item = () => {
+    const review = record();
+    return review.kind === 'import' ? review.items[0] : undefined;
+  };
   // Shown until the review is reloaded; the controller saves it in order.
   const [editedDraft, setEditedDraft] = createSignal<ImportDraft>();
-  const draft = (): ImportDraft =>
-    editedDraft() ?? decodeImportDraft(item()?.draft) ?? EMPTY_IMPORT_DRAFT;
+  const draft = (): ImportDraft => {
+    const saved = item();
+    return (
+      editedDraft() ?? (saved ? withRowLists(saved.draft) : EMPTY_IMPORT_DRAFT)
+    );
+  };
   const nodes = createMemo(() =>
     buildPlanTree(planTreeEntries(sources.entries()))
   );
@@ -97,14 +99,14 @@ export function createImportReview(sources: ImportReviewSources) {
     if (!current || !editable()) return;
     const next = setExcluded(draft(), nodes(), id, !included);
     setEditedDraft(next);
-    controller.edit(current.id, next);
+    controller.edit(current.id, { kind: 'import', draft: next });
   }
   function setSharedWithTeam(id: string, shared: boolean) {
     const current = item();
     if (!current || !editable()) return;
     const next = setShared(draft(), nodes(), id, shared);
     setEditedDraft(next);
-    controller.edit(current.id, next);
+    controller.edit(current.id, { kind: 'import', draft: next });
   }
   function toggleRows(id: string) {
     const next = new Set(showingRows());
@@ -181,7 +183,7 @@ export function createImportReview(sources: ImportReviewSources) {
     stopping,
     stopFailed,
     error: controller.error,
-    validation: () => controller.validation()?.message,
+    validation: controller.validation,
     stale: controller.stale,
     setIncluded,
     setShared: setSharedWithTeam,

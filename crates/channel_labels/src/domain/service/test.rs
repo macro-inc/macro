@@ -25,6 +25,11 @@ enum RepoCall {
         label_id: Uuid,
         name: String,
     },
+    Transfer {
+        source: ChannelLabelsScope,
+        target: ChannelLabelsScope,
+        label_id: Uuid,
+    },
     Delete {
         label_id: Uuid,
     },
@@ -69,6 +74,7 @@ fn label(team_id: Uuid, name: &str) -> ChannelLabel {
         rule: None,
         sort_order: 0.0,
         channel_ids: Vec::new(),
+        explicit_channel_ids: None,
         channel_count: 0,
         created_at: Utc::now(),
         updated_at: Utc::now(),
@@ -143,6 +149,28 @@ impl ChannelLabelsRepo for FakeRepo {
         });
         Ok(self.rename_outcome.clone().unwrap_or_else(|| {
             LabelWriteOutcome::Written(label(scope.team_id().unwrap_or_default(), name))
+        }))
+    }
+
+    async fn transfer_label(
+        &self,
+        source: &ChannelLabelsScope,
+        target: &ChannelLabelsScope,
+        label_id: Uuid,
+        name: &str,
+        _viewer: &MacroUserIdStr<'_>,
+        _rule: Option<&ChannelLabelRule>,
+    ) -> Result<LabelWriteOutcome, Self::Err> {
+        self.record(RepoCall::Transfer {
+            source: source.clone(),
+            target: target.clone(),
+            label_id,
+        });
+        Ok(self.rename_outcome.clone().unwrap_or_else(|| {
+            let mut result = label(target.team_id().unwrap_or_default(), name);
+            result.id = label_id;
+            result.team_id = target.team_id();
+            LabelWriteOutcome::Written(result)
         }))
     }
 
@@ -239,7 +267,7 @@ async fn creation_and_assignment_report_ineligible_channels() {
     for result in [created.map(|_| ()), assigned] {
         assert!(matches!(
             result,
-            Err(ChannelLabelsError::BadRequest(message)) if message.contains("only team channels")
+            Err(ChannelLabelsError::BadRequest(message)) if message.contains("not eligible")
         ));
     }
 }
@@ -428,7 +456,7 @@ async fn set_channel_label_maps_repo_outcomes() {
 #[tokio::test]
 async fn users_without_teams_create_private_labels() {
     let actor = MacroUserIdStr::try_from(USER_ID.to_owned()).unwrap();
-    let receipt = ChannelLabelsReceipt::from_access(actor.clone(), None).unwrap();
+    let receipt = ChannelLabelsReceipt::from_access(actor.clone(), None, None).unwrap();
     let repo = FakeRepo::default();
     let service = ChannelLabelsServiceImpl::new(repo.clone());
     let channel = Uuid::now_v7();
@@ -461,7 +489,7 @@ fn cannot_use_another_users_team_receipt() {
             model_entity::EntityType::Team,
         );
     assert!(matches!(
-        ChannelLabelsReceipt::from_access(actor, Some(access)),
+        ChannelLabelsReceipt::from_access(actor, Some(access), None),
         Err(ChannelLabelsError::Unauthorized)
     ));
 }
@@ -553,4 +581,135 @@ async fn rules_can_be_edited_only_on_existing_smart_tags() {
         .await
         .unwrap();
     assert_eq!(repo.calls().len(), 1);
+}
+
+#[test]
+fn explicit_scope_requires_verified_team_membership() {
+    use crate::domain::models::ChannelLabelScopeSelection;
+    let actor = MacroUserIdStr::try_from(USER_ID.to_owned()).unwrap();
+    assert!(matches!(
+        ChannelLabelsReceipt::from_access(
+            actor.clone(),
+            None,
+            Some(ChannelLabelScopeSelection::Team)
+        ),
+        Err(ChannelLabelsError::Unauthorized)
+    ));
+    let personal = ChannelLabelsReceipt::from_access(
+        actor.clone(),
+        None,
+        Some(ChannelLabelScopeSelection::Personal),
+    )
+    .unwrap();
+    assert!(matches!(personal.scope(), ChannelLabelsScope::User(id) if id == &actor));
+    let access =
+        entity_access::domain::models::EntityAccessReceipt::dangerously_assert_authenticated_user(
+            actor.clone(),
+            &Uuid::now_v7().to_string(),
+            model_entity::EntityType::Team,
+        );
+    let personal = ChannelLabelsReceipt::from_access(
+        actor.clone(),
+        Some(access),
+        Some(ChannelLabelScopeSelection::Personal),
+    )
+    .unwrap();
+    assert!(matches!(personal.scope(), ChannelLabelsScope::User(id) if id == &actor));
+}
+
+#[tokio::test]
+async fn scope_transfer_uses_one_atomic_repo_call_and_checks_actor() {
+    let (team_id, source) = receipt();
+    let actor = MacroUserIdStr::try_from(USER_ID.to_owned()).unwrap();
+    let target = ChannelLabelsReceipt::from_access(actor, None, None).unwrap();
+    let label_id = Uuid::now_v7();
+    let repo = FakeRepo::default();
+    let service = ChannelLabelsServiceImpl::new(repo.clone());
+    let moved = service
+        .update_label(&source, Some(&target), label_id, " Private ".into(), None)
+        .await
+        .unwrap();
+    assert_eq!(moved.id, label_id);
+    assert_eq!(moved.team_id, None);
+    assert_eq!(
+        repo.calls(),
+        vec![RepoCall::Transfer {
+            source: ChannelLabelsScope::Team(team_id),
+            target: target.scope().clone(),
+            label_id,
+        }]
+    );
+    let other = ChannelLabelsReceipt::from_access(
+        MacroUserIdStr::try_from("macro|other@macro.com".to_owned()).unwrap(),
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(matches!(
+        service
+            .update_label(&source, Some(&other), label_id, "Private".into(), None)
+            .await,
+        Err(ChannelLabelsError::Unauthorized)
+    ));
+    assert_eq!(repo.calls().len(), 1);
+}
+
+#[tokio::test]
+async fn sections_reject_mixed_rule_and_picks_but_allow_replacing_manual_lists() {
+    let repo = FakeRepo::default();
+    let sections = ChannelLabelsServiceImpl::for_sections(repo.clone());
+    let legacy = ChannelLabelsServiceImpl::new(repo.clone());
+    let (_, receipt) = receipt();
+    let picked = Uuid::now_v7();
+    let rule = ChannelLabelRule::Name {
+        contains: " roadmap ".into(),
+    };
+    for service in [&legacy, &sections] {
+        assert!(matches!(
+            service
+                .create_label(
+                    &receipt,
+                    NewChannelLabel {
+                        name: "Planning".into(),
+                        rule: Some(rule.clone()),
+                        channel_ids: vec![picked],
+                    },
+                )
+                .await,
+            Err(ChannelLabelsError::BadRequest(_))
+        ));
+    }
+    assert!(repo.calls().is_empty());
+    sections
+        .create_label(
+            &receipt,
+            NewChannelLabel {
+                name: "Planning".into(),
+                rule: Some(rule.clone()),
+                channel_ids: vec![],
+            },
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        &repo.calls()[0],
+        RepoCall::Create { channel_ids, rule: Some(ChannelLabelRule::Name { contains }), .. }
+            if channel_ids.is_empty() && contains == "roadmap"
+    ));
+    assert!(matches!(
+        legacy
+            .rename_label(
+                &receipt,
+                Uuid::now_v7(),
+                "Planning".into(),
+                Some(rule.clone())
+            )
+            .await,
+        Err(ChannelLabelsError::BadRequest(_))
+    ));
+    sections
+        .rename_label(&receipt, Uuid::now_v7(), "Planning".into(), Some(rule))
+        .await
+        .unwrap();
+    assert!(matches!(repo.calls()[1], RepoCall::Rename { .. }));
 }

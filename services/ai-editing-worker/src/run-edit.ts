@@ -12,6 +12,7 @@ import type { SyncServiceSource } from '@macro-inc/collaboration/sync-service/so
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { Telemetry } from '@macro-inc/observability';
 import type { LanguageModel } from 'ai';
+import type { LoroDoc } from 'loro-crdt';
 import { fastEditor, supervisor } from './ai-editing/agents';
 import { PeerPool } from './ai-editing/awareness';
 import type { DocumentOp } from './ai-editing/editor';
@@ -69,12 +70,12 @@ export type Editor = {
 
 export type RunEditArgs = {
   /** Live sync source, already constructed by the caller (ws in prod). */
-  source: SyncServiceSource;
+  source: LiveSyncSource & Pick<SyncServiceSource, 'doInitialSync'>;
   documentId: string;
   prompt: string;
   models: ResolvedModels;
   mode?: EditMode;
-  /** Names the cursors; absent, writers draw pooled names instead. */
+  /** Names the cursors; absent, they read `Macro (AI)`. */
   editor?: Editor;
   /** Snippet runner — QuickJS sandbox in prod, `new Function` in local dev. */
   runner?: CodeRunner;
@@ -101,6 +102,9 @@ export type RunEditResult = {
   /** Structured trace of the session; stored as JSON, rendered to markdown on demand. */
   session: TraceSession;
   clarification?: string;
+  /** The acknowledged version, encoded like sync-service's revisions. Without
+   *  propagation nothing is committed, so it is the version the edit started from. */
+  revision: string;
 };
 
 export async function runEditSession(
@@ -140,6 +144,7 @@ export async function runEditSession(
   // here too would double the content — so route live sync to a no-op sink
   // that acks everything and forwards nothing.
   const shouldPropagate = args.propagate ?? true;
+  const startRevision = loroRevision(manager.doc);
   // Typing animations exist for people watching the shared doc. With no
   // propagation nobody can watch, so every animation pause is pure latency —
   // measured at 3.4 s of a 6.3 s fast-mode step.
@@ -217,10 +222,21 @@ export async function runEditSession(
     // Drain the queued propagates (plus a final catch-all sync) and ensure every
     // commit reached the server before we disconnect. No-op sink when not
     // propagating, so this is harmless either way.
-    await Telemetry.span('edit.flush', async () => {
+    await Telemetry.span('edit.flush', async (span) => {
       await workspace.flush();
       await wal.flush();
+      // The socket closes on abort, so anything still unsent was dropped.
+      args.signal?.throwIfAborted();
+      const { dirty } = await wal.summary();
+      span.setAttr('wal.dirty', dirty);
+      if (dirty > 0)
+        throw new Error(
+          `sync service did not acknowledge ${dirty} document update(s); the edit may have applied`
+        );
     });
+    const revision = shouldPropagate
+      ? loroRevision(manager.doc)
+      : startRevision;
 
     const usage = totalUsage.toEntries();
 
@@ -246,6 +262,7 @@ export async function runEditSession(
       ops: allOps,
       session,
       clarification,
+      revision,
     };
   } finally {
     workspace.dispose();
@@ -253,4 +270,9 @@ export async function runEditSession(
     manager.dispose();
     source.cleanup();
   }
+}
+
+/** The doc's version as sync-service reports a revision: base64 of the encoded oplog version. */
+function loroRevision(doc: LoroDoc): string {
+  return btoa(String.fromCharCode(...doc.oplogVersion().encode()));
 }

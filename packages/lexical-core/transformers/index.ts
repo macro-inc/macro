@@ -7,8 +7,9 @@ import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
 import { I_CURSOR_SYSTEM_NOTIFICATION } from './cursorSystemNotification';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { I_DATABASE_QUERY, I_DATABASE_QUERY_BLOCK } from './databaseQuery';
+import { createDetailsTransformer } from './details';
 import { I_HTML_RENDER } from './htmlRender';
-import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
+import { I_IMAGE_CONSTRAINED, IMAGE, listItemImage } from './image';
 import {
   E_BLOCK_EQUATION_NODE,
   E_INLINE_EQUATION_NODE,
@@ -27,6 +28,7 @@ import {
   E_PR_MENTION,
   E_TAG_MENTION,
   E_USER_MENTION,
+  I_ACCOUNT_MANAGER_REQUEST,
   I_AGENT_SESSION_CARD,
   I_AGENT_SESSION_MENTION,
   I_BOOKING_LINK_MENTION,
@@ -61,6 +63,7 @@ import { UNKNOWN_MENTION } from './unknownMention';
 import { I_VIDEO, VIDEO_LINK } from './video';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
 
+export { ORDERED_LIST_ENTER } from './customTransformers';
 export { isConversionOnlyTransformer, protectEmptyParagraphLines };
 
 /**
@@ -69,6 +72,7 @@ export { isConversionOnlyTransformer, protectEmptyParagraphLines };
  * standard markdown syntax.
  */
 export const INTERNAL_TRANSFORMERS: Transformer[] = [
+  createDetailsTransformer(() => INTERNAL_TRANSFORMERS),
   I_DATABASE_QUERY_BLOCK,
   I_DATABASE_QUERY,
   I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
@@ -83,6 +87,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_VIDEO,
   I_IMAGE_CONSTRAINED,
   IMAGE, // Standard markdown images (fallback)
+  listItemImage(I_IMAGE_CONSTRAINED, IMAGE),
   I_USER_MENTION,
   I_GROUP_MENTION,
   I_DOCUMENT_MENTION,
@@ -105,6 +110,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_THEME_MENTION,
   I_TAG_MENTION,
   I_CONNECT_APP,
+  I_ACCOUNT_MANAGER_REQUEST,
   I_WATERMARK,
   ...CUSTOM_TRANSFORMERS,
   ESCAPED_AUTO_LINK,
@@ -117,6 +123,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
  * External transformers for converting Lexical to and from to GitHub Flavored (ish) Markdown.
  */
 export const EXTERNAL_TRANSFORMERS: Transformer[] = [
+  createDetailsTransformer(() => EXTERNAL_TRANSFORMERS),
   UNLINKED_TEXT,
   I_DATABASE_QUERY_BLOCK,
   I_DATABASE_QUERY,
@@ -125,6 +132,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   VIDEO_LINK,
   I_VIDEO,
   IMAGE,
+  listItemImage(IMAGE),
   BR_TAG_TO_LINE_BREAK,
   E_TABLE_NODE,
   HTML_BLOCKQUOTE,
@@ -163,6 +171,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
  * Complete set of transformers supporting both internal and external markdown operations.
  */
 export const ALL_TRANSFORMERS: Transformer[] = [
+  createDetailsTransformer(() => ALL_TRANSFORMERS),
   I_DATABASE_QUERY_BLOCK,
   I_DATABASE_QUERY,
   I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
@@ -178,6 +187,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_VIDEO,
   I_IMAGE_CONSTRAINED,
   IMAGE,
+  listItemImage(I_IMAGE_CONSTRAINED, IMAGE),
   BR_TAG_TO_LINE_BREAK,
   I_TABLE_NODE,
   E_TABLE_NODE,
@@ -212,6 +222,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_THEME_MENTION,
   I_TAG_MENTION,
   I_CONNECT_APP,
+  I_ACCOUNT_MANAGER_REQUEST,
   I_WATERMARK,
   E_WATERMARK,
   E_TAG_MENTION,

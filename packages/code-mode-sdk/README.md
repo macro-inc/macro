@@ -48,12 +48,19 @@ There is no runtime documentation helper. See the
 [agent playbook](../../crates/agent_code_mode/SKILL.md).
 
 ```sh
-bun run --cwd packages/code-mode-sdk generate
-bun run --cwd packages/code-mode-sdk check:generated
+bun run --cwd packages/code-mode-sdk generate   # writes the assets to dist/
 bun run --cwd packages/code-mode-sdk type-check
 bun run --cwd packages/code-mode-sdk test
 ```
 
-Commit the generated `sdk.mjs`, `handlebars.mjs` and backend documentation JSON.
+The generated `sdk.mjs`, `handlebars.mjs`, `documentation.json`,
+`operations.json` (each SDK operation's label, method, path and whether it
+writes), `hosts.json` (every service the SDK can reach, with its host in each
+environment) and `sdk-types.json` (the SDK's declarations routine code is
+type-checked against, with their fingerprint) are build outputs, never
+committed. `crates/code_mode_assets`
+builds them when it compiles: local cargo runs `scripts/generate.ts` with bun,
+and Nix builds and Rust CI use the `code-mode-assets` flake package through
+`CODE_MODE_ASSETS_DIR`. See that crate's `AGENTS.md`.
 Real Deno integration tests live in `crates/code_execution`; public SDK entity
 behavior is tested under `packages/sdk/tests`.

@@ -1,7 +1,7 @@
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
-/** Only the persistent action adds width; quick actions reuse the date's space. */
+/** Quick actions replace the date without retaining its width on hover or focus. */
 export function RowEnd(props: {
   actions?: JSX.Element;
   leadingAction?: JSX.Element;
@@ -15,7 +15,7 @@ export function RowEnd(props: {
           class={cn(
             '[grid-area:1/1]',
             props.actions &&
-              'group-hover/entity:invisible group-focus-within/entity:invisible'
+              'group-hover/entity:hidden group-focus-within/entity:hidden'
           )}
         >
           {props.children}

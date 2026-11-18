@@ -1,7 +1,4 @@
-use crate::{
-    AuthedClient, Result,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{AuthedClient, Result, error::FusionAuthClientError};
 
 /// Deletes a user in fusionauth
 /// https://fusionauth.io/docs/apis/users#delete-a-user
@@ -16,11 +13,7 @@ pub(crate) async fn delete_user(
         .delete(format!("{base_url}/api/user/{user_id}?hardDelete=true"))
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
@@ -28,19 +21,7 @@ pub(crate) async fn delete_user(
             Ok(())
         }
         reqwest::StatusCode::NOT_FOUND => Err(FusionAuthClientError::UserDoesNotExist),
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            tracing::error!(body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }
 
@@ -57,30 +38,14 @@ pub(crate) async fn deactivate_user(
         .delete(format!("{base_url}/api/user/{user_id}"))
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
             tracing::trace!("user deactivated");
             Ok(())
         }
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            tracing::error!(body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }
 
@@ -96,29 +61,13 @@ pub(crate) async fn reactivate_user(
         .put(format!("{base_url}/api/user/{user_id}?reactivate=true"))
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
             tracing::trace!("user reactivated");
             Ok(())
         }
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            tracing::error!(body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }

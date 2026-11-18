@@ -3,13 +3,14 @@ import { throwOnErr } from '@core/util/result';
 import { accessRequestsClient } from '@service-storage/access-requests';
 import type { ShareEntity } from '@service-storage/generated/schemas/shareEntity';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { useQuery } from '@tanstack/solid-query';
+import { useQueries, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { revalidateActivityQueries } from '../activity/push-registry';
 import { agentSessionKeys } from '../agent-session/keys';
 import { callKeys } from '../call/keys';
 import { queryClient } from '../client';
 import { invalidateExternalChat } from '../external-chats';
+import { harnessKeys } from '../harnesses/keys';
 import { refreshActiveGraphqlPreviewQueries } from '../preview/active-queries';
 import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
 import { soupKeys } from '../soup/keys';
@@ -20,10 +21,26 @@ import { accessRequestKeys } from './keys';
 export function fetchAccessRequestState(entity: ShareEntity, offset = 0) {
   return throwOnErr(() => accessRequestsClient.state(entity, offset));
 }
+/**
+ * When an observer reads the state again: `mount` on every mount, since a
+ * cached state can predate an access change; `caller` only when the caller
+ * asks, for one that knows whether the cached state is current.
+ */
+export type AccessRequestStateRead = 'mount' | 'caller';
+
+const ACCESS_REQUEST_STATE_READS: Record<
+  AccessRequestStateRead,
+  { staleTime: number; refetchOnMount: boolean | 'always' }
+> = {
+  mount: { staleTime: 0, refetchOnMount: 'always' },
+  caller: { staleTime: Infinity, refetchOnMount: false },
+};
+
 function accessRequestStateOptions(
   target: ShareEntity | undefined,
   enabled: boolean,
-  offset: number
+  offset: number,
+  read: AccessRequestStateRead
 ) {
   return {
     queryKey: accessRequestKeys
@@ -34,8 +51,7 @@ function accessRequestStateOptions(
       return fetchAccessRequestState(target, offset);
     },
     enabled: !!target && enabled,
-    staleTime: 0,
-    refetchOnMount: 'always' as const,
+    ...ACCESS_REQUEST_STATE_READS[read],
     refetchOnWindowFocus: 'always' as const,
     refetchOnReconnect: 'always' as const,
     refetchInterval: 30_000,
@@ -52,6 +68,12 @@ export function refreshSharedAccess(entity: ShareEntity) {
   fireAndForget(invalidateAccessRequests(entity), 'access-requests');
   if (entity.entityType === 'external_chat') {
     invalidateExternalChat(entity.entityId);
+    return;
+  }
+  // A runtime appears in no list but the runtime queries.
+  if (entity.entityType === 'harness') {
+    queryClient.invalidateQueries({ queryKey: harnessKeys.list.queryKey });
+    queryClient.invalidateQueries({ queryKey: harnessKeys.directory.queryKey });
     return;
   }
   // Permissions change list membership even when the item was never cached.
@@ -103,10 +125,25 @@ export function refreshSharedAccess(entity: ShareEntity) {
 export function useAccessRequestState(
   entity: Accessor<ShareEntity | undefined>,
   enabled: Accessor<boolean> = () => true,
-  offset: Accessor<number> = () => 0
+  offset: Accessor<number> = () => 0,
+  read: AccessRequestStateRead = 'mount'
 ) {
   return useQuery(() =>
-    accessRequestStateOptions(entity(), enabled(), offset())
+    accessRequestStateOptions(entity(), enabled(), offset(), read)
   );
+}
+/**
+ * The first page of each entity's access-request state, sharing the cache
+ * the entity's own Share menu and rows read.
+ */
+export function useAccessRequestStates(
+  entities: Accessor<ShareEntity[]>,
+  enabled: Accessor<boolean> = () => true
+) {
+  return useQueries(() => ({
+    queries: entities().map((entity) =>
+      accessRequestStateOptions(entity, enabled(), 0, 'mount')
+    ),
+  }));
 }
 export { accessRequestsClient };

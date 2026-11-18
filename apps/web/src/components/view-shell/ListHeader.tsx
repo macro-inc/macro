@@ -1,6 +1,18 @@
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button, cn } from '@ui';
-import { createSignal, type JSX, onMount, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
+import {
+  type ListSearchSuggestions,
+  useListSearchKeys,
+} from './list-search-keys';
 import { SearchBar } from './SearchBar';
 import { ViewShell } from './ViewShell';
 
@@ -20,17 +32,39 @@ export function ListHeader(props: {
   );
 }
 
-/** The query belongs to the view; only the expanded presentation is local. */
+/**
+ * The query belongs to the view; only the expanded presentation is local.
+ *
+ * The field hands the keyboard to the results instead of trapping it:
+ * ArrowDown or Enter moves to the first result, and Escape leaves the field
+ * with the query and its results intact. Escape pressed again, in the list,
+ * clears the search.
+ */
 export function ListHeaderSearch(props: {
   label: string;
   placeholder?: string;
   value: string;
   onValueChange: (value: string) => void;
-  onEscape?: () => void;
+  /** Moves keyboard focus into the view's result list. */
+  focusResults?: () => void;
   registerFocus: (focus: () => void) => void;
+  /**
+   * The open field takes the rest of the header, and closes again when it is
+   * left empty. The view hides its other header actions while it is open.
+   */
+  wide?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onFocusChange?: (focused: boolean) => void;
+  suggestions?: ListSearchSuggestions;
   ref?: (element: HTMLDivElement) => void;
 }) {
-  const [expanded, setExpanded] = createSignal(Boolean(props.value));
+  const [expanded, setExpandedState] = createSignal(Boolean(props.value));
+  const setExpanded = (open: boolean) => {
+    if (open === expanded()) return;
+
+    setExpandedState(open);
+    props.onOpenChange?.(open);
+  };
   let input: HTMLInputElement | undefined;
   let trigger: HTMLButtonElement | undefined;
   const focus = () => {
@@ -40,17 +74,55 @@ export function ListHeaderSearch(props: {
       input?.select();
     });
   };
-  const close = () => {
+  const clear = () => {
     props.onValueChange('');
     setExpanded(false);
+  };
+  const close = () => {
+    clear();
     trigger?.focus();
   };
-  onMount(() => props.registerFocus(focus));
+  const keys = useListSearchKeys({
+    value: () => props.value,
+    clear,
+    focusResults: () => props.focusResults,
+    input: () => input,
+    trigger: () => trigger,
+    suggestions: () => props.suggestions,
+  });
+  onMount(() => {
+    props.registerFocus(focus);
+    // A view restored with a search starts with its field open.
+    if (expanded()) props.onOpenChange?.(true);
+  });
+  // The view keeps its own copy of these; a field that unmounts while open
+  // (a tab that cannot search, a thread over the list) must not leave it set.
+  onCleanup(() => {
+    props.onOpenChange?.(false);
+    props.onFocusChange?.(false);
+  });
+  // A wide field hides the header's other actions, so it closes as soon as
+  // the view clears its search from outside (a tab change) and nobody is
+  // typing in it.
+  createEffect(
+    on(
+      () => props.value,
+      (value) => {
+        if (!props.wide || value.trim()) return;
+        if (document.activeElement !== input) setExpanded(false);
+      },
+      { defer: true }
+    )
+  );
 
   return (
     <div
       ref={props.ref}
-      class={cn('shrink-0', expanded() ? 'w-56 max-w-[40cqw] min-w-24' : 'w-8')}
+      class={cn(
+        !expanded() && 'w-8 shrink-0',
+        expanded() && !props.wide && 'w-56 max-w-[40cqw] min-w-24 shrink-0',
+        expanded() && props.wide && 'min-w-24 flex-1'
+      )}
     >
       <Show
         when={expanded()}
@@ -75,11 +147,18 @@ export function ListHeaderSearch(props: {
           placeholder={props.placeholder ?? props.label}
           value={props.value}
           onValueChange={props.onValueChange}
+          // The browser's own history popup would take ArrowDown and Enter.
+          autocomplete="off"
+          aria-controls={props.suggestions?.listId}
+          aria-activedescendant={props.suggestions?.activeId?.()}
           onClose={close}
-          onEscape={() => {
-            close();
-            props.onEscape?.();
+          onKeyDown={keys.onKeyDown}
+          onFocus={() => props.onFocusChange?.(true)}
+          onBlur={() => {
+            props.onFocusChange?.(false);
+            if (props.wide && !props.value.trim()) setExpanded(false);
           }}
+          onEscape={keys.onEscape}
         />
       </Show>
     </div>

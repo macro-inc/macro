@@ -95,12 +95,14 @@ fn seeding_refuses_a_section_named_twice() {
                 title: "Contact".to_owned(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             },
             FormSection::Questions {
                 id: CONTACT,
                 title: "Again".to_owned(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             },
         ],
     };
@@ -125,6 +127,7 @@ fn seeding_refuses_a_question_named_twice() {
                     required: false,
                     widget: None,
                 }],
+                show_when: None,
             },
             FormSection::Questions {
                 id: DETAILS,
@@ -137,6 +140,7 @@ fn seeding_refuses_a_question_named_twice() {
                     required: false,
                     widget: None,
                 }],
+                show_when: None,
             },
         ],
     };
@@ -179,12 +183,14 @@ fn replacing_writes_only_what_changed() {
                         widget: None,
                     },
                 ],
+                show_when: None,
             },
             FormSection::Questions {
                 id: DETAILS,
                 title: "Details".to_owned(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             },
         ],
     };
@@ -270,12 +276,14 @@ fn replacing_keeps_section_fields_the_layout_does_not_model() {
                             widget: None,
                         },
                     ],
+                    show_when: None,
                 },
                 FormSection::Questions {
                     id: DETAILS,
                     title: "Details".to_owned(),
                     description: String::new(),
                     questions: vec![],
+                    show_when: None,
                 },
             ],
         },
@@ -349,4 +357,85 @@ fn texts_and_movable_lists_are_the_container_types() {
         panic!("the help text is not text");
     };
     let _: (LoroText, LoroMovableList) = (help_text, document.get_movable_list("sectionOrder"));
+}
+
+#[test]
+fn show_when_rules_survive_seeding_merge_with_a_concurrent_rename_and_clear_by_key() {
+    let shown_after_contact = FilterGroup {
+        conjunction: Conjunction::And,
+        conditions: vec![FilterNode::Condition(FilterCondition {
+            column: NAME_COLUMN,
+            test: FilterTest::Text {
+                operator: TextOperator::Is,
+                value: "Ada".to_owned(),
+            },
+        })],
+    };
+    let branching = FormLayout {
+        sections: vec![
+            FormSection::Questions {
+                id: CONTACT,
+                title: "Contact".to_owned(),
+                description: String::new(),
+                questions: vec![QuestionLayout {
+                    id: NAME,
+                    column: NAME_COLUMN,
+                    help_text: String::new(),
+                    required: true,
+                    widget: None,
+                }],
+                show_when: None,
+            },
+            FormSection::Questions {
+                id: DETAILS,
+                title: "Details".to_owned(),
+                description: String::new(),
+                questions: vec![],
+                show_when: Some(shown_after_contact.clone()),
+            },
+        ],
+    };
+    let snapshot = seed_layout(&branching).unwrap();
+    assert_eq!(read_layout(&snapshot).unwrap().layout, branching);
+
+    // One editor renames the section while another clears its rules.
+    let mut renamed = branching.clone();
+    let FormSection::Questions { title, .. } = &mut renamed.sections[1] else {
+        panic!("the second section asks questions");
+    };
+    *title = "More details".to_owned();
+    let mut always_shown = branching.clone();
+    let FormSection::Questions { show_when, .. } = &mut always_shown.sections[1] else {
+        panic!("the second section asks questions");
+    };
+    *show_when = None;
+    let rename = replace_layout(&snapshot, &renamed).unwrap();
+    let clear = replace_layout(&snapshot, &always_shown).unwrap();
+
+    let merged = merge(&snapshot, &[&rename.update, &clear.update]);
+
+    assert_eq!(
+        merged,
+        FormLayout {
+            sections: vec![
+                branching.sections[0].clone(),
+                FormSection::Questions {
+                    id: DETAILS,
+                    title: "More details".to_owned(),
+                    description: String::new(),
+                    questions: vec![],
+                    show_when: None,
+                },
+            ],
+        }
+    );
+    let cleared = LoroDoc::from_snapshot(&snapshot).unwrap();
+    cleared.import(&clear.update).unwrap();
+    let Some(loro::ValueOrContainer::Container(loro::Container::Map(details))) = cleared
+        .get_map("sections")
+        .get(&DETAILS.as_uuid().to_string())
+    else {
+        panic!("the section is not a map");
+    };
+    assert!(details.get("showWhen").is_none());
 }

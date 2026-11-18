@@ -26,6 +26,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod access_requests;
 mod import;
 
 #[cfg(test)]
@@ -485,15 +486,45 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, actor))]
     async fn delete_channel(
         &self,
         actor: Sender,
         channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
+        let participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let is_owner = participants.iter().any(|participant| {
+            participant.user_id == actor.as_ref() && participant.role == ParticipantRole::Owner
+        });
+        if !is_owner {
+            let info = self
+                .repo
+                .get_channel_info(channel_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            let is_team_admin =
+                if let (ChannelType::Team, Some(team_id)) = (info.channel_type, info.team_id) {
+                    self.repo
+                        .user_is_team_admin(&actor, team_id)
+                        .await
+                        .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+                } else {
+                    false
+                };
+            if !is_team_admin {
+                return Err(ChannelMutationErr::Forbidden(
+                    "only the channel owner or an admin of the channel's team can delete it"
+                        .to_string(),
+                ));
+            }
+        }
         self.repo
-            .delete_channel(channel_id, actor.as_ref().to_string())
+            .delete_channel(channel_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         self.events.dispatch(ChannelEvent::ChannelDeleted {
@@ -1084,6 +1115,21 @@ where
         entity_id: String,
         user_id: String,
     ) -> Result<Vec<AttachmentEntityReference>, ChannelMessagesErr> {
+        if matches!(
+            entity_type.as_str(),
+            "crm_company" | "crm_contact" | "crm_pipeline"
+        ) {
+            let Some(access) = &self.comment_parent_access else {
+                return Ok(Vec::new());
+            };
+            if !access
+                .can_view_parent(&user_id, &entity_type, &entity_id)
+                .await
+                .map_err(ChannelMessagesErr::Repo)?
+            {
+                return Ok(Vec::new());
+            }
+        }
         let mut references = self
             .repo
             .get_attachment_references(&entity_type, &entity_id, &user_id)

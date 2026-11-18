@@ -27,6 +27,7 @@ describe('livekit-loader', () => {
       Camera: Track.Source.Camera,
       Microphone: Track.Source.Microphone,
       ScreenShare: Track.Source.ScreenShare,
+      ScreenShareAudio: Track.Source.ScreenShareAudio,
     });
     expect(LK_ROOM_EVENT.Disconnected).toBe(RoomEvent.Disconnected);
     expect(LK_DISCONNECT_REASON).toEqual({

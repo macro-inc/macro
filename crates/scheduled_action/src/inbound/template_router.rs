@@ -14,7 +14,7 @@ use macro_authorization::{
 };
 use macro_uuid::Uuid;
 
-use crate::domain::models::CreateScheduledAction;
+use crate::domain::models::ActionConfiguration;
 use crate::domain::ports::RoutineTemplateService;
 use crate::domain::templates::{RoutineTemplate, ShareRoutineTemplate};
 use crate::inbound::axum_router::{ScheduledActionApiError, ScheduledActionResponse};
@@ -184,7 +184,7 @@ where
     tag = "scheduled actions",
     operation_id = "activate_scheduled_action_template",
     params(("id" = String, Path, description = "ID of the shared routine")),
-    request_body = CreateScheduledAction,
+    request_body = ActionConfiguration,
     responses(
         (status = 201, body = ScheduledActionResponse),
         (status = 400, body = String),
@@ -198,7 +198,12 @@ pub async fn activate_template<T, Svc, Auth>(
     State(state): State<RoutineTemplateRouterState<T, Svc, Auth>>,
     Path(id): Path<Uuid>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
-    body: Result<Json<CreateScheduledAction>, JsonRejection>,
+    user: Result<
+        macro_authorization::MacroAuthorizationExtractor<Auth, macro_authorization::UserOrInternal>,
+        macro_authorization::MacroAuthorizationRejection,
+    >,
+    headers: axum::http::HeaderMap,
+    body: Result<Json<ActionConfiguration>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
     T: RoutineTemplateService,
@@ -206,7 +211,14 @@ where
     Auth: MacroAuthorizationService,
 {
     let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
-    let created = state.service.activate_template(&principal, id, req).await?;
+    let requester = crate::inbound::axum_router::requester(
+        user.as_ref().ok().map(|user| &user.authorization),
+        &headers,
+    );
+    let created = state
+        .service
+        .activate_template(&principal, id, req, requester)
+        .await?;
     Ok((
         StatusCode::CREATED,
         Json(ScheduledActionResponse::from(created)),

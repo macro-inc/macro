@@ -41,4 +41,27 @@ pub enum ValidationError {
     /// The root of a tool input schema must be an object.
     #[error("tool input schema root must have type \"object\"")]
     RootNotObject,
+    /// Providers reject composition keywords at the tool input root.
+    #[error(
+        "tool input schema root must not contain oneOf, anyOf, or allOf; put alternatives inside a named property instead of flattening them"
+    )]
+    RootComposition,
+    /// A `$ref` loop runs only through required, non-nullable fields, so no
+    /// finite value fits it; Gemini rejects the whole request.
+    #[error(
+        "schema has a $ref loop of required fields closing at {0}; make a field on the loop optional or nullable, or reach it through an array that may be empty"
+    )]
+    RequiredRefLoop(String),
+    /// The schema nests deeper than Gemini accepts; Gemini rejects the whole
+    /// request without naming the tool.
+    #[error(
+        "schema nests {depth} levels deep at {path}; Gemini rejects tool schemas deeper than {max}, so remove a level of nesting from the tool's input type",
+        max = crate::schema::GEMINI_MAX_SCHEMA_DEPTH
+    )]
+    TooDeep {
+        /// Levels of non-empty JSON objects and arrays on the deepest path.
+        depth: usize,
+        /// Dotted path to the deepest value.
+        path: String,
+    },
 }

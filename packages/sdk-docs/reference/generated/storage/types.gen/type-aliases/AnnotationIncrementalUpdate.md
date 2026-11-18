@@ -1,3 +1,0 @@
-# Type Alias: AnnotationIncrementalUpdate
-
-> **AnnotationIncrementalUpdate** = \{ `payload`: \{ `documentId`: `string`; `response`: [`CreateUnthreadedAnchorResponse`](CreateUnthreadedAnchorResponse.md); `sender`: `string`; \}; `updateType`: `"create-anchor"`; \} \| \{ `payload`: \{ `documentId`: `string`; `response`: [`EditAnchorResponse`](EditAnchorResponse.md); `sender`: `string`; \}; `updateType`: `"edit-anchor"`; \} \| \{ `payload`: \{ `documentId`: `string`; `response`: [`DeleteUnthreadedAnchorResponse`](DeleteUnthreadedAnchorResponse.md); `sender`: `string`; \}; `updateType`: `"delete-anchor"`; \}

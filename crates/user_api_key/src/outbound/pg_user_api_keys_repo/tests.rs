@@ -241,3 +241,23 @@ async fn insert_same_hash_for_second_user_is_rejected(pool: PgPool) {
         .expect_err("duplicate hash should fail");
     assert!(matches!(err, super::UserApiKeysRepoErr::Db(_)));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn racing_replacements_leave_exactly_one_live_key(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgUserApiKeysRepo::new(pool.clone());
+    let user = user(USER_A);
+    let (first_id, second_id) = (UserApiKeyId::generate(), UserApiKeyId::generate());
+    let (first_hash, second_hash) = (UserApiKey::generate().hash(), UserApiKey::generate().hash());
+
+    let (first, second) = tokio::join!(
+        repo.replace_keys_named(&user, first_id, "Agent signup", &first_hash),
+        repo.replace_keys_named(&user, second_id, "Agent signup", &second_hash),
+    );
+    first.unwrap();
+    second.unwrap();
+
+    let live = repo.list_keys(&user).await.unwrap();
+    assert_eq!(live.len(), 1);
+    assert!(live[0].id == first_id || live[0].id == second_id);
+}

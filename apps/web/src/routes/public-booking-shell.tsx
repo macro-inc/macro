@@ -1,14 +1,17 @@
 import { hapticImpact } from '@core/mobile/haptics';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTauri } from '@core/util/platform';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { type ParentProps, Show } from 'solid-js';
 
-/** Native webviews have no browser chrome, including on unavailable pages. */
+/**
+ * Native webviews have no browser chrome, including on unavailable pages, and
+ * these routes render outside the split layout that owns the app's history.
+ */
 export function PublicBookingShell(props: ParentProps) {
   const navigate = useNavigate();
-  const showBack = () => isNativeMobilePlatform() && window.parent === window;
+  const showBack = () => isTauri() && window.parent === window;
 
   return (
     <div class="min-h-0 flex-1 overflow-y-auto bg-page text-ink">

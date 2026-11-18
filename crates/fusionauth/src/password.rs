@@ -1,9 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{
-    AuthedClient, FusionAuthClient, Result,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{AuthedClient, FusionAuthClient, Result, error::FusionAuthClientError};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -39,41 +36,29 @@ async fn login(
         .json(&request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     let status = res.status();
     match status {
         reqwest::StatusCode::OK => {
             tracing::trace!("passwordless login complete");
-            let body = res.json::<PasswordLoginResponse>().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let body = res
+                .json::<PasswordLoginResponse>()
+                .await
+                .map_err(FusionAuthClientError::transport)?;
 
             Ok((body.token.into(), body.refresh_token.into()))
         }
         reqwest::StatusCode::ACCEPTED => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
 
             tracing::warn!(body=%body, "user not registered to application");
             Err(FusionAuthClientError::UserNotRegistered)
         }
         reqwest::StatusCode::NOT_FOUND => Err(FusionAuthClientError::IncorrectCode),
         _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
 
             if status.as_u16() == 212 {
                 // Email not verified
@@ -81,11 +66,7 @@ async fn login(
                 return Err(FusionAuthClientError::UserNotVerified);
             }
 
-            tracing::error!(status=%status, body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
+            Err(FusionAuthClientError::unexpected(status, &headers, body))
         }
     }
 }

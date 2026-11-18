@@ -53,8 +53,6 @@ export default {
     projectBadge: 'プロジェクト',
     newProject: '新規プロジェクト',
     contentAlreadyOpen: 'コンテンツはすでに開いています',
-    unableToOpenConversation:
-      '会話を開けませんでした。もう一度お試しください。',
     mobileSearchPlaceholder: '検索…',
     closeSearch: '検索を閉じる',
     searchFullTextFor: '「{{query}}」を全文検索',
@@ -569,10 +567,6 @@ export default {
       other: '{{count}}件中{{accepted}}件を未完了にしました',
     },
     toastMarkNotDoneFailed: '未完了にできませんでした',
-    toastThreadStaysDone:
-      'このスレッドには受信したメッセージがないため、完了のままになります',
-    toastThreadsStayDone:
-      'これらのスレッドには受信したメッセージがないため、完了のままになります',
     toastCountNotRestored: {
       other: '{{count}}件を復元できませんでした。',
     },
@@ -666,8 +660,6 @@ export default {
     create: '作成',
     getMobileApp: 'モバイルアプリを入手',
     signedInAs: '{{name}}としてログイン中',
-    commandMenu: 'コマンドメニュー',
-    searchEverything: 'すべてを検索',
     customizeSidebar: 'サイドバーをカスタマイズ',
     customizeSidebarDescription:
       'サイドバーに表示するアプリを選択し、ドラッグして並べ替えます。ホームは常に先頭に表示されます。',
@@ -735,7 +727,7 @@ export default {
     tabMobileApp: 'モバイルアプリ',
     tabTags: 'タグ',
     tabIntegrations: '連携',
-    tabRuntimes: 'ランタイム',
+    tabRuntimes: 'マシン',
     tabMcpServer: 'MCPサーバー',
     tabApiKeys: 'APIキー',
     tabBots: 'ボット',
@@ -781,7 +773,6 @@ export default {
     goForward: '進む',
     createNewSplit: '新しい分割画面を作成',
     close: '閉じる',
-    returnToList: 'リストに戻る',
     previousItem: '前の項目',
     nextItem: '次の項目',
     itemNavigation: '項目のナビゲーション',

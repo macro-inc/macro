@@ -73,6 +73,7 @@ import {
 } from 'lexical';
 import { match } from 'ts-pattern';
 import * as blocks from '../ai-toolkit/blocks';
+import * as databases from '../ai-toolkit/databases';
 import * as inline from '../ai-toolkit/inline';
 import * as lists from '../ai-toolkit/lists';
 import * as locate from '../ai-toolkit/locate';
@@ -80,6 +81,7 @@ import * as modify from '../ai-toolkit/modify';
 import type { LexicalSession } from '../ai-toolkit/session';
 import * as tables from '../ai-toolkit/tables';
 import type {
+  DatabaseQueryView,
   DocumentOp,
   Format,
   ListKind,
@@ -207,6 +209,12 @@ export class Doc implements DocReader, DocWriter {
       )
       .with({ kind: 'setDate' }, (e) =>
         this.setDate(e.node, e.date, e.displayFormat)
+      )
+      .with({ kind: 'setDatabaseQueryView' }, (e) =>
+        this.setDatabaseQueryView(e.node, e.view)
+      )
+      .with({ kind: 'setDatabaseLocation' }, (e) =>
+        this.setDatabaseLocation(e.node, e.tableId, e.viewId)
       )
       .exhaustive();
   }
@@ -792,6 +800,27 @@ export class Doc implements DocReader, DocWriter {
     });
   }
 
+  private setDatabaseQueryView(node: NodeRef, view: DatabaseQueryView): void {
+    this.tx(() =>
+      databases.$setQueryView(locate.$byId(this.session, node), node, view)
+    );
+  }
+
+  private setDatabaseLocation(
+    node: NodeRef,
+    tableId: string,
+    viewId?: string
+  ): void {
+    this.tx(() =>
+      databases.$setLocation(
+        locate.$byId(this.session, node),
+        node,
+        tableId,
+        viewId
+      )
+    );
+  }
+
   /** Resolve an insert anchor to a sibling node. Climbs past inline nodes (so a
    *  text id resolves to its block) but stops at the first block-level node —
    *  including a decorator block like a divider/image/video. `$blockById` can't
@@ -971,6 +1000,9 @@ export function buildNode(spec: NodeSpec): LexicalNode {
     .with({ block: 'html-render' }, (s) =>
       $createHtmlRenderNode({ html: s.html })
     )
+    .with({ block: 'database-query' }, (s) =>
+      databases.$createQueryBlock(s.query)
+    )
     .with({ block: 'image' }, (session) =>
       $createImageNode({
         srcType: session.srcType,
@@ -993,6 +1025,9 @@ export function buildNode(spec: NodeSpec): LexicalNode {
       $createEquationNode(session.tex, session.inline ?? false)
     )
     .with({ inline: 'linebreak' }, () => $createLineBreakNode())
+    .with({ inline: 'database-query' }, (s) =>
+      databases.$createInlineQuery(s.query)
+    )
     .with({ inline: 'equation' }, (session) =>
       $createEquationNode(session.tex, true)
     )

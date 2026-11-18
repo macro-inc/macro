@@ -1,3 +1,4 @@
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import type { GuestPolicy } from '@service-storage/generated/schemas/guestPolicy';
 import { Checkbox } from '@ui';
 import { createUniqueId, For, Show } from 'solid-js';
@@ -17,18 +18,27 @@ export interface EventGuestPolicyRowProps {
   disabledReason?: string;
 }
 
-/**
- * What guests may do with the event. As in Google Calendar, guests who may
- * modify the event may also invite others.
- */
-export function EventGuestPolicyRow(props: EventGuestPolicyRowProps) {
+/** As in Google Calendar, guests who may modify the event may also invite others. */
+function createGuestPolicyEditor(props: EventGuestPolicyRowProps) {
   const labelId = `event-guest-permissions-${createUniqueId()}`;
-  const reasonId = `${labelId}-reason`;
-  const change = (key: keyof GuestPolicy, checked: boolean) => {
-    const next = { ...props.value, [key]: checked };
-    if (next.canModify) next.canInviteOthers = true;
-    props.onChange(next);
+  return {
+    labelId,
+    reasonId: `${labelId}-reason`,
+    change: (key: keyof GuestPolicy, checked: boolean) => {
+      const next = { ...props.value, [key]: checked };
+      if (next.canModify) next.canInviteOthers = true;
+      props.onChange(next);
+    },
+    isDisabled: (key: keyof GuestPolicy) =>
+      props.disabled === true ||
+      (key === 'canInviteOthers' && props.value.canModify),
   };
+}
+
+/** What guests may do with the event, on one line. */
+export function EventGuestPolicyRow(props: EventGuestPolicyRowProps) {
+  const { labelId, reasonId, change, isDisabled } =
+    createGuestPolicyEditor(props);
 
   return (
     <div
@@ -45,10 +55,7 @@ export function EventGuestPolicyRow(props: EventGuestPolicyRowProps) {
           <Checkbox
             checked={props.value[permission.key]}
             onChange={(checked) => change(permission.key, checked)}
-            disabled={
-              props.disabled ||
-              (permission.key === 'canInviteOthers' && props.value.canModify)
-            }
+            disabled={isDisabled(permission.key)}
             class="touch:min-h-[44px]"
           >
             <Checkbox.Control />
@@ -59,6 +66,49 @@ export function EventGuestPolicyRow(props: EventGuestPolicyRowProps) {
       <Show when={props.disabledReason}>
         {(reason) => (
           <span id={reasonId} class="text-ink-extra-muted">
+            {reason()}
+          </span>
+        )}
+      </Show>
+    </div>
+  );
+}
+
+/** What guests may do with the event, one permission per row, for a touch sheet. */
+export function EventGuestPolicyRows(props: EventGuestPolicyRowProps) {
+  const { labelId, reasonId, change, isDisabled } =
+    createGuestPolicyEditor(props);
+
+  return (
+    <div
+      role="group"
+      aria-labelledby={labelId}
+      aria-describedby={props.disabledReason ? reasonId : undefined}
+      class="flex min-w-0 flex-col gap-1"
+    >
+      <span id={labelId} class="px-4 text-xs font-medium text-ink-muted">
+        Guest permissions
+      </span>
+      <MobileDrawer.Section class="mx-0">
+        <For each={GUEST_PERMISSIONS}>
+          {(permission) => (
+            <Checkbox
+              checked={props.value[permission.key]}
+              onChange={(checked) => change(permission.key, checked)}
+              disabled={isDisabled(permission.key)}
+              class="min-h-11 w-full justify-between px-3"
+            >
+              <Checkbox.Label class="text-sm text-ink">
+                {permission.label}
+              </Checkbox.Label>
+              <Checkbox.Control />
+            </Checkbox>
+          )}
+        </For>
+      </MobileDrawer.Section>
+      <Show when={props.disabledReason}>
+        {(reason) => (
+          <span id={reasonId} class="px-4 text-xs text-ink-extra-muted">
             {reason()}
           </span>
         )}

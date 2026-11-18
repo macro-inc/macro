@@ -1,13 +1,13 @@
+import { DisclosureCaret } from '@app/features/block-agent/ui/DisclosureCaret';
 import CaretRight from '@icon/system/regular/caret-right.svg?component-solid';
 import { Button, Layer } from '@ui';
-import type { Component, JSX } from 'solid-js';
-import { Show } from 'solid-js';
+import type { Accessor, Component, JSX } from 'solid-js';
+import { createContext, Show, useContext } from 'solid-js';
 
 type ToolRowProps = {
   /** The call is still running: its text shimmers, as an active agent row does. */
   active?: boolean;
   align?: 'center' | 'start';
-  grouped?: boolean;
   children: JSX.Element;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   trailing?: JSX.Element;
@@ -43,17 +43,30 @@ type ToolListItemProps = {
   icon?: JSX.Element;
 };
 
+type ToolListButtonProps = {
+  children: JSX.Element;
+  onClick?: (event: MouseEvent) => void;
+};
+
+/**
+ * A grouped tool sits among an agent's other tool rows, so it drops its card,
+ * icons, and indents to read as one more line of that list.
+ */
+const GroupedContext = createContext<Accessor<boolean>>(() => false);
+
 function Root(props: ToolRootProps) {
   const content = () => (
-    <div
-      class="relative overflow-hidden text-xs leading-5 text-ink-extra-muted"
-      classList={{
-        'opacity-50': props.muted,
-        'rounded-lg bg-surface': !props.grouped,
-      }}
-    >
-      {props.children}
-    </div>
+    <GroupedContext.Provider value={() => props.grouped ?? false}>
+      <div
+        class="relative overflow-hidden text-xs leading-5 text-ink-extra-muted"
+        classList={{
+          'opacity-50': props.muted,
+          'rounded-lg bg-surface': !props.grouped,
+        }}
+      >
+        {props.children}
+      </div>
+    </GroupedContext.Provider>
   );
 
   return (
@@ -64,25 +77,37 @@ function Root(props: ToolRootProps) {
 }
 
 function Row(props: ToolRowProps) {
+  const grouped = useContext(GroupedContext);
   const alignStart = () => props.align === 'start';
 
   return (
     <div
-      class="flex w-full gap-2"
+      class="flex w-full"
       classList={{
-        'min-h-8 py-1 text-sm leading-6': props.grouped,
-        'min-h-9 px-3 py-2': !props.grouped,
+        'relative min-h-8 gap-1.5 py-1 text-sm leading-6 not-touch:has-[[aria-expanded]]:hover:text-ink-muted':
+          grouped(),
+        'min-h-9 gap-2 px-3 py-2': !grouped(),
         'items-center': !alignStart(),
         'items-start': alignStart(),
       }}
     >
-      <props.icon
-        class="size-4 shrink-0 text-ink-extra-muted"
-        classList={{ 'mt-0.5': alignStart() }}
-      />
+      <Show when={!grouped()}>
+        <props.icon
+          class="size-4 shrink-0 text-ink-extra-muted"
+          classList={{ 'mt-0.5': alignStart() }}
+        />
+      </Show>
+      {/* Grouped, the content takes only its text's width, so a count the
+          renderer spaces to the far edge follows the detail at the row's gap
+          instead, and the object a renderer highlights steps down to the
+          detail's tone. */}
       <div
-        class="min-w-0 flex-1 overflow-hidden"
-        classList={{ 'magic-chip-shimmer': props.active }}
+        class="min-w-0 overflow-hidden"
+        classList={{
+          'flex-1': !grouped(),
+          '*:gap-1.5 [--color-ink:var(--color-ink-disabled)]': grouped(),
+          'magic-chip-shimmer': props.active,
+        }}
       >
         {props.children}
       </div>
@@ -94,46 +119,78 @@ function Row(props: ToolRowProps) {
 }
 
 function Response(props: ToolResponseProps) {
-  return <div class="px-3 pb-2">{props.children}</div>;
+  const grouped = useContext(GroupedContext);
+  return (
+    <div class="pb-2" classList={{ 'px-3': !grouped() }}>
+      {props.children}
+    </div>
+  );
 }
 
 function ResultToggle(props: ToolResultToggleProps) {
+  const grouped = useContext(GroupedContext);
   const canToggle = () => props.showToggle ?? true;
+  const toggle = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    props.onToggle(event);
+  };
 
   return (
     <Show
       when={canToggle()}
       fallback={
         <Show when={props.status}>
-          <span class="shrink-0 whitespace-nowrap text-xs text-ink-extra-muted">
+          <span
+            class="shrink-0 whitespace-nowrap"
+            classList={{
+              'text-ink-disabled': grouped(),
+              'text-xs text-ink-extra-muted': !grouped(),
+            }}
+          >
             {props.status}
           </span>
         </Show>
       }
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-expanded={props.expanded}
-        class="shrink-0 whitespace-nowrap px-1 text-ink-extra-muted hover:text-ink-muted"
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          props.onToggle(event);
-        }}
+      <Show
+        when={grouped()}
+        fallback={
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-expanded={props.expanded}
+            class="shrink-0 whitespace-nowrap px-1 text-ink-extra-muted hover:text-ink-muted"
+            onClick={toggle}
+          >
+            <Show when={props.status}>
+              <span>{props.status}</span>
+            </Show>
+            <CaretRight
+              class="size-3 touch:size-6 shrink-0 pointer-events-none"
+              aria-hidden="true"
+              classList={{
+                'rotate-90': props.expanded,
+              }}
+            />
+          </Button>
+        }
       >
-        <Show when={props.status}>
-          <span>{props.status}</span>
-        </Show>
-        <CaretRight
-          class="size-3 touch:size-6 shrink-0 pointer-events-none"
-          aria-hidden="true"
-          classList={{
-            'rotate-90': props.expanded,
-          }}
-        />
-      </Button>
+        {/* Stretched over the row, so the whole row opens the results as the
+            session's other tool rows do. */}
+        <button
+          type="button"
+          aria-expanded={props.expanded}
+          class="group flex shrink-0 items-center gap-1.5 whitespace-nowrap outline-none after:absolute after:inset-0 after:outline-offset-2 focus-visible:after:outline-2 focus-visible:after:outline-accent"
+          onClick={toggle}
+        >
+          <Show when={props.status}>
+            <span class="tabular-nums text-ink-disabled">{props.status}</span>
+          </Show>
+          <DisclosureCaret open={props.expanded} />
+        </button>
+      </Show>
     </Show>
   );
 }
@@ -149,13 +206,31 @@ function Group(props: ToolGroupProps) {
 }
 
 function List(props: ToolListProps) {
-  return <div class="-mx-3 -my-2">{props.children}</div>;
+  const grouped = useContext(GroupedContext);
+  return (
+    <div
+      classList={{
+        '-mx-3 -my-2': !grouped(),
+        // Results read in the row's tone, not as brighter content under it.
+        '[--color-ink:currentColor]': grouped(),
+      }}
+    >
+      {props.children}
+    </div>
+  );
 }
 
 function ListItem(props: ToolListItemProps) {
+  const grouped = useContext(GroupedContext);
   return (
-    <div class="flex min-h-8 items-center gap-2 px-3 py-1.5 text-xs leading-4">
-      <Show when={props.icon}>
+    <div
+      class="flex items-center gap-2 text-xs"
+      classList={{
+        'min-h-6 py-0.5 leading-5': grouped(),
+        'min-h-8 px-3 py-1.5 leading-4': !grouped(),
+      }}
+    >
+      <Show when={!grouped() && props.icon}>
         <div class="flex size-4 shrink-0 items-center justify-center text-ink-extra-muted">
           {props.icon}
         </div>
@@ -165,9 +240,29 @@ function ListItem(props: ToolListItemProps) {
   );
 }
 
+/** A result that opens what it found. */
+function ListButton(props: ToolListButtonProps) {
+  const grouped = useContext(GroupedContext);
+  return (
+    <button
+      type="button"
+      class="w-full text-left"
+      classList={{
+        'grid items-center touch:min-h-[44px] not-touch:hover:text-ink-muted':
+          grouped(),
+        'block hover:bg-hover': !grouped(),
+      }}
+      onClick={(event) => props.onClick?.(event)}
+    >
+      {props.children}
+    </button>
+  );
+}
+
 export const Tool = {
   Group,
   List,
+  ListButton,
   ListItem,
   Response,
   ResultToggle,

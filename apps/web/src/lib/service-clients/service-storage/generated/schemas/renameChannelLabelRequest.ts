@@ -5,12 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RenameChannelLabelRequestRule } from './renameChannelLabelRequestRule';
+import type { RenameChannelLabelRequestTargetScope } from './renameChannelLabelRequestTargetScope';
 
 /**
- * Request body for renaming a label.
+ * Request body for updating a label's name, smart rule, or sharing scope.
  */
 export interface RenameChannelLabelRequest {
   /** New display name. */
   name: string;
   rule?: RenameChannelLabelRequestRule;
+  targetScope?: RenameChannelLabelRequestTargetScope;
 }

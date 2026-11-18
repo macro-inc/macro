@@ -3,7 +3,13 @@
  */
 
 import type { MessageData } from '@core/messages/types';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+} from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Content } from '../Content';
 import { CollapseLongContentProvider, MessageProvider } from '../context';
@@ -42,6 +48,24 @@ function renderContent(collapse: boolean) {
   ));
 }
 
+function renderCommentCard() {
+  return render(() => (
+    <>
+      <button type="button">Page</button>
+      <div data-comment-thread="comment">
+        <CollapseLongContentProvider value={true}>
+          <MessageProvider value={() => message}>
+            <Content />
+          </MessageProvider>
+        </CollapseLongContentProvider>
+      </div>
+      <div data-comment-badge="comment">
+        <button type="button">Badge</button>
+      </div>
+    </>
+  ));
+}
+
 describe('long message content', () => {
   beforeEach(() => {
     vi.stubGlobal(
@@ -74,6 +98,69 @@ describe('long message content', () => {
     fireEvent.click(less);
     expect(preview()).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Show more' })).toBeTruthy();
+  });
+
+  it('returns an expanded comment to its preview when a press lands outside the card', () => {
+    setBodyHeight(800);
+    const view = renderCommentCard();
+    const preview = () => view.container.querySelector('[data-collapsed]');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    expect(preview()).toBeNull();
+
+    const press = (target: Element) => {
+      fireEvent.pointerDown(target);
+      fireEvent.pointerUp(target);
+    };
+
+    press(screen.getByText('A very long comment'));
+    press(screen.getByRole('button', { name: 'Badge' }));
+    expect(preview()).toBeNull();
+
+    const menu = document.createElement('button');
+    menu.textContent = 'Delete menu';
+    document.body.appendChild(menu);
+    try {
+      press(menu);
+      expect(preview()).toBeNull();
+    } finally {
+      menu.remove();
+    }
+
+    // jsdom has no PointerEvent, so the id has to be set on the event itself.
+    const pointer = (
+      target: Element,
+      type: 'pointerDown' | 'pointerUp',
+      pointerId: number
+    ) => {
+      const event = createEvent[type](target);
+      Object.defineProperty(event, 'pointerId', { value: pointerId });
+      fireEvent(target, event);
+    };
+    const page = screen.getByRole('button', { name: 'Page' });
+    pointer(page, 'pointerDown', 7);
+    expect(preview()).toBeNull();
+    pointer(page, 'pointerUp', 8);
+    expect(preview()).toBeNull();
+    pointer(page, 'pointerUp', 7);
+    expect(preview()).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Show more' })).toBeTruthy();
+  });
+
+  it('starts the preview at the top again after reading down the expanded body', () => {
+    setBodyHeight(800);
+    const view = renderContent(true);
+    const body = view.container.querySelector<HTMLElement>(
+      '[data-message-content] > div'
+    )!;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    body.scrollTop = 500;
+    expect(body.scrollTop).toBe(500);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(body.hasAttribute('data-collapsed')).toBe(true);
+    expect(body.scrollTop).toBe(0);
   });
 
   it('reveals a hidden link when focus moves into it', () => {

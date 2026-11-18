@@ -18,6 +18,7 @@ function setup(
     initialEmail?: string;
     autoStart?: boolean;
     token?: string;
+    ssoFallbackNotice?: string;
     signupJourney?: (slots: SignupJourneySlots) => ReturnType<typeof Journey>;
   } = {}
 ) {
@@ -32,6 +33,7 @@ function setup(
         initialEmail={options.initialEmail}
         autoStart={options.autoStart}
         token={options.token}
+        ssoFallbackNotice={options.ssoFallbackNotice}
         onVerified={verified}
         onSignIn={signIn}
         signupJourney={options.signupJourney}
@@ -90,6 +92,29 @@ const typeCode = async (value: string) =>
     target: { value },
   });
 
+describe('agent signup', () => {
+  it('asks for an agent account by email', async () => {
+    const { fake } = setup({ intent: 'agent-signup' });
+
+    click('Continue with email');
+    await typeEmail('agent@signup.test');
+    click('Continue');
+    await screen.findByText('agent@signup.test');
+
+    expect(fake.calls()).toContain('sendAgentCode:agent@signup.test');
+  });
+
+  it('asks for an agent account through Google', async () => {
+    const { fake } = setup({ intent: 'agent-signup' });
+
+    click('Continue with Google');
+
+    await waitFor(() =>
+      expect(fake.calls()).toContain('sso:google:agent-signup')
+    );
+  });
+});
+
 describe('email sign-in', () => {
   it('updates a signed-in viewer without remounting their workspace on session refresh', () => {
     const { fake } = setup({
@@ -98,6 +123,7 @@ describe('email sign-in', () => {
           id: 'macro|member@acme.com',
           email: 'member@acme.com',
           tutorialComplete: false,
+          isAgent: false,
         },
       },
     });
@@ -115,6 +141,7 @@ describe('email sign-in', () => {
         id: 'macro|another@acme.com',
         email: 'another@acme.com',
         tutorialComplete: false,
+        isAgent: false,
       };
     });
     expect(screen.getByTestId('signed-in')).not.toBe(workspace);
@@ -436,5 +463,28 @@ describe('desktop sign-up', () => {
     await vi.advanceTimersByTimeAsync(300);
     await screen.findByRole('button', { name: 'Connect work email' });
     expect(screen.queryByTestId('pending')).toBeNull();
+  });
+});
+
+describe('after a failed provider sign-in', () => {
+  it('opens on the email step, says why, and still sends a code', async () => {
+    const { fake } = setup({
+      intent: 'signup',
+      ssoFallbackNotice:
+        'Your organization needs an admin to approve Macro. Continue with your email instead.',
+    });
+    expect(
+      screen.getByText(
+        'Your organization needs an admin to approve Macro. Continue with your email instead.'
+      )
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Continue with Microsoft' })
+    ).toBeNull();
+    await typeEmail('ada@example.com');
+    click('Continue');
+    await waitFor(() =>
+      expect(fake.calls()).toContain('sendCode:ada@example.com')
+    );
   });
 });

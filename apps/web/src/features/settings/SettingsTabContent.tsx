@@ -6,6 +6,7 @@ import { CalendarSettings } from '../calendar/calendar-settings';
 import { CrmSettings as Crm } from '../crm/crm-settings';
 import { Usage } from '../usage/usage';
 import { Account } from './Account';
+import { AccountManagers } from './AccountManagers';
 import { Admin } from './Admin';
 import { Agent } from './Agent';
 import { AgentSettings } from './AgentSettings';
@@ -29,8 +30,14 @@ const RoutineSettings = lazyNamed(
   'RoutineSettings'
 );
 
-/** Shared forms for desktop panels and mobile sheet detail pages. */
-export function SettingsTabContent(props: { tab: SettingsTab }) {
+/**
+ * Shared forms for desktop panels and mobile sheet detail pages. `phone` is
+ * set by the phone settings sheet, for settings phones leave out.
+ */
+export function SettingsTabContent(props: {
+  tab: SettingsTab;
+  phone?: boolean;
+}) {
   const isAvailable = useSettingsTabAvailable();
   const isCurrentTab = (tab: SettingsTab) =>
     props.tab === tab && isAvailable(tab);
@@ -46,13 +53,16 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
         <Account />
       </Show>
       <Show when={isCurrentTab('Email')}>
-        <EmailSettings />
+        <EmailSettings displayOptions={!props.phone} />
       </Show>
       <Show when={isCurrentTab('Calendar')}>
         <CalendarSettings />
       </Show>
       <Show when={isCurrentTab('API Keys')}>
         <ApiKeys />
+      </Show>
+      <Show when={isCurrentTab('Account Managers')}>
+        <AccountManagers />
       </Show>
       <Show when={isCurrentTab('Notifications')}>
         <Notifications />

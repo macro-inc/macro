@@ -6,6 +6,7 @@ import type {
 } from '@core/comments/commentType';
 import type { Message } from '@service-storage/messages';
 import type { NodeKey } from 'lexical';
+import type { DraftPublication } from './LocalCommentDraft';
 
 export type MarkId = string; // uuid
 
@@ -28,6 +29,7 @@ export type Mark = {
   isDraft: boolean;
   peerId?: string;
   thread?: ThreadPayload;
+  publication?: DraftPublication;
 };
 export type MarkStore = Partial<Record<MarkId, Mark>>;
 

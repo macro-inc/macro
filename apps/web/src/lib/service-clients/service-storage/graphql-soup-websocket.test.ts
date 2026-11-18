@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const telemetryError = vi.hoisted(() => vi.fn());
 vi.mock('@macro-inc/observability', () => ({
+  NOOP_SPAN: {},
   Telemetry: { error: telemetryError },
 }));
 

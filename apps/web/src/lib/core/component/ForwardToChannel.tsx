@@ -13,8 +13,8 @@ import { ShareOptions } from '@core/component/TopBar/ShareButton';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
+import type { RecipientSourceFactory } from '@core/user/recipient-source';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -22,6 +22,7 @@ import { chatRuleset, uploadFile } from '@core/util/upload';
 import CheckIcon from '@icon/system/regular/check.svg?component-solid';
 import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import { type Span, Telemetry } from '@macro-inc/observability';
+import { useCombinedRecipientSource } from '@queries/contacts/recipient-source';
 import {
   blockNameToItemType,
   itemTypeToReferenceEntityType,
@@ -29,6 +30,7 @@ import {
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
+import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { Button, cn, Hotkey } from '@ui';
 import {
   type Accessor,
@@ -51,16 +53,13 @@ type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
 interface MobileForwardToChannelLayoutProps
   extends Pick<
     ForwardToChannelProps,
-    | 'submitPermissionInfo'
-    | 'hideAccessLevelSelector'
-    | 'editPermissionEnabled'
-    | 'allowedAccessLevels'
+    'submitPermissionInfo' | 'editPermissionEnabled' | 'allowedAccessLevels'
   > {
   isAuthenticated: Accessor<boolean | undefined>;
   selectedOptions: Accessor<Recipient[]>;
   setSelectedOptions: (v: Recipient[]) => void;
   triedToSubmit: Accessor<boolean>;
-  destinationOptions: ReturnType<typeof useCombinedRecipients>['all'];
+  createSource: RecipientSourceFactory<'user' | 'channel'>;
   submitAccessLevel: Accessor<AccessLevel | null>;
   setSubmitAccessLevel: (level: AccessLevel | null) => void;
   composer: ReturnType<typeof createForwardMessageComposer>;
@@ -81,7 +80,7 @@ function MobileForwardToChannelLayout(
           setSelectedOptions={props.setSelectedOptions}
           selectedOptions={props.selectedOptions()}
           triedToSubmit={props.triedToSubmit}
-          options={props.destinationOptions}
+          createSource={props.createSource}
           triggerMode="input"
           class="border border-edge-muted p-1"
           focusOnMount
@@ -133,10 +132,7 @@ function MobileForwardToChannelLayout(
         </div>
       </Show>
       <Show
-        when={
-          props.submitPermissionInfo?.userPermissions === Permissions.OWNER &&
-          !props.hideAccessLevelSelector
-        }
+        when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}
       >
         <div class="px-3 py-2 flex items-center">
           <span class="text-sm text-ink-muted pr-2">Access:</span>
@@ -184,12 +180,16 @@ interface ForwardToChannelProps {
     handleSubmit: () => void;
     canSubmit: () => boolean;
   }) => void;
-  hideAccessLevelSelector?: boolean;
   initialAccessLevel?: AccessLevel | null;
   /** Levels the picker offers; all when absent. */
   allowedAccessLevels?: readonly AccessLevel[];
   /** Attach an entity that has no block, instead of `blockId`/`blockName`. */
   entity?: NewAttachment;
+  /**
+   * Reference `entity` in the message text instead of attaching it, for
+   * entities messages show only as mentions (routines).
+   */
+  inlineReference?: { markdown: string; mention: SimpleMention };
   /**
    * Grant the destination before the message is sent, for entities that
    * sending does not grant. Rejecting cancels that delivery.
@@ -222,7 +222,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   });
   const canSubmit = () =>
     selectedOptions().length > 0 && !isSubmitting() && !composer.isUploading();
-  const { all: destinationOptions } = useCombinedRecipients();
 
   const destination = createMemo(() => {
     let options = selectedOptions();
@@ -364,9 +363,20 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   ) {
     const prepare = props.prepareChannel;
     const composed = composer.message();
+    const inline = props.inlineReference;
     const message = {
       ...composed,
-      attachments: [asAttachment(), ...(composed.attachments ?? [])],
+      ...(inline
+        ? {
+            content: [composed.content.trim(), inline.markdown]
+              .filter(Boolean)
+              .join('\n\n'),
+            mentions: [...composed.mentions, inline.mention],
+            attachments: composed.attachments ?? [],
+          }
+        : {
+            attachments: [asAttachment(), ...(composed.attachments ?? [])],
+          }),
       beforeSend:
         prepare &&
         ((id: string) =>
@@ -506,11 +516,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       }
 
       if (targets.length > 1) {
-        toast.success('Messages sent successfully');
+        toast.success('Messages sent');
       } else {
         const result = results[0];
         if (result) {
-          toast.success('Message sent successfully', {
+          toast.success('Message sent', {
+            dismissStyle: 'icon',
             actions: [
               {
                 label: 'View in channel',
@@ -577,9 +588,8 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             selectedOptions={selectedOptions}
             setSelectedOptions={(v) => setSelectedOptions(v)}
             triedToSubmit={triedToSubmit}
-            destinationOptions={destinationOptions}
+            createSource={useCombinedRecipientSource}
             submitPermissionInfo={props.submitPermissionInfo}
-            hideAccessLevelSelector={props.hideAccessLevelSelector}
             allowedAccessLevels={props.allowedAccessLevels}
             submitAccessLevel={submitAccessLevel}
             setSubmitAccessLevel={setSubmitAccessLevel}
@@ -600,7 +610,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 setSelectedOptions={setSelectedOptions}
                 selectedOptions={selectedOptions()}
                 triedToSubmit={triedToSubmit}
-                options={destinationOptions}
+                createSource={useCombinedRecipientSource}
                 triggerMode="input"
                 focusOnMount
                 horizontalScroll
@@ -610,7 +620,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             <Show
               when={
                 props.submitPermissionInfo?.userPermissions ===
-                  Permissions.OWNER && !props.hideAccessLevelSelector
+                Permissions.OWNER
               }
             >
               <div class="shrink-0 pr-2 flex items-center gap-2">

@@ -1,212 +1,115 @@
-import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
-import CheckIcon from '@icon/system/regular/check.svg';
-import LinkIcon from '@icon/system/regular/link.svg';
-import LockIcon from '@icon/system/regular/lock-simple.svg';
-import type {
-  RoutineTemplate,
-  TemplateVariable,
-  VariableFill,
-} from '@service-scheduled-action/generated/schemas';
+import { EntityIcon } from '@core/component/EntityIcon';
 import {
-  ActionDialogShell,
-  Badge,
-  Button,
-  Card,
-  Dialog,
-  Input,
-  Tabs,
-} from '@ui';
-import { For, type JSX, Show } from 'solid-js';
-import {
-  TemplateReferenceChip,
-  variableLabel,
-} from '../components/template-reference';
-import { variableKey } from '../core/template';
-
-function fillOptions(variable: TemplateVariable) {
-  if (variable.kind === 'time_zone')
-    return [
-      { value: 'activator' as const, label: 'Their time zone' },
-      { value: 'shared' as const, label: `Keep ${variable.timezone}` },
-    ];
-  return [
-    ...(variable.kind === 'user'
-      ? [{ value: 'activator' as const, label: 'The person activating' }]
-      : []),
-    { value: 'shared' as const, label: 'Same for everyone' },
-    { value: 'choice' as const, label: 'They choose' },
-  ];
-}
-
-function VariableRow(props: {
-  variable: TemplateVariable;
-  disabled: boolean;
-  onFill(fill: VariableFill): void;
-}) {
-  return (
-    <div class="flex flex-wrap items-center justify-between gap-2 py-1.5">
-      <TemplateReferenceChip
-        variable={props.variable}
-        state={props.variable.fill === 'activator' ? 'fills_in' : 'works'}
-      />
-      <Tabs
-        aria-label={`How ${variableLabel(props.variable)} fills in`}
-        size="sm"
-        wrap
-        disabled={props.disabled}
-        options={fillOptions(props.variable)}
-        value={props.variable.fill}
-        onChange={props.onFill}
-      />
-    </div>
-  );
-}
-
-function ShareNote(props: { icon: JSX.Element; children: JSX.Element }) {
-  return (
-    <li class="flex gap-2 text-sm text-ink-muted">
-      <span class="mt-0.5 shrink-0">{props.icon}</span>
-      <span>{props.children}</span>
-    </li>
-  );
-}
+  ShareCard,
+  ShareDialogFrame,
+  ShareDialogTitle,
+} from '@core/component/TopBar/ShareDialogFrame';
+import { isMobile } from '@core/mobile/isMobile';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import type { RoutineTemplate } from '@service-scheduled-action/generated/schemas';
+import { Button, cn } from '@ui';
+import { type JSX, Show } from 'solid-js';
 
 /**
- * Sharing a routine as a template: the owner generalizes its references,
- * publishes the snapshot, and passes the link on. Their routine itself is
- * never shared.
+ * A routine's Share menu. Sending it or copying its link shares the routine's
+ * current setup; each person who opens it can activate their own copy.
  */
-export function ShareTemplateDialog(props: {
+export function ShareRoutineDialog(props: {
   open: boolean;
   onOpenChange(open: boolean): void;
   name: string;
   /** `undefined` while loading, `null` when not shared yet. */
   template: RoutineTemplate | null | undefined;
-  description: string;
-  onDescription(description: string): void;
-  variables: readonly TemplateVariable[];
-  onFill(key: string, fill: VariableFill): void;
   pending: boolean;
-  error?: string;
-  onShare(): void;
-  onUnshare(): void;
   onCopyLink(): void;
-  /** Posts the template to a channel or person; shown once it's shared. */
+  onStopSharing(): void;
+  /** The standard send form: recipients, optional message, Share. */
   send: JSX.Element;
+  /** The send form's submit, which phones show beside the title. */
+  sendAction?: { canSubmit(): boolean; submit(): void };
 }) {
+  const shared = () => Boolean(props.template);
   return (
-    <Dialog
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-      position="center"
-      class="w-[min(40rem,calc(100vw-2rem))]"
-      visibleScrim
-    >
-      <div class="contents">
-        <ActionDialogShell hideBorder class="max-h-[85dvh] bg-transparent">
-          <ActionDialogShell.Body class="flex flex-col gap-5 space-y-0">
-            <ActionDialogShell.Header class="flex flex-wrap items-center gap-2 space-y-0">
-              <ActionDialogShell.Title class="text-base">
-                Share: {props.name}
-              </ActionDialogShell.Title>
-              <Badge variant="outline" size="xs">
-                As a template
-              </Badge>
-            </ActionDialogShell.Header>
-            <Card>
-              <Card.Body>
-                <p class="font-medium">
-                  People get a template, not your routine
-                </p>
-                <ul class="mt-2 flex flex-col gap-1.5">
-                  <ShareNote icon={<CheckIcon class="size-4 text-success" />}>
-                    They see your instructions and triggers, and can activate
-                    their own copy that runs as them.
-                  </ShareNote>
-                  <ShareNote icon={<LockIcon class="size-4" />}>
-                    Your routine, its runs and its results stay private to you.
-                  </ShareNote>
-                  <ShareNote icon={<ArrowsClockwiseIcon class="size-4" />}>
-                    Sharing again updates the template with your routine's
-                    current setup.
-                  </ShareNote>
-                </ul>
-              </Card.Body>
-            </Card>
-            <label class="flex flex-col gap-1.5 text-sm">
-              <span class="font-medium">Description</span>
-              <Input
-                value={props.description}
-                placeholder="What does this routine do for someone?"
-                maxLength={1000}
-                disabled={props.pending}
-                onInput={(event) =>
-                  props.onDescription(event.currentTarget.value)
-                }
-              />
-            </label>
-            <Show when={props.variables.length > 0}>
-              <section class="flex flex-col gap-1">
-                <h3 class="text-sm font-medium">
-                  What changes for each person
-                </h3>
-                <div class="divide-y divide-edge-divider">
-                  <For each={props.variables}>
-                    {(variable) => (
-                      <VariableRow
-                        variable={variable}
-                        disabled={props.pending}
-                        onFill={(fill) =>
-                          props.onFill(variableKey(variable), fill)
-                        }
-                      />
-                    )}
-                  </For>
-                </div>
-              </section>
-            </Show>
-            <Show when={props.template}>
-              {(template) => (
-                <section class="flex flex-col gap-2">
-                  <h3 class="text-sm font-medium">
-                    Shared · active for {template().active_count}
-                  </h3>
-                  {props.send}
-                </section>
+    <ShareDialogFrame open={props.open} onOpenChange={props.onOpenChange}>
+      <ShareCard
+        header={
+          <div class="flex w-full min-w-0 items-center justify-between gap-2">
+            <ShareDialogTitle
+              icon={
+                <EntityIcon targetType="routine" size="sm" class="shrink-0" />
+              }
+              name={props.name}
+            />
+            <Show when={isMobile() && props.sendAction}>
+              {(action) => (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  class="shrink-0"
+                  disabled={!action().canSubmit()}
+                  onClick={() => action().submit()}
+                >
+                  Share
+                </Button>
               )}
             </Show>
-            <Show when={props.error}>
-              <p class="text-sm text-failure" role="alert">
-                {props.error}
-              </p>
-            </Show>
-          </ActionDialogShell.Body>
-          <ActionDialogShell.Footer class="justify-between">
-            <Show when={props.template} fallback={<span />}>
-              <div class="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={() => props.onCopyLink()}>
-                  <LinkIcon class="size-4" />
-                  Copy template link
-                </Button>
+          </div>
+        }
+      >
+        {props.send}
+      </ShareCard>
+      <ShareCard>
+        <div class="flex flex-col gap-3 p-4 text-sm text-ink">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <span class="font-medium">Anyone with the link</span>
+              <div
+                class={cn(
+                  'flex items-center justify-center rounded-xl border px-2 py-0.5',
+                  shared()
+                    ? 'border-accent/30 bg-accent/10 text-accent'
+                    : 'border-edge-muted bg-edge-muted text-ink-extra-muted'
+                )}
+              >
+                <span class="text-xs font-medium whitespace-nowrap">
+                  {shared() ? 'Shared' : 'Just me'}
+                </span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <Show when={shared()}>
                 <Button
-                  variant="danger"
+                  variant="ghost"
                   disabled={props.pending}
-                  onClick={() => props.onUnshare()}
+                  onClick={() => props.onStopSharing()}
                 >
                   Stop sharing
                 </Button>
-              </div>
-            </Show>
-            <Button
-              variant="primary"
-              disabled={props.pending || props.template === undefined}
-              onClick={() => props.onShare()}
+              </Show>
+              <Button
+                variant="secondary"
+                disabled={props.pending || props.template === undefined}
+                onClick={() => props.onCopyLink()}
+              >
+                <CopyIcon class="size-4" />
+                <span>Copy Link</span>
+              </Button>
+            </div>
+          </div>
+          <p class="text-ink-muted">
+            <Show
+              when={props.template}
+              fallback="People you share with can activate their own copy. Your runs stay private."
             >
-              {props.template ? 'Update template' : 'Share template'}
-            </Button>
-          </ActionDialogShell.Footer>
-        </ActionDialogShell>
-      </div>
-    </Dialog>
+              {(template) =>
+                template().active_count === 1
+                  ? 'Active for 1 person. Your runs stay private.'
+                  : `Active for ${template().active_count} people. Your runs stay private.`
+              }
+            </Show>
+          </p>
+        </div>
+      </ShareCard>
+    </ShareDialogFrame>
   );
 }

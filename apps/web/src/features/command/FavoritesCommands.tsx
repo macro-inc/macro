@@ -45,6 +45,7 @@ export function FavoritesCommands() {
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
       toast.alert(t('commandMenu.contentAlreadyOpen'));
     }
+    CommandState.setFocusDestinationOnClose(true);
     // Close the menu and clear the query once a favorite is opened.
     CommandState.close();
     CommandState.setQuery('');

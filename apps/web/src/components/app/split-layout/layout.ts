@@ -91,7 +91,7 @@ export function useSplitLayout() {
   function insertSplit(
     content: SplitContent,
     referredFrom: ReferredFrom = null,
-    options: Pick<OpenWithSplitOptions, 'insertIndex'> = {}
+    options: Pick<OpenWithSplitOptions, 'beside'> = {}
   ) {
     return openWithSplit(content, {
       activate: true,

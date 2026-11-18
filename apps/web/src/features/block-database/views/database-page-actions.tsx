@@ -1,9 +1,15 @@
+import { EntityAppearanceMenu } from '@app/features/entity-appearance/appearance-menu';
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import CopyIcon from '@icon/system/regular/copy.svg';
+import DuplicateIcon from '@icon/system/regular/copy.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import StarIcon from '@icon/system/regular/star.svg';
@@ -44,8 +50,14 @@ type CsvImportFailure = DatabaseCsvFailure | { kind: 'unreadable' };
 export type DatabaseEntityActions = {
   favorited: boolean;
   onToggleFavorite: () => void;
-  onCopyLink: () => void;
-  onCopyId: () => void;
+  onCopyLink: () => void | boolean | Promise<void | boolean>;
+  onCopyId: () => void | boolean | Promise<void | boolean>;
+  /** Whether a copy is being made; Duplicate waits for it. */
+  duplicating: boolean;
+  /** Copy the database into a new one the viewer owns, and open it. */
+  onDuplicate: () => void;
+  /** Present for the owner, who alone may file it in a folder. */
+  onMoveToFolder?: () => void;
 };
 
 export function DatabasePageActions(props: {
@@ -59,6 +71,7 @@ export function DatabasePageActions(props: {
   const [exporting, setExporting] = createSignal(false);
   const [reading, setReading] = createSignal(false);
   const [confirmDelete, setConfirmDelete] = createSignal(false);
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [deleting, setDeleting] = createSignal(false);
   const [deleteError, setDeleteError] = createSignal('');
   const [draft, setDraft] = createSignal<{ data: DatabaseCsv; name: string }>();
@@ -183,30 +196,68 @@ export function DatabasePageActions(props: {
             {(actions) => (
               <>
                 <Dropdown.Group>
-                  <Dropdown.Item onSelect={actions().onCopyLink}>
-                    <LinkIcon class="size-4 shrink-0" />
+                  <Show when={editable() && appearanceFlag().enabled}>
+                    <EntityAppearanceMenu
+                      entity={{
+                        type: 'database',
+                        id: props.detail.database.id,
+                        name: props.detail.database.name,
+                        ownerId: props.detail.database.owner_id,
+                        grant: props.detail.grant,
+                        appearance: readEntityAppearance(
+                          props.detail.database.appearance
+                        ),
+                        projectId:
+                          props.detail.database.project_id ?? undefined,
+                      }}
+                    />
+                  </Show>
+                  <Dropdown.CopyItem
+                    icon={<LinkIcon class="size-4" />}
+                    onCopy={actions().onCopyLink}
+                  >
                     Copy Link
-                  </Dropdown.Item>
-                  <Dropdown.Item onSelect={actions().onCopyId}>
-                    <CopyIcon class="size-4 shrink-0" />
+                  </Dropdown.CopyItem>
+                  <Dropdown.CopyItem onCopy={actions().onCopyId}>
                     Copy ID
-                  </Dropdown.Item>
+                  </Dropdown.CopyItem>
                 </Dropdown.Group>
                 <Dropdown.Group>
                   <Dropdown.Item onSelect={actions().onToggleFavorite}>
                     <StarIcon class="size-4 shrink-0" />
                     {actions().favorited ? 'Unfavorite' : 'Favorite'}
                   </Dropdown.Item>
+                  <Show when={actions().onMoveToFolder}>
+                    {(moveToFolder) => (
+                      <Dropdown.Item onSelect={moveToFolder()}>
+                        <FolderIcon class="size-4 shrink-0" />
+                        {t('entityActions.moveToFolder')}
+                      </Dropdown.Item>
+                    )}
+                  </Show>
                 </Dropdown.Group>
               </>
             )}
           </Show>
-          <Show when={editable()}>
+          <Show when={editable() || props.entityActions}>
             <Dropdown.Group>
-              <Dropdown.Item onSelect={() => (focusTitleAfterClose = true)}>
-                <PencilIcon class="size-4 shrink-0" />
-                Rename
-              </Dropdown.Item>
+              <Show when={editable()}>
+                <Dropdown.Item onSelect={() => (focusTitleAfterClose = true)}>
+                  <PencilIcon class="size-4 shrink-0" />
+                  Rename
+                </Dropdown.Item>
+              </Show>
+              <Show when={props.entityActions}>
+                {(actions) => (
+                  <Dropdown.Item
+                    disabled={actions().duplicating}
+                    onSelect={actions().onDuplicate}
+                  >
+                    <DuplicateIcon class="size-4 shrink-0" />
+                    {t('entityActions.duplicate')}
+                  </Dropdown.Item>
+                )}
+              </Show>
             </Dropdown.Group>
           </Show>
           <Dropdown.Group>
@@ -239,6 +290,7 @@ export function DatabasePageActions(props: {
                     fireAndForget(exportCsv(), 'database-page-actions')
                   }
                 >
+                  <DownloadIcon class="size-4 shrink-0" />
                   Current table as CSV
                 </Dropdown.Item>
               </Dropdown.SubContent>
@@ -273,12 +325,14 @@ export function DatabasePageActions(props: {
       </Show>
       <Show when={webhooksOpen() && props.table}>
         {(table) => (
-          <WebhooksDialog
-            databaseId={props.detail.database.id}
-            table={table()}
-            onClose={() => setWebhooksOpen(false)}
-            returnFocus={menuButton}
-          />
+          <Show keyed when={`${props.detail.database.id}:${table().table.id}`}>
+            <WebhooksDialog
+              databaseId={props.detail.database.id}
+              table={table()}
+              onClose={() => setWebhooksOpen(false)}
+              returnFocus={menuButton}
+            />
+          </Show>
         )}
       </Show>
       <DeleteDialog

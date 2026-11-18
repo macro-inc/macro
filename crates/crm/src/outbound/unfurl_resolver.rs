@@ -28,6 +28,9 @@ use crate::domain::{
 };
 use unfurl::domain::ports::UnfurlService;
 
+#[cfg(test)]
+mod test;
+
 /// Adapter that resolves [`DomainMetadata`] by unfurling
 /// `https://{domain}`. Holds the underlying [`UnfurlService`] behind an
 /// [`Arc`] so the resolver itself is cheap to [`Clone`].

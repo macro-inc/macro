@@ -3,11 +3,13 @@
 # apps/web/tauri except the paths that never reach the iOS binary, recognised
 # by the same naming convention the Android gate uses (android-native.mjs,
 # which excludes iOS/macOS/linux/windows/apple/desktop-named paths): a path
-# component that is `android`, `macos`, `linux`, `windows` or `desktop`,
-# starts with that name plus `_`, `.` or `-`, or an extension-style
-# `.android.` / `.macos.` / `.linux.` / `.windows.` infix (the android_*
-# plugins, tauri.android.conf.json and tauri.macos.conf.json, desktop_update
-# and the desktop_* modules, linux_notification, the macos icons; the Rust
+# component that is `android`, `macos`, `linux` or `windows` or starts with
+# that name plus `_`, `.` or `-`; one that is `desktop` or starts with
+# `desktop.` / `desktop-` (not `desktop_`: desktop_update and its Status type
+# compile into mobile, only desktop_update/desktop/ is cfg(desktop)); or an
+# extension-style `.android.` / `.macos.` / `.linux.` / `.windows.` infix (the
+# android_* plugins, tauri.android.conf.json and tauri.macos.conf.json,
+# src/desktop/, desktop-cef, linux_notification, the macos icons; the Rust
 # ones are all behind cfg(target_os) / cfg(desktop)) — plus the desktop
 # updater manifest, editor config and Markdown docs. `apple`/`ios` paths
 # stay included: gen/apple is the Xcode project. Plus one thing outside that tree: the
@@ -16,24 +18,31 @@
 # natively, and the team bumps that version when a cache change must ship, so
 # the bump — not every edit under crates/client — is the native signal. The
 # release stamps uploaded builds with the hash, the merge gate compares the
-# live build's stamp against the merge result's, and the drift / head guards
+# approved build's stamp against the merge result's, and the drift / head guards
 # compare commits with it. Must match nativeTreeHash() in
 # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
 # detection (web_app_check_main/ios_native_check.rs).
 NATIVE_TREE_PATH=apps/web/tauri
 CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
-export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
+export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows)([_./-]|$)|(^|/)desktop([./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
 
-# native_tree_hash <commit>: prints the hash, fails if the path is missing.
+# native_tree_listing <commit>: what the hash covers — the filtered ls-tree
+# lines plus the cache wasm version — fails if the path is missing.
 # (--full-tree: ls-tree otherwise narrows its output to the current directory,
 # which would silently hash nothing when run from apps/web.)
-native_tree_hash() {
+native_tree_listing() {
   git rev-parse -q --verify "$1:${NATIVE_TREE_PATH}" >/dev/null || return 1
-  {
-    git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
-      | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
-    echo "cache-wasm-version $(cache_wasm_version "$1")"
-  } | git hash-object --stdin
+  git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
+    | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
+  echo "cache-wasm-version $(cache_wasm_version "$1")"
+}
+
+# native_tree_hash <commit>: prints the hash of the listing, and fails when the
+# listing does (a pipe would hash nothing and succeed).
+native_tree_hash() {
+  local listing
+  listing=$(native_tree_listing "$1") || return 1
+  git hash-object --stdin <<<"$listing"
 }
 
 # cache_wasm_version <commit>: the `version` of the client cache wasm package

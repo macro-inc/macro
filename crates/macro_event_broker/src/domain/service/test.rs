@@ -224,7 +224,9 @@ fn example_event() -> ExampleMacroEvent {
 
 #[tokio::test]
 async fn consumer_service_receives_and_decodes_typed_event() {
-    let event = example_event();
+    let correlation_id = Uuid::from_u128(42);
+    let mut event = example_event();
+    event.event.agent_correlation_id = Some(correlation_id);
     let consumer = TestEventConsumer {
         topic: MacroExampleTopic::TOPIC_STR,
         key: "msg-123",
@@ -234,6 +236,7 @@ async fn consumer_service_receives_and_decodes_typed_event() {
 
     let message = service.recv().await.expect("message is received");
     let decoded = message.decode_payload().expect("associated topic decodes");
+    assert_eq!(decoded.agent_correlation_id(), Some(correlation_id));
     let DeclaredMacroEvent::ExampleMacroEvent(decoded) = decoded;
     assert_eq!(decoded.key(), "msg-123");
     assert_eq!(decoded.event(), event.event());

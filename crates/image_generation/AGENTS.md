@@ -4,7 +4,8 @@
 
 Belongs to AI tools: generates images from a prompt (with up to three
 reference images), stores them as static files, and exposes the flow through
-an AI toolset (`GenerateImage`).
+an AI toolset (`GenerateImage`) and an HTTP route (`POST /images/generate`,
+feature `axum`) that the SDK's `macro.images.generate()` calls.
 
 ## Start here
 
@@ -18,6 +19,10 @@ an AI toolset (`GenerateImage`).
   `usageMetadata` before decode/save so cost survives failures).
 - `src/outbound/static_files.rs`: `StaticFileImageStore`.
 - `src/inbound/toolset/generate_image.rs`: the AI toolset entry point.
+- `src/inbound/axum_router.rs`: the HTTP adapter; hosts wrap the service in
+  `AdmittedImageGenerationService` so each request is admitted against the
+  acting user's AI allowance (agent turns are admitted upstream, so the tool
+  path is not).
 
 ## Scope
 
@@ -28,9 +33,11 @@ an AI toolset (`GenerateImage`).
 
 ## Boundaries
 
-- Depends on: `ai_toolset`, `ai_usage`, `attachment`, `lexical_client`,
-  `static_file_service_client`.
-- Used by: `ai_tools` (composes providers and wires the toolset).
+- Depends on: `ai_billing` (admission port), `ai_toolset`, `ai_usage`,
+  `attachment`, `lexical_client`, `static_file_service_client`; with `axum`,
+  `entity_registry` and `macro_authorization`.
+- Used by: `ai_tools` (composes providers and wires the toolset);
+  `agent_harness_service` mounts the router under `/cognition`.
 
 ## Recipes
 
@@ -41,7 +48,7 @@ an AI toolset (`GenerateImage`).
 
 ## Checks
 
-- `cargo test -p image_generation`.
+- `cargo test -p image_generation --features axum`.
 
 ## Related
 

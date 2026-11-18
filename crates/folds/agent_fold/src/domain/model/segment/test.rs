@@ -101,25 +101,29 @@ fn code_execution_steps_show_observed_sdk_operations_without_source_or_results()
                 id: "code-1:1".into(),
                 label: "Search documents".into(),
                 detail: None,
-                status: ActivityStatus::Completed
+                status: ActivityStatus::Completed,
+                card: None,
             },
             ActivityRow {
                 id: "code-1:2".into(),
                 label: "Read email".into(),
                 detail: None,
-                status: ActivityStatus::Failed
+                status: ActivityStatus::Failed,
+                card: None,
             },
             ActivityRow {
                 id: "code-1:3".into(),
                 label: "Create document".into(),
                 detail: None,
-                status: ActivityStatus::Interrupted
+                status: ActivityStatus::Interrupted,
+                card: None,
             },
             ActivityRow {
                 id: "code-1:4".into(),
                 label: "Read email".into(),
                 detail: None,
-                status: ActivityStatus::Running
+                status: ActivityStatus::Running,
+                card: None,
             },
         ]
     );
@@ -139,7 +143,7 @@ fn code_execution_steps_show_observed_sdk_operations_without_source_or_results()
 }
 
 #[test]
-fn code_without_observed_requests_keeps_its_tool_step() {
+fn code_without_observed_requests_reads_as_workspace_work() {
     let part = MessagePart::ToolUse {
         id: ToolUseId("code-2".into()),
         name: ToolName::Mcp {
@@ -153,7 +157,132 @@ fn code_without_observed_requests_keeps_its_tool_step() {
             error: None,
         },
     };
-    assert_eq!(segments(&[part], true)[0].rows[0].label, "Execute code");
+    assert_eq!(
+        segments(&[part], true)[0].rows,
+        [ActivityRow {
+            id: "code-2".to_owned(),
+            label: "Worked in your workspace".to_owned(),
+            detail: None,
+            status: ActivityStatus::Completed,
+            card: None,
+        }]
+    );
+}
+
+#[test]
+fn code_through_the_public_server_reads_as_workspace_work() {
+    let part = MessagePart::ToolUse {
+        id: ToolUseId("code-4".into()),
+        name: ToolName::Mcp {
+            server: "macro".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Other {
+            kind: "other".into(),
+            input: Some(serde_json::json!({"source": "export async function main() {}"})),
+            result: Some(serde_json::json!({"status": "succeeded"})),
+            output: None,
+            error: None,
+        },
+    };
+    assert_eq!(
+        segments(&[part], true)[0].rows[0].label,
+        "Worked in your workspace"
+    );
+}
+
+#[test]
+fn code_mode_lookups_are_not_steps() {
+    let lookup = |id: &str, name: ToolName| MessagePart::ToolUse {
+        id: ToolUseId(id.into()),
+        name,
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Macro {
+            input: serde_json::json!({"query": "documents"}),
+            output: None,
+            error: None,
+        },
+    };
+    let parts = [
+        lookup(
+            "describe",
+            ToolName::Mcp {
+                server: "macro_internal".into(),
+                tool: "DescribeCodeTools".into(),
+            },
+        ),
+        lookup(
+            "docs",
+            ToolName::Mcp {
+                server: "macro_internal".into(),
+                tool: "ReadCodeDocs".into(),
+            },
+        ),
+        lookup(
+            "search",
+            ToolName::Native {
+                name: "SearchTools".into(),
+            },
+        ),
+        lookup(
+            "load",
+            ToolName::Mcp {
+                server: "macro".into(),
+                tool: "LoadTools".into(),
+            },
+        ),
+    ];
+    assert_eq!(kinds(&segments(&parts, true)), []);
+
+    // Between two steps, a lookup neither splits the run nor adds a row.
+    let between = [
+        run("a", "ls", ToolStatus::Completed),
+        parts[0].clone(),
+        run("b", "pwd", ToolStatus::Completed),
+    ];
+    let segments = segments(&between, true);
+    assert_eq!(kinds(&segments), [(SegmentKind::Activity, true)]);
+    assert_eq!(segments[0].rows.len(), 2);
+}
+
+#[test]
+fn an_unfinished_or_failed_code_run_still_reads_as_workspace_work() {
+    let code = |status: ToolStatus| MessagePart::ToolUse {
+        id: ToolUseId("code-3".into()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status,
+        detail: ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: None,
+            error: None,
+        },
+    };
+    let row = |status: ToolStatus, closed: bool| {
+        let row = segments(&[code(status)], closed)[0].rows[0].clone();
+        (row.label, row.status)
+    };
+    assert_eq!(
+        row(ToolStatus::Running, false),
+        (
+            "Working in your workspace".to_owned(),
+            ActivityStatus::Running
+        )
+    );
+    assert_eq!(
+        row(ToolStatus::Running, true),
+        (
+            "Worked in your workspace".to_owned(),
+            ActivityStatus::Interrupted
+        )
+    );
+    assert_eq!(
+        row(ToolStatus::Failed, true),
+        ("Workspace step failed".to_owned(), ActivityStatus::Failed)
+    );
 }
 
 #[test]
@@ -192,12 +321,14 @@ fn narration_work_and_answer_are_three_segments_with_the_steps_grouped() {
                 label: "Ran".to_owned(),
                 detail: Some("cargo test".to_owned()),
                 status: ActivityStatus::Completed,
+                card: None,
             },
             ActivityRow {
                 id: "b".to_owned(),
                 label: "Read".to_owned(),
                 detail: Some("lib.rs".to_owned()),
                 status: ActivityStatus::Completed,
+                card: None,
             },
         ]
     );
@@ -391,4 +522,52 @@ fn session_activity_retains_command_and_tool_input_details_for_authorized_live_v
     let live = segments(&parts, true);
     assert_eq!(live[0].rows[0].detail.as_deref(), Some(command));
     assert_eq!(live[0].rows[1].detail.as_deref(), Some(query));
+}
+
+fn present_view(id: &str, view: Option<dynamic_ui::View>, status: ToolStatus) -> MessagePart {
+    MessagePart::ToolUse {
+        id: ToolUseId(id.to_owned()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "PresentView".into(),
+        },
+        status,
+        detail: ToolDetail::View { view, error: None },
+    }
+}
+
+#[test]
+fn a_presented_view_is_its_steps_card() {
+    let view = dynamic_ui::View {
+        title: Some("Launch notes".to_owned()),
+        widgets: vec![dynamic_ui::Widget::Md {
+            markdown: "Shipped.".to_owned(),
+        }],
+    };
+    let parts = [
+        present_view("call-1", Some(view.clone()), ToolStatus::Completed),
+        present_view("view_0199", Some(view.clone()), ToolStatus::Completed),
+    ];
+    let rows = &segments(&parts, true)[0].rows;
+    // The agent's own call is its receipt; the presented call shows the view.
+    assert_eq!(rows[0].card, None);
+    assert_eq!(rows[0].detail, None);
+    assert_eq!(rows[1].card, Some(ActivityCard::View { view }));
+    assert_eq!(rows[1].detail.as_deref(), Some("Launch notes"));
+}
+
+#[test]
+fn only_a_finished_presentation_with_a_view_has_a_card() {
+    let view = dynamic_ui::View {
+        title: None,
+        widgets: Vec::new(),
+    };
+    for part in [
+        present_view("view_1", Some(view.clone()), ToolStatus::Running),
+        present_view("view_2", Some(view.clone()), ToolStatus::Failed),
+        present_view("view_3", None, ToolStatus::Completed),
+    ] {
+        let parts = [part];
+        assert_eq!(segments(&parts, false)[0].rows[0].card, None);
+    }
 }

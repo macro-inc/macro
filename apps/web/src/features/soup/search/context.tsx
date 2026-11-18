@@ -1,3 +1,4 @@
+import { useQuickAccess } from '@core/context/quickAccess';
 import type { EntityData } from '@entity';
 import { type EntityTypeItemMap, useQuickAccessEntities } from '@property';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -27,6 +28,11 @@ export type SoupSearchPoolEntry = {
 
 interface SearchContextValue {
   entityPool: Accessor<SoupSearchPoolEntry[]>;
+  /**
+   * Routines, kept out of `entityPool`: that pool also feeds the Home, Drive,
+   * and Tasks searches, which never list routines. Workspace Search adds them.
+   */
+  routinePool: Accessor<SoupSearchPoolEntry[]>;
 }
 
 const SearchContext = createContext<SearchContextValue>();
@@ -43,9 +49,12 @@ export const useOptionalSearchContext = () => useContext(SearchContext);
 
 export const SearchProvider: FlowComponent = (props) => {
   const { items } = useQuickAccessEntities(() => [...SEARCH_ENTITY_TYPES]);
+  const routines = useQuickAccess().useList('routine').items;
 
   return (
-    <SearchContext.Provider value={{ entityPool: items }}>
+    <SearchContext.Provider
+      value={{ entityPool: items, routinePool: routines }}
+    >
       {props.children}
     </SearchContext.Provider>
   );

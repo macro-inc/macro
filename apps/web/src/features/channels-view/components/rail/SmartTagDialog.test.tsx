@@ -14,9 +14,13 @@ import type { ComponentProps, ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { promptSmartTag } from './SmartTagDialog';
 
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
+
 const fetchPreview = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: true }),
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled: flag.key !== 'enable-chat-sidebar-sections',
+  }),
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { channelLabels: { preview: fetchPreview } },

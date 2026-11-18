@@ -31,7 +31,7 @@ the top; switching back shows the pages already loaded. Team needs a backend tha
 accepts `scope: TEAM` on `user.activity`; against an older one only that tab
 fails, with the feed's unavailable copy.
 
-When checking Activity, enable GraphQL Soup as well as the activity flag. Verify
+When checking Activity, enable the activity flag. Verify
 that an initial visit resolves entity names in both the feed and Most active,
 then reload and scroll through another page. Preview loading and live name
 updates should keep the page responsive without repeatedly fetching previews.
@@ -43,6 +43,12 @@ refresh for actions by another authorized user. After disconnecting and
 reconnecting the websocket, verify recovery without requiring another action.
 Hidden tabs defer refresh until visible; purges refresh all mounted activity
 queries through the normal access checks.
+
+Overview dates retain their server calendar day in every viewer timezone. Check
+the year grid, tooltips and streaks across a daylight-saving transition and leap
+day; mounting the same cached overview must not shift or omit a day. The shared
+activity date owner (`activity/core/activity-dates.ts`) uses UTC calendar
+arithmetic, without a timezone lookup per cell; test it in a DST timezone.
 
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)

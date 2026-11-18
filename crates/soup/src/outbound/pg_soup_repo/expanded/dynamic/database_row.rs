@@ -1,6 +1,6 @@
 //! Database row clauses for the flat and grouped Soup queries: a row is visible
-//! when its database is untrashed and the viewer holds a grant on it, or edits
-//! a live form over it.
+//! when its database is untrashed and the viewer holds a grant on it, edits a
+//! live form over it, or views a live form over it that shares its responses.
 
 use filter_ast::Expr;
 use item_filters::ast::database_row::DatabaseRowLiteral;
@@ -28,19 +28,28 @@ pub(in crate::outbound::pg_soup_repo) fn build_database_row_filter(
         .unwrap_or_default()
 }
 
-/// Databases the viewer reaches as an editor of a live form over them.
-const FORM_EDITOR_SEMI_JOIN: &str = r#"row_database.database_id IN (
+/// Databases the viewer reaches through a live form over them: as its editor,
+/// or as its viewer when it shares its responses.
+const FORM_SEMI_JOIN: &str = r#"row_database.database_id IN (
                     SELECT f.database_id
                     FROM forms f
                     JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
                     JOIN user_source_ids us ON us.source_id = ea.source_id
                     WHERE f.trashed_at IS NULL
-                    AND ea.access_level IN ('edit', 'owner')
+                    AND (
+                        ea.access_level IN ('edit', 'owner')
+                        OR (ea.access_level = 'view' AND f.responses_visible)
+                    )
                 )"#;
 
 /// Rows are never viewed on their own: `ViewedAt` sorts them last and `ViewedUpdated`
 /// uses `updated_at`, matching [`models_soup::item::SoupItem`]'s cursor.
-pub(super) fn database_row_top_clause(sort: SimpleSortMethod, grouped: bool) -> String {
+pub(super) fn database_row_top_clause(
+    sort: SimpleSortMethod,
+    grouped: bool,
+    property_sort: bool,
+    name_sort: bool,
+) -> String {
     let sort_ts = match sort {
         SimpleSortMethod::CreatedAt => "r.created_at",
         SimpleSortMethod::ViewedAt => "'1970-01-01 00:00:00+00'",
@@ -48,17 +57,21 @@ pub(super) fn database_row_top_clause(sort: SimpleSortMethod, grouped: bool) -> 
     };
     let group_columns = if grouped {
         ", NULL::text as project_id, 'DATABASE_ROW'::property_entity_type as property_entity_type"
+    } else if property_sort {
+        ", 'DATABASE_ROW'::property_entity_type as property_entity_type"
     } else {
         ""
     };
+    // Rows hydrate without a name, so a name-sorted page always puts them last.
+    let name_column = super::name_sort_column(name_sort, "NULL::text");
     format!(
         r#"SELECT 'database_row'::text as item_type, r.id::text as id,
-        {sort_ts}::timestamptz as sort_ts {group_columns}
+        {sort_ts}::timestamptz as sort_ts {group_columns}{name_column}
         FROM database_rows r
         JOIN database_tables row_table ON row_table.id = r.table_id
         JOIN database_entities row_database ON row_database.database_id = row_table.database_id
         WHERE row_database.trashed_at IS NULL AND ({} OR {})"#,
         access_semi_join("row_database.database_id::text", "database"),
-        FORM_EDITOR_SEMI_JOIN,
+        FORM_SEMI_JOIN,
     )
 }

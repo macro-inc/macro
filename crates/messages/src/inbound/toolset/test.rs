@@ -59,6 +59,7 @@ fn bot_sender() -> ChannelSender<'static> {
 
 fn message(id: Uuid, thread_id: Option<Uuid>, sender: ChannelSender<'static>) -> Message {
     Message {
+        kind: crate::domain::models::MessageKind::Message,
         id,
         parent: initiative(),
         thread_id,

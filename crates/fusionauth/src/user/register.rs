@@ -1,9 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{
-    AuthedClient, Result,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{AuthedClient, Result, error::FusionAuthClientError};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -35,11 +32,7 @@ pub(crate) async fn register_user<'a>(
         .json(&register_user_request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     let status_code = res.status();
     match status_code {
@@ -48,11 +41,8 @@ pub(crate) async fn register_user<'a>(
             Ok(())
         }
         _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
 
             if status_code == reqwest::StatusCode::BAD_REQUEST
                 && body.contains("[duplicate]registration")
@@ -64,11 +54,11 @@ pub(crate) async fn register_user<'a>(
                 return Err(FusionAuthClientError::UserDoesNotExist);
             }
 
-            tracing::error!(body=%body, status=%status_code, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
+            Err(FusionAuthClientError::unexpected(
+                status_code,
+                &headers,
+                body,
+            ))
         }
     }
 }

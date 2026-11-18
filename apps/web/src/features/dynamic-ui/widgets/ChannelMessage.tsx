@@ -1,5 +1,5 @@
 import { ReadonlyThread } from '@channel/StandaloneThread';
-import type { WidgetOf } from '../schema';
+import type { WidgetOf } from '../view';
 
 export type ChannelMessageProps = Omit<WidgetOf<'channelMessage'>, 'type'>;
 

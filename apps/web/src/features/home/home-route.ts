@@ -12,8 +12,10 @@ import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { documentCommentLocation } from '@notifications/document-comment-location';
 import type { z } from 'zod';
+import { projectHostedContent } from '../projects/open-project';
 import {
   type HomePreviewRouteParams,
+  type homeProjectSearch,
   isHomeDocumentType,
 } from './home-route-schema';
 
@@ -23,6 +25,7 @@ export type HomePreviewSearch = {
     'messageId' | 'threadId'
   >;
   document: Pick<DriveSearchParams, 'commentId'>;
+  project?: z.infer<typeof homeProjectSearch.schema>;
 };
 
 /** Normalize typed and fallback child routes to the same block identity. */
@@ -88,9 +91,14 @@ export function homePreviewTarget(
       ? { alias: params.blockType, baseType: blockType }
       : undefined,
     params:
-      blockType === 'channel'
-        ? channelParams(search.channel)
-        : commentParams(params.blockType, search.document),
+      blockType === 'initiative'
+        ? {
+            section: search.project?.section ?? 'overview',
+            discussionId: search.project?.discussionId,
+          }
+        : blockType === 'channel'
+          ? channelParams(search.channel)
+          : commentParams(params.blockType, search.document),
   };
 }
 
@@ -99,6 +107,13 @@ export function homePreviewLegacyTarget(
   params: HomePreviewRouteParams,
   search: HomePreviewSearch
 ): SplitContent {
+  if (params.blockType === 'initiative') {
+    return projectHostedContent(
+      params.previewId,
+      search.project?.section ?? 'overview',
+      search.project?.discussionId
+    );
+  }
   const target = homePreviewTarget(params, search);
   return {
     type: params.blockType,

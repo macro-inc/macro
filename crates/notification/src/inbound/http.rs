@@ -206,7 +206,7 @@ pub struct BulkGetByEventItemIdsRequest {
 #[utoipa::path(
     post,
     operation_id = "bulk_get_user_notifications_by_event_item_ids",
-    path = "/v2/user_notifications/item/bulk",
+    path = "/v1/user_notifications/item/bulk",
     params(
         ("limit" = Option<u32>, Query, description = "Size limit per page. Default 20, max 500."),
         ("states" = Option<String>, Query, description = "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states."),
@@ -274,7 +274,7 @@ pub struct NotificationBulkRequest {
 #[utoipa::path(
     patch,
     operation_id = "bulk_mark_notifications_seen",
-    path = "/v2/user_notifications/bulk/seen",
+    path = "/v1/user_notifications/bulk/seen",
     request_body = NotificationBulkRequest,
     responses(
         (status = 200),
@@ -301,7 +301,7 @@ pub async fn bulk_mark_seen<S: NotificationReader, Auth: MacroAuthorizationServi
 #[utoipa::path(
     patch,
     operation_id = "bulk_mark_notifications_done",
-    path = "/v2/user_notifications/bulk/done",
+    path = "/v1/user_notifications/bulk/done",
     request_body = NotificationBulkRequest,
     responses(
         (status = 200),
@@ -328,7 +328,7 @@ pub async fn bulk_mark_done<S: NotificationReader, Auth: MacroAuthorizationServi
 #[utoipa::path(
     patch,
     operation_id = "bulk_mark_notifications_undone",
-    path = "/v2/user_notifications/bulk/undone",
+    path = "/v1/user_notifications/bulk/undone",
     request_body = NotificationBulkRequest,
     responses(
         (status = 200),
@@ -382,7 +382,7 @@ async fn bulk_update<S: NotificationReader, Auth: MacroAuthorizationService>(
 #[utoipa::path(
     get,
     operation_id = "get_user_notifications_by_event_item_id",
-    path = "/v2/user_notifications/item/{event_item_id}",
+    path = "/v1/user_notifications/item/{event_item_id}",
     params(
         ("event_item_id" = Uuid, Path, description = "The event item ID"),
         ("limit" = Option<u32>, Query, description = "Size limit per page. Default 20, max 500."),
@@ -442,7 +442,7 @@ pub async fn get_by_event_item_id<
 #[utoipa::path(
     get,
     operation_id = "get_user_notification_by_id_v2",
-    path = "/v2/user_notifications/{notification_id}",
+    path = "/v1/user_notifications/{notification_id}",
     params(
         ("notification_id" = Uuid, Path, description = "ID of the notification"),
     ),
@@ -493,7 +493,7 @@ pub async fn get_notification_by_id<
 #[utoipa::path(
     delete,
     operation_id = "delete_user_notification_v2",
-    path = "/v2/user_notifications/{notification_id}",
+    path = "/v1/user_notifications/{notification_id}",
     params(
         ("notification_id" = Uuid, Path, description = "ID of the notification"),
     ),
@@ -530,7 +530,7 @@ pub async fn delete_notification<S: NotificationReader, Auth: MacroAuthorization
 #[utoipa::path(
     delete,
     operation_id = "bulk_delete_user_notifications_v2",
-    path = "/v2/user_notifications/bulk",
+    path = "/v1/user_notifications/bulk",
     request_body = NotificationBulkRequest,
     responses(
         (status = 200),

@@ -42,7 +42,16 @@ export const messages: ChatMessage[] = [
     sentAt: '2026-10-21T10:00:00Z',
     edited: false,
     deleted: false,
-    reactions: [{ emoji: '👍', count: 2, mine: true }],
+    reactions: [
+      {
+        emoji: '👍',
+        reactors: [
+          { name: 'Me', userId: 'macro|me@example.test' },
+          { name: 'Ben' },
+        ],
+        mine: true,
+      },
+    ],
     attachments: [],
   },
   {
@@ -97,6 +106,7 @@ export function createFakeChat(
     fileUrl: (fileId: string) => `https://files.example.test/${fileId}`,
     markRead: vi.fn(async (_messageId: string) => undefined),
     stopSync: vi.fn(async () => undefined),
+    importHistory: vi.fn(async () => undefined),
   } satisfies ExternalChatCapabilities;
   return { capabilities, setChat, setMessages, setDelivery };
 }

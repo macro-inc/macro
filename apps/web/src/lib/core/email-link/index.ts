@@ -30,6 +30,12 @@ import type { UseQueryResult } from '@tanstack/solid-query';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal, getOwner } from 'solid-js';
 import { inboxAuthorizationUrl } from './consent';
+import {
+  announceAlreadyConnected,
+  announceConsentCancelled,
+  announceLinkedInbox,
+  type InboxAddition,
+} from './link-outcome';
 import { selectEmailProvider } from './ProviderDialog';
 import { rememberInboxLinkReturn } from './return-layout';
 import { requestShareInboxConfirmation } from './share-conflict';
@@ -90,18 +96,18 @@ function parseSharedInboxConflict(message: string): {
  * Pass `forceShare` to confirm promoting a mailbox another user already connected into
  * a shared inbox, after the user accepts the `SharedInboxConflict` prompt.
  *
- * @returns ok if syncing was started, err if syncing failed
+ * @returns ok with the id of the inbox now accessible, err if syncing failed
  */
 function initEmailLink(args?: {
   linkId?: string;
   forceShare?: boolean;
-}): ResultAsync<void, EmailInitError> {
+}): ResultAsync<string, EmailInitError> {
   return ResultAsync.fromSafePromise(
     emailClient.init({ linkId: args?.linkId, forceShare: args?.forceShare })
   ).andThen((initResult) => {
     if (initResult.isErr()) {
       if (isPaymentRequired(initResult.error))
-        return err<void, EmailInitError>({ tag: 'PaymentRequired' });
+        return err<string, EmailInitError>({ tag: 'PaymentRequired' });
       const conflict = initResult.error.find(
         (e) => e.code === SHARED_INBOX_CONFLICT_CODE
       );
@@ -110,19 +116,19 @@ function initEmailLink(args?: {
           tag: 'SharedInboxConflict',
           ...parseSharedInboxConflict(conflict.message),
         };
-        return err<void, EmailInitError>(conflictError);
+        return err<string, EmailInitError>(conflictError);
       }
       if (initResult.error.some((e) => e.code === NO_GMAIL_GRANT_CODE)) {
-        return err<void, EmailInitError>({ tag: 'NoGmailGrant' });
+        return err<string, EmailInitError>({ tag: 'NoGmailGrant' });
       }
       const error: EmailInitError = initResult.error.some(
         (e) => e.code === ALREADY_INITIALIZED_CODE
       )
         ? { tag: 'AlreadyInitialized' }
         : { tag: 'FailedToInitialize', message: 'Failed to initialize' };
-      return err<void, EmailInitError>(error);
+      return err<string, EmailInitError>(error);
     }
-    return okAsync<void, EmailInitError>(undefined);
+    return okAsync<string, EmailInitError>(initResult.value.link_id);
   });
 }
 
@@ -225,6 +231,13 @@ function isTooManyPendingLinks(
 const TOO_MANY_PENDING_LINKS_MESSAGE =
   'Too many inbox connections in progress.';
 
+type AddInboxOptions = {
+  scopes?: ConsentScopes;
+  provider?: 'GMAIL' | 'OUTLOOK';
+  reconnectLinkId?: string;
+  emailAddress?: string;
+};
+
 /**
  * Starts the add-inbox flow: fetches the selected provider's authorization URL and
  * navigates the browser to the OAuth consent page. The callback returns to
@@ -245,6 +258,10 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
  * deep link; web navigates the page. Both stash the current layout against the
  * new link id so the callback restores it. Native mobile needs no stash: its
  * layout never unmounts.
+ *
+ * A plain add (mailbox consent, no account named) also records the inboxes
+ * already connected, so a chooser that returns one of them is reported as
+ * already connected instead of as a new account.
  */
 export function useAddInboxFlow() {
   const owner = getOwner();
@@ -253,11 +270,15 @@ export function useAddInboxFlow() {
   const { query, initEmailLink } = useEmailLinks();
   const { showPaywall } = usePaywallState();
 
-  const completeNativeLink = async (linkId: string, forceShare: boolean) => {
+  const completeNativeLink = async (
+    linkId: string,
+    forceShare: boolean,
+    addition: InboxAddition | undefined
+  ) => {
     await initEmailLink({ linkId, forceShare }).match(
-      async () => {
+      async (connectedLinkId) => {
         await query.refetch();
-        toast.success('Account connected');
+        announceLinkedInbox(connectedLinkId, addition);
       },
       async (error) => {
         if (error.tag === 'PaymentRequired') {
@@ -266,6 +287,7 @@ export function useAddInboxFlow() {
         }
         if (error.tag === 'AlreadyInitialized') {
           await query.refetch();
+          announceAlreadyConnected(addition?.provider);
           return;
         }
         if (error.tag === 'SharedInboxConflict' && !forceShare) {
@@ -273,7 +295,10 @@ export function useAddInboxFlow() {
             emailAddress: error.emailAddress,
             ownerEmail: error.ownerEmail,
             onShare: () =>
-              fireAndForget(completeNativeLink(linkId, true), 'add-inbox'),
+              fireAndForget(
+                completeNativeLink(linkId, true, addition),
+                'add-inbox'
+              ),
           });
           return;
         }
@@ -299,6 +324,7 @@ export function useAddInboxFlow() {
   const startNativeFlow = async (
     scopes: ConsentScopes,
     provider: 'GMAIL' | 'OUTLOOK',
+    addition: InboxAddition | undefined,
     reconnectLinkId?: string,
     emailAddress?: string
   ) => {
@@ -326,28 +352,47 @@ export function useAddInboxFlow() {
       inboxAuthorizationUrl(result.value.authorization_url, emailAddress)
     );
     if (!auth.success) {
-      if (auth.error !== 'User canceled login') {
-        toast.failure('Failed to add inbox');
-      }
+      if (auth.error === 'User canceled login') announceConsentCancelled();
+      else toast.failure('Failed to add inbox');
       return;
     }
 
-    await completeNativeLink(result.value.link_id, false);
+    await completeNativeLink(result.value.link_id, false, addition);
   };
 
-  return async (options?: {
-    scopes?: ConsentScopes;
-    provider?: 'GMAIL' | 'OUTLOOK';
-    reconnectLinkId?: string;
-    emailAddress?: string;
-  }) => {
+  // Reconnects, account hints, and calendar consent may target an existing
+  // inbox on purpose, so only a plain add compares against connected ones.
+  const plainAddition = async (
+    provider: 'GMAIL' | 'OUTLOOK',
+    scopes: ConsentScopes,
+    options: AddInboxOptions | undefined
+  ): Promise<InboxAddition | undefined> => {
+    if (scopes !== 'gmail' || options?.reconnectLinkId || options?.emailAddress)
+      return undefined;
+    // Without the current list, an existing inbox would read as a new one.
+    const links = queryReadyGate(query)
+      ? query.data.links
+      : (await query.refetch()).data?.links;
+    if (!links) return undefined;
+    return {
+      provider,
+      connectedInboxes: links.map((link) => ({
+        id: link.id,
+        emailAddress: link.email_address,
+      })),
+    };
+  };
+
+  return async (options?: AddInboxOptions) => {
     const scopes = options?.scopes ?? 'gmail';
     const provider = options?.provider ?? (await selectEmailProvider(owner));
     if (!provider) return;
+    const addition = await plainAddition(provider, scopes, options);
     if (isNativeMobilePlatform()) {
       await startNativeFlow(
         scopes,
         provider,
+        addition,
         options?.reconnectLinkId,
         options?.emailAddress
       );
@@ -370,6 +415,7 @@ export function useAddInboxFlow() {
       rememberInboxLinkReturn(result.value.link_id, {
         url: `${toBaseRelative(window.location.pathname)}${window.location.search}${window.location.hash}`,
         scopes,
+        addition,
       });
       const authorizationUrl = inboxAuthorizationUrl(
         result.value.authorization_url,
@@ -415,7 +461,11 @@ export function useEmailLinks() {
     query: query,
     isConnected: () => hasEmailLinks(query),
     initEmailLink: (args?: { linkId?: string; forceShare?: boolean }) =>
-      initEmailLink(args).map(startEmailPolling).map(invalidations),
+      initEmailLink(args).map(async (linkId) => {
+        startEmailPolling();
+        await invalidations();
+        return linkId;
+      }),
     disconnect: () => disconnectEmail().andTee(invalidations),
     resyncInbox: (linkId: string) =>
       resyncInbox(linkId).andTee(() => invalidateEmailLinks()),

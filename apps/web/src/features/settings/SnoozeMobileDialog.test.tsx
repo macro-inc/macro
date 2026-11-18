@@ -12,10 +12,13 @@ import { ImperativeDialogHost } from '@ui/components/ImperativeDialog';
 import { createSignal, getOwner } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const save = vi.hoisted(() => vi.fn(async () => {}));
+const save = vi.hoisted(() => vi.fn(async () => ({ failed: [] })));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => true }));
 vi.mock('@core/mobile/virtualKeyboard', () => ({
   virtualKeyboardVisible: () => false,
+}));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|viewer@example.com',
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: vi.fn() },
@@ -24,7 +27,7 @@ vi.mock('@core/util/dateSearch/useDateSearch', () => ({
   useDateSearch: () => () => [],
 }));
 vi.mock('@queries/notification/unsubscribes', () => ({
-  useMuteItemMutation: () => ({ mutateAsync: save }),
+  useBulkNotificationPreferencesMutation: () => ({ mutateAsync: save }),
 }));
 
 beforeEach(() => {

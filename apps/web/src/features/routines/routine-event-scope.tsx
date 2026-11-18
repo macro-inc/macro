@@ -1,6 +1,7 @@
 import { useQuickAccessEntities } from '@property/editors/selectors/entityUtils';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
-import { Suspense } from 'solid-js';
+import { Tabs } from '@ui';
+import { Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   callEventScopeLabel,
@@ -40,35 +41,67 @@ export function RoutineEventScopeLabel(props: ScopeProps) {
 }
 
 /** Inline search inside the trigger panel; never opens another popover. */
+export function RoutineEntityPicker(props: {
+  entityType: ScopeProps['kind'] | 'USER' | 'INITIATIVE';
+  placeholder: string;
+  ids: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  return (
+    <Suspense fallback={<p class="p-3 text-sm text-ink-muted">Loading…</p>}>
+      <div class="overflow-hidden rounded-lg border border-edge-muted">
+        <PropertyEntitySelector
+          config={{
+            isMultiSelect: true,
+            placeholder: props.placeholder,
+            specificEntityType: props.entityType,
+            visibleCheckboxes: true,
+          }}
+          selectedOptions={() => new Set(props.ids)}
+          setSelectedOptions={(ids) => props.onChange([...ids])}
+        />
+      </div>
+    </Suspense>
+  );
+}
+
 export function RoutineEventScope(
   props: ScopeProps & {
     onChange: (ids: string[] | undefined) => void;
   }
 ) {
-  const plural = () => `${entityLabel(props.kind)}s`;
+  const singular = () => entityLabel(props.kind);
   return (
-    <Suspense fallback={<p class="p-3 text-sm text-ink-muted">Loading…</p>}>
-      <PropertyEntitySelector
-        config={{
-          isMultiSelect: true,
-          placeholder: `Search ${plural()}…`,
-          specificEntityType: props.kind,
-        }}
-        selectedOptions={() => new Set(props.ids ?? ['__any__'])}
-        setSelectedOptions={(ids) => {
-          if (ids.has('__any__') && props.ids !== undefined) {
-            props.onChange(undefined);
-          } else {
-            props.onChange([...ids].filter((id) => id !== '__any__'));
-          }
-        }}
-        pinnedOptions={[
-          {
-            id: '__any__',
-            label: `Any ${entityLabel(props.kind)} I can access`,
-          },
+    <div class="grid gap-1.5">
+      <span class="text-xs font-medium">Applies to</span>
+      <Tabs
+        aria-label="Applies to"
+        size="sm"
+        fullWidth
+        options={[
+          { value: 'any', label: `Any ${singular()}` },
+          { value: 'specific', label: `Specific ${singular()}s` },
         ]}
+        value={props.ids === undefined ? 'any' : 'specific'}
+        onChange={(value) => props.onChange(value === 'any' ? undefined : [])}
       />
-    </Suspense>
+      <Show
+        when={props.ids}
+        fallback={
+          <p class="text-xs text-ink-muted">
+            Every {singular()} you can access.
+          </p>
+        }
+      >
+        {(ids) => (
+          <RoutineEntityPicker
+            entityType={props.kind}
+            placeholder={`Search ${singular()}s…`}
+            ids={ids()}
+            onChange={props.onChange}
+          />
+        )}
+      </Show>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 use crate::domain::models::{
-    CatalogEntry, CatalogPage, ConnectToken, McpServer, PipedreamAccount, PipedreamConnection,
-    client_info,
+    CatalogEntry, CatalogPage, ConnectToken, MacroUserIdStr, McpServer, PipedreamAccount,
+    PipedreamConnection, client_info,
 };
 use crate::domain::ports::{
     ConnectedAppProxy, ConnectorDirectory, McpConnection, PipedreamConnect, ProxyResponse,
@@ -267,9 +267,10 @@ impl PipedreamConnect for PipedreamClient {
     }
 }
 
-impl ConnectorDirectory for PipedreamClient {
+impl PipedreamClient {
+    /// Pipedream's connectable app under `app_slug`, whoever asks.
     #[tracing::instrument(skip(self), err, fields(app = %app_slug))]
-    async fn retrieve(&self, app_slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
+    pub async fn retrieve_app(&self, app_slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
         // The slug is interpolated into the path. Anything outside Pipedream's
         // app-slug charset is not an app, and is not requested.
         if !is_app_slug(app_slug) {
@@ -298,10 +299,21 @@ impl ConnectorDirectory for PipedreamClient {
         let app: AppResponse = serde_json::from_value(app).context("parsing Pipedream app")?;
         Ok(connectable_catalog_entry(app_slug, app))
     }
+}
+
+impl ConnectorDirectory for PipedreamClient {
+    async fn retrieve(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        app_slug: &str,
+    ) -> anyhow::Result<Option<CatalogEntry>> {
+        self.retrieve_app(app_slug).await
+    }
 
     #[tracing::instrument(skip(self), err)]
     async fn search(
         &self,
+        _user_id: &MacroUserIdStr<'static>,
         search: Option<&str>,
         cursor: Option<&str>,
         limit: u32,
@@ -349,15 +361,7 @@ impl ConnectorDirectory for PipedreamClient {
         let entries = body
             .data
             .into_iter()
-            // Apps without an auth flow have nothing to connect.
-            .filter(|app| app.auth_type.as_deref() != Some("none"))
-            .map(|app| CatalogEntry {
-                categories: app.categories,
-                app_slug: app.name_slug,
-                display_name: app.name,
-                description: app.description.filter(|d| !d.is_empty()),
-                icon_url: Some(app.img_src).filter(|u| u.starts_with("https://")),
-            })
+            .filter_map(offered_catalog_entry)
             .collect();
 
         Ok(CatalogPage {
@@ -513,10 +517,24 @@ fn is_app_slug(slug: &str) -> bool {
             .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_')
 }
 
-/// An app the catalog would offer to connect: the slug we asked for, with an
-/// auth flow. Apps with `auth_type: none` have nothing to connect.
+/// Apps the catalog never offers. `linkedin` can only post and look up
+/// profiles by ID, not search people or read a feed as users expect.
+const HIDDEN_APP_SLUGS: &[&str] = &["linkedin"];
+
+/// The app the catalog would offer under `requested_slug`, if that is the app.
 fn connectable_catalog_entry(requested_slug: &str, app: AppResponse) -> Option<CatalogEntry> {
-    if app.auth_type.as_deref() == Some("none") || app.name_slug != requested_slug {
+    if app.name_slug != requested_slug {
+        return None;
+    }
+    offered_catalog_entry(app)
+}
+
+/// An app the catalog offers to connect: one with an auth flow that isn't
+/// hidden. Apps with `auth_type: none` have nothing to connect.
+fn offered_catalog_entry(app: AppResponse) -> Option<CatalogEntry> {
+    if app.auth_type.as_deref() == Some("none")
+        || HIDDEN_APP_SLUGS.contains(&app.name_slug.as_str())
+    {
         return None;
     }
     Some(CatalogEntry {

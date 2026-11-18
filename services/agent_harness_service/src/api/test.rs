@@ -330,6 +330,22 @@ async fn gateway_egress_keeps_authentication_and_git_basic_challenge() {
 }
 
 impl CodingAgentService for RoutineSessionsSpy {
+    fn list_updates(
+        &self,
+        user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<agent_session::domain::updates::AgentUpdates, CodingAgentError>,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            self.0.lock().unwrap().push(user_id.to_string());
+            Err(CodingAgentError::Forbidden)
+        })
+    }
     fn create(
         &self,
         command: DispatchCodingAgentRequest,

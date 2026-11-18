@@ -6,6 +6,7 @@ import type {
 import {
   type Accessor,
   createMemo,
+  createSignal,
   For,
   onCleanup,
   onMount,
@@ -56,6 +57,8 @@ export function ThreadReplyList(props: {
   /** Keep replies on the root's rail instead of branching each one off it. */
   monorail?: boolean;
   hideRail?: boolean;
+  /** Show each reply's avatar and header as a root message. */
+  asRoots?: boolean;
   /** An inline composer or footer continues the rail after the replies. */
   railContinues?: boolean;
 }) {
@@ -85,9 +88,15 @@ export function ThreadReplyList(props: {
 
   onCleanup(targetReplyScroller.dispose);
 
+  const displayMeta = (id: string) => {
+    const meta = listMetaByReplyId()[id];
+    if (!props.asRoots) return meta;
+    return { ...meta, isGroupedWithPrevious: false };
+  };
   return (
     <For each={[...repliesById().keys()]}>
       {(id) => {
+        const [element, setElement] = createSignal<HTMLDivElement>();
         onCleanup(() => replyElements.delete(id));
         const replyMessage = () => ({
           ...repliesById().get(id)!,
@@ -100,6 +109,7 @@ export function ThreadReplyList(props: {
         return (
           <div
             ref={(element) => {
+              setElement(element);
               replyElements.set(id, element);
               notifyElementOnMount(props.onMessageMount, id, element);
             }}
@@ -128,13 +138,17 @@ export function ThreadReplyList(props: {
                 </Show>
               </Show>
             </Show>
-            <MarkMessageNotifications messageId={id} parent={props.parent}>
+            <MarkMessageNotifications
+              messageId={id}
+              parent={props.parent}
+              element={element()}
+            >
               <ChannelMessage
                 parent={props.parent}
                 inputMode={props.inputMode}
                 message={replyMessage()}
                 actions={props.getMessageActions?.(replyMessage())}
-                listMeta={listMetaByReplyId()[id]}
+                listMeta={displayMeta(id)}
                 messageEditor={props.messageEditor}
                 onClick={() => props.onSelectReply?.(id)}
                 selected={isReplySelected()}

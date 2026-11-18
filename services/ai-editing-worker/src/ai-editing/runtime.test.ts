@@ -173,3 +173,28 @@ describe('runtime — awareness ref resolution', () => {
     expect(awareness.seen.every((x) => real.has(x.node))).toBe(true);
   });
 });
+
+describe('runtime — database blocks', () => {
+  it('inserts a saved chart, restyles it, and retargets an embedded database', async () => {
+    const { session } = build(
+      'Pipeline\n\n<m-document-card>{"documentId":"db-1","documentName":"Projects","blockName":"database","blockParams":{"tableId":"table-1","viewId":"view-1"}}</m-document-card>'
+    );
+    const [headingId, cardId] = topIds(session);
+    const chart =
+      '<m-db-query>{"queryId":"q-1","databaseId":"db-1","title":"By owner","prompt":"Projects per owner","displayMode":"bar","chart":{"x":"owner","y":["projects"]}}</m-db-query>';
+    const summary = await runCode(
+      session,
+      `const chart = editor.insertDatabaseQueryAfter('${headingId}', ${JSON.stringify(chart)});
+       editor.setDatabaseQueryView(chart, { displayMode: 'line' });
+       editor.setDatabaseLocation('${cardId}', { tableId: 'table-2' });`
+    );
+    expect(summary).toContain('CHANGED');
+    const xml = serializeWithXml(session);
+    expect(xml).toContain(
+      '<database-query id="ref-1" queryId="q-1" databaseId="db-1" displayMode="line" title="By owner" prompt="Projects per owner" chart="{&quot;x&quot;:&quot;owner&quot;,&quot;y&quot;:[&quot;projects&quot;]}"/>'
+    );
+    expect(xml).toContain(
+      'blockParams="{&quot;tableId&quot;:&quot;table-2&quot;,&quot;viewId&quot;:&quot;&quot;}"'
+    );
+  });
+});

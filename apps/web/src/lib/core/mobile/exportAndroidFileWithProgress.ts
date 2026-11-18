@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import XIcon from '@icon/system/regular/x.svg';
 import { createSignal } from 'solid-js';
 import { type AndroidFileAction, exportAndroidFile } from './androidFiles';
 
@@ -27,9 +28,16 @@ export async function exportAndroidFileWithProgress(
       get title() {
         return `Preparing file… ${Math.round(progress() * 100)}%`;
       },
-      actions: [{ label: 'Cancel', onClick: () => controller.abort() }],
+      actions: [
+        {
+          label: 'Cancel',
+          icon: XIcon,
+          variant: 'danger',
+          onClick: () => controller.abort(),
+        },
+      ],
     },
-    { persistent: true }
+    { persistent: true, showCloseButton: false }
   );
   try {
     return await exportAndroidFile(blob, name, action, {

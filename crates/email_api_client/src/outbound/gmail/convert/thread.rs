@@ -40,8 +40,13 @@ pub(crate) fn map_thread_resource_to_service(
         .and_then(|message| message.internal_date_ts);
     let latest_non_spam_message_ts = messages
         .iter()
-        .rfind(|message| !is_spam_or_trash(message))
-        .and_then(|message| message.internal_date_ts);
+        .filter(|message| !is_spam_or_trash(message))
+        .filter_map(|message| {
+            message
+                .internal_date_ts
+                .or_else(|| message.is_draft.then_some(message.created_at))
+        })
+        .max();
 
     let thread_db_id = Uuid::now_v7();
     for message in &mut messages {

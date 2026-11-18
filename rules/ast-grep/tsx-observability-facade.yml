@@ -1,0 +1,14 @@
+id: tsx-observability-facade
+language: tsx
+severity: error
+message: Use the observability facade and explicit parents; browser async context must not depend on global patches.
+files:
+  - apps/web/src/**
+ignores:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/*.spec.ts'
+  - '**/*.spec.tsx'
+rule:
+  kind: string
+  regex: ^['"](@opentelemetry/[^'"]+|zone\.js[^'"]*|@macro-inc/observability/zone)['"]$

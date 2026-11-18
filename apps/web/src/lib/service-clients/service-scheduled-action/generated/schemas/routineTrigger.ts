@@ -6,9 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RoutineTriggerOneOf } from './routineTriggerOneOf';
+import type { RoutineTriggerOneOfFive } from './routineTriggerOneOfFive';
 import type { RoutineTriggerOneOfThree } from './routineTriggerOneOfThree';
 
 /**
  * An individual trigger in a routine's trigger list.
  */
-export type RoutineTrigger = RoutineTriggerOneOf | RoutineTriggerOneOfThree;
+export type RoutineTrigger =
+  | RoutineTriggerOneOf
+  | RoutineTriggerOneOfThree
+  | RoutineTriggerOneOfFive;

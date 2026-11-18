@@ -17,6 +17,8 @@ fn stored_prompt(text: &str) -> StoredQueuedAction {
         })),
         announced_message_id: None,
         context: None,
+        client: None,
+        prompter: crate::domain::model::PrompterKind::User,
     }
 }
 

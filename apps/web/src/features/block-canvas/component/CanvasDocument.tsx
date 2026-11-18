@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import {
   type Accessor,
   createResource,
@@ -75,6 +76,7 @@ function CanvasDocumentLoader(props: CanvasDocumentProps) {
       }
     }
   );
+  usePending('canvas.parse', () => loaded.loading);
   return (
     <Show when={!loaded.loading} fallback={<Loading />}>
       <Switch>

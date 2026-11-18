@@ -2,6 +2,7 @@ import { makePersistedState } from '@app/lib/persistence';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import { createSignal } from 'solid-js';
 import type { NotificationSoundCategoryId } from '../core/categories';
+import type { QuietHours } from '../core/quiet-hours';
 import {
   DEFAULT_NOTIFICATION_SOUND_SETTINGS,
   type NotificationSoundCategorySettings,
@@ -40,6 +41,8 @@ export function createNotificationSoundSettings(userId: string) {
     settings,
     setEnabled: (enabled: boolean) =>
       setSettings((current) => ({ ...current, enabled })),
+    setCallSoundsEnabled: (callSoundsEnabled: boolean) =>
+      setSettings((current) => ({ ...current, callSoundsEnabled })),
     setVolume: (volume: number) =>
       setSettings((current) => ({ ...current, volume })),
     setCategory: (
@@ -52,6 +55,11 @@ export function createNotificationSoundSettings(userId: string) {
           ...current.categories,
           [id]: { ...current.categories[id], ...change },
         },
+      })),
+    setQuietHours: (change: Partial<QuietHours>) =>
+      setSettings((current) => ({
+        ...current,
+        quietHours: { ...current.quietHours, ...change },
       })),
   };
 }

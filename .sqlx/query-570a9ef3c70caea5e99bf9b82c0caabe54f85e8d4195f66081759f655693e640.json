@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT archived_by IS NOT NULL AS \"archived!\"\n            FROM agent_session\n            WHERE id = $1\n            FOR SHARE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "archived!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "570a9ef3c70caea5e99bf9b82c0caabe54f85e8d4195f66081759f655693e640"
+}

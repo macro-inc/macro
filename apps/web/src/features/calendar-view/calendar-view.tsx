@@ -1,14 +1,13 @@
 import { CalendarViewContextProvider } from '@app/features/calendar/components/CalendarViewContext';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { usePosthog } from '@app/lib/analytics/posthog';
 import {
   createSearchParams,
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
@@ -24,23 +23,13 @@ import {
   on,
   onCleanup,
   onMount,
-  Show,
 } from 'solid-js';
 import { CalendarFocusContextProvider } from './calendar-focus-target';
 import { createCalendarFocusTarget } from './calendar-target';
 import { createCalendarTargetAim } from './calendar-target-request';
 import { calendarSearch, calendarSearchTarget } from './calendar-url';
-import { CalendarViewSkeleton } from './calendar-view-skeleton';
 import { Workspace } from './components/Workspace';
 import { CALENDAR_VIEW_ID, type CalendarViewTarget } from './types';
-
-function CalendarDisabledRedirect() {
-  const panel = useSplitPanelOrThrow();
-  onMount(() => {
-    panel.handle.replace({ next: { type: 'component', id: 'home' } });
-  });
-  return null;
-}
 
 function nonEmpty(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -56,8 +45,6 @@ export type CalendarViewProps = {
 
 /** Route-backed Calendar view, hosted by its own route or inline under another. */
 export function CalendarView(props: CalendarViewProps) {
-  const calendarUiEnabled = useCalendarUiFlag();
-  const posthog = usePosthog();
   const userId = useUserId();
   const analytics = useAnalytics();
   const notificationSource = useGlobalNotificationSource();
@@ -180,10 +167,21 @@ export function CalendarView(props: CalendarViewProps) {
       };
     }
   );
+  usePending('calendar.target', () => occurrencesQuery.isLoading);
   const focusTarget = createCalendarFocusTarget(
     targetRequest,
     occurrencesQuery
   );
+
+  const markEventRead = (eventId: string) => {
+    fireAndForget(
+      markNotificationsForEntityAsRead(notificationSource, {
+        type: 'calendar_event',
+        id: eventId,
+      }),
+      'calendar-notification-read'
+    );
+  };
 
   const setFocusedEventId = (eventId: string | undefined) => {
     const next = eventId ?? '';
@@ -191,19 +189,18 @@ export function CalendarView(props: CalendarViewProps) {
       if (!next) return;
       const landed = next === aimingEventId;
       aimingEventId = undefined;
-      // List activation already marks its row; landing must not send a second
-      // overlapping read write that could interfere with optimistic rollback.
-      if (landed) return;
+      if (landed) {
+        // List activation already marks its row; landing must not send a second
+        // overlapping read write that could interfere with optimistic rollback.
+        // A link has no row behind it, so its landing marks the event instead.
+        const openedByLink =
+          !panel.isInlinePreview &&
+          contentTarget().focusRequestId === undefined;
+        if (openedByLink) markEventRead(next);
+        return;
+      }
     }
-    if (eventId) {
-      fireAndForget(
-        markNotificationsForEntityAsRead(notificationSource, {
-          type: 'calendar_event',
-          id: eventId,
-        }),
-        'calendar-notification-read'
-      );
-    }
+    if (eventId) markEventRead(eventId);
     // Inline, a dismissed popover is not a destination change: the host's
     // selection still names this event, and clearing it would make the next
     // request for the same event a navigation.
@@ -227,24 +224,15 @@ export function CalendarView(props: CalendarViewProps) {
   });
 
   return (
-    <Show
-      when={calendarUiEnabled()}
-      fallback={
-        <Show when={posthog.flagsLoaded()} fallback={<CalendarViewSkeleton />}>
-          <CalendarDisabledRedirect />
-        </Show>
-      }
-    >
-      <CalendarFocusContextProvider target={focusTarget}>
-        <CalendarViewContextProvider
-          periodView={routeParams.period}
-          focusedEventId={routeTarget().eventId}
-          onPeriodViewChange={setPeriodView}
-          onFocusedEventIdChange={setFocusedEventId}
-        >
-          <Workspace headerLeading={props.headerLeading} />
-        </CalendarViewContextProvider>
-      </CalendarFocusContextProvider>
-    </Show>
+    <CalendarFocusContextProvider target={focusTarget}>
+      <CalendarViewContextProvider
+        periodView={routeParams.period}
+        focusedEventId={routeTarget().eventId}
+        onPeriodViewChange={setPeriodView}
+        onFocusedEventIdChange={setFocusedEventId}
+      >
+        <Workspace headerLeading={props.headerLeading} />
+      </CalendarViewContextProvider>
+    </CalendarFocusContextProvider>
   );
 }

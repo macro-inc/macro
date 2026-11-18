@@ -2,6 +2,9 @@ import { type CrmContext, useCrmContext } from '../context/crm-context';
 export const useCompanyQuery = (
   ...args: Parameters<CrmContext['createCompanySource']>
 ) => useCrmContext().createCompanySource(...args);
+export const useCompanyContactsQuery = (
+  ...args: Parameters<CrmContext['createCompanyContactsSource']>
+) => useCrmContext().createCompanyContactsSource(...args);
 export const useContactQuery = (
   ...args: Parameters<CrmContext['createContactSource']>
 ) => useCrmContext().createContactSource(...args);
@@ -14,6 +17,7 @@ export const useIsTeamAdmin = (
 export const useTeamCrmConfig = (
   ...args: Parameters<CrmContext['createTeamConfigSource']>
 ) => useCrmContext().createTeamConfigSource(...args);
+export const useBlockedDomains = () => useCrmContext().createBlockedDomains();
 export const useCrmPermissions = (
   ...args: Parameters<CrmContext['createCapabilities']>
 ) => useCrmContext().createCapabilities(...args);

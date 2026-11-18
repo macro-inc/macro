@@ -1,9 +1,12 @@
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { UserIcon } from '@core/component/UserIcon';
 import { emailToMacroId } from '@core/user/macroId';
 import type { IUser } from '@core/user/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import type { ContactFilterSourceFactory } from '@queries/contacts/filter-source';
 import { Dropdown } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
@@ -34,14 +37,33 @@ function FilterLabel(props: { label: string; active: boolean }) {
 /** Search contacts or add an email address that is not in the contact list. */
 export function CalendarPeopleFilterSubmenu(props: {
   label: string;
-  contacts: Accessor<IUser[]>;
-  loading: Accessor<boolean>;
-  error: Accessor<boolean>;
+  createSource: ContactFilterSourceFactory;
+  parentOpen: Accessor<boolean>;
   values: Accessor<string[]>;
   onChange: (emails: string[]) => void;
 }) {
   const [open, setOpen] = createSignal(false);
-  const [search, setSearch] = createSignal('');
+  const source = props.createSource(
+    props.values,
+    () => props.parentOpen() && open()
+  );
+  const search = source.suggestions.search;
+  const setSearch = source.suggestions.setSearch;
+  const contacts = () => source.suggestions.data()?.users ?? [];
+  const loading = source.suggestions.loading;
+  const error = source.suggestions.error;
+  const hasNext = () => !!source.suggestions.data()?.nextCursor;
+  // Further contacts load as the end of the list scrolls into view. With no
+  // rows listed, the sentinel sits below the empty list and keeps reading
+  // pages until one matches or the directory ends. The sentinel opts out of
+  // scroll anchoring, which would otherwise hold it in view as pages land.
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => hasNext() && !error(),
+    isFetchingNextPage: loading,
+    fetchNextPage: source.suggestions.next,
+  });
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
   let listViewport: HTMLDivElement | undefined;
   const [contentRef, setContentRef] = createSignal<HTMLElement>();
@@ -51,36 +73,54 @@ export function CalendarPeopleFilterSubmenu(props: {
   };
   const matches = createMemo(() => {
     const text = normalizedSearch();
-    const contacts = props.contacts();
-    const contactEmails = new Set(
-      contacts.map((contact) => contact.email.toLowerCase())
+    const suggestions = contacts();
+    const suggestionEmails = new Set(
+      suggestions.map((contact) => contact.email.toLowerCase())
     );
-    const customSelected: IUser[] = props
-      .values()
-      .filter((email) => !contactEmails.has(email))
-      .map((email) => ({
-        id: emailToMacroId(email) ?? email,
-        email,
-        name: email,
-      }));
-    return [...customSelected, ...contacts].filter(
-      (contact) =>
-        contact.name.toLowerCase().includes(text) ||
-        contact.email.toLowerCase().includes(text)
+    const resolved = new Map(
+      [...suggestions, ...(source.selection.data()?.users ?? [])].map(
+        (contact) => [contact.email.toLowerCase(), contact]
+      )
     );
+    const selectedEmails = new Set(
+      props.values().map((email) => email.trim().toLowerCase())
+    );
+    const selected: IUser[] = [...selectedEmails].map(
+      (email) =>
+        resolved.get(email) ?? {
+          id: emailToMacroId(email) ?? email,
+          email,
+          name: email,
+        }
+    );
+    // Suggestions have already been filtered/ranked before the page limit. Only
+    // the independent selection is filtered here, never the returned window.
+    return [
+      ...selected.filter(
+        (contact) =>
+          suggestionEmails.has(contact.email.toLowerCase()) ||
+          contact.name.toLowerCase().includes(text) ||
+          contact.email.toLowerCase().includes(text)
+      ),
+      ...suggestions.filter(
+        (contact) => !selectedEmails.has(contact.email.toLowerCase())
+      ),
+    ];
   });
   const canAddEmail = () => {
     const email = normalizedSearch();
     return (
       EmailValidator.validate(email) &&
-      !props.contacts().some((contact) => contact.email.toLowerCase() === email)
+      ![...contacts(), ...(source.selection.data()?.users ?? [])].some(
+        (contact) => contact.email.toLowerCase() === email
+      )
     );
   };
   const toggleEmail = (email: string) => {
     const values = props.values();
     props.onChange(
-      values.includes(email)
-        ? values.filter((value) => value !== email)
+      values.some((value) => value.trim().toLowerCase() === email)
+        ? values.filter((value) => value.trim().toLowerCase() !== email)
         : [...values, email]
     );
   };
@@ -98,11 +138,21 @@ export function CalendarPeopleFilterSubmenu(props: {
     const frame = requestAnimationFrame(() => {
       if (open()) input.focus();
     });
+    const isContentControl = (target: EventTarget | null) =>
+      target instanceof Node &&
+      target !== contentRef() &&
+      contentRef()?.contains(target);
     const handleBlur = (event: FocusEvent) => {
-      const next = event.relatedTarget;
-      if (next instanceof Node && contentRef()?.contains(next)) return;
+      if (isContentControl(event.relatedTarget)) return;
       queueMicrotask(() => {
-        if (open() && document.activeElement !== input) input.focus();
+        // Deferred option registration focuses the menu container. Restore the
+        // search field, but never steal a deliberate arrow/click focus on a row.
+        if (
+          open() &&
+          document.activeElement !== input &&
+          !isContentControl(document.activeElement)
+        )
+          input.focus();
       });
     };
     input.addEventListener('blur', handleBlur);
@@ -136,6 +186,7 @@ export function CalendarPeopleFilterSubmenu(props: {
             <SearchIcon class="size-3.5 shrink-0 text-ink-muted" />
             <input
               ref={setInputRef}
+              onFocusIn={(event) => event.stopPropagation()}
               type="text"
               aria-label={`Search ${props.label.toLowerCase()} contacts`}
               placeholder="Search contacts or enter email"
@@ -152,7 +203,7 @@ export function CalendarPeopleFilterSubmenu(props: {
             />
           </div>
           <Show
-            when={!props.loading()}
+            when={!loading() || matches().length > 0}
             fallback={
               <div
                 role="status"
@@ -182,11 +233,16 @@ export function CalendarPeopleFilterSubmenu(props: {
                       closeOnSelect="unless-shift"
                       checked={props
                         .values()
-                        .includes(contact.email.toLowerCase())}
+                        .some(
+                          (value) =>
+                            value.trim().toLowerCase() ===
+                            contact.email.toLowerCase()
+                        )}
                       onChange={() => toggleEmail(contact.email.toLowerCase())}
                     >
                       <UserIcon
                         id={contact.id}
+                        name={contact.name}
                         size="sm"
                         suppressClick
                         showTooltip={false}
@@ -197,8 +253,41 @@ export function CalendarPeopleFilterSubmenu(props: {
                     </Dropdown.CheckboxItem>
                   )}
                 </Virtualizer>
+                <Show when={hasNext()}>
+                  <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+                </Show>
               </div>
             </Show>
+          </Show>
+          <Show when={matches().length === 0 && hasNext()}>
+            <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+          </Show>
+          <Show
+            when={
+              source.suggestions.data()?.offline ||
+              source.suggestions.data()?.sync === 'partial' ||
+              source.suggestions.data()?.sync === 'cold'
+            }
+          >
+            <div role="status" class="px-2 py-1 text-xs text-ink-muted">
+              Cached contacts may be incomplete.
+            </div>
+          </Show>
+          <Show when={source.selection.error()}>
+            <div role="status" class="px-2 py-1 text-xs text-ink-muted">
+              Selected emails are kept; some names are unavailable.
+            </div>
+          </Show>
+          <Show when={error()}>
+            <Dropdown.Item
+              closeOnSelect={false}
+              disabled={loading()}
+              onSelect={() =>
+                fireAndForget(source.suggestions.retry(), 'calendar-filters')
+              }
+            >
+              Retry contacts
+            </Dropdown.Item>
           </Show>
           <Show when={canAddEmail()}>
             <Dropdown.Item
@@ -219,14 +308,17 @@ export function CalendarPeopleFilterSubmenu(props: {
             </Dropdown.Item>
           </Show>
           <Show
-            when={!props.loading() && matches().length === 0 && !canAddEmail()}
+            when={
+              !loading() &&
+              matches().length === 0 &&
+              !canAddEmail() &&
+              (error() || !hasNext())
+            }
           >
             <div class="px-2 py-3 text-center text-xs text-ink-muted">
-              {props.error()
+              {error()
                 ? 'Contacts unavailable. Enter an email instead.'
-                : normalizedSearch()
-                  ? 'No matching contacts'
-                  : 'No contacts available'}
+                : 'No matching contacts. Enter an email instead.'}
             </div>
           </Show>
         </Dropdown.Group>

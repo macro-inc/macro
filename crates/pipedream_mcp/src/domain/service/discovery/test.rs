@@ -21,6 +21,7 @@ fn entry() -> CatalogEntry {
 impl ConnectorDirectory for Directory {
     async fn search(
         &self,
+        _user_id: &MacroUserIdStr<'static>,
         search: Option<&str>,
         _cursor: Option<&str>,
         limit: u32,
@@ -32,7 +33,11 @@ impl ConnectorDirectory for Directory {
             next_cursor: Some("next".into()),
         })
     }
-    async fn retrieve(&self, slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
+    async fn retrieve(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        slug: &str,
+    ) -> anyhow::Result<Option<CatalogEntry>> {
         Ok((slug == "linear").then(entry))
     }
 }
@@ -59,6 +64,7 @@ impl ConnectorCapabilities for Directory {
 
 struct Store {
     enabled: Option<bool>,
+    provider: crate::domain::models::ConnectionProvider,
     overlaid: bool,
     seen: Mutex<Vec<String>>,
 }
@@ -115,6 +121,7 @@ impl ConnectionStore for Store {
             server_name: "Linear".into(),
             account_id: "account".into(),
             enabled,
+            provider: self.provider,
         }))
     }
 }
@@ -132,6 +139,7 @@ fn service(
         })),
         Arc::new(Store {
             enabled,
+            provider: crate::domain::models::ConnectionProvider::Pipedream,
             overlaid: false,
             seen: Mutex::default(),
         }),
@@ -265,6 +273,7 @@ async fn overlaid_apps_report_their_native_connection_not_pipedream() {
             })),
             Arc::new(Store {
                 enabled: Some(true),
+                provider: crate::domain::models::ConnectionProvider::Pipedream,
                 overlaid: true,
                 seen: Mutex::default(),
             }),
@@ -276,6 +285,31 @@ async fn overlaid_apps_report_their_native_connection_not_pipedream() {
             panic!("inspection expected")
         };
         assert_eq!(connected, native.is_some());
-        assert!(svc.connections.seen.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn a_connect_grant_outranks_an_overlay() {
+    for enabled in [true, false] {
+        let svc = ConnectorDiscovery::new(
+            Some(Arc::new(Directory {
+                fail_tools: false,
+                tool_count: 1,
+                seen: Mutex::default(),
+            })),
+            Arc::new(Store {
+                enabled: Some(enabled),
+                provider: crate::domain::models::ConnectionProvider::Connect,
+                overlaid: true,
+                seen: Mutex::default(),
+            }),
+            Arc::new(Native(Some("Linear".to_owned()))),
+        );
+        let DiscoveryResult::Inspect { connected, .. } =
+            svc.discover(&user(), &inspect("linear")).await.unwrap()
+        else {
+            panic!("inspection expected")
+        };
+        assert_eq!(connected, enabled);
     }
 }

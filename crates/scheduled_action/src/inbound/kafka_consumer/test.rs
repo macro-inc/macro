@@ -185,7 +185,8 @@ fn subscriptions_are_exact_and_group_is_dedicated() {
             "macro.messages",
             "macro.properties",
             "macro.email",
-            "macro.calls"
+            "macro.calls",
+            "macro.github_webhooks"
         ]
     );
     assert_eq!(
@@ -421,4 +422,23 @@ fn call_conversion_preserves_the_envelope() {
     assert_eq!(event.event_id, original.event_id);
     assert_eq!(event.schema_version, original.schema_version);
     assert_eq!(payload, original.event);
+}
+
+#[test]
+fn the_routine_behind_an_event_reaches_ingestion() {
+    let routine_id = Uuid::from_u128(9);
+    let mut posted = envelope("document.created");
+    posted["routine_id"] = json!(routine_id);
+    let message = message(
+        "macro.documents",
+        Some(serde_json::to_vec(&posted).unwrap()),
+        Some(ENTITY_ID.as_bytes().to_vec()),
+        10,
+    );
+
+    let event = incoming_event(DeclaredMacroEvent::decode(&message).unwrap());
+
+    assert_eq!(event.routine_id, Some(routine_id));
+    let unstamped = incoming_event(DeclaredMacroEvent::decode(&document(10)).unwrap());
+    assert_eq!(unstamped.routine_id, None);
 }

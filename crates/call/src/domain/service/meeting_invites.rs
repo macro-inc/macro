@@ -91,6 +91,14 @@ where
             .add_meeting_invitees(&meeting.id, &call_id, &recipients)
             .await?;
 
+        for recipient in &recipients {
+            let mut metadata = CallNotificationMetadata::new(call_id, None);
+            metadata.meeting_id = Some(meeting.id);
+            metadata.invited_by = Some(actor.to_string());
+            metadata.recipient_user_id = Some(recipient.to_string());
+            self.publish_call_notification(CallNotificationEvent::Invited(metadata));
+        }
+
         let invited_at = Utc::now();
         self.connection_service
             .send_channel_message(
@@ -113,8 +121,13 @@ where
     pub(super) async fn send_meeting_answered_event(
         &self,
         meeting_id: Uuid,
+        call_id: Uuid,
         actor: MacroUserIdStr<'_>,
     ) {
+        let mut metadata = CallNotificationMetadata::new(call_id, None);
+        metadata.user_id = Some(actor.to_string());
+        metadata.recipient_user_id = Some(actor.to_string());
+        self.publish_call_notification(CallNotificationEvent::Answered(metadata));
         self.connection_service
             .send_channel_message(
                 &[actor.copied()],

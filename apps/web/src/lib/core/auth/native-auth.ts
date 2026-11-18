@@ -1,4 +1,6 @@
 import { getNativeMobilePlatform } from '@core/util/platform';
+import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
+import { Telemetry } from '@macro-inc/observability';
 import { invoke } from '@tauri-apps/api/core';
 
 export type NativeAuthResult = {
@@ -6,6 +8,11 @@ export type NativeAuthResult = {
   token?: string;
   error?: string;
 };
+
+function nativeAuthOutcome(result: NativeAuthResult) {
+  if (result.success) return 'success';
+  return result.error === 'User canceled login' ? 'canceled' : 'failed';
+}
 
 /**
  * Where the hosted flow sends the desktop app's session code. The deep-link
@@ -44,23 +51,41 @@ export function createNativeAuthSession(iosCallbackHost: string) {
 
   return {
     callbackUrl,
-    async authenticate(authUrl: string): Promise<NativeAuthResult> {
-      try {
-        return await invoke<NativeAuthResult>(
-          android
-            ? 'plugin:android-auth|authenticate'
-            : 'plugin:auth|authenticate',
-          {
-            payload: android
-              ? { authUrl, callbackUrl }
-              : { authUrl, callbackScheme: 'macro', ephemeralSession: true },
-          }
+    authenticate(authUrl: string): Promise<NativeAuthResult> {
+      return Telemetry.span('auth.native_session', async (span) => {
+        span.setAttr(
+          'auth.native_session.platform',
+          android ? 'android' : 'ios'
         );
-      } catch {
-        // Bridge failures must settle the caller just like browser cancellation.
-        // Do not log callback URLs or session codes.
-        return { success: false, error: 'Unable to start authentication' };
-      }
+        // The sheet's result reaches only the JavaScript that opened it, and
+        // finishing it can mean leaving the app for a sign-in code. A reload
+        // in between throws away a sign-in that succeeded.
+        const releaseReloadHold = holdAutomaticReload();
+        try {
+          const result = await invoke<NativeAuthResult>(
+            android
+              ? 'plugin:android-auth|authenticate'
+              : 'plugin:auth|authenticate',
+            {
+              payload: android
+                ? { authUrl, callbackUrl }
+                : { authUrl, callbackScheme: 'macro', ephemeralSession: true },
+            }
+          );
+          span.setAttr(
+            'auth.native_session.outcome',
+            nativeAuthOutcome(result)
+          );
+          return result;
+        } catch {
+          // Bridge failures must settle the caller just like browser cancellation.
+          // Do not log callback URLs or session codes.
+          span.setAttr('auth.native_session.outcome', 'bridge_failed');
+          return { success: false, error: 'Unable to start authentication' };
+        } finally {
+          releaseReloadHold();
+        }
+      });
     },
   };
 }

@@ -30,12 +30,7 @@ import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, ComposerSurface, SendButton } from '@ui';
-import {
-  $getRoot,
-  $getSelection,
-  $isRangeSelection,
-  $isTextNode,
-} from 'lexical';
+import { $getRoot, $setSelection } from 'lexical';
 import {
   createEffect,
   createSignal,
@@ -46,7 +41,8 @@ import {
   Show,
 } from 'solid-js';
 import { IMAGE_INPUT_WARNING } from '../../block-agent/state/image-input';
-import { AgentComposerAddMenu } from '../views/ComposerAddMenu';
+import { AgentComposerAddMenu } from '../../block-agent/ui/AgentComposerAddMenu';
+import { openComposerTypeahead } from '../../block-agent/ui/open-composer-typeahead';
 
 /** Shared input that starts on one line and grows with the draft. */
 export function ChatComposer(props: {
@@ -115,11 +111,17 @@ export function ChatComposer(props: {
   const drawerOpen = () => props.drawerOpen && !collapsed();
   useTouchOutsideToDismissKeyboard(() => container);
   const disabled = () => !!props.blockedReason || props.session?.disabled;
-  const canSendNext = () =>
-    !hasContent() &&
-    props.session?.hasQueuedMessages &&
-    props.session.onStop &&
-    !disabled();
+  // The editor reports a host draft back as its own export, which can differ
+  // (a code block loses trailing blank lines). Passing that on would rewrite
+  // the draft under another composer showing it while someone types there.
+  // That covers the export it reports while connecting with the draft, too.
+  let hostMarkdown: string | undefined;
+  let editorConnected = false;
+  const reportDraft = (markdown: string) => {
+    if (!editorConnected || markdown === hostMarkdown) return;
+    hostMarkdown = undefined;
+    props.onDraftChange(markdown);
+  };
   const editor = buildConfig('chat')
     .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agents-chat-composer')
@@ -128,7 +130,8 @@ export function ChatComposer(props: {
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()
-    .withRestoreFocus()
+    // Focusing the composer without a selection continues the draft.
+    .withRestoreFocus('rootEnd')
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
         fireAndForget(
@@ -144,7 +147,6 @@ export function ChatComposer(props: {
       // button is the only way to submit.
       if (isTouchDevice()) return false;
       if (markdown.trim() || attachments().length > 0) send(markdown);
-      else if (canSendNext()) sendNext();
       return true;
     })
     .onFocusLeave({
@@ -155,7 +157,7 @@ export function ChatComposer(props: {
       },
       onEnd: () => {},
     })
-    .onChange(props.onDraftChange);
+    .onChange(reportDraft);
 
   if (props.session) {
     editor.withAgentCommands({
@@ -177,13 +179,30 @@ export function ChatComposer(props: {
           : 'auto',
   });
 
+  // Markdown import leaves the selection at the start, and focusing the editor
+  // restores it there. After a seeded draft (Ask AI's mentions), put the caret
+  // at its end when the editor has focus. Otherwise clear the selection, so
+  // the next focus lands at the end (withRestoreFocus('rootEnd')) without this
+  // update moving the DOM selection or taking focus.
+  const placeCaretAfterDraft = () => {
+    const focused = editor.lexical
+      .getRootElement()
+      ?.contains(document.activeElement);
+    editor.lexical.update(() => {
+      if (focused) $getRoot().selectEnd();
+      else $setSelection(null);
+    });
+  };
+
   // Only host draft changes should replace the editor contents.
   createEffect(
     on(
       () => props.draft,
       (draft) => {
-        if (draft !== editor.controls.getMarkdown())
-          editor.controls.setMarkdown(draft);
+        if (draft === editor.controls.getMarkdown()) return;
+        editor.controls.setMarkdown(draft);
+        hostMarkdown = editor.controls.getMarkdown();
+        placeCaretAfterDraft();
       }
     )
   );
@@ -226,10 +245,6 @@ export function ChatComposer(props: {
     props.onSend(prompt, attached);
   };
 
-  const sendNext = () => {
-    if (canSendNext()) (props.session?.onSendNext ?? props.session?.onStop)?.();
-  };
-
   const focusEditor = (event: Event) => {
     const target = event.target as HTMLElement | null;
     if (
@@ -246,39 +261,19 @@ export function ChatComposer(props: {
     if (event.type === 'pointerdown') editor.controls.focus();
   };
 
-  const openTypeahead = (kind: 'library' | 'skills') => {
-    editor.lexical.focus(() => {
-      editor.lexical.update(
-        () => {
-          if (!$isRangeSelection($getSelection())) $getRoot().selectEnd();
-          const selection = $getSelection();
-          if (!$isRangeSelection(selection)) return;
-          const node = selection.anchor.getNode();
-          const preceding = $isTextNode(node)
-            ? node
-                .getTextContent()
-                .slice(selection.anchor.offset - 1, selection.anchor.offset)
-            : '';
-          if (preceding && !/\s/.test(preceding)) selection.insertText(' ');
-        },
-        {
-          discrete: true,
-          onUpdate: () =>
-            editor.lexical.dispatchCommand(
-              kind === 'library'
-                ? TYPE_AT_SYMBOL_COMMAND
-                : props.session
-                  ? TYPE_AGENT_COMMAND_SYMBOL_COMMAND
-                  : TYPE_SKILL_SYMBOL_COMMAND,
-              undefined
-            ),
-        }
-      );
-    });
-  };
+  const openTypeahead = (kind: 'library' | 'skills') =>
+    openComposerTypeahead(
+      editor.lexical,
+      kind === 'library'
+        ? TYPE_AT_SYMBOL_COMMAND
+        : props.session
+          ? TYPE_AGENT_COMMAND_SYMBOL_COMMAND
+          : TYPE_SKILL_SYMBOL_COMMAND
+    );
 
   const editorRow = () => (
     <div
+      data-composer-scroll
       classList={{
         'max-h-6 overflow-hidden': !!collapsed(),
         'max-h-[min(15rem,30dvh)]': !collapsed(),
@@ -289,6 +284,10 @@ export function ChatComposer(props: {
         class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p:first-child]:mt-0 [&_[data-markdown-editable]>.md-p:last-child]:mb-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
         config={editor}
         initialValue={props.draft}
+        onConnect={() => {
+          editorConnected = true;
+          if (props.draft) placeCaretAfterDraft();
+        }}
         placeholder={
           isTouchDevice()
             ? // Phones are too narrow for the full mention and skills hint.
@@ -465,8 +464,8 @@ export function ChatComposer(props: {
                     </div>
                     <Show
                       when={
-                        (props.session?.busy || canSendNext()) &&
-                        props.session?.onStop &&
+                        props.session?.busy &&
+                        props.session.onStop &&
                         !hasContent()
                       }
                       fallback={
@@ -485,34 +484,17 @@ export function ChatComposer(props: {
                         />
                       }
                     >
-                      <Show
-                        when={canSendNext()}
-                        fallback={
-                          <Button
-                            aria-label="Stop"
-                            tooltip="Stop"
-                            variant="secondary"
-                            class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
-                            size="icon-md"
-                            disabled={disabled()}
-                            onClick={() => props.session?.onStop?.()}
-                          >
-                            <div class="size-3.5 rounded-sm bg-current" />
-                          </Button>
-                        }
+                      <Button
+                        aria-label="Stop"
+                        tooltip="Stop"
+                        variant="secondary"
+                        class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
+                        size="icon-md"
+                        disabled={disabled()}
+                        onClick={() => props.session?.onStop?.()}
                       >
-                        <SendButton
-                          appearance="composer"
-                          class="touch:bg-transparent touch:text-ink touch:data-disabled:bg-transparent"
-                          intent="flush"
-                          aria-label="Flush queued messages"
-                          tooltip={{
-                            content: 'Flush queued messages',
-                            shortcut: 'Enter',
-                          }}
-                          onClick={sendNext}
-                        />
-                      </Show>
+                        <div class="size-3.5 rounded-sm bg-current" />
+                      </Button>
                     </Show>
                   </div>
                 </div>

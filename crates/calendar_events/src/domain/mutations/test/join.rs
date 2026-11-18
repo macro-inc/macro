@@ -83,16 +83,31 @@ fn sharer_organizes() -> FakeRepo {
     }
 }
 
-fn asking(
+type TestJoinRequestService =
+    CalendarJoinRequestServiceImpl<FakeRepo, RecordingNotifier, RecordingRefreshNotifier>;
+
+fn asking(repo: FakeRepo) -> (TestJoinRequestService, RecordingNotifier) {
+    let (service, notifier, _) = asking_with_refresh(repo);
+    (service, notifier)
+}
+
+/// The service with a refresh notifier that watches `repo`'s stored requests.
+fn asking_with_refresh(
     repo: FakeRepo,
 ) -> (
-    CalendarJoinRequestServiceImpl<FakeRepo, RecordingNotifier>,
+    TestJoinRequestService,
     RecordingNotifier,
+    RecordingRefreshNotifier,
 ) {
     let notifier = RecordingNotifier::default();
+    let refresh = RecordingRefreshNotifier {
+        join_requests: repo.join_requests.clone(),
+        ..RecordingRefreshNotifier::default()
+    };
     (
-        CalendarJoinRequestServiceImpl::new(repo, notifier.clone()),
+        CalendarJoinRequestServiceImpl::new(repo, notifier.clone(), refresh.clone()),
         notifier,
+        refresh,
     )
 }
 
@@ -141,6 +156,87 @@ async fn a_channel_member_asks_the_sharer_only_once() {
         notifier.notified.lock().unwrap().as_slice(),
         [(SHARER.to_string(), first.id, "Offsite".to_string())]
     );
+}
+
+#[tokio::test]
+async fn a_new_request_refreshes_the_lists_readers_once_it_is_stored() {
+    let (service, _, refresh) = asking_with_refresh(sharer_organizes());
+
+    service
+        .request_to_join(MEMBER, Uuid::now_v7())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        refresh.notified.lock().unwrap().as_slice(),
+        [(SHARER.to_string(), SELF_LINK, false)]
+    );
+    // The nudge saw the stored request, so a refetch finds it.
+    assert_eq!(
+        refresh.seen_statuses.lock().unwrap().as_slice(),
+        [CalendarJoinRequestStatus::Pending]
+    );
+    // The requester reads no list and is told nothing about the sharer's inbox.
+    assert!(refresh.answered_requesters.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn only_the_first_ask_refreshes_the_list() {
+    for status in [
+        CalendarJoinRequestStatus::Pending,
+        CalendarJoinRequestStatus::Accepted,
+        CalendarJoinRequestStatus::Declined,
+    ] {
+        let repo = sharer_organizes();
+        let request = pending_request(&repo, status);
+        let (service, _, refresh) = asking_with_refresh(repo);
+
+        let result = service.request_to_join(MEMBER, request.event_id).await;
+
+        assert_eq!(
+            result.is_err(),
+            status == CalendarJoinRequestStatus::Declined,
+            "{status:?}"
+        );
+        assert!(refresh.notified.lock().unwrap().is_empty(), "{status:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_refused_ask_refreshes_nothing() {
+    let not_shared = FakeRepo {
+        export: None,
+        ..sharer_organizes()
+    };
+    let own_copy = FakeRepo {
+        export: Some(shared_export(CalendarEventExportAccess::OwnCopy)),
+        ..sharer_organizes()
+    };
+    let cannot_invite = sharer_as_guest(GuestPolicy {
+        can_invite_others: false,
+        ..GuestPolicy::default()
+    });
+    let read_only = FakeRepo {
+        mutation_target: Some(mutation_target(true)),
+        ..sharer_organizes()
+    };
+    for (repo, case) in [
+        (not_shared, "not shared with the requester"),
+        (own_copy, "already on the requester's calendar"),
+        (cannot_invite, "the sharer may not add guests"),
+        (read_only, "the sharer's calendar is read-only"),
+    ] {
+        let (service, _, refresh) = asking_with_refresh(repo);
+
+        assert!(
+            service
+                .request_to_join(MEMBER, Uuid::now_v7())
+                .await
+                .is_err(),
+            "{case}"
+        );
+        assert!(refresh.notified.lock().unwrap().is_empty(), "{case}");
+    }
 }
 
 #[tokio::test]
@@ -368,6 +464,78 @@ async fn answering_a_resolved_request_returns_it_unchanged() {
 }
 
 #[tokio::test]
+async fn an_answer_refreshes_the_list_and_the_requesters_card() {
+    for (accept, status) in [
+        (true, CalendarJoinRequestStatus::Accepted),
+        (false, CalendarJoinRequestStatus::Declined),
+    ] {
+        let repo = sharer_organizes();
+        let request = pending_request(&repo, CalendarJoinRequestStatus::Pending);
+        let refresh = RecordingRefreshNotifier {
+            join_requests: repo.join_requests.clone(),
+            ..RecordingRefreshNotifier::default()
+        };
+
+        service_with_refresh(
+            repo,
+            FakeProvider::new(FakeProviderBehavior::Echo),
+            FakeTokens::ok(),
+            refresh.clone(),
+        )
+        .respond_to_join_request(SHARER, request.id, accept)
+        .await
+        .unwrap();
+
+        // A decline writes nothing to the provider, so nothing else would
+        // tell the list's readers; the last nudge carries the stored answer
+        // even when an acceptance's invite nudged earlier.
+        assert_eq!(
+            refresh.notified.lock().unwrap().last(),
+            Some(&(SHARER.to_string(), SELF_LINK, false)),
+            "accept={accept}"
+        );
+        assert_eq!(
+            refresh.seen_statuses.lock().unwrap().last(),
+            Some(&status),
+            "accept={accept}"
+        );
+        assert_eq!(
+            refresh.answered_requesters.lock().unwrap().as_slice(),
+            [(MEMBER.to_string(), request.event_id)],
+            "accept={accept}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_stale_answer_changes_nothing_so_it_refreshes_nothing() {
+    for status in [
+        CalendarJoinRequestStatus::Accepted,
+        CalendarJoinRequestStatus::Declined,
+    ] {
+        for accept in [true, false] {
+            let repo = sharer_organizes();
+            let request = pending_request(&repo, status);
+            let refresh = RecordingRefreshNotifier::default();
+
+            let answered = service_with_refresh(
+                repo,
+                FakeProvider::new(FakeProviderBehavior::Echo),
+                FakeTokens::ok(),
+                refresh.clone(),
+            )
+            .respond_to_join_request(SHARER, request.id, accept)
+            .await
+            .unwrap();
+
+            assert_eq!(answered, request, "{status:?} accept={accept}");
+            assert!(refresh.notified.lock().unwrap().is_empty());
+            assert!(refresh.answered_requesters.lock().unwrap().is_empty());
+        }
+    }
+}
+
+#[tokio::test]
 async fn a_refused_invite_leaves_the_request_pending() {
     let repo = sharer_organizes();
     let request = pending_request(&repo, CalendarJoinRequestStatus::Pending);
@@ -450,6 +618,7 @@ async fn a_read_only_copy_cannot_answer() {
 fn preview(viewer_event_id: Option<Uuid>) -> CalendarMentionPreview {
     CalendarMentionPreview::Accessible(Box::new(CalendarMentionEvent {
         viewer_copy: viewer_event_id.map(|_| CalendarMentionViewerCopy::Event),
+        viewer_calendar_ids: Vec::new(),
         viewer_event_id,
         title: "Offsite".to_string(),
         description: None,

@@ -74,7 +74,7 @@ it('shows standard groups, filters, and inserts through controlled input without
   fireEvent.input(editor, { target: { value: 'Please ask @julia' } });
   expect(screen.getAllByRole('option')).toHaveLength(1);
   fireEvent.keyDown(editor, { key: 'Enter' });
-  expect(draft()).toBe('Please ask @Julia ');
+  expect(draft()).toBe('Please ask @Julia Westphal ');
   expect(send).not.toHaveBeenCalled();
   expect(screen.queryByRole('listbox')).toBeNull();
   fireEvent.input(editor, { target: { value: `${draft()}to review this` } });
@@ -90,7 +90,9 @@ it('supports arrow selection, mouse selection, dismissal, and empty results', ()
   fireEvent.input(editor, { target: { value: '@' } });
   fireEvent.keyDown(editor, { key: 'ArrowDown' });
   expect(
-    screen.getByRole('option', { name: 'Teo' }).getAttribute('aria-selected')
+    screen
+      .getByRole('option', { name: 'Wolf Mermelstein' })
+      .getAttribute('aria-selected')
   ).toBe('true');
   fireEvent.keyDown(editor, { key: 'Escape' });
   expect(screen.queryByRole('listbox')).toBeNull();
@@ -190,14 +192,14 @@ it('uses the real menu category drilldown and return behavior', () => {
     .getByText('Documents, Agents, & Tasks')
     .closest('section')!;
   fireEvent.click(
-    within(documents).getByRole('button', { name: 'View all (8)' })
+    within(documents).getByRole('button', { name: 'View all (10)' })
   );
   expect(screen.queryByText('People')).toBeNull();
-  expect(screen.getAllByRole('option')).toHaveLength(8);
+  expect(screen.getAllByRole('option')).toHaveLength(10);
   fireEvent.click(screen.getByRole('button', { name: '← Back to everything' }));
   expect(screen.getByText('People')).toBeTruthy();
   fireEvent.keyDown(editor, { key: 'ArrowRight' });
-  expect(screen.getAllByRole('option')).toHaveLength(8);
+  expect(screen.getAllByRole('option')).toHaveLength(12);
   fireEvent.keyDown(editor, { key: 'ArrowLeft' });
   expect(screen.getByText('Channels')).toBeTruthy();
 });

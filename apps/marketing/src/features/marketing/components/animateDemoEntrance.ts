@@ -161,6 +161,15 @@ export function animateDemoEntrance(
       1200
     );
   };
+  // Until the first scroll builds the keyframes, nothing hides the workspace.
+  // Hold it at the entrance's first frame so it never shows, vanishes, and
+  // reappears as the bubbles arrive.
+  const syncWaiting = () => {
+    section.toggleAttribute(
+      'data-entrance-waiting',
+      !prepared && !engaged && !reduced.matches
+    );
+  };
   const update = () => {
     // A live edit can replace the constellation without remounting this
     // section. Detached sources measure as zero-sized boxes at (0, 0).
@@ -172,6 +181,7 @@ export function animateDemoEntrance(
       measure();
       return;
     }
+    syncWaiting();
     if (reduced.matches || engaged) return;
     const progress = Math.max(
       0,
@@ -179,7 +189,10 @@ export function animateDemoEntrance(
     );
     if (progress === lastProgress) return;
     lastProgress = progress;
-    if (!prepared && progress > 0) prepare();
+    if (!prepared && progress > 0) {
+      prepare();
+      syncWaiting();
+    }
     animations.forEach((animation) => {
       animation.currentTime = progress * 1450;
     });
@@ -216,6 +229,7 @@ export function animateDemoEntrance(
   const settle = () => {
     engaged = true;
     clear();
+    syncWaiting();
   };
   const frame = target.querySelector('iframe');
   let frameDocument: Document | null = null;
@@ -249,5 +263,6 @@ export function animateDemoEntrance(
     scroller.removeEventListener('scroll', update);
     reduced.removeEventListener('change', measure);
     clear();
+    section.removeAttribute('data-entrance-waiting');
   };
 }

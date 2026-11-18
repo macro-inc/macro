@@ -1,10 +1,18 @@
 //! Poll durable mailbox work. Notifications only change when that work is due.
 
+use crate::util::redis::RedisClient;
+use email::domain::mailbox::progress::{MailboxProgressRepository, MailboxProgressService};
+use email::domain::mailbox::telemetry::defer_reason;
 use email::domain::mailbox::{
     MailboxError, MailboxGateway, MailboxIngest, MailboxSyncRepository, MailboxSyncService,
 };
+use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
+
+/// How often each worker flushes its import counts and one worker logs the
+/// Outlook health snapshot.
+const HEALTH_INTERVAL: Duration = Duration::from_secs(60);
 
 /// Domain services own sync and retry decisions; this loop only schedules work
 /// and stops accepting work during shutdown. Interrupted work retains its lease.
@@ -14,10 +22,10 @@ pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
 ) {
     loop {
         let cycle = async {
-            let mut worked = record(service.discover_once().await);
-            worked |= record(service.enumerate_once().await);
+            let mut worked = reported(service.discover_once().await);
+            worked |= reported(service.enumerate_once().await);
             for _ in 0..32 {
-                if !record(service.reconcile_once().await) {
+                if !reported(service.reconcile_once().await) {
                     break;
                 }
                 worked = true;
@@ -39,14 +47,69 @@ pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
     }
 }
 
+/// For units that log their own deferrals and failures with their mailbox.
+fn reported(result: Result<bool, MailboxError>) -> bool {
+    result.unwrap_or(false)
+}
+
 fn record(result: Result<bool, MailboxError>) -> bool {
     match result {
         Ok(worked) => worked,
         Err(MailboxError::Stale) => false,
-        Err(error) => {
-            tracing::warn!(%error,"mailbox sync work deferred");
+        // The shared request gate pacing a mailbox is routine.
+        Err(
+            error @ MailboxError::Provider(EmailApiError::RateLimited {
+                origin: RateLimitOrigin::Gate(_),
+                ..
+            }),
+        ) => {
+            tracing::debug!(defer_reason = defer_reason(&error), %error, "mailbox sync work deferred");
             false
         }
+        Err(error) => {
+            tracing::warn!(defer_reason = defer_reason(&error), %error, "mailbox sync work deferred");
+            false
+        }
+    }
+}
+
+/// Every worker flushes the imports it counted each minute; whichever worker
+/// claims the minute also logs one health snapshot per Outlook mailbox.
+pub async fn run_health<R: MailboxProgressRepository>(
+    service: MailboxProgressService<R>,
+    redis: RedisClient,
+    cancellation: CancellationToken,
+) {
+    let mut interval = tokio::time::interval(HEALTH_INTERVAL);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => break,
+            _ = interval.tick() => {},
+        }
+        let report = async {
+            if let Err(error) = service.flush().await {
+                tracing::warn!(%error, "failed to flush Outlook import counts");
+            }
+            // Slightly shorter than the interval so the next minute is free.
+            if redis
+                .claim_outlook_health_snapshot(HEALTH_INTERVAL - Duration::from_secs(5))
+                .await
+                && let Err(error) = service.report().await
+            {
+                tracing::warn!(%error, "failed to read the Outlook health snapshot");
+            }
+        };
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => break,
+            () = report => {},
+        }
+    }
+    // Keep the counts of the last minute.
+    if let Err(error) = service.flush().await {
+        tracing::warn!(%error, "failed to flush Outlook import counts");
     }
 }
 
@@ -87,9 +150,9 @@ pub async fn run_contacts<R, G, S>(
 {
     loop {
         let cycle = async {
-            let mut worked = record(service.sync_once().await);
+            let mut worked = reported(service.sync_once().await);
             for _ in 0..8 {
-                if !record(service.photo_once().await) {
+                if !reported(service.photo_once().await) {
                     break;
                 }
                 worked = true;
@@ -113,7 +176,7 @@ pub async fn run_drafts<R, G, M>(
     M: email::domain::mailbox::drafts::ports::DraftMaterializer,
 {
     loop {
-        let worked = tokio::select! { biased; _ = cancellation.cancelled() => return, result = service.execute_once() => record(result) };
+        let worked = tokio::select! { biased; _ = cancellation.cancelled() => return, result = service.execute_once() => reported(result) };
         if !worked {
             tokio::select! { biased; _ = cancellation.cancelled() => return, _ = tokio::time::sleep(Duration::from_secs(1)) => {} }
         }
@@ -132,7 +195,7 @@ pub async fn run_projections<R, E>(
         let worked = tokio::select! {
             biased;
             _ = cancellation.cancelled() => return,
-            result = service.project_once() => record(result),
+            result = service.project_once() => reported(result),
         };
         if !worked {
             tokio::select! {
@@ -153,7 +216,7 @@ pub async fn run_commands<R, G>(
     G: email::domain::mailbox::commands::MailboxCommandGateway,
 {
     loop {
-        let worked = tokio::select! { biased; _ = cancellation.cancelled() => return, result = service.execute_once() => record(result) };
+        let worked = tokio::select! { biased; _ = cancellation.cancelled() => return, result = service.execute_once() => reported(result) };
         if !worked {
             tokio::select! { biased; _ = cancellation.cancelled() => return, _ = tokio::time::sleep(Duration::from_secs(1)) => {} }
         }
@@ -191,7 +254,7 @@ pub async fn run_settings<R, G>(
     G: email::domain::mailbox::settings::MailboxSettingsGateway,
 {
     loop {
-        let worked = tokio::select! {biased;_ = cancellation.cancelled()=>return,result=service.execute_once()=>record(result)};
+        let worked = tokio::select! {biased;_ = cancellation.cancelled()=>return,result=service.execute_once()=>reported(result)};
         if !worked {
             tokio::select! {biased;_ = cancellation.cancelled()=>return,_ = tokio::time::sleep(Duration::from_secs(1))=>{}}
         }
@@ -206,7 +269,7 @@ pub async fn run_watches<R, G>(
     G: email::domain::mailbox::watches::MailboxWatchGateway,
 {
     loop {
-        let worked = tokio::select! {biased;_ = cancellation.cancelled()=>return,result=service.execute_once()=>record(result)};
+        let worked = tokio::select! {biased;_ = cancellation.cancelled()=>return,result=service.execute_once()=>reported(result)};
         if !worked {
             tokio::select! {biased;_ = cancellation.cancelled()=>return,_ = tokio::time::sleep(Duration::from_secs(5))=>{}}
         }

@@ -3,15 +3,15 @@ import { setAgentSessionArchived } from '@queries/agent-session/entity-mutations
 
 export async function changeSessionArchiveState(
   sessionId: string,
-  isArchived: boolean
+  archived: boolean
 ): Promise<boolean> {
   try {
-    await setAgentSessionArchived(sessionId, isArchived);
-    toast.success(isArchived ? 'Session archived' : 'Session unarchived');
+    await setAgentSessionArchived(sessionId, archived);
+    toast.success(archived ? 'Session archived' : 'Session unarchived');
     return true;
   } catch {
     toast.failure(
-      isArchived ? 'Unable to archive session' : 'Unable to unarchive session'
+      archived ? 'Unable to archive session' : 'Unable to unarchive session'
     );
     return false;
   }

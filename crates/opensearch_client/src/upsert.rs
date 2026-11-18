@@ -8,7 +8,7 @@ pub mod email;
 pub mod project;
 pub mod properties;
 
-use crate::error::OpensearchClientError;
+use crate::error::{OpensearchClientError, OpensearchOperation};
 
 /// Result of a bulk upsert operation
 #[derive(Debug, Default)]
@@ -62,28 +62,21 @@ pub(crate) async fn bulk_upsert_to_index(
     client: &opensearch::OpenSearch,
     index: &str,
     bulk_body: Vec<String>,
-    method_name: &str,
+    operation: OpensearchOperation,
 ) -> crate::Result<BulkUpsertResult> {
     let response = client
         .bulk(opensearch::BulkParts::Index(index))
         .body(bulk_body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some(method_name.to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed(operation, &err))?;
 
     let status_code = response.status_code();
     if !status_code.is_success() {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some(method_name.to_string()),
-                })?;
+        let body = response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::deserialization_failed(operation, &err))?;
 
         tracing::error!(
             status_code = ?status_code,
@@ -93,18 +86,14 @@ pub(crate) async fn bulk_upsert_to_index(
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some(method_name.to_string()),
+            operation,
         });
     }
 
-    let response_body: serde_json::Value =
-        response
-            .json()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some(method_name.to_string()),
-            })?;
+    let response_body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|err| OpensearchClientError::deserialization_failed(operation, &err))?;
 
     Ok(parse_bulk_response(&response_body))
 }

@@ -1,3 +1,4 @@
+import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
@@ -18,10 +19,10 @@ import { CompanyPropertiesSection } from './company-properties-section';
 import { CompanySharingSection } from './company-sharing-section';
 import {
   RecordCallsSection,
-  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
+import { RecordDetailsSection } from './record-details-section';
 import { useCompanyQuery } from './use-crm';
 
 /**
@@ -31,14 +32,30 @@ import { useCompanyQuery } from './use-crm';
  * calls. Properties, sharing, and references open in the floating
  * information panel.
  */
-export function Company(props: {
+type CompanyProps = {
   companyId: string;
   section?: CompanySection;
   headerToggle?: boolean;
-  onHidden?: () => void;
   onOpenContact?: (contact: CompanyContact) => void;
   onOpenPipeline?: (pipelineId: string) => void;
-}) {
+};
+
+export function Company(props: CompanyProps) {
+  return (
+    <TraceFlow
+      name="crm.company"
+      key={() => `${props.companyId}:${props.section ?? 'overview'}`}
+      attributes={{
+        'company.id': props.companyId,
+        'crm.section': props.section ?? 'overview',
+      }}
+    >
+      <CompanyContent {...props} />
+    </TraceFlow>
+  );
+}
+
+function CompanyContent(props: CompanyProps) {
   const context = useCrmContext();
   onCleanup(
     context.registerTaskComposerRecord(() => ({
@@ -47,8 +64,8 @@ export function Company(props: {
     }))
   );
   const listsEnabled = context.listsEnabled();
-  const pipelinesEnabled = context.pipelinesEnabled();
-  const { company, contacts } = useCompanyQuery(() => props.companyId);
+  const { company, query } = useCompanyQuery(() => props.companyId);
+  usePending('crm.record', () => query.isLoading);
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {
@@ -76,19 +93,16 @@ export function Company(props: {
             <Match when={section() === 'overview'}>
               <RecordOverview>
                 <CompanyHeader company={company()} />
-                <Show when={pipelinesEnabled()}>
-                  <context.PipelineEntries
-                    record={{ type: 'company', id: props.companyId }}
-                    onOpenPipeline={props.onOpenPipeline}
-                  />
-                </Show>
+                <context.PipelineEntries
+                  record={{ type: 'company', id: props.companyId }}
+                  onOpenPipeline={props.onOpenPipeline}
+                />
                 <CompanyDiscussionSection companyId={props.companyId} />
               </RecordOverview>
             </Match>
             <Match when={section() === 'team'}>
               <CompanyContactsSection
                 company={company()}
-                contacts={contacts()}
                 onOpenContact={props.onOpenContact}
               />
             </Match>
@@ -108,9 +122,6 @@ export function Company(props: {
                 </Show>
               </Suspense>
             </Match>
-            <Match when={section() === 'databases'}>
-              <RecordDatabasesSection scope={scope()} />
-            </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />
             </Match>
@@ -118,10 +129,11 @@ export function Company(props: {
         </div>
       </div>
 
+      <RecordDetailsSection company={company()} />
       <SidePanel.Section
         id="company-properties"
         title="Properties"
-        order={15}
+        order={30}
         defaultOpen
         render={(renderSection) => (
           <CompanyPropertiesSection
@@ -135,10 +147,10 @@ export function Company(props: {
           <CompanyListsSection companyId={props.companyId} />
         </Suspense>
       </Show>
-      <SidePanel.Section id="company-sharing" title="Sharing" order={25}>
-        <CompanySharingSection company={company()} onHidden={props.onHidden} />
+      <SidePanel.Section id="company-sharing" title="Email sharing" order={50}>
+        <CompanySharingSection company={company()} />
       </SidePanel.Section>
-      <SidePanel.Section id="company-references" title="References" order={30}>
+      <SidePanel.Section id="company-references" title="References" order={20}>
         <RecordReferencesSection scope={scope()} />
       </SidePanel.Section>
     </SidePanel.Layout>

@@ -288,6 +288,28 @@ describe('thread state with an injected source', () => {
       }
     }));
 
+  it('stops offering a reply draft once a snapshot shows it was sent', () =>
+    createRoot((dispose) => {
+      try {
+        const draft = message('draft', {
+          is_draft: true,
+          replying_to_id: 'parent',
+          body_html_sanitized: '<p>Reply</p>',
+        });
+        const [snapshot, setSnapshot] = createSignal(
+          thread([message('parent'), draft])
+        );
+        const state = createEmailThreadState(
+          createThreadContext({ thread: snapshot })
+        );
+        expect(state.drafts.getDraftForMessage('parent')).toEqual(draft);
+        setSnapshot(thread([message('parent'), { ...draft, is_draft: false }]));
+        expect(state.drafts.getDraftForMessage('parent')).toBeUndefined();
+      } finally {
+        dispose();
+      }
+    }));
+
   it('keeps selection and programmatic scrolling local to each mounted thread', () =>
     createRoot((dispose) => {
       try {

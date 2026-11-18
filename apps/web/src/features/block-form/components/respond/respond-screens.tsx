@@ -1,4 +1,5 @@
 import { timeRangeFromInstants } from '@app/features/database/core/cell-date-range';
+import { percentagePointsText } from '@app/features/database/core/column-inference';
 import CheckCircle from '@icon/system/regular/check-circle.svg';
 import Lock from '@icon/system/regular/lock.svg';
 import Prohibit from '@icon/system/regular/prohibit.svg';
@@ -46,6 +47,8 @@ export function ProgressStrip(props: { position: number; total: number }) {
 export function RespondTitleCard(props: {
   name: string;
   description: string;
+  /** The form's logo, shown above its name. */
+  logoUrl?: string;
   compact: boolean;
 }) {
   return (
@@ -57,6 +60,15 @@ export function RespondTitleCard(props: {
       }
     >
       <div class={cn('flex flex-col', props.compact ? 'gap-1.5 p-3' : 'gap-6')}>
+        <Show when={props.logoUrl}>
+          {(logoUrl) => (
+            <img
+              src={logoUrl()}
+              alt=""
+              class="h-12 max-w-48 self-start object-contain"
+            />
+          )}
+        </Show>
         <h1
           class={cn(
             'font-semibold text-ink wrap-anywhere',
@@ -179,7 +191,13 @@ export function AnswerValue(props: {
       .with({ type: 'text' }, (text) => (
         <span class="whitespace-pre-wrap wrap-anywhere">{text.value}</span>
       ))
-      .with({ type: 'number' }, (number) => <span>{String(number.value)}</span>)
+      .with({ type: 'number' }, (number) => (
+        <span>
+          {props.column.percentage
+            ? `${percentagePointsText(number.value)}%`
+            : String(number.value)}
+        </span>
+      ))
       .with({ type: 'boolean' }, (checked) => (
         <span>{checked.value ? 'Yes' : 'No'}</span>
       ))

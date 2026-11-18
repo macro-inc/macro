@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  eventTimingCursor,
   initializeUiOperationTelemetry,
+  readEventTimings,
+  setActiveRoute,
   startUiOperation,
 } from './ui-operation';
 
@@ -13,6 +16,7 @@ const { spans } = vi.hoisted(() => ({
   }[],
 }));
 vi.mock('@macro-inc/observability', () => ({
+  NOOP_SPAN: {},
   Telemetry: {
     span: (name: string) => {
       const record = {
@@ -145,6 +149,32 @@ describe('UI operation timing', () => {
     expect(spans[0].ends).toBe(1);
   });
 
+  it('tags each root with its kind and, except navigations, the current route', () => {
+    setActiveRoute('channel');
+    startUiOperation('database.cell.commit').cancel();
+    startUiOperation('navigation', { kind: 'navigation' }).cancel();
+    startUiOperation('view.email', {
+      kind: 'view',
+      attributes: { 'route.id': 'email' },
+    }).cancel();
+    expect(spans.map((span) => span.attrs['flow.kind'])).toEqual([
+      'interaction',
+      'navigation',
+      'view',
+    ]);
+    expect(spans.map((span) => span.attrs['route.id'])).toEqual([
+      'channel',
+      undefined,
+      'email',
+    ]);
+    expect(spans[0].attrs).toMatchObject({
+      'ui.outcome': 'cancelled',
+      'ui.long_task_count': 0,
+      'ui.long_animation_frame_count': 0,
+    });
+    expect(spans[0].attrs['ui.elapsed_ms']).toEqual(expect.any(Number));
+  });
+
   it('ends hidden operations and cancels frames without claiming a paint', () => {
     const operation = startUiOperation('database.cell.editor.open');
     operation.afterPaint();
@@ -176,6 +206,49 @@ describe('UI operation timing', () => {
     startUiOperation('database.cell.commit', { event: event(500) }).finish();
     expect(spans[0].attrs['ui.event_to_handler_ms']).toBe(50);
     expect(spans[1].attrs['ui.event_to_handler_ms']).toBeUndefined();
+  });
+
+  it('reads event timings after a cursor and reports what the bounded buffer dropped', () => {
+    const keydown = (start: number) =>
+      ({
+        entryType: 'event',
+        name: 'keydown',
+        startTime: start,
+        duration: 40,
+        processingStart: start + 5,
+        processingEnd: start + 25,
+        interactionId: start,
+      }) as unknown as PerformanceEntry;
+    records.push(keydown(1));
+    const cursor = eventTimingCursor();
+    records.push(keydown(10), {
+      entryType: 'longtask',
+      name: 'self',
+      startTime: 12,
+      duration: 80,
+    } as PerformanceEntry);
+    const read = readEventTimings(cursor);
+    expect(read).toMatchObject({
+      dropped: 0,
+      supported: true,
+      thresholdMs: 16,
+    });
+    expect(read.entries).toEqual([
+      {
+        name: 'keydown',
+        start: 10,
+        inputDelayMs: 5,
+        processingMs: 20,
+        durationMs: 40,
+        interactionId: 10,
+      },
+    ]);
+
+    for (let start = 100; start < 400; start++) records.push(keydown(start));
+    const late = readEventTimings(read.cursor);
+    expect(late.dropped).toBe(100);
+    expect(late.entries).toHaveLength(200);
+    expect(readEventTimings(late.cursor).entries).toEqual([]);
   });
 
   it('cleans up observers once and works without PerformanceObserver support', () => {

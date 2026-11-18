@@ -108,7 +108,7 @@ fn candidate(is_coding: bool, available: bool) -> CodingAgentCandidate {
 }
 
 fn fixture() -> (
-    CodingAgentServiceImpl<Directory, Sessions>,
+    CodingAgentServiceImpl<Directory, Sessions, ()>,
     Directory,
     Sessions,
     CodingAgentCandidate,
@@ -118,7 +118,7 @@ fn fixture() -> (
     directory.candidates.lock().unwrap().push(agent.clone());
     let sessions = Sessions::default();
     (
-        CodingAgentServiceImpl::new(directory.clone(), sessions.clone()),
+        CodingAgentServiceImpl::new(directory.clone(), sessions.clone(), ()),
         directory,
         sessions,
         agent,

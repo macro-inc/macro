@@ -115,12 +115,13 @@ where
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
-    pub(super) async fn change_thread_mailbox_state_impl(
+    /// Set `action`'s state on the thread; the number of messages it changed.
+    pub(crate) async fn change_thread_mailbox_state_impl(
         &self,
         actor: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
         action: MailboxAction,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         match action {
             MailboxAction::Read(true) => return self.mark_thread_seen_impl(actor, thread_id).await,
             MailboxAction::Read(false) => {
@@ -138,9 +139,11 @@ where
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
             .ok_or(EmailErr::ThreadNotFound)?;
         if link.provider == UserProvider::Outlook {
-            self.queue_outlook_action(&link, thread_id, actor, action)
-                .await?;
-            return Ok(());
+            return Ok(self
+                .queue_outlook_action(&link, thread_id, actor, action)
+                .await?
+                .successful_ids
+                .len());
         }
         let (provider_id, value) = match &action {
             MailboxAction::Flagged(value) => (system_labels::STARRED, *value),
@@ -150,9 +153,11 @@ where
             _ => unreachable!("read and archive handled above"),
         };
         let label = self.link_label_by_provider_id(link.id, provider_id).await?;
-        self.update_thread_labels_with_actor(&link, thread_id, label.id, value, Some(actor))
-            .await?;
-        Ok(())
+        Ok(self
+            .update_thread_labels_with_actor(&link, thread_id, label.id, value, Some(actor))
+            .await?
+            .successful_ids
+            .len())
     }
 
     /// The email domain selects a bounded message set; persistence commits the
@@ -189,7 +194,7 @@ where
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         let link = self
             .email_repo
             .owned_link_for_thread(thread_id, macro_id.clone())
@@ -212,9 +217,11 @@ where
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
 
         if link.provider == UserProvider::Outlook {
-            self.queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(true))
-                .await?;
-            return Ok(());
+            return Ok(self
+                .queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(true))
+                .await?
+                .successful_ids
+                .len());
         }
 
         let message_ids: Vec<Uuid> = messages.iter().map(|message| message.db_id).collect();
@@ -236,12 +243,14 @@ where
                 .update_thread_read_status(thread_id, link.id, true)
                 .await
                 .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
-            return Ok(());
+            return Ok(0);
         };
 
-        self.update_thread_labels_impl(&link, thread_id, unread_label_id, false)
-            .await?;
-        Ok(())
+        Ok(self
+            .update_thread_labels_impl(&link, thread_id, unread_label_id, false)
+            .await?
+            .successful_ids
+            .len())
     }
 
     #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
@@ -249,7 +258,7 @@ where
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         let link = self
             .email_repo
             .owned_link_for_thread(thread_id, macro_id.clone())
@@ -260,17 +269,21 @@ where
         // Resolve from the authorized thread's inbox, never the caller's primary
         // inbox: multi-inbox users have a distinct UNREAD label for each link.
         if link.provider == UserProvider::Outlook {
-            self.queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(false))
-                .await?;
-            return Ok(());
+            return Ok(self
+                .queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(false))
+                .await?
+                .successful_ids
+                .len());
         }
         let unread_label = self
             .link_label_by_provider_id(link.id, system_labels::UNREAD)
             .await?;
 
-        self.update_thread_labels_impl(&link, thread_id, unread_label.id, true)
-            .await?;
-        Ok(())
+        Ok(self
+            .update_thread_labels_impl(&link, thread_id, unread_label.id, true)
+            .await?
+            .successful_ids
+            .len())
     }
 
     /// Resolve the owning inbox server-side, including delegated inboxes.
@@ -280,7 +293,7 @@ where
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
         archived: bool,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         let link = self
             .email_repo
             .owned_link_for_thread(thread_id, macro_id.clone())
@@ -295,25 +308,30 @@ where
             .await
     }
 
-    /// Outlook folders have no INBOX label row; only Gmail stores one.
+    /// Outlook folders have no INBOX label row; only Gmail stores one. The
+    /// number of messages it moved.
     pub(super) async fn set_thread_inbox(
         &self,
         link: &Link,
         thread_id: Uuid,
         actor: macro_user_id::user_id::MacroUserIdStr<'static>,
         in_inbox: bool,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         if link.provider == UserProvider::Outlook {
-            self.queue_outlook_action(link, thread_id, actor, MailboxAction::Archived(!in_inbox))
-                .await?;
-            return Ok(());
+            return Ok(self
+                .queue_outlook_action(link, thread_id, actor, MailboxAction::Archived(!in_inbox))
+                .await?
+                .successful_ids
+                .len());
         }
         let label = self
             .link_label_by_provider_id(link.id, system_labels::INBOX)
             .await?;
-        self.update_thread_labels_with_actor(link, thread_id, label.id, in_inbox, Some(actor))
-            .await?;
-        Ok(())
+        Ok(self
+            .update_thread_labels_with_actor(link, thread_id, label.id, in_inbox, Some(actor))
+            .await?
+            .successful_ids
+            .len())
     }
 
     async fn link_label_by_provider_id(

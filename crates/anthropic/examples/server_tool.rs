@@ -1,4 +1,5 @@
-use anthropic::prelude::WEB_SEARCH_TOOL;
+use anthropic::openai::request::{AnthropicRequestExtension, AnthropicRequestExtensions};
+use anthropic::prelude::CODE_EXECUTION_TOOL;
 use std::io::Write;
 use std::process::exit;
 
@@ -14,14 +15,19 @@ const LOG_MODE: bool = false;
 
 #[tokio::main]
 async fn main() {
-    let client = Client::dangerously_try_from_env(None);
-    let mut request = CreateMessageRequestBody::default();
-    request.max_tokens = 1000;
-    request.system = Some(SystemPrompt::Text(
-        "You are a helpful AI assistant in a CLI based demo. Use web search tool eagerly".into(),
-    ));
-    request.model = "claude-haiku-4-5".into();
-    request.tools = Some(vec![WEB_SEARCH_TOOL.clone().into()]);
+    let client = Client::dangerously_try_from_env(Some(AnthropicRequestExtensions(vec![
+        AnthropicRequestExtension::CodeExecutionTool,
+    ])));
+    let mut request = CreateMessageRequestBody {
+        max_tokens: 1000,
+        system: Some(SystemPrompt::Text(
+            "You are a helpful AI assistant in a CLI based demo. Use the code execution tool eagerly"
+                .into(),
+        )),
+        model: "claude-haiku-4-5".into(),
+        tools: Some(vec![CODE_EXECUTION_TOOL.clone().into()]),
+        ..Default::default()
+    };
     let mut out = std::io::stdout();
 
     loop {
@@ -57,12 +63,8 @@ async fn main() {
                 continue;
             }
             if let Err(error) = event {
-                match error {
-                    other => {
-                        writeln!(out, "\nerror: {:#?}", other).expect("io");
-                        exit(1);
-                    }
-                }
+                writeln!(out, "\nerror: {:#?}", error).expect("io");
+                exit(1);
             } else {
                 let event = event.unwrap();
                 let response_text = match event {
@@ -78,10 +80,12 @@ async fn main() {
                         ContentDeltaEvent::TextDelta { text } => text,
                         ContentDeltaEvent::ThinkingDelta { thinking } => thinking,
                         ContentDeltaEvent::CitationsDelta { .. } => "[Citation]".into(),
-                        ContentDeltaEvent::WebSearchToolResult(web_search_result) => {
-                            format!("{:#?}", web_search_result)
+                        ContentDeltaEvent::BashCodeExecutionToolResult(result) => {
+                            format!("{:#?}", result)
                         }
-
+                        ContentDeltaEvent::TextEditorCodeExecutionToolResult(result) => {
+                            format!("{:#?}", result)
+                        }
                         ContentDeltaEvent::ServerToolUse(tool) => {
                             format!("{:#?}", tool)
                         }
@@ -92,8 +96,11 @@ async fn main() {
                         ContentDeltaEvent::ServerToolUse(tool) => {
                             format!("{:#?}", tool)
                         }
-                        ContentDeltaEvent::WebSearchToolResult(web_search_result) => {
-                            format!("{:#?}", web_search_result)
+                        ContentDeltaEvent::BashCodeExecutionToolResult(result) => {
+                            format!("{:#?}", result)
+                        }
+                        ContentDeltaEvent::TextEditorCodeExecutionToolResult(result) => {
+                            format!("{:#?}", result)
                         }
                         _ => "".into(),
                     },

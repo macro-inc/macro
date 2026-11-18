@@ -11,7 +11,7 @@
 //! as an artifact; the iOS build has never run in CI, so that is the cheap way
 //! to iterate on it without a PR or an API token.
 //!
-//! NOTE: like `deploy_preview`, this must NOT be a required status check — a
+//! NOTE: like the web preview steps, this must NOT be a required status check — a
 //! PR should stay mergeable regardless of whether its preview built.
 
 use gh_workflow::{

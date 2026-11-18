@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO referral_tracking (id, referrer_id, referred_id, status, created_at)\n            VALUES ($1, $2, $3, 'incomplete', NOW())\n            ON CONFLICT (referred_id) DO NOTHING\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "80b23d305a99cef820a42a920a288065af18ee4a52f00a8b97f90bc8de58aeaa"
+}

@@ -28,8 +28,9 @@ const referralCode = () =>
 export async function sendEmailCode(input: {
   email: string;
   password?: string;
+  isAgent: boolean;
 }): Promise<SendCodeResult> {
-  const { email, password } = input;
+  const { email, password, isAgent } = input;
   if (await isPasswordLogin(email)) {
     if (!password) return { t: 'password-required' };
     const tokens = await authServiceClient.passwordLogin({ password, email });
@@ -52,6 +53,7 @@ export async function sendEmailCode(input: {
         redirect_uri: REDIRECT_URI,
         email,
         ...(referral_code && { referral_code }),
+        ...(isAgent && { is_agent: true }),
       }),
     }
   ).catch(() => undefined);

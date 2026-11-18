@@ -20,6 +20,7 @@ fn client(base_url: String) -> FusionAuthClient {
 
 fn user() -> create::User<'static> {
     create::User {
+        data: None,
         email: Cow::Borrowed("user@example.com"),
         password: Cow::Borrowed("unused-password"),
         username: None,

@@ -1,13 +1,21 @@
 const SIGNUP_STEPS = ['welcome', 'vision', 'security', 'work'] as const;
 export type SignupStep = (typeof SIGNUP_STEPS)[number];
 
+/** The identity providers a new account can sign up with. */
+export type SignupProvider = 'google' | 'microsoft';
+
 /** Only local presentation choices cross the sign-up redirect, never credentials. */
 export type SignupDraft = {
   step: SignupStep;
   accent?: string;
-  /** Google sign-up started from the work step; the OAuth return resumes there. */
+  /** Sign-up started from the work step; the OAuth return resumes there. */
   authenticating?: boolean;
+  /** Which provider that sign-up went through. */
+  provider?: SignupProvider;
 };
+
+const isSignupProvider = (value: unknown): value is SignupProvider =>
+  value === 'google' || value === 'microsoft';
 
 const isSignupStep = (value: unknown): value is SignupStep =>
   SIGNUP_STEPS.some((step) => step === value);
@@ -33,6 +41,10 @@ export function parseSignupDraft(raw: string | null): SignupDraft | undefined {
       'authenticating' in value &&
       value.authenticating === true &&
       value.step === 'work',
+    provider:
+      'provider' in value && isSignupProvider(value.provider)
+        ? value.provider
+        : undefined,
   };
 }
 

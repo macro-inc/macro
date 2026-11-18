@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@core/hotkey/hotkeys', () => ({
   useHotkeyDOMScope: () => [() => {}, {}],
 }));
-vi.mock('./split-layout/components/PriorityCollapseOverflowSensor', () => ({
+vi.mock('../priority-collapse/PriorityCollapseOverflowSensor', () => ({
   createPriorityCollapseController: () => ({
     setRow: () => {},
     collapser: {},

@@ -557,6 +557,14 @@ fn render_tool(label: &str, status: ToolStatus, detail: &ToolDetail) -> String {
                 let _ = writeln!(out, "{}", indent(&format!("error: {error}")));
             }
         }
+        ToolDetail::View { view, error } => {
+            if let Some(view) = view {
+                let _ = writeln!(out, "{}", indent(&format!("view: {view:?}")));
+            }
+            if let Some(error) = error {
+                let _ = writeln!(out, "{}", indent(&format!("error: {error}")));
+            }
+        }
         ToolDetail::UserTool { input, outcome } => {
             let _ = writeln!(out, "{}", indent(&format!("draft: {}", pretty(input))));
             let _ = writeln!(out, "{}", indent(&format!("outcome: {outcome:?}")));

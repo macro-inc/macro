@@ -70,6 +70,7 @@ async fn a_derived_column_is_created_with_a_number_definition_and_its_formula() 
         column.config,
         Some(ColumnConfig::Derived {
             formula: plus_ones_times(&seeded, 2.0),
+            percentage: false,
         })
     );
     let definition = &world.definitions[&column.property_definition_id].definition;
@@ -334,5 +335,170 @@ async fn a_formula_cannot_read_its_own_column() {
     assert_eq!(
         cycle,
         "Seats can't be used here: its value depends on this column."
+    );
+}
+
+#[tokio::test]
+async fn a_formula_cell_is_derived_on_creation_on_a_new_formula_and_on_each_input_write() {
+    let seeded = seeded().await;
+    let seats = ColumnId::new();
+    let seats_cell = |seeded: &Seeded| {
+        let world = seeded.world.lock().unwrap();
+        let definition = world
+            .columns
+            .iter()
+            .find(|column| column.id == seats)
+            .unwrap()
+            .property_definition_id;
+        world.cells[&seeded.row_id].get(&definition).cloned()
+    };
+    apply(
+        &seeded,
+        vec![DatabaseOp::Column {
+            table: seeded.table_id,
+            column: seats,
+            change: ColumnChange::Create {
+                definition: NewColumn::Derived {
+                    name: "Seats".into(),
+                    formula: plus_ones_times(&seeded, 2.0),
+                },
+                after: None,
+            },
+        }],
+    )
+    .await
+    .unwrap();
+    // Sam brings 2 plus ones.
+    assert_eq!(seats_cell(&seeded), Some(PropertyValue::Num(4.0)));
+
+    let formula_set = seeded
+        .service
+        .apply_ops_with_changes(
+            edit(seeded.database_id),
+            viewer(OWNER),
+            vec![DatabaseOp::Column {
+                table: seeded.table_id,
+                column: seats,
+                change: ColumnChange::SetFormula {
+                    formula: plus_ones_times(&seeded, 3.0),
+                },
+            }]
+            .into(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(seats_cell(&seeded), Some(PropertyValue::Num(6.0)));
+
+    apply(
+        &seeded,
+        vec![DatabaseOp::Rows {
+            table: seeded.table_id,
+            change: RowsChange::Update {
+                changes: RowChanges::Uniform {
+                    rows: vec![seeded.row_id],
+                    cells: vec![CellWrite {
+                        column: seeded.plus_ones_column.id,
+                        value: CellValue::Number(5.0),
+                    }],
+                },
+            },
+        }],
+    )
+    .await
+    .unwrap();
+    assert_eq!(seats_cell(&seeded), Some(PropertyValue::Num(15.0)));
+
+    let outcome = seeded
+        .service
+        .undo_change(
+            edit(seeded.database_id),
+            viewer(OWNER),
+            formula_set.changes[0].change,
+        )
+        .await
+        .unwrap();
+    assert!(
+        matches!(outcome, UndoOutcome::Reverted { .. }),
+        "{outcome:?}"
+    );
+    assert_eq!(seats_cell(&seeded), Some(PropertyValue::Num(10.0)));
+}
+
+#[tokio::test]
+async fn a_derived_number_column_can_become_percentage() {
+    let seeded = seeded().await;
+    let seats = ColumnId::new();
+    apply(
+        &seeded,
+        vec![DatabaseOp::Column {
+            table: seeded.table_id,
+            column: seats,
+            change: ColumnChange::Create {
+                definition: NewColumn::Derived {
+                    name: "Seats".into(),
+                    formula: plus_ones_times(&seeded, 2.0),
+                },
+                after: None,
+            },
+        }],
+    )
+    .await
+    .unwrap();
+    let definition = seeded
+        .world
+        .lock()
+        .unwrap()
+        .columns
+        .iter()
+        .find(|column| column.id == seats)
+        .unwrap()
+        .property_definition_id;
+
+    apply(
+        &seeded,
+        vec![DatabaseOp::Column {
+            table: seeded.table_id,
+            column: seats,
+            change: ColumnChange::ChangeType {
+                to: ColumnKind::Percentage,
+            },
+        }],
+    )
+    .await
+    .unwrap();
+
+    {
+        let world = seeded.world.lock().unwrap();
+        let column = world
+            .columns
+            .iter()
+            .find(|column| column.id == seats)
+            .unwrap();
+        assert_eq!(column.property_definition_id, definition);
+        assert_eq!(
+            column.config,
+            Some(ColumnConfig::Derived {
+                formula: plus_ones_times(&seeded, 2.0),
+                percentage: true,
+            })
+        );
+    }
+
+    let text = refusal(
+        apply(
+            &seeded,
+            vec![DatabaseOp::Column {
+                table: seeded.table_id,
+                column: seats,
+                change: ColumnChange::ChangeType {
+                    to: ColumnKind::Text,
+                },
+            }],
+        )
+        .await,
+    );
+    assert_eq!(
+        text,
+        "a derived column's type follows its formula; change the formula instead"
     );
 }

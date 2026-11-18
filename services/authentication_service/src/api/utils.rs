@@ -139,16 +139,18 @@ pub async fn append_signed_up_param_if_new_user(
     macro_cache_client: &macro_cache_client::MacroCache,
     email: &str,
     redirect_url: &mut Url,
-) {
+) -> bool {
     match macro_cache_client.take_user_just_signed_up(email).await {
         Ok(true) => {
             redirect_url
                 .query_pairs_mut()
                 .append_pair("signed_up", "true");
+            true
         }
-        Ok(false) => {}
+        Ok(false) => false,
         Err(e) => {
             tracing::error!(error=?e, "unable to check just-signed-up marker");
+            false
         }
     }
 }

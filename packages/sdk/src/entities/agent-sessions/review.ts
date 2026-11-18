@@ -1,12 +1,26 @@
 import type {
-  ReviewDecision,
-  ReviewRecord,
-} from '../../../generated/agent-harness/types.gen';
+  CreateCalendarEvent_Deserialize,
+  ReviewDecision_Deserialize,
+  ReviewDraft_Deserialize,
+  ReviewDrafts_Deserialize,
+  ReviewRecord_Serialize,
+  ReviewTitle,
+  SendEmail,
+} from '../../../generated/agent-reviews';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import type { AgentSession } from './agent-session';
 import type { CodeExecution } from './code-execution';
+
+type ReviewRecord = ReviewRecord_Serialize;
+type ReviewDecision = ReviewDecision_Deserialize;
+
+// The HTTP schemas are opaque: the server serializes the Rust review types,
+// whose TypeScript contract is generated from the same Rust types.
+function typedRecord(record: unknown): ReviewRecord {
+  return record as ReviewRecord;
+}
 
 /** A persistent review remains actionable after the code execution ends. */
 export class SessionReview extends MacroEntity<ReviewRecord> {
@@ -57,7 +71,7 @@ export class SessionReview extends MacroEntity<ReviewRecord> {
         body: { ...input, executionId: execution?.id ?? null },
       }),
     );
-    return SessionReview.fromRecord(client, session, record);
+    return SessionReview.fromRecord(client, session, typedRecord(record));
   }
   static async list(
     client: MacroClient,
@@ -72,27 +86,49 @@ export class SessionReview extends MacroEntity<ReviewRecord> {
       }),
     );
     return records.map((record) =>
-      SessionReview.fromRecord(client, execution.session(), record),
+      SessionReview.fromRecord(
+        client,
+        execution.session(),
+        typedRecord(record),
+      ),
     );
   }
   protected async fetch(): Promise<ReviewRecord> {
-    return unwrap(
-      await this.client.agentHarness.getSessionReview({
-        path: { session_id: this.parent.id, review_id: this.id },
-      }),
+    return typedRecord(
+      unwrap(
+        await this.client.agentHarness.getSessionReview({
+          path: { session_id: this.parent.id, review_id: this.id },
+        }),
+      ),
     );
   }
   readonly title = this.field('title');
   readonly kind = this.field('kind');
+  /**
+   * The session this review belongs to.
+   *
+   * @readonly
+   */
   session(): AgentSession {
     return this.parent;
   }
-  /** Compact reference for main()'s returned reviews array. */
+  /**
+   * Compact reference for main()'s returned reviews array.
+   *
+   * @readonly
+   */
   async reference(): Promise<{ kind: ReviewRecord['kind']; id: string }> {
     return { kind: await this.kind(), id: this.id };
   }
+  /**
+   * The review's items, each with its draft, status and result.
+   *
+   * @readonly
+   */
   async items(): Promise<ReviewItem[]> {
-    return (await this.detail.get()).items.map(
+    const record = await this.detail.get();
+    const items: ReviewRecord['items'] = record.items;
+    return items.map(
       (item) =>
         new ReviewItem(item, {
           edit: (draft) =>
@@ -102,15 +138,31 @@ export class SessionReview extends MacroEntity<ReviewRecord> {
         }),
     );
   }
+  /**
+   * Reload the saved review, for example after a decision or a conflict.
+   *
+   * @readonly
+   */
   async refresh(): Promise<this> {
     this.detail.clear();
     await this.detail.get();
     return this;
   }
-  /** Submit the saved pending drafts. Never retries a conflict or ambiguous send. */
+  /**
+   * Submit the saved pending drafts. Never retries a conflict or ambiguous send.
+   *
+   * @destructive
+   * @openworld
+   */
   async submitAll(): Promise<void> {
     await this.decide({ action: 'submit', items: [] });
   }
+  /**
+   * Dismiss every pending draft without sending it.
+   *
+   * @destructive
+   * @idempotent
+   */
   async dismissAll(): Promise<void> {
     await this.decide({ action: 'dismiss', items: [] });
   }
@@ -133,12 +185,16 @@ export class SessionReview extends MacroEntity<ReviewRecord> {
   }
 }
 
-/** An item handle scopes edits and decisions to its persisted review. */
+/**
+ * An item handle scopes edits and decisions to its persisted review.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
+ */
 export class ReviewItem {
   constructor(
     private readonly snapshot: ReviewRecord['items'][number],
     private readonly actions: {
-      edit: (draft: unknown) => Promise<void>;
+      edit: (draft: ReviewDraft) => Promise<void>;
       submit: () => Promise<void>;
       dismiss: () => Promise<void>;
     },
@@ -149,55 +205,49 @@ export class ReviewItem {
   get status(): ReviewRecord['items'][number]['status'] {
     return this.snapshot.status;
   }
-  get draft(): unknown {
+  get draft(): ReviewRecord['items'][number]['draft'] {
     return this.snapshot.draft;
   }
-  get result(): unknown {
+  /** The action's confirmed response, `null` until it completes. */
+  get result(): ReviewRecord['items'][number]['result'] {
     return this.snapshot.result;
   }
-  async edit(draft: unknown): Promise<void> {
+  /**
+   * Replace this pending draft; `kind` must match the review's.
+   *
+   * @write
+   * @idempotent
+   */
+  async edit(draft: ReviewDraft): Promise<void> {
     await this.actions.edit(draft);
   }
+  /**
+   * Submit this pending draft, sending the email or creating the event it holds.
+   *
+   * @destructive
+   * @openworld
+   */
   async submit(): Promise<void> {
     await this.actions.submit();
   }
+  /**
+   * Dismiss this pending draft without sending it.
+   *
+   * @destructive
+   * @idempotent
+   */
   async dismiss(): Promise<void> {
     await this.actions.dismiss();
   }
 }
 
+/** A replacement draft keyed by its review's kind. */
+export type ReviewDraft = ReviewDraft_Deserialize;
 /** Markdown is rendered by the ordinary email action; the UI can edit each draft. */
-export type ReviewEmailDraft = {
-  subject: string;
-  body: string;
-  to: Array<{ email: string; name?: string | null }>;
-  cc?: Array<{ email: string; name?: string | null }>;
-  bcc?: Array<{ email: string; name?: string | null }>;
-  replyingToId?: string | null;
-  includeSignature?: boolean | null;
-  attachments?: Array<{ documentId: string }>;
-};
-export type CreateReviewOptions =
-  | { kind: 'email'; title: string; drafts: ReviewEmailDraft[] }
-  | { kind: 'calendar'; title: string; drafts: ReviewCalendarDraft[] };
+export type ReviewEmailDraft = SendEmail;
 /** Calendar drafts use the existing calendar composer and creation action. */
-export type ReviewCalendarDraft = {
-  title: string;
-  time: import('../../../generated/calendar/types.gen').EventTime;
-  description?: string | null;
-  location?: string | null;
-  attendees?: Array<{ email: string; isOptional?: boolean }>;
-  calendarId?: string | null;
-  recurrenceLines?: string[];
-  addMacroCall?: boolean;
-  addGoogleMeet?: boolean;
-  reminders?: {
-    useDefault: boolean;
-    overrides?: Array<{ method: string; minutes: number }>;
-  } | null;
-  eventType?: 'default' | 'out_of_office';
-  outOfOffice?: {
-    autoDeclineMode?: 'decline_none' | 'decline_all' | 'decline_new_only';
-    declineMessage?: string | null;
-  } | null;
-};
+export type ReviewCalendarDraft = CreateCalendarEvent_Deserialize;
+/** A review's kind and its drafts; the execution is attached by the handle. */
+export type CreateReviewOptions = {
+  title: ReviewTitle;
+} & ReviewDrafts_Deserialize;

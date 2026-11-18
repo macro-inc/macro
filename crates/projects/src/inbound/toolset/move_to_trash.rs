@@ -4,7 +4,7 @@ use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
-use entity_mutation::{MoveEntity, TrashEntity};
+use entity_mutation::{DuplicateEntity, MoveEntity, TrashEntity};
 use model_entity::{Entity, EntityType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -88,19 +88,21 @@ impl ToolAnnotated for MoveToTrash {
 }
 
 #[async_trait]
-impl<PSvc, ESvc, DSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>> for MoveToTrash
+impl<PSvc, ESvc, DSvc, EmSvc, DbSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>
+    for MoveToTrash
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
+    DbSvc: DuplicateEntity + Send + Sync + 'static,
 {
     type Output = MoveToTrashResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, entity_type=?self.entity_type, entity_id=?self.entity_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>,
+        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let entity = self

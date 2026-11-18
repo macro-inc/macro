@@ -51,6 +51,21 @@ export function operationBlocksEditing(
   );
 }
 
+/**
+ * A draft write awaiting a decision can still be discarded: the server deletes
+ * a conflicted or unconfirmed draft. Delivery that started, or lost access,
+ * cannot.
+ */
+export function operationBlocksDiscard(
+  operation?: MessageOperation | null
+): boolean {
+  if (!operation || !operationBlocksEditing(operation)) return false;
+  if (operation.state === 'CONFLICT') return false;
+  return !(
+    operation.state === 'UNCERTAIN' && operation.issue !== 'SEND_UNKNOWN'
+  );
+}
+
 /** Moving a draft is how rejected content recovers, but not mid-move. */
 export function operationBlocksInboxSwitch(
   operation?: MessageOperation | null

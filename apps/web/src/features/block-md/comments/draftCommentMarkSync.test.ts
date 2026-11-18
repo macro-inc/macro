@@ -1,7 +1,9 @@
 import { $reconcileLexicalState } from '@core/component/LexicalMarkdown/collaboration/reconcile';
 import {
+  COMMIT_COMMENT_MARK_COMMAND,
   CREATE_DRAFT_COMMENT_COMMAND,
   commentPlugin,
+  DELETE_COMMENT_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import {
   getSaveState,
@@ -10,6 +12,7 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import {
   $createCommentNode,
+  $getCommentMarkText,
   $isCommentNode,
   $updateAllNodeIds,
   CommentNode,
@@ -205,6 +208,63 @@ describe('draft comment marks stay out of the shared document', () => {
       'comment-mark',
     ]);
   });
+
+  it.each(['cancel', 'commit', 'remote'] as const)(
+    'preserves a saved range when an overlapping draft is %s',
+    (action) => {
+      const { editor, mappings } = setup();
+      editor.update(
+        () => {
+          const text = $createTextNode('Already commented text');
+          $getRoot().append(
+            $createParagraphNode().append(
+              $createCommentNode({ ids: ['saved'] }).append(text)
+            )
+          );
+          text.select(2, 7);
+          editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined);
+          $updateAllNodeIds(mappings);
+        },
+        { discrete: true }
+      );
+      const key = draftKeys(editor)[0];
+      const id = editor.read(
+        () => $getNodeByKey<CommentNode>(key)!.getIDs()[0]
+      );
+      const shared = loroSyncState(editor.getEditorState());
+      expect(JSON.stringify(shared)).not.toContain(id);
+      expect(JSON.stringify(shared)).toContain('saved');
+      expect(editor.read(() => $getCommentMarkText('saved'))).toBe(
+        'Already commented text'
+      );
+
+      if (action === 'remote') {
+        applyRemote(editor, mappings, shared);
+        expect(draftKeys(editor)).toEqual([key]);
+        expect(draftText(editor, key)).toBe('ready');
+      } else {
+        editor.update(
+          () => {
+            if (action === 'cancel')
+              editor.dispatchCommand(DELETE_COMMENT_COMMAND, [id, false]);
+            else
+              editor.dispatchCommand(COMMIT_COMMENT_MARK_COMMAND, {
+                markId: id,
+              });
+          },
+          { discrete: true }
+        );
+        expect(draftKeys(editor)).toEqual([]);
+        expect(editor.read(() => $getCommentMarkText(id))).toBe(
+          action === 'commit' ? 'ready' : ''
+        );
+      }
+      expect(editor.read(() => $getCommentMarkText('saved'))).toBe(
+        'Already commented text'
+      );
+      expect(paragraphText(editor)).toEqual(['Already commented text']);
+    }
+  );
 
   it('returns the same state object when there is no draft to strip', () => {
     const { editor } = setup();

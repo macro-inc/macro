@@ -82,3 +82,85 @@ it('opens the deployed native format without conversion, preserving IDs, metadat
   doc.commit();
   doc.free();
 });
+
+it('skips node kinds from newer clients and preserves them through local edits', () => {
+  const doc = new LoroDoc();
+  doc.setPeerId('1');
+  const tree = doc.getTree('scene');
+  tree.enableFractionalIndex(0);
+  const pose = (parentId: string) => ({
+    parentId,
+    transform: IDENTITY,
+    world: IDENTITY,
+    geometry: { width: 100, height: 80 },
+  });
+  for (const id of ['a', 'newer', 'b']) {
+    const node = tree.createNode();
+    node.data.set('id', id);
+    node.data.set('kind', id === 'newer' ? 'future-kind' : 'rectangle');
+    node.data.set('pose', pose('root'));
+    node.data.set('fill', 'red');
+    node.data.set('stroke', 'black');
+  }
+  const group = tree.createNode();
+  group.data.set('id', 'g');
+  group.data.set('kind', 'group');
+  group.data.set('pose', { ...pose('root'), geometry: null });
+  const nested = group.createNode();
+  nested.data.set('id', 'nested');
+  nested.data.set('kind', 'future-kind');
+  nested.data.set('pose', { ...pose('g'), geometry: { source: '<p>' } });
+  const child = group.createNode();
+  child.data.set('id', 'child');
+  child.data.set('kind', 'rectangle');
+  child.data.set('pose', pose('g'));
+  child.data.set('fill', 'red');
+  child.data.set('stroke', 'black');
+  doc.commit();
+  const newerRegisters = tree
+    .getNodes()
+    .find((n) => n.data.get('id') === 'newer')!
+    .data.toJSON();
+
+  const backend = createLoroGraphicsBackendFromDoc(doc, 'root');
+  const editor = createGraphicsEditorFromBackend(backend);
+  expect(Object.keys(editor.document.items).sort()).toEqual(
+    ['a', 'b', 'child', 'g', 'root'].sort()
+  );
+
+  editor.select('a');
+  editor.deleteSelection();
+  editor.select('b');
+  editor.reorderSelection('front');
+  editor.select('child');
+  editor.setSelectionAppearance({ fill: 'green' });
+
+  const ids = (nodes: ReturnType<typeof tree.roots>) =>
+    nodes.map((node) => node.data.get('id'));
+  expect(ids(tree.roots())).toEqual(['newer', 'g', 'b']);
+  expect(ids(group.children() ?? [])).toEqual(['nested', 'child']);
+  expect(
+    tree
+      .getNodes()
+      .find((n) => n.data.get('id') === 'newer')!
+      .data.toJSON()
+  ).toEqual(newerRegisters);
+
+  // A remote peer adding another newer kind does not break the projection.
+  const remote = new LoroDoc();
+  remote.setPeerId('2');
+  remote.import(doc.export({ mode: 'snapshot' }));
+  const added = remote.getTree('scene').createNode();
+  added.data.set('id', 'remote-newer');
+  added.data.set('kind', 'future-kind');
+  added.data.set('pose', pose('root'));
+  remote.commit();
+  backend.receive(remote.export({ mode: 'update', from: doc.oplogVersion() }));
+  expect(ids(tree.roots())).toContain('remote-newer');
+  expect(editor.document.items['remote-newer']).toBeUndefined();
+
+  editor.dispose();
+  backend.dispose();
+  doc.free();
+  remote.free();
+});

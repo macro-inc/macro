@@ -1,14 +1,13 @@
 import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
 import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import { createKeyedProjection } from '@app/lib/queries/soup/create-keyed-projection';
-import { fireAndForget } from '@core/util/fireAndForget';
+import { usePending } from '@app/observability/flow';
 import {
   ListEntity,
   ListEntityMetadataQueryProvider,
   ListLayoutProvider,
   type NarrowLayoutVariant,
 } from '@entity';
-import { Button } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -22,11 +21,13 @@ import { useInfiniteScrollSentinel } from '../../../lib/primitives/infinite-scro
 import {
   CrmListEmpty,
   CrmListError,
+  CrmListRetry,
   CrmListSearchEmpty,
   CrmListSkeleton,
 } from '../components/list-state';
 import { useCrmContext } from '../context/crm-context';
 import type { ItemListSource } from '../context/crm-sources';
+import { useOptionalCrmWorkspace } from '../context/workspace-context';
 import { recordItemMatchesSearch } from '../core/record-search';
 
 /**
@@ -54,6 +55,7 @@ export function RecordItemList(props: {
   dateField?: 'updated_at' | 'created_at' | 'viewed_at';
 }) {
   const { openEntity } = useCrmContext().createNavigation();
+  const workspace = useOptionalCrmWorkspace();
   // Reading `data` before the first page resolves would suspend the tab.
   const items = () =>
     props.source.isPending ? [] : (props.source.data?.entities ?? []);
@@ -97,6 +99,7 @@ export function RecordItemList(props: {
   // paused requests; a disabled one shows the empty state instead.
   const loading = () =>
     props.pending || (props.source.isPending && props.source.isEnabled);
+  usePending('crm.items', () => Boolean(loading()));
 
   return (
     <div class="flex min-h-0 w-full flex-1 flex-col">
@@ -110,7 +113,7 @@ export function RecordItemList(props: {
           <Show
             when={props.narrowLayout !== 'condensed'}
             fallback={
-              <RetryNotice
+              <CrmListRetry
                 message="Couldn't load this list."
                 onRetry={() => props.source.refetch()}
               />
@@ -160,7 +163,7 @@ export function RecordItemList(props: {
                 <CrmListSkeleton label="Searching more items" count={2} />
               }
             >
-              <RetryNotice
+              <CrmListRetry
                 message="Couldn't load more."
                 onRetry={() => props.source.fetchNextPage()}
               />
@@ -215,7 +218,10 @@ export function RecordItemList(props: {
                         entity={entity}
                         hideCheckbox
                         timestamp={entity.updatedAt}
-                        onClick={() => openEntity(entity)}
+                        onClick={(event) => {
+                          if (!workspace?.host.record.openItem(entity, event))
+                            openEntity(entity);
+                        }}
                         referencePropertyIds={props.referencePropertyIds}
                       />
                     </>
@@ -227,7 +233,7 @@ export function RecordItemList(props: {
           <Show
             when={!props.source.isFetchNextPageError}
             fallback={
-              <RetryNotice
+              <CrmListRetry
                 message="Couldn't load more."
                 onRetry={() => props.source.fetchNextPage()}
               />
@@ -242,25 +248,6 @@ export function RecordItemList(props: {
           </Show>
         </Match>
       </Switch>
-    </div>
-  );
-}
-
-/** A failed request, kept distinct from an empty list, with a retry. */
-function RetryNotice(props: {
-  message: string;
-  onRetry: () => Promise<unknown>;
-}) {
-  return (
-    <div class="flex items-center justify-center gap-2 p-3 text-center text-xs text-ink-muted">
-      <span>{props.message}</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => fireAndForget(props.onRetry(), 'crm')}
-      >
-        Retry
-      </Button>
     </div>
   );
 }

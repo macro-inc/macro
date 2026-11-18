@@ -1,5 +1,12 @@
 use super::*;
+use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
 use token::MockMicrosoftTokenCipher;
+
+type Service = MicrosoftAuthService<
+    MockMicrosoftGrantRepository,
+    MockMicrosoftIdentityProvider,
+    FakeFeatureFlags,
+>;
 
 fn attempt() -> LinkAttempt {
     LinkAttempt {
@@ -47,7 +54,7 @@ async fn mismatched_provider_is_rejected_before_code_exchange() {
         .once()
         .return_once(move |_| Ok(pending));
     repo.expect_abandon_link().once().returning(|_| Ok(()));
-    let service = MicrosoftAuthService::new(
+    let service = Service::new(
         repo,
         MockMicrosoftIdentityProvider::new(),
         Arc::new(MockMicrosoftTokenCipher::new()),
@@ -89,10 +96,10 @@ async fn verified_mailbox_never_changes_the_initiating_owner() {
         .expect_encrypt()
         .once()
         .withf(move |actual, email, _| {
-            actual == &owner.to_string() && email == "other-mailbox@example.com"
+            actual == owner.to_string() && email == "other-mailbox@example.com"
         })
         .returning(|_, _, _| Ok(envelope()));
-    let service = MicrosoftAuthService::new(repo, provider, Arc::new(cipher));
+    let service = Service::new(repo, provider, Arc::new(cipher));
     assert_eq!(
         service
             .complete_link(id, "microsoft", "code")
@@ -122,8 +129,7 @@ async fn partial_consent_is_not_persisted_as_full_parity_grant() {
             refresh_token: MicrosoftRefreshToken::new("refresh".into()),
         })
     });
-    let service =
-        MicrosoftAuthService::new(repo, provider, Arc::new(MockMicrosoftTokenCipher::new()));
+    let service = Service::new(repo, provider, Arc::new(MockMicrosoftTokenCipher::new()));
     assert_eq!(
         service.complete_link(id, "microsoft", "code").await,
         Err(MicrosoftAuthError::MissingPermissions)
@@ -172,7 +178,7 @@ async fn lost_rotation_fence_never_returns_or_caches_the_access_token() {
         .expect_decrypt()
         .once()
         .returning(|_, _, _| Ok(MicrosoftRefreshToken::new("refresh".into())));
-    let service = MicrosoftAuthService::new(repo, provider, Arc::new(cipher));
+    let service = Service::new(repo, provider, Arc::new(cipher));
     assert!(matches!(
         service
             .access_token(macro_uuid::generate_uuid_v7(), 1, 1, false)
@@ -189,7 +195,7 @@ async fn revoked_grants_are_checked_before_cache_hits() {
     repo.expect_active_grant()
         .once()
         .returning(|_, _, _| Err(MicrosoftAuthError::ReauthorizationRequired));
-    let service = MicrosoftAuthService::new(
+    let service = Service::new(
         repo,
         MockMicrosoftIdentityProvider::new(),
         Arc::new(MockMicrosoftTokenCipher::new()),
@@ -249,7 +255,7 @@ async fn free_account_at_mixed_provider_limit_cannot_start_a_new_connection() {
             reconnecting: false,
         })
     });
-    let service = MicrosoftAuthService::new(
+    let service = Service::new(
         repo,
         MockMicrosoftIdentityProvider::new(),
         Arc::new(MockMicrosoftTokenCipher::new()),
@@ -258,6 +264,7 @@ async fn free_account_at_mixed_provider_limit_cannot_start_a_new_connection() {
         service
             .start_link(
                 Uuid::now_v7(),
+                &MacroUserIdStr::parse_from_str("macro|person@example.com").unwrap(),
                 "https://macro.test/callback".into(),
                 None,
                 false,
@@ -266,4 +273,251 @@ async fn free_account_at_mixed_provider_limit_cannot_start_a_new_connection() {
             .await,
         Err(MicrosoftAuthError::PaymentRequired)
     ));
+}
+
+#[tokio::test]
+async fn new_connections_need_the_switch_and_the_users_flag() {
+    let user = MacroUserIdStr::try_from("macro|person@example.com".to_string()).unwrap();
+    let cases = [
+        // (switch, flags configured, the user's flag load, admitted)
+        (
+            true,
+            true,
+            Ok(FlagSnapshot::new([(
+                OUTLOOK_FLAG.into(),
+                FlagValue::Boolean(true),
+            )])),
+            true,
+        ),
+        (
+            true,
+            true,
+            Ok(FlagSnapshot::new([(
+                OUTLOOK_FLAG.into(),
+                FlagValue::Boolean(false),
+            )])),
+            false,
+        ),
+        (true, true, Ok(FlagSnapshot::default()), false),
+        (true, true, Err("PostHog unreachable".to_owned()), false),
+        (true, false, Err("never loaded".to_owned()), true),
+        (
+            false,
+            true,
+            Ok(FlagSnapshot::new([(
+                OUTLOOK_FLAG.into(),
+                FlagValue::Boolean(true),
+            )])),
+            false,
+        ),
+        (false, false, Err("never loaded".to_owned()), false),
+    ];
+    for (switch, configured, load, admitted) in cases {
+        let mut flags = FakeFeatureFlags::default();
+        flags.set(user.clone(), load.clone());
+        let service = Service::new(
+            MockMicrosoftGrantRepository::new(),
+            MockMicrosoftIdentityProvider::new(),
+            Arc::new(MockMicrosoftTokenCipher::new()),
+        )
+        .with_connections_enabled(switch)
+        .with_feature_flags(configured.then_some(flags));
+        assert_eq!(
+            service.new_connections_enabled(&user).await,
+            admitted,
+            "switch {switch}, configured {configured}, load {load:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn flagged_off_user_cannot_start_a_new_connection() {
+    let user = MacroUserIdStr::try_from("macro|person@example.com".to_string()).unwrap();
+    for load in [
+        Ok(FlagSnapshot::new([(
+            OUTLOOK_FLAG.into(),
+            FlagValue::Boolean(false),
+        )])),
+        Err("PostHog unreachable".to_owned()),
+    ] {
+        let mut repo = MockMicrosoftGrantRepository::new();
+        repo.expect_connection_facts().once().returning(|_, _| {
+            Ok(email::domain::inbox_entitlement::InboxConnectionFacts {
+                professional: true,
+                accessible_inboxes: 0,
+                reconnecting: false,
+            })
+        });
+        let mut flags = FakeFeatureFlags::default();
+        flags.set(user.clone(), load);
+        // No begin_link expectation: a refused start records no attempt.
+        let service = Service::new(
+            repo,
+            MockMicrosoftIdentityProvider::new(),
+            Arc::new(MockMicrosoftTokenCipher::new()),
+        )
+        .with_feature_flags(Some(flags));
+        assert!(matches!(
+            service
+                .start_link(
+                    Uuid::now_v7(),
+                    &user,
+                    "https://macro.test/callback".into(),
+                    None,
+                    false,
+                    None
+                )
+                .await,
+            Err(MicrosoftAuthError::NotConfigured)
+        ));
+    }
+}
+
+#[tokio::test]
+async fn flagged_on_user_starts_a_new_connection() {
+    let user = MacroUserIdStr::try_from("macro|person@example.com".to_string()).unwrap();
+    let mut repo = MockMicrosoftGrantRepository::new();
+    repo.expect_connection_facts().once().returning(|_, _| {
+        Ok(email::domain::inbox_entitlement::InboxConnectionFacts {
+            professional: true,
+            accessible_inboxes: 0,
+            reconnecting: false,
+        })
+    });
+    repo.expect_begin_link().once().returning(|_| Ok(()));
+    let mut provider = MockMicrosoftIdentityProvider::new();
+    provider
+        .expect_identity_provider_id()
+        .once()
+        .returning(|| Ok("microsoft".into()));
+    provider
+        .expect_authorize()
+        .once()
+        .returning(|_| Ok("https://login.example.com/authorize".into()));
+    let mut flags = FakeFeatureFlags::default();
+    flags.set(
+        user.clone(),
+        Ok(FlagSnapshot::new([(
+            OUTLOOK_FLAG.into(),
+            FlagValue::Boolean(true),
+        )])),
+    );
+    let service = Service::new(repo, provider, Arc::new(MockMicrosoftTokenCipher::new()))
+        .with_feature_flags(Some(flags));
+    let started = service
+        .start_link(
+            Uuid::now_v7(),
+            &user,
+            "https://macro.test/callback".into(),
+            None,
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        started.authorization_url,
+        "https://login.example.com/authorize"
+    );
+}
+
+#[tokio::test]
+async fn reconnecting_an_inbox_never_depends_on_the_flag_or_the_switch() {
+    let user = MacroUserIdStr::try_from("macro|person@example.com".to_string()).unwrap();
+    let reconnect = Uuid::now_v7();
+    for load in [
+        Ok(FlagSnapshot::new([(
+            OUTLOOK_FLAG.into(),
+            FlagValue::Boolean(false),
+        )])),
+        Err("PostHog unreachable".to_owned()),
+    ] {
+        let mut repo = MockMicrosoftGrantRepository::new();
+        repo.expect_connection_facts()
+            .once()
+            .withf(move |_, id| *id == Some(reconnect))
+            .returning(|_, _| {
+                Ok(email::domain::inbox_entitlement::InboxConnectionFacts {
+                    professional: false,
+                    accessible_inboxes: 2,
+                    reconnecting: true,
+                })
+            });
+        repo.expect_begin_link().once().returning(|_| Ok(()));
+        let mut provider = MockMicrosoftIdentityProvider::new();
+        provider
+            .expect_identity_provider_id()
+            .once()
+            .returning(|| Ok("microsoft".into()));
+        provider
+            .expect_authorize()
+            .once()
+            .returning(|_| Ok("https://login.example.com/authorize".into()));
+        let mut flags = FakeFeatureFlags::default();
+        flags.set(user.clone(), load);
+        let service = Service::new(repo, provider, Arc::new(MockMicrosoftTokenCipher::new()))
+            .with_connections_enabled(false)
+            .with_feature_flags(Some(flags));
+        assert!(
+            service
+                .start_link(
+                    Uuid::now_v7(),
+                    &user,
+                    "https://macro.test/callback".into(),
+                    None,
+                    false,
+                    Some(reconnect),
+                )
+                .await
+                .is_ok()
+        );
+    }
+}
+
+#[tokio::test]
+async fn tokens_report_whether_the_cache_served_them() {
+    let grant_id = macro_uuid::generate_uuid_v7();
+    let mut repo = MockMicrosoftGrantRepository::new();
+    repo.expect_active_grant()
+        .times(2)
+        .returning(move |_, _, _| {
+            Ok(StoredGrant {
+                scopes: scopes(),
+                id: grant_id,
+                generation: 1,
+                revision: 0,
+                owner: "owner".into(),
+                email: "mailbox@example.com".into(),
+                envelope: envelope(),
+            })
+        });
+    repo.expect_acquire_refresh()
+        .once()
+        .returning(|_, _| Ok(true));
+    repo.expect_finish_refresh()
+        .once()
+        .returning(|_, _, _, _| Ok(true));
+    let mut provider = MockMicrosoftIdentityProvider::new();
+    provider.expect_refresh().once().returning(|_| {
+        Ok(RefreshedGrant {
+            access_token: Zeroizing::new("fresh".into()),
+            refresh_token: None,
+            expires_in: 3600,
+            scopes: scopes(),
+        })
+    });
+    let mut cipher = MockMicrosoftTokenCipher::new();
+    cipher
+        .expect_decrypt()
+        .once()
+        .returning(|_, _, _| Ok(MicrosoftRefreshToken::new("refresh".into())));
+    let service = Service::new(repo, provider, Arc::new(cipher));
+    let link = macro_uuid::generate_uuid_v7();
+
+    let refreshed = service.access_token(link, 1, 1, false).await.unwrap();
+    let cached = service.access_token(link, 1, 1, false).await.unwrap();
+
+    assert!(!refreshed.cached);
+    assert!(cached.cached);
+    assert_eq!(cached.as_str(), "fresh");
 }

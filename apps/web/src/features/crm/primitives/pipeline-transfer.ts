@@ -8,11 +8,12 @@ import {
 } from '../../database/core/csv';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import type { PipelineTransfer } from '../context/pipelines';
-import type { Pipeline } from '../core/pipeline';
+import type { Pipeline, TrackedPipeline } from '../core/pipeline';
 import {
   encodePipelineCsv,
   type PipelineCsvRow,
   type PipelineImportPlan,
+  PipelineImportRefusal,
   pipelineImportMessage,
   pipelineRecordCell,
   planPipelineImport,
@@ -60,7 +61,10 @@ export function createPipelineExport(
         transfer.readTable(signal)
       );
       span.setAttr('crm.pipeline.rows', table.rows.length);
-      const ids = [...recordIds(pipeline(), table.rows)];
+      // A generic pipeline's rows name no records to describe.
+      const ids = pipeline().recordType
+        ? [...recordIds(pipeline(), table.rows)]
+        : [];
       span.setAttr('crm.pipeline.records', ids.length);
       const records = await span.span('crm.pipeline.describe_records', () =>
         transfer.describeRecords(ids, signal)
@@ -95,6 +99,8 @@ export type PipelineImportResult = {
   present: number;
   /** Records that could not be found or created, such as gmail.com companies. */
   unresolved: number;
+  /** Refused entries, identified by record and position in the import. */
+  invalid?: { entry: number; key: string; reason: string }[];
 };
 
 /**
@@ -121,17 +127,24 @@ export async function addPipelineRows(input: {
   );
   const present = recordIds(pipeline, table.rows);
   const rows: CellWrite[][] = [];
+  const entries: { entry: number; key: string }[] = [];
   const outcome: PipelineImportResult = { added: 0, present: 0, unresolved: 0 };
-  for (const row of plan.rows) {
+  for (const [index, row] of plan.rows.entries()) {
     const id = ids.get(row.record.key);
     if (!id) outcome.unresolved++;
     else if (present.has(id)) outcome.present++;
-    else rows.push([pipelineRecordCell(pipeline, id), ...row.cells]);
+    else {
+      rows.push([pipelineRecordCell(pipeline, id), ...row.cells]);
+      entries.push({ entry: index + 1, key: row.record.key });
+    }
   }
   await span.span('crm.pipeline.insert_rows', () =>
-    transfer.insertRows(rows, table.columns)
+    transfer.insertRows(rows, table.columns, (index, reason) => {
+      outcome.invalid ??= [];
+      outcome.invalid.push({ ...entries[index], reason });
+    })
   );
-  outcome.added = rows.length;
+  outcome.added = rows.length - (outcome.invalid?.length ?? 0);
   return outcome;
 }
 
@@ -141,7 +154,7 @@ export async function addPipelineRows(input: {
  * failure adds only what is still missing.
  */
 export function createPipelineImport(
-  pipeline: Pipeline,
+  pipeline: TrackedPipeline,
   transfer: PipelineTransfer
 ) {
   const [plan, setPlan] = createSignal<PipelineImportPlan>();
@@ -214,7 +227,9 @@ export function createPipelineImport(
     } catch (cause) {
       span.error(cause);
       setError(
-        'Could not finish the import. Retry to add the rows that are still missing.'
+        cause instanceof PipelineImportRefusal
+          ? cause.message
+          : 'Could not finish the import. Retry to add the rows that are still missing.'
       );
     }
     try {

@@ -25,6 +25,7 @@ describe('PollComposer', () => {
       screen.getByRole<HTMLButtonElement>('button', { name: 'Post poll' })
         .disabled
     ).toBe(true);
+    expect(screen.queryByText(/show results/i)).toBeNull();
     fireEvent.input(screen.getByLabelText('Question'), {
       target: { value: 'Where should we meet?' },
     });
@@ -42,13 +43,15 @@ describe('PollComposer', () => {
       target: { value: 'Online' },
     });
     fireEvent.click(screen.getByLabelText('Multiple answers'));
-    fireEvent.click(screen.getByLabelText('Show results to respondents'));
+    fireEvent.click(screen.getByLabelText('Share responses with team'));
+    fireEvent.click(screen.getByLabelText('Anonymous'));
     fireEvent.submit(screen.getByRole('form', { name: 'New poll' }));
     expect(post).toHaveBeenCalledWith({
       question: 'Where should we meet?',
       options: ['Office', 'Cafe', 'Online'],
       multi: true,
-      showResults: false,
+      shareResponses: true,
+      anonymous: true,
     });
   });
 

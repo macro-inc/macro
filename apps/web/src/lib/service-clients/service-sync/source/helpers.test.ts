@@ -4,6 +4,7 @@ import {
   WebsocketConnectionState,
 } from '@macro-inc/collaboration/websocket';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
+import { NOOP_SPAN } from '@macro-inc/observability';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,10 +14,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@macro-inc/collaboration/sync-service/socket', () => ({
   createSyncSocket: mocks.socket,
 }));
-vi.mock('@block-md/observability', () => ({
-  resumeDocumentSpan: () => undefined,
-}));
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SYNC_SERVICE_HOSTS: { ws: 'wss://sync.test' },
 }));
 vi.mock('@core/constant/featureFlags', () => ({
@@ -103,4 +102,29 @@ describe('deferred document authorization', () => {
     );
     expect(getToken).toHaveBeenCalledOnce();
   });
+});
+
+it('uses the supplied load context for initial and renewed document sockets', async () => {
+  const parent = {
+    ...NOOP_SPAN,
+    traceparent: () =>
+      '00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01',
+  };
+  createSyncServiceSocket(
+    'document',
+    undefined,
+    {
+      isCurrent: () => true,
+      canWrite: () => true,
+      getToken: async () => 'fresh',
+      onInvalidated: () => () => {},
+    },
+    parent
+  );
+  expect(await resolveUrl()).toContain(
+    '&traceparent=00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01'
+  );
+  expect(await resolveUrl()).toContain(
+    '&traceparent=00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01'
+  );
 });

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 /// One change to a Word document's body. Ids are the paragraph, table and
 /// block ids `ReadWordDocument` reports.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -144,6 +145,7 @@ pub enum WordDocumentRequest {
 
 /// The worker's answer: the document, or the changed blocks, as text.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct WordDocumentResponse {
     /// Blocks with their ids and text, or what an edit changed.

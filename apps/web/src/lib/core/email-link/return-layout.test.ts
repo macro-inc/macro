@@ -70,6 +70,20 @@ describe('inbox link return layout', () => {
     expect(consumeInboxLinkReturn(LINK_ID)).toBeUndefined();
   });
 
+  it('keeps the stash for a callback that reloads before it leaves', () => {
+    const addition = {
+      provider: 'GMAIL' as const,
+      connectedInboxes: [{ id: 'inbox-1', emailAddress: 'person@example.com' }],
+    };
+    rememberInboxLinkReturn(LINK_ID, { url: '/mail', addition });
+
+    readInboxLinkReturn(LINK_ID);
+
+    expect(readInboxLinkReturn(LINK_ID)).toEqual({ url: '/mail', addition });
+    expect(consumeInboxLinkReturn(LINK_ID)).toEqual({ url: '/mail', addition });
+    expect(readInboxLinkReturn(LINK_ID)).toBeUndefined();
+  });
+
   it('ignores a stash left behind by a different flow', () => {
     rememberInboxLinkReturn('abandoned-link', { url: '/home' });
 

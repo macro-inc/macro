@@ -109,10 +109,19 @@ pub trait ChatProvider: Send + Sync + 'static {
         &self,
         chats: &[ChatRef],
     ) -> ExternalChatResult<Vec<Option<CommunityReference>>>;
+    /// The picture of each of `chats`, in order, as its owner's account sees
+    /// it: the group's, or a direct chat's person's.
+    async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>>;
     /// Who is in the chat; `None` when no observer has read it.
     async fn members(&self, chat: &ChatRef) -> ExternalChatResult<Option<Members>>;
-    /// Names for the provider ids (mentions, system lines) of a chat.
-    async fn people(&self, chat: &ChatRef, ids: &[String]) -> ExternalChatResult<People>;
+    /// Names for the provider ids (mentions, system lines) and the stored
+    /// people (senders, reactors, voters) of a chat.
+    async fn people(
+        &self,
+        chat: &ChatRef,
+        ids: &[String],
+        persons: &[Uuid],
+    ) -> ExternalChatResult<People>;
     /// Ask the chat's observers and the viewer's own account to read the
     /// chat again; the provider rate limits refreshes.
     async fn request_refresh(&self, chat: &ChatRef, viewer: &str) -> ExternalChatResult<()>;
@@ -342,6 +351,14 @@ pub trait FileStore: Send + Sync {
     /// Store the bytes as a new static file owned by `import.owner`; returns
     /// its id.
     async fn store(&self, import: &FileImport, bytes: Vec<u8>) -> ExternalChatResult<Uuid>;
+    /// Store a provider profile picture (`mime` is an `image/*` type) as a
+    /// new static file owned by `owner`; returns its id.
+    async fn store_picture(
+        &self,
+        owner: &str,
+        mime: &str,
+        bytes: Vec<u8>,
+    ) -> ExternalChatResult<Uuid>;
     /// Delete one static file; one that is already gone counts as deleted.
     async fn delete(&self, file_id: Uuid) -> ExternalChatResult<()>;
 }

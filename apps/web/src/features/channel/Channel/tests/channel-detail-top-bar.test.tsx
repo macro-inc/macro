@@ -12,7 +12,7 @@ vi.mock('@app/components/view-shell', () => ({
   ViewShell: { TopBar: mocks.pass },
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
-  ChatWithAgentButton: () => null,
+  openChatWithAgent: vi.fn(),
 }));
 vi.mock('@app/features/next-soup/actions', () => ({
   toSingleEntityActionListState: () => ({}),
@@ -54,6 +54,10 @@ vi.mock('@channel/Call/ChannelCallButton', () => ({
   ChannelCallButton: () => null,
 }));
 vi.mock('@channel/Call/ChannelCallTab', () => ({ ChannelCallTab: () => null }));
+vi.mock('../../Call/views/ActiveCallHeader', () => ({
+  ActiveCallHeader: () => null,
+  JoinableCallStatus: () => null,
+}));
 vi.mock('@channel/Call/use-call', () => ({
   useCall: () => ({ isInThisChannel: () => false }),
 }));
@@ -74,7 +78,7 @@ vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
 vi.mock(
-  '@components/app/split-layout/components/PriorityCollapseOverflowSensor',
+  '@app/components/priority-collapse/PriorityCollapseOverflowSensor',
   () => ({
     createPriorityCollapseController: () => ({
       setRow: () => {},
@@ -83,8 +87,10 @@ vi.mock(
     PriorityCollapseOverflowSensor: mocks.pass,
   })
 );
-vi.mock('@components/app/split-layout/layoutUtils', () => ({
+vi.mock('@app/components/priority-collapse/createPriorityCollapser', () => ({
   useRegisterPriorityCollapseItem: () => () => false,
+}));
+vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));

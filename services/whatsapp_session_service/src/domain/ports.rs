@@ -10,9 +10,10 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ChatUpdate, ClaimedSend, HistoryPage, InboundEvent, MediaImport, MessageAnchor, OutboundMedia,
-    SessionScope,
+    ChatUpdate, ClaimedSend, HistoryPage, InboundEvent, LookupAnswer, MediaImport, MessageAnchor,
+    OutboundMedia, PictureAnswer, PictureCheck, SessionScope,
 };
+use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::GroupInfo;
 
 /// Errors from taking, holding or announcing account locks.
@@ -80,6 +81,11 @@ pub enum AccountSignal {
     Send,
     /// `whatsapp_roster_requested`: refresh the group list.
     Groups,
+    /// `whatsapp_lookup_requested`: answer pending phone-number lookups.
+    Lookup,
+    /// `whatsapp_history_requested`: the owner started importing earlier
+    /// messages.
+    History,
     /// `whatsapp_account_changed`: consent or adopted groups changed.
     Changed,
     /// Notifications may have been missed; re-read everything.
@@ -188,6 +194,15 @@ pub enum SessionEvent {
     /// The phone answered a request for a chat's earlier messages; the
     /// messages themselves went to the [`InboundSink`] as history.
     HistoryPage(HistoryPage),
+    /// A person's or group's profile picture changed to `picture_id`, or
+    /// was removed (`None`).
+    PictureChanged {
+        /// The JID and, for a person, the other half of its phone-number/LID
+        /// pair when known.
+        jids: Vec<String>,
+        /// WhatsApp's id of the new picture.
+        picture_id: Option<String>,
+    },
     /// The account joined a group, or a group's name or participants changed.
     GroupChanged {
         /// The group.
@@ -337,6 +352,22 @@ pub trait WhatsAppSession: Send + Sync + 'static {
         chat_jid: &str,
         message: &MessageAnchor,
     ) -> impl Future<Output = Result<(), SessionError>> + Send;
+
+    /// Asks WhatsApp whether a phone number has an account (one usync
+    /// query; it records the number's LID pairing in the LID store).
+    fn look_up(
+        &self,
+        phone: &PhoneNumber,
+    ) -> impl Future<Output = Result<LookupAnswer, SessionError>> + Send;
+
+    /// Asks WhatsApp for a person's or group's preview picture (one
+    /// `w:profile:picture` query) and downloads a new one at once, since its
+    /// URL expires. A query WhatsApp throttles is `RateLimited`; a download
+    /// that fails, is too large or is not an image is `Failed`.
+    fn profile_picture(
+        &self,
+        check: &PictureCheck,
+    ) -> impl Future<Output = Result<PictureAnswer, SessionError>> + Send;
 
     /// Unlinks the device at WhatsApp.
     fn logout(&self) -> impl Future<Output = ()> + Send;

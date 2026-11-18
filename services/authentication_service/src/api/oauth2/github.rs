@@ -47,6 +47,9 @@ impl IntoResponse for GithubLinkError {
                 tracing::error!(error=?error, "internal error occurred while linking github account");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error occurred")
             }
+            GithubLinkError::GithubServiceError(GithubError::Upstream(error)) => {
+                return error.into_response();
+            }
             GithubLinkError::GithubServiceError(error) => {
                 tracing::error!(error=?error, "github service error occurred while linking github account");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error occurred")

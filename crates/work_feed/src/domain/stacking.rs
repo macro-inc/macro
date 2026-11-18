@@ -15,44 +15,16 @@
 
 use std::collections::{HashMap, HashSet};
 
-use model_entity::EntityType;
+use attention_feed::domain::{
+    keying::channel_thread_root,
+    models::{FeedNotification, sort_newest_first},
+};
 use model_notifications::NotifEvent;
-use notification::domain::models::UserNotificationRow;
 
-use super::models::{FeedNotification, WorkFeedStack, WorkFeedStackKind};
+use super::models::{WorkFeedStack, WorkFeedStackKind};
 
 #[cfg(test)]
 mod test;
-
-/// The channel thread root a channel notification is attributed to, if any:
-/// the thread for replies, and the named message's thread (or the message
-/// itself, which becomes the root) for mentions, reactions and document
-/// mentions. Plain sends and channel-level events have none.
-pub fn channel_thread_root(notification: &UserNotificationRow<NotifEvent>) -> Option<&str> {
-    if notification.entity.entity_type != EntityType::Channel {
-        return None;
-    }
-    match &notification.notification_metadata {
-        NotifEvent::ChannelMessageReply(reply) => Some(reply.thread_id.as_str()),
-        NotifEvent::ChannelMention(mention) => {
-            Some(mention.thread_id.as_deref().unwrap_or(&mention.message_id))
-        }
-        NotifEvent::ChannelMessageReaction(reaction) => Some(
-            reaction
-                .thread_id
-                .as_deref()
-                .unwrap_or(&reaction.message_id),
-        ),
-        NotifEvent::DocumentMention(mention) => Some(
-            mention
-                .channel
-                .thread_id
-                .as_deref()
-                .unwrap_or(&mention.channel.message_id),
-        ),
-        _ => None,
-    }
-}
 
 /// Threads in a channel that have replies or thread mentions; their root
 /// messages belong to the thread rather than to the channel.
@@ -101,15 +73,6 @@ pub fn scope_channel_thread(
         })
         .cloned()
         .collect()
-}
-
-/// Sort notifications newest first, breaking ties by id for a stable order.
-pub fn sort_newest_first(notifications: &mut [FeedNotification]) {
-    notifications.sort_by(|a, b| {
-        b.created_at
-            .cmp(&a.created_at)
-            .then_with(|| b.notification_id.cmp(&a.notification_id))
-    });
 }
 
 /// A message-shaped notification's role in its conversation.

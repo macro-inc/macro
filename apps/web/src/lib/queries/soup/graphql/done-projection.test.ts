@@ -133,7 +133,13 @@ it('does not restore into another filter/sort scope or over a deletion', () => {
   project('signal', page([email('a')]), [done], true, deleted);
   const undone = { ...done, done: false };
   expect(
-    project('signal', page([]), [undone], true, new Set(['a']))?.entities
+    project(
+      'signal',
+      page([]),
+      [undone],
+      true,
+      new Set(['GraphqlSoupEmailThread:a'])
+    )?.entities
   ).toEqual([]);
   expect(project('noise', page([]), [undone], true, deleted)?.entities).toEqual(
     []

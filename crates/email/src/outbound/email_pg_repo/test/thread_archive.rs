@@ -48,7 +48,7 @@ async fn archive_publishes_one_user_attributed_event_after_commit(
     Ok(())
 }
 
-fn service_with_enqueuer<E: EmailMessageEnqueuer>(
+pub(super) fn service_with_enqueuer<E: EmailMessageEnqueuer>(
     pool: Pool<Postgres>,
     enqueuer: E,
 ) -> EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>, E, NoOpCrmService, ()>
@@ -63,6 +63,7 @@ fn service_with_enqueuer<E: EmailMessageEnqueuer>(
         macro_event_broker: original.macro_event_broker,
         sent_undo_delay_secs: original.sent_undo_delay_secs,
         sender_provider: original.sender_provider,
+        shared_thread_replies: original.shared_thread_replies,
     }
 }
 
@@ -70,9 +71,9 @@ type LabelWrite = (Uuid, Vec<(Uuid, String)>, Vec<String>, Vec<String>);
 
 /// Label writes and, in the same order, the pending write id each carried.
 #[derive(Clone, Default)]
-struct RecordingEnqueuer(
-    Arc<std::sync::Mutex<Vec<LabelWrite>>>,
-    Arc<std::sync::Mutex<Vec<Uuid>>>,
+pub(super) struct RecordingEnqueuer(
+    pub(super) Arc<std::sync::Mutex<Vec<LabelWrite>>>,
+    pub(super) Arc<std::sync::Mutex<Vec<Uuid>>>,
 );
 impl EmailMessageEnqueuer for RecordingEnqueuer {
     type Err = anyhow::Error;

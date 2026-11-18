@@ -13,7 +13,8 @@ model.
 - `src/document.rs`, `src/chat.rs`, `src/comms.rs` (channels), `src/crm_company.rs`,
   `src/crm_contact.rs`, `src/database_row.rs`, `src/email_thread.rs`,
   `src/initiative.rs`, `src/project.rs`, `src/call_record.rs`,
-  `src/calendar_event.rs`, `src/agent_session.rs`, `src/foreign_entity.rs`:
+  `src/calendar_event.rs`, `src/agent_session.rs`, `src/foreign_entity.rs`,
+  `src/harness.rs` (runtimes, listed only by attention feeds):
   per-entity-kind Soup response models.
 - `src/properties.rs`: `SoupProperty` — properties attached to a Soup item.
 
@@ -25,12 +26,12 @@ model.
 
 ## Boundaries
 
-- Depends on: `call`, `channels`, `crm`, `document_sub_type`, `doppleganger`,
-  `email`, `macro_user_id`, `model`, `model-entity`, `model_owner`,
-  `models_pagination`, `models_properties`.
+- Depends on: `bot_id`, `call`, `channels`, `crm`, `document_sub_type`,
+  `doppleganger`, `email`, `macro_user_id`, `model`, `model-entity`,
+  `model_owner`, `models_pagination`, `models_properties`.
 - Used by: `ai_tools`, `complete_graph`, `databases_sql`, `graphql_initiative`,
   `graphql_soup`, `models_search`, `search_service`, `skills`, `soup`,
-  `soup_filter_projection`, `work_feed`.
+  `soup_filter_projection`, `attention_feed`.
 
 ## Recipes
 

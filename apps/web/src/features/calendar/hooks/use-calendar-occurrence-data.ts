@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { useUserId } from '@core/context/user';
 import {
   type CalendarOccurrenceQueryRange,
@@ -83,6 +84,13 @@ export function useCalendarOccurrenceData(
     occurrencesQuery.isSuccess &&
     occurrencesQuery.data?.syncStatus === CalendarSyncStatus.syncing;
 
+  usePending(
+    'calendar.occurrences',
+    () =>
+      isRangeSupported() &&
+      (occurrencesQuery.isLoading ||
+        (occurrencesQuery.isSuccess && options.sourcesReady?.() === false))
+  );
   return {
     range: options.range,
     occurrencesQuery,

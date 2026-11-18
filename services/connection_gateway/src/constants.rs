@@ -32,3 +32,7 @@ pub const DEFAULT_TIMEOUT_THRESHOLD: u64 = 60_000;
 
 /// Emit diagnostics while a websocket queue or write remains blocked this long.
 pub(crate) const SLOW_WEBSOCKET_OPERATION_THRESHOLD: Duration = Duration::from_secs(1);
+
+/// How often a connection re-checks that its user can still view each entity
+/// it is subscribed to.
+pub(crate) const GRANT_REVALIDATION_INTERVAL: Duration = Duration::from_secs(300);

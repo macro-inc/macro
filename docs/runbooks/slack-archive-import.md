@@ -46,7 +46,6 @@ and [the Settings interaction guide](../agent-guide/settings.md#slack-archive-im
 | `UPLOAD_STAGING_BUCKET` | DSS/worker same bucket. Worker infrastructure supplies this value. |
 | `OVERRIDE_SLACK_IMPORT_QUEUE`, `OVERRIDE_SLACK_IMPORT_DLQ` | Typed queue names/URLs; worker infrastructure supplies them. Resolve both at startup. |
 | `OVERRIDE_SEARCH_PROCESSING_SERVICE_URL` | Worker internal scoped-backfill endpoint; supplied by infrastructure. |
-| `enable-slack-archive-import` | Frontend feature flag. Local override: `VITE_ENABLE_SLACK_ARCHIVE_IMPORT=true`. It grants no server authority. |
 
 The worker stack uses Doppler project `slack-import-worker` and selects
 `DATABASE_URL`, `INTERNAL_API_KEY`, `SLACK_IMPORT_ENABLED`, and
@@ -239,7 +238,7 @@ separate live probes below.
 For a **new disposable** browser instance, use the local launcher and seed an admin
 team against that named instance. For an existing instance, follow
 [non-destructive recovery](../development/running-locally.md#recover-an-existing-instance-without-resetting-data)
-instead: neither `run_local` nor `stack up` is a data-preserving restart. Enable
+instead: an attached `run_local` and `stack up` both wipe. Enable
 DSS/worker admission and the frontend override, and use the local E2E backend
 origin/JWT setup without invoking a stack-resetting harness. No-Doppler default
 Macro API signing keys are placeholders: supply a local-only generated RSA key

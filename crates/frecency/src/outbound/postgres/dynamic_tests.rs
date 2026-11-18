@@ -41,6 +41,59 @@ async fn pull_request_filters_fail_explicitly_before_database_access() {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn date_literals_match_nothing_and_preserve_negation(pool: PgPool) {
+    use item_filters::ast::properties::{DateRange, PropertiesLiteral, PropertyMatchValue};
+
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let id = Uuid::from_u128(1);
+    storage
+        .set_aggregate(AggregateFrecency {
+            id: AggregateId {
+                entity: EntityType::Document.with_entity_string(id.to_string()),
+                user_id: user.clone(),
+            },
+            data: FrecencyData {
+                event_count: 1,
+                frecency_score: 100.0,
+                first_event: Utc::now(),
+                recent_events: VecDeque::new(),
+            },
+        })
+        .await
+        .unwrap();
+    sqlx::query!(
+        "INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values) VALUES ($1, $2, 'DOCUMENT', '00000001-0000-0000-0000-000000000004', $3)",
+        Uuid::from_u128(2),
+        id.to_string(),
+        serde_json::json!({"type": "Date", "value": "2026-10-20T12:00:00Z"})
+    ).execute(&pool).await.unwrap();
+    let literal = Expr::Literal(DocumentLiteral::Property(PropertiesLiteral {
+        property_definition_id: Uuid::from_u128(0x00000001_0000_0000_0000_000000000004),
+        entity_type: None,
+        value: PropertyMatchValue::DateRange(DateRange {
+            start: None,
+            end: None,
+        }),
+    }));
+    for (filter, count) in [(literal.clone(), 0), (Expr::is_not(literal), 1)] {
+        let rows = storage
+            .get_top_entities(FrecencyPageRequest {
+                user_id: user.clone(),
+                from_score: None,
+                limit: 10,
+                filters: Some(EntityFilterAst {
+                    document_filter: Some(Arc::new(filter)),
+                    ..Default::default()
+                }),
+            })
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), count);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_dynamic_filter_by_document_ids(pool: PgPool) {
     let storage = FrecencyPgStorage::new(pool.clone());
     let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();

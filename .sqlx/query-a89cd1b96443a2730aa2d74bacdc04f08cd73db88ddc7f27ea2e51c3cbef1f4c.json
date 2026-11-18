@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, provider_id AS \"provider_id!\", subject, body_html_sanitized, body_text, snippet\n            FROM email_messages\n            WHERE link_id = $1 AND provider_id > $2\n            ORDER BY provider_id\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "body_html_sanitized",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "body_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "snippet",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a89cd1b96443a2730aa2d74bacdc04f08cd73db88ddc7f27ea2e51c3cbef1f4c"
+}

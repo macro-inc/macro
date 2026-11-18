@@ -4,7 +4,8 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
-/// Request data carrying the work feed service, triggers and viewer lookup.
+/// Request data carrying the work feed service and the shared triggers and
+/// viewer lookup.
 mod context;
 /// Feed, scope and mutation inputs.
 mod inputs;
@@ -17,10 +18,7 @@ mod query;
 /// The `workFeedUpdates` subscription.
 mod subscriptions;
 
-pub use context::{
-    EntityAccessWorkFeedViewers, WorkFeedGraphqlContext, WorkFeedGraphqlService,
-    WorkFeedViewerResolver,
-};
+pub use context::{WorkFeedGraphqlContext, WorkFeedGraphqlService};
 pub use inputs::{
     GraphqlWorkFeedItemType, GraphqlWorkFeedMode, MarkWorkFeedItemsDoneInput,
     UndoWorkFeedItemsDoneInput, WorkFeedDoneItemInput, WorkFeedInput, WorkFeedScopeInput,

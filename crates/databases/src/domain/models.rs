@@ -24,6 +24,7 @@ pub use models_databases::{
     ChangeId, ColumnId, DatabaseId, OptionId, QueryId, RowId, TableId, TableVersion, TakenId,
 };
 
+use crate::domain::derivation::Derivation;
 use crate::domain::journal::{JournalPlan, RestoredRow};
 
 /// Identifier of a `models_properties` property definition bound as a column.
@@ -32,6 +33,9 @@ pub type PropertyDefinitionId = Uuid;
 /// A database: a named collection of tables, owned and shared as one entity.
 #[derive(utoipa::ToSchema, Debug, Clone, Serialize, Deserialize)]
 pub struct Database {
+    /// Entity-owned icon and color overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// Identifier.
     #[schema(value_type = Uuid)]
     pub id: DatabaseId,
@@ -44,6 +48,9 @@ pub struct Database {
     /// Set when trashed.
     #[schema(required = true)]
     pub trashed_at: Option<DateTime<Utc>>,
+    /// The folder it is filed in; `null` at the root.
+    #[schema(required = true)]
+    pub project_id: Option<String>,
 }
 
 /// One table (tab) of a database.
@@ -162,8 +169,17 @@ impl Column {
     /// A derived column's formula.
     pub fn formula(&self) -> Option<&models_databases::Formula> {
         match &self.config {
-            Some(ColumnConfig::Derived { formula }) => Some(formula),
+            Some(ColumnConfig::Derived { formula, .. }) => Some(formula),
             _ => None,
+        }
+    }
+
+    /// Whether the placement shows a number as a percent: 0.25 displays as 25%.
+    pub fn is_percentage(&self) -> bool {
+        match &self.config {
+            Some(ColumnConfig::Percentage) => true,
+            Some(ColumnConfig::Derived { percentage, .. }) => *percentage,
+            _ => false,
         }
     }
 }
@@ -181,6 +197,9 @@ pub struct ColumnCast {
     pub specific_entity_type: Option<models_properties::EntityType>,
     /// Whether the target is a relation to another table's rows.
     pub relation: bool,
+    /// Whether the target shows a number as a percent.
+    #[serde(default)]
+    pub percentage: bool,
     /// Whether the values convert.
     pub cast: CastVerdict,
     /// Why nothing converts, for a `never` cast.
@@ -267,7 +286,12 @@ pub enum ColumnConfig {
     Derived {
         /// How its cells are computed.
         formula: models_databases::Formula,
+        /// Whether a number formula is shown as a percent.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        percentage: bool,
     },
+    /// A number shown as a percent: 0.25 displays as 25%.
+    Percentage,
 }
 
 /// A row's identity and place in its table. Cells are not here: they are
@@ -282,10 +306,10 @@ pub struct RowRef {
 
 /// What a new database starts with: one table whose only column, a text
 /// column that infers its type from its first value, holds each row's title.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FirstTable {
     /// The table's display name.
-    pub name: &'static str,
+    pub name: String,
     /// The title column's display name.
     pub title_column: &'static str,
 }
@@ -299,6 +323,10 @@ pub struct CreateDatabase {
     pub owner_id: MacroUserIdStr<'static>,
     /// The agent creating it for the owner; `None` when the owner acts.
     pub acting_bot: Option<BotId>,
+    /// The first table's display name; "Table 1" when `None`. A caller that
+    /// is about to fill a table names it here and builds into it, so the
+    /// database does not keep an empty "Table 1" beside it.
+    pub first_table: Option<String>,
 }
 
 /// Settle a new empty column's type using its first value.
@@ -474,10 +502,15 @@ pub enum Write {
         table_id: TableId,
         /// One entry per new row.
         rows: Vec<Vec<(PropertyDefinitionId, PropertyValue)>>,
+        /// The ids the client minted for the new rows, one per row; empty
+        /// to mint them here, and when `restored` gives them.
+        ids: Vec<RowId>,
         /// The ids and positions the rows come back under, one per row,
         /// when the insert puts back rows a removal took; empty to mint
         /// new ones after the table's last row.
         restored: Vec<RestoredRow>,
+        /// The derived columns whose cells the rows' cells feed.
+        derivation: Option<Derivation>,
     },
     /// Set (or, with `None`, clear) cells of existing rows of the table.
     UpdateRows {
@@ -485,6 +518,9 @@ pub enum Write {
         table_id: TableId,
         /// Each row with its cells.
         rows: Vec<(RowId, CellChanges)>,
+        /// The derived columns whose cells the written cells feed, derived
+        /// again on these rows.
+        derivation: Option<Derivation>,
     },
     /// Remove rows of the table with their cells.
     DeleteRows {
@@ -643,6 +679,9 @@ pub struct Writes {
     pub expected_versions: Vec<(TableId, TableVersion)>,
     /// What the batch's journal entries are built from.
     pub journal: JournalPlan,
+    /// The derived columns its schema changes affect, derived again on
+    /// every row of their tables once its writes are applied.
+    pub derivations: Vec<Derivation>,
 }
 
 impl Writes {
@@ -1102,6 +1141,9 @@ pub enum DatabaseError {
     /// The caller lacks the permission the operation requires.
     #[error("unauthorized")]
     Unauthorized,
+    /// Icon or color metadata failed validation.
+    #[error("{0}")]
+    InvalidAppearance(String),
     /// A schema operation was refused.
     #[error("invalid schema operation: {0}")]
     InvalidSchemaOperation(SchemaError),

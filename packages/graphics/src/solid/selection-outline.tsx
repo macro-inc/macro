@@ -37,6 +37,13 @@ const outlines: { [K in ShapeKind]: Component<OutlineProps<K>> } = {
       vector-effect="non-scaling-stroke"
     />
   ),
+  artifact: (props) => (
+    <rect
+      width={props.item.geometry.width}
+      height={props.item.geometry.height}
+      vector-effect="non-scaling-stroke"
+    />
+  ),
   document: (props) => (
     <rect
       width={props.item.geometry.width}

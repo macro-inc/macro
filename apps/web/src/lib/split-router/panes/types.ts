@@ -1,3 +1,5 @@
+import type { SplitSide } from './layout-tree';
+
 /** One independent navigation history; stable for the pane's lifetime. */
 export type PaneId = string & { readonly PaneId: unique symbol };
 
@@ -39,8 +41,14 @@ export interface PaneStore<E extends PaneEntry = PaneEntry> {
   apply(pane: PaneId, change: PaneChange<E>): void;
 }
 
-/** Where a destination lands: an existing pane, or a new pane at an index. */
-export type Placement = { pane: PaneId } | { insertAt: number };
+/**
+ * Where a destination lands: an existing pane, a new pane at an index, or a
+ * new pane splitting `split` with it on `side`.
+ */
+export type Placement =
+  | { pane: PaneId }
+  | { insertAt: number }
+  | { split: PaneId; side: SplitSide };
 
 /** The caller's hints for placing a new pane. Policies extend this interface through declaration merging. */
 export interface OpenIntent {

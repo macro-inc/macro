@@ -6,13 +6,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
 import { buildConfig } from '../../../builder/MarkdownConfigBuilder';
+import { initializeLexical } from '../../../init';
 import { ComposerEditor } from '../../ComposerEditor';
 import { StaticMarkdown, StaticMarkdownContext } from '../StaticMarkdown';
+
+initializeLexical();
 
 const url = 'https://apps.apple.com/us/app/macro-app/id6743133649';
 const original = `hey! can you rate the Macro app on the App Store (5 stars if you're feeling it) and leave a quick review if you can? takes 30 seconds:\n${url}\n\n(sent by @macro on behalf of Jacob)`;
 
 function Fixture() {
+  const initialValue =
+    new URLSearchParams(location.search).get('markdown') ?? url;
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -50,15 +55,18 @@ function Fixture() {
                 >
                   <StaticMarkdown
                     markdown={
-                      'Encoded path: https://example.com/a%20b?q=x%2Fy#part\n\nURL punctuation: https://example.com/a~~b~~c\n\nLiteral code: `https://example.com/code`\n\nRemoved link: <m-link>{"url":"https://example.com/removed","text":"https://example.com/removed","unlinked":true}</m-link>'
+                      'Encoded path: https://example.com/a%20b?q=x%2Fy#part\n\nURL punctuation: https://example.com/a~~b~~c\n\nSaved before linking: https://example.com/post?a=x\\_y&s=20\n\nLiteral code: `https://example.com/code`\n\nRemoved link: <m-link>{"url":"https://example.com/removed","text":"https://example.com/removed","unlinked":true}</m-link>'
                     }
                   />
                 </section>
                 <section class="border border-edge rounded p-4 space-y-3">
-                  <h2>Edit and save a link</h2>
+                  <div data-testid="input">
+                    <StaticMarkdown markdown={initialValue} />
+                  </div>
+                  <h2>Edit and save a message</h2>
                   <ComposerEditor
                     config={editor}
-                    initialValue={url}
+                    initialValue={initialValue}
                     ariaLabel="Message"
                   />
                   <button

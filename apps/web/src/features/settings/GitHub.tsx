@@ -10,6 +10,7 @@ import {
   useInitGithubLinkMutation,
   useReauthenticateGithubMutation,
 } from '@queries/auth';
+import { makeEventListener } from '@solid-primitives/event-listener';
 import { Match, Show, Switch } from 'solid-js';
 import {
   ConnectAction,
@@ -24,6 +25,12 @@ export function useGithubConnection() {
   const initGithubLink = useInitGithubLinkMutation();
   const deleteGithubLink = useDeleteGithubLinkMutation();
   const reauthenticateGithub = useReauthenticateGithubMutation();
+
+  // GitHub consent runs in another window or the system browser; returning to
+  // the app focuses the window without changing page visibility.
+  makeEventListener(window, 'focus', () =>
+    fireAndForget(githubLink.refetch(), 'github-settings')
+  );
 
   const status = () =>
     githubLink.isSuccess ? githubLink.data.status : undefined;

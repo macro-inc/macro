@@ -38,26 +38,27 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
             pool.clone(),
         )),
     );
-    let mut record = ReviewRecord {
-        id: ReviewId(macro_uuid::generate_uuid_v7()),
-        session_id: session,
-        acting_user: None,
-        execution_id: Some(execution),
-        presented_at: None,
-        kind: ReviewKind::Email,
-        title: "Pick one".into(),
-        revision: 0,
-        updated_at: 0,
-        decision: None,
-        items: vec![ReviewItem {
-            id: macro_uuid::generate_uuid_v7(),
-            draft: json!({"subject":"Which?"}),
-            edited: false,
-            status: ReviewItemStatus::Pending,
-            result: None,
-            error: None,
-        }],
-    };
+    let mut record: ReviewRecord = serde_json::from_value(json!({
+        "id": macro_uuid::generate_uuid_v7(),
+        "sessionId": session.as_uuid(),
+        "actingUser": "macro|owner@example.com",
+        "executionId": execution,
+        "presentedAt": null,
+        "title": "Pick one",
+        "revision": 0,
+        "updatedAt": 0,
+        "decision": null,
+        "kind": "email",
+        "items": [{
+            "id": macro_uuid::generate_uuid_v7(),
+            "draft": {"subject":"Which?", "body":"Hello", "to":[{"email":"ada@example.com"}]},
+            "edited": false,
+            "status": "pending",
+            "result": null,
+            "error": null
+        }]
+    }))
+    .unwrap();
     store.create(&record, 100).await.unwrap();
     let mut second = record.clone();
     second.id = ReviewId(macro_uuid::generate_uuid_v7());
@@ -96,7 +97,7 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
             .is_none()
     );
     record.revision = 1;
-    record.items[0].status = ReviewItemStatus::Submitting;
+    record.items.states_mut()[0].status = ReviewItemStatus::Submitting;
     let notification = agent_session::domain::notifications::PendingNotification::new(
         agent_session::domain::notifications::ProduceNotification {
             session_id: session,
@@ -144,7 +145,10 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
     .await
     .unwrap();
     assert_eq!(persisted.revision, 1);
-    assert_eq!(persisted.items[0].status, ReviewItemStatus::Submitting);
+    assert_eq!(
+        persisted.items.states()[0].status,
+        ReviewItemStatus::Submitting
+    );
     sqlx::raw_sql("DELETE FROM agent_session WHERE id = '00000000-0000-0000-0000-000000000001'")
         .execute(&pool)
         .await

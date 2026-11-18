@@ -14,7 +14,6 @@ import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import type { ValidHotkey } from '@core/hotkey/types';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
-import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
 import Check from '@icon/system/regular/check-square.svg';
 import TextCode from '@icon/system/regular/code.svg';
 import CodeBlock from '@icon/system/regular/code-block.svg';
@@ -83,6 +82,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { CommentButton } from './CommentButton';
 import { MediaSelector } from './MediaSelector';
 import { TableInsert } from './TableInsert';
 
@@ -1054,19 +1054,10 @@ export function FormatTools(props: {
             </Button>
             <MediaSelector buttonIsDisabled={buttonIsDisabled} />
             <Show when={ENABLE_MARKDOWN_COMMENTS}>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                tooltip="Comment"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleInsertComment();
-                }}
+              <CommentButton
+                onClick={handleInsertComment}
                 disabled={commentButtonIsDisabled()}
-              >
-                <ChatTeardrop class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-              </Button>
+              />
             </Show>
             <VerticalBar />
             <Dropdown
@@ -1148,19 +1139,10 @@ export function FormatTools(props: {
           <div class="w-4"></div>
         </Show>
         <Show when={ENABLE_MARKDOWN_COMMENTS && canComment() && !canEdit()}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            tooltip="Comment"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleInsertComment();
-            }}
+          <CommentButton
+            onClick={handleInsertComment}
             disabled={commentButtonIsDisabled()}
-          >
-            <ChatTeardrop class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-          </Button>
+          />
         </Show>
       </>
     );

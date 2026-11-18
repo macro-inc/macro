@@ -44,7 +44,7 @@ import type {
   EmailUndoHandle,
 } from '../context/compose-capabilities';
 import type { EmailReplySession } from '../context/email-form-inputs';
-import { decodeBase64Utf8 } from '../core/decode-base64';
+import { draftEditorHtml } from '../core/draft-editor-html';
 import type { EmailDraft } from '../core/email-draft';
 import { plainTextToHtml } from '../core/plain-text-to-html';
 import {
@@ -63,6 +63,8 @@ import { observeDraftIdentity } from './draft-identity';
 import {
   createDraftPersistence,
   deleteDraftForDiscard,
+  type KeptAsNewDraftReason,
+  recordKeptAsNewDraft,
 } from './draft-persistence';
 import { observeDraftRestoration } from './draft-restoration';
 import { createDraftSaveNotice } from './draft-save-notice';
@@ -202,10 +204,14 @@ export function createReplyComposer(
   const userEmail = props.viewerEmail;
 
   const primaryInboxId = props.accounts.primaryId;
+  // A thread shared with the viewer sits in its owner's inbox; reply from one
+  // of the viewer's own instead.
+  const threadInboxId = () =>
+    ctx.ownsThreadInbox() ? thread()?.link_id : undefined;
   // Capture this domain inbox ID for each asynchronous operation.
   const activeInboxId = () =>
     form.selectedInboxId() ??
-    thread()?.link_id ??
+    threadInboxId() ??
     draftSeed?.link_id ??
     primaryInboxId() ??
     props.accounts.inboxes()[0]?.id;
@@ -351,18 +357,23 @@ export function createReplyComposer(
   });
 
   const savedDraftThreadId = session.threadId;
-  observeDraftIdentity(
-    props.drafts,
+  observeDraftIdentity({
+    storage: props.drafts,
     session,
-    props.notices,
-    () => {
+    notices: props.notices,
+    recover: () => {
       if (scheduleBlocked() || schedule.state().type === 'scheduled') return;
       if (props.drafts.retryDraft) {
         void retryDraft().catch(props.notices.reportError);
-      } else detachFromObsoleteDraft('Saving your edits as a new draft.');
+      } else
+        detachFromObsoleteDraft(
+          'save-rejected',
+          persistence.unsavedEdits(editVersion),
+          'Saving your edits as a new draft.'
+        );
     },
-    handleAlreadySent,
-    async () => {
+    onAlreadySent: handleAlreadySent,
+    onConfirmed: async () => {
       if (
         sendLocked() ||
         schedule.state().type === 'scheduled' ||
@@ -373,14 +384,14 @@ export function createReplyComposer(
       const draftId = session.draftId();
       if (draftId && session.serverConfirmed())
         await attachmentPersistence.upload(draftId);
-    }
-  );
+    },
+    onAcknowledged: (local) => persistence.acknowledged(local),
+  });
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
   let draftTransfer: ReturnType<typeof createDraftTransfer> | undefined;
   let identityVersion = 0;
   let editVersion = 0;
-  let persistedEditVersion = 0;
   const lifecycle = props.draftLifecycle.observe({
     draftId: () => (session.serverConfirmed() ? savedDraftId() : undefined),
     threadId: savedDraftThreadId,
@@ -626,11 +637,17 @@ export function createReplyComposer(
       );
       return null;
     }
+    const recipients = form.recipients();
     if (
       !hasDraftContent(
-        prepared.bodyText,
+        prepared.hasWrittenContent,
         form.subject(),
-        form.attachments.list().length
+        form.attachments.list().length,
+        // A forward's recipients are typed in, not derived from the thread,
+        // so they keep a forward with no note of its own alive.
+        form.replyType() === 'forward'
+          ? recipients.to.length + recipients.cc.length + recipients.bcc.length
+          : undefined
       )
     ) {
       return null;
@@ -744,8 +761,7 @@ export function createReplyComposer(
     try {
       if (!draft) {
         await persistence.remove({ inboxId, completingThread });
-        if (generation === identityVersion)
-          persistedEditVersion = Math.max(persistedEditVersion, revision);
+        if (generation === identityVersion) persistence.saved(revision);
         return;
       }
       if (!currentThread) {
@@ -767,8 +783,7 @@ export function createReplyComposer(
         completingThread,
       });
       if (generation !== identityVersion || !saved) return;
-      if (saved.persistence !== 'queued')
-        persistedEditVersion = Math.max(persistedEditVersion, revision);
+      if (saved.persistence !== 'queued') persistence.saved(revision);
       return saved.draftId;
     } catch (error) {
       if (generation === identityVersion)
@@ -797,6 +812,7 @@ export function createReplyComposer(
           : null,
         inboxId: snapshot.inboxId,
         attachments: snapshot.attachments,
+        edit: snapshot.revision,
       });
     },
     paused: () =>
@@ -829,7 +845,10 @@ export function createReplyComposer(
     },
     setPending: setRestoring,
     restore: (draft, change, restoredPersistence, local, attachments) => {
-      persistence.restored(local);
+      persistence.restored(local, {
+        edit: editVersion,
+        persistence: restoredPersistence,
+      });
       setDraftGeneration(draft.draft_generation ?? 0);
       session.dispatch({
         type: 'seeded',
@@ -841,9 +860,8 @@ export function createReplyComposer(
       form.restoreDraft(draft);
       if (attachments) form.attachments.replace(attachments);
       setIncludeSignature(change.includeSignature !== false);
-      const bodyHtml = draft.body_html_sanitized
-        ? decodeBase64Utf8(draft.body_html_sanitized)
-        : plainTextToHtml(draft.body_text ?? '');
+      const bodyHtml =
+        draftEditorHtml(draft) ?? plainTextToHtml(draft.body_text ?? '');
       setRestoredBodyHtml(bodyHtml);
       const currentEditor = editor();
       if (currentEditor) setEditorStateFromHtml(currentEditor, bodyHtml);
@@ -1175,7 +1193,8 @@ export function createReplyComposer(
     }
     if (scheduleAction === 'schedule' || scheduleAction === 'update') {
       const result = await schedule.submit();
-      if (result === 'scheduled') {
+      // Another composer may have cancelled the schedule while it committed.
+      if (result === 'scheduled' && schedule.state().type === 'scheduled') {
         const scheduledDraftId = savedDraftId();
         rememberCurrentReply();
         // The scheduled draft stays in the thread with its "Scheduled for"
@@ -1197,6 +1216,11 @@ export function createReplyComposer(
     const sendOperation = ++sendOperationVersion;
     const sendGeneration = identityVersion;
     try {
+      // A reply with nothing written has nothing to send, even if an earlier
+      // save gave it draft ids. Refuse before the save, which would drop them.
+      const snapshot = captureSave(willMarkDone);
+      if (!snapshot.draft) return refuseSend(props.notices, 'nothing-to-send');
+
       // Ensure draft is saved before sending so undo-send always has a draft to restore
       const epochBeforeSave = session.epoch();
       try {
@@ -1214,8 +1238,8 @@ export function createReplyComposer(
             ) &&
           (form.attachments.list().length === 0 || session.serverConfirmed())
         )
-          await autosave.saveLocal(captureSave(willMarkDone));
-        else await autosave.save(captureSave(willMarkDone));
+          await autosave.saveLocal(snapshot);
+        else await autosave.save(snapshot);
       } catch (error) {
         props.notices.reportError(error);
         if (session.isStale(epochBeforeSave)) return;
@@ -1585,7 +1609,12 @@ export function createReplyComposer(
   const handleSendTimeChange = (date: Date | null) =>
     scheduleBlocked() ? false : schedule.select(date);
 
-  const detachFromObsoleteDraft = (message: string) => {
+  const detachFromObsoleteDraft = (
+    reason: KeptAsNewDraftReason,
+    unsavedEdits: number,
+    message: string
+  ) => {
+    recordKeptAsNewDraft(reason, { draftId: session.draftId(), unsavedEdits });
     identityVersion += 1;
     autosave.cancel();
     session.dispatch({ type: 'reset' });
@@ -1594,7 +1623,6 @@ export function createReplyComposer(
     attachmentLinks.detach();
     schedule.detach();
     setTerminalState(undefined);
-    persistedEditVersion = 0;
     props.notices.feedback.alert(message);
     if (omittedAttachments) {
       props.notices.feedback.alert(
@@ -1641,8 +1669,11 @@ export function createReplyComposer(
           return;
 
         if (state.type === 'scheduled') {
-          if (editVersion > persistedEditVersion) {
+          const unsavedEdits = persistence.unsavedEdits(editVersion);
+          if (unsavedEdits > 0) {
             detachFromObsoleteDraft(
+              'scheduled-elsewhere',
+              unsavedEdits,
               'This email was scheduled in another tab. Your newer text was kept as a new draft.'
             );
             return;
@@ -1680,8 +1711,14 @@ export function createReplyComposer(
         // Only a confirmed schedule makes a delivery "the scheduled email"; any
         // other draft was sent from another tab or device.
         const wasScheduled = schedule.state().type === 'scheduled';
-        if (editVersion > persistedEditVersion) {
+        const unsavedEdits = persistence.unsavedEdits(
+          editVersion,
+          state.type === 'sent' ? state.sentCopy : undefined
+        );
+        if (unsavedEdits > 0) {
           detachFromObsoleteDraft(
+            state.type === 'sent' ? 'sent-elsewhere' : 'changed-elsewhere',
+            unsavedEdits,
             state.type !== 'sent'
               ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
               : wasScheduled

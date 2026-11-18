@@ -21,7 +21,6 @@ const previewImports = [
   '@app/features/calendar-view/components/use-forward-event-email',
   '@app/features/calendar/hooks/create-guest-invite-controller',
   '@app/features/calendar/hooks/use-calendar-ui-flag',
-  '@app/features/calendar-notes/calendar-meeting-notes',
   '@app/features/calendar-view/components/use-open-event-email',
   '@app/features/calendar-view/copy-guest-emails',
   '@property/editors/selectors/PropertyEntitySelector',

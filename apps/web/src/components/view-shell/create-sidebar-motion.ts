@@ -1,20 +1,24 @@
+import { createAnimationGroup } from '@app/lib/utils/create-animation-group';
 import { type Accessor, onCleanup } from 'solid-js';
 
 const SIDEBAR_MOTION_DURATION = 140;
 
 /** Animate the solver's settled layout without changing its resize preferences. */
 export function createSidebarMotion(root: Accessor<HTMLElement | undefined>) {
-  const running = new Set<() => void>();
+  const motion = createAnimationGroup();
   let revision = 0;
+  let restore = () => {};
   const cancel = () => {
-    for (const finish of running) finish();
+    motion.cancel();
+    restore();
+    restore = () => {};
   };
   onCleanup(() => {
     revision++;
     cancel();
   });
 
-  return (update: () => void) => {
+  return (update: () => void, complete: () => void = () => {}) => {
     const shell = root();
     const currentRevision = ++revision;
     const panels = shell?.querySelectorAll<HTMLElement>(
@@ -40,18 +44,23 @@ export function createSidebarMotion(root: Accessor<HTMLElement | undefined>) {
       typeof shell.animate !== 'function' ||
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
     ) {
+      complete();
       return;
     }
 
     // Solid settles the solver's registrations before measuring the destination.
     queueMicrotask(() => {
       if (revision !== currentRevision || !shell.isConnected) return;
+      const targets: { target: HTMLElement; keyframes: Keyframe[] }[] = [];
+      const cleanups: (() => void)[] = [];
       for (const [panel, from] of before) {
         if (!panel.isConnected) continue;
         const aside = panel.querySelector<HTMLElement>(
           '[data-view-shell-aside]'
         );
-        const hidden = getComputedStyle(panel).display === 'none';
+        const hidden =
+          panel.classList.contains('hidden') ||
+          getComputedStyle(panel).display === 'none';
         const width = hidden ? 0 : Number.parseFloat(panel.style.width);
         const left = panel.style.left;
         if (from.width === width && from.left === left) continue;
@@ -64,9 +73,15 @@ export function createSidebarMotion(root: Accessor<HTMLElement | undefined>) {
           aside.style.width = `${Math.max(from.width, width)}px`;
           panel.style.overflow = 'clip';
           panel.style.display = 'block';
+          cleanups.push(() => {
+            aside.style.width = previousAsideWidth ?? '';
+            panel.style.overflow = previousOverflow;
+            panel.style.display = previousDisplay;
+          });
         }
-        const animation = panel.animate(
-          [
+        targets.push({
+          target: panel,
+          keyframes: [
             {
               width: `${from.width}px`,
               left: from.left,
@@ -74,24 +89,26 @@ export function createSidebarMotion(root: Accessor<HTMLElement | undefined>) {
             },
             { width: `${width}px`, left, opacity: aside && hidden ? 0 : 1 },
           ],
-          {
-            duration: SIDEBAR_MOTION_DURATION,
-            easing: 'ease-out',
-            fill: 'both',
-          }
-        );
-        const finish = () => {
-          if (!running.delete(finish)) return;
-          animation.cancel();
-          if (aside) {
-            aside.style.width = previousAsideWidth ?? '';
-            panel.style.overflow = previousOverflow;
-            panel.style.display = previousDisplay;
-          }
-        };
-        running.add(finish);
-        animation.onfinish = finish;
+        });
       }
+      restore = () => {
+        for (const cleanup of cleanups) cleanup();
+      };
+      if (!targets.length) {
+        restore();
+        restore = () => {};
+        complete();
+        return;
+      }
+      motion.start(
+        targets,
+        { duration: SIDEBAR_MOTION_DURATION, easing: 'ease-out', fill: 'both' },
+        complete,
+        () => {
+          restore();
+          restore = () => {};
+        }
+      );
     });
   };
 }

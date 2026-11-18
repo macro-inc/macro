@@ -21,7 +21,7 @@ export interface CreateChannelScopedBotRequest {
   description?: CreateChannelScopedBotRequestDescription;
   /** Stable handle. */
   handle: string;
-  /** Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false. */
+  /** Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false. */
   has_agent?: CreateChannelScopedBotRequestHasAgent;
   /** Display name. */
   name: string;

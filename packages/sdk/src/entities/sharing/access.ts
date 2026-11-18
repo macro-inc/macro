@@ -21,7 +21,11 @@ export class EntityAccess {
     return { entity_type: this.entityType, entity_id: this.entity.id };
   }
 
-  /** A page of access requests, including the caller's own request and review rights. */
+  /**
+   * A page of access requests, including the caller's own request and review rights.
+   *
+   * @readonly
+   */
   async state(offset?: number) {
     const state = unwrap(
       await this.client.storage.accessRequestsState({
@@ -45,7 +49,36 @@ export class EntityAccess {
     };
   }
 
-  /** Request access, optionally naming the revision of an earlier request. */
+  /**
+   * Ask the item's reviewers for more access in the caller's name, as the Share
+   * menu's Request access does, superseding the caller's latest request.
+   *
+   * Agents: call this only when the user asked for it or agreed after being
+   * offered it, typically after a write failed with `MacroForbiddenError`
+   * because the user can only view the item; never request access on your
+   * own. It never grants access: the request stays pending until a reviewer
+   * decides. Tell the user it is pending and who reviews it (`state().owner`),
+   * do not claim the failed write succeeded, check `state()` later (`mine`
+   * holds this request's `status()`), and retry the write only once
+   * `state().accessLevel` allows it.
+   *
+   * @write
+   */
+  async request(
+    requestedLevel: Exclude<AccessLevel, 'owner'>,
+  ): Promise<AccessRequest> {
+    const { mine } = await this.state();
+    return this.submit(
+      requestedLevel,
+      mine ? await mine.revision() : undefined,
+    );
+  }
+
+  /**
+   * Request access, optionally naming the revision of an earlier request.
+   *
+   * @write
+   */
   async submit(
     requestedLevel: AccessLevel,
     revision?: number,
@@ -62,7 +95,11 @@ export class EntityAccess {
     );
   }
 
-  /** Cancel the caller's own request at its observed revision. */
+  /**
+   * Cancel the caller's own request at its observed revision.
+   *
+   * @destructive
+   */
   async cancel(revision: number): Promise<void> {
     unwrap(
       await this.client.storage.accessRequestsCancel({
@@ -72,7 +109,11 @@ export class EntityAccess {
     );
   }
 
-  /** Direct grants expressed as user handles. */
+  /**
+   * Direct grants expressed as user handles.
+   *
+   * @readonly
+   */
   async direct() {
     return unwrap(
       await this.client.storage.accessRequestsDirect({ path: this.path }),
@@ -82,7 +123,12 @@ export class EntityAccess {
     }));
   }
 
-  /** Grant direct access, or remove it by omitting the access level. */
+  /**
+   * Grant direct access, or remove it by omitting the access level.
+   *
+   * @destructive
+   * @idempotent
+   */
   async grant(user: User, accessLevel?: AccessLevel): Promise<void> {
     unwrap(
       await this.client.storage.accessRequestsSetDirect({
@@ -92,7 +138,12 @@ export class EntityAccess {
     );
   }
 
-  /** Remove one user's direct grant. */
+  /**
+   * Remove one user's direct grant.
+   *
+   * @destructive
+   * @idempotent
+   */
   async remove(user: User): Promise<void> {
     unwrap(
       await this.client.storage.accessRequestsRemoveDirect({
@@ -101,7 +152,12 @@ export class EntityAccess {
     );
   }
 
-  /** Resolve a request belonging to this entity at an observed revision. */
+  /**
+   * Resolve a request belonging to this entity at an observed revision.
+   *
+   * @destructive
+   * @mcp-exclude Takes a handle built from a listing record, which an MCP call can't reference.
+   */
   async resolve(
     request: AccessRequest,
     resolution: ResolveRequest,
@@ -126,7 +182,11 @@ export class EntityAccess {
   }
 }
 
-/** One access request; resolutions preserve optimistic concurrency. */
+/**
+ * One access request; resolutions preserve optimistic concurrency.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
+ */
 export class AccessRequest extends MacroEntity<RequestRecord> {
   private resolvedRecord?: RequestRecord;
 
@@ -176,7 +236,11 @@ export class AccessRequest extends MacroEntity<RequestRecord> {
     User.byId(this.client, id),
   );
 
-  /** Approve with an access level, or decline by omitting it. */
+  /**
+   * Approve with an access level, or decline by omitting it.
+   *
+   * @destructive
+   */
   async resolve(grantedLevel?: AccessLevel): Promise<void> {
     this.resolvedRecord = await this.access.resolve(this, {
       revision: await this.revision(),

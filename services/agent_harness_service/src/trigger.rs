@@ -10,7 +10,7 @@ use agent_trigger::domain::task_assignment::{
     ProjectTaskAssignmentContext, TaskAssignmentContext, process_task_assignment,
 };
 use agent_trigger::outbound::{
-    BotRepoAgentLookup, ChannelRepoTypeLookup, DssTaskAssignmentContext, FastModelTriggerJudge,
+    BotRepoAgentLookup, ChannelRepoTypeLookup, DssTaskAssignmentContext, JevTriggerJudge,
     LexicalExplicitReplyExtractor, MessageDiscussionReader, MessageThreadHistory, ParentNameReader,
     PgPeopleDirectory, VisionImageCaptioner,
 };
@@ -59,11 +59,12 @@ type Trigger = AgentTriggerService<
     BotRepoAgentLookup<PgBotsRepo>,
     BotRepoAgentLookup<PgBotsRepo>,
     LexicalExplicitReplyExtractor,
-    FastModelTriggerJudge,
+    Option<JevTriggerJudge<TriggerClassifier>>,
     MessageThreadHistory<
         entity_access::domain::service::EntityAccessServiceImpl<
             entity_access::outbound::PgAccessRepository,
         >,
+        PgPeopleDirectory<PgBotsRepo>,
     >,
 >;
 type Publisher = MacroEventBrokerService<KafkaEventPublisher, macro_event_broker::GlobalSpawner>;
@@ -96,11 +97,18 @@ fn commit_message<M: MacroEventCollection + 'static>(
         .map_err(|error| anyhow::anyhow!("failed to commit trigger event offset: {error:?}"))
 }
 
+/// The Jev classifier behind implicit trigger judgement.
+pub type TriggerClassifier = jev::domain::JevClassifier<jev::outbound::SystemOneJev>;
+
 /// Shared domain services retained across trigger-consumer restarts.
 #[derive(Clone)]
 pub struct TriggerServices {
     /// Recorder configured with the host's quota policy.
     pub recorder: Arc<dyn ai_usage::UsageRecorder>,
+    /// Classifier judging which live agent an unmentioned thread reply is
+    /// for; `None` when `TYPESAFE_API_KEY` is unset, so only mentions and
+    /// explicit replies reach agents.
+    pub classifier: Option<Arc<TriggerClassifier>>,
     /// Admission gate for Macro-funded inference.
     pub admission: Arc<dyn ai_billing::AiAdmissionService>,
     /// Message service used to announce task assignments.
@@ -140,6 +148,7 @@ async fn run(
 ) -> anyhow::Result<()> {
     let TriggerServices {
         recorder,
+        classifier,
         admission,
         messages,
     } = services;
@@ -194,7 +203,7 @@ async fn run(
     );
     let images = VisionImageCaptioner::new(
         static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
-        recorder.clone(),
+        recorder,
     );
     let trigger = AgentTriggerService::new(
         PgAgentSessionRepo::new(
@@ -205,12 +214,13 @@ async fn run(
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         LexicalExplicitReplyExtractor::new(lexical),
-        FastModelTriggerJudge::new(recorder, images),
+        classifier.map(|classifier| JevTriggerJudge::new(classifier, images)),
         MessageThreadHistory::new(
             message_reader,
             entity_access::domain::service::EntityAccessServiceImpl::new(
                 entity_access::outbound::PgAccessRepository::new(pool.clone()),
             ),
+            PgPeopleDirectory::new(pool.clone(), PgBotsRepo::new(pool.clone())),
         ),
     )
     .with_conversations(std::sync::Arc::new(
@@ -219,6 +229,7 @@ async fn run(
             bots::domain::service::BotServiceImpl::new(
                 PgBotsRepo::new(pool.clone()),
                 macro_event_broker::NoopMacroEventBroker,
+                crate::computers::harness_service(&pool),
             ),
             PgAgentSessionRepo::new(
                 pool.clone(),

@@ -91,6 +91,23 @@ function recordingClient() {
   return { client, requests };
 }
 
+describe('switching an event to a Macro call', () => {
+  test('update asks the service for the call', async () => {
+    const { client: recording, requests } = recordingClient();
+
+    await CalendarEvent.byId(recording, 'event-1').update({ macroCall: true });
+
+    expect(requests).toEqual([
+      {
+        operation: 'update',
+        options: expect.objectContaining({
+          body: expect.objectContaining({ macroCall: true }),
+        }),
+      },
+    ]);
+  });
+});
+
 describe('naming the copy of a meeting held by several inboxes', () => {
   test('update, delete and inviteGuests send the copy inbox', async () => {
     const { client: recording, requests } = recordingClient();

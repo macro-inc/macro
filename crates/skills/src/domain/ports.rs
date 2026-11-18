@@ -58,6 +58,13 @@ pub trait SkillService: Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<SkillSummary>, SkillError>> + Send;
+
+    /// The user's skills an agent may load without being asked, as many as
+    /// routing considers, most recently updated first, with their descriptions.
+    fn list_routable_skills(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<SkillSummary>, SkillError>> + Send;
 }
 
 /// Capabilities for accessing skill documents and their current markdown.
@@ -74,6 +81,13 @@ pub trait SkillReader: Send + Sync + 'static {
         &self,
         receipt: &EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<SkillDocumentMetadata, SkillError>> + Send;
+
+    /// The descriptions of skills already listed for the caller, by id.
+    /// Skills with no description are left out.
+    fn descriptions(
+        &self,
+        document_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<std::collections::HashMap<uuid::Uuid, String>, SkillError>> + Send;
 
     /// Read the complete current markdown of an authorized document.
     fn markdown(

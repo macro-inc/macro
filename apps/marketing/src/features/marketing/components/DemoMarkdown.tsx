@@ -11,7 +11,7 @@ function Inline(props: { text: string }) {
       {(part) => (
         <Switch fallback={<DemoMentionText text={part} />}>
           <Match when={part.startsWith('**') && part.endsWith('**')}>
-            <strong class="font-bold">{part.slice(2, -2)}</strong>
+            <strong class="font-medium">{part.slice(2, -2)}</strong>
           </Match>
           <Match when={part.startsWith('`') && part.endsWith('`')}>
             <code class="bg-inline-code font-mono rounded-xs md-inline-code p-0.5">
@@ -43,7 +43,7 @@ export function DemoMarkdown(props: {
             }
           >
             <Match when={block.startsWith('## ')}>
-              <h2 class="text-[1.125em] font-semibold mb-2">
+              <h2 class="text-[1.125em] font-medium mb-2">
                 <Inline text={block.slice(3)} />
               </h2>
             </Match>

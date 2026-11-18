@@ -5,15 +5,19 @@ import {
 } from '@core/util/fetchWithToken';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import type { Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 import type {
   BulkGetByEventItemIdsRequest,
+  BulkItem,
+  BulkRemoveItemsRequest,
+  BulkSetItemsRequest,
   GetAllUserNotificationsResponse,
   NotificationState,
 } from './generated/schemas';
 import type { ApiUserNotification } from './generated/schemas/apiUserNotification';
 import type { DeviceRequest } from './generated/schemas/deviceRequest';
+import { EntityType } from './generated/schemas/entityType';
 import type { GetNotificationTypePreferencesResponse } from './generated/schemas/getNotificationTypePreferencesResponse';
 import type { NotificationBulkRequest } from './generated/schemas/notificationBulkRequest';
 import type { UserUnsubscribe } from './generated/schemas/userUnsubscribe';
@@ -25,6 +29,40 @@ const _NOTIFICATION_WEBSOCKET_EVENT = 'notification';
 
 type WithEventItemId = { event_item_id: string };
 type WithItem = { item_id: string; item_type: string };
+
+const notificationEntityType = z.enum(EntityType);
+
+function notificationPreferenceItems(
+  items: readonly UserUnsubscribe[]
+): Result<BulkItem[], ResultError<'INVALID_ITEM_TYPE'>[]> {
+  const validatedItems: BulkItem[] = [];
+  for (const item of items) {
+    let itemType = item.item_type;
+    if (itemType === 'email' || itemType === 'thread') {
+      itemType = 'email_thread';
+    } else if (itemType === 'foreign') {
+      itemType = 'foreign_entity';
+    }
+
+    const parsedType = notificationEntityType.safeParse(itemType);
+    if (!parsedType.success) {
+      return err([
+        {
+          code: 'INVALID_ITEM_TYPE',
+          message: 'Unsupported notification item type.',
+          arg: 'item_type',
+        },
+      ]);
+    }
+
+    validatedItems.push({
+      item_id: item.item_id,
+      item_type: parsedType.data,
+    });
+  }
+
+  return ok(validatedItems);
+}
 
 function notificationFetch(
   url: string,
@@ -56,7 +94,7 @@ export type DocumentMentionLocation = NonNullable<
 >;
 const commentRef = z.union([z.number(), z.string()]);
 
-export const documentMentionMetadata = z.object({
+const documentMentionMetadata = z.object({
   mention_id: z.string(),
   location: z
     .discriminatedUnion('type', [
@@ -236,10 +274,43 @@ export const notificationServiceClient = {
       })
     ).map((result) => ({ data: result }));
   },
-  async unsubscribeItem(args: WithItem & { snoozed_until?: string | null }) {
-    const query = args.snoozed_until
-      ? `?snoozed_until=${encodeURIComponent(args.snoozed_until)}`
-      : '';
+  async unsubscribeItems(
+    items: readonly UserUnsubscribe[],
+    snoozedUntil?: string
+  ) {
+    const validatedItems = notificationPreferenceItems(items);
+    if (validatedItems.isErr()) return err(validatedItems.error);
+
+    const body: BulkSetItemsRequest = {
+      items: validatedItems.value,
+      snoozed_until: snoozedUntil,
+    };
+    return notificationFetch<{}>('/unsubscribe/items', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+  async removeUnsubscribeItems(items: readonly UserUnsubscribe[]) {
+    const validatedItems = notificationPreferenceItems(items);
+    if (validatedItems.isErr()) return err(validatedItems.error);
+
+    const body: BulkRemoveItemsRequest = {
+      items: validatedItems.value,
+    };
+    return notificationFetch<{}>('/unsubscribe/items', {
+      method: 'DELETE',
+      body: JSON.stringify(body),
+    });
+  },
+  async unsubscribeItem(
+    args: WithItem & { snoozed_until?: string | null; mentions_only?: boolean }
+  ) {
+    // Both are sent when both are given, so the server refuses the pair
+    // instead of this client choosing one.
+    const params = new URLSearchParams();
+    if (args.mentions_only) params.set('mentions_only', 'true');
+    if (args.snoozed_until) params.set('snoozed_until', args.snoozed_until);
+    const query = params.size > 0 ? `?${params}` : '';
     return notificationFetch<{}>(
       `/unsubscribe/item/${encodeURIComponent(args.item_type)}/${encodeURIComponent(args.item_id)}${query}`,
       {

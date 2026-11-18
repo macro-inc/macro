@@ -1,3 +1,7 @@
+import {
+  BlockAliasRegistry,
+  BlockRegistry,
+} from '@app/lib/constants/block-registry';
 import { editorIsEmpty } from '@core/component/LexicalMarkdown/utils';
 import { convertBookingLinkMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertBookingLinkMentionsToLinks';
 import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
@@ -18,7 +22,16 @@ function parseHtml(html: string): Document {
 
 const APP_LINK_PATTERN = /^\/app\/([a-z0-9_-]+)\/([A-Za-z0-9_-]+)\/?$/i;
 
-/** Which Macro entity an `/app/<block>/<id>` link opens, if it is one. */
+const BLOCK_NAMES: ReadonlySet<string> = new Set([
+  ...BlockRegistry,
+  ...BlockAliasRegistry,
+]);
+
+/**
+ * Which Macro entity an `/app/<block>/<id>` link opens, if it is one. App pages
+ * with the same shape that are not entities, such as `/app/booking/<id>`,
+ * open as ordinary links.
+ */
 export function parseMacroAppLink(
   href: string
 ): { blockName: string; documentId: string } | undefined {
@@ -35,7 +48,7 @@ export function parseMacroAppLink(
   ]);
   if (!origins.has(url.origin)) return undefined;
   const match = APP_LINK_PATTERN.exec(url.pathname);
-  if (!match) return undefined;
+  if (!match || !BLOCK_NAMES.has(match[1])) return undefined;
   return { blockName: match[1], documentId: match[2] };
 }
 

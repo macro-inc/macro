@@ -11,6 +11,9 @@ import type { Awareness } from './awareness';
 when the server relayed it so receivers can drop older relays.
  */
 export interface AwarenessRelay {
+  /** Whether the viewer's grant lets them edit; a viewer who cannot is
+shown as viewing. */
+  canEdit: boolean;
   /** The database the viewer is in. */
   databaseId: string;
   /** When the server relayed it, in milliseconds since the Unix epoch. */

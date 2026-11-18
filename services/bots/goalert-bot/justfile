@@ -1,0 +1,8 @@
+dev:
+  bun run --watch src/server.ts
+
+test:
+  bun test
+
+check:
+  bunx tsc --noEmit --project tsconfig.json

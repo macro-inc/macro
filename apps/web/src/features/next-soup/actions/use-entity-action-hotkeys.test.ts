@@ -5,13 +5,20 @@ import { createRoot } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import { useEntityActionHotkeys } from './use-entity-action-hotkeys';
 
-const { action, markDone } = vi.hoisted(() => {
+const { action, markDone, discardDraft } = vi.hoisted(() => {
   const action = () => ({
     canExecute: () => true,
     execute: vi.fn(),
     executeWithSoup: vi.fn(() => Promise.resolve()),
   });
-  return { action, markDone: action() };
+  return {
+    action,
+    markDone: action(),
+    discardDraft: {
+      ...action(),
+      canExecute: (entity: { isDraft?: boolean }) => entity.isDraft === true,
+    },
+  };
 });
 
 vi.mock('@service-storage/websocket', () => ({
@@ -29,6 +36,7 @@ vi.mock('@core/hotkey/hotkeys', () => ({
   createHotkeyGroup: () => ({ dispose: vi.fn(), addDisposer: vi.fn() }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('@queries/team/teams', () => ({ useIsTeamAdmin: () => () => false }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
@@ -44,6 +52,9 @@ vi.mock('@app/features/property/editor/state/propertyEditor', () => ({
 vi.mock('@app/features/sharing/global-share-modal/shareable-entity', () => ({
   isShareableEntityType: () => false,
 }));
+vi.mock('./make-block-sender-action', () => ({
+  makeBlockSenderAction: action,
+}));
 vi.mock('./index', () => ({
   makeAddTagAction: action,
   makeCopyAction: action,
@@ -52,6 +63,7 @@ vi.mock('./index', () => ({
   makeCopyLinkAction: action,
   makeCreateReminderAction: action,
   makeDeleteAction: action,
+  makeDiscardDraftAction: () => discardDraft,
   makeFavoriteAction: action,
   makeMarkDoneAction: () => markDone,
   makeMarkNotDoneAction: action,
@@ -85,6 +97,39 @@ it('marks one selection per key press and ignores key auto-repeat', () => {
     expect(markDone.executeWithSoup).not.toHaveBeenCalled();
     expect(handler(new KeyboardEvent('keydown', { key: 'e' }))).toBe(true);
     expect(markDone.executeWithSoup).toHaveBeenCalledOnce();
+    dispose();
+  });
+});
+
+it('discards a row draft with the composer discard keys', () => {
+  createRoot((dispose) => {
+    let thread = { type: 'email', id: 'thread', isDraft: true } as EntityData;
+    const list = {} as never;
+    useEntityActionHotkeys({
+      scopeId: 'list',
+      list,
+      selectedEntities: () => [],
+      focusedEntity: () => thread,
+      restoreFocus: () => undefined,
+      viewContext: () => ({ supportsMarkDone: true }) as never,
+    });
+    const options = vi
+      .mocked(registerHotkey)
+      .mock.calls.find(
+        ([options]) => options.hotkeyToken === TOKENS.email.discardDraft
+      )![0];
+    expect(options.hotkey).toEqual([
+      'shift+cmd+.',
+      'shift+cmd+,',
+      'shift+cmd+d',
+    ]);
+    expect(options.condition!()).toBe(true);
+    expect(options.keyDownHandler!()).toBe(true);
+    expect(discardDraft.executeWithSoup).toHaveBeenCalledWith([thread], list);
+
+    thread = { type: 'email', id: 'thread', isDraft: false } as EntityData;
+    expect(options.condition!()).toBe(false);
+    expect(options.keyDownHandler!()).toBe(false);
     dispose();
   });
 });

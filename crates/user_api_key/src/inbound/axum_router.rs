@@ -5,12 +5,13 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{delete, get, post},
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    AccountHolderOrInternal, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, is_program_run,
 };
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
@@ -97,6 +98,11 @@ pub struct DeleteUserApiKeyParams {
     pub id: UserApiKeyId,
 }
 
+/// Why an agent's program may not create an API key: the key is a full
+/// credential for the account that would reach the model, without the
+/// program's agent claims.
+const PROGRAM_KEY_REFUSAL: &str = "An agent's program cannot create an API key: the key would reach you. Tell the user to create one in Macro's settings.";
+
 /// Mint a new API key for the caller.
 #[utoipa::path(
     post,
@@ -114,13 +120,19 @@ pub struct DeleteUserApiKeyParams {
 #[tracing::instrument(err, skip_all)]
 pub async fn create_user_api_key_handler<S, Auth>(
     State(state): State<UserApiKeyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Json(body): Json<CreateUserApiKeyRequest>,
 ) -> Result<(StatusCode, Json<CreatedUserApiKey>), UserApiKeyError>
 where
     S: UserApiKeyService,
     Auth: MacroAuthorizationService,
 {
+    let attribution = user.authorization.user.attribution();
+    if is_program_run(attribution, &headers) {
+        tracing::warn!(?attribution, "refused an API key from a program");
+        return Err(UserApiKeyError::Forbidden(PROGRAM_KEY_REFUSAL));
+    }
     let created = state
         .service
         .create_key(&user.authorization.user.macro_user_id, &body.name)
@@ -143,7 +155,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn list_user_api_keys_handler<S, Auth>(
     State(state): State<UserApiKeyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
 ) -> Result<Json<UserApiKeysList>, UserApiKeyError>
 where
     S: UserApiKeyService,
@@ -173,7 +185,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_user_api_key_handler<S, Auth>(
     State(state): State<UserApiKeyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
     Path(params): Path<DeleteUserApiKeyParams>,
 ) -> Result<StatusCode, UserApiKeyError>
 where
@@ -192,6 +204,7 @@ impl IntoResponse for UserApiKeyError {
         let status_code = match &self {
             UserApiKeyError::NotFound => StatusCode::NOT_FOUND,
             UserApiKeyError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            UserApiKeyError::Forbidden(_) => StatusCode::FORBIDDEN,
             UserApiKeyError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 

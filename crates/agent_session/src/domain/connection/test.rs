@@ -4,6 +4,7 @@
 //! transcript, so "which session owns this" is a correctness question about
 //! that session's durable history.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use super::*;
@@ -162,6 +163,20 @@ fn model_probe_responses_belong_to_the_connection_waiters() {
         }),
         Routed::Probe
     );
+}
+
+#[test]
+fn an_answer_to_the_connection_is_neither_a_session_frame_nor_an_orphan() {
+    let mut routes = Routes::default();
+    routes.expect_connection_response(RequestId::Str("macro-live-sessions-1".to_owned()));
+
+    let answer = response(
+        "macro-live-sessions-1",
+        serde_json::json!({"sessionIds": []}),
+    );
+    assert_eq!(routes.route(&answer), Routed::Answer);
+    // Answered once: a second reply to the same request has no owner.
+    assert_eq!(routes.route(&answer), Routed::Orphan);
 }
 
 #[test]
@@ -482,5 +497,236 @@ async fn pending_model_probe_ends_when_the_connection_closes() {
     assert!(matches!(
         probing.await.expect("probe task"),
         Err(ModelProbeError::Closed)
+    ));
+}
+
+fn sent_request(
+    message: Option<ToRuntimeMessage>,
+) -> agent_client_protocol::schema::v1::Request<agent_client_protocol::RawJsonRpcParams> {
+    let Some(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request)))) = message
+    else {
+        panic!("expected an ACP request, got {message:?}");
+    };
+    request
+}
+
+fn answer(
+    request: &agent_client_protocol::schema::v1::Request<agent_client_protocol::RawJsonRpcParams>,
+    result: serde_json::Value,
+) -> ToServerMessage {
+    ToServerMessage::Acp(AcpMessage(RawJsonRpcMessage::response(
+        request.id.clone(),
+        Ok(result),
+    )))
+}
+
+fn listing_initialize() -> serde_json::Value {
+    serde_json::json!({
+        "protocolVersion": 1,
+        "agentCapabilities": {"loadSession": true, "sessionCapabilities": {"list": {}}},
+    })
+}
+
+#[tokio::test]
+async fn a_dialed_runtime_is_initialized_once_and_lists_every_page_of_its_sessions() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let listing = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.list_sessions().await })
+    };
+    runtime.tx.send(ready()).expect("ready should send");
+
+    let initialize = sent_request(runtime.rx.recv().await);
+    assert_eq!(initialize.method.as_ref(), "initialize");
+    runtime
+        .tx
+        .send(answer(&initialize, listing_initialize()))
+        .expect("initialize answer should send");
+    let first = sent_request(runtime.rx.recv().await);
+    assert_eq!(first.method.as_ref(), "session/list");
+    runtime
+        .tx
+        .send(answer(
+            &first,
+            serde_json::json!({"sessions": [{"sessionId": "acp-1", "cwd": "/srv"}], "nextCursor": "page-2"}),
+        ))
+        .expect("first page should send");
+    let second = sent_request(runtime.rx.recv().await);
+    assert_eq!(
+        serde_json::to_value(&second.params).unwrap()["cursor"],
+        "page-2"
+    );
+    runtime
+        .tx
+        .send(answer(
+            &second,
+            serde_json::json!({"sessions": [{"sessionId": "acp-2", "cwd": "/srv"}]}),
+        ))
+        .expect("second page should send");
+
+    assert_eq!(
+        listing
+            .await
+            .expect("list task")
+            .expect("the runtime listed")
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>(),
+        [SessionId::from("acp-1"), SessionId::from("acp-2")]
+    );
+    // Sessions binding afterwards reuse this handshake instead of sending
+    // their own initialize.
+    assert!(matches!(
+        &*connection.handshake().borrow(),
+        HandshakeStatus::ReadyWithContext { restore, .. } if restore.load && !restore.resume
+    ));
+    let attachment = connection.bind(AgentSessionId::TEST_A).await;
+    let (_session_outbound, mut session_inbound) = attachment.connector.split();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), session_inbound.recv())
+            .await
+            .is_err(),
+        "a session must not be handed a handshake the connection already ran"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_that_cannot_list_sessions_lists_none() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let listing = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.list_sessions().await })
+    };
+    runtime.tx.send(ready()).expect("ready should send");
+    let initialize = sent_request(runtime.rx.recv().await);
+    runtime
+        .tx
+        .send(answer(
+            &initialize,
+            serde_json::json!({"protocolVersion": 1, "agentCapabilities": {"loadSession": true}}),
+        ))
+        .expect("initialize answer should send");
+
+    assert!(
+        listing
+            .await
+            .expect("list task")
+            .expect("not listing is no failure")
+            .is_empty()
+    );
+    assert!(runtime.rx.try_recv().is_err(), "no session/list was sent");
+}
+
+#[tokio::test]
+async fn a_handshake_a_session_runs_is_reused_for_listing() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let attachment = connection.bind(AgentSessionId::TEST_A).await;
+    let (_session_outbound, mut session_inbound) = attachment.connector.split();
+    runtime.tx.send(ready()).expect("ready should send");
+    assert!(matches!(
+        session_inbound.recv().await,
+        Some(ToServerMessage::Event {
+            event: SystemEvent::AcpReady
+        })
+    ));
+    let listing = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.list_sessions().await })
+    };
+
+    // The session's initialize finishes and is published the way its actor
+    // publishes it.
+    let initialize = RawJsonRpcMessage::request(
+        "initialize".to_owned(),
+        serde_json::json!({"protocolVersion": 1}),
+        RequestId::Str("agent_session:0".to_owned()),
+    )
+    .expect("a serializable request");
+    connection
+        .handshake()
+        .send_replace(HandshakeStatus::ReadyWithContext {
+            restore: SessionRestoreSupport {
+                resume: false,
+                load: true,
+            },
+            context: Arc::new(InitializationContext {
+                request: ToRuntimeMessage::Acp(AcpMessage(initialize)),
+                response: response("agent_session:0", listing_initialize()),
+            }),
+        });
+
+    let list = sent_request(runtime.rx.recv().await);
+    assert_eq!(list.method.as_ref(), "session/list");
+    runtime
+        .tx
+        .send(answer(
+            &list,
+            serde_json::json!({"sessions": [
+                {"sessionId": "acp-1", "cwd": "/srv", "updatedAt": "2026-11-10T17:05:00Z"},
+            ]}),
+        ))
+        .expect("list answer should send");
+    assert_eq!(
+        listing
+            .await
+            .expect("list task")
+            .expect("the runtime listed"),
+        [ListedSession {
+            id: SessionId::from("acp-1"),
+            updated_at: Some(
+                chrono::DateTime::parse_from_rfc3339("2026-11-10T17:05:00Z")
+                    .unwrap()
+                    .with_timezone(&chrono::Utc)
+            ),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn an_abandoned_initialize_hands_the_handshake_to_a_waiting_session() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let listing = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.list_sessions().await })
+    };
+    runtime.tx.send(ready()).expect("ready should send");
+    sent_request(runtime.rx.recv().await);
+    // Bound while the connection's own initialize is unanswered: it waits.
+    let attachment = connection.bind(AgentSessionId::TEST_A).await;
+    let (_session_outbound, mut session_inbound) = attachment.connector.split();
+
+    // The caller's deadline passes and the listing is dropped.
+    listing.abort();
+    assert!(listing.await.unwrap_err().is_cancelled());
+
+    assert!(matches!(
+        session_inbound.recv().await,
+        Some(ToServerMessage::Event {
+            event: SystemEvent::AcpReady
+        })
+    ));
+    assert!(matches!(
+        &*connection.handshake().borrow(),
+        HandshakeStatus::InFlight
+    ));
+}
+
+#[tokio::test]
+async fn a_closed_connection_ends_the_listing() {
+    let (carrier, runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let listing = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.list_sessions().await })
+    };
+    drop(runtime);
+
+    assert!(matches!(
+        listing.await.expect("list task"),
+        Err(ListSessionsError::Closed)
     ));
 }

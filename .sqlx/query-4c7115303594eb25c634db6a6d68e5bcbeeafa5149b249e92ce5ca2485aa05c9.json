@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session\n            SET archived_by = CASE\n                    WHEN $2 THEN COALESCE(archived_by, 'user'::agent_session_archive_cause)\n                END,\n                archived_at = CASE WHEN $2 THEN COALESCE(archived_at, NOW()) END,\n                modified_at = CASE\n                    WHEN (archived_by IS NOT NULL) IS DISTINCT FROM $2 THEN NOW()\n                    ELSE modified_at\n                END\n            WHERE id = $1\n            RETURNING modified_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "modified_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4c7115303594eb25c634db6a6d68e5bcbeeafa5149b249e92ce5ca2485aa05c9"
+}

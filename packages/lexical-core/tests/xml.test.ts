@@ -170,4 +170,59 @@ describe('xml', () => {
     expect(xml).toContain('&amp;');
     expect(xml).toContain('&gt;');
   });
+
+  it('shows which table and view a database card embeds', () => {
+    const state = root([
+      {
+        type: 'document-card',
+        version: 1,
+        documentId: 'db-1',
+        documentName: 'Projects',
+        blockName: 'database',
+        blockParams: { tableId: 'table-1', viewId: 'view-1' },
+        $: { id: 'card' },
+      },
+    ]);
+    expect(toXml(state)).toContain(
+      '<document-card id="card" documentId="db-1" name="Projects" blockName="database" blockParams="{&quot;tableId&quot;:&quot;table-1&quot;,&quot;viewId&quot;:&quot;view-1&quot;}"/>'
+    );
+  });
+
+  it('serializes a database answer with its chart', () => {
+    const state = root([
+      {
+        type: 'database-query',
+        version: 2,
+        queryId: 'q-1',
+        databaseId: 'db-1',
+        prompt: 'Projects per owner',
+        title: 'By owner',
+        displayMode: 'bar',
+        chart: { x: 'owner', y: ['projects'], stack: true },
+        height: 320,
+        $: { id: 'chart' },
+      },
+      paragraph(
+        [
+          text('Total: ', 0, 't1'),
+          {
+            type: 'database-query',
+            version: 2,
+            queryId: 'q-2',
+            prompt: 'How many projects?',
+            displayMode: 'scalar',
+            $: { id: 'n' },
+          },
+        ],
+        'p1'
+      ),
+    ]);
+    const xml = toXml(state);
+    expect(xml).toContain(
+      '<database-query id="chart" queryId="q-1" databaseId="db-1" displayMode="bar" title="By owner" prompt="Projects per owner" chart="{&quot;x&quot;:&quot;owner&quot;,&quot;y&quot;:[&quot;projects&quot;],&quot;stack&quot;:true}" height="320"/>'
+    );
+    expect(xml).toContain(
+      '<database-query id="n" queryId="q-2" displayMode="scalar" prompt="How many projects?"/>'
+    );
+  });
 });

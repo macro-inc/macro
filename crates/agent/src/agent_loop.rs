@@ -7,14 +7,17 @@ use crate::model::router::{ModelRouter, ProviderAgent};
 use crate::model::types::Model;
 use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
+use crate::system_prompt::{PromptSection, SystemPrompt};
 use crate::telemetry::GenAiContext;
-use crate::tool_adapter::DynToolSetAdapter;
+use crate::tool_adapter::{DynToolSetAdapter, provider_definition};
 use crate::tool_result_limit::ToolResultLimit;
+use ai_toolset::tool_search::{ToolMatch, tools_loaded_by};
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
 use rig_agent::tool::server::{ToolServer, ToolServerHandle};
-use rig_core::message::{AssistantContent, Message};
+use rig_core::message::{AssistantContent, Message, ToolResultContent, UserContent};
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
@@ -22,94 +25,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 const DEFAULT_MAX_TURNS: usize = 200;
-
-/// A session's system prompt, optionally split where the part every session
-/// of the agent repeats byte for byte ends, with an optional tail that
-/// changes every turn.
-///
-/// Anthropic caches the shared part apart from the per-session rest
-/// (instructions, memory), so a session reads the shared part back even when
-/// its rest is new. The turn's part comes last, after anything the loop adds
-/// (the model id, connected integrations), so a change to it costs only what
-/// follows it. Other providers receive the parts joined.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SystemPrompt {
-    shared: Option<String>,
-    rest: String,
-    turn: String,
-}
-
-impl SystemPrompt {
-    /// A prompt whose leading `shared` part is the same for every session of
-    /// the agent and whose `rest` is the session's own.
-    pub fn split(shared: impl Into<String>, rest: impl Into<String>) -> Self {
-        Self {
-            shared: Some(shared.into()),
-            rest: rest.into(),
-            turn: String::new(),
-        }
-    }
-
-    /// This prompt with `turn`, the part only this turn sends, at its end.
-    #[must_use]
-    pub fn with_turn(mut self, turn: impl Into<String>) -> Self {
-        self.turn = turn.into();
-        self
-    }
-
-    /// The shared part, when the prompt is split.
-    pub fn shared(&self) -> Option<&str> {
-        self.shared.as_deref()
-    }
-
-    /// Everything after the shared part: the session's own, then the turn's.
-    pub fn rest(&self) -> String {
-        format!("{}{}", self.rest, self.turn)
-    }
-
-    /// The whole prompt as one string.
-    pub(crate) fn joined(&self) -> String {
-        self.to_string()
-    }
-
-    fn push_str(&mut self, text: &str) {
-        self.rest.push_str(text);
-    }
-}
-
-impl std::fmt::Display for SystemPrompt {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            formatter,
-            "{}{}{}",
-            self.shared.as_deref().unwrap_or_default(),
-            self.rest,
-            self.turn
-        )
-    }
-}
-
-impl From<String> for SystemPrompt {
-    fn from(rest: String) -> Self {
-        Self {
-            shared: None,
-            rest,
-            turn: String::new(),
-        }
-    }
-}
-
-impl From<&String> for SystemPrompt {
-    fn from(rest: &String) -> Self {
-        rest.clone().into()
-    }
-}
-
-impl From<&str> for SystemPrompt {
-    fn from(rest: &str) -> Self {
-        rest.to_owned().into()
-    }
-}
 
 /// Factory for creating per-request agent sessions.
 ///
@@ -393,8 +308,24 @@ impl AgentLoop {
             catalog: catalog.clone(),
             loads: ToolLoads::default(),
         };
+        // Resolve each definition once, so `already_available` matches the
+        // description the provider shows the model.
+        let definitions: Vec<_> = toolset
+            .request_schemas()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|schema| provider_definition(schema.name, schema.description, &schema.schema))
+            .collect();
+        let advertised = definitions
+            .iter()
+            .map(|definition| ToolMatch {
+                name: definition.name.clone(),
+                description: definition.description.clone(),
+            })
+            .collect();
         let request_context = RequestContext::new(usage_ctx.user.clone())
             .with_tool_search(catalog, loader)
+            .with_advertised_tools(Arc::new(advertised))
             .with_genai_telemetry(self.genai_telemetry);
         // TODO this is cringe, make request context a RW lock newtype
         let request_context_rw = Arc::new(RwLock::new(request_context.clone()));
@@ -406,7 +337,8 @@ impl AgentLoop {
         let routing: ToolRouter =
             Arc::new(move |name: &str| routing_toolset.routing_description(name));
 
-        let adapters = DynToolSetAdapter::from_toolset(
+        let adapters = DynToolSetAdapter::from_definitions(
+            definitions,
             toolset.clone(),
             context.clone(),
             request_context_rw.clone(),
@@ -467,18 +399,23 @@ impl AgentLoop {
         // newly released model doesn't recognize its own id and may fall back
         // to identifying as a predecessor — tell it to trust the id.
         let mut system_prompt = system_prompt.into();
-        system_prompt.push_str(&format!(
-            "\n\nYou are the {} model. If this model id is unfamiliar, \
-             that is because it was released after your training data cutoff — trust \
-             this id over your training data when identifying yourself.",
-            self.model
-        ));
+        system_prompt.push(
+            PromptSection::ModelId,
+            &format!(
+                "\n\nYou are the {} model. If this model id is unfamiliar, \
+                 that is because it was released after your training data cutoff — trust \
+                 this id over your training data when identifying yourself.",
+                self.model
+            ),
+        );
         // Tell the model which connected integrations it can reach via tool
         // search. The prompt text lives in the `prompt` crate; the toolset names
         // are the dynamic data injected here. Omitted when nothing is connected.
         if let Some(section) = prompt::connected_toolsets::render(&searchable_toolset_names) {
-            system_prompt.push_str("\n\n");
-            system_prompt.push_str(&section);
+            system_prompt.push(
+                PromptSection::ConnectedIntegrations,
+                &format!("\n\n{section}"),
+            );
         }
 
         // Session-scoped GenAI telemetry: the conversation id ties the spans of
@@ -492,6 +429,7 @@ impl AgentLoop {
             ContentPolicy::from_env(),
             self.genai_telemetry,
         );
+        telemetry.set_prompt(&system_prompt, &tool_search.catalog);
         let agent = build(
             handle,
             &system_prompt,
@@ -669,6 +607,7 @@ impl Session {
                 gen_ai.provider.name = self.telemetry.provider_name(),
                 gen_ai.request.model = self.telemetry.model_name(),
                 agent.stream.items = tracing::field::Empty,
+                agent.stream.model_calls = tracing::field::Empty,
                 agent.stream.first_chunk_ms = tracing::field::Empty,
                 agent.stream.first_chunk_kind = tracing::field::Empty,
                 agent.stream.trailing_silence_ms = tracing::field::Empty,
@@ -679,6 +618,7 @@ impl Session {
                 agent.name = %self.telemetry.agent_name(),
                 agent.model = self.telemetry.model_name(),
                 agent.stream.items = tracing::field::Empty,
+                agent.stream.model_calls = tracing::field::Empty,
                 agent.stream.first_chunk_ms = tracing::field::Empty,
                 agent.stream.first_chunk_kind = tracing::field::Empty,
                 agent.stream.trailing_silence_ms = tracing::field::Empty,
@@ -731,11 +671,15 @@ impl Session {
         };
 
         // A session lives for one turn, so whatever the conversation loaded
-        // before is gone. Reload what it called, in the order it first did,
-        // rather than have the model reload each tool every turn.
-        let called = called_catalog_tools(history, &self.request_context.searchable_tools);
-        if !called.is_empty() {
-            (self.bridge_inputs.register_loaded)(called).await;
+        // before is gone. Reload what it loaded or called, in the order it
+        // first did, rather than have the model reload each tool every turn
+        // or call a tool it loaded that is no longer there.
+        let in_use = HistoryTools::of(history, &self.request_context.searchable_tools);
+        for (call_id, tools) in &in_use.loads {
+            self.bridge_inputs.tool_loads.record_call(call_id, tools);
+        }
+        if !in_use.tools.is_empty() {
+            (self.bridge_inputs.register_loaded)(in_use.tools).await;
         }
 
         let stream = self
@@ -762,25 +706,79 @@ impl Session {
     }
 }
 
-/// The catalog tools `history` called, in the order of their first call.
-fn called_catalog_tools(history: &[Message], catalog: &[SearchableTool]) -> Vec<SearchableTool> {
-    let mut called: Vec<SearchableTool> = Vec::new();
-    for message in history {
-        let Message::Assistant { content, .. } = message else {
-            continue;
-        };
-        for content in content.iter() {
-            let AssistantContent::ToolCall(call) = content else {
-                continue;
-            };
-            let name = &call.function.name;
-            if called.iter().any(|tool| &tool.name == name) {
-                continue;
-            }
-            if let Some(tool) = catalog.iter().find(|tool| &tool.name == name) {
-                called.push(tool.clone());
+/// The catalog tools `history` loaded or called, in the order it first did.
+#[derive(Default)]
+struct HistoryTools {
+    /// Every such tool, once.
+    tools: Vec<SearchableTool>,
+    /// The tools each `SearchTools` or `LoadTools` call loaded, by the call's
+    /// provider id.
+    loads: Vec<(String, Vec<SearchableTool>)>,
+}
+
+impl HistoryTools {
+    fn of(history: &[Message], catalog: &[SearchableTool]) -> Self {
+        let mut found = Self::default();
+        let mut call_names: HashMap<&str, &str> = HashMap::new();
+        for message in history {
+            match message {
+                Message::Assistant { content, .. } => {
+                    for content in content.iter() {
+                        let AssistantContent::ToolCall(call) = content else {
+                            continue;
+                        };
+                        call_names.insert(&call.id, &call.function.name);
+                        if let Some(tool) =
+                            catalog.iter().find(|tool| tool.name == call.function.name)
+                        {
+                            found.add(tool);
+                        }
+                    }
+                }
+                Message::User { content } => {
+                    for content in content.iter() {
+                        let UserContent::ToolResult(result) = content else {
+                            continue;
+                        };
+                        let Some(tool_name) = call_names.get(result.id.as_str()) else {
+                            continue;
+                        };
+                        let text: String = result
+                            .content
+                            .iter()
+                            .filter_map(|content| match content {
+                                ToolResultContent::Text(text) => Some(text.text.as_str()),
+                                _ => None,
+                            })
+                            .collect();
+                        // Every tool the call loaded, as the live turn
+                        // recorded it, even one an earlier call loaded too.
+                        let loaded: Vec<SearchableTool> = tools_loaded_by(tool_name, &text)
+                            .iter()
+                            .filter_map(|name| catalog.iter().find(|tool| &tool.name == name))
+                            .cloned()
+                            .collect();
+                        for tool in &loaded {
+                            found.add(tool);
+                        }
+                        if !loaded.is_empty() {
+                            // Requests are laid out under the provider's call
+                            // id (see `replay_provider_ids`).
+                            let call_id = result.call_id.as_ref().unwrap_or(&result.id);
+                            found.loads.push((call_id.clone(), loaded));
+                        }
+                    }
+                }
+                Message::System { .. } => {}
             }
         }
+        found
     }
-    called
+
+    /// Adds `tool` unless it is already in.
+    fn add(&mut self, tool: &SearchableTool) {
+        if !self.tools.iter().any(|known| known.name == tool.name) {
+            self.tools.push(tool.clone());
+        }
+    }
 }

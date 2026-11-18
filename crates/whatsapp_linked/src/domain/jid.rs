@@ -75,6 +75,36 @@ impl<'a> Jid<'a> {
     }
 }
 
+/// Shortest and longest E.164 numbers WhatsApp registers, in digits.
+const PHONE_DIGITS: std::ops::RangeInclusive<usize> = 7..=15;
+
+/// A phone number in E.164 form (`+<country code><number>`, no spacing).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PhoneNumber(String);
+
+fn e164(input: &str) -> IResult<&str, &str> {
+    all_consuming(preceded(char('+'), digits)).parse(input)
+}
+
+impl PhoneNumber {
+    /// Accept only E.164: `+`, then 7 to 15 digits, the first not `0`.
+    pub fn parse(text: &str) -> Option<Self> {
+        let (_, digits) = e164(text).ok()?;
+        (PHONE_DIGITS.contains(&digits.len()) && !digits.starts_with('0'))
+            .then(|| Self(text.to_owned()))
+    }
+
+    /// The number as stored and shown, `+<digits>`.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// The person's phone-number JID.
+    pub fn jid(&self) -> String {
+        format!("{}@s.whatsapp.net", self.0.trim_start_matches('+'))
+    }
+}
+
 /// A group JID.
 pub fn is_group_jid(text: &str) -> bool {
     Jid::parse(text).is_some_and(|jid| jid.kind == JidKind::Group)

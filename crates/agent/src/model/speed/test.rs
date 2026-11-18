@@ -4,6 +4,16 @@ use super::*;
 fn premium_speeds_are_model_specific() {
     assert!(ModelSpeed::Ultrafast.supported("openai/gpt-6-astra"));
     assert!(ModelSpeed::Ultrafast.supported("openai/gpt-6.1-sol"));
+    assert!(ModelSpeed::Priority.supported("openai/gpt-6-astra"));
+    assert!(ModelSpeed::Priority.supported("openai/gpt-6.1-sol"));
+    assert_eq!(
+        ModelSpeed::offered("openai/gpt-6.1-sol"),
+        [
+            ModelSpeed::Standard,
+            ModelSpeed::Priority,
+            ModelSpeed::Ultrafast
+        ]
+    );
     assert!(!ModelSpeed::Fast.supported("anthropic/claude-opus-5-5"));
     assert!(ModelSpeed::Fast.billable("anthropic/claude-opus-5-5"));
     for model in [
@@ -14,6 +24,7 @@ fn premium_speeds_are_model_specific() {
     ] {
         assert!(!ModelSpeed::Fast.supported(model));
         assert!(!ModelSpeed::Ultrafast.supported(model));
+        assert!(!ModelSpeed::Priority.supported(model));
         assert!(ModelSpeed::Standard.supported(model));
     }
 }
@@ -24,6 +35,9 @@ fn speed_preserves_reasoning_parameters() {
     ModelSpeed::Ultrafast.apply("openai/gpt-6-astra", &mut params);
     assert_eq!(params["reasoning"]["effort"], "high");
     assert_eq!(params["service_tier"], "ultrafast");
+    ModelSpeed::Priority.apply("openai/gpt-6-astra", &mut params);
+    assert_eq!(params["reasoning"]["effort"], "high");
+    assert_eq!(params["service_tier"], "priority");
     ModelSpeed::Standard.apply("openai/gpt-6-astra", &mut params);
     assert_eq!(params["service_tier"], "default");
     let mut withheld = serde_json::json!({});

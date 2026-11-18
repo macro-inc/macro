@@ -15,22 +15,30 @@ mod mangle;
 mod toolset;
 
 pub use call_tool_result::CallToolResultExt;
+pub use mangle::unmangle;
 pub use toolset::{ConnectedServer, Error, ListedServer, RemoteMcpToolSet};
 
 use rmcp::RoleClient;
-use rmcp::model::{ClientInfo, Implementation};
+use rmcp::model::{ClientConfig, Implementation, ProtocolVersion};
 use rmcp::service::RunningService;
 
 /// Our MCP client publishes this name to servers on-connect.
 pub const MCP_CLIENT_NAME: &str = "Macro";
 
 /// A connected MCP server session.
-pub type McpServer = RunningService<RoleClient, ClientInfo>;
+pub type McpServer = RunningService<RoleClient, ClientConfig>;
 
 /// Build the client info sent to MCP servers during initialization.
-pub fn client_info() -> ClientInfo {
-    ClientInfo::new(
+///
+/// Pins the protocol version to [`ProtocolVersion::LATEST_WITH_INITIALIZE`].
+/// rmcp's default is the newest version it knows (2026-07-28), which has no
+/// `initialize` call, yet `serve` always opens with `initialize`. Servers that
+/// know that version refuse the handshake instead of negotiating down (Google,
+/// Datadog, Zendesk, GitHub).
+pub fn client_info() -> ClientConfig {
+    ClientConfig::new(
         Default::default(),
         Implementation::new(MCP_CLIENT_NAME, env!("CARGO_PKG_VERSION")),
     )
+    .with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE)
 }

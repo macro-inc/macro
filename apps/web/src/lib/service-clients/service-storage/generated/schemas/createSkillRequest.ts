@@ -13,6 +13,10 @@ instructions that AI reads and follows when the skill is referenced in an
 AI input.
  */
 export interface CreateSkillRequest {
+  /** When to use the skill, in one line starting "Use when", e.g. "Use when
+drafting release notes; not changelog entries". Agents choose skills
+for a request by it. */
+  description: string;
   /** Markdown source text. Defaults to an empty skill document. */
   markdown?: CreateSkillRequestMarkdown;
   /** Optional project ID to associate the skill with. */

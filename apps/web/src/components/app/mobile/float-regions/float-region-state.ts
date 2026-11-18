@@ -2,7 +2,7 @@ import { type Accessor, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 /** Region render order in the host, top to bottom. Add new regions here. */
-export const FLOAT_REGIONS = ['accessory', 'dock'] as const;
+export const FLOAT_REGIONS = ['accessory', 'call', 'dock'] as const;
 
 export type FloatRegionName = (typeof FLOAT_REGIONS)[number];
 
@@ -16,6 +16,15 @@ type FloatRegionRegistration = {
   isActive: Accessor<boolean>;
   /** Mount order, used to break priority ties. */
   seq: number;
+  /** Pane-local chrome follows its content rather than the app-wide host. */
+  anchor?: Accessor<HTMLElement | undefined>;
+  pane?: string;
+};
+
+type FloatRegionScopeRegistration = {
+  pane: string;
+  anchor: Accessor<HTMLElement | undefined>;
+  isActive: Accessor<boolean>;
 };
 
 const priorityOf = (registration: FloatRegionRegistration) =>
@@ -41,6 +50,7 @@ function createFloatRegionsState() {
     Partial<Record<FloatRegionName, HTMLElement>>
   >({});
   const [hostHeight, setHostHeight] = createSignal(0);
+  const [scopes, setScopes] = createSignal<FloatRegionScopeRegistration[]>([]);
   let nextSeq = 0;
 
   function register(
@@ -83,6 +93,22 @@ function createFloatRegionsState() {
 
   return {
     register,
+    registerScope: (scope: FloatRegionScopeRegistration) => {
+      setScopes((previous) => [...previous, scope]);
+      return () =>
+        setScopes((previous) => previous.filter((entry) => entry !== scope));
+    },
+    anchor: (region: FloatRegionName) => {
+      const winner = winnerOf(region);
+      const anchor = winner?.anchor?.();
+      if (anchor || !winner?.pane) return anchor;
+      const entries = scopes();
+      for (let index = entries.length - 1; index >= 0; index--) {
+        const scope = entries[index]!;
+        if (scope.pane === winner.pane && scope.isActive())
+          return scope.anchor();
+      }
+    },
     setMount: (region: FloatRegionName, el: HTMLElement) =>
       setMounts(region, el),
     mount: (region: FloatRegionName) => mounts[region],

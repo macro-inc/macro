@@ -2,7 +2,9 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 
-/** Fill short pages as well as paging on scroll, without retrying a failed page in a loop. */
+/** Fill short pages as well as paging on scroll, without retrying a failed page
+ * in a loop. An empty window keeps reading pages until one matches or the
+ * results end. */
 export function createSearchPagination<T>(options: {
   items: Accessor<readonly T[]>;
   container: Accessor<HTMLElement | undefined>;
@@ -25,13 +27,14 @@ export function createSearchPagination<T>(options: {
     const remaining = options.remaining();
     if (remaining === undefined || remaining > 44 * 3) return;
     const page = options.items();
-    if (automatic && page === lastAutoPage) return;
+    if (automatic && page.length > 0 && page === lastAutoPage) return;
     lastAutoPage = page;
     fireAndForget(options.loadMore(), 'mobile-search');
   };
 
   // DOM measurements settle after rendering and ResizeObserver updates. A new
-  // result array allows another automatic page; a failed/no-op fetch does not.
+  // result array allows another automatic page; a failed/no-op fetch does not,
+  // except in an empty window, where every finished page advances the cursor.
   const scheduleCheck = () => {
     if (queued) return;
     queued = true;

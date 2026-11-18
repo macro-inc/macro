@@ -89,7 +89,10 @@ async fn presentation_rejects_cross_owner_and_archived_before_actor_delivery() {
     ));
     let mut session = fx.repo.get(fx.session).await.unwrap();
     let owner = session.owner_user().unwrap().to_owned();
-    session.is_archived = true;
+    session.archived = Some(crate::domain::model::SessionArchive {
+        by: crate::domain::model::ArchiveCause::User,
+        at: chrono::Utc::now(),
+    });
     fx.repo.insert_session(session);
     assert!(matches!(
         fx.service.present_tool(fx.session, owner, card()).await,

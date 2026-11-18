@@ -1,11 +1,18 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableEmailSignatures } from '@core/constant/featureFlags';
+import { EmailRowStylePreview } from '@app/features/email-view/components/EmailRowStylePreview';
+import {
+  chosenEmailRowStyle,
+  setEmailRowStyle,
+} from '@app/features/email-view/primitives/email-row-style';
+import { t } from '@app/lib/i18n';
+import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Button } from '@ui';
+import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
+import type { Link as EmailLink } from '@service-email/generated/schemas';
+import { Button, Tabs, ToggleSwitch } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
 import {
@@ -16,8 +23,11 @@ import {
 } from './primitives';
 import { SignatureSection } from './SignatureSection';
 
-export function EmailSettings() {
-  const signatures = useFeatureFlag(enableEmailSignatures);
+/**
+ * `displayOptions` shows the Mail row style; the phone settings sheet leaves
+ * it out because phones always show Minimalist rows.
+ */
+export function EmailSettings(props: { displayOptions: boolean }) {
   const { openSettings } = useSettingsState();
   const isAvailable = useSettingsTabAvailable();
   return (
@@ -39,22 +49,43 @@ export function EmailSettings() {
           <EmailCard />
         </Suspense>
       </SettingsSection>
-      <Show when={signatures().enabled}>
+      <Show when={props.displayOptions}>
         <SettingsSection
-          title="Signatures"
-          description="Create a signature for each email account and preview it before sending."
+          title={t('settingsEmail.displayOptions')}
+          target="Display options"
+          description={t('settingsEmail.displayOptionsDescription')}
         >
-          <Suspense
-            fallback={
-              <p role="status" class="text-sm text-ink-muted">
-                Loading signatures…
-              </p>
-            }
-          >
-            <EmailSignatures />
-          </Suspense>
+          <EmailDisplayOptions />
         </SettingsSection>
       </Show>
+      <SettingsSection
+        title="Signatures"
+        description="Create a signature for each email account and preview it before sending."
+      >
+        <Suspense
+          fallback={
+            <p role="status" class="text-sm text-ink-muted">
+              Loading signatures…
+            </p>
+          }
+        >
+          <EmailSignatures />
+        </Suspense>
+      </SettingsSection>
+      <SettingsSection
+        title="Read receipts"
+        description="See when recipients open messages you send."
+      >
+        <Suspense
+          fallback={
+            <p role="status" class="text-sm text-ink-muted">
+              Loading accounts…
+            </p>
+          }
+        >
+          <EmailReadReceipts />
+        </Suspense>
+      </SettingsSection>
       <Show when={isAvailable('Notifications') || isAvailable('Calendar')}>
         <SettingsSection title="Related settings">
           <SettingsCard>
@@ -77,7 +108,7 @@ export function EmailSettings() {
               <SettingsRow
                 stackOnNarrow
                 label="Calendars"
-                description="Manage the calendars connected to your Google accounts."
+                description="Manage the calendars connected to your email accounts."
               >
                 <Button
                   variant="ghost"
@@ -95,13 +126,39 @@ export function EmailSettings() {
   );
 }
 
+/** The Row style control and its live sample, as Display options shows them. */
+export function EmailDisplayOptions() {
+  return (
+    <SettingsCard>
+      {/* One card child, so the card draws no divider above the sample. */}
+      <div>
+        <SettingsRow stackOnNarrow label={t('settingsEmail.rowStyle')}>
+          <Tabs
+            aria-label={t('settingsEmail.rowStyle')}
+            touch="segmented"
+            size="sm"
+            options={[
+              { value: 'minimalist', label: t('settingsEmail.minimalist') },
+              { value: 'classic', label: t('settingsEmail.classic') },
+            ]}
+            value={chosenEmailRowStyle()}
+            onChange={setEmailRowStyle}
+          />
+        </SettingsRow>
+        <EmailRowStylePreview
+          rowStyle={chosenEmailRowStyle()}
+          class="mx-4 mb-4"
+        />
+        <p class="sr-only">{t('settingsEmail.rowStyleDescription')}</p>
+      </div>
+    </SettingsCard>
+  );
+}
+
 function EmailSignatures() {
   const userId = useUserId();
   const { query } = useEmailLinks();
-  const links = () =>
-    query.isSuccess
-      ? query.data.links.filter((link) => link.macro_id === userId())
-      : [];
+  const links = () => (query.isSuccess ? query.data.links : []);
   return (
     <Show
       when={!query.isError}
@@ -142,11 +199,82 @@ function EmailSignatures() {
                 </p>
               }
             >
-              <SignatureSection link={link} />
+              <SignatureSection
+                link={link}
+                shared={link.macro_id !== userId()}
+              />
             </Suspense>
           )}
         </For>
       </Show>
     </Show>
+  );
+}
+
+function EmailReadReceipts() {
+  const userId = useUserId();
+  const { query } = useEmailLinks();
+  const links = () =>
+    (query.data?.links ?? []).filter((link) => link.macro_id === userId());
+  return (
+    <Show
+      when={!query.isPending}
+      fallback={
+        <p role="status" class="text-sm text-ink-muted">
+          Loading accounts…
+        </p>
+      }
+    >
+      <Show
+        when={query.data}
+        fallback={
+          <SettingsCard>
+            <SettingsRow label="Couldn't load accounts">
+              <Button
+                variant="outline"
+                onClick={() => fireAndForget(query.refetch(), 'email-settings')}
+              >
+                Try again
+              </Button>
+            </SettingsRow>
+          </SettingsCard>
+        }
+      >
+        <SettingsCard>
+          <For
+            each={links()}
+            fallback={
+              <SettingsRow label="Connect an email account above to use read receipts." />
+            }
+          >
+            {(link) => <ReadReceiptsRow link={link} />}
+          </For>
+        </SettingsCard>
+      </Show>
+    </Show>
+  );
+}
+
+function ReadReceiptsRow(props: { link: EmailLink }) {
+  const updateSettings = useUpdateEmailSettingsMutation();
+  return (
+    <SettingsRow label={props.link.email_address}>
+      <ToggleSwitch
+        size="md"
+        label={`Read receipts for ${props.link.email_address}`}
+        labelClass="sr-only"
+        checked={props.link.settings.read_receipts_enabled ?? true}
+        disabled={updateSettings.isPending}
+        onChange={(checked) =>
+          updateSettings.mutate(
+            {
+              linkId: props.link.id,
+              settings: { read_receipts_enabled: checked },
+            },
+            { onError: () => toast.failure('Failed to update read receipts.') }
+          )
+        }
+      />
+    </SettingsRow>
   );
 }

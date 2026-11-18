@@ -138,6 +138,14 @@ pub(crate) struct State {
     /// Groups whose messages name the sender by LID only, without
     /// `participant_pn`, as WhatsApp does for some senders.
     pub(crate) lid_only_groups: std::collections::HashSet<String>,
+    /// Profile pictures of users and groups.
+    pub(crate) pictures: HashMap<crate::picture::PictureTarget, crate::picture::Picture>,
+    /// Picture images by file key, with their content type.
+    pub(crate) picture_files: HashMap<String, (String, Vec<u8>)>,
+    /// Picture queries answered, rate-limited ones included.
+    pub(crate) picture_queries: usize,
+    /// Every picture query is answered 429.
+    pub(crate) pictures_rate_limited: bool,
 }
 
 /// A device JID in the phone-number or LID domain.
@@ -613,6 +621,7 @@ impl State {
                 iq_result(iq, vec![node("list", vec![], children(users))])
             }
             ("usync", "get", _) => self.usync(iq),
+            ("w:profile:picture", "get", Some("picture")) => self.profile_picture(from, iq),
             ("w:g2", "get", Some("query")) => {
                 let group = attr_jid(iq, "to")
                     .and_then(|to| self.groups.get(&to.user))
@@ -715,7 +724,9 @@ impl State {
             .get_children()
             .iter()
             .filter_map(|user| {
-                let requested = attr_jid(user, "jid")?;
+                let Some(requested) = attr_jid(user, "jid") else {
+                    return self.contact_lookup(user);
+                };
                 let phone = self.phone_of(&requested)?;
                 let record = self.users.get(&phone)?;
                 let lid = requested.server == HIDDEN_USER_SERVER;
@@ -776,6 +787,40 @@ impl State {
                 children(vec![node("list", vec![], children(users))]),
             )],
         )
+    }
+
+    /// Whether a phone number (`<contact>+<digits>@c.us</contact>`, as
+    /// `IsOnWhatsApp` asks) is registered, answered LID-first like WhatsApp:
+    /// the LID as `jid` with the number as `pn_jid`. Unknown numbers are `out`.
+    fn contact_lookup(&self, user: &Node) -> Option<Node> {
+        let contact = user.get_child_by_tag(&["contact"]);
+        let query = match &contact.content {
+            Some(NodeContent::String(query)) => query.clone(),
+            Some(NodeContent::Bytes(query)) => String::from_utf8_lossy(query).into_owned(),
+            _ => return None,
+        };
+        let phone = query.strip_prefix('+')?.strip_suffix("@c.us")?;
+        let answer = |user_attrs: Vec<(&str, AttributeValue)>, registered: &str| {
+            node(
+                "user",
+                user_attrs,
+                children(vec![node(
+                    "contact",
+                    vec![("type", text(registered))],
+                    bytes(query.as_bytes()),
+                )]),
+            )
+        };
+        Some(match self.users.get(phone) {
+            Some(record) => answer(
+                vec![
+                    ("jid", jid(&device_jid(&record.lid, 0, true))),
+                    ("pn_jid", jid(&device_jid(&record.phone, 0, false))),
+                ],
+                "in",
+            ),
+            None => answer(vec![("jid", jid(&device_jid(phone, 0, false)))], "out"),
+        })
     }
 }
 

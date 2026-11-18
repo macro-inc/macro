@@ -14,28 +14,23 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-    - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        clean: 'false'
-        fetch-depth: '0'
-        persist-credentials: 'false'
-    - id: changed-files
-      name: Get changed files
-      uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62
-      with:
-        json: 'true'
-        escape_json: 'false'
-        write_output_files: 'true'
     - name: Label based on paths
       uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          const fs = require('fs');
-          const changedFiles = JSON.parse(
-            fs.readFileSync('.github/outputs/all_changed_files.json', 'utf8')
-          );
+          // The PR's files from the API, without the files it deletes: the
+          // same set a full-history checkout and diff gave, in about 4 s
+          // instead of 38 s (once 705 s). The API lists at most 3,000 files.
+          const files = await github.paginate(github.rest.pulls.listFiles, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number,
+            per_page: 100,
+          });
+          const changedFiles = files
+            .filter((file) => file.status !== 'removed')
+            .map((file) => file.filename);
           const labels = new Set();
 
           // Define path-to-label mappings

@@ -8,12 +8,18 @@ link flow, following the hexagonal architecture pattern.
 
 ## Start here
 
+- `README.md` and `app-webhooks.json`: the GitHub App's reviewed webhook
+  subscriptions, minimum read permissions, full event inventory, and manual
+  registration steps. The JSON is a manifest fragment, not live configuration.
 - `src/domain/models.rs`: re-exports pull request domain types from
   `github_pull_requests` alongside this crate's own link/installation/sync
   models — most "GitHub" domain types actually live in that crate.
 - `src/inbound/github_sync_router.rs`: GitHub App install redirect, OAuth
   callback, and the webhook handler.
 - `src/inbound/pull_request_index_router.rs`: the HTTP surface for indexed PRs.
+- `src/broker.rs` + `src/domain/models/webhook_delivery.rs`: every verified
+  delivery, whatever its event, published to `macro.github_webhooks` for
+  subscribers such as routines.
 - `src/outbound/github_sync_client.rs`, `src/outbound/github_auth_client.rs`:
   GitHub's own REST/App API clients.
 - `src/outbound/pg_github_repo.rs`, `src/outbound/pg_github_sync_repo.rs`: the
@@ -23,6 +29,10 @@ link flow, following the hexagonal architecture pattern.
 
 - Owns: account linking (`link` feature), the App installation/webhook sync
   (`sync` feature), and the Axum router/webhook verification for both.
+  The `installation_claims` feature exposes whether a user has linked GitHub
+  and who may see an installation's deliveries, without the rest of the sync
+  stack. A personal installation counts only while the account that installed
+  it is the one linked.
 - Not here: the pull request model, merge rules, and PR listing/service →
   `crates/github_pull_requests`, which this crate re-exports and calls into.
 
@@ -32,12 +42,14 @@ link flow, following the hexagonal architecture pattern.
   `documents`, `fusionauth`, `connection_gateway_client`, `macro_service_urls`,
   `notification`/`model_notifications`.
 - Used by: `agent_harness_service`, `agent_harness`, `agent_egress`,
-  `document_storage_service`, `authentication_service`.
+  `document_storage_service`, `authentication_service`, `scheduled_action`.
 
 ## Recipes
 
-- Add a webhook event: `src/inbound/github_sync_router.rs` (dispatch) →
-  `src/domain/models.rs` (sync model) → `src/outbound/pg_github_sync_repo.rs`.
+- Add a routine webhook event: review `app-webhooks.json` and `README.md`, then
+  apply the registration settings manually after approval. Ingestion already
+  publishes any verified installation event; only new PR/installation sync
+  behavior needs domain handlers or persistence changes.
 - Add a new GitHub API call: `src/outbound/github_sync_client.rs` or
   `github_auth_client.rs` → the domain service that needs it.
 
@@ -52,7 +64,7 @@ link flow, following the hexagonal architecture pattern.
 ## Gotchas
 
 - Missing FusionAuth identities/grants require reauthentication; infrastructure
-  errors remain errors. After OAuth proves GitHub identity, refresh the grant
+  errors remain errors (outages as `GithubError::Upstream`, below). After OAuth proves GitHub identity, refresh the grant
   before returning an existing link. Reassign every sharer when its grant owner
   is gone, using the old owner as a compare-and-swap condition. Hold the user
   guard then the GitHub account guard through OAuth grant writes and DB changes;
@@ -67,6 +79,14 @@ link flow, following the hexagonal architecture pattern.
 - Webhook signature verification uses `hmac`/`subtle` for constant-time
   comparison — don't swap in a plain `==` when touching
   `github_sync_router.rs`.
+- A GitHub or sign-in outage is `GithubError::Upstream`, answered 502/503 by
+  `inbound.rs`. Outbound adapters classify it (`github_oauth_client.rs`
+  `throttling`/`unexpected_response`, `github_auth_client.rs`
+  `fusionauth_error`); everything else they cannot explain stays `Internal`.
+  Port errors reach the service as `GithubError`, so map them with
+  `.map_err(Into::into)`, never `GithubError::Internal(e.into())`, which turns
+  an outage back into a 500. A GitHub 403 is a refusal only after
+  `throttling` rules out a rate limit.
 - `GithubError::Forbidden`, `SetupUserNotLinked`, and `RepositoryUnavailable`
   all map to the same 403 deliberately — don't let a response distinguish
   "app not installed" from "installed somewhere you have no claim to".

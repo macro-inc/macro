@@ -241,6 +241,9 @@ impl MailboxGateway for UncertainProvider {
     > {
         unreachable!("commands must not fetch bodies or attachments")
     }
+    async fn admitted_requests(&self, _: MailboxKey) -> Option<u64> {
+        None
+    }
 }
 impl MailboxCommandGateway for UncertainProvider {
     async fn organization(

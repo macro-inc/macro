@@ -39,7 +39,7 @@ export function SettingsPage(props: {
   signpost?: JSX.Element;
   /** Brand mark left of the title, for provider detail pages. */
   icon?: JSX.Element;
-  /** Right-aligned controls beside the title (e.g. a global toggle). */
+  /** Controls beside the title; wrap below the text when the pane narrows. */
   actions?: JSX.Element;
   /** Renders a back affordance above the title for drill-in subpages. */
   onBack?: () => void;
@@ -75,8 +75,8 @@ export function SettingsPage(props: {
             {props.backLabel ?? 'Back'}
           </button>
         </Show>
-        <header class="flex items-start justify-between gap-4 @max-[480px]/settings-page:flex-col @max-[480px]/settings-page:gap-3">
-          <div class="flex flex-col gap-1.5 min-w-0">
+        <header class="flex flex-wrap items-start justify-between gap-4 @max-[480px]/settings-page:flex-col @max-[480px]/settings-page:gap-3">
+          <div class="flex min-w-0 grow basis-64 flex-col gap-1.5 @max-[480px]/settings-page:basis-auto">
             <Show when={!inSheet || props.showTitleInSheet || props.onBack}>
               <div class="flex min-w-0 items-center gap-3">
                 <Show when={props.icon}>
@@ -97,7 +97,7 @@ export function SettingsPage(props: {
             <Show when={props.signpost}>{props.signpost}</Show>
           </div>
           <Show when={props.actions}>
-            <div class="shrink-0 pt-1">{props.actions}</div>
+            <div class="max-w-full shrink-0 pt-1">{props.actions}</div>
           </Show>
         </header>
         <div
@@ -200,13 +200,24 @@ export function SettingsSurface(props: {
   );
 }
 
-/** Rows share a raised surface; nested cards do not add another box. */
-export function SettingsCard(props: { class?: string; children: JSX.Element }) {
+/**
+ * Rows share a raised surface; nested cards do not add another box.
+ * `inset="wide"` is for cards whose rows use the wider `px-6` inset (Settings →
+ * Machines), so the dividers line up with their content.
+ */
+export function SettingsCard(props: {
+  class?: string;
+  inset?: 'standard' | 'wide';
+  children: JSX.Element;
+}) {
   const nested = useContext(SettingsSurfaceContext);
   return (
     <SettingsSurface
       class={cn(
-        'overflow-hidden settings-row-dividers [--color-edge-divider:color-mix(in_srgb,var(--color-ink)_5%,transparent)] [&>*:not(:last-child)]:after:inset-x-4',
+        'overflow-hidden settings-row-dividers [--color-edge-divider:color-mix(in_srgb,var(--color-ink)_5%,transparent)]',
+        props.inset === 'wide'
+          ? '[&>*:not(:last-child)]:after:inset-x-6'
+          : '[&>*:not(:last-child)]:after:inset-x-4',
         nested && '-mx-4',
         props.class
       )}
@@ -311,13 +322,15 @@ export function ChoiceRow(props: {
   description: string;
   suggested?: boolean;
   disabled?: boolean;
+  /** Trailing content, e.g. a price or an action for an unavailable choice. */
+  aside?: JSX.Element;
   onChange: () => void;
 }) {
   return (
     <label
       class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted has-checked:border-accent has-checked:bg-accent-bg"
       classList={{
-        'cursor-not-allowed opacity-50': props.disabled,
+        'cursor-not-allowed': props.disabled,
         'p-4': props.suggested,
         'p-3': !props.suggested,
       }}
@@ -331,8 +344,9 @@ export function ChoiceRow(props: {
         onChange={props.onChange}
         aria-label={props.title}
         class="mt-0.5 accent-accent"
+        classList={{ 'opacity-50': props.disabled }}
       />
-      <span class="min-w-0">
+      <span class="min-w-0 flex-1" classList={{ 'opacity-50': props.disabled }}>
         <span class="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">
           {props.title}
           <Show when={props.suggested}>
@@ -345,6 +359,9 @@ export function ChoiceRow(props: {
           {props.description}
         </span>
       </span>
+      <Show when={props.aside}>
+        <span class="shrink-0 self-center text-right">{props.aside}</span>
+      </Show>
     </label>
   );
 }
@@ -358,6 +375,8 @@ export function IntegrationRow(props: {
   /** The brand icon, rendered at its native size inside a fixed slot. */
   icon?: JSX.Element;
   title: JSX.Element;
+  /** Shown right after the title, e.g. a Beta badge. */
+  badge?: JSX.Element;
   description?: JSX.Element;
   /** Proven facts under the description (e.g. connected accounts). Wraps. */
   facts?: JSX.Element;
@@ -382,7 +401,13 @@ export function IntegrationRow(props: {
       </Show>
       {/* The basis wraps actions below the text on narrow screens. */}
       <div class="flex-1 basis-48 min-w-0 flex flex-col gap-0.5">
-        <div class="flex items-center gap-2 min-w-0">
+        {/* With a badge, narrow rows wrap instead of truncating the title. */}
+        <div
+          class={cn(
+            'flex items-center gap-2 min-w-0',
+            props.badge && 'flex-wrap gap-y-1'
+          )}
+        >
           <div
             class={cn(
               'text-sm font-medium truncate',
@@ -391,6 +416,7 @@ export function IntegrationRow(props: {
           >
             {props.title}
           </div>
+          {props.badge}
           <Show when={props.status}>{props.status}</Show>
         </div>
         <Show when={props.description}>

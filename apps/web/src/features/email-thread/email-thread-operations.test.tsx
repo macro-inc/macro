@@ -2,7 +2,7 @@ import type { MailboxOperation } from '@service-email/generated/schemas';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { onlineManager } from '@tanstack/query-core';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { type Ok, ok } from 'neverthrow';
+import { err, type Ok, ok } from 'neverthrow';
 import { Suspense } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
@@ -23,6 +23,7 @@ afterEach(() => {
   cleanup();
   onlineManager.setOnline(true);
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 const operation = (
   state: MailboxOperation['state'],
@@ -94,6 +95,28 @@ it.each(['fetching', 'paused', 'disabled'] as const)(
     client.clear();
   }
 );
+it.each([
+  ['stops polling a thread the server no longer has', 'NOT_FOUND', 1],
+  ['keeps polling a thread through a transient failure', 'NETWORK_ERROR', 3],
+] as const)('%s', async (_, code, requests) => {
+  vi.useFakeTimers();
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  threadOperations.mockResolvedValue(err([{ code, message: code }]));
+  render(() => (
+    <QueryClientProvider client={client}>
+      <EmailThreadOperations
+        threadId="deleted-thread"
+        enabled
+        announceRead={false}
+      />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(12_000);
+  expect(threadOperations).toHaveBeenCalledTimes(requests);
+  client.clear();
+});
 it('does not announce the mark-as-read that opening a thread queues', () => {
   const read = { kind: 'read', value: true } as const;
   render(() => (

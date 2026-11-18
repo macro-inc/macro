@@ -7,6 +7,7 @@ const ADAPTER: NpmAdapter = NpmAdapter {
     bin: "claude-agent-acp",
     cli: "claude",
     cli_path_env: "CLAUDE_CODE_EXECUTABLE",
+    cli_spawned_by_node: true,
 };
 
 pub(super) struct ClaudeCode;

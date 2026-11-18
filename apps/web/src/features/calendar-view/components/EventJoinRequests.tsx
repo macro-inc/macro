@@ -3,6 +3,7 @@ import { OwnerLabel } from '@entity/owner/owner-display';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import {
   type CalendarJoinRequest,
+  isAlreadyAnswered,
   useCalendarJoinRequestsQuery,
   useRespondToCalendarJoinRequestMutation,
 } from '@queries/calendar/join-requests';
@@ -29,12 +30,21 @@ export function EventJoinRequests(props: {
   const pending = () => (queryReadyGate(requests) ? requests.data : []);
 
   const respond = useRespondToCalendarJoinRequestMutation({
-    onSuccess: (request) =>
+    onSuccess: (request, { decision }) => {
+      if (isAlreadyAnswered(request, decision)) {
+        toast.alert(
+          request.status === 'accepted'
+            ? `Already answered: ${request.requesterEmail} was invited`
+            : 'Already answered: this request was declined'
+        );
+        return;
+      }
       toast.success(
         request.status === 'accepted'
           ? `Invited ${request.requesterEmail}`
           : 'Declined the request'
-      ),
+      );
+    },
     onError: (error) =>
       toast.failure(
         isGuestInviteRefused(error)

@@ -1,3 +1,4 @@
+import type { PeopleCache } from '../people/host';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
  * Transport-agnostic cache host interface consumed by the urql exchange and
@@ -10,6 +11,7 @@ import type { IdentityBindingWire, MutationInspection } from '../protocol';
 import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
   AffectedOperationsResult,
+  CacheChangeHints,
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
   CacheReadPriority,
@@ -25,7 +27,7 @@ import type {
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
   HydrationResult,
-  HydrationSearchChanges,
+  HydrationScope,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
@@ -82,6 +84,11 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   identity?: string;
 }
 
+export interface CacheHydrateArgs extends Omit<CacheWriteArgs, 'opKey'> {
+  /** Reject a response from another account or cleared database before writing. */
+  hydrationScope?: HydrationScope;
+}
+
 export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
   /** Caller-supplied RFC UUID used for explicit safe coalescing. */
   uuid: string;
@@ -108,8 +115,8 @@ export interface InitialMutationClaimArgs {
 
 export type CacheChangeListener = (
   revision: CacheRevision,
-  /** Undefined for ordinary writes/resets and older runtimes: refresh conservatively. */
-  searchChanges?: HydrationSearchChanges
+  /** Missing metadata/proof IDs mean unknown; resets always refresh. */
+  changes?: CacheChangeHints
 ) => void;
 
 export type CacheChangeOptions = {
@@ -147,8 +154,14 @@ export interface CacheHost {
   readRecordsByKeys(
     args: ReadRecordsByKeysArgs
   ): Promise<ReadRecordsByKeysResult>;
-  /** Searches the compact write-through materialized projection. */
-  search(args: SearchCacheArgs): Promise<SearchCachePage>;
+  /** Context-aware contact policy; absent on disabled/older host adapters. */
+  readonly people?: PeopleCache;
+  /** Searches the compact write-through materialized projection. Aborting
+   * `signal` releases a search the caller has superseded. */
+  search(
+    args: SearchCacheArgs,
+    options?: { signal?: AbortSignal }
+  ): Promise<SearchCachePage>;
   /** Evaluates an exact initial Soup filter page over complete local projections. */
   entityFilter(args: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
   /** Answers a calendar viewport from the local range index. */
@@ -164,7 +177,7 @@ export interface CacheHost {
    * notifying foreground subscribers unless the write resets cache identity.
    * Cache-only consumers can opt into hydration via onCacheChanged.
    */
-  hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
+  hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(
     args: EnqueueOptimisticMutationArgs,

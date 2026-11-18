@@ -10,6 +10,9 @@ use crate::domain::ports::{SkillLister, SkillReader, SkillSearcher, SkillService
 
 /// Maximum number of skills returned from a single listing.
 const LIST_LIMIT: u16 = 100;
+/// Maximum number of the user's skills routing considers: eight Jev calls of
+/// 32 questions (see [`crate::domain::selection`]).
+const ROUTABLE_LIMIT: u16 = 256;
 
 /// Skill domain service backed by discovery and authorized document reading ports.
 #[derive(Debug, Clone)]
@@ -44,6 +47,7 @@ fn system_skill_summaries() -> impl Iterator<Item = SkillSummary> {
         .map(|skill| SkillSummary {
             document_id: skill.id(),
             name: skill.name.to_string(),
+            description: None,
             updated_at: None,
         })
 }
@@ -150,6 +154,7 @@ impl<S: SkillSearcher, L: SkillLister, R: SkillReader> SkillService for SkillSer
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<Vec<SkillSummary>, SkillError> {
         let mut skills = self.lister.list_skills(user_id, LIST_LIMIT).await?;
+        self.describe(&mut skills).await?;
 
         // System skills are visible to everyone; having no update timestamp,
         // they sort after every user skill.
@@ -158,5 +163,28 @@ impl<S: SkillSearcher, L: SkillLister, R: SkillReader> SkillService for SkillSer
         sort_most_recently_updated_first(&mut skills);
 
         Ok(skills)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_routable_skills(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<SkillSummary>, SkillError> {
+        let mut skills = self.lister.list_skills(user_id, ROUTABLE_LIMIT).await?;
+        self.describe(&mut skills).await?;
+        sort_most_recently_updated_first(&mut skills);
+        Ok(skills)
+    }
+}
+
+impl<S, L, R: SkillReader> SkillServiceImpl<S, L, R> {
+    /// Fill in the descriptions of listed user skills.
+    async fn describe(&self, skills: &mut [SkillSummary]) -> Result<(), SkillError> {
+        let ids: Vec<uuid::Uuid> = skills.iter().map(|skill| skill.document_id).collect();
+        let mut descriptions = self.reader.descriptions(&ids).await?;
+        for skill in skills {
+            skill.description = descriptions.remove(&skill.document_id);
+        }
+        Ok(())
     }
 }

@@ -16,14 +16,16 @@ use uuid::Uuid;
 use super::{FormsServiceImpl, receipt_attribution, receipt_form_id, repository_error};
 use crate::domain::events::{FormChangedMetadata, FormTopicEvent};
 use crate::domain::models::{FormError, SharingRefusal};
-use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
+use crate::domain::ports::{
+    Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
+};
 use crate::domain::sharing::{FormSharingRepo, FormSharingService};
 
 /// Most channel grants one request may change.
 const MAX_CHANNEL_GRANTS_PER_UPDATE: usize = 100;
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts> FormSharingService
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images> FormSharingService
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormSharingRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -32,6 +34,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     #[tracing::instrument(skip(self, receipt), err)]
     async fn share_permissions(

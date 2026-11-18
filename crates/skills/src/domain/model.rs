@@ -9,6 +9,8 @@ pub struct SkillSummary {
     pub document_id: uuid::Uuid,
     /// The name of the skill.
     pub name: String,
+    /// When to use the skill. Only system skills have one so far.
+    pub description: Option<String>,
     /// When the skill document was last updated, when known.
     pub updated_at: Option<DateTime<Utc>>,
 }

@@ -37,6 +37,7 @@ impl Modify for SecurityAddon {
         paths(
             message::send_message_handler,
             message::batch_send_message_handler,
+            message::broadcast_message_handler,
             entities::get_entity_handler,
         ),
         components(

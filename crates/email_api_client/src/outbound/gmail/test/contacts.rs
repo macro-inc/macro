@@ -1,5 +1,5 @@
 use uuid::Uuid;
-use wiremock::matchers::{method, path, query_param};
+use wiremock::matchers::{method, path, query_param, query_param_is_missing};
 use wiremock::{Mock, ResponseTemplate};
 
 use super::repository;
@@ -7,16 +7,17 @@ use crate::domain::models::AccessToken;
 use crate::domain::ports::MailboxContactsClient;
 
 #[tokio::test]
-async fn paginates_contacts_and_returns_the_final_sync_token() {
+async fn reads_contacts_one_page_at_a_time() {
     let (server, repository) = repository().await;
     Mock::given(method("GET"))
         .and(path("/people/me/connections"))
         .and(query_param("requestSyncToken", "true"))
+        .and(query_param_is_missing("pageToken"))
         .respond_with(ResponseTemplate::new(200).set_body_raw(
             include_str!("fixtures/contacts_page_1.json"),
             "application/json",
         ))
-        .up_to_n_times(1)
+        .expect(1)
         .mount(&server)
         .await;
     Mock::given(method("GET"))
@@ -26,17 +27,28 @@ async fn paginates_contacts_and_returns_the_final_sync_token() {
             include_str!("fixtures/contacts_page_2.json"),
             "application/json",
         ))
+        .expect(1)
         .mount(&server)
         .await;
+    let token = AccessToken::new("token");
+    let link_id = Uuid::now_v7();
 
-    let contacts = repository
-        .list_contacts(&AccessToken::new("token"), Uuid::now_v7(), None)
+    let first = repository
+        .list_contacts_page(&token, link_id, None, None)
         .await
         .unwrap();
-    assert_eq!(contacts.contacts.len(), 2);
-    assert_eq!(contacts.next_sync_token, "contacts-sync-final");
+    assert_eq!(first.contacts.len(), 1);
+    assert_eq!(first.next_page_token.as_deref(), Some("contacts-next"));
+    assert_eq!(first.next_sync_token, None);
+
+    let last = repository
+        .list_contacts_page(&token, link_id, None, Some("contacts-next"))
+        .await
+        .unwrap();
+    assert_eq!(last.next_page_token, None);
+    assert_eq!(last.next_sync_token.as_deref(), Some("contacts-sync-final"));
     assert_eq!(
-        contacts.contacts[1].original_photo_url.as_deref(),
+        last.contacts[0].original_photo_url.as_deref(),
         Some("https://lh3.googleusercontent.test/second=s128")
     );
 }
@@ -74,9 +86,9 @@ async fn normalizes_self_and_other_contacts() {
     );
 
     let other = repository
-        .list_other_contacts(&AccessToken::new("token"), link_id, Some("previous"))
+        .list_other_contacts_page(&AccessToken::new("token"), link_id, Some("previous"), None)
         .await
         .unwrap();
-    assert_eq!(other.next_sync_token, "other-sync-final");
+    assert_eq!(other.next_sync_token.as_deref(), Some("other-sync-final"));
     assert_eq!(other.contacts[0].link_id, link_id);
 }

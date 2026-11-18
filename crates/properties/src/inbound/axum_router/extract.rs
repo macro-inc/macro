@@ -15,8 +15,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
-    EntityType as AccessEntityType, RequiredPermission, ViewAccessLevel,
+    AccessLevel, BotAccessScope, EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt,
+    EntityPermission, EntityType as AccessEntityType, RequiredPermission, ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{
@@ -228,14 +228,31 @@ where
             .await
             .map_err(ReceiptRejection::from)?;
 
-        let user = authorization.authorization.user.macro_user_id;
-        let receipt = mint_authenticated_receipt::<EditAccessLevel, A>(
-            state.entity_access_service.as_ref(),
-            &user,
-            &params.entity_id,
-            target_entity_type(params.entity_type),
-        )
-        .await?;
+        let user = authorization.authorization.user;
+        let entity_type = target_entity_type(params.entity_type);
+        // A token signed for an agent writes as that agent on its user's
+        // behalf, the way the agent's MCP tools do.
+        let receipt = match user.agent_id {
+            Some(agent) => state
+                .entity_access_service
+                .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                    agent,
+                    BotAccessScope::user(user.macro_user_id),
+                    &params.entity_id,
+                    entity_type,
+                )
+                .await
+                .map_err(|_| PropertiesErr::PermissionDenied)?,
+            None => {
+                mint_authenticated_receipt::<EditAccessLevel, A>(
+                    state.entity_access_service.as_ref(),
+                    &user.macro_user_id,
+                    &params.entity_id,
+                    entity_type,
+                )
+                .await?
+            }
+        };
 
         Ok(Self(receipt))
     }

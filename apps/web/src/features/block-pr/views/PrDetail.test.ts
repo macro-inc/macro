@@ -25,7 +25,7 @@ vi.mock('@entity/components/GithubLabelPill', () => ({
   GithubLabelPills: () => null,
 }));
 vi.mock('@notifications', () => ({
-  DebouncedNotificationReadMarker: () => null,
+  NotificationReadMarker: () => null,
 }));
 vi.mock('@queries/storage/github-pull-requests', () => ({
   useRefreshGithubPullRequest: (

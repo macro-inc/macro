@@ -9,7 +9,7 @@ use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 
 use crate::domain::{
-    models::{GithubAccessToken, GithubGrantLinkOutcome, GithubLink},
+    models::{GithubAccessToken, GithubError, GithubGrantLinkOutcome, GithubLink},
     ports::Auth,
 };
 
@@ -48,16 +48,28 @@ impl GithubAuthImpl {
         &self,
         fusionauth_user_id: &uuid::Uuid,
         github_user_id: &str,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), GithubError> {
         let key = github_access_token_key!(fusionauth_user_id, github_user_id);
         let mut conn = self.conn.clone();
-        conn.del::<&str, ()>(&key).await?;
+        conn.del::<&str, ()>(&key).await.map_err(cache_error)?;
         Ok(())
     }
 }
 
+/// FusionAuth outages are upstream failures; anything else is ours.
+fn fusionauth_error(error: FusionAuthClientError) -> GithubError {
+    match error.upstream() {
+        Some(upstream) => GithubError::Upstream(upstream),
+        None => GithubError::Internal(error.into()),
+    }
+}
+
+fn cache_error(error: redis::RedisError) -> GithubError {
+    GithubError::Internal(error.into())
+}
+
 impl Auth for GithubAuthImpl {
-    type Err = anyhow::Error;
+    type Err = GithubError;
 
     #[tracing::instrument(skip(self, username, access_token), err)]
     async fn link_user(
@@ -84,7 +96,8 @@ impl Auth for GithubAuthImpl {
             self.conn
                 .clone()
                 .set_ex::<&str, &str, ()>(&key, access_token, TTL_SECONDS)
-                .await?;
+                .await
+                .map_err(cache_error)?;
         } else {
             self.clear_access_token_cache(fusionauth_user_id, github_user_id)
                 .await?;
@@ -102,8 +115,14 @@ impl Auth for GithubAuthImpl {
         let key = github_access_token_key!(fusionauth_user_id, github_user_id);
         let mut conn = self.conn.clone();
 
-        if let Some(access_token) = conn.get::<&str, Option<String>>(&key).await? {
-            conn.expire::<&str, ()>(&key, TTL_SECONDS as i64).await?;
+        if let Some(access_token) = conn
+            .get::<&str, Option<String>>(&key)
+            .await
+            .map_err(cache_error)?
+        {
+            conn.expire::<&str, ()>(&key, TTL_SECONDS as i64)
+                .await
+                .map_err(cache_error)?;
             return Ok(Some(GithubAccessToken::new(access_token)));
         }
 
@@ -120,7 +139,7 @@ impl Auth for GithubAuthImpl {
                 FusionAuthClientError::UserDoesNotExist
                 | FusionAuthClientError::NoIdentityProviderFound,
             ) => return Ok(None),
-            Err(error) => return Err(error.into()),
+            Err(error) => return Err(fusionauth_error(error)),
         };
 
         // An identity may retain another account's grant for its remaining sharers.
@@ -140,10 +159,12 @@ impl Auth for GithubAuthImpl {
             .arg(TTL_SECONDS)
             .arg("NX")
             .query_async(&mut conn)
-            .await?;
+            .await
+            .map_err(cache_error)?;
         let token = if inserted.is_none() {
             conn.get::<&str, Option<String>>(&key)
-                .await?
+                .await
+                .map_err(cache_error)?
                 .unwrap_or_else(|| link.token.clone())
         } else {
             link.token.clone()
@@ -178,7 +199,7 @@ impl Auth for GithubAuthImpl {
                 .await?;
                 Ok(())
             }
-            Err(e) => Err(e.into()),
+            Err(e) => Err(fusionauth_error(e)),
         }
     }
 }
@@ -192,7 +213,7 @@ async fn refresh_grant(
     github_user_id: &str,
     username: &str,
     access_token: &str,
-) -> Result<GithubGrantLinkOutcome, anyhow::Error> {
+) -> Result<GithubGrantLinkOutcome, GithubError> {
     // Read FusionAuth directly: a cached token can outlive its identity.
     let links = match fusionauth_client
         .get_links(&fusionauth_user_id.to_string(), Some(idp_id.to_string()))
@@ -203,7 +224,7 @@ async fn refresh_grant(
             return Ok(GithubGrantLinkOutcome::IdentityMissing);
         }
         Err(FusionAuthClientError::NoIdentityProviderFound) => Vec::new(),
-        Err(error) => return Err(error.into()),
+        Err(error) => return Err(fusionauth_error(error)),
     };
     let existing = links
         .iter()
@@ -223,7 +244,8 @@ async fn refresh_grant(
     if existing.is_some() {
         fusionauth_client
             .unlink_user(&fusionauth_user_id.to_string(), idp_id, github_user_id)
-            .await?;
+            .await
+            .map_err(fusionauth_error)?;
     }
     if let Err(error) = fusionauth_client
         .link_user(request(access_token.to_string()))
@@ -239,7 +261,7 @@ async fn refresh_grant(
                 tracing::error!(error=?rollback_error, "unable to restore github grant after failed refresh");
             }
         }
-        return Err(error.into());
+        return Err(fusionauth_error(error));
     }
     Ok(GithubGrantLinkOutcome::Linked)
 }

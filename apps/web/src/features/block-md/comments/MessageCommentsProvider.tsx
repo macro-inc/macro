@@ -23,11 +23,13 @@ import { useUserId } from '@core/context/user';
 import { onElementConnect } from '@core/util/onElementConnect';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { CommentNode } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import {
   useMessageLink,
   useMessageRootsQuery,
 } from '@queries/messages/document-messages';
 import { usePatchThreadMutation } from '@queries/messages/mutations';
+import { hasPostedComment } from '@queries/messages/posted-comment';
 import { onThreadStateUpdated } from '@queries/messages/sync';
 import type { MessageThread } from '@service-storage/messages';
 import {
@@ -50,6 +52,7 @@ import { createStore, reconcile } from 'solid-js/store';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useDeleteNewComments } from './commentOperations';
 import type { Mark, ThreadStore } from './commentType';
+import { createLocalCommentDraft } from './LocalCommentDraft';
 
 function getHighlightThread(
   highlight: Mark
@@ -95,6 +98,7 @@ export const MessageCommentsProvider: VoidComponent<{
     documentId: getDocumentId,
     permissions,
     state,
+    documentSource,
   } = useMarkdownDocument();
   const { comments: commentState, setCommentState } = state;
   const documentId = getDocumentId();
@@ -162,7 +166,6 @@ export const MessageCommentsProvider: VoidComponent<{
     setCommentState('highlightedCommentId', v);
   const setActiveMarkIds = activeMarkIdsSignal.set;
   const canEdit = permissions.canEdit;
-  const canComment = permissions.canComment;
   const userId = useUserId();
   const patchThread = usePatchThreadMutation();
   // Pending commands, not a comment projection: metadata for an old root may
@@ -232,11 +235,9 @@ export const MessageCommentsProvider: VoidComponent<{
           if (node && element) updateMarkPresentation(node, element, markId);
         }
       });
-      // Deleting one's own comment also includes removing its persisted mark.
-      if (
-        state.deleted_at &&
-        (canEdit() || (canComment() && state.user_id === userId()))
-      )
+      // Only an editor's session writes the document, so it removes the
+      // persisted mark, including for comments deleted while it was closed.
+      if (state.deleted_at && canEdit())
         editor.dispatchCommand(DELETE_COMMENT_COMMAND, [markId, true]);
     }
   };
@@ -264,7 +265,7 @@ export const MessageCommentsProvider: VoidComponent<{
     setMountedMarks(markId, markNodeKey, markElement);
     const existing = marks[markId];
 
-    if (existing && (!isDraft || existing.existsOnServer)) {
+    if (existing) {
       if (existing.existsOnServer) markElement.classList.remove('draft');
       setMarks(markId, 'markNodes', markNodeKey, markElement);
       return;
@@ -272,6 +273,13 @@ export const MessageCommentsProvider: VoidComponent<{
 
     if (isDraft && !isLocal) {
       return;
+    }
+
+    if (isDraft) {
+      Telemetry.info('comment.draft.mounted', {
+        'document.id': documentId,
+        'comment.mark_id': markId,
+      });
     }
 
     setMarks(markId, {
@@ -584,6 +592,35 @@ export const MessageCommentsProvider: VoidComponent<{
     )
   );
 
+  const localDraft = createLocalCommentDraft({
+    userId,
+    hasPostedComment: (markId) => hasPostedComment(documentId, markId),
+    editor,
+    manager: props.loroManager,
+    mapping: wrapper.mapping,
+    interactable: wrapper.isInteractable,
+    source: () => {
+      const source = documentSource();
+      return source.type === 'sync' ? source.source : undefined;
+    },
+    add: (id, element, publication) => {
+      setMarks(id, {
+        id,
+        existsOnServer: false,
+        isDraft: true,
+        owner: userId(),
+        markNodes: { draft: element },
+        publication,
+      });
+    },
+    remove: (id) => {
+      // A posted mark has its own mounted ranges by now.
+      if (marks[id]?.existsOnServer)
+        setMarks(id, 'markNodes', 'draft', undefined);
+      else setMarks(id, undefined);
+    },
+  });
+
   plugins.use(
     commentPlugin({
       ops: {
@@ -593,8 +630,10 @@ export const MessageCommentsProvider: VoidComponent<{
         init: initComments,
       },
       peerId: currentPeerId,
+      documentId,
+      draft: localDraft,
     })
   );
 
-  return null;
+  return <localDraft.Highlight />;
 };

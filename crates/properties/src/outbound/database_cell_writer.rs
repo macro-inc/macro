@@ -52,6 +52,22 @@ impl DatabaseCellWriter for PropertiesPgRepo {
         Ok(())
     }
 
+    async fn set_entity_values_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        values: &[(String, Option<PropertyValue>)],
+    ) -> Result<u64, Self::Err> {
+        entity_property_queries::set_entity_values_in_transaction(
+            transaction,
+            entity_type,
+            property_definition_id,
+            values,
+        )
+        .await
+    }
+
     async fn entity_values_in(
         &self,
         transaction: &mut Self::Transaction,

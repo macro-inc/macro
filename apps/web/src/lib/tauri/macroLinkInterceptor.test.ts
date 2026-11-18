@@ -37,6 +37,18 @@ describe('openMacroLinkInApp', () => {
     });
   });
 
+  it('keeps the private token of a booking receipt link', () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    expect(openMacroLinkInApp('https://macro.com/app/booking/123#token')).toBe(
+      true
+    );
+    expect(emit).toHaveBeenCalledWith('navigate', {
+      path: '/booking/123',
+      query: '',
+      fragment: 'token',
+    });
+  });
+
   it('leaves external links alone under Tauri', () => {
     vi.mocked(isTauri).mockReturnValue(true);
     expect(openMacroLinkInApp('https://github.com/macro-inc')).toBe(false);

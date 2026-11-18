@@ -1,3 +1,5 @@
+import { linkGithubAccount } from '@core/auth/authorize-github';
+import { isFeatureEnabled, macroConnect } from '@core/constant/featureFlags';
 import {
   openPipedreamConnectUI,
   type PipedreamConnectEvent,
@@ -28,6 +30,7 @@ import type { ServerResponse } from '@service-cognition/generated/schemas';
 import {
   type InfiniteData,
   infiniteQueryOptions,
+  queryOptions,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -41,6 +44,7 @@ const KEYS = {
   overlays: ['pipedreamConnectors', 'overlays'] as const,
   catalog: (search: string) =>
     ['pipedreamConnectors', 'catalog', search] as const,
+  catalogIcons: ['pipedreamConnectors', 'catalogIcons'] as const,
 };
 
 /** Stable placeholder for `neverSuspend` consumers (see below). */
@@ -224,6 +228,29 @@ export function usePipedreamCatalogQuery(search: () => string) {
   return useInfiniteQuery(() => pipedreamCatalogQueryOptions(search().trim()));
 }
 
+function pipedreamCatalogIconsQueryOptions() {
+  return queryOptions({
+    queryKey: KEYS.catalogIcons,
+    queryFn: async () =>
+      throwOnErr(
+        async () =>
+          await cognitionApiServiceClient.browsePipedreamCatalog({ limit: 50 })
+      ),
+    select: (page: PipedreamCatalogResponse) =>
+      new Map(page.servers.map((entry) => [entry.app_slug, entry.icon_url])),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * App logos by slug, from one full-size catalog page. Connection records carry
+ * only a slug. That covers all of Macro Connect's catalog, and Pipedream's most
+ * popular apps; a connector outside it keeps its fallback icon.
+ */
+export function usePipedreamCatalogIconsQuery() {
+  return useQuery(pipedreamCatalogIconsQueryOptions);
+}
+
 function invalidateConnections() {
   return queryClient.invalidateQueries({ queryKey: KEYS.list });
 }
@@ -300,6 +327,13 @@ let pipedreamUnsupported = false;
  * An overlaid app (see {@link usePipedreamOverlaysQuery}) never goes through
  * Pipedream: it authorizes its own MCP server with the native MCP OAuth flow
  * in a new tab instead, and is connected once that server is authorized.
+ * GitHub's server is authorized by the Macro GitHub account link, so GitHub
+ * links the account instead.
+ *
+ * With the `macro-connect` flag, the backend may route the app through Macro
+ * Connect instead of Pipedream: consent then runs on Connect's page in a
+ * popup (web) or the system browser (native), and the connection is
+ * recorded once Connect confirms it.
  *
  * Resolves `'connected'` on success (connections cache already refreshed),
  * `'closed'` when the user dismissed the UI without finishing, and
@@ -320,7 +354,13 @@ export async function connectPipedreamApp(args: {
   const cachedOverlay = queryClient
     .getQueryData<PipedreamOverlayResponse[]>(KEYS.overlays)
     ?.find((overlay) => overlay.app_slug === args.appSlug);
-  const popup = cachedOverlay ? reserveOauthPopup() : null;
+  // A Macro Connect consent page also needs its tab reserved now; it is
+  // closed again if the backend answers with a Pipedream token.
+  const popup =
+    (cachedOverlay && !linksGithub(cachedOverlay)) ||
+    (!cachedOverlay && isFeatureEnabled(macroConnect))
+      ? reserveOauthPopup()
+      : null;
   return Telemetry.span('pipedream.connect', async (span) => {
     span.setAttr('connector.app_slug', args.appSlug);
     span.setAttr('connector.native', isTauri());
@@ -328,9 +368,11 @@ export async function connectPipedreamApp(args: {
       const overlay =
         cachedOverlay ?? (await lookUpOverlay(args.appSlug, span));
       span.setAttr('connector.overlaid', overlay !== undefined);
-      const outcome = overlay
-        ? await connectOverlaidApp(overlay, args, popup, span)
-        : await connectPipedreamAccount(args, span);
+      const outcome = !overlay
+        ? await connectPipedreamAccount(args, popup, span)
+        : linksGithub(overlay)
+          ? await connectGithubLink(span)
+          : await connectOverlaidApp(overlay, args, popup, span);
       span.setAttr('connector.outcome', outcome);
       return outcome;
     } catch (error) {
@@ -360,6 +402,30 @@ async function lookUpOverlay(
     return undefined;
   }
   return overlays.value.find((overlay) => overlay.app_slug === appSlug);
+}
+
+const GITHUB_APP_SLUG = 'github';
+
+/** Whether `overlay` is GitHub, which the account link authorizes. */
+function linksGithub(overlay: PipedreamOverlayResponse) {
+  return overlay.app_slug === GITHUB_APP_SLUG;
+}
+
+/**
+ * Link the user's GitHub account, which the backend reads to authorize
+ * GitHub's MCP server. On the web the page leaves for GitHub and returns
+ * after the link, so this resolves `'closed'`; on native mobile it resolves
+ * once the link is made.
+ */
+async function connectGithubLink(span: Span): Promise<PipedreamConnectOutcome> {
+  const linked = await span.span('github.link', async () =>
+    linkGithubAccount('Failed to connect GitHub')
+  );
+  if (!linked) return 'closed';
+  await queryClient.invalidateQueries({
+    queryKey: mcpServersQueryOptions().queryKey,
+  });
+  return 'connected';
 }
 
 const OVERLAY_AUTH_POLL_MS = 2000;
@@ -403,10 +469,12 @@ async function connectOverlaidApp(
     const deadline = Date.now() + OVERLAY_AUTH_TIMEOUT_MS;
     while (Date.now() < deadline && currentUserId() === userId) {
       const closed = popup?.closed ?? false;
-      const servers = await queryClient.fetchQuery({
-        ...mcpServersQueryOptions(),
-        staleTime: 0,
-      });
+      const servers = await consent.run(() =>
+        queryClient.fetchQuery({
+          ...mcpServersQueryOptions(),
+          staleTime: 0,
+        })
+      );
       if (overlaidSlugsConnected([overlay], servers).length > 0) {
         return 'connected';
       }
@@ -421,21 +489,38 @@ async function connectOverlaidApp(
 
 async function connectPipedreamAccount(
   args: Parameters<typeof connectPipedreamApp>[0],
+  popup: Window | null,
   span: Span
 ): Promise<PipedreamConnectOutcome> {
-  if (pipedreamUnsupported) return 'unsupported';
+  if (pipedreamUnsupported) {
+    popup?.close();
+    return 'unsupported';
+  }
 
   const userId = currentUserId();
   const token = await span.span('pipedream.token', async () =>
-    cognitionApiServiceClient.createPipedreamToken()
+    cognitionApiServiceClient.createPipedreamToken({ app_slug: args.appSlug })
   );
   if (token.isErr()) {
+    popup?.close();
     if (token.error.some((e) => e.code === PIPEDREAM_DISABLED)) {
       pipedreamUnsupported = true;
       return 'unsupported';
     }
     throw new ThrownResultError(token.error);
   }
+  span.setAttr('connector.provider', token.value.provider);
+  if (token.value.provider === 'connect' && token.value.connect_url) {
+    return connectThroughMacroConnect(
+      args,
+      token.value.connect_url,
+      popup,
+      span
+    );
+  }
+  popup?.close();
+  const connectToken = token.value.token;
+  if (!connectToken) throw new Error('Pipedream returned no connect token');
 
   const openConnectUI = isTauri()
     ? (await import('@core/pipedream/connect-native'))
@@ -448,7 +533,7 @@ async function connectPipedreamAccount(
     async () =>
       new Promise<ConsentResult>((resolve) => {
         ui = openConnectUI({
-          token: token.value.token,
+          token: connectToken,
           app: args.appSlug,
           container: args.container,
           // 'error' events are shown inside the Connect UI itself; the user
@@ -489,6 +574,50 @@ async function connectPipedreamAccount(
 }
 
 type ConsentResult = Exclude<PipedreamConnectEvent, { type: 'error' }>;
+
+const MACRO_CONNECT_POLL_MS = 2000;
+// Matches Connect's session lifetime.
+const MACRO_CONNECT_TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
+ * Run Macro Connect's consent page in `popup` (or the system browser), then
+ * ask the backend to record the connection until Connect confirms it, the
+ * tab is closed, or the session expires. Connect's redirect page cannot
+ * message this tab, so completion is polled, as for overlaid apps.
+ */
+async function connectThroughMacroConnect(
+  args: Parameters<typeof connectPipedreamApp>[0],
+  connectUrl: string,
+  popup: Window | null,
+  span: Span
+): Promise<PipedreamConnectOutcome> {
+  const userId = currentUserId();
+  assignOauthUrl(popup, connectUrl);
+  return span.span('macro_connect.consent', async () => {
+    const deadline = Date.now() + MACRO_CONNECT_TIMEOUT_MS;
+    while (Date.now() < deadline && currentUserId() === userId) {
+      const closed = popup?.closed ?? false;
+      const result = await cognitionApiServiceClient.completeMacroConnect({
+        app_slug: args.appSlug,
+        server_name: args.serverName,
+      });
+      if (result.isOk()) {
+        if (currentUserId() !== userId) return 'closed';
+        upsertConnection(result.value);
+        await invalidateConnections();
+        return 'connected';
+      }
+      if (!result.error.some((e) => e.code === 'NOT_FOUND')) {
+        throw new ThrownResultError(result.error);
+      }
+      if (closed) return 'closed';
+      await new Promise((resolve) =>
+        setTimeout(resolve, MACRO_CONNECT_POLL_MS)
+      );
+    }
+    return 'closed';
+  });
+}
 
 /**
  * Pipedream's Connect UI drops its success message when an OAuth provider

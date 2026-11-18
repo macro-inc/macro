@@ -18,6 +18,26 @@ struct RecordingPipelines {
 }
 
 impl PipelineService for RecordingPipelines {
+    async fn stage_requirements(
+        &self,
+        _: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<requirements::StageRequirement>, PipelineError> {
+        unimplemented!()
+    }
+    async fn set_stage_requirement(
+        &self,
+        _: EntityAccessReceipt<EditAccessLevel>,
+        _: requirements::StageRequirement,
+    ) -> Result<(), PipelineError> {
+        unimplemented!()
+    }
+    async fn view_positions(
+        &self,
+        _: EntityAccessReceipt<ViewAccessLevel>,
+        _: databases::domain::models::ViewId,
+    ) -> Result<Vec<databases::domain::models::CardPosition>, PipelineError> {
+        unimplemented!()
+    }
     async fn create(
         &self,
         _: CrmTeamReceipt<MemberTeamRole>,

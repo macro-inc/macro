@@ -1,29 +1,29 @@
 // Cloudflare Workers entry. Importing @microlabs/otel-cf-workers loads the
 // `cloudflare:workers` module at module scope, so this stays in its own entry
-// (like zone.ts) and must only be imported from code that runs in workerd.
+// and must only be imported from code that runs in workerd.
 import {
-	BatchTraceSpanProcessor,
-	instrument,
-	instrumentDO,
-	OTLPExporter,
-	type TraceConfig,
-} from "@microlabs/otel-cf-workers";
-import type { Context, Span } from "@opentelemetry/api";
-import { ATTR_DEPLOYMENT_ENVIRONMENT, ATTR_USER_ID } from "./constants";
-import { userIdSuppressed } from "./privacy";
+  BatchTraceSpanProcessor,
+  instrument,
+  instrumentDO,
+  OTLPExporter,
+  type TraceConfig,
+} from '@microlabs/otel-cf-workers';
+import type { Context, Span } from '@opentelemetry/api';
+import { ATTR_DEPLOYMENT_ENVIRONMENT, ATTR_USER_ID } from './constants';
+import { userIdSuppressed } from './privacy';
 
 export type { TraceConfig };
 export { instrument, instrumentDO };
 
 export interface WorkerTraceConfigOptions {
-	serviceName: string;
-	environment: string;
-	/** OTLP/HTTP traces endpoint. Spans are not exported when unset. */
-	tracesUrl?: string;
-	/** Extra headers for the export request (e.g. an intake API key). */
-	tracesHeaders?: Record<string, string>;
-	/** Read the current user id; called once per span when it starts. */
-	getUserId?: () => string | undefined;
+  serviceName: string;
+  environment: string;
+  /** OTLP/HTTP traces endpoint. Spans are not exported when unset. */
+  tracesUrl?: string;
+  /** Extra headers for the export request (e.g. an intake API key). */
+  tracesHeaders?: Record<string, string>;
+  /** Read the current user id; called once per span when it starts. */
+  getUserId?: () => string | undefined;
 }
 
 /**
@@ -41,32 +41,32 @@ export interface WorkerTraceConfigOptions {
  * environment (and user id) are stamped onto every span here.
  */
 export function createWorkerTraceConfig(
-	options: WorkerTraceConfigOptions,
+  options: WorkerTraceConfigOptions
 ): TraceConfig {
-	return {
-		service: { name: options.serviceName },
-		spanProcessors: [
-			{
-				onStart: (span: Span, parentContext: Context) => {
-					span.setAttribute(ATTR_DEPLOYMENT_ENVIRONMENT, options.environment);
-					if (userIdSuppressed(parentContext)) return;
-					const userId = options.getUserId?.();
-					if (userId !== undefined) span.setAttribute(ATTR_USER_ID, userId);
-				},
-				onEnd: () => {},
-				forceFlush: () => Promise.resolve(),
-				shutdown: () => Promise.resolve(),
-			},
-			...(options.tracesUrl
-				? [
-						new BatchTraceSpanProcessor(
-							new OTLPExporter({
-								url: options.tracesUrl,
-								headers: options.tracesHeaders,
-							}),
-						),
-					]
-				: []),
-		],
-	};
+  return {
+    service: { name: options.serviceName },
+    spanProcessors: [
+      {
+        onStart: (span: Span, parentContext: Context) => {
+          span.setAttribute(ATTR_DEPLOYMENT_ENVIRONMENT, options.environment);
+          if (userIdSuppressed(parentContext)) return;
+          const userId = options.getUserId?.();
+          if (userId !== undefined) span.setAttribute(ATTR_USER_ID, userId);
+        },
+        onEnd: () => {},
+        forceFlush: () => Promise.resolve(),
+        shutdown: () => Promise.resolve(),
+      },
+      ...(options.tracesUrl
+        ? [
+            new BatchTraceSpanProcessor(
+              new OTLPExporter({
+                url: options.tracesUrl,
+                headers: options.tracesHeaders,
+              })
+            ),
+          ]
+        : []),
+    ],
+  };
 }

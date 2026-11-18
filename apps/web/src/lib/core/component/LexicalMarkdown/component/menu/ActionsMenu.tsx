@@ -1,6 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
-import { enableDatabases } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -176,10 +174,9 @@ export function ActionMenu(props: {
     if (idx >= 0) merged[idx] = override;
     else merged.push(override);
   }
-  const databasesEnabled = useFeatureFlag(enableDatabases);
   const validActions = () =>
     availableActions(merged, {
-      databasesEnabled: databasesEnabled().enabled,
+      databasesEnabled: true,
       ignoreActionIds: props.ignoreActionIds,
       hasNodes: (dependencies) => props.editor.hasNodes(dependencies),
     });
@@ -335,7 +332,7 @@ export function ActionMenu(props: {
       <ScopedPortal scope={props.portalScope}>
         <div
           data-holds-prompts
-          class="w-60 cursor-default select-none z-modal-content menu-open-animation"
+          class="w-60 mobile:w-[calc(100cqw-1rem-2px)] max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithElement={floatWithElementProps()}
           use:floatWithSelection={floatWithSelectionProps()}
           use:clickOutside={clickOutsideHandler}

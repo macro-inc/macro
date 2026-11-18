@@ -14,7 +14,10 @@ invites, and the colleague-joined email.
 - `src/call_invite.rs`, `src/colleague_joined.rs`: the remaining notification
   metadata types, one file each.
 - `templates/*.html`: the actual email markup (Askama/Jinja2-compatible
-  syntax).
+  syntax). An email that needs an unsubscribe link puts
+  `notification::domain::models::signing::unsubscribe_placeholder(TYPE_NAME)` in
+  the `href`; the notification service signs it per recipient at send time, and
+  the type must be in the service's blockable list.
 - `preview_invite.py`: renders `templates/invite.html` with dummy data via
   Jinja2 and opens it in a browser — use this to check template changes
   without sending an email (`pip3 install jinja2` if needed).
@@ -52,6 +55,12 @@ invites, and the colleague-joined email.
   sender, `teams`' `invite_users_to_team`, derives it the way `join_team`
   grants entitlements: Pro only from an enterprise team or one with a
   subscription. Never let the copy promise more than the join grants.
+- The team invite email is sent on the inviter's behalf: `format_email` sets
+  `from_name` (their name), `reply_to` (their address) and a plain-text `text`
+  part that mirrors the HTML copy. `inviter_name` is untrusted and optional, so
+  the subject, body and text fall back to the inviter's address; `from_name`
+  stays unset without a name, since an address as a display name looks like
+  spoofing to mail filters. `teams` looks the name up when it sends the invite.
 - `InviteToTeamMetadata.reminder` marks the reminder emails `teams` sends for
   unanswered invites; it only prefixes the subject with "Reminder:". A
   reminder shares the invite's rate-limit bucket (one email per invite per

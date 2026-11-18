@@ -6,8 +6,8 @@ mod test;
 
 use super::NoOpPaymentGateway;
 use crate::domain::{
-    BillingError, BillingPeriod, CreditCheckoutRequest, CreditReloadRequest, OverageChargeRequest,
-    PaymentGateway, Result, SubscriptionScope,
+    BillingError, BillingPeriod, CreditCheckoutRequest, CreditReloadRequest, InvoicePayment,
+    InvoiceVoid, OverageChargeRequest, PaymentGateway, Result, SubscriptionScope,
 };
 use authentication_service_client::AuthServiceClient;
 use macro_uuid::Uuid;
@@ -53,9 +53,23 @@ impl PaymentGateway for HttpPaymentGateway {
         charge_id: Uuid,
         invoice_id: &str,
         scope: SubscriptionScope,
-    ) -> Result<bool> {
+    ) -> Result<InvoicePayment> {
         NoOpPaymentGateway
             .pay_overage_invoice(charge_id, invoice_id, scope)
+            .await
+    }
+
+    async fn void_credit_invoice(&self, invoice_id: &str) -> Result<InvoiceVoid> {
+        NoOpPaymentGateway.void_credit_invoice(invoice_id).await
+    }
+
+    async fn has_payment_method(
+        &self,
+        customer_id: &str,
+        scope: SubscriptionScope,
+    ) -> Result<bool> {
+        NoOpPaymentGateway
+            .has_payment_method(customer_id, scope)
             .await
     }
 

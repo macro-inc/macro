@@ -10,5 +10,7 @@ import type { UserNameLastName } from './userNameLastName';
 export interface UserName {
   first_name?: UserNameFirstName;
   id: string;
+  /** Whether this is an agent account rather than a person. */
+  is_agent?: boolean;
   last_name?: UserNameLastName;
 }

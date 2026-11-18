@@ -1,12 +1,10 @@
 //! Unified entity-mutation capability impls for email threads.
 
-use std::collections::HashSet;
-
 use entity_access::domain::models::EditAccessLevel;
 use entity_mutation::{
     EntityMutationEffect, EntityMutationErrorCode, MoveEntity, capability::MoveEntityRequest,
+    project_refs,
 };
-use model_entity::{Entity, EntityType};
 
 use super::EmailServiceImpl;
 use crate::domain::{models::EmailErr, ports::EmailService};
@@ -19,16 +17,6 @@ impl From<EmailErr> for EntityMutationErrorCode {
             error => Self::internal(rootcause::report!(error)),
         }
     }
-}
-
-/// Build affected project entities from optional container ids.
-fn project_refs(ids: impl IntoIterator<Item = Option<String>>) -> Vec<Entity<'static>> {
-    let mut seen = HashSet::new();
-    ids.into_iter()
-        .flatten()
-        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
-        .map(|id| EntityType::Project.with_entity_string(id))
-        .collect()
 }
 
 impl<T, U, E, CS, Eam, B> MoveEntity for EmailServiceImpl<T, U, E, CS, Eam, B>

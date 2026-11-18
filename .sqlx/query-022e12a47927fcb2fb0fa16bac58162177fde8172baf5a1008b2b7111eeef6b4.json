@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO memory_activity_team (user_id, granularity, period_start, team_id)\n                SELECT $1, $2, $3, UNNEST($4::uuid[]) ON CONFLICT DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Date",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "022e12a47927fcb2fb0fa16bac58162177fde8172baf5a1008b2b7111eeef6b4"
+}

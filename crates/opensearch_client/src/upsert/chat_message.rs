@@ -1,7 +1,11 @@
 use models_opensearch::SearchIndex;
 
 use crate::upsert::properties::IndexedProperty;
-use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
+use crate::{
+    Result,
+    date_format::EpochMillis,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 #[cfg(test)]
 mod test;
@@ -97,18 +101,20 @@ pub(crate) async fn upsert_chat_message(
         .body(parent_body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_chat_message_parent".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(
+                OpensearchOperation::UpsertChatMessageParent,
+                &err,
+            )
         })?;
 
     if !parent_response.status_code().is_success() {
         let status_code = parent_response.status_code();
         let body = parent_response.text().await.map_err(|err| {
-            OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("upsert_chat_message_parent".to_string()),
-            }
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::UpsertChatMessageParent,
+                &err,
+            )
         })?;
         tracing::error!(
             status_code=%status_code,
@@ -117,7 +123,7 @@ pub(crate) async fn upsert_chat_message(
         );
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("upsert_chat_message_parent".to_string()),
+            operation: OpensearchOperation::UpsertChatMessageParent,
         });
     }
 
@@ -129,9 +135,8 @@ pub(crate) async fn upsert_chat_message(
         .body(child_body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_chat_message_child".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::UpsertChatMessageChild, &err)
         })?;
 
     let status_code = child_response.status_code();
@@ -141,10 +146,10 @@ pub(crate) async fn upsert_chat_message(
     }
 
     let body = child_response.text().await.map_err(|err| {
-        OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_chat_message_child".to_string()),
-        }
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpsertChatMessageChild,
+            &err,
+        )
     })?;
 
     tracing::error!(
@@ -155,7 +160,7 @@ pub(crate) async fn upsert_chat_message(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("upsert_chat_message_child".to_string()),
+        operation: OpensearchOperation::UpsertChatMessageChild,
     })
 }
 
@@ -182,9 +187,8 @@ pub(crate) async fn update_chat_metadata(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_chat_metadata".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::UpdateChatMetadata, &err)
         })?;
 
     let status_code = response.status_code();
@@ -197,14 +201,9 @@ pub(crate) async fn update_chat_metadata(
         return Ok(());
     }
 
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("update_chat_metadata".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed(OpensearchOperation::UpdateChatMetadata, &err)
+    })?;
 
     tracing::error!(
         status_code=?status_code,
@@ -215,7 +214,7 @@ pub(crate) async fn update_chat_metadata(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_chat_metadata".to_string()),
+        operation: OpensearchOperation::UpdateChatMetadata,
     })
 }
 
@@ -233,7 +232,7 @@ pub(crate) async fn update_chat_properties(
     let properties_value =
         serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
             details: err.to_string(),
-            method: Some("update_chat_properties".to_string()),
+            operation: OpensearchOperation::UpdateChatProperties,
         })?;
     let body = json!({ "doc": { "properties": properties_value } });
 
@@ -246,9 +245,8 @@ pub(crate) async fn update_chat_properties(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_chat_properties".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::UpdateChatProperties, &err)
         })?;
 
     let status_code = response.status_code();
@@ -256,14 +254,12 @@ pub(crate) async fn update_chat_properties(
         tracing::trace!(chat_id=%chat_id, "chat properties updated");
         return Ok(());
     }
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("update_chat_properties".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpdateChatProperties,
+            &err,
+        )
+    })?;
 
     // A *missing document* 404 is a no-op: the chat isn't indexed yet, so the
     // next message upsert will include its properties. A *missing index* 404
@@ -290,6 +286,6 @@ pub(crate) async fn update_chat_properties(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_chat_properties".to_string()),
+        operation: OpensearchOperation::UpdateChatProperties,
     })
 }

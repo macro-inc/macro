@@ -95,20 +95,21 @@ function getFileItems(
   return Array.from(dataTransfer.items).filter((item) => item.kind === 'file');
 }
 
-function itemToEntry(
-  item: DataTransferItem
-): FileSystemFileEntry | FileSystemDirectoryEntry | null {
+function itemToEntry(item: DataTransferItem): FileSystemEntry | null {
   const entry = item.webkitGetAsEntry?.() ?? null;
-  if (entry) return entry as FileSystemFileEntry | FileSystemDirectoryEntry;
+  if (entry?.isDirectory) return entry;
 
-  // Fallback for clipboard paste where webkitGetAsEntry returns null
+  // Read files directly rather than through their entry. Chrome gives a
+  // clipboard image no entry, and WebKit gives an in-memory clipboard image
+  // (a screenshot) an entry whose file() fails with NotFoundError, because
+  // the image has no path on disk.
   const file = item.getAsFile();
-  return file ? createSyntheticFileEntry(file) : null;
+  if (file) return createSyntheticFileEntry(file);
+
+  return entry;
 }
 
-function partitionEntries(
-  entries: (FileSystemFileEntry | FileSystemDirectoryEntry)[]
-): ExtractedEntries {
+function partitionEntries(entries: FileSystemEntry[]): ExtractedEntries {
   const fileEntries: FileSystemFileEntry[] = [];
   const directoryEntries: FileSystemDirectoryEntry[] = [];
 

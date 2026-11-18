@@ -120,15 +120,27 @@ fn schema_dependencies(
                     }
                 }
             }
-            Change::SetGateRules { rules, .. } => {
-                ids.extend(rules.conditions().iter().map(|c| c.column))
-            }
+            Change::SetGateRules { rules, .. }
+            | Change::SetShowWhen {
+                show_when: Some(rules),
+                ..
+            } => ids.extend(rules.conditions().iter().map(|c| c.column)),
             Change::AddQuestion { question, .. } => {
                 ids.insert(question.column);
             }
             Change::AddSection { section, .. } => match section {
-                FormSection::Questions { questions, .. } => {
-                    ids.extend(questions.iter().map(|q| q.column))
+                FormSection::Questions {
+                    questions,
+                    show_when,
+                    ..
+                } => {
+                    ids.extend(questions.iter().map(|q| q.column));
+                    ids.extend(
+                        show_when
+                            .iter()
+                            .flat_map(|rules| rules.conditions())
+                            .map(|c| c.column),
+                    );
                 }
                 FormSection::Gate { rules, .. } => {
                     ids.extend(rules.conditions().iter().map(|c| c.column))

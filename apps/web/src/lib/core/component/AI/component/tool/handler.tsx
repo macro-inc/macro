@@ -5,14 +5,12 @@ import {
   listCompaniesHandler,
 } from '@app/features/crm/crm-tool-renderers';
 import { pipelineToolHandlers } from '@app/features/crm/pipeline-tool-renderers';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableDatabases } from '@core/constant/featureFlags';
 import {
   deserializeToolCall,
   deserializeToolResponse,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
-import { createMemo, Show } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   createAgentSessionHandler,
@@ -99,11 +97,7 @@ import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createSkillHandler } from './CreateSkill';
 import { createTagHandler } from './CreateTag';
-import {
-  DatabaseToolPlaceholder,
-  isToolShown,
-  lazyDatabaseToolHandlers,
-} from './DatabaseToolHandlers';
+import { lazyDatabaseToolHandlers } from './DatabaseToolHandlers';
 import { deleteTagHandler } from './DeleteTag';
 import { readDesignHandler } from './Design';
 import {
@@ -111,7 +105,6 @@ import {
   readPhotoshopDocumentHandler,
 } from './DesignDocument';
 import { discoverConnectorsHandler } from './DiscoverConnectors';
-import { displayResultsHandler } from './DisplayResults';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
 import {
@@ -134,12 +127,18 @@ import {
 } from './ImportTools';
 import { initiativeToolHandlers } from './Initiatives';
 import { LegacyGeneratedImage } from './LegacyGeneratedImage';
+import { listAgentUpdatesHandler } from './ListAgentUpdates';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
 import { listTagsHandler } from './ListTags';
 import { listTeamMembersHandler } from './ListTeamMembers';
 import { loadToolsHandler } from './LoadTools';
+import {
+  getUserActivityHandler,
+  readMemoryHandler,
+  updateMemoryHandler,
+} from './Memory';
 import { moveToProjectHandler } from './MoveToProject';
 import {
   listNotificationsHandler,
@@ -220,6 +219,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadCodeDocs: readCodeDocsHandler,
   DispatchCodingAgent: dispatchCodingAgentHandler,
   ListCodingAgents: listCodingAgentsHandler,
+  ListAgentUpdates: listAgentUpdatesHandler,
   ReadSpreadsheet: readSpreadsheetHandler,
   CalculateSpreadsheet: calculateSpreadsheetHandler,
   EditSpreadsheet: editSpreadsheetHandler,
@@ -302,7 +302,6 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   RenameItem: renameItemHandler,
   UpdateSharing: updateSharingHandler,
   BashCodeExecution: bashCodeExecutionHandler,
-  DisplayResults: displayResultsHandler,
   DiscoverConnectors: discoverConnectorsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
@@ -351,6 +350,9 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,
   SelfKnowledge: selfKnowledgeHandler,
+  ReadMemory: readMemoryHandler,
+  UpdateMemory: updateMemoryHandler,
+  GetUserActivity: getUserActivityHandler,
   SendChannelMessage: sendChannelMessageHandler,
   ShareWithChannel: shareWithChannelHandler,
   SendConfirmedEmail: sendConfirmedEmailHandler,
@@ -398,7 +400,6 @@ export function hasToolRenderer(name: string): boolean {
 }
 
 export function RenderTool(props: ToolProps) {
-  const databasesEnabled = useFeatureFlag(enableDatabases);
   const maybeTool = deserializeToolCall({
     id: props.tool_id,
     json: props.json,
@@ -478,24 +479,19 @@ export function RenderTool(props: ToolProps) {
           return undefined;
         }}
       >
-        <Show
-          when={isToolShown(tool.name, databasesEnabled().enabled)}
-          fallback={<DatabaseToolPlaceholder />}
-        >
-          <Dynamic
-            component={handler.render}
-            {...context}
-            response={response()}
-            renderContext={{
-              isStreaming: props.renderContext.renderContext.isStreaming,
-              grouped: props.renderContext.renderContext.grouped,
-              running:
-                !props.isComplete &&
-                props.renderContext.renderContext.isStreaming,
-              followedBy: props.renderContext.renderContext.followedBy,
-            }}
-          />
-        </Show>
+        <Dynamic
+          component={handler.render}
+          {...context}
+          response={response()}
+          renderContext={{
+            isStreaming: props.renderContext.renderContext.isStreaming,
+            grouped: props.renderContext.renderContext.grouped,
+            running:
+              !props.isComplete &&
+              props.renderContext.renderContext.isStreaming,
+            followedBy: props.renderContext.renderContext.followedBy,
+          }}
+        />
       </ToolErrorContext.Provider>
     </LegacyGeneratedImage>
   );

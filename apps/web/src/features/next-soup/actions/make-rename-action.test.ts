@@ -92,12 +92,17 @@ describe('makeRenameAction.canExecute', () => {
   });
 
   it('allows active agent sessions but refuses archived ones', () => {
-    expect(canExecute(entity('agent_session', { isArchived: false }))).toBe(
+    expect(canExecute(entity('agent_session', { archivedBy: null }))).toBe(
       true
     );
-    expect(canExecute(entity('agent_session', { isArchived: true }))).toBe(
-      false
-    );
+    expect(
+      canExecute(
+        entity('agent_session', {
+          archivedBy: 'runtime_closed',
+          archivedAt: '2026-01-01T00:00:00Z',
+        })
+      )
+    ).toBe(false);
   });
 
   it('refuses channel messages, threads, email, and foreign rows', () => {

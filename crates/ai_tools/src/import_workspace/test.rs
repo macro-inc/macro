@@ -18,11 +18,13 @@ fn a_new_database_is_written_into_its_starter_table_and_title_column() {
     let column_id = Uuid::from_u128(0xc01a_0000_0000_0000_0000_0000_0000_0001);
     let detail = DatabaseDetail {
         database: Database {
+            appearance: None,
             id: DatabaseId::from_uuid(database_id),
             name: "Roadmap".to_string(),
             owner_id: "macro|owner@example.com".to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         },
         grant: AccessLevel::Owner,
         tables: vec![TableDetail {
@@ -86,11 +88,13 @@ fn a_new_database_without_a_starter_table_is_refused() {
     let database_id = Uuid::from_u128(0x0dbb_0000_0000_0000_0000_0000_0000_0002);
     let detail = DatabaseDetail {
         database: Database {
+            appearance: None,
             id: DatabaseId::from_uuid(database_id),
             name: "Roadmap".to_string(),
             owner_id: "macro|owner@example.com".to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         },
         grant: AccessLevel::Owner,
         tables: vec![],
@@ -105,11 +109,13 @@ fn a_new_database_whose_starter_table_has_no_column_is_refused() {
     let table_id = Uuid::from_u128(0x7ab1_0000_0000_0000_0000_0000_0000_0003);
     let detail = DatabaseDetail {
         database: Database {
+            appearance: None,
             id: DatabaseId::from_uuid(database_id),
             name: "Roadmap".to_string(),
             owner_id: "macro|owner@example.com".to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         },
         grant: AccessLevel::Owner,
         tables: vec![TableDetail {

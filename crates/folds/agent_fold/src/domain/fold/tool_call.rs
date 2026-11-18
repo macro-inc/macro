@@ -41,6 +41,7 @@ impl FoldState {
             ToolShape::Harness => tool_detail(reader, &frame),
             ToolShape::Macro(_) => macro_detail(reader, &frame),
             ToolShape::UserTool(tool) => user_tool_detail(reader, tool, &frame),
+            ToolShape::View => view_detail(reader, &frame),
             ToolShape::Subagent => subagent_detail(reader, &name, &frame),
         };
         let tool = MessagePart::ToolUse {
@@ -143,6 +144,11 @@ impl FoldState {
             ToolDetail::Macro { .. } | ToolDetail::UserTool { .. } => {
                 patch_macro_detail(reader, name, detail, &frame);
             }
+            ToolDetail::View { .. } => {
+                if frame.raw_output.is_some() {
+                    *detail = view_detail(reader, &frame);
+                }
+            }
             ToolDetail::Subagent { .. } => patch_subagent_detail(reader, name, detail, &frame),
             _ => patch_detail(reader, detail, &frame),
         }
@@ -221,6 +227,32 @@ pub(super) fn macro_detail(reader: &dyn HarnessReader, frame: &ToolFrame<'_>) ->
     ToolDetail::Macro {
         input: reader.tool_input(frame).unwrap_or(serde_json::Value::Null),
         output,
+        error,
+    }
+}
+
+/// Build the detail for a view tool from a frame: the view its result
+/// carries, decoded. A view tool's arguments are never read: they are the
+/// model's, streamed undecoded, and the server decodes the view into the
+/// result it returns.
+pub(super) fn view_detail(reader: &dyn HarnessReader, frame: &ToolFrame<'_>) -> ToolDetail {
+    /// What a view tool returns.
+    #[derive(serde::Deserialize)]
+    struct ViewResult {
+        view: dynamic_ui::View,
+    }
+
+    let Some(raw) = frame.raw_output else {
+        return ToolDetail::View {
+            view: None,
+            error: None,
+        };
+    };
+    let (value, error) = reader.unwrap_tool_output(raw);
+    ToolDetail::View {
+        view: serde_json::from_value::<ViewResult>(value)
+            .ok()
+            .map(|result| result.view),
         error,
     }
 }
@@ -368,7 +400,10 @@ pub(super) fn patch_detail(
         }
         // Patched by `patch_macro_detail` / `patch_subagent_detail`, which
         // have the name and the harness's result shapes to hand.
-        ToolDetail::Macro { .. } | ToolDetail::UserTool { .. } | ToolDetail::Subagent { .. } => {}
+        ToolDetail::Macro { .. }
+        | ToolDetail::View { .. }
+        | ToolDetail::UserTool { .. }
+        | ToolDetail::Subagent { .. } => {}
     }
 }
 

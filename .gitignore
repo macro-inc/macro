@@ -19,6 +19,8 @@ run-local.fish
 **/coverage
 !packages/sdk/src/coverage/
 !packages/sdk/src/coverage/**
+!crates/email_e2e/coverage/
+!crates/email_e2e/coverage/**
 **/.nyc_output
 **/.cache
 **/.vite
@@ -42,6 +44,13 @@ infra/local/generated/
 .pi/outputs/
 .commandcode/
 **/.webhook.json
+# Code-mode assets and the SDK reference are generated at build time
+# (crates/code_mode_assets, packages/sdk-docs); never commit them.
+/crates/code_execution/src/outbound/deno/sdk.mjs
+/crates/code_execution/src/outbound/deno/handlebars.mjs
+/crates/agent_code_mode/src/domain/documentation.json
+/crates/agent_code_mode/src/domain/operations.json
+/packages/sdk-docs/reference/
 /artifacts
 
 # Raw SSE captures from CURSOR_ACP_RECORD_DIR; sanitize into

@@ -85,6 +85,7 @@ const KNOWN_TYPES: Record<KnownNode['type'], 1> = {
   video: 1,
   'html-render': 1,
   'document-card': 1,
+  'database-query': 1,
   'user-mention': 1,
   'document-mention': 1,
   'contact-mention': 1,
@@ -311,6 +312,27 @@ export function serializeNode(node: SerNode): FxpNode {
         nodeAttrs(n, {
           ...(n.documentId && { documentId: n.documentId }),
           ...(n.documentName && { name: n.documentName }),
+          ...(n.blockName && { blockName: n.blockName }),
+          ...(n.blockParams &&
+            Object.keys(n.blockParams).length > 0 && {
+              blockParams: JSON.stringify(n.blockParams),
+            }),
+        })
+      )
+    )
+    .with({ type: 'database-query' }, (n) =>
+      el(
+        'database-query',
+        [],
+        nodeAttrs(n, {
+          queryId: n.queryId,
+          ...(n.databaseId && { databaseId: n.databaseId }),
+          ...(n.tableId && { tableId: n.tableId }),
+          displayMode: n.displayMode,
+          ...(n.title && { title: n.title }),
+          prompt: n.prompt,
+          ...(n.chart && { chart: JSON.stringify(n.chart) }),
+          ...(n.height !== undefined && { height: String(n.height) }),
         })
       )
     )

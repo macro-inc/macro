@@ -29,6 +29,15 @@ id and forwards the inner bytes unchanged. Existing 900,000-byte chunking and
 per-document reassembly remain in place under the envelope. Text `ping`/`pong`
 heartbeats apply to the dedicated sync socket.
 
+The router keeps one route per document per socket, but every caller of
+`attach()` gets its own virtual socket. A source learns the document only from
+`RemoteInitialSync`, which the Durable Object sends once per downstream
+connection, so a caller joining an open route re-subscribes it. Callers already
+on the route see a close, as on an upstream drop, then a reconnect, and
+converge. The route unsubscribes when its last virtual socket closes. Callers
+still close their source when their view goes away; a source that is never
+closed keeps its route open.
+
 Each client socket owns its routes and downstream tasks. Any DSS replica can
 accept a connection; reconnecting to another replica creates new routes and
 re-subscribes with refreshed document tokens. Replicas share no routing state.

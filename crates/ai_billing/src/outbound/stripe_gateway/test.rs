@@ -182,7 +182,7 @@ async fn pay_overage_invoice_updates_a_stale_open_invoice_before_paying() {
         )
         .await
         .expect("pay overage invoice");
-    assert!(paid_now);
+    assert_eq!(paid_now, InvoicePayment::Paid);
 
     let requests = server.received_requests().await.expect("recorded requests");
     let update_at = request_position(&requests, "POST", &format!("/v1/invoices/{INVOICE_ID}"));
@@ -309,7 +309,7 @@ async fn pay_overage_invoice_skips_the_update_when_the_open_invoice_already_matc
         .pay_overage_invoice(Uuid::from_u128(3), INVOICE_ID, SubscriptionScope::Personal)
         .await
         .expect("pay overage invoice");
-    assert!(paid_now);
+    assert_eq!(paid_now, InvoicePayment::Paid);
 
     let requests = server.received_requests().await.expect("recorded requests");
     assert!(requests.iter().all(|request| {
@@ -640,7 +640,7 @@ async fn pay_overage_invoice_keeps_a_stamped_scope_when_the_live_scope_differs()
         )
         .await
         .expect("pay stamped invoice");
-    assert!(paid_now);
+    assert_eq!(paid_now, InvoicePayment::Paid);
 
     let requests = server.received_requests().await.expect("recorded requests");
     let update = post_request(&requests, &format!("/v1/invoices/{INVOICE_ID}"));
@@ -695,7 +695,7 @@ async fn pay_overage_invoice_preserves_a_stamped_personal_method_after_team_conv
         )
         .await
         .expect("pay converted personal invoice");
-    assert!(paid_now);
+    assert_eq!(paid_now, InvoicePayment::Paid);
 
     let requests = server.received_requests().await.expect("recorded requests");
     assert!(requests.iter().all(|request| {
@@ -750,7 +750,7 @@ async fn pay_overage_invoice_returns_when_the_invoice_is_already_paid() {
         .pay_overage_invoice(Uuid::from_u128(8), INVOICE_ID, SubscriptionScope::Personal)
         .await
         .expect("already paid invoice");
-    assert!(paid_now);
+    assert_eq!(paid_now, InvoicePayment::Paid);
 
     let requests = server.received_requests().await.expect("recorded requests");
     assert!(requests.iter().all(|request| {
@@ -1302,4 +1302,93 @@ async fn historical_direct_usage_invoices_are_never_paid_by_the_gateway() {
         Err(BillingError::DirectUsageBillingDisabled)
     ));
     assert_eq!(server.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn void_credit_invoice_voids_an_open_invoice() {
+    let server = MockServer::start().await;
+    let open = open_invoice(Some(CURRENT_PAYMENT_METHOD), Some(PERSONAL_SCOPE_STAMP));
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(stripe_response(&open)))
+        .mount(&server)
+        .await;
+    let mut voided = open.clone();
+    voided.status = Some(InvoiceStatus::Void);
+    Mock::given(method("POST"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}/void")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(stripe_response(&voided)))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let outcome = gateway(&server)
+        .void_credit_invoice(INVOICE_ID)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, InvoiceVoid::Voided);
+}
+
+#[tokio::test]
+async fn void_credit_invoice_reports_an_invoice_stripe_already_collected() {
+    let server = MockServer::start().await;
+    let paid = stripe_response(&paid_invoice(CURRENT_PAYMENT_METHOD, None));
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&paid))
+        .mount(&server)
+        .await;
+
+    let outcome = gateway(&server)
+        .void_credit_invoice(INVOICE_ID)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, InvoiceVoid::Paid);
+    let requests = server.received_requests().await.unwrap();
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.method.as_str() != "POST")
+    );
+}
+
+#[test]
+fn a_payment_that_stopped_for_3d_secure_needs_authentication() {
+    let with_intent = |intent: stripe::PaymentIntent| {
+        let mut invoice = open_invoice(Some(CURRENT_PAYMENT_METHOD), None);
+        invoice.payment_intent = Some(Expandable::Object(Box::new(intent)));
+        invoice
+    };
+    let requires_action = stripe::PaymentIntent {
+        status: PaymentIntentStatus::RequiresAction,
+        ..Default::default()
+    };
+    let declined_for_authentication = stripe::PaymentIntent {
+        status: PaymentIntentStatus::RequiresPaymentMethod,
+        last_payment_error: Some(Box::new(stripe::ApiErrors {
+            decline_code: Some("authentication_required".to_string()),
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+    let declined = stripe::PaymentIntent {
+        status: PaymentIntentStatus::RequiresPaymentMethod,
+        last_payment_error: Some(Box::new(stripe::ApiErrors {
+            decline_code: Some("insufficient_funds".to_string()),
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+
+    assert!(needs_authentication(&with_intent(requires_action)));
+    assert!(needs_authentication(&with_intent(
+        declined_for_authentication
+    )));
+    assert!(!needs_authentication(&with_intent(declined)));
+    assert!(!needs_authentication(&open_invoice(
+        Some(CURRENT_PAYMENT_METHOD),
+        None
+    )));
 }

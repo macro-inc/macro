@@ -68,6 +68,7 @@ const events: SessionNotification[] = [
 // gives it: reports first, then the reply.
 const taskReply: FoldedMessage = {
   agentSessionId: session.sessionId(),
+  key: '2:agent',
   requestId: null,
   pending: false,
   postedAt: null,

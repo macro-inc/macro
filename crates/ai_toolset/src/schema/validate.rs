@@ -4,16 +4,23 @@
 //! [`generate_validated_input_schema`](super::generate::generate_validated_input_schema)
 //! instead.
 
+mod depth;
 mod extract;
 mod one_of;
 mod recursive;
+mod ref_loop;
+
+#[cfg(test)]
+mod test;
 
 use super::error::ValidationError;
 use extract::Extract;
 use schemars::Schema;
 
+pub use depth::{GEMINI_MAX_SCHEMA_DEPTH, nesting_depth, validate_gemini_nesting_depth};
 pub use one_of::ValidateNoOneOf;
 pub use recursive::RecursiveValidate;
+pub use ref_loop::{required_ref_loop, validate_no_required_ref_loop};
 
 /// A validating visitor similar to [`Transform`](schemars::transform::Transform)
 ///
@@ -27,12 +34,14 @@ pub trait Validate {
 }
 
 /// Validates a tool's input schema against the strict-mode requirements of
-/// both OpenAI and Anthropic.
+/// both OpenAI and Anthropic, and the schemas Gemini accepts.
 ///
 /// Returns the tool's name and description extracted from the schema
-/// metadata. Checks what the transforms cannot fix: surviving `$ref`s
-/// (recursive types), non-`false` `additionalProperties` (map types),
-/// non-primitive enum members, residual `oneOf`, and a non-object root.
+/// metadata. Requires an object root without `oneOf`, `anyOf`, or `allOf`,
+/// and rejects residual `oneOf` throughout the schema. Nested `anyOf` is
+/// supported, so tagged variants belong under a named property. Rejects a
+/// `$ref` loop made only of required fields and nesting deeper than
+/// [`GEMINI_MAX_SCHEMA_DEPTH`], both of which Gemini refuses.
 ///
 /// See:
 /// * <https://platform.claude.com/docs/en/agents-and-tools/tool-use/strict-tool-use>
@@ -47,7 +56,16 @@ pub fn validate_tool_schema(schema: &Schema) -> Result<(String, String), Validat
         return Err(ValidationError::RootNotObject);
     }
 
+    if ["oneOf", "anyOf", "allOf"]
+        .into_iter()
+        .any(|keyword| schema.get(keyword).is_some())
+    {
+        return Err(ValidationError::RootComposition);
+    }
+
     RecursiveValidate(ValidateNoOneOf).validate(schema)?;
+    validate_no_required_ref_loop(schema)?;
+    validate_gemini_nesting_depth(schema)?;
 
     Ok((name, description))
 }

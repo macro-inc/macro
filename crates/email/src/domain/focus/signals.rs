@@ -2,11 +2,17 @@
 
 use std::collections::HashSet;
 
+use chrono::Duration;
+
 use super::{
-    input::{is_dismissive_reply, new_text},
+    calendar::notice_in_message,
+    input::{is_closing_reply, is_dismissive_reply, new_text},
     models::{FocusSignals, FocusThread},
-    rule::is_calendar_subject,
 };
+
+/// How far back from a thread's latest message the owner's writing to someone
+/// still makes them a recent contact.
+pub const RECENT_CONTACT_DAYS: i64 = 90;
 
 /// Consumer mail providers; sharing one of these is not being teammates.
 const FREEMAIL_DOMAINS: [&str; 11] = [
@@ -57,17 +63,32 @@ const AUTOMATED_LOCAL_PARTS: [&str; 30] = [
     "mailer-daemon",
 ];
 
+/// Local parts of addresses nobody answers from. Narrower than
+/// [`AUTOMATED_LOCAL_PARTS`]: a person does reply from `support@` or `hello@`.
+const UNANSWERED_LOCAL_PARTS: [&str; 8] = [
+    "noreply",
+    "no-reply",
+    "donotreply",
+    "do-not-reply",
+    "donot-reply",
+    "do-notreply",
+    "bounce",
+    "mailer-daemon",
+];
+
 fn domain(address: &str) -> &str {
     address.rsplit_once('@').map_or("", |(_, domain)| domain)
+}
+
+fn local_part_ends_with(address: &str, parts: &[&str]) -> bool {
+    let local = address.split_once('@').map_or(address, |(local, _)| local);
+    parts.iter().any(|part| local.ends_with(part))
 }
 
 /// An address that sends automated mail; matches the end of the local part,
 /// so `team@` and `product-updates@` both count.
 fn is_automated_sender(address: &str) -> bool {
-    let local = address.split_once('@').map_or(address, |(local, _)| local);
-    AUTOMATED_LOCAL_PARTS
-        .iter()
-        .any(|part| local.ends_with(part))
+    local_part_ends_with(address, &AUTOMATED_LOCAL_PARTS)
 }
 
 fn is_substantive(body: Option<&str>) -> bool {
@@ -78,6 +99,7 @@ fn is_substantive(body: Option<&str>) -> bool {
 /// owner's sent mail.
 pub(super) fn signals(thread: &FocusThread) -> FocusSignals {
     let owner = thread.owner_email.to_lowercase();
+    let latest = thread.messages.last();
     let incoming = thread
         .messages
         .iter()
@@ -131,19 +153,46 @@ pub(super) fn signals(thread: &FocusThread) -> FocusSignals {
 
     let contact = !brushed_off && (replied_for_real || written_to || (teammate && !bulk));
 
+    // Measured from the thread's latest message, so re-deciding a thread later
+    // gives the same answer.
+    let recent_since = latest.map(|message| message.at - Duration::days(RECENT_CONTACT_DAYS));
+    let is_recent = |at| recent_since.is_some_and(|since| at >= since);
+    let replied_recently = replies
+        .iter()
+        .any(|message| is_recent(message.at) && is_substantive(message.body.as_deref()));
+    let wrote_recently = notes_to_senders
+        .iter()
+        .any(|note| is_recent(note.at) && is_substantive(note.body.as_deref()));
+    let recent_contact = !brushed_off && !bulk && (replied_recently || wrote_recently);
+
+    // Only a notice nobody has written after: a person replying to one is a
+    // conversation, and the owner answering one has seen it.
+    let calendar = latest
+        .filter(|message| !message.is_sent)
+        .and_then(notice_in_message);
+
+    // Only threads with mail from the other side: the owner's own unanswered
+    // sends are not inbox threads, and nothing here can judge them.
+    let awaiting_reply = !incoming.is_empty()
+        && latest.is_some_and(|message| {
+            message.is_sent
+                && notice_in_message(message).is_none()
+                && !is_closing_reply(&new_text(message.body.as_deref().unwrap_or_default()))
+                && message.to.iter().any(|recipient| {
+                    let recipient = recipient.to_lowercase();
+                    recipient != owner && !local_part_ends_with(&recipient, &UNANSWERED_LOCAL_PARTS)
+                })
+        });
+
     FocusSignals {
         contact,
+        recent_contact,
+        brushed_off,
         replied,
         teammate,
-        latest_from_owner: thread
-            .messages
-            .last()
-            .is_some_and(|message| message.is_sent),
-        calendar_subject: thread
-            .messages
-            .first()
-            .and_then(|message| message.subject.as_deref())
-            .is_some_and(is_calendar_subject),
+        latest_from_owner: latest.is_some_and(|message| message.is_sent),
+        calendar,
+        awaiting_reply,
     }
 }
 

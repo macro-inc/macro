@@ -7,12 +7,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableCrmActivity,
-  enableCrmLists,
-  enableCrmPipelines,
-  enableDatabases,
-} from '@core/constant/featureFlags';
+import { enableCrmLists } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { emailToMacroId, getInitialsFromName } from '@core/user';
@@ -20,20 +15,15 @@ import { idToEmail } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
+import { usePrimaryEmailLinkId } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { createSoupLiveQuery } from '@queries/soup/graphql/create-soup-live-query';
 import {
   type SoupAstItemsQuery,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { getSoupEntityById } from '@queries/soup/normalized-cache';
-import {
-  onDatabaseBatchCommitted,
-  onDatabaseTableAdvanced,
-  useDatabasesQuery,
-} from '@queries/storage/databases';
 import {
   invalidateUserTeams,
   useCurrentTeamQuery,
@@ -41,6 +31,7 @@ import {
 } from '@queries/team/teams';
 import { patchTeamCrmSettings } from '@service-auth/crm';
 import { storageServiceClient } from '@service-storage/client';
+import { crmEmailPrivacyClient } from '@service-storage/crm-email-privacy';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { useNavigate } from '@solidjs/router';
 import { useQueryClient } from '@tanstack/solid-query';
@@ -48,6 +39,7 @@ import { createMemo, lazy } from 'solid-js';
 import { createTagFacetContext } from '../soup';
 import { createCrmActivityFilters } from './activity-filters-adapter';
 import { createCrmActivityState } from './activity-state-adapter';
+import { createAddToPipelineSource } from './add-to-pipeline-adapter';
 import type { CrmContext } from './context/crm-context';
 import type { CrmQuery, ItemListSource } from './context/crm-sources';
 import {
@@ -56,6 +48,7 @@ import {
 } from './creation-adapter';
 import { createAppCrmDisplayOptions } from './display-adapter';
 import { downloadCrmCsv } from './download-adapter';
+import { EmailThreadMention } from './email-thread-mention';
 import {
   copyCrmPipelineLink,
   copyCrmRecordLink,
@@ -67,6 +60,7 @@ import { createCrmPipelineEntries } from './pipeline-entries-adapter';
 import { createCrmPermissions } from './primitives/team-config';
 import { useCrmActivityQuery } from './queries/activity';
 import { crmActivityItemMatches } from './queries/activity-options';
+import { useBlockedDomains } from './queries/blocked-domains';
 import {
   createCompanyImporter,
   useCompanyQuery,
@@ -76,14 +70,19 @@ import {
   useSetCompanyNameMutation,
   useSetEmailSyncMutation,
 } from './queries/companies';
+import { useCompanyContactsQuery } from './queries/company-contacts';
 import { useCompanyEmailsQuery } from './queries/company-emails';
+import {
+  useSetContactCompanyMutation,
+  useSetContactEmailMutation,
+} from './queries/contact-edit';
 import { useContactEmailsQuery } from './queries/contact-emails';
 import {
   useContactQuery,
   useSetContactHiddenMutation,
   useSetContactNameMutation,
 } from './queries/contacts';
-import { createCrmDatabasesSource } from './queries/databases';
+import { createEmailPrivacySource } from './queries/email-privacy';
 import { fetchCrmExportCompanies } from './queries/export';
 import { useCrmLists } from './queries/lists';
 import { createPipelineTransfer } from './queries/pipeline-transfer';
@@ -201,27 +200,29 @@ export function createAppCrmContext(): CrmContext {
   const layout = useSplitLayout();
   const panel = useSplitPanel();
   const createContext = useCreateContext();
-  const activityFlag = useFeatureFlag(enableCrmActivity);
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const navigate = useNavigate();
-  const openCreateItem = async (kind: 'notes' | 'calls' | 'databases') => {
+  const openCreateItem = async (kind: 'notes' | 'calls') => {
     if (kind === 'calls') {
       navigate('/meet/new');
       return;
     }
     const { runCreateAction } = await import('@app/features/command/Launcher');
-    const type = {
-      notes: 'md',
-      databases: 'database',
-    } as const;
-    runCreateAction(type[kind], { source: 'crm' });
+    runCreateAction('md', { source: 'crm' });
   };
   const createSettings = () => useTeamCrmConfig(deps);
   return {
+    createEmailPrivacy: () => {
+      const team = useCurrentTeamQuery();
+      return createEmailPrivacySource(
+        { ...deps, privacy: crmEmailPrivacyClient },
+        () => (team.isSuccess ? team.data?.team.id : undefined),
+        userId
+      );
+    },
     registerTaskComposerRecord(source) {
       if (!panel) return () => {};
       return createContext.register(panel.handle.id, () => ({
-        task: activityFlag().enabled ? crmTaskComposerContext(source()) : null,
+        task: crmTaskComposerContext(source()),
       }));
     },
     createPipelines: (teamId) => createPipelinesSource(deps, teamId),
@@ -230,6 +231,11 @@ export function createAppCrmContext(): CrmContext {
       graphql: getGraphqlSoupClient,
       storage: deps.storage,
     }),
+    createAddToPipeline: (record) =>
+      createAddToPipelineSource(
+        { ...deps, graphql: getGraphqlSoupClient },
+        record
+      ),
     PipelineSharing: PipelineShare,
     createPipelineTransfer: (pipeline) =>
       createPipelineTransfer(deps, pipeline),
@@ -240,6 +246,7 @@ export function createAppCrmContext(): CrmContext {
     contactInitials: getInitialsFromName,
     userEmail: idToEmail,
     createNavigation: createAppCrmNavigation,
+    EmailThreadMention,
     copyRecordLink: copyCrmRecordLink,
     copyViewLink: copyCrmViewLink,
     copyPipelineLink: copyCrmPipelineLink,
@@ -247,28 +254,21 @@ export function createAppCrmContext(): CrmContext {
       const flag = useFeatureFlag(enableCrmLists);
       return () => flag().enabled;
     },
-    pipelinesEnabled() {
-      const flag = useFeatureFlag(enableCrmPipelines);
-      return () => flag().enabled;
-    },
     createCompanyEmails: (...args) =>
       withRowNotifications(
-        useCompanyEmailsQuery(useSoupAstItemsQuery, ...args)
+        useCompanyEmailsQuery(
+          useSoupAstItemsQuery,
+          ...args,
+          usePrimaryEmailLinkId()
+        )
       ),
     createContactEmails: (...args) =>
       withRowNotifications(
-        useContactEmailsQuery(useSoupAstItemsQuery, ...args)
-      ),
-    createDatabases: (scope) =>
-      createCrmDatabasesSource(
-        {
-          createRows: createSoupLiveQuery,
-          createListing: useDatabasesQuery,
-          onCommitted: onDatabaseBatchCommitted,
-          onTableAdvanced: onDatabaseTableAdvanced,
-        },
-        scope,
-        () => !!userId() && databasesFlag().enabled
+        useContactEmailsQuery(
+          useSoupAstItemsQuery,
+          ...args,
+          usePrimaryEmailLinkId()
+        )
       ),
     openCreateItem: (kind) => fireAndForget(openCreateItem(kind), 'crm'),
     openEmailComposer: (recipient) =>
@@ -375,10 +375,13 @@ export function createAppCrmContext(): CrmContext {
     userId,
     isTeamAdmin: useIsTeamAdmin,
     createCompanySource: (...args) => useCompanyQuery(deps, ...args),
+    createCompanyContactsSource: (...args) =>
+      useCompanyContactsQuery(deps, ...args),
     createContactSource: (...args) =>
       withReadyGate(useContactQuery(deps, ...args)),
     createTeamSource: useCurrentTeamQuery,
     createTeamConfigSource: createSettings,
+    createBlockedDomains: () => useBlockedDomains(deps),
     createCapabilities: () =>
       createCrmPermissions(userId, useCurrentTeamQuery(), createSettings()),
     createDealStages: createAppDealStages,
@@ -390,6 +393,8 @@ export function createAppCrmContext(): CrmContext {
     createContact: (...args) => useCreateContactMutation(deps, ...args),
     renameCompany: (...args) => useSetCompanyNameMutation(deps, ...args),
     renameContact: (...args) => useSetContactNameMutation(deps, ...args),
+    editContactEmail: () => useSetContactEmailMutation(deps),
+    editContactCompany: () => useSetContactCompanyMutation(deps),
     hideCompany: (...args) => useSetCompanyHiddenMutation(deps, ...args),
     hideContact: (...args) => useSetContactHiddenMutation(deps, ...args),
     setEmailSync: (...args) => useSetEmailSyncMutation(deps, ...args),

@@ -5,32 +5,69 @@ import { canLabelChannel } from './channel-label-eligibility';
 
 export function channelMatchesSmartTag(
   channel: ChannelEntity,
-  rule: ChannelLabelRule
+  rule: ChannelLabelRule,
+  label?: Pick<ChannelLabel, 'teamId'>
 ): boolean {
   return (
-    canLabelChannel(channel) &&
+    canLabelChannel(channel, label) &&
     rule.contains.length > 0 &&
     channel.name.toLowerCase().includes(rule.contains.toLowerCase())
   );
 }
 
-/** Keep unloaded server matches, exclude non-team channels, and reflect live names. */
+/** Preserve authorized server matches and reflect live names within each scope. */
 export function resolveChannelLabelMemberships(
   labels: readonly ChannelLabel[],
   channels: readonly ChannelEntity[]
 ): ChannelLabel[] {
   const loadedIds = new Set(channels.map((channel) => channel.id));
-  const ineligibleIds = new Set(
-    channels
-      .filter((channel) => !canLabelChannel(channel))
-      .map((channel) => channel.id)
+  const channelsById = new Map(
+    channels.map((channel) => [channel.id, channel])
   );
   return labels.map((label) => {
+    // Only the additive sections API marks its viewer-authorized memberships.
+    if (label.explicitChannelIds != null) {
+      const serverIds = new Set(label.channelIds);
+      const explicitIds = new Set(label.explicitChannelIds);
+      const eligible = (channel: ChannelEntity) => {
+        if (!canLabelChannel(channel, label)) return false;
+        if (!label.teamId) return channel.isParticipant !== false;
+        return channel.teamId
+          ? channel.teamId === label.teamId
+          : serverIds.has(channel.id);
+      };
+      const channelIds = [
+        ...new Set([
+          ...label.channelIds.filter((id) => !loadedIds.has(id)),
+          ...channels
+            .filter(
+              (channel) =>
+                eligible(channel) &&
+                (label.rule
+                  ? channelMatchesSmartTag(channel, label.rule, label)
+                  : explicitIds.has(channel.id))
+            )
+            .map((channel) => channel.id),
+        ]),
+      ];
+      return {
+        ...label,
+        channelIds,
+        explicitChannelIds: label.rule
+          ? []
+          : label.explicitChannelIds.filter((id) => {
+              const channel = channelsById.get(id);
+              return !channel || eligible(channel);
+            }),
+        channelCount: channelIds.length,
+      };
+    }
     const rule = label.rule;
     if (!rule) {
-      const channelIds = label.channelIds.filter(
-        (id) => !ineligibleIds.has(id)
-      );
+      const channelIds = label.channelIds.filter((id) => {
+        const channel = channelsById.get(id);
+        return !channel || canLabelChannel(channel, label);
+      });
       return channelIds.length === label.channelIds.length
         ? label
         : {
@@ -41,18 +78,32 @@ export function resolveChannelLabelMemberships(
               (label.channelIds.length - channelIds.length),
           };
     }
-    // Channel entities have no team ID. Shared-label matches must come from
-    // the server so a matching name cannot add another team's channel.
+    // Known team IDs allow live matches before the membership snapshot refreshes.
+    // Keep server authorization as the baseline when team metadata is missing.
     const serverIds = new Set(label.channelIds);
     const channelIds = [
       ...new Set([
         ...label.channelIds.filter((id) => !loadedIds.has(id)),
         ...channels
-          .filter(
-            (channel) =>
-              (!label.teamId || serverIds.has(channel.id)) &&
-              channelMatchesSmartTag(channel, rule)
-          )
+          .filter((channel) => {
+            if (!channelMatchesSmartTag(channel, rule, label)) {
+              return false;
+            }
+
+            if (!label.teamId) {
+              return true;
+            }
+
+            if (channel.isParticipant === false) {
+              return false;
+            }
+
+            if (channel.teamId) {
+              return channel.teamId === label.teamId;
+            }
+
+            return serverIds.has(channel.id);
+          })
           .map((channel) => channel.id),
       ]),
     ];

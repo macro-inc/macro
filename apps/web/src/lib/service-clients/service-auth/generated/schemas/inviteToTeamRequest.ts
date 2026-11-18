@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InviteEntry } from './inviteEntry';
+import type { InviteToTeamRequestTeamId } from './inviteToTeamRequestTeamId';
 
 /**
  * The request body to invite a user to a team
@@ -12,4 +13,11 @@ import type { InviteEntry } from './inviteEntry';
 export interface InviteToTeamRequest {
   /** The invites to send, each with an email and tier */
   invites: InviteEntry[];
+  /** Invite these addresses as agents: an address with no account signs up
+as an agent and joins the team when it first signs in. */
+  is_agent?: boolean;
+  /** The team the caller means to invite to. Invites always go to the
+caller's current team; when this names another team, nothing is sent
+and the request answers 409. */
+  team_id?: InviteToTeamRequestTeamId;
 }

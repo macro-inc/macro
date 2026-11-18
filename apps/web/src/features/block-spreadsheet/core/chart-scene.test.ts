@@ -1,7 +1,8 @@
 import type { SheetChart } from '@macro-inc/spreadsheet/sheet-drawings';
 import { describe, expect, it } from 'vitest';
 import { type ChartData, type ChartReader, chartData } from './chart-data';
-import { type ChartShape, chartScene } from './chart-scene';
+import { chartScene } from './chart-scene';
+import type { ChartShape } from './chart-shapes';
 
 const months = ['Jan', 'Feb', 'Mar'];
 const data = (plots: ChartData['plots'], extra: Partial<ChartData> = {}) => ({

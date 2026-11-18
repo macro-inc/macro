@@ -25,7 +25,11 @@ export type RunQueueArgs = {
   resolveNode?: (node: NodeRef) => NodeRef;
   /** Injectable for tests (skip real timers). */
   sleep?: (ms: number) => Promise<void>;
+  /** Once aborted, no further edit is applied; skipped ops fail. */
+  signal?: AbortSignal;
 };
+
+const ABORTED = 'edit aborted';
 
 export async function runQueue(args: RunQueueArgs): Promise<OpResult[]> {
   const { ops, randomSource, docReader, docWriter, awarenessSource } = args;
@@ -36,6 +40,10 @@ export async function runQueue(args: RunQueueArgs): Promise<OpResult[]> {
   const results: OpResult[] = [];
 
   for (const op of ops) {
+    if (args.signal?.aborted) {
+      results.push({ ok: false, op, error: ABORTED });
+      continue;
+    }
     let steps: DocumentOpStep[];
     try {
       steps = animate(op, {
@@ -51,6 +59,8 @@ export async function runQueue(args: RunQueueArgs): Promise<OpResult[]> {
 
     try {
       for (const step of steps) {
+        // An animated op stops between steps, so it can end partly typed.
+        if (args.signal?.aborted) throw new Error(ABORTED);
         await match(step)
           .with({ kind: 'pause' }, ({ ms }) => sleep(ms))
           .with({ kind: 'awareness' }, ({ x }) =>

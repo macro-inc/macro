@@ -58,3 +58,35 @@ describe('generated channel images', () => {
     });
   });
 });
+
+describe('SDK static image markup', () => {
+  it('parses StaticImage.toMarkdown() into a sized static-file image', () => {
+    const editor = createEditor({
+      nodes: SupportedNodeTypes,
+      onError: (error) => {
+        throw error;
+      },
+    });
+    editor.update(
+      () => {
+        $convertFromMarkdownString(
+          'Rendered image:\n\n<m-image>{"url":"https://static.example/file/render","alt":"Plan\\u003c/m-image\\u003e","srcType":"sfs","id":"render","width":200,"height":160,"scale":1,"constrainedWidth":400,"constrainedHeight":400}</m-image>',
+          INTERNAL_TRANSFORMERS
+        );
+      },
+      { discrete: true }
+    );
+    editor.getEditorState().read(() => {
+      const [node] = $nodesOfType(ImageNode);
+      expect(node).toBeDefined();
+      expect(node.getSrcType()).toBe('sfs');
+      expect(node.getId()).toBe('render');
+      expect(node.getUrl()).toBe('https://static.example/file/render');
+      expect(node.getAlt()).toBe('Plan</m-image>');
+      expect(node.getEffectiveDimensions()).toEqual({
+        width: 200,
+        height: 160,
+      });
+    });
+  });
+});

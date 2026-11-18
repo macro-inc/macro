@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT link.agent_session_id\n            FROM agent_session_pull_request link\n            WHERE lower(link.github_key) = lower($1)\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM agent_session_pull_request other\n                  LEFT JOIN github_pull_request pull_request\n                      ON lower(pull_request.github_key) = lower(other.github_key)\n                  WHERE other.agent_session_id = link.agent_session_id\n                    AND pull_request.status IS DISTINCT FROM 'merged'\n                    AND pull_request.status IS DISTINCT FROM 'closed'\n              )\n              AND EXISTS (\n                  SELECT 1\n                  FROM agent_session_pull_request other\n                  JOIN github_pull_request pull_request\n                      ON lower(pull_request.github_key) = lower(other.github_key)\n                  WHERE other.agent_session_id = link.agent_session_id\n                    AND pull_request.status = 'merged'\n              )\n            ORDER BY link.agent_session_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "42a19e37ca627f048c0415b379b5f666a8e4110b27f3ba2dd8e1e068cdf117f8"
+}

@@ -1,12 +1,10 @@
-import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
+import { catalogModelLabel } from '@core/component/AI/constant/model-label';
+import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
-  acceleratedSpeed,
-  speedForModel,
-} from '@core/component/AI/constant/speed';
-import { fastModeEnabled } from '@core/component/AI/signal/speed';
-import ArrowUp from '@icon/system/regular/arrow-up.svg';
-import { Button } from '@ui';
+  preferredSpeed,
+  setPreferredSpeed,
+} from '@core/component/AI/signal/speed';
 /**
  * The block's composer container: reads the session from context and drives
  * the dumb `AgentInput` with derived props. Every in-flight state it shows
@@ -14,6 +12,7 @@ import { Button } from '@ui';
  * combined model-and-effort change waits for runtime confirmation.
  */
 
+import { isMacroHarness } from '@app/features/agents-view/core/agent-kind';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import {
   type InputAttachmentData,
@@ -24,6 +23,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
+import { isNoRuntimeAccessError } from '@service-agent-harness/no-runtime-access';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import {
@@ -39,6 +39,7 @@ import {
   type EffortSelection,
   effortConfigOption,
   effortLabel,
+  selectConfigOption,
 } from '../state/session-config';
 import {
   AgentInput,
@@ -79,7 +80,6 @@ export function AgentComposer(props: {
     metadata,
     pending,
     queue,
-    sendNext,
     steer,
     steerFailed,
     turn,
@@ -100,7 +100,9 @@ export function AgentComposer(props: {
     if (readOnly()) return;
     try {
       const result = await issue(action);
-      if (result?.isErr()) toast.failure(failure);
+      // A stopped agent says why in the transcript instead.
+      if (result?.isErr() && !result.error.some(isNoRuntimeAccessError))
+        toast.failure(failure);
     } catch {
       toast.failure(failure);
     }
@@ -124,6 +126,24 @@ export function AgentComposer(props: {
   };
 
   const effort = () => effortConfigOption(metadata()?.configOptions ?? []);
+  /** Macro's tier option, when the current model offers more than standard.
+   * Other harnesses' speed values are theirs to interpret, so they are left alone. */
+  const speedOption = () => {
+    if (!isMacroHarness(session()?.harness)) return;
+    const option = selectConfigOption(
+      metadata()?.configOptions ?? [],
+      'speed',
+      'speed'
+    );
+    const offered = nativeSpeeds(
+      option?.options.map((choice) => choice.value) ?? []
+    );
+    return option && offered ? { id: option.id, option, offered } : undefined;
+  };
+  const speed = () => {
+    const tiers = speedOption();
+    return tiers ? resolveSpeed(preferredSpeed(), tiers.offered) : undefined;
+  };
   const changingEffort = () => {
     const option = effort();
     return option ? changingConfig(messages(), option.id) : undefined;
@@ -180,17 +200,12 @@ export function AgentComposer(props: {
   const send = async (markdown: string, attachments: InputAttachmentData[]) => {
     if (readOnly() || configuring()) return;
     const meta = metadata();
-    if (
-      meta?.model &&
-      acceleratedSpeed(meta.model) &&
-      meta.configOptions.some((option) => option.id === 'speed')
-    ) {
+    const tiers = speedOption();
+    const tier = speed();
+    if (meta?.model && tiers && tier && tiers.option.currentValue !== tier) {
       setConfiguring(true);
       try {
-        await selectModel(meta.model, {
-          configId: 'speed',
-          value: speedForModel(meta.model, fastModeEnabled()),
-        });
+        await selectModel(meta.model, { configId: tiers.id, value: tier });
       } catch {
         persistedDraft.setDraft(markdown);
         toast.failure('The speed setting could not be applied. Please retry.');
@@ -248,32 +263,16 @@ export function AgentComposer(props: {
     <>
       <Show when={queuedItems().length > 0}>
         <div class="pb-1.5">
-          <div class="mb-1 flex items-center justify-between gap-2 px-1">
-            <span class="text-xs text-ink-muted">
-              {queuedItems().length} queued
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              class="touch:min-h-11"
-              aria-label="Send next queued message now"
-              disabled={readOnly() || loadFailed() || pending()}
-              onClick={() => {
-                if (!readOnly()) sendNext();
-              }}
-            >
-              <ArrowUp class="size-4" />
-              Send next
-            </Button>
+          <div class="mb-1 px-1 text-xs text-ink-muted">
+            {queuedItems().length} queued
           </div>
           <div class="max-h-[25dvh] overflow-y-auto overscroll-contain">
             <QueuedPrompts
               items={queuedItems()}
               disabled={readOnly()}
-              onEdit={(actionId, prompt) => {
-                if (!readOnly())
-                  fireAndForget(queue.edit(actionId, prompt), 'agent-composer');
-              }}
+              onEdit={(actionId, prompt) =>
+                readOnly() ? undefined : queue.edit(actionId, prompt)
+              }
               onRemove={(actionId) => {
                 if (!readOnly())
                   fireAndForget(queue.remove(actionId), 'agent-composer');
@@ -329,7 +328,6 @@ export function AgentComposer(props: {
         readOnly={readOnly()}
         autofocus={props.autofocus}
         busy={busy()}
-        hasQueuedMessages={queuedItems().length > 0}
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed
         // into, but not sent from, until the id lands.
@@ -344,14 +342,9 @@ export function AgentComposer(props: {
             'agent-composer'
           )
         }
-        onSendNext={() => {
-          if (!readOnly()) sendNext();
-        }}
-        modelName={modelLabel(
+        modelName={catalogModelLabel(
           metadata()?.model ?? undefined,
-          metadata()?.supportedModels.find(
-            (model) => model.id === metadata()?.model
-          )?.name
+          metadata()?.supportedModels ?? []
         )}
         supportsImages={
           metadata()?.supportedModels.find(
@@ -433,13 +426,13 @@ export function AgentComposer(props: {
               }}
             />
 
-            <Show
-              when={metadata()?.configOptions.some(
-                (option) => option.id === 'speed'
-              )}
-            >
-              <SpeedToggle model={metadata()?.model ?? ''} />
-            </Show>
+            <SpeedSelector
+              onCloseAutoFocus={restoreInputFocus}
+              offered={speedOption()?.option.options ?? []}
+              value={speed() ?? 'standard'}
+              disabled={readOnly() || configuring()}
+              onChange={setPreferredSpeed}
+            />
           </div>
         }
       />

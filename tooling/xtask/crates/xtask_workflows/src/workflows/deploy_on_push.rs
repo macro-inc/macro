@@ -1,8 +1,8 @@
 //! `Deploy on Push` — the single push-to-main dev deploy pipeline. Mirrors the
-//! production release flow: cloud storage first, then the sync service and web
-//! app, with every stage deploying unconditionally. The web app *builds* in
-//! parallel with the backend; only its upload waits, so the frontend still
-//! goes live last.
+//! production release flow: cloud storage first, then the sync service and the
+//! ChatGPT MCP worker, then the web app, with every stage deploying
+//! unconditionally. The web app *builds* in parallel with the backend; only its
+//! upload waits, so the frontend still goes live last.
 //!
 //! Nothing is path-gated, deliberately. The pipeline serializes on one
 //! concurrency group, and GitHub cancels a *pending* run as soon as a newer one
@@ -15,8 +15,10 @@
 //! always a superset of the ones it displaced.
 //!
 //! The called workflows already avoid redundant work internally (the service
-//! matrix is Nix-cached and Pulumi no-ops unchanged stacks), so the cost of
-//! dropping the gate is small next to a silently undeployed commit.
+//! matrix is Nix-cached, Pulumi no-ops unchanged stacks, and the sync worker
+//! compares its inputs with the live version), so the cost of dropping the gate
+//! is small next to a silently undeployed commit. Those checks are safe because
+//! they compare with what is deployed, not with the previous push.
 //!
 //! Replaces the separate `deploy_cloud_storage_on_push` and
 //! `deploy_web_app_dev_push` workflows. Generated into `deploy_on_push.yml`
@@ -25,13 +27,17 @@
 //!
 //! NOTE: the top-level concurrency group deliberately differs from the called
 //! workflows' literal groups (`deploy-all-services-dev`, `deploy-web-app-dev`,
-//! `deploy-sync-service-dev`) — declaring the *same* group in a wrapper and
-//! its called workflow makes GitHub detect a self-deadlock and cancel the run.
+//! `deploy-sync-service-dev`, `deploy-mcp-chatgpt-worker-dev`) — declaring the
+//! *same* group in a wrapper and its called workflow makes GitHub detect a
+//! self-deadlock and cancel the run.
 //! The called workflows' groups are still what serialize these push deploys
 //! against manual dispatches of the individual pipelines.
 
 use anyhow::Result;
 use gh_workflow::{Concurrency, Event, Expression, Job, Push, Workflow};
+
+#[cfg(test)]
+mod test;
 
 /// Prepended to the generated YAML, under the "do not edit" header. The
 /// no-gating decision is the single most likely thing for someone to try to
@@ -55,8 +61,9 @@ pub const NOTICE: &str = indoc::indoc! {"
     # Deploying everything unconditionally makes the coalescing lossless: the
     # surviving run always deploys a superset of the runs it displaced. The
     # called workflows already avoid redundant work internally (Nix-cached
-    # builds, Pulumi no-ops on unchanged stacks), so the cost is small next to
-    # an undeployed commit.
+    # builds, Pulumi no-ops on unchanged stacks, the sync worker comparing its
+    # inputs with the live version), so the cost is small next to an undeployed
+    # commit. Those checks compare with what is deployed, never the last push.
     #
 "};
 
@@ -73,6 +80,7 @@ pub fn deploy_on_push() -> Workflow {
         )
         .add_job("deploy-cloud-storage", deploy_cloud_storage())
         .add_job("deploy-sync-service", deploy_sync_service())
+        .add_job("deploy-mcp-chatgpt-worker", deploy_mcp_chatgpt_worker())
         .add_job("build-web-app", build_web_app())
         .add_job("deploy-web-app", deploy_web_app())
 }
@@ -105,6 +113,19 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
         crate::workflows::yaml_fragment("environment: dev")?,
     );
     sync_service.insert(
+        "secrets".into(),
+        crate::workflows::yaml_fragment(indoc::indoc! {r#"
+            CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        "#})?,
+    );
+
+    let mcp_chatgpt_worker = crate::workflows::job_mut(root, "deploy-mcp-chatgpt-worker")?;
+    mcp_chatgpt_worker.remove("runs-on");
+    mcp_chatgpt_worker.insert(
+        "with".into(),
+        crate::workflows::yaml_fragment("environment: dev")?,
+    );
+    mcp_chatgpt_worker.insert(
         "secrets".into(),
         crate::workflows::yaml_fragment(indoc::indoc! {r#"
             CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -166,6 +187,16 @@ fn deploy_sync_service() -> Job {
         .uses("./.github/workflows/deploy_sync_service.yml")
 }
 
+/// The ChatGPT MCP server calls the backend through the SDK and takes its tokens
+/// from the MCP auth broker, so it ships behind them, like the sync worker.
+/// Nothing waits on it: the web app doesn't talk to it.
+fn deploy_mcp_chatgpt_worker() -> Job {
+    Job::default()
+        .name("Deploy MCP ChatGPT Worker")
+        .needs(vec!["deploy-cloud-storage".to_string()])
+        .uses("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
+}
+
 /// No `needs`: the build only reads the commit, so it overlaps the backend's
 /// ~15 minutes instead of adding ~4 after them.
 fn build_web_app() -> Job {
@@ -174,13 +205,14 @@ fn build_web_app() -> Job {
         .uses("./.github/workflows/build_web_app.yml")
 }
 
-/// Same ordering rationale as [`deploy_sync_service`]; uploads the dist that
-/// [`build_web_app`] left in this run.
+/// Publish only after the worker supports the frontend's sync protocol. The
+/// build remains parallel, but a failed worker deploy must block new clients.
 fn deploy_web_app() -> Job {
     Job::default()
         .name("Deploy Web App")
         .needs(vec![
             "deploy-cloud-storage".to_string(),
+            "deploy-sync-service".to_string(),
             "build-web-app".to_string(),
         ])
         .uses("./.github/workflows/deploy_web_app.yml")

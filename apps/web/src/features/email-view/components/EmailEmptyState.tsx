@@ -9,6 +9,7 @@ import { FOCUS_WINDOW_DAYS } from '@queries/email/focus';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
+import { canSearchEmailTab } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailTab } from '../types';
 
@@ -59,8 +60,18 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
       description: 'Email you archive will appear here.',
     }))
     .with('focus', () => ({
-      title: 'Nothing needs you',
-      description: `Signal email worth your attention from the last ${FOCUS_WINDOW_DAYS} days appears here.`,
+      title: "You're caught up",
+      description: `Email worth your attention from the last ${FOCUS_WINDOW_DAYS} days appears here.`,
+    }))
+    .with('spam', () => ({
+      title: 'No spam',
+      description:
+        'Email marked as spam or junk in your connected inboxes appears here.',
+    }))
+    .with('trash', () => ({
+      title: 'Trash is empty',
+      description:
+        'Deleted email from your connected inboxes appears here until it is permanently removed.',
     }))
     .with('all', () => ({
       title: 'No email yet',
@@ -70,22 +81,22 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
 }
 
 export function EmailEmptyState() {
-  const { state, setFacets, setInboxIds } = useEmailView();
+  const { state, setInboxIds, setTab, filtersChanged, clearFilters } =
+    useEmailView();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
   // Scheduled has no search or filters; text typed on another tab stays behind.
   const searchText = () =>
-    state.tab === 'scheduled' || state.tab === 'reminders'
-      ? ''
-      : state.search.trim();
+    canSearchEmailTab(state.tab) ? state.search.trim() : '';
   const noInboxesSelected = () => state.inboxIds?.length === 0;
-  const hasActiveFilters = () =>
-    Object.values(state.facets).some((optionIds) => optionIds.length > 0);
 
+  // These states fill the list pane, which is narrow beside the reading pane,
+  // so they center in it instead of hugging the sidebar.
   return (
     <Switch>
       <Match when={!emailActive()}>
         <EmptyStatePanel
+          centered
           graphic={EmptyStateEmailGraphic}
           title="Connect your email"
           description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
@@ -126,7 +137,7 @@ export function EmailEmptyState() {
         )}
       </Match>
 
-      <Match when={hasActiveFilters()}>
+      <Match when={filtersChanged()}>
         <EmptyStatePanel
           centered
           graphic={EmptyStateNoFilterMatchGraphic}
@@ -135,7 +146,7 @@ export function EmailEmptyState() {
         >
           <FilteredHiddenBanner
             hasHiddenItems={false}
-            onClearFilters={() => setFacets({})}
+            onClearFilters={clearFilters}
           />
         </EmptyStatePanel>
       </Match>
@@ -143,9 +154,18 @@ export function EmailEmptyState() {
       <Match when={tabCopy(state.tab)}>
         {(copy) => (
           <EmptyStatePanel
+            centered
             graphic={EmptyStateInboxTrayGraphic}
             title={copy().title}
             description={copy().description}
+            primaryAction={
+              state.tab === 'focus'
+                ? {
+                    label: 'See the rest of your inbox',
+                    onClick: () => setTab('important'),
+                  }
+                : undefined
+            }
             documentationUrl={EMAIL_DOCS_URL}
           />
         )}

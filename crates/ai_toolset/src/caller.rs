@@ -12,8 +12,9 @@ pub enum ToolCaller {
     Agent(BotId),
     /// An OAuth MCP client acting for the user. `name` is the name the client
     /// registered under: self-reported, so a display label only, never an
-    /// identity or a permission. Absent for a token the broker issued before
-    /// it recorded which client it went to.
+    /// identity or a permission. The broker bounds its length and characters
+    /// and refuses reserved names. Absent for a token the broker issued before
+    /// it recorded which client it went to, or whose stored name is reserved.
     McpClient {
         /// The client's registered name, such as "Claude Code".
         name: Option<String>,
@@ -23,10 +24,11 @@ pub enum ToolCaller {
 }
 
 impl ToolCaller {
-    /// The label a write made for this caller is shown "via", if any.
+    /// The client a write made for this caller is shown under, if any. An
+    /// MCP client that registered no name is shown as a generic one.
     pub fn via(&self) -> Option<&str> {
         match self {
-            Self::McpClient { name } => name.as_deref(),
+            Self::McpClient { name } => Some(name.as_deref().unwrap_or("MCP client")),
             Self::Agent(_) | Self::ApiKey => None,
         }
     }

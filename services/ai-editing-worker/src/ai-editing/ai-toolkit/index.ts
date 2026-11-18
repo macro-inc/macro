@@ -1,4 +1,5 @@
 export * from './blocks';
+export * from './databases';
 export * from './inline';
 export * from './lists';
 export * from './locate';

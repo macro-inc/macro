@@ -5,15 +5,19 @@ import {
   type TasksViewProviderProps,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
-import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { ProjectTaskSearch } from '../components/project-task-search';
-import { useProjectsContext } from '../context/projects-context';
+import {
+  type ProjectSource,
+  useProjectsContext,
+} from '../context/projects-context';
+import { NewProjectTask } from '../new-project-task';
 import { createProjectTasksDataSource } from '../queries/project-tasks';
 
 export type ProjectTasksProviderProps = ParentProps<{
   projectId: string;
+  /** The host's read of this project, so the list doesn't send its own. */
+  source?: ProjectSource;
   onOpenTask: NonNullable<TasksViewProviderProps['onOpenTask']>;
   onCreateTask?: TasksViewProviderProps['onCreateTask'];
 }>;
@@ -44,7 +48,7 @@ export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
           sourceFactory={(state, options) =>
             createProjectTasksDataSource(
               projectId,
-              context.createProjectSource(() => projectId),
+              props.source ?? context.createProjectSource(() => projectId),
               state,
               options
             )
@@ -61,6 +65,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
   return (
     <ProjectTasksProvider
       projectId={props.projectId}
+      source={props.source}
       onOpenTask={props.onOpenTask}
       onCreateTask={props.onCreateTask}
     >
@@ -82,12 +87,7 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
         <div class="ml-auto flex shrink-0 items-center gap-2">
           <TasksControls />
           {props.addTasksAction}
-          <Show when={props.onCreateTask}>
-            <Button variant="secondary" onClick={() => props.onCreateTask?.()}>
-              <PlusIcon class="size-4" />
-              New task
-            </Button>
-          </Show>
+          <NewProjectTask onCreateTask={props.onCreateTask} />
         </div>
       </div>
       <TasksContent />

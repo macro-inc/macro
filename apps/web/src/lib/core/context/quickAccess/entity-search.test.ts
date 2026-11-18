@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { filterQuickAccessItems } from './entity-search';
-import type { UserItem } from './types';
+import {
+  filterQuickAccessItems,
+  searchQuickAccessItems,
+} from './entity-search';
+import type { EntityItem, UserItem } from './types';
 
 function items(...names: string[]): UserItem[] {
   return names.map((name, index) => ({
@@ -37,6 +40,10 @@ describe('pending Quick Access matches', () => {
     ['a😀b🎵c', '🎵😀', false],
     ['Alpha', 'aa', true],
     ['Alpha', 'aaa', false],
+    ['Avery Morgan, Blair Chen', 'Blair, aver', true],
+    ['Avery Morgan, Blair Chen', 'Blair,Avery', true],
+    ['Avery Morgan, Blair Chen', 'Blair, casey', false],
+    ['Avery Morgan, Blair Chen', ' , ', false],
   ])(
     'matches cache subsequence semantics for %s and %s',
     (name, query, matches) => {
@@ -50,5 +57,38 @@ describe('pending Quick Access matches', () => {
   it('preserves the full list when the query is cleared', () => {
     const ranked = items('Seamus snip', 'other');
     expect(filterQuickAccessItems(ranked, ' \t ')).toBe(ranked);
+  });
+});
+
+describe('local Quick Access search', () => {
+  function channel(id: string, bucket: 'channel' | 'dm', name: string) {
+    const item: EntityItem = {
+      id,
+      kind: 'entity',
+      bucket,
+      searchText: name,
+      sortTimestamp: 0,
+      timestamps: {},
+      data: {
+        id,
+        type: 'channel',
+        name,
+        ownerId: 'owner',
+        channelType: bucket === 'dm' ? 'direct_message' : 'private',
+      },
+    };
+    return item;
+  }
+
+  it('finds channels and DMs by names typed in any order', () => {
+    const items = [
+      channel('group', 'channel', 'Avery Morgan, Blair Chen'),
+      channel('dm', 'dm', 'Blair Chen'),
+    ];
+    const found = (query: string) =>
+      searchQuickAccessItems(items, query).map((item) => item.id);
+
+    expect(found('Blair, Avery')).toEqual(['group']);
+    expect(found('chen blair')).toEqual(['group', 'dm']);
   });
 });

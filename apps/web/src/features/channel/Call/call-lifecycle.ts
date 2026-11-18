@@ -1,10 +1,11 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { thrownResultErrorHasCode } from '@core/util/result';
+import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import {
   type Cleanup,
   createMachine,
   type MachineDef,
 } from '@macro-inc/machine';
+import { Telemetry } from '@macro-inc/observability';
 import type { CallTokenResponse } from '@service-call/client';
 import type { DisconnectReason } from 'livekit-client';
 import { match } from 'ts-pattern';
@@ -17,6 +18,7 @@ import {
 } from './auto-rejoin';
 import type { CallSessionDisconnectOptions } from './CallSessionController';
 import { LK_DISCONNECT_REASON } from './livekit-loader';
+import { isMicrophoneAccessError } from './microphone-access';
 
 export const JOIN_TIMEOUT_MS = 15_000;
 export const LEAVE_TIMEOUT_MS = 10_000;
@@ -28,7 +30,14 @@ export const LEAVE_TIMEOUT_MS = 10_000;
 const MAX_ENDED_CALL_RELEASES = 2;
 const ALREADY_IN_CALL_MESSAGE =
   "You're already in another call. Leave your current call before joining a new one.";
+const MICROPHONE_BLOCKED_MESSAGE =
+  'Microphone access is off. Allow it in Settings to join the call.';
 export type CallIdentity = { channelId: string; callId: string | null };
+
+/** Only an explicit Start action is allowed to create a session. */
+export type CallJoinIntent =
+  | { kind: 'start' }
+  | { kind: 'join'; callId?: string };
 /** What started a join, recorded with the joined event. */
 export type JoinSource =
   /** A Join control the user pressed. */
@@ -69,6 +78,9 @@ function deferred<T = void>() {
 type Join = ReturnType<typeof deferred<void>> & {
   channelId: string;
   source: JoinSource;
+  intent: CallJoinIntent;
+  /** A sent Start can still allocate a session after the client times out. */
+  pendingStart?: Promise<CallTokenResponse>;
   onJoin?: () => void;
   restoredCall?: CallIdentity;
 };
@@ -89,7 +101,13 @@ export type CallLifecycleState =
   | { t: 'retry-wait'; attempt: AutoRejoinAttempt }
   | { t: 'checking'; attempt: AutoRejoinAttempt }
   | { t: 'leaving'; request: Leave }
-  | { t: 'failed'; channelId: string; error: unknown };
+  | {
+      t: 'failed';
+      channelId: string;
+      intent: CallJoinIntent;
+      pendingStart?: Promise<CallTokenResponse>;
+      error: unknown;
+    };
 type Event =
   | { t: 'join'; request: Join }
   | { t: 'leave'; request: Leave }
@@ -110,6 +128,8 @@ const definition: MachineDef<CallLifecycleState, Event> = {
           state: {
             t: 'failed',
             channelId: state.request.channelId,
+            intent: state.request.intent,
+            pendingStart: state.request.pendingStart,
             error,
           } as const,
         }))
@@ -179,6 +199,15 @@ function changeIntent(event: Event) {
     .otherwise(() => undefined);
 }
 
+function joinFailureMessage(error: unknown) {
+  if (thrownResultErrorHasCode(error, 'CONFLICT'))
+    return ALREADY_IN_CALL_MESSAGE;
+  if (thrownResultErrorHasCode(error, 'GONE'))
+    return 'This call has ended. Start a new call to continue.';
+  if (isMicrophoneAccessError(error)) return MICROPHONE_BLOCKED_MESSAGE;
+  return 'Unable to join the call. Please check your connection.';
+}
+
 function shouldRejoin(reason?: DisconnectReason) {
   return match(reason)
     .with(
@@ -196,8 +225,9 @@ function shouldRejoin(reason?: DisconnectReason) {
 export function createCallLifecycle(options: {
   shouldRequestToken: (channelId: string) => boolean;
   prepareToken?: (channelId: string) => Promise<() => Promise<void>>;
-  requestToken: (channelId: string) => Promise<CallTokenResponse>;
-  connect: (token: CallTokenResponse) => Promise<void>;
+  requestToken: (callId: string) => Promise<CallTokenResponse>;
+  startCall: (channelId: string) => Promise<CallTokenResponse>;
+  connect: (token: CallTokenResponse, source: JoinSource) => Promise<void>;
   disconnect: (options?: CallSessionDisconnectOptions) => Promise<void>;
   leave: (channelId: string) => Promise<LeaveResult>;
   lookup: (channelId: string) => Promise<ActiveCallLookup>;
@@ -205,6 +235,8 @@ export function createCallLifecycle(options: {
   beginJoin: (channelId: string) => void;
   rollbackJoin: () => void;
   setError: (error: string | null) => void;
+  /** The join failed because the microphone is denied. */
+  microphoneBlocked: () => void;
   watch: (
     call: CallIdentity,
     disconnected: (reason?: DisconnectReason) => void,
@@ -260,6 +292,14 @@ export function createCallLifecycle(options: {
         options.setError(null);
       },
       joining: ({ request }, dispatch) => {
+        const span = Telemetry.span('call.join');
+        span.setAttr('channel.id', request.channelId);
+        span.setAttr('call.join.source', request.source);
+        span.setAttr('call.join.intent', request.intent.kind);
+        span.setAttr('call.join.outcome', 'cancelled');
+        if (request.intent.kind === 'join' && request.intent.callId) {
+          span.setAttr('call.id', request.intent.callId);
+        }
         let active = true;
         let settled = false;
         let finishPreparation: (() => Promise<void>) | undefined;
@@ -270,6 +310,8 @@ export function createCallLifecycle(options: {
         };
         const fail = (error: unknown) => {
           if (!active) return;
+          span.setAttr('call.join.outcome', 'failed');
+          span.error(error);
           settled = true;
           request.reject(error);
           dispatch({ t: 'fail', error });
@@ -294,10 +336,36 @@ export function createCallLifecycle(options: {
               await Promise.allSettled(pendingServerLeaves);
               if (!active) return;
             }
+            // Retry a sent Start by its eventual identity, never by sending
+            // another creation-capable request while its outcome is unknown.
+            if (request.pendingStart) {
+              const pendingStart = request.pendingStart;
+              request.intent = { kind: 'join' };
+              let token: CallTokenResponse | undefined;
+              try {
+                token = await pendingStart;
+              } catch (error) {
+                // A lost response is not proof that Start did not allocate.
+                // Recover through the non-creating lookup below.
+                options.reportError(error);
+              }
+              request.pendingStart = undefined;
+              if (!active) return;
+              if (token) {
+                if (token.channelId !== request.channelId) {
+                  throw new Error(
+                    'Call token does not belong to the requested channel'
+                  );
+                }
+                request.intent = { kind: 'join', callId: token.callId };
+              }
+            }
             if (request.restoredCall) {
               let activeCall: ActiveCallLookup;
               try {
-                activeCall = await options.lookup(request.channelId);
+                activeCall = await span.span('call.lookup', () =>
+                  options.lookup(request.channelId)
+                );
               } catch (error) {
                 if (!active) return;
                 options.reportError(error);
@@ -318,6 +386,29 @@ export function createCallLifecycle(options: {
             const needsConnection = options.shouldRequestToken(
               request.channelId
             );
+            // Resolve a join once, before permissions can delay the request.
+            // Recovery and retries retain this id even if the channel starts a new call.
+            if (request.intent.kind === 'join' && !request.intent.callId) {
+              let callId =
+                call?.channelId === request.channelId ? call.callId : null;
+              if (!callId) {
+                const activeCall = await span.span('call.lookup', () =>
+                  options.lookup(request.channelId)
+                );
+                if (!active) return;
+                if (activeCall === 'unavailable') {
+                  throw new Error('Unable to verify the active call');
+                }
+                callId = activeCall?.callId ?? null;
+              }
+              if (!callId) {
+                throw new ThrownResultError([
+                  { code: 'GONE', message: 'The call has ended' },
+                ]);
+              }
+              request.intent = { kind: 'join', callId };
+              span.setAttr('call.id', callId);
+            }
             if (needsConnection || renewMembership) {
               if (options.prepareToken) {
                 // Permission prompts precede the lease and connection deadline.
@@ -333,10 +424,22 @@ export function createCallLifecycle(options: {
                   JOIN_TIMEOUT_MS
                 );
               }
-              const [token] = await Promise.all([
-                options.requestToken(request.channelId),
-                delay,
-              ]);
+              const intent = request.intent;
+              let tokenRequest: Promise<CallTokenResponse>;
+              if (intent.kind === 'start') {
+                tokenRequest = span.span('call.token', () =>
+                  options.startCall(request.channelId)
+                );
+                request.pendingStart = tokenRequest;
+              } else if (intent.callId) {
+                const callId = intent.callId;
+                tokenRequest = span.span('call.token', () =>
+                  options.requestToken(callId)
+                );
+              } else {
+                throw new Error('Missing call identity');
+              }
+              const [token] = await Promise.all([tokenRequest, delay]);
               if (!active) return;
               if (token.channelId !== request.channelId) {
                 throw new Error(
@@ -356,9 +459,49 @@ export function createCallLifecycle(options: {
                 await releaseStaleNativeSession(call);
                 return;
               }
-              if (needsConnection) await options.connect(token);
+              if (
+                request.intent.kind === 'join' &&
+                !sameCall(
+                  {
+                    channelId: request.channelId,
+                    callId: request.intent.callId ?? null,
+                  },
+                  { channelId: token.channelId, callId: token.callId }
+                )
+              ) {
+                throw new Error(
+                  'Call token does not belong to the requested call'
+                );
+              }
+              // Once Start allocated a session, retries are joins to that session.
+              request.intent = { kind: 'join', callId: token.callId };
+              span.setAttr('call.id', token.callId);
+              if (needsConnection) {
+                await span.run(() => options.connect(token, request.source));
+              }
               call = { channelId: token.channelId, callId: token.callId };
             } else {
+              if (
+                request.intent.kind === 'join' &&
+                !sameCall(call, {
+                  channelId: request.channelId,
+                  callId: request.intent.callId ?? null,
+                })
+              ) {
+                const error = new ThrownResultError([
+                  { code: 'GONE', message: 'The call has ended' },
+                ]);
+                if (!call) throw error;
+                // Keep the native session intact, but refuse to report it as
+                // a successful join to a different selected call.
+                settled = true;
+                request.reject(error);
+                options.rollbackJoin();
+                span.setAttr('call.join.outcome', 'wrong_session');
+                span.error(error);
+                dispatch({ t: 'connected', call });
+                return;
+              }
               // Let the joining scope finish mounting before dispatching its
               // completion, just as the token/connect path does.
               await Promise.resolve();
@@ -368,6 +511,7 @@ export function createCallLifecycle(options: {
             options.setError(null);
             settled = true;
             request.resolve();
+            span.setAttr('call.join.outcome', 'connected');
             const connected = call ?? {
               channelId: request.channelId,
               callId: null,
@@ -386,13 +530,14 @@ export function createCallLifecycle(options: {
             releasePreparation();
           }
         }
-        fireAndForget(connect(), 'channel-call');
+        fireAndForget(span.run(connect), 'channel-call');
         return () => {
           active = false;
           releasePreparation();
           clearTimeout(timeout);
           clearTimeout(delayTimer);
           finishDelay();
+          span.end();
           if (!settled) request.reject(new Error('Call join cancelled'));
         };
       },
@@ -461,7 +606,16 @@ export function createCallLifecycle(options: {
             return;
           }
           try {
-            await startJoin(attempt.channelId, 'auto_rejoin');
+            await startJoin(
+              attempt.channelId,
+              'auto_rejoin',
+              undefined,
+              false,
+              {
+                kind: 'join',
+                callId: attempt.callId ?? undefined,
+              }
+            );
           } catch (error) {
             options.reportError(error);
           }
@@ -473,11 +627,8 @@ export function createCallLifecycle(options: {
       },
       failed: ({ channelId, error }) => {
         options.rollbackJoin();
-        options.setError(
-          thrownResultErrorHasCode(error, 'CONFLICT')
-            ? ALREADY_IN_CALL_MESSAGE
-            : 'Unable to join the call. Please check your connection.'
-        );
+        options.setError(joinFailureMessage(error));
+        if (isMicrophoneAccessError(error)) options.microphoneBlocked();
         let active = true;
         // Recovery must not keep Try again pending, or tear down a newer join.
         async function cleanUpFailedJoin() {
@@ -486,7 +637,7 @@ export function createCallLifecycle(options: {
           } catch (error) {
             options.reportError(error);
           }
-          if (!active) return;
+          if (!active || thrownResultErrorHasCode(error, 'GONE')) return;
           try {
             await leaveServer(channelId);
           } catch (error) {
@@ -532,7 +683,7 @@ export function createCallLifecycle(options: {
             !request.skipServerLeave && request.options?.endNativeCall !== false
               ? leaveServerOnce()
               : undefined;
-          let result: LeaveResult = undefined;
+          let result: LeaveResult;
           try {
             try {
               await options.disconnect(request.options);
@@ -542,6 +693,7 @@ export function createCallLifecycle(options: {
               if (releasing) result = await releasing;
               else if (active && !request.skipServerLeave)
                 result = await leaveServerOnce();
+              else result = undefined;
             }
             finish(undefined, result);
           } catch (error) {
@@ -567,23 +719,33 @@ export function createCallLifecycle(options: {
   function join(
     channelId: string,
     onJoin?: () => void,
-    source: JoinSource = 'user'
+    source: JoinSource = 'user',
+    intent?: CallJoinIntent
   ): Promise<void> {
-    return startJoin(channelId, source, onJoin, true);
+    return startJoin(channelId, source, onJoin, true, intent);
   }
 
   function startJoin(
     channelId: string,
     source: JoinSource,
     onJoin?: () => void,
-    explicit = false
+    explicit = false,
+    intent?: CallJoinIntent
   ): Promise<void> {
     if (disposed) return Promise.reject(new Error('Call lifecycle disposed'));
     const state = machine.getState();
-    if (state.t === 'joining')
-      return state.request.channelId === channelId
+    if (state.t === 'joining') {
+      const targetId = intent?.kind === 'join' ? intent.callId : undefined;
+      const pendingId =
+        state.request.intent.kind === 'join'
+          ? state.request.intent.callId
+          : undefined;
+      const sameTarget =
+        !targetId || targetId.toLowerCase() === pendingId?.toLowerCase();
+      return state.request.channelId === channelId && sameTarget
         ? state.request.promise
         : Promise.reject(new Error('Already joining another call'));
+    }
     if (
       state.t === 'leaving' &&
       (state.request.options?.endNativeCall !== false ||
@@ -591,6 +753,18 @@ export function createCallLifecycle(options: {
     )
       return Promise.reject(new Error('Call is still leaving'));
     if (state.t === 'active') {
+      if (
+        state.call.channelId === channelId &&
+        intent?.kind === 'join' &&
+        intent.callId &&
+        !sameCall(state.call, { channelId, callId: intent.callId })
+      ) {
+        return Promise.reject(
+          new ThrownResultError([
+            { code: 'GONE', message: 'The call has ended' },
+          ])
+        );
+      }
       try {
         onJoin?.();
         if (state.call.channelId !== channelId) {
@@ -606,7 +780,21 @@ export function createCallLifecycle(options: {
     // Only an accepted join lets a left call back in: a refused one (still
     // leaving, joining elsewhere) must keep it out once the leave settles.
     if (explicit) forgetEndedCalls(channelId);
-    const request: Join = { ...deferred(), channelId, source, onJoin };
+    const request: Join = {
+      ...deferred(),
+      channelId,
+      source,
+      onJoin,
+      intent:
+        intent ??
+        (state.t === 'failed' && state.channelId === channelId
+          ? state.intent
+          : { kind: 'join' }),
+      pendingStart:
+        !intent && state.t === 'failed' && state.channelId === channelId
+          ? state.pendingStart
+          : undefined,
+    };
     machine.dispatch({ t: 'join', request });
     return request.promise;
   }
@@ -748,6 +936,7 @@ export function createCallLifecycle(options: {
       ...deferred(),
       channelId: call.channelId,
       source: 'restore',
+      intent: { kind: 'join', callId: call.callId ?? undefined },
       restoredCall: call,
     };
     machine.dispatch({ t: 'join', request });

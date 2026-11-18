@@ -16,7 +16,9 @@ export type AsideLayout = {
   preserveDuringResize?: boolean;
 };
 
-/** Shared starting size for every workspace navigation sidebar. */
+/** Base navigation sizes; docked wide-touch sidebars scale these bounds. */
+export const WIDE_TOUCH_ASIDE_SCALE = 1.57421875;
+
 export const DEFAULT_ASIDE_LAYOUT: AsideLayout = {
   width: 256,
   min: 224,
@@ -24,6 +26,10 @@ export const DEFAULT_ASIDE_LAYOUT: AsideLayout = {
 };
 
 export type MainLayout = {
+  /**
+   * Width Main holds beside an inline detail, which takes the rest of the
+   * shell. A drag moves it; feed `onWidthChangeEnd` back here to keep it.
+   */
   width?: number;
   min: number;
   max?: number;

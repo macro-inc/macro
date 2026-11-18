@@ -5,6 +5,7 @@ input_file: crates/folds/agent_fold/fixtures/real/resumed_and_continued.jsonl
 ---
 SessionMetadata {
     notifications: [],
+    review_revisions: [],
     noop_turn: None,
     harness: ClaudeCode,
     model: Some(

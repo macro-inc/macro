@@ -27,6 +27,7 @@ fn contact() -> FormSection {
             required: false,
             widget: None,
         }],
+        show_when: None,
     }
 }
 
@@ -36,6 +37,7 @@ fn details() -> FormSection {
         title: "Details".to_owned(),
         description: String::new(),
         questions: vec![],
+        show_when: None,
     }
 }
 
@@ -45,6 +47,7 @@ fn travel() -> FormSection {
         title: "Travel".to_owned(),
         description: String::new(),
         questions: vec![],
+        show_when: None,
     }
 }
 
@@ -200,6 +203,7 @@ fn concurrent_booking_steps_both_read_last_and_stay_repairable() {
             required: false,
             widget: None,
         }],
+        show_when: None,
     };
     let rename = replace_layout(&merged, &renamed).unwrap();
     assert_eq!(merge(&merged, &[&rename.update]), renamed);
@@ -226,6 +230,7 @@ fn concurrent_booking_steps_both_read_last_and_stay_repairable() {
                         required: false,
                         widget: None,
                     }],
+                    show_when: None,
                 },
                 details(),
                 intro_booking(),

@@ -1,5 +1,6 @@
 //! Canonical email facts and keyset pagination over synchronized Mail.
 use super::*;
+use crate::parsed_document::parsed_document;
 use cache_core::{
     engine::{Engine, EngineError},
     normalize::normalize,
@@ -157,9 +158,6 @@ fn project_with_facts(
     let all = preview_ref(record, "mailAllPreview")?;
     let draft = preview_ref(record, "mailDraftPreview")?;
     let sent = preview_ref(record, "mailSentPreview")?;
-    if all.is_none() && (draft.is_some() || sent.is_some()) {
-        return None;
-    }
     facts.push(boolean_fact(all.is_some(), "mail-has-message")?);
     for (attribute, id) in [
         ("mail-all-message", all),
@@ -247,7 +245,7 @@ pub async fn draft_optimistic_updates<S: Storage>(
     };
     let key = EntityKey::entity(TYPE, &[id]);
     let record_key = RecordKey::new(key.to_string()).map_err(error)?;
-    let parsed = Document::parse(query).map_err(error)?;
+    let parsed = parsed_document(query).map_err(error)?;
     let op = parsed.operation(operation).map_err(error)?;
     let records = normalize(schema, op, variables, data).map_err(error)?;
     let Some(record) = records.get(&key).filter(|record| {
@@ -375,7 +373,7 @@ pub async fn projection_updates_for_write<S: Storage>(
             RecordKey::new(format!("{TYPE}:{id}")).map_err(error)?,
         )]);
     }
-    let parsed = Document::parse(query).map_err(error)?;
+    let parsed = parsed_document(query).map_err(error)?;
     let op = parsed.operation(operation).map_err(error)?;
     let updates = normalize(schema, op, variables, data)
         .map_err(error)?

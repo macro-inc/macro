@@ -57,6 +57,29 @@ impl AgentCreations for PgAgentCreations {
         .await
     }
 
+    #[tracing::instrument(skip(self, person), err)]
+    async fn channel_request_sent_at(
+        &self,
+        channel_id: Uuid,
+        person: &MacroUserIdStr<'static>,
+        before: DateTime<Utc>,
+    ) -> Result<Option<DateTime<Utc>>, Self::Err> {
+        // The parent timeline index, filtered to the person.
+        sqlx::query_scalar!(
+            r#"
+            SELECT max(created_at) AS "sent_at"
+            FROM comms_messages
+            WHERE parent_entity_type = 'channel' AND parent_entity_id = $1
+              AND sender_id = $2 AND created_at < $3 AND deleted_at IS NULL
+            "#,
+            channel_id.to_string(),
+            person.as_ref(),
+            before,
+        )
+        .fetch_one(&self.pool)
+        .await
+    }
+
     #[tracing::instrument(skip(self, person, items), fields(items = items.len()), err)]
     async fn created_since(
         &self,

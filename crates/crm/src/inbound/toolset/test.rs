@@ -19,7 +19,6 @@ fn creation_conflicts_explain_what_to_change() {
             CrmError::ContactAlreadyExistsForCompany,
             "already has a contact",
         ),
-        (CrmError::ContactEmailDomainMismatch, "company's domains"),
         (CrmError::CrmDisabledForTeam, "turned off"),
     ] {
         let description = crm_error(error).description;

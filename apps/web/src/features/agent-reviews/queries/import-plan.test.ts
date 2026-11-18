@@ -1,6 +1,6 @@
 import type { ImportEntity } from '@queries/import';
 import { describe, expect, it } from 'vitest';
-import { decodeImportDraft, decodePlanEntries } from './import-plan';
+import { decodePlanEntries } from './import-plan';
 
 const row: ImportEntity = {
   id: 'roadmap',
@@ -128,34 +128,7 @@ describe('decodePlanEntries while planning', () => {
   });
 });
 
-describe('decodeImportDraft', () => {
-  it('reads the excluded and re-shared rows and rejects other drafts', () => {
-    expect(decodeImportDraft({ source: 'notion' })).toEqual({
-      source: 'notion',
-      excluded: [],
-      shared: [],
-      personal: [],
-    });
-    expect(
-      decodeImportDraft({
-        source: 'notion',
-        excluded: ['roadmap'],
-        shared: ['wiki'],
-        personal: ['q3'],
-      })
-    ).toEqual({
-      source: 'notion',
-      excluded: ['roadmap'],
-      shared: ['wiki'],
-      personal: ['q3'],
-    });
-    expect(decodeImportDraft({ subject: 'Hi' })).toBeUndefined();
-  });
-});
-
 it('decodes tracker tasks and projects while isolating review ids', () => {
-  expect(decodeImportDraft({ source: 'linear' })?.source).toBe('linear');
-  expect(decodeImportDraft({ source: 'jira' })?.source).toBe('jira');
   const decoded = decodePlanEntries(
     [
       { ...row, id: 'l', source: 'linear', kind: 'issue' },

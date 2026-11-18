@@ -29,6 +29,14 @@ export function useTeamInviteLinkQuery(
   return useQuery(() => teamInviteLinkQueryOptions(teamId(), enabled()));
 }
 
+/** The team's invite link token, from the cache when fresh; null when none. */
+export async function fetchTeamInviteLinkToken(teamId: string) {
+  const link = await queryClient.fetchQuery(
+    teamInviteLinkQueryOptions(teamId, true)
+  );
+  return link.token ?? null;
+}
+
 function setTeamInviteLink(teamId: string, token: string | null) {
   queryClient.setQueryData<TeamInviteLinkResponse>(
     teamKeys.inviteLink(teamId).queryKey,

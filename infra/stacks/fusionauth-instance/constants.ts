@@ -2,6 +2,7 @@ import { config, stack } from '../../packages/shared';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Provider } from 'pulumi-fusionauth';
+import { FUSIONAUTH_THEME_IDS } from './theme-ids';
 
 // The id of the default tenant
 export const DEFAULT_FUSIONAUTH_TENANT_ID =
@@ -89,8 +90,4 @@ export const fusionAuthProvider = new Provider('fusion-auth-provider', {
 The fusionauth custom theme. This is just a theme with a custom oauth redirect
 */
 export const FUSIONAUTH_THEME_ID =
-  stack === 'prod'
-    ? 'e486f9ac-e63f-4549-8244-ee8ed641f8a0'
-    : stack === 'dev'
-      ? '87cf78dd-03ba-478a-9211-3da0cdba9c3f'
-      : undefined;
+  stack === 'prod' || stack === 'dev' ? FUSIONAUTH_THEME_IDS[stack] : undefined;

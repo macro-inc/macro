@@ -21,3 +21,23 @@ fn initiative_property_filter_preserves_its_scope() {
         models_properties::EntityType::Initiative,
     );
 }
+
+#[test]
+fn date_ranges_keep_open_bounds_and_normalize_offsets() {
+    let value = GraphqlPropertyMatchValue::DateRange(GraphqlPropertyDateRange {
+        start: None,
+        end: Some("2026-10-21T00:00:00+05:30".to_owned()),
+    })
+    .into_ast()
+    .unwrap();
+    assert!(matches!(value, PropertyMatchValue::DateRange(range)
+        if range.start.is_none() && range.end.unwrap().to_rfc3339() == "2026-10-20T18:30:00+00:00"));
+    assert!(
+        GraphqlPropertyMatchValue::DateRange(GraphqlPropertyDateRange {
+            start: Some("not a timestamp".to_owned()),
+            end: None,
+        })
+        .into_ast()
+        .is_err()
+    );
+}

@@ -1,4 +1,5 @@
 import Newspaper from '@icon/system/regular/newspaper.svg';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
@@ -20,7 +21,7 @@ export const readAgentSessionHandler = createToolRenderer({
               <div class="max-h-96 overflow-auto space-y-3 p-3">
                 <p class="text-ink-muted">
                   {result().name} · {result().status}
-                  {result().isArchived ? ' · Archived' : ''}
+                  {isSessionArchived(result()) ? ' · Archived' : ''}
                 </p>
                 <Show when={result().truncated}>
                   <p class="text-ink-muted">

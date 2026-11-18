@@ -109,6 +109,27 @@ fn embedded_assets_select_their_consumers() {
     assert!(mixed_set.contains("collab_surface"));
 }
 
+/// The code-mode assets are generated from the SDK by a build script, so an
+/// SDK-only change must still test everything that embeds them.
+#[test]
+fn sdk_sources_select_code_mode_asset_consumers() {
+    let graph = build_graph(false).expect("cargo metadata");
+
+    let selection = select_in_repo(&graph, &["packages/sdk/src/macro.ts"]);
+    let set = selected_packages(&selection);
+    for expected in [
+        "code_mode_assets",
+        "code_execution",
+        "agent_code_mode",
+        "agent_harness_service",
+    ] {
+        assert!(
+            set.contains(expected),
+            "SDK changes must select {expected}: {selection:?}"
+        );
+    }
+}
+
 /// Drift check: every workspace package whose Rust sources mention the shared
 /// asset path must be listed in the determinator rule (and vice versa). The
 /// scan is textual, so a doc-comment mention merely over-selects safely.
@@ -463,4 +484,36 @@ fn collect_rust_files(dir: &Path, out: &mut BTreeSet<PathBuf>) {
             out.insert(path);
         }
     }
+}
+
+/// The saved metadata must select the same packages as a live `cargo metadata`, and a
+/// damaged file must fall back to one rather than fail or select nothing.
+#[test]
+fn saved_metadata_selects_what_live_metadata_selects() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("metadata.json");
+    let root = xtask_paths::workspace_root();
+    let changed = [PathBuf::from("crates/macro_user_id/src/lib.rs")];
+    let rules = repository_rules().unwrap();
+    let live = build_graph(true).expect("cargo metadata");
+    let expected = select_by_paths(&live, &changed, &rules).unwrap();
+
+    let saved_now = build_graph_with_saved_metadata(&root, &file).unwrap();
+    assert!(file.exists());
+    assert_eq!(
+        select_by_paths(&saved_now, &changed, &rules).unwrap(),
+        expected
+    );
+    let restored = build_graph_with_saved_metadata(&root, &file).unwrap();
+    assert_eq!(
+        select_by_paths(&restored, &changed, &rules).unwrap(),
+        expected
+    );
+
+    std::fs::write(&file, "{ not metadata").unwrap();
+    let recovered = build_graph_with_saved_metadata(&root, &file).unwrap();
+    assert_eq!(
+        select_by_paths(&recovered, &changed, &rules).unwrap(),
+        expected
+    );
 }

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT stage_column_id, stage_id, required_column_id FROM crm_pipeline_stage_requirements WHERE pipeline_id = $1 ORDER BY stage_column_id, stage_id, required_column_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stage_column_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "stage_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "required_column_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "58abb3bd86cd8b0efdc4a4e46927c209520c9c38af388662ea9a63ee24c0f081"
+}

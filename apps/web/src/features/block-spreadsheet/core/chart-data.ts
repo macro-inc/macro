@@ -1,7 +1,6 @@
 import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
 import {
-  type ChartGrouping,
-  type ChartKind,
+  type ChartPlot,
   type ChartRange,
   type ChartValue,
   parseChartLiteral,
@@ -9,6 +8,7 @@ import {
   type SheetChart,
 } from '@macro-inc/spreadsheet/sheet-drawings';
 import type { WorkbookCalculation } from './calculation';
+import { paletteColor } from './drawingml-colors';
 import { formatCellAddress } from './spreadsheet-document';
 import type { SpreadsheetWorkbookSheet } from './workbook-document';
 
@@ -33,13 +33,7 @@ export type ChartSeriesData = {
   sample?: string;
 };
 
-export type ChartPlotData = {
-  kind: ChartKind;
-  grouping?: ChartGrouping;
-  secondary?: boolean;
-  filled?: boolean;
-  hiLow?: boolean;
-  upDown?: boolean;
+export type ChartPlotData = Omit<ChartPlot, 'series'> & {
   series: ChartSeriesData[];
 };
 
@@ -47,6 +41,13 @@ export type ChartData = {
   title?: string;
   legend?: SheetChart['legend'];
   categories: string[];
+  /**
+   * Each point's labels from the outermost level in, for treemaps and
+   * sunbursts whose labels span several columns.
+   */
+  paths?: string[][];
+  /** No cells label the points, so they are numbered 1, 2, 3. */
+  numbered?: true;
   plots: ChartPlotData[];
   /** Colors of pie and doughnut slices. */
   palette: string[];
@@ -135,23 +136,47 @@ export function chartData(
     const target = range(reference, names);
     return target ? read(target)?.slice(0, MAX_CHART_POINTS) : undefined;
   };
+  /**
+   * A block of labels as one list per point: its rows when it is at least as
+   * tall as it is wide, else its columns.
+   */
+  const levels = (index: number): string[][] => {
+    const cells = values(index) ?? [];
+    const reference = chart.references[index] ?? '';
+    const target = !parseChartLiteral(reference) && range(reference, names);
+    if (!target) return cells.map((value) => [value.text]);
+    const width = target.right - target.left + 1;
+    const height = target.bottom - target.top + 1;
+    const across = height >= width;
+    return Array.from({ length: across ? height : width }, (_, point) =>
+      Array.from(
+        { length: across ? width : height },
+        (_, level) =>
+          cells[across ? point * width + level : level * width + point]?.text ??
+          ''
+      )
+    );
+  };
   const palette = chart.colors?.length ? chart.colors : DEFAULT_PALETTE;
   let categories: string[] | undefined;
+  let paths: string[][] | undefined;
   let count = 0;
-  const plots = chart.plots.map((plot) => ({
-    kind: plot.kind,
-    ...(plot.grouping && { grouping: plot.grouping }),
-    ...(plot.secondary && { secondary: true }),
-    ...(plot.filled && { filled: true }),
-    ...(plot.hiLow && { hiLow: true }),
-    ...(plot.upDown && { upDown: true }),
-    series: plot.series.map((series) => {
+  const plots = chart.plots.map(({ series: plotSeries, ...plot }) => ({
+    ...plot,
+    series: plotSeries.map((series) => {
       const index = count++;
       const points = values(series.values) ?? [];
       const labels = values(series.categories);
       // Scatter and bubble charts plot numbers on both axes.
       const xy = plot.kind === 'scatter' || plot.kind === 'bubble';
-      if (!xy && labels && !categories)
+      const nested = plot.kind === 'treemap' || plot.kind === 'sunburst';
+      if (nested && series.categories !== undefined && !paths) {
+        paths = levels(series.categories);
+        // A point is named by its innermost label.
+        categories = paths.map(
+          (path) => path.findLast((label) => label.trim()) ?? ''
+        );
+      } else if (!xy && labels && !categories)
         categories = labels.map((value) => value.text);
       // A pivot chart's series are named as its pivot table names them.
       const name =
@@ -164,7 +189,7 @@ export function chartData(
         `Series ${index + 1}`;
       return {
         name,
-        color: series.color ?? palette[index % palette.length],
+        color: series.color ?? paletteColor(palette, index),
         values: points.map((value) => value.number ?? null),
         // Text among the x values numbers the points 1, 2, 3, as in Excel.
         ...(xy && {
@@ -201,6 +226,8 @@ export function chartData(
     categories:
       categories ??
       Array.from({ length: longest }, (_, index) => `${index + 1}`),
+    ...(!categories && { numbered: true as const }),
+    ...(paths && { paths }),
     plots,
     palette,
   };

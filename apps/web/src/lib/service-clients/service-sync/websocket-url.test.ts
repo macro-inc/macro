@@ -11,10 +11,13 @@ vi.mock('@core/constant/featureFlags', () => ({
     return auth.bearer;
   },
 }));
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: { 'document-storage-service': 'https://gateway.test/dss' },
 }));
-vi.mock('@core/util/fetchWithToken', () => ({ fetchToken: auth.cookie }));
+vi.mock('@core/util/fetchWithToken', () => ({
+  ensureFreshSession: auth.cookie,
+}));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: auth.token }));
 
 import { resolveSyncRouterWsUrl } from './websocket-url';
@@ -26,7 +29,7 @@ beforeEach(() => {
 });
 
 describe('dedicated DSS sync socket credentials', () => {
-  it('preserves the DSS gateway prefix and refreshes cookies on each connection', async () => {
+  it('preserves the DSS gateway prefix and ensures fresh cookies on each connection', async () => {
     expect(await resolveSyncRouterWsUrl()).toBe(
       'wss://gateway.test/dss/sync/ws'
     );

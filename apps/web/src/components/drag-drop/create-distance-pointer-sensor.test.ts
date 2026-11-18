@@ -56,11 +56,14 @@ vi.mock('@thisbeyond/solid-dnd', () => ({
 
 let dispose: (() => void) | undefined;
 const onCancel = vi.fn();
-function setup(distance = 10) {
+function setup(
+  distance = 10,
+  options?: Parameters<typeof createDistancePointerSensor>[2]
+) {
   let sensor!: ReturnType<typeof createDistancePointerSensor>;
   createRoot((cleanup) => {
     dispose = cleanup;
-    sensor = createDistancePointerSensor(distance, onCancel);
+    sensor = createDistancePointerSensor(distance, onCancel, options);
   });
   const press = (x = 10, y = 20, button = 0) =>
     mock.press(
@@ -106,6 +109,38 @@ describe('distance-only mouse sensor', () => {
     expect(mock.actions.dragStart).not.toHaveBeenCalled();
     expect(up().defaultPrevented).toBe(false);
     expect(mock.actions.dragStart).not.toHaveBeenCalled();
+  });
+
+  it('allows a scoped manual activator without adding a global hold-to-drag handler', () => {
+    vi.useFakeTimers();
+    const { sensor, press, move, up } = setup(8, {
+      id: 'section-pointer',
+      manual: true,
+    });
+    expect(mock.actions.addSensor).toHaveBeenCalledWith({
+      id: 'section-pointer',
+      activators: {},
+    });
+
+    press();
+    move(100, 100);
+    expect(mock.actions.dragStart).not.toHaveBeenCalled();
+
+    sensor.start(
+      new MouseEvent('mousedown', { clientX: 10, clientY: 20 }),
+      'section'
+    );
+    vi.advanceTimersByTime(5000);
+    move(18, 20);
+    expect(mock.actions.dragStart).not.toHaveBeenCalled();
+    move(19, 20);
+    expect(mock.actions.sensorStart).toHaveBeenCalledWith('section-pointer', {
+      x: 10,
+      y: 20,
+    });
+    expect(mock.actions.dragStart).toHaveBeenCalledWith('section');
+    up();
+    expect(mock.actions.sensorEnd).toHaveBeenCalledOnce();
   });
 
   it('starts beyond the threshold with the press coordinates and clears selection', () => {

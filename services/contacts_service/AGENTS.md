@@ -43,3 +43,5 @@ outbox worker that notifies `connection_gateway`.
 ## Related
 
 - Domain crate: `crates/contacts`
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

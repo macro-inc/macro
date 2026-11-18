@@ -5,6 +5,8 @@
 /// What a column's values would do under each type (`GET …/casts`), and
 /// what they become under one (`POST …/conversion`).
 pub mod casts;
+/// Database duplication transport.
+pub mod duplicate;
 /// The change journal: a row's history
 /// (`GET /{id}/tables/{table_id}/rows/{row_id}/history`) and undoing a change
 /// (`POST /{id}/changes/{change}/undo`).
@@ -21,11 +23,13 @@ mod test;
 pub mod transfer;
 /// A board's card places: `GET /{id}/views/{view_id}/positions`.
 pub mod views;
+use crate::domain::duplicate::DatabaseDuplicateService;
 use crate::domain::sharing::DatabaseSharingService;
 use crate::domain::transfer::DatabaseTransferService;
 use casts::{column_casts_handler, column_conversion_handler};
 use models_databases::{DatabaseId, TableId};
 use std::sync::Arc;
+use tracing::Level;
 
 use axum::{
     Json, Router,
@@ -116,7 +120,10 @@ pub fn databases_router<Service, EntityAccess, Authorization, RouterState>(
     state: DatabasesRouterState<Service, EntityAccess, Authorization>,
 ) -> Router<RouterState>
 where
-    Service: DatabasesService + DatabaseSharingService + DatabaseTransferService,
+    Service: DatabasesService
+        + DatabaseSharingService
+        + DatabaseTransferService
+        + DatabaseDuplicateService,
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
     RouterState: Send + Sync + 'static,
@@ -135,11 +142,8 @@ where
             "/",
             post(create_database_handler::<Service, EntityAccess, Authorization>),
         )
-        // Static segments win over `/{id}`, so these never read as a database.
-        .route(
-            "/queries",
-            post(saved_queries::save_query_handler::<Service, EntityAccess, Authorization>),
-        )
+        // Static segments win over `/{id}`, so this never reads as a database.
+        // Saving a query compiles it, so that route is `databases_sql`'s.
         .route(
             "/queries/{query_id}",
             get(saved_queries::get_query_handler::<Service, EntityAccess, Authorization>),
@@ -147,6 +151,14 @@ where
         .route(
             "/{id}",
             get(get_database_handler::<Service, EntityAccess, Authorization>),
+        )
+        .route(
+            "/{id}/appearance",
+            put(set_database_appearance::<Service, EntityAccess, Authorization>),
+        )
+        .route(
+            "/{id}/duplicate",
+            post(duplicate::duplicate_database_handler::<Service, EntityAccess, Authorization>),
         )
         .route(
             "/{id}/awareness",
@@ -201,12 +213,34 @@ pub(crate) fn viewer_of<Authorization>(
     }
 }
 
+/// The agent an SDK token (code mode) carries, recorded on the current span.
+/// A creation made with it is attributed to the agent, like the native tool's,
+/// so channel delivery can share what the agent made for the request; access
+/// checks still run as the plain user ([`viewer_of`]).
+pub(crate) fn agent_attribution<Authorization>(
+    user: &MacroAuthorizationExtractor<Authorization, UserOrInternal>,
+) -> Option<bot_id::BotId> {
+    let acting_bot = user.authorization.user.agent_id;
+    tracing::Span::current().record(
+        "acting_bot",
+        tracing::field::display(
+            acting_bot.map_or_else(|| "none".to_owned(), |bot| bot.to_string()),
+        ),
+    );
+    acting_bot
+}
+
 /// Request body for creating a database.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateDatabaseRequest {
     /// Display name.
     pub name: String,
+    /// The first table's display name; "Table 1" when omitted. Name it when
+    /// you are about to fill a table, and build into it rather than adding a
+    /// second table beside an empty "Table 1".
+    #[serde(default)]
+    pub first_table: Option<String>,
 }
 
 /// Path params for the column routes.
@@ -246,8 +280,8 @@ where
     Ok(Json(databases))
 }
 
-/// Create a database owned by the caller; its first table, "Table 1", holds a
-/// "Name" text column.
+/// Create a database owned by the caller; its first table, "Table 1" unless
+/// `firstTable` names it, holds a "Name" text column.
 #[utoipa::path(
     post,
     tag = "databases",
@@ -261,7 +295,7 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err, skip_all, fields(acting_bot = tracing::field::Empty))]
 pub async fn create_database_handler<Service, EntityAccess, Authorization>(
     State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,
     user: MacroAuthorizationExtractor<Authorization, UserOrInternal>,
@@ -272,12 +306,14 @@ where
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
 {
+    let acting_bot = agent_attribution(&user);
     let database = state
         .service
         .create_database(CreateDatabase {
             name: request.name,
             owner_id: viewer_of(&user).user_id,
-            acting_bot: None,
+            acting_bot,
+            first_table: request.first_table,
         })
         .await?;
     Ok((StatusCode::CREATED, Json(database)))
@@ -298,7 +334,7 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn get_database_handler<Service, EntityAccess, Authorization>(
     access: DatabaseAccessLevelExtractor<ViewAccessLevel, EntityAccess, Authorization>,
     State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,
@@ -313,6 +349,33 @@ where
         .get_database(access.entity_access_receipt)
         .await?;
     Ok(Json(detail))
+}
+
+/// Replace a database's icon and color without changing its content timestamp.
+#[utoipa::path(put, tag = "databases", operation_id = "set_database_appearance",
+    path = "/databases/{id}/appearance",
+    params(("id" = Uuid, Path, description = "Database id")),
+    request_body = model_entity::EntityAppearance,
+    responses((status = 200, body = model_entity::EntityAppearance),
+        (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn set_database_appearance<Service, EntityAccess, Authorization>(
+    access: DatabaseAccessLevelExtractor<EditAccessLevel, EntityAccess, Authorization>,
+    State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,
+    Json(appearance): Json<model_entity::EntityAppearance>,
+) -> Result<Json<model_entity::EntityAppearance>, DatabaseError>
+where
+    Service: DatabasesService,
+    EntityAccess: EntityAccessService,
+    Authorization: MacroAuthorizationService,
+{
+    Ok(Json(
+        state
+            .service
+            .set_appearance(access.entity_access_receipt, appearance)
+            .await?,
+    ))
 }
 
 /// Tell a database's other viewers where the caller is.
@@ -422,6 +485,7 @@ impl IntoResponse for DatabaseError {
             DatabaseError::InvalidSchemaOperation(_)
             | DatabaseError::InvalidSharing(_)
             | DatabaseError::InvalidOp(_) => StatusCode::BAD_REQUEST,
+            DatabaseError::InvalidAppearance(_) => StatusCode::BAD_REQUEST,
             DatabaseError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let message = match self {

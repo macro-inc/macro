@@ -1,4 +1,6 @@
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import type { ReviewUpdates } from '../../agent-reviews/queries/reviews';
 import { PersistedReview } from '../../agent-reviews/views/persisted-review';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import { WorkingLine } from '../ui/WorkingLine';
@@ -52,12 +54,27 @@ export function PresentedReviewPart(props: {
     )
       setPendingDecision(undefined);
   });
+  // The one place a card chooses: inside its own session's view, the log
+  // announces each saved revision; anywhere else (activity snapshots in DMs
+  // and channels) it polls.
+  const updates = (): ReviewUpdates =>
+    session?.sessionId() === props.sessionId
+      ? {
+          kind: 'announced',
+          revision: () =>
+            session
+              .metadata()
+              ?.reviewRevisions.find(
+                (announced) => announced.reviewId === props.reviewId
+              )?.revision,
+        }
+      : { kind: 'polled' };
   const canAct = () =>
     Boolean(
       session?.sessionId() === props.sessionId &&
         session.userId() &&
         session.session()?.canEdit &&
-        !session.session()?.isArchived
+        !isSessionArchived(session.session())
     );
   return (
     <>
@@ -65,7 +82,7 @@ export function PresentedReviewPart(props: {
         sessionId={props.sessionId}
         reviewId={props.reviewId}
         canAct={canAct()}
-        ownerId={session?.session()?.ownerId}
+        updates={updates()}
         eventId={latestNotification()?.id}
         onDecision={() =>
           setPendingDecision({ previousEvent: latestNotification()?.id })

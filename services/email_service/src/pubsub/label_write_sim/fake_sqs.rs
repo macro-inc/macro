@@ -13,6 +13,9 @@ use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 
+#[cfg(test)]
+mod test;
+
 #[derive(Clone, Debug)]
 pub struct Sent {
     pub queue_url: String,
@@ -54,7 +57,8 @@ impl FakeSqs {
             .expect("bind fake sqs");
         let url = format!("http://{}", listener.local_addr().unwrap());
         let fake = FakeSqs { state, url };
-        let app = Router::new().fallback(handle).with_state(fake.clone());
+        let app =
+            Router::new().fallback_service(axum::routing::post(handle).with_state(fake.clone()));
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
         fake
     }

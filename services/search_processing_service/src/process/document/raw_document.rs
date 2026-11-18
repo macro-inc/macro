@@ -18,14 +18,14 @@ use s3_key::{
     build_docx_to_pdf_converted_document_key,
 };
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 use crate::parsers::pdf::parse_pdf_pages;
 use crate::{
     parsers::{
         ai::parse_ai_text, fig::parse_fig_pages, markdown::parse_markdown_legacy,
-        psd::parse_psd_text,
+        psd::parse_psd_text, text::decode_text,
     },
-    process::document::document_info::{DocumentInfo, get_document_info},
+    process::document::document_info::{DocumentInfo, IndexableDocument, get_document_info},
     process::properties::to_indexed_properties,
 };
 
@@ -127,6 +127,7 @@ async fn attach_indexed_properties(
 /// Returns `None` when the document has no file type.
 fn generate_parent_only_upsert(
     document_info: DocumentMetadata,
+    is_email_attachment: bool,
 ) -> anyhow::Result<Option<UpsertDocumentArgs>> {
     let Some(file_type) = document_info.file_type else {
         return Ok(None);
@@ -142,6 +143,7 @@ fn generate_parent_only_upsert(
         updated_at_millis: EpochMillis::new(Utc::now().timestamp_millis())?,
         sub_type: document_info.sub_type.map(|st| st.to_string()),
         properties: vec![],
+        is_email_attachment,
     }))
 }
 
@@ -153,7 +155,10 @@ async fn update_search_with_parent_only_document(
     db: &sqlx::Pool<sqlx::Postgres>,
     search_extractor_message: &SearchExtractorMessage,
 ) -> anyhow::Result<()> {
-    let document_info = match get_document_info(db, search_extractor_message)
+    let IndexableDocument {
+        metadata: document_info,
+        is_email_attachment,
+    } = match get_document_info(db, search_extractor_message)
         .await
         .context("failed to get document info")?
     {
@@ -175,7 +180,7 @@ async fn update_search_with_parent_only_document(
         }
     };
 
-    let Some(args) = generate_parent_only_upsert(document_info)? else {
+    let Some(args) = generate_parent_only_upsert(document_info, is_email_attachment)? else {
         tracing::debug!("file type is none");
         return Ok(());
     };
@@ -220,7 +225,8 @@ async fn read_design_text(file_type: FileType, content: Vec<u8>) -> anyhow::Resu
 }
 
 /// Indexes a file its parser cannot read (a password-protected or damaged
-/// PDF, or a design that is old, damaged, or too large to decode here) by
+/// PDF, a design that is old, damaged, or too large to decode here, or a
+/// text file whose bytes are binary or in an unrecognized encoding) by
 /// name only, dropping the text an earlier version left, so it stays
 /// findable. Reading it again would fail the same way, so this is not an
 /// error to retry.
@@ -311,7 +317,10 @@ pub async fn update_search_with_raw_document(
     }
 
     // This ensures we only process the latest version
-    let document_info = match get_document_info(db, search_extractor_message)
+    let IndexableDocument {
+        metadata: document_info,
+        is_email_attachment,
+    } = match get_document_info(db, search_extractor_message)
         .await
         .context("failed to get document info")?
     {
@@ -389,7 +398,7 @@ pub async fn update_search_with_raw_document(
 
     let mut upserts: Vec<UpsertDocumentArgs> = match file_type {
         FileType::Pdf | FileType::Docx => {
-            #[cfg(feature = "pdf")]
+            #[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
             {
                 let Some(pages_content) =
                     parse_pdf_pages(content).context("unable to parse pdf")?
@@ -415,10 +424,11 @@ pub async fn update_search_with_raw_document(
                         updated_at_millis,
                         sub_type: sub_type.clone(),
                         properties: vec![],
+                        is_email_attachment,
                     })
                     .collect()
             }
-            #[cfg(not(feature = "pdf"))]
+            #[cfg(not(all(feature = "pdf", not(feature = "no_pdf"))))]
             {
                 let _ = content;
                 tracing::debug!("pdf/docx indexing skipped: pdf feature disabled");
@@ -445,6 +455,7 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 })
                 .collect()
         }
@@ -461,6 +472,7 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 }],
                 read => {
                     if let Err(error) = &read {
@@ -479,8 +491,16 @@ pub async fn update_search_with_raw_document(
             // NOTE: this is legacy now. MD parsing mainly happens through sync service via
             // LexicalClient
             tracing::trace!("markdown parsing from DSS is deprecated");
-            let result = parse_markdown_legacy(&String::from_utf8(content)?)
-                .context("unable to parse markdown")?;
+            let Some(content) = decode_text(content, file_type) else {
+                tracing::warn!("indexing markdown that is not text by name only");
+                return update_search_with_unreadable_file(
+                    opensearch_client,
+                    db,
+                    search_extractor_message,
+                )
+                .await;
+            };
+            let result = parse_markdown_legacy(&content).context("unable to parse markdown")?;
             result
                 .into_iter()
                 .map(|result| UpsertDocumentArgs {
@@ -494,11 +514,20 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 })
                 .collect::<Vec<UpsertDocumentArgs>>()
         }
         file_type => {
-            let content = String::from_utf8(content)?;
+            let Some(content) = decode_text(content, file_type) else {
+                tracing::warn!("indexing a file that is not text by name only");
+                return update_search_with_unreadable_file(
+                    opensearch_client,
+                    db,
+                    search_extractor_message,
+                )
+                .await;
+            };
             if content.is_empty() {
                 vec![]
             } else {
@@ -513,6 +542,7 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 }]
             }
         }
@@ -534,6 +564,7 @@ pub async fn update_search_with_raw_document(
 fn generate_upserts(
     document_info: DocumentMetadata,
     markdown_result: Vec<MarkdownParseResult>,
+    is_email_attachment: bool,
 ) -> anyhow::Result<Vec<UpsertDocumentArgs>> {
     let result = markdown_result;
     let updated_at_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
@@ -559,6 +590,7 @@ fn generate_upserts(
             updated_at_millis,
             sub_type: sub_type.clone(),
             properties: vec![],
+            is_email_attachment,
         })
         .collect::<Vec<UpsertDocumentArgs>>();
 
@@ -584,7 +616,10 @@ pub async fn update_search_with_sync_document(
         }
     }
 
-    let document_info = match get_document_info(db, search_extractor_message)
+    let IndexableDocument {
+        metadata: document_info,
+        is_email_attachment,
+    } = match get_document_info(db, search_extractor_message)
         .await
         .context("failed to get document info")?
     {
@@ -625,8 +660,8 @@ pub async fn update_search_with_sync_document(
     };
 
     let sub_type = document_info.sub_type.as_ref().map(|st| st.to_string());
-    let mut upserts =
-        generate_upserts(document_info, result).context("unable to generate upserts")?;
+    let mut upserts = generate_upserts(document_info, result, is_email_attachment)
+        .context("unable to generate upserts")?;
 
     attach_indexed_properties(db, document_id, sub_type.as_deref(), &mut upserts).await?;
 

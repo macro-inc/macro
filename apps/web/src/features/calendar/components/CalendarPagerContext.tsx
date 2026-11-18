@@ -203,6 +203,17 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
       rotatePages(destination, direction),
   });
 
+  // A page mounted after the active one starts beside the period that page
+  // shows by then, which a navigation may already have moved.
+  const initialDateFor = (id: CalendarPageId) => {
+    const order = pageOrder();
+    const offset = order.indexOf(id) - order.indexOf(activePageId());
+    const activeDate = activePage()?.api()?.getDate();
+    if (offset === 0 || !activeDate) return initialDates[id];
+
+    return shiftedDateForView(activeDate, periodView(), offset < 0 ? -1 : 1);
+  };
+
   const registerPage = (handle: CalendarPageHandle) => {
     pageHandles.set(handle.id, handle);
     notifyPageRegistryChange();
@@ -265,6 +276,22 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     setRequestedDate(date);
     props.onNavigate();
     scheduleActiveUpdate();
+  };
+
+  const navigateToToday = () => {
+    const now = new Date();
+    gotoDate(now);
+    // Scroll after the active grid renders. A newer navigation clears this job
+    // together with the date update, so it cannot scroll an unrelated period.
+    renderQueue.enqueue('scroll-to-now', () => {
+      activePage()
+        ?.api()
+        ?.scrollToTime({
+          // Keep the current-time marker below the scroller's top fade.
+          minutes: Math.max(0, now.getHours() * 60 + now.getMinutes() - 60),
+        });
+      copyActiveScrollPosition();
+    });
   };
 
   const finishDateNavigation = async (
@@ -387,13 +414,13 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     navigationDate,
     activeTeamEvents: () => activePage()?.teamEvents?.() ?? [],
     visibleRange: () => activeData()?.range(),
-    initialDateFor: (id: CalendarPageId) => initialDates[id],
+    initialDateFor,
     isActive: (id: CalendarPageId) => activePageId() === id,
     registerPage,
     updateSize,
     gotoDate,
     navigateToDate,
-    navigateToToday: () => navigateToDate(new Date()),
+    navigateToToday,
     previousPeriod: () => navigatePeriod('previous'),
     nextPeriod: () => navigatePeriod('next'),
     changeView,

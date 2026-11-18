@@ -72,6 +72,7 @@ impl NotificationRepository for MockNotifRepo {
     async fn get_unsubscribed_users<'a>(
         &self,
         _: &str,
+        _: bool,
         _: &[macro_user_id::user_id::MacroUserIdStr<'a>],
     ) -> Result<std::collections::HashSet<macro_user_id::user_id::MacroUserIdStr<'static>>, Report>
     {
@@ -121,6 +122,14 @@ impl NotificationRepository for MockNotifRepo {
         _: &macro_user_id::user_id::MacroUserIdStr<'_>,
         _: &[uuid::Uuid],
         _: bool,
+    ) -> Result<Vec<crate::domain::models::UserNotificationRow<serde_json::Value>>, Report> {
+        unimplemented!()
+    }
+    async fn reopen_notifications(
+        &self,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        _: &[uuid::Uuid],
+        _: &[uuid::Uuid],
     ) -> Result<Vec<crate::domain::models::UserNotificationRow<serde_json::Value>>, Report> {
         unimplemented!()
     }

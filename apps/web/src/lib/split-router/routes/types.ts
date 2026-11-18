@@ -98,9 +98,14 @@ export type SplitRouteRemountContext = {
 };
 
 export type SplitRoutePreloadContext<TParams = SplitRouteParams> = {
+  /** Entity declared by the destination leaf, when it has one. */
+  reference?: SplitReference;
+  /** Full destination for an ancestor that owns shared resource preloading. */
+  location: SplitLocation;
   params: TParams;
   search: SplitSearchState | undefined;
   intent: PreloadIntent;
+  /** Cache admission survives navigation commit; aborts on router disposal. */
   signal: AbortSignal;
 };
 

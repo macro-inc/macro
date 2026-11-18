@@ -35,6 +35,19 @@ pub trait DatabaseCellWriter: DatabaseWriteTransaction {
         value: Option<PropertyValue>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Set one property on many entities of one type, each to its value,
+    /// or with `None` clear it: a statement each way however many entities
+    /// there are, for a use case storing a whole column at once. Answers how
+    /// many stored values changed. The caller holds the locks that serialize
+    /// writers of these values.
+    fn set_entity_values_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        values: &[(String, Option<PropertyValue>)],
+    ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
+
     /// What these entities of one type hold, read inside the transaction so
     /// a use case sees what its own locks guard: each entity's properties
     /// with a value, or only those of `definitions` when given, as

@@ -17,6 +17,12 @@ union FromPeer {
   5 -> struct PeerRegisterId {
     uint64 peerid;
   }
+  // Comment publication is validated even for editors. Older servers reject
+  // this variant rather than accepting an unchecked structural text change.
+  6 -> struct PeerCommentUpdate {
+    byte[][] updates;
+    string id;
+  }
 }
 
 union FromRemote {

@@ -1,4 +1,4 @@
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createSelector, createSignal } from 'solid-js';
 import {
   createSelectionState,
   type SelectionState,
@@ -135,6 +135,8 @@ export function createListController<TItem, TMetadata = unknown>(
     const result = itemResultFor(key);
     return result && canNavigateTo(result, forcedFocus()) ? result : undefined;
   });
+
+  const isFocused = createSelector(() => focusedResult()?.key);
 
   // Where the focused item last sat: the list it sat in and its index. Only
   // the reference is kept, so lists pay nothing per change; neighbours are
@@ -392,8 +394,10 @@ export function createListController<TItem, TMetadata = unknown>(
     const result = selectableResult(rowKey);
     return result ? selectionKeyForResult(result) : undefined;
   };
-  const isSelectionKeySelected = (selectionKey: ListKey) =>
-    effectiveSelectionKeys().has(selectionKey);
+  const isSelectionKeySelected = createSelector(
+    effectiveSelectionKeys,
+    (selectionKey: ListKey, keys) => keys.has(selectionKey)
+  );
   const isRowSelected = (rowKey: ListKey) => {
     const selectionKey = selectionKeyForRow(rowKey);
     return selectionKey !== undefined && isSelectionKeySelected(selectionKey);
@@ -551,6 +555,7 @@ export function createListController<TItem, TMetadata = unknown>(
   return {
     items,
     focus: {
+      isFocused,
       requestedKey: requestedFocusKey,
       key: () => focusedResult()?.key,
       item: () => focusedResult()?.item,

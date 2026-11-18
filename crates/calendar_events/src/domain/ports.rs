@@ -1,8 +1,10 @@
 //! Ports implemented by calendar adapters.
 
+use std::collections::HashMap;
 use std::future::Future;
 
 use chrono::{DateTime, Utc};
+use futures::future::BoxFuture;
 use rootcause::Report;
 use uuid::Uuid;
 
@@ -12,8 +14,9 @@ use super::ics::{
     IcsParticipant,
 };
 use super::join_requests::{CalendarJoinRequest, CalendarJoinRequestStatus};
+use super::labels::{EventCopy, EventLabels};
 use super::meeting_links::{
-    CreateEventWithMacroCallError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
+    MacroCallEventError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
 };
 use super::models::{
     ActorInboxes, AlignedGuestCopy, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
@@ -23,11 +26,11 @@ use super::models::{
     CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarMentionPreview,
     CalendarMentionRequestItem, CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome,
     CalendarReminderDispatchMessage, CalendarReminderFiring, CalendarReminderSweepSummary,
-    CalendarSyncStatus, DisconnectedCalendar, DueCalendarReminder, EventDetails,
-    GoogleCalendarSyncSnapshot, GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan,
-    GoogleWatchChannel, GoogleWatchConfig, GuestPolicy, MeetingCopy, OccurrenceListing,
-    OccurrenceRange, OwnedInbox, ProviderCalendar, ProviderCalendarTarget, StoredGoogleCalendar,
-    TeamOutOfOffice, VisibleCalendar,
+    CalendarSyncFailure, CalendarSyncHealth, CalendarSyncStatus, DisconnectedCalendar,
+    DueCalendarReminder, EventDetails, GoogleCalendarSyncSnapshot, GoogleEventSyncBatch,
+    GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, GuestPolicy,
+    MeetingCopy, OccurrenceListing, OccurrenceRange, OwnedInbox, ProviderCalendar,
+    ProviderCalendarTarget, StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -72,6 +75,30 @@ impl CalendarProviderError {
     pub fn message(&self) -> &str {
         &self.message
     }
+}
+
+impl From<CalendarProviderErrorKind> for CalendarSyncFailure {
+    /// A sync that fails for any reason a retry can clear is transient.
+    fn from(kind: CalendarProviderErrorKind) -> Self {
+        match kind {
+            CalendarProviderErrorKind::Permanent => Self::Permanent,
+            CalendarProviderErrorKind::ReauthRequired => Self::ReauthRequired,
+            CalendarProviderErrorKind::Transient
+            | CalendarProviderErrorKind::SyncTokenExpired
+            | CalendarProviderErrorKind::PushUnsupported => Self::Transient,
+        }
+    }
+}
+
+/// Reads how current a requester's calendar data is.
+pub trait CalendarSyncHealthReader: Send + Sync + 'static {
+    /// The freshness of every calendar visible to the requester, as
+    /// `list_visible_calendars` lists them, and the inboxes whose first sync
+    /// has listed none yet.
+    fn calendar_sync_health(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<CalendarSyncHealth, Report>> + Send;
 }
 
 /// Stable identifiers and sync policy for one provider calendar fetch.
@@ -436,6 +463,33 @@ pub trait CalendarCopyConfirmation: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<CopyRefusal>, CalendarMutationError>> + Send;
 }
 
+/// Reads what an update builds on when it has to add to stored content.
+pub trait CalendarEventDetailsReader: Send + Sync + 'static {
+    /// The stored details of the event or occurrence `scope` addresses,
+    /// refused like an update when the requester cannot write that copy.
+    fn details_for_update(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        scope: &CalendarUpdateScope,
+    ) -> impl Future<Output = Result<EventDetails, CalendarMutationError>> + Send;
+}
+
+/// Inbound service port labelling events for a reader outside the calendar,
+/// such as search. Those readers hold it as a trait object, so it boxes its
+/// future.
+pub trait CalendarEventLabelReader: Send + Sync + 'static {
+    /// How each of `event_ids` reads for the requester. A caller resolves who
+    /// may see them first; an event that is on none of the requester's
+    /// calendars comes back with nothing to say.
+    fn event_labels<'a>(
+        &'a self,
+        requester_id: &'a str,
+        event_ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<HashMap<Uuid, EventLabels>, Report>>;
+}
+
 /// Inbound service port for querying calendar occurrence projections.
 pub trait CalendarOccurrenceService: Send + Sync + 'static {
     /// Return occurrences visible to a requester in a bounded viewport.
@@ -552,6 +606,9 @@ pub struct RetiredCalendarEvent {
     /// Whether the row is now gone. `false` means it was rewritten from a
     /// remaining source.
     pub deleted: bool,
+    /// Whether teammates' out-of-office rows may have changed. `false`
+    /// certifies that nothing retired here fed that overlay.
+    pub team_ooo_changed: bool,
 }
 
 /// Persistence operations used by calendar business logic.
@@ -729,13 +786,15 @@ pub trait CalendarRepository: Send + Sync + 'static {
     /// fencing token: store the message, stamp the time, and bump the
     /// consecutive-failure counter that gates whether the failure surfaces to
     /// the user. The calendar's sync state is left untouched so the next poll
-    /// retries it. A successful `commit_google_calendar_sync` clears all three.
+    /// retries it. A successful `commit_google_calendar_sync` clears them all,
+    /// as it does the failure's `kind`.
     fn record_google_calendar_sync_error(
         &self,
         key: CalendarBackfillJobKey,
         lease_token: Uuid,
         account_id: Uuid,
         calendar_id: Uuid,
+        kind: CalendarSyncFailure,
         message: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
@@ -859,6 +918,13 @@ pub trait CalendarRepository: Send + Sync + 'static {
         requester_id: &str,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
 
+    /// The copies `event_ids` name, whoever asks: a caller resolves who may
+    /// see them first. An id with no event is absent.
+    fn event_copies(
+        &self,
+        event_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<EventCopy>, Report>> + Send;
+
     /// Every connected inbox the requester owns
     /// (`email_links.macro_id = requester`). Raw and unnormalized;
     /// [`ActorInboxes::from_owned`] is the single normalization point.
@@ -918,10 +984,10 @@ pub enum CalendarJoinRequestError {
 /// and for sharers reading the requests on their events.
 pub trait CalendarJoinRequestService: Send + Sync + 'static {
     /// Ask the person who shared an event with one of the requester's
-    /// channels to add them as a guest, notifying them when the request
-    /// becomes pending. Asking again while pending changes nothing; asking
-    /// after a decline is refused with `Declined`, so the sharer is asked
-    /// only once.
+    /// channels to add them as a guest. When the request becomes pending this
+    /// notifies them and refreshes the open request lists of their inbox's
+    /// viewers. Asking again while pending changes nothing; asking after a
+    /// decline is refused with `Declined`, so the sharer is asked only once.
     fn request_to_join(
         &self,
         requester_id: &str,
@@ -948,6 +1014,16 @@ pub trait CalendarRefreshNotifier: Send + Sync + 'static {
         owner_id: &str,
         email_link_id: Uuid,
         team_ooo_changed: bool,
+    ) -> impl Future<Output = ()> + Send;
+
+    /// Signal that the request to join `event_id` by `requester_id` was
+    /// answered. The requester views the event through a channel share, so
+    /// [`Self::calendar_changed`], which reaches the viewers of the sharer's
+    /// inbox, never reaches them.
+    fn join_request_answered(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
     ) -> impl Future<Output = ()> + Send;
 }
 
@@ -1098,15 +1174,15 @@ pub trait CalendarEventForwardSource: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send;
 }
 
-/// Inbound service port creating events that carry a Macro call.
+/// Inbound service port writing events that carry a Macro call.
 ///
-/// The meeting is minted before the calendar write, so the one invitation
-/// attendees receive already names the call, and its join link travels in
-/// the event's description and location. Hosts that mint meetings compose a
+/// The meeting is minted before the calendar write, so the one invitation or
+/// update attendees receive already names the call, and its join link travels
+/// in the event's description and location. Hosts that mint meetings compose a
 /// [`CalendarMutationService`] with a [`MeetingLinkProvider`] through
-/// [`super::meeting_links::create_event_with_macro_call`]; hosts that are
-/// not the calendar write authority forward the request to the calendar
-/// service.
+/// [`super::meeting_links::create_event_with_macro_call`] and
+/// [`super::meeting_links::update_event_with_macro_call`]; hosts that are not
+/// the calendar write authority forward the request to the calendar service.
 pub trait CalendarMacroCallService: Send + Sync + 'static {
     /// Mint a Macro call for `draft` and create the event carrying its link.
     fn create_event_with_macro_call(
@@ -1115,7 +1191,17 @@ pub trait CalendarMacroCallService: Send + Sync + 'static {
         email_link_id: Option<Uuid>,
         calendar_id: Option<Uuid>,
         draft: CalendarEventDraft,
-    ) -> impl Future<Output = Result<CalendarEvent, CreateEventWithMacroCallError>> + Send;
+    ) -> impl Future<Output = Result<CalendarEvent, MacroCallEventError>> + Send;
+
+    /// Switch an event to a Macro call, applying `patch` in the same write.
+    fn update_event_with_macro_call(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
+    ) -> impl Future<Output = Result<CalendarEvent, MacroCallEventError>> + Send;
 }
 
 /// Outbound port minting Macro meetings for calendar events.

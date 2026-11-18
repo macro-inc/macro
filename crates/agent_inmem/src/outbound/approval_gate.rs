@@ -8,7 +8,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use agent_egress::domain::approval::{
-    InProcessCall, MACRO_SERVER_SLUG, ToolApprovalService, refusal, spends_owner_access,
+    InProcessCall, MACRO_SERVER_SLUG, OwnerApprovals, ToolApprovalService, refusal,
+    spends_owner_access,
 };
 use agent_egress::domain::ports::{ToolApprovalAnnouncer, ToolApprovalSignals, ToolApprovalStore};
 use agent_session::domain::model::AgentSessionId;
@@ -142,5 +143,14 @@ where
                     NativeToolVerdict::Refuse(UNDECIDED.to_owned())
                 })
         })
+    }
+
+    /// The egress proxy holds remote MCP calls for the owner itself.
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _session: AgentSessionId,
+        _tool: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
     }
 }

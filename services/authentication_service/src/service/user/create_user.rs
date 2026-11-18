@@ -38,6 +38,7 @@ pub async fn create_user(
     is_verified: bool,
     db: &sqlx::Pool<sqlx::Postgres>,
     stripe_client: &stripe::Client,
+    is_agent: bool,
 ) -> anyhow::Result<(String, Option<i32>)> {
     let stripe_customer_id = if is_local_stripe_stub() {
         // Local mode uses a stub key; don't call Stripe (it would 401 and
@@ -84,6 +85,7 @@ pub async fn create_user(
         stripe_customer_id.as_deref(),
         organization_id,
         roles,
+        is_agent,
     )
     .await?;
 

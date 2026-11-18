@@ -8,14 +8,21 @@ import {
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { DateValue } from '@core/util/date';
-import { type EmailEntity, isEmailEntity } from '@entity';
+import {
+  type EmailEntity,
+  type EntityData,
+  isEmailEntity,
+  type WithNotification,
+} from '@entity';
 import { useEmailFocusQuery } from '@queries/email/focus';
 import { createGraphqlSoupDoneProjection } from '@queries/soup/graphql/done-projection';
 import { usePendingGraphqlSoupDone } from '@queries/soup/graphql/optimistic-done';
 import { createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
+import type { EmailFocusSort } from '../constants';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
 import { useEmailTabAvailability } from '../tab-availability';
+import { buildFocusDateRows } from './email-results';
 import type {
   EmailDataSource,
   EmailDataSourceInput,
@@ -26,7 +33,7 @@ import type {
 const timestamp = (value: DateValue | null | undefined) =>
   value instanceof Date ? value.getTime() : Date.parse(value ?? '') || 0;
 
-// The same recency the other tabs order and group by.
+// The latest message in either direction, as `mapEmailFocus` dates each row.
 const recency = (email: EmailEntity) =>
   timestamp(email.sortTs ?? email.updatedAt ?? email.createdAt);
 
@@ -44,10 +51,11 @@ function matchesSearch(email: EmailEntity, text: string): boolean {
 }
 
 /**
- * Applies the view's inbox scope, filters and search to the Focus list. The
- * server returns it by priority; "Importance" and "Most recent" reorder it here.
- * Done threads leave at once, as on Signal: the server drops archived
- * threads only on the next read. Focus has no Status or Done filters.
+ * Applies the view's inbox scope, filters and search to the Focus list, then
+ * orders it. The server already sends it newest first, but sorting here keeps
+ * rows under their day headers, which go by each row's own date. Done threads
+ * leave at once, as on Signal: the server drops archived threads only on the
+ * next read. Focus has no Read status or Done filters.
  */
 export function selectFocusEmails(
   emails: readonly EmailEntity[],
@@ -72,18 +80,28 @@ export function selectFocusEmails(
   );
   return (
     match(input.focusSort)
-      .with('priority', () => selected)
       .with('importance', () => selected.sort(byImportance))
       .with('recent', () => selected.sort(byRecency))
-      // An order this build doesn't know keeps the server's priority order.
-      .exhaustive(() => selected)
+      // An order this build doesn't know reads as the default, most recent.
+      .exhaustive(() => selected.sort(byRecency))
   );
 }
 
+/** Day headers only mean something on a chronological list. */
+export function buildFocusRows(
+  emails: WithNotification<EntityData>[],
+  focusSort: EmailFocusSort,
+  now = new Date()
+): EmailDataSourceItem[] {
+  return focusSort === 'recent'
+    ? buildFocusDateRows(emails, now)
+    : buildFlatSoupRows(emails);
+}
+
 /**
- * The Focus tab: signal threads the email focus worker found worth the
- * owner's attention. The whole list arrives in one read, so filtering and
- * ordering happen here rather than on the server.
+ * The Focus tab: inbox threads the email focus worker found worth the owner's
+ * attention. The whole list arrives in one read, so filtering and the chosen
+ * order are applied here.
  */
 export function useFocusEmailSource(
   state: EmailDataSourceInput,
@@ -120,10 +138,11 @@ export function useFocusEmailSource(
 
   const built = createMemo((): EmailDataSourceItem[] => {
     if (!ready()) return [];
-    return buildFlatSoupRows(
+    return buildFocusRows(
       selectFocusEmails(emails(), state, facetContext()).map((email) =>
         withEntityNotifications(email, notificationSource)
-      )
+      ),
+      state.focusSort
     );
   });
   const items = createSoupRowStore(built);

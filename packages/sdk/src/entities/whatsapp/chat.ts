@@ -54,7 +54,10 @@ export class WhatsAppChat extends MacroEntity<WhatsAppChatRecord> {
   /** Group subject (or member names), or the other person's name or number. */
   readonly name = this.field('name');
 
-  /** Newest activity WhatsApp reported, when known. */
+  /** The other person's phone number (`+<digits>`) of a direct chat, when known. */
+  readonly phoneNumber = this.field('phoneNumber');
+
+  /** Newest activity WhatsApp reported; unknown for saved contacts never written to. */
   readonly lastActivityAt = this.field('lastActivityAt');
 
   /** Archived in WhatsApp. */
@@ -89,6 +92,10 @@ export class WhatsAppChat extends MacroEntity<WhatsAppChatRecord> {
    * own external chat; its earlier messages are imported from the phone.
    * Adding it again returns the same chat. Only the owner sends in a direct
    * chat.
+   *
+   * @write
+   * @idempotent
+   * @openworld
    */
   async add(): Promise<ExternalChat> {
     const kind = await this.kind();
@@ -100,7 +107,11 @@ export class WhatsAppChat extends MacroEntity<WhatsAppChatRecord> {
     return ExternalChat.byId(this.client, result.chatId);
   }
 
-  /** Reload the chat's list entry. */
+  /**
+   * Reload the chat's list entry.
+   *
+   * @readonly
+   */
   async refresh(): Promise<this> {
     this.detail.clear();
     await this.detail.get();

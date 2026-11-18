@@ -24,6 +24,8 @@ pub mod document;
 pub mod email_thread;
 /// Foreign entity models for Soup responses.
 pub mod foreign_entity;
+/// Paired runtime models for attention feeds.
+pub mod harness;
 /// Initiative models for Soup responses.
 pub mod initiative;
 /// Unified Soup feed item model.
@@ -32,5 +34,7 @@ pub mod item;
 pub mod project;
 /// Property models attached to Soup items.
 pub mod properties;
+/// Team models for attention feeds.
+pub mod team;
 
 pub use properties::SoupProperty;

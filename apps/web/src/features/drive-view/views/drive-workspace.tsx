@@ -1,4 +1,10 @@
-import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
+import {
+  CollectionPanes,
+  useViewTabHotkeys,
+  ViewShell,
+} from '@app/components/view-shell';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
+import { FolderDropZone } from '@app/features/next-soup/actions';
 import { SplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -10,8 +16,14 @@ import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { DRIVE_TABS } from '../core/types';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
 import { DriveBreadcrumbs } from './drive-breadcrumbs';
+import {
+  DriveFolderHierarchy,
+  DriveFolderPath,
+  useDriveFolderHierarchyVisible,
+} from './drive-folder-hierarchy';
 import { DriveHeader } from './drive-header';
 import { DriveList } from './drive-list';
+import { DriveMobileControls } from './drive-mobile-controls';
 import { DriveSidebar } from './drive-sidebar';
 
 export function DriveLoading() {
@@ -23,6 +35,16 @@ export function DriveLoading() {
         class="size-5 animate-spin"
       />
     </div>
+  );
+}
+
+function DriveBrowser() {
+  const folderHierarchy = useDriveFolderHierarchyVisible();
+
+  return (
+    <Show when={folderHierarchy()} fallback={<DriveList />}>
+      <DriveFolderHierarchy />
+    </Show>
   );
 }
 
@@ -57,6 +79,7 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
       <SplitPanel.Root>
         <SplitPanel.Body>
           <ViewShell.Root
+            contentLayout="collection"
             asidePreferenceKey="documents"
             resizable
             aside={{ preserveDuringResize: false }}
@@ -65,28 +88,35 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
             <ViewShell.Aside>
               <DriveSidebar />
             </ViewShell.Aside>
-            <ViewShell.Main>
-              <Show
-                when={navigation.active() || navigation.activeCallId()}
-                fallback={
-                  <>
-                    <DriveHeader />
-                    {props.tour}
-                    <ViewShell.Content>
-                      <Suspense fallback={<DriveLoading />}>
+            <CollectionPanes
+              hasDetail={!!navigation.active() || !!navigation.activeCallId()}
+              list={
+                <MobileListLayout
+                  header={
+                    <div class="flex min-w-0 flex-col gap-1">
+                      <DriveMobileControls />
+                      <DriveFolderPath />
+                    </div>
+                  }
+                >
+                  <DriveHeader />
+                  {props.tour}
+                  <ViewShell.Content>
+                    <Suspense fallback={<DriveLoading />}>
+                      <FolderDropZone folderId={state.projectId()}>
                         <DriveFileDropzone onDrop={actions.dropFiles}>
-                          <DriveList />
+                          <DriveBrowser />
                         </DriveFileDropzone>
-                      </Suspense>
-                    </ViewShell.Content>
-                  </>
-                }
-              >
-                <Suspense fallback={<DriveLoading />}>
-                  <SplitRouter.Outlet />
-                </Suspense>
-              </Show>
-            </ViewShell.Main>
+                      </FolderDropZone>
+                    </Suspense>
+                  </ViewShell.Content>
+                </MobileListLayout>
+              }
+            >
+              <Suspense fallback={<DriveLoading />}>
+                <SplitRouter.Outlet />
+              </Suspense>
+            </CollectionPanes>
           </ViewShell.Root>
         </SplitPanel.Body>
       </SplitPanel.Root>

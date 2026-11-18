@@ -3,10 +3,11 @@
 #[cfg(test)]
 mod test;
 
+use models_databases::TableId;
 use models_databases::views::{
     Conjunction, DatabaseView, DateOperator, DateRangeOperator, FilterCondition, FilterGroup,
     FilterNode, FilterTest, NumberOperator, PresenceOperator, SetOperator, SortDirection,
-    TextOperator, ViewProblem,
+    TextOperator, ViewLayout, ViewProblem, ViewQuery,
 };
 
 use crate::catalog::{Catalog, Column, Table};
@@ -26,11 +27,35 @@ pub fn compile_view(view: &DatabaseView, catalog: &Catalog) -> Result<SelectQuer
     compile_checked(view, checked_table(view, catalog)?)
 }
 
+/// Compile the filter and ordering of a table read, independent of its presentation.
+pub fn compile_table_query(
+    table_id: TableId,
+    query: &ViewQuery,
+    catalog: &Catalog,
+) -> Result<SelectQuery, ViewProblem> {
+    let table = catalog
+        .tables
+        .iter()
+        .find(|table| table.id == table_id)
+        .ok_or(ViewProblem::UnknownTable { table: table_id })?;
+    let columns = table
+        .columns
+        .iter()
+        .map(super::schema_column)
+        .collect::<Vec<_>>();
+    models_databases::views::check(query, &ViewLayout::Table { columns: vec![] }, &columns)?;
+    compile_query_checked(query, table)
+}
+
 /// [`compile_view`] once the view has checked out against `table`.
 pub(super) fn compile_checked(
     view: &DatabaseView,
     table: &Table,
 ) -> Result<SelectQuery, ViewProblem> {
+    compile_query_checked(&view.query, table)
+}
+
+fn compile_query_checked(query: &ViewQuery, table: &Table) -> Result<SelectQuery, ViewProblem> {
     let position = row_position_key(table.id);
     let mut bindings: Vec<Binding> = table
         .columns
@@ -46,8 +71,7 @@ pub(super) fn compile_checked(
         relation: 0,
         column: None,
     });
-    let order_by = view
-        .query
+    let order_by = query
         .sort
         .iter()
         .map(|key| {
@@ -64,7 +88,7 @@ pub(super) fn compile_checked(
             direction: Direction::Ascending,
         })))
         .collect::<Result<_, ViewProblem>>()?;
-    let where_ = match &view.query.filter {
+    let where_ = match &query.filter {
         Some(group) => group_filter(table, group)?,
         None => None,
     };

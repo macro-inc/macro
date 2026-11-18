@@ -1,6 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
+import * as doppler from '@pulumiverse/doppler';
 import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
@@ -25,12 +26,20 @@ import {
 const gatewayLoadBalancer = getGatewayAlb();
 
 const BASE_NAME = pulumi.getProject();
+/** Must match `ENCRYPTION_PURPOSE` in `mcp_auth_proxy::outbound::postgres`. */
+const MCP_OAUTH_KMS_PURPOSE = 'mcp-oauth-authorization-code';
+const MCP_OAUTH_KMS_ACTIONS = ['kms:Encrypt', 'kms:Decrypt'];
 const REPO_ROOT = '../../..';
+
+/** Where the service reads `REPO_STORAGE_ROOT`; set to this path in Doppler. */
+const REPO_STORAGE_PATH = '/data/agent-git';
+const REPO_VOLUME_NAME = 'agent-git-repos';
 
 type Args = {
   vpc: {
-    vpcId: pulumi.Output<string> | string;
-    privateSubnetIds: pulumi.Output<string[]> | string[];
+    vpcId: string;
+    // One EFS mount target per subnet, so the list must be known up front.
+    privateSubnetIds: string[];
   };
   tags: { [key: string]: string };
   containerEnvVars: { name: string; value: pulumi.Output<string> | string }[];
@@ -100,6 +109,43 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     this.egressDomain = getServiceUrl(ServiceUrl.AGENT_HARNESS_EGRESS_URL);
     this.cloudStorageClusterName = cloudStorageClusterName;
     this.tags = tags;
+
+    const serviceSg = this.initializeSecurityGroups({ vpcId: vpc.vpcId });
+    this.serviceSg = serviceSg;
+
+    const repoStorage = this.initializeRepoStorage({
+      vpcId: vpc.vpcId,
+      privateSubnetIds: vpc.privateSubnetIds,
+    });
+
+    const efsPolicy = new aws.iam.Policy(
+      `${BASE_NAME}-efs-policy`,
+      {
+        name: `${BASE_NAME}-efs-policy-${stack}`,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: [
+                'elasticfilesystem:ClientMount',
+                'elasticfilesystem:ClientWrite',
+                'elasticfilesystem:ClientRootAccess',
+              ],
+              Resource: [repoStorage.fileSystem.arn],
+              Effect: 'Allow',
+              Condition: {
+                StringEquals: {
+                  'elasticfilesystem:AccessPointArn':
+                    repoStorage.accessPoint.arn,
+                },
+              },
+            },
+          ],
+        },
+        tags,
+      },
+      { parent: this }
+    );
 
     const secretsManagerPolicy = new aws.iam.Policy(
       `${BASE_NAME}-secrets-manager-policy`,
@@ -206,6 +252,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         managedPolicyArns: [
           secretsManagerPolicy.arn,
           queuePolicy.arn,
+          efsPolicy.arn,
           ...(s3Policy ? [s3Policy.arn] : []),
         ],
         tags,
@@ -225,6 +272,48 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       { parent: this, dependsOn: [this.role] }
     );
 
+    // Only the task role may mount, only through the access point, and only
+    // over TLS.
+    new aws.efs.FileSystemPolicy(
+      `${BASE_NAME}-efs-file-system-policy`,
+      {
+        fileSystemId: repoStorage.fileSystem.id,
+        policy: pulumi.jsonStringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AllowTaskRoleThroughAccessPoint',
+              Effect: 'Allow',
+              Principal: { AWS: this.role.arn },
+              Action: [
+                'elasticfilesystem:ClientMount',
+                'elasticfilesystem:ClientWrite',
+                'elasticfilesystem:ClientRootAccess',
+              ],
+              Resource: repoStorage.fileSystem.arn,
+              Condition: {
+                StringEquals: {
+                  'elasticfilesystem:AccessPointArn':
+                    repoStorage.accessPoint.arn,
+                },
+              },
+            },
+            {
+              Sid: 'DenyInsecureTransport',
+              Effect: 'Deny',
+              Principal: { AWS: '*' },
+              Action: '*',
+              Resource: repoStorage.fileSystem.arn,
+              Condition: { Bool: { 'aws:SecureTransport': 'false' } },
+            },
+          ],
+        }),
+      },
+      { parent: this }
+    );
+
+    const mcpOauthKms = this.createMcpOauthKmsKey(tags);
+
     const image = new EcrImage(
       `${BASE_NAME}-ecr-image-${stack}`,
       {
@@ -242,9 +331,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       { parent: this }
     );
     this.ecr = image.ecr;
-
-    const serviceSg = this.initializeSecurityGroups({ vpcId: vpc.vpcId });
-    this.serviceSg = serviceSg;
 
     const gatewayTargetGroup = new ServiceTargetGroup(
       `${stack}-${BASE_NAME}`,
@@ -315,6 +401,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       [GatewayService.MCP_SERVER, '/mcp'],
       [GatewayService.DOCUMENT_COGNITION_SERVICE, '/cognition'],
       [GatewayService.AGENT_SCHEDULE_SERVICE, '/scheduled-action'],
+      [GatewayService.AGENT_GIT_SERVICE, '/agent-git'],
     ];
     const sharedApiRules = sharedApiRoutes.map(
       ([service, prefix]) =>
@@ -425,6 +512,19 @@ export class AgentHarnessService extends pulumi.ComponentResource {
           executionRole: {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
+          volumes: [
+            {
+              name: REPO_VOLUME_NAME,
+              efsVolumeConfiguration: {
+                fileSystemId: repoStorage.fileSystem.id,
+                transitEncryption: 'ENABLED',
+                authorizationConfig: {
+                  accessPointId: repoStorage.accessPoint.id,
+                  iam: 'ENABLED',
+                },
+              },
+            },
+          ],
           containers: withTelemetry(BASE_NAME, {
             service: {
               name: BASE_NAME,
@@ -443,6 +543,13 @@ export class AgentHarnessService extends pulumi.ComponentResource {
                 },
               ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
+              mountPoints: [
+                {
+                  sourceVolume: REPO_VOLUME_NAME,
+                  containerPath: REPO_STORAGE_PATH,
+                  readOnly: false,
+                },
+              ],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {
@@ -488,9 +595,12 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         parent: this,
         // ECS refuses a service whose target group is not yet associated
         // with a load balancer; it is the listener rule that creates that
-        // association.
+        // association. Tasks also fail to start until a mount target exists
+        // in their subnet.
         dependsOn: [
+          ...repoStorage.mountTargets,
           ...args.configurationSecrets,
+          ...mcpOauthKms,
           gatewayTargetGroup.listener_rule,
           ...publicHostRules,
           ...sharedApiRules,
@@ -500,6 +610,105 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     );
 
     this.setupServiceAlarms();
+  }
+
+  /**
+   * The key the public MCP OAuth broker encrypts its authorization codes'
+   * upstream tokens with, and the Doppler value naming it. Returns what the
+   * ECS service must wait for, so no task starts unable to issue a code.
+   */
+  private createMcpOauthKmsKey(tags: { [key: string]: string }) {
+    const accountRootArn = pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentityOutput().accountId}:root`;
+    const key = new aws.kms.Key(
+      `${BASE_NAME}-mcp-oauth-key`,
+      {
+        description: `Public MCP OAuth authorization code encryption key for ${stack}`,
+        deletionWindowInDays: 30,
+        enableKeyRotation: true,
+        policy: aws.iam.getPolicyDocumentOutput({
+          statements: [
+            {
+              sid: 'AllowAccountKeyAdministration',
+              effect: 'Allow',
+              principals: [{ type: 'AWS', identifiers: [accountRootArn] }],
+              actions: [
+                'kms:CancelKeyDeletion',
+                'kms:Create*',
+                'kms:Delete*',
+                'kms:Describe*',
+                'kms:Disable*',
+                'kms:Enable*',
+                'kms:Get*',
+                'kms:List*',
+                'kms:Put*',
+                'kms:Revoke*',
+                'kms:ScheduleKeyDeletion',
+                'kms:TagResource',
+                'kms:UntagResource',
+                'kms:Update*',
+              ],
+              resources: ['*'],
+            },
+            {
+              sid: 'AllowMcpOauthCodeEncryption',
+              effect: 'Allow',
+              principals: [{ type: 'AWS', identifiers: [this.role.arn] }],
+              actions: MCP_OAUTH_KMS_ACTIONS,
+              resources: ['*'],
+              conditions: [
+                {
+                  test: 'StringEquals',
+                  variable: 'kms:EncryptionContext:macro:purpose',
+                  values: [MCP_OAUTH_KMS_PURPOSE],
+                },
+              ],
+            },
+          ],
+        }).json,
+        tags,
+      },
+      { parent: this, protect: stack === 'prod' }
+    );
+    const alias = new aws.kms.Alias(
+      `${BASE_NAME}-mcp-oauth-key-alias`,
+      { name: `alias/${BASE_NAME}-mcp-oauth-${stack}`, targetKeyId: key.keyId },
+      { parent: this }
+    );
+    const rolePolicy = new aws.iam.RolePolicy(
+      `${BASE_NAME}-mcp-oauth-kms-policy`,
+      {
+        role: this.role.id,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: MCP_OAUTH_KMS_ACTIONS,
+              Resource: key.arn,
+              Effect: 'Allow',
+              Condition: {
+                StringEquals: {
+                  'kms:EncryptionContext:macro:purpose': MCP_OAUTH_KMS_PURPOSE,
+                },
+              },
+            },
+          ],
+        },
+      },
+      { parent: this }
+    );
+    // MacroConfig reads only Doppler in ECS, so the key reaches the service
+    // through it rather than the container environment.
+    const dopplerKeyId = new doppler.Secret(
+      `harness-MCP_OAUTH_KMS_KEY_ID-${stack}`,
+      {
+        project: 'agent-harness-service',
+        config: stack === 'prod' ? 'prd' : 'dev',
+        name: 'MCP_OAUTH_KMS_KEY_ID',
+        value: alias.name,
+      },
+      { parent: this }
+    );
+    return [rolePolicy, dopplerKeyId];
   }
 
   private initializeSecurityGroups({
@@ -531,6 +740,94 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     );
 
     return serviceSg;
+  }
+
+  /**
+   * Encrypted EFS for the agent git service's bare repositories, shared by
+   * every replica and reachable on NFS only from the service security group.
+   *
+   * The access point maps every client to root (uid/gid 0), the user the
+   * container already runs as, so the repositories' owner matches the process
+   * and git's `safe.directory` ownership check passes without configuration.
+   * With IAM authorization EFS squashes root unless the task role also has
+   * `elasticfilesystem:ClientRootAccess`, so both policies grant it.
+   */
+  private initializeRepoStorage({
+    vpcId,
+    privateSubnetIds,
+  }: {
+    vpcId: string;
+    privateSubnetIds: string[];
+  }) {
+    const fileSystem = new aws.efs.FileSystem(
+      `${BASE_NAME}-repos`,
+      {
+        encrypted: true,
+        performanceMode: 'generalPurpose',
+        throughputMode: 'elastic',
+        tags: { ...this.tags, Name: `${BASE_NAME}-repos-${stack}` },
+      },
+      // The repositories are user data: never delete them with the stack.
+      { parent: this, retainOnDelete: true }
+    );
+
+    const efsSg = new aws.ec2.SecurityGroup(
+      `${BASE_NAME}-efs-sg-${stack}`,
+      {
+        name: `${BASE_NAME}-efs-sg-${stack}`,
+        vpcId,
+        description: `${BASE_NAME} repository EFS mount targets`,
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    new aws.vpc.SecurityGroupIngressRule(
+      `${BASE_NAME}-efs-nfs-in`,
+      {
+        securityGroupId: efsSg.id,
+        description: 'NFS from the agent-harness-service tasks',
+        referencedSecurityGroupId: this.serviceSg.id,
+        ipProtocol: 'tcp',
+        fromPort: 2049,
+        toPort: 2049,
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    const mountTargets = privateSubnetIds.map(
+      (subnetId, index) =>
+        new aws.efs.MountTarget(
+          `${BASE_NAME}-efs-mount-${index}`,
+          {
+            fileSystemId: fileSystem.id,
+            subnetId,
+            securityGroups: [efsSg.id],
+          },
+          { parent: this }
+        )
+    );
+
+    const accessPoint = new aws.efs.AccessPoint(
+      `${BASE_NAME}-repos-access-point`,
+      {
+        fileSystemId: fileSystem.id,
+        posixUser: { uid: 0, gid: 0 },
+        rootDirectory: {
+          path: '/agent-git',
+          creationInfo: {
+            ownerUid: 0,
+            ownerGid: 0,
+            permissions: '0755',
+          },
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    return { fileSystem, accessPoint, mountTargets };
   }
 
   private setupServiceAlarms() {

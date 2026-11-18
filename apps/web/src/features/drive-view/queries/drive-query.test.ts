@@ -23,7 +23,6 @@ function request(
     selection: selected,
     userId,
     facetContext,
-    snippetsEnabled: true,
   });
 }
 
@@ -48,14 +47,6 @@ describe('buildDriveQuery', () => {
     expect(result.body.ef).toEqual({ l: { ThreadId: NIL_UUID } });
     expect(result.body.cf).toEqual({ l: { cid: NIL_UUID } });
     expect(result.body.pf).toEqual({ l: { pid: NIL_UUID } });
-  });
-
-  it('excludes disabled snippets before paginating the list', () => {
-    const result = buildDriveQuery({ selection, userId: 'me', facetContext });
-    expect(JSON.stringify(result.body.df)).toContain(
-      '"!":{"l":{"dst":"snippet"}}'
-    );
-    expect(JSON.stringify(request().body.df)).not.toContain('snippet');
   });
 
   it('drops owned scoping outside default and maps attachment scope', () => {
@@ -147,6 +138,32 @@ describe('buildDriveQuery', () => {
     expect(filtered.body.propf).toEqual({
       l: { pd: 'tag-definition', v: { so: 'urgent' } },
     });
+  });
+
+  it('orders names ascending and every other sort newest first', () => {
+    expect(request({ ...selection, sort: 'name' }).params).toMatchObject({
+      sort_method: 'name',
+      sort_direction: 'asc',
+    });
+    expect(request({ ...selection, sort: 'created_at' }).params).toMatchObject({
+      sort_method: 'created_at',
+      sort_direction: 'desc',
+    });
+  });
+
+  it('drops the folder email target a name-sorted page cannot return', () => {
+    const folder = {
+      ...selection,
+      location: { kind: 'folder', id: 'folder' },
+    } satisfies DriveSelection;
+
+    expect(request(folder).body.ef).toEqual({ l: { ProjectId: 'folder' } });
+
+    const byName = request({ ...folder, sort: 'name' });
+    expect(byName.body.ef).toBeUndefined();
+    expect(byName.body.emailView).toBeUndefined();
+    expect(byName.body.pf).toEqual({ l: { pid: 'folder' } });
+    expect(byName.body.cf).toEqual({ l: { pid: 'folder' } });
   });
 
   it('uses touched_by_me for Recent without unsupported email/channel trees', () => {

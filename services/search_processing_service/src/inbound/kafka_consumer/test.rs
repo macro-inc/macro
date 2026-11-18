@@ -36,7 +36,7 @@ use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
     DocumentDeletedMetadata, DocumentInteractionMetadata, DocumentPurgedMetadata,
     DocumentSyncContentUpdatedMetadata, DocumentTopicEvent, DocumentUpdatedMetadata,
-    InteractionReason,
+    EmailAttachmentsReleasedMetadata, InteractionReason,
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEvent as _, MessageParts};
 use macro_event_topics::{
@@ -161,6 +161,7 @@ fn started_event() -> CallTopicEvent {
 
 fn archived_event() -> CallTopicEvent {
     CallTopicEvent::RecordArchived(CallRecordArchivedMetadata {
+        channel_thread: false,
         call_id: CALL_ID,
         channel_id: Some(CHANNEL_ID),
         created_by: user_id(),
@@ -801,6 +802,7 @@ fn message_event_cases() -> Vec<(MessageTopicEvent, MessageEventDescription)> {
         ),
         (
             MessageTopicEvent::Patched(MessagePatchedMetadata {
+                completed_reply: None,
                 parent: channel.clone(),
                 message_id: MESSAGE_ID,
                 thread_id: None,
@@ -892,6 +894,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
         ),
         (
             DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+                appearance_change: None,
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
                 actor_user_id: Some(user.clone()),
@@ -911,6 +914,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
         ),
         (
             DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+                appearance_change: None,
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
                 actor_user_id: Some(user.clone()),
@@ -986,6 +990,19 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 action: DocumentIndexAction::Remove,
                 document_id: DOCUMENT_ID.to_string(),
                 event_type: "document.purged",
+            },
+        ),
+        (
+            DocumentTopicEvent::EmailAttachmentsReleased(EmailAttachmentsReleasedMetadata {
+                trashed_document_ids: vec![DOCUMENT_ID.to_string()],
+                kept_document_ids: vec![SOURCE_DOCUMENT_ID.to_string()],
+            }),
+            DocumentEventDescription {
+                action: DocumentIndexAction::ReleaseEmailAttachments {
+                    document_ids: vec![DOCUMENT_ID.to_string(), SOURCE_DOCUMENT_ID.to_string()],
+                },
+                document_id: DOCUMENT_ID.to_string(),
+                event_type: "document.email_attachments_released",
             },
         ),
         (
@@ -1255,6 +1272,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
         ),
         (
             PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+                inherited_from_project: None,
                 entity_property_id: ENTITY_PROPERTY_ID,
                 entity_id: PROPERTY_ENTITY_ID.to_string(),
                 entity_type: EntityType::Document,
@@ -1262,6 +1280,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
                 actor_user_id: actor_user_id.clone(),
                 actor: None,
                 on_behalf_of: None,
+                source: None,
                 value: None,
                 previous_value: None,
                 updated_at: Utc::now(),
@@ -1453,7 +1472,7 @@ fn maps_message_facts_to_channel_index_actions() {
 #[test]
 fn maps_all_document_lifecycle_events_to_index_actions() {
     let cases = document_event_cases();
-    assert_eq!(cases.len(), 9);
+    assert_eq!(cases.len(), 10);
 
     for (event, expected) in cases {
         let serialized = serde_json::to_value(&event).expect("serializable document event");

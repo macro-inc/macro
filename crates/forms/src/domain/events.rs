@@ -95,7 +95,8 @@ pub struct FormResponseSubmittedMetadata {
     pub form_id: FormId,
     /// The ledger entry.
     pub response_id: FormResponseId,
-    /// The signed-in respondent; `None` for an anonymous one.
+    /// The signed-in respondent; `None` for an anonymous visitor or when
+    /// the form hides respondents. The ledger still records them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub respondent: Option<MacroUserIdStr<'static>>,
     /// The row holding the answers.
@@ -130,6 +131,16 @@ pub enum FormTopicEvent {
     /// Someone responded.
     #[serde(rename = "form.response_submitted")]
     ResponseSubmitted(FormResponseSubmittedMetadata),
+    /// Icon or color metadata changed without touching content recency.
+    #[serde(rename = "form.appearance_changed")]
+    AppearanceChanged {
+        /// The form.
+        form_id: FormId,
+        /// The editor, when authenticated.
+        attribution: Option<Attribution>,
+        /// Previous and saved appearance.
+        change: activity::AppearanceChange,
+    },
 }
 
 impl TopicEvent for FormTopicEvent {
@@ -170,6 +181,7 @@ impl FormTopicEvent {
             | FormTopicEvent::SharingChanged(metadata) => metadata.form_id,
             FormTopicEvent::Purged(metadata) => metadata.form_id,
             FormTopicEvent::ResponseSubmitted(metadata) => metadata.form_id,
+            FormTopicEvent::AppearanceChanged { form_id, .. } => *form_id,
         }
     }
 }

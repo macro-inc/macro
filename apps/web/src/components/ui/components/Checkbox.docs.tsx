@@ -149,7 +149,7 @@ export default defineDoc({
       id: 'list-affordances',
       title: 'List affordances',
       description:
-        'Two visual-only helpers for rows that are themselves the hit target: `SingleSelectCheck` for pick-one menus, `InlineCheckbox` for multi-select lists. Neither handles input — the row does.',
+        'Two visual-only helpers for rows that are themselves the hit target: `SingleSelectCheck` for pick-one menus, `InlineCheckbox` for multi-select lists. Pass `animate={false}` for rapid list selection; other uses animate by default. Neither handles input — the row does.',
       render: ListAffordancesDemo,
     },
   ],

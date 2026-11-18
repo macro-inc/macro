@@ -1507,3 +1507,62 @@ describe('split router while other work is in flight', () => {
     expect(router.arrival(pane(0))).toBe('forward');
   });
 });
+
+it('cancels speculative route admission when its account router is disposed', async () => {
+  let signal: AbortSignal | undefined;
+  const view = setup('/home', {
+    routes: {
+      ...appRoutes,
+      definitions: [
+        {
+          ...appRoute,
+          preload: (context) => {
+            if (context.intent === 'hover') signal = context.signal;
+          },
+        },
+      ],
+    },
+  });
+  const preloaded = view.router.preload(homeLocation, 'hover');
+  expect(signal?.aborted).toBe(false);
+  view.dispose();
+  expect(signal?.aborted).toBe(true);
+  await preloaded;
+});
+
+it('keeps speculative admission alive after navigation commits, until account disposal', async () => {
+  const imported = Promise.withResolvers<void>();
+  const requested = vi.fn();
+  let admission: Promise<void> | undefined;
+  let signal: AbortSignal | undefined;
+  async function readAfterImport(lifetime: AbortSignal) {
+    await imported.promise;
+    if (!lifetime.aborted) requested();
+  }
+  const view = setup('/home', {
+    routes: {
+      ...appRoutes,
+      definitions: [
+        {
+          ...appRoute,
+          preload: (context) => {
+            signal = context.signal;
+            admission = readAfterImport(context.signal);
+          },
+        },
+      ],
+    },
+  });
+  try {
+    expect(view.router.ready()).toBe(true);
+    expect(signal?.aborted).toBe(false);
+    imported.resolve();
+    await admission;
+    expect(requested).toHaveBeenCalledOnce();
+  } finally {
+    imported.resolve();
+    await admission;
+    view.dispose();
+  }
+  expect(signal?.aborted).toBe(true);
+});

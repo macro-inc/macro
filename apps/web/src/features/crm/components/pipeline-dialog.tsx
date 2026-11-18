@@ -1,7 +1,9 @@
+import { CreateMenuRadioItem } from '@app/components/view-shell/CreateMenuItem';
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import CheckIcon from '@icon/system/regular/check.svg';
+import TableIcon from '@icon/system/regular/table.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, Checkbox, Dialog, Dropdown, EntityComposer, Panel } from '@ui';
@@ -10,9 +12,39 @@ import { Dynamic } from 'solid-js/web';
 import type { NewPipeline } from '../core/pipeline';
 
 const RECORD_TYPES = [
-  { value: 'company', label: 'Companies', icon: BuildingsIcon },
-  { value: 'contact', label: 'Contacts', icon: UsersIcon },
+  {
+    value: 'company',
+    icon: BuildingsIcon,
+    get label() {
+      return t('crm.pipelineTrackCompanies');
+    },
+    get description() {
+      return t('crm.pipelineTrackCompaniesDescription');
+    },
+  },
+  {
+    value: 'contact',
+    icon: UsersIcon,
+    get label() {
+      return t('crm.pipelineTrackContacts');
+    },
+    get description() {
+      return t('crm.pipelineTrackContactsDescription');
+    },
+  },
+  {
+    value: 'generic',
+    icon: TableIcon,
+    get label() {
+      return t('crm.pipelineTrackGeneric');
+    },
+    get description() {
+      return t('crm.pipelineTrackGenericDescription');
+    },
+  },
 ] as const;
+
+type Tracking = (typeof RECORD_TYPES)[number]['value'];
 
 /** One creation session; cancel preserves existing CRM data. */
 export function PipelineDialog(props: {
@@ -20,22 +52,22 @@ export function PipelineDialog(props: {
   onClose(): void;
 }) {
   const [name, setName] = createSignal('');
-  const [recordType, setRecordType] =
-    createSignal<NewPipeline['recordType']>('company');
+  const [tracking, setTracking] = createSignal<Tracking>('company');
   const [shareWithTeam, setShareWithTeam] = createSignal(false);
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal(false);
   const tracked = () =>
-    RECORD_TYPES.find((type) => type.value === recordType()) ?? RECORD_TYPES[0];
+    RECORD_TYPES.find((type) => type.value === tracking()) ?? RECORD_TYPES[0];
   const close = () => !pending() && props.onClose();
   async function submit() {
     if (pending() || !name().trim()) return;
     setPending(true);
     setError(false);
     try {
+      const current = tracking();
       await props.onCreate({
         name: name().trim(),
-        recordType: recordType(),
+        recordType: current === 'generic' ? null : current,
         sharing: shareWithTeam() ? 'team' : 'private',
       });
       props.onClose();
@@ -100,7 +132,9 @@ export function PipelineDialog(props: {
                 <EntityComposer.Properties class="px-2">
                   <Dropdown placement="bottom-start">
                     <Dropdown.Trigger
-                      aria-label={`Track ${tracked().label}`}
+                      aria-label={t('crm.pipelineTrackChoice', {
+                        choice: tracked().label,
+                      })}
                       class="rounded-full"
                       disabled={pending()}
                     >
@@ -111,30 +145,24 @@ export function PipelineDialog(props: {
                       {tracked().label}
                       <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
                     </Dropdown.Trigger>
-                    <Dropdown.Content class="min-w-40">
+                    <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)]">
                       <Dropdown.Group>
-                        <Dropdown.GroupLabel>Track</Dropdown.GroupLabel>
+                        <Dropdown.GroupLabel>
+                          {t('crm.pipelineTrack')}
+                        </Dropdown.GroupLabel>
                         <Dropdown.RadioGroup
-                          value={recordType()}
-                          onChange={(value) =>
-                            setRecordType(value as NewPipeline['recordType'])
-                          }
+                          value={tracking()}
+                          onChange={(value) => setTracking(value as Tracking)}
                         >
                           <For each={RECORD_TYPES}>
                             {(type) => (
-                              <Dropdown.RadioItem
+                              <CreateMenuRadioItem
                                 value={type.value}
+                                icon={type.icon}
+                                title={type.label}
+                                description={type.description}
                                 closeOnSelect
-                              >
-                                <Dynamic
-                                  component={type.icon}
-                                  class="size-4 shrink-0"
-                                />
-                                <span class="flex-1">{type.label}</span>
-                                <Dropdown.ItemIndicator>
-                                  <CheckIcon class="size-3.5 text-accent" />
-                                </Dropdown.ItemIndicator>
-                              </Dropdown.RadioItem>
+                              />
                             )}
                           </For>
                         </Dropdown.RadioGroup>

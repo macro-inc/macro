@@ -97,10 +97,48 @@ one shared with them by someone else (`shared`, with its owner).
 and direct chats: name, last activity, archived and pinned, and the newest
 known message (the anchor). WhatsApp's history sync right after pairing fills
 it (initial, recent and full bundles; push-name bundles rename direct chats);
-live messages in any chat bump activity and add new chats; contact, push-name,
-archive and pin updates change existing rows. It never holds message content.
+live messages in any chat bump activity and add new chats; push-name, archive
+and pin updates change existing rows. The phone's saved contacts (address-book
+names from app state) are listed as direct chats with no activity, so the owner
+can start a chat with someone never written to: all of them on connect and
+after each app-state sync, each contact change as it arrives; a row that didn't
+change signals nothing. It never holds message content.
 `GET /whatsapp/chats` merges it with the roster (the roster names groups and decides
-which groups can be added), newest first.
+which groups can be added), newest first, and gives a direct chat's phone
+number.
+
+Anyone else is reached by phone number: `POST /whatsapp/lookups {phoneNumber}`
+(E.164; the owner's own session only, at most 20 per account per hour, since
+WhatsApp bans accounts that check many numbers) records a `whatsapp_lookup`
+and signals `whatsapp_lookup_requested`; the session holding the account asks
+WhatsApp once (`IsOnWhatsApp`, which also stores the number's LID pairing) and
+records `found`, `not_on_whatsapp` or `failed`. A found number joins the chat
+list as a direct chat by phone number, so the ordinary add accepts it; the web
+polls `GET /whatsapp/lookups/{id}`, then adds and opens the chat. A lookup still
+pending after 60 seconds reads as `failed`. Lookups are deleted an hour later,
+and with the account's consent.
+
+Profile pictures are stored per observing account and JID
+(`whatsapp_profile_picture`), because WhatsApp's privacy settings show a
+picture to some accounts and not others; a chat shows the pictures its
+owner's account sees, as it shows that account's contact names. Only added
+chats are tracked: the group or direct chat when it is added and each new
+sender who is not a Macro user, never the unadded chat list (bulk picture
+queries for strangers get accounts banned). Chats and people added before
+pictures were tracked are backfilled the same way, all due at once for the
+budget to pace. Detaching a chat stops tracking (and deletes the files of)
+the pictures no other added chat of the owner shows. The session holding the account
+checks due pictures one at a time, 3 s apart, within 60 per hour and 100 per
+day per account (counted in Postgres, so the budget survives a replica move),
+and pauses 15 minutes, doubling up to 6 hours, when WhatsApp answers 429. It
+asks for the preview with the id it already stores, so an unchanged picture
+downloads nothing, and downloads a new one at once (its URL expires),
+staging the bytes on the row. DSS stores them as a static file owned by the
+account's owner (`static_file_id`, the only column the read path joins on);
+a replaced, hidden or removed picture's file is deleted like a released
+attachment. Hidden (401) and unset (404) pictures show initials. Pictures
+are checked again about weekly (hidden ones fortnightly), and at once when a
+`picture` notification brings another id.
 
 Direct chats are added like groups (`external_chat.kind = 'direct'`,
 `remote_id` the other person's JID, by phone number when known) and named after the
@@ -115,17 +153,31 @@ added by; history is requested in the chat as the phone keys it (by LID).
 An account paired before the list existed only gets groups and chats with new
 messages: WhatsApp sends the full list once, at pairing.
 
-Adding a group sets `backfill_state = 'pending'` when a message of the chat is
-known to start from (the chat list's anchor, or a stored message the account
-saw), else `waiting_for_message`: nothing to import from until someone posts.
-The chat's first message (live, history sync or chat-list update) makes it
-`pending` and starts the import at once. The owner's account then
-imports the chat's earlier messages from the phone, on demand only: it asks for
-the anchor message itself when it predates adoption (a placeholder resend) and
-for pages of 50 messages before the oldest imported one (history sync on
-demand), until the phone has nothing older (`done`) or 500 messages / 90 days
-(`partial`). An unanswered request (60 s) means `waiting_for_phone`, retried
-every 5 minutes and at once on reconnect. WhatsApp's group info carries no
+Earlier messages come only from the owner's phone, and Macro asks it only
+when the owner presses **Import**. Every request wakes WhatsApp on the phone;
+on iOS one it can't finish in the background shows "Syncing with WhatsApp on
+Other device stopped", so nothing asks on a timer, on reconnect or on adding.
+Adding a group sets `backfill_state = 'waiting_for_phone'` (the import needs the
+phone) when a message of the chat is known to start from (the chat list's
+anchor, or a stored message the account saw), else `waiting_for_message`:
+nothing to import from until someone posts; the chat's first message (live,
+history sync or chat-list update) makes it `waiting_for_phone`. A direct chat
+with no known message (a saved contact or looked-up number) starts `done`:
+there is nothing earlier to import, and its first message arrives live. If a
+chat update later brings a message from before the chat was added (the phone
+had history after all), it becomes `waiting_for_phone`.
+
+The web shows the owner an import bar in each chat that is
+`waiting_for_phone`, and on desktop a closable bottom-right prompt covering all
+of them ("open WhatsApp on your phone … **Import**").
+`POST /whatsapp/history-import` (the owner's own session) moves those chats
+to `pending` and signals `whatsapp_history_requested`; the replica holding the
+account then asks for the anchor message itself when it predates adoption (a
+placeholder resend) and for pages of 50 messages before the oldest imported
+one (history sync on demand), each answered page asking for the next, until
+the phone has nothing older (`done`) or 500 messages / 90 days (`partial`). A
+request unanswered for 60 s puts the chat back to `waiting_for_phone`, and the
+prompt returns; it is never retried otherwise. WhatsApp's group info carries no
 message id, so a quiet chat of an account paired before the chat list existed
 has no other anchor. Imported messages are ingested as history (origin
 `history`): no notifications, no unread, deduplicated with live messages by
@@ -150,6 +202,16 @@ account's LID store (ingest also from the account's roster). Identities still
 ambiguous are quarantined and retried. Missing reaction/revision targets
 are deferred. Edits follow source revision order; deletes are permanent tombstones.
 Reactions and media live in `external_chat_reaction` and `external_chat_attachment`.
+A sender's WhatsApp name (`external_chat_person.display_name`) comes from the
+message, else from the account's contact store, which keeps the names WhatsApp
+sends with history sync and earlier messages (history messages carry none).
+Contact-store failures log a warning and leave the sender unnamed; they do not
+prevent ingestion. Roster reads complete missing participant names from contacts.
+Reads name people (senders, reactors, voters, members, mentions) in
+`whatsapp_linked`'s `domain::people::ChatNames`: the chat owner's chat-list
+name for any of their aliases (their address book), else that WhatsApp name,
+else their phone number, so nothing needs backfilling when a contact is saved
+or renamed.
 
 Besides text and media, a message may carry structured content in
 `external_chat_message.rich` (`external_chat::domain::rich::RichContent`):

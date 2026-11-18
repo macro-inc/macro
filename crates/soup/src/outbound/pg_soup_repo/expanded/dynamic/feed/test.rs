@@ -1,11 +1,12 @@
 use super::super::{
     DocumentIdArrays, ExpandedDynamicCursorArgs, ItemSource, build_chat_filter,
-    build_document_filter, build_project_filter, build_query, chat_literal_constant,
+    build_document_filter, build_project_filter, build_query_from, chat_literal_constant,
     document_literal_constant, expanded_dynamic_cursor_soup_hydrated, project_literal_constant,
 };
 use super::{FeedArm, OrderedScans};
 use crate::domain::models::{
-    SimpleSortQuery, SimpleSortRequest, SoupDocumentServerFacts, SoupProjectionHydration,
+    DynamicSort, SimpleSortQuery, SimpleSortRequest, SoupDocumentServerFacts,
+    SoupProjectionHydration,
 };
 use crate::domain::ports::SoupRepo;
 use crate::outbound::pg_soup_repo::PgSoupRepo;
@@ -475,7 +476,7 @@ async fn walk(
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: PAGE,
-                cursor: query,
+                cursor: DynamicSort::from_timestamp_query(query),
                 exclude_frecency,
             },
             item_source,
@@ -570,13 +571,13 @@ fn shapes_reach_every_driver_and_phase() {
         .iter()
         .flat_map(|(_, filter)| {
             SORTS.map(|sort| {
-                let (query, _) = build_query(
+                let (query, _) = build_query_from(
                     filter,
                     false,
-                    sort,
+                    sort.into(),
                     ItemSource::SourceItems,
                     USER,
-                    &mut DocumentIdArrays::starting_at(9),
+                    &mut DocumentIdArrays::starting_at(10),
                 );
                 let (candidates, _) = query.sql().split_once("Combined AS").unwrap();
                 candidates.to_owned()
@@ -660,13 +661,13 @@ fn only_ordered_scans_need_the_bound() {
             project_filter: tree(Expr::val(ProjectLiteral::Importance(false))),
             ..Default::default()
         };
-        build_query(
+        build_query_from(
             &filter,
             false,
-            SimpleSortMethod::UpdatedAt,
+            SimpleSortMethod::UpdatedAt.into(),
             ItemSource::SourceItems,
             USER,
-            &mut DocumentIdArrays::starting_at(9),
+            &mut DocumentIdArrays::starting_at(10),
         )
         .1
     };
@@ -807,7 +808,7 @@ async fn non_utc_sessions_read_the_item_tables(
             ExpandedDynamicCursorArgs {
                 user_id: MacroUserIdStr::parse_from_str(USER).unwrap(),
                 limit: 1,
-                cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filter.clone()),
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filter.clone()),
                 exclude_frecency: false,
             },
             item_source,
@@ -1048,7 +1049,7 @@ fn selective_filters_read_the_item_tables() {
             properties.as_ref(),
             notified,
             USER,
-            &mut DocumentIdArrays::starting_at(9),
+            &mut DocumentIdArrays::starting_at(10),
         );
         assert_eq!(arm.is_some(), projected, "{description}");
     }
@@ -1081,7 +1082,7 @@ fn selective_filters_read_the_item_tables() {
             None,
             false,
             USER,
-            &mut DocumentIdArrays::starting_at(9),
+            &mut DocumentIdArrays::starting_at(10),
         )
         .is_none(),
         "a disabled CBM filter matches every document"

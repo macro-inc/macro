@@ -9,8 +9,9 @@
  * Calendar-month commitments that consume the payer's automatic reload cap.
  */
 export interface AutoReloadMonthlyBudget {
-  /** Reloads paid, pending, or failed with an invoice that can still collect.
-Customer cents; manual credit purchases do not count. */
+  /** Reloads and one-time card purchases paid, pending, or failed with an
+invoice that can still collect. Customer cents; Checkout purchases do
+not count. */
   committed_cents: number;
   /** Remaining cap cannot fund the minimum automatic reload charge. */
   limit_reached: boolean;

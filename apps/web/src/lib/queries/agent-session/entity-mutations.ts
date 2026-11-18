@@ -30,8 +30,8 @@ export async function renameAgentSession(id: string, name: string) {
   refreshSessionEntity(id);
 }
 
-export async function setAgentSessionArchived(id: string, isArchived: boolean) {
-  await throwOnErr(() => agentHarnessServiceClient.setArchived(id, isArchived));
+export async function setAgentSessionArchived(id: string, archived: boolean) {
+  await throwOnErr(() => agentHarnessServiceClient.setArchived(id, archived));
   refreshSessionEntity(id);
 }
 

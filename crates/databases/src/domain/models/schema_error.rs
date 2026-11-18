@@ -212,6 +212,9 @@ pub enum SchemaError {
     /// The import's request key was used for other contents.
     #[error("This import request changed. Start a new import.")]
     ImportRequestChanged,
+    /// The database has more rows than a duplicate copies.
+    #[error("This database is too large to duplicate.")]
+    DuplicateTooLarge,
     /// Another table of the database has the import's name.
     #[error("A table with this name already exists. Choose another name.")]
     ImportNameTaken,

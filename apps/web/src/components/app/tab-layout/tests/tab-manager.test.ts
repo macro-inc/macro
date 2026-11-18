@@ -3,6 +3,7 @@ import {
   createMemoryPaneStore,
   createSplitRouter,
   type Entry,
+  PANE_LEVEL,
   type PaneId,
   type SplitRouter,
 } from '@app/lib/split-router';
@@ -11,8 +12,14 @@ import {
   createTestPolicy,
 } from '@app/lib/split-router/tests/fixtures';
 import { createRoot } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
-import { createTabManager, type TabLayoutHost } from '../tab-manager';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { closeTabOrWindow } from '../close-tab-shortcut';
+import { NO_SPLITS_TAB_HOST } from '../DesktopTabsController';
+import {
+  createTabManager,
+  MAX_PARKED_TABS,
+  type TabLayoutHost,
+} from '../tab-manager';
 
 const fakeHost = (): TabLayoutHost => ({
   tabTitle: () => undefined,
@@ -22,7 +29,11 @@ const fakeHost = (): TabLayoutHost => ({
   activateSplit: () => {},
 });
 
-function setup(url: string, userId = `user-${Math.random()}`) {
+function setup(
+  url: string,
+  userId = `user-${Math.random()}`,
+  host = fakeHost()
+) {
   const history = createMemoryHistory(url);
   let created = 0;
   const { router, tabManager, dispose } = createRoot((dispose) => {
@@ -35,7 +46,7 @@ function setup(url: string, userId = `user-${Math.random()}`) {
     });
     const tabManager = createTabManager({
       router,
-      manager: fakeHost(),
+      manager: host,
       userId,
     });
     return { router, tabManager, dispose };
@@ -111,6 +122,35 @@ describe('desktop tab manager', () => {
     expect(router.canGo(router.panes()[0]!, -1)).toBe(true);
   });
 
+  it('scopes blocks to the tab they mount in, leaving the first unscoped', async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    const [first] = tabManager.tabs();
+    expect(tabManager.blockScope()).toBeUndefined();
+
+    tabManager.newTab();
+    await flush(router);
+    expect(tabManager.blockScope()).toBe(tabManager.activeTabId());
+
+    tabManager.activateTab(first!.id);
+    await flush(router);
+    expect(tabManager.blockScope()).toBeUndefined();
+  });
+
+  it('numbers tabs by position, with 9 always the last', async () => {
+    const { router, tabManager } = track(setup('/mail'));
+    tabManager.newTab();
+    await flush(router);
+    tabManager.newTab();
+    await flush(router);
+    const [first, second, third] = tabManager.tabs();
+
+    expect(tabManager.tabByNumber(1)).toBe(first);
+    expect(tabManager.tabByNumber(2)).toBe(second);
+    expect(tabManager.tabByNumber(3)).toBe(third);
+    expect(tabManager.tabByNumber(4)).toBeUndefined();
+    expect(tabManager.tabByNumber(9)).toBe(third);
+  });
+
   it('closing the active tab activates its neighbor and restores it', async () => {
     const { router, tabManager } = track(setup('/mail/t1'));
     const [first] = tabManager.tabs();
@@ -128,6 +168,35 @@ describe('desktop tab manager', () => {
     const { tabManager } = track(setup('/home'));
     tabManager.closeTab(tabManager.activeTabId());
     expect(tabManager.tabs()).toHaveLength(1);
+  });
+
+  it('Cmd+W closes the active tab and keeps the window while another tab is open', async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    const [first] = tabManager.tabs();
+    tabManager.newTab();
+    await flush(router);
+    const closeWindow = vi.fn(async () => {});
+
+    closeTabOrWindow(tabManager, closeWindow);
+    await flush(router);
+    expect(tabManager.tabs().map((tab) => tab.id)).toEqual([first!.id]);
+    expect(closeWindow).not.toHaveBeenCalled();
+  });
+
+  it('Cmd+W on the last tab closes the window and keeps the tab', () => {
+    const { tabManager } = track(setup('/home'));
+    const closeWindow = vi.fn(async () => {});
+
+    closeTabOrWindow(tabManager, closeWindow);
+    expect(tabManager.tabs()).toHaveLength(1);
+    expect(closeWindow).toHaveBeenCalledOnce();
+  });
+
+  it('Cmd+W without desktop tabs closes the window', () => {
+    const closeWindow = vi.fn(async () => {});
+
+    closeTabOrWindow(undefined, closeWindow);
+    expect(closeWindow).toHaveBeenCalledOnce();
   });
 
   it('openEntryInNewTab without activation leaves the layout alone', async () => {
@@ -171,5 +240,110 @@ describe('desktop tab manager', () => {
       kind: 'url',
       url: '/mail/t1',
     });
+  });
+
+  it('keeps the tabs on a page outside the app layout, such as a call', async () => {
+    const { router, tabManager, userId } = track(setup('/mail/t1'));
+    tabManager.newTab();
+    await flush(router);
+
+    // Entering a call swaps the app shell, and its tab owner, for the
+    // meeting shell, which owns tabs over the same router without splits.
+    const meeting = createRoot((dispose) => ({
+      tabManager: createTabManager({
+        router,
+        manager: NO_SPLITS_TAB_HOST,
+        userId,
+      }),
+      dispose,
+    }));
+    await router.navigate('/login');
+    await flush(router);
+    expect(meeting.tabManager.tabs()).toHaveLength(2);
+
+    meeting.tabManager.activateTab(meeting.tabManager.tabs()[0]!.id);
+    await flush(router);
+    expect(routeIds(router)).toEqual([['mail', 'mail-thread']]);
+    meeting.dispose();
+  });
+
+  it('parks the tab it leaves, so switching back shows the same panes without remounting', async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    const [first] = tabManager.tabs();
+    const firstPanes = router.panes();
+    const firstEntry = router.entry(firstPanes[0]!);
+
+    tabManager.newTab();
+    await flush(router);
+    const second = tabManager.activeTabId();
+    expect(tabManager.layerIds()).toEqual([first!.id, second]);
+    expect(tabManager.isLive(second)).toBe(true);
+    expect(tabManager.isLive(first!.id)).toBe(false);
+    // The left tab's panes stay retained, with their entries, in its layer.
+    expect(tabManager.layerSplits(first!.id)).toEqual(firstPanes);
+    expect(router.entry(firstPanes[0]!)).toBe(firstEntry);
+
+    tabManager.activateTab(first!.id);
+    await flush(router);
+    expect(router.panes()).toEqual(firstPanes);
+    expect(router.entry(firstPanes[0]!)).toBe(firstEntry);
+    expect(tabManager.isLive(first!.id)).toBe(true);
+    expect(tabManager.layerSplits(second)).toHaveLength(1);
+  });
+
+  it('the first live tab takes the initial layer, so enabling tabs remounts nothing', () => {
+    const { tabManager } = track(setup('/mail/t1'));
+    expect(tabManager.layerIds()).toEqual(['initial']);
+  });
+
+  it(`unmounts the least recently used tabs past ${MAX_PARKED_TABS} parked`, async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    const [first] = tabManager.tabs();
+    const firstPanes = router.panes();
+
+    for (let i = 0; i <= MAX_PARKED_TABS; i += 1) {
+      tabManager.newTab();
+      await flush(router);
+    }
+
+    const evicted = tabManager.tabs().find((tab) => tab.id === first!.id)!;
+    expect(evicted.stored.kind).toBe('snapshot');
+    expect(router.retainedPanes()).not.toContain(firstPanes[0]);
+    expect(tabManager.layerIds()).toHaveLength(MAX_PARKED_TABS + 1);
+
+    tabManager.activateTab(first!.id);
+    await flush(router);
+    expect(routeIds(router)).toEqual([['mail', 'mail-thread']]);
+  });
+
+  it('closing a background tab forgets its parked panes', async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    const [first] = tabManager.tabs();
+    const firstPanes = router.panes();
+    tabManager.newTab();
+    await flush(router);
+
+    tabManager.closeTab(first!.id);
+    expect(tabManager.tabs()).toHaveLength(1);
+    expect(router.retainedPanes()).toEqual(router.panes());
+    expect(router.entry(firstPanes[0]!)).toBeUndefined();
+  });
+
+  it('a leave guard in the active tab can refuse closing it', async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    tabManager.newTab();
+    await flush(router);
+    const closing = tabManager.activeTabId();
+    const stop = router.registerGuard(
+      router.panes()[0]!,
+      PANE_LEVEL,
+      () => false
+    );
+
+    tabManager.closeTab(closing);
+    await flush(router);
+    expect(tabManager.tabs()).toHaveLength(2);
+    expect(tabManager.activeTabId()).toBe(closing);
+    stop();
   });
 });

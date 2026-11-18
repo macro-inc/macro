@@ -9,6 +9,7 @@ async fn it_should_deserialize_query_params() {
         original_url: Some("https://example.com".parse().unwrap()),
         referral_code: Some("test".to_string()),
         is_mobile: true,
+        is_agent: true,
     };
 
     let json = serde_json::to_string(&sso_state).unwrap();
@@ -30,7 +31,7 @@ async fn it_should_deserialize_query_params() {
 
     assert_matches!(data, OAuthCbParams { code: Some(code), state: Some(container), .. } => {
         assert_eq!(code, "test123");
-        assert_matches!(container.decode().unwrap(), SsoState { original_url: Some(url), is_mobile: true, referral_code: Some(code) } => {
+        assert_matches!(container.decode().unwrap(), SsoState { original_url: Some(url), is_mobile: true, referral_code: Some(code), is_agent: true } => {
             assert_eq!(url.as_str(), "https://example.com/");
             assert_eq!(code.as_str(), "test");
         })
@@ -107,6 +108,7 @@ async fn it_writes_session_code_to_db() {
             original_url: Some("https://macro.com".parse().unwrap()),
             is_mobile: true,
             referral_code: None,
+            is_agent: false,
         }),
         async |x| dummy.cb(x).await,
     )
@@ -132,6 +134,7 @@ async fn it_rejects_disallowed_original_url_without_side_effects() {
             original_url: Some("https://evil.example.com/phish".parse().unwrap()),
             is_mobile: true,
             referral_code: None,
+            is_agent: false,
         }),
         async |x| dummy.cb(x).await,
     )
@@ -148,6 +151,7 @@ async fn it_allows_macro_scheme_original_url() {
             original_url: Some("macro://login".parse().unwrap()),
             is_mobile: false,
             referral_code: None,
+            is_agent: false,
         }),
         async |x| dummy.cb(x).await,
     )
@@ -186,4 +190,84 @@ fn html_redirect_works() {
     let res = html_redirect_inner(&"https://example.com".parse().unwrap()).into_string();
     dbg!(&res);
     assert!(res.contains(r#"<meta http-equiv="refresh" content="0;url=https://example.com/">"#));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn redirect_telemetry_carries_no_session_code() {
+    let state = Some(SsoState {
+        // A code left over from an earlier attempt rides in on the state.
+        original_url: Some(
+            "https://macro.com/app/login?token=stale-code"
+                .parse()
+                .unwrap(),
+        ),
+        is_mobile: true,
+        referral_code: None,
+        is_agent: false,
+    });
+    let (traces, _guard) = crate::api::trace_capture::capture_traces();
+    let mut dummy = DummyCb::default();
+    get_redirect_url(&state, async |x| dummy.cb(x).await)
+        .await
+        .unwrap();
+    traces.rearm();
+    let url = get_redirect_url(&state, async |x| dummy.cb(x).await)
+        .await
+        .unwrap();
+    let code = url
+        .query_pairs()
+        .find(|(k, _)| k == "token")
+        .map(|(_, v)| v.into_owned())
+        .unwrap();
+
+    let text = traces.text();
+    assert!(
+        text.contains("get_redirect_url"),
+        "spans were captured: {text}"
+    );
+    assert!(
+        !text.contains(&code),
+        "session code reached telemetry: {text}"
+    );
+    assert!(
+        !text.contains("stale-code"),
+        "stale code reached telemetry: {text}"
+    );
+}
+
+fn sso_state(original_url: Option<&str>) -> SsoState {
+    SsoState {
+        original_url: original_url.map(|url| url.parse().unwrap()),
+        is_mobile: false,
+        referral_code: None,
+        is_agent: false,
+    }
+}
+
+#[test]
+fn sign_in_failure_returns_to_the_starting_page_with_the_reason() {
+    let state = sso_state(Some("https://macro.com/app/signup?referral_code=abc"));
+    let url = sign_in_failure_url(Some(&state), ConsentFailure::AdminConsentRequired).unwrap();
+    assert_eq!(
+        url.as_str(),
+        "https://macro.com/app/signup?referral_code=abc&sso_error=admin_consent_required"
+    );
+}
+
+#[test]
+fn sign_in_failure_replaces_an_earlier_reason() {
+    let state = sso_state(Some("https://macro.com/app/signup?sso_error=failed"));
+    let url = sign_in_failure_url(Some(&state), ConsentFailure::Cancelled).unwrap();
+    assert_eq!(
+        url.as_str(),
+        "https://macro.com/app/signup?sso_error=cancelled"
+    );
+}
+
+#[test]
+fn sign_in_failure_needs_an_allowed_page_to_return_to() {
+    assert!(sign_in_failure_url(None, ConsentFailure::Failed).is_none());
+    assert!(sign_in_failure_url(Some(&sso_state(None)), ConsentFailure::Failed).is_none());
+    let forged = sso_state(Some("https://evil.example.com/phish"));
+    assert!(sign_in_failure_url(Some(&forged), ConsentFailure::Failed).is_none());
 }

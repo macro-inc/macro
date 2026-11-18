@@ -26,7 +26,9 @@ use agent_fold::domain::model::TurnId;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::events::{InFlightTurnSummary, TurnSummary};
 use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::PrompterKind;
 use agent_session::domain::model::StoredQueuedAction;
+use agent_session::domain::model::UiClientId;
 use agent_session::domain::ports::QueuedControl;
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
@@ -60,6 +62,11 @@ pub struct QueuedEntry {
     pub announce: Option<AnnounceOrigin>,
     /// Why the agent is being asked, composed into the prompt at dispatch.
     pub context: Option<TriggerContext>,
+    /// The app tab the prompt was typed in, recorded on the turn it opens.
+    pub client: Option<UiClientId>,
+    /// Whether a person or a program for them wrote the prompt; a system
+    /// turn is told apart by its notifications instead.
+    pub prompter: PrompterKind,
     /// The chip message, once posted. Set by the dispatch that posts it and
     /// carried through a requeue, so a dispatch that fails *after*
     /// announcing retries without posting a second chip.
@@ -162,6 +169,32 @@ impl From<&QueuedEntry> for QueuedControl {
 }
 
 impl QueuedEntry {
+    /// Who the turn this entry opens acts for: a system turn acts for nobody,
+    /// even when the batch names a user.
+    pub fn prompter_kind(&self) -> PrompterKind {
+        if matches!(&self.action, AgentAction::Prompt(prompt) if prompt.notifications.as_ref().is_some_and(|input| input.system_turn))
+        {
+            PrompterKind::System
+        } else {
+            self.prompter
+        }
+    }
+
+    /// The person who typed this prompt into the session itself, from the
+    /// session view or the API: a human prompt with no thread to announce
+    /// into and no trigger behind it. A mention in a channel, document or call
+    /// thread carries its origin (`announce`), and a runtime forwarding a
+    /// triggered prompt carries its `context`; neither counts. A tool that
+    /// prompts on a person's behalf with no trigger counts as theirs.
+    /// Following a session is what lists a hidden one for this person.
+    pub fn direct_prompter(&self) -> Option<&MacroUserIdStr<'static>> {
+        let typed = matches!(self.action, AgentAction::Prompt(_))
+            && self.prompter_kind() == PrompterKind::User
+            && self.announce.is_none()
+            && self.context.is_none();
+        self.actor.as_ref().filter(|_| typed)
+    }
+
     /// The durable form written to the session store.
     pub fn to_stored(&self) -> anyhow::Result<StoredQueuedAction> {
         Ok(StoredQueuedAction {
@@ -176,6 +209,8 @@ impl QueuedEntry {
                 .transpose()?,
             announced_message_id: self.announced,
             context: self.context.clone(),
+            client: self.client,
+            prompter: self.prompter,
         })
     }
 
@@ -188,6 +223,8 @@ impl QueuedEntry {
             announce: stored.announce.map(serde_json::from_value).transpose()?,
             announced: stored.announced_message_id,
             context: stored.context,
+            client: stored.client,
+            prompter: stored.prompter,
             created_at: stored.created_at,
         })
     }
@@ -328,13 +365,15 @@ impl SessionQueues {
     ///
     /// `actor` becomes the entry's actor: the user who rewrote the text is
     /// who later dispatch announces and logs as, so an edit cannot keep
-    /// someone else's name on words they did not type.
+    /// someone else's name on words they did not type. A program's edit
+    /// makes the entry a program's, and no later edit makes it a person's.
     pub fn edit_prompt(
         &self,
         session: AgentSessionId,
         action_id: AgentActionId,
         prompt: String,
         actor: Option<MacroUserIdStr<'static>>,
+        prompter: PrompterKind,
     ) -> Result<(), QueueError> {
         let mut queue = self.queues.get_mut(&session).ok_or(QueueError::NotFound)?;
         let entry = queue
@@ -345,6 +384,7 @@ impl SessionQueues {
             AgentAction::Prompt(action) => {
                 action.prompt = prompt;
                 entry.actor = actor;
+                entry.prompter = entry.prompter.after_edit(prompter);
                 Ok(())
             }
             AgentAction::SetModel(_)

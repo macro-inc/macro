@@ -8,25 +8,24 @@ export function createEmbedState(
   prepare: () => void
 ) {
   const [activeId, setActiveId] = createSignal<string>();
-  const active = () => {
-    const id = activeId();
-    const item = id ? document.items[id] : undefined;
-    return item?.type === 'document' &&
+  const canEnter = (id: string) => {
+    const item = document.items[id];
+    if (item?.type === 'artifact') return true;
+
+    return (
+      item?.type === 'document' &&
       item.geometry.display === 'embed' &&
       canEmbedDocument(item.geometry.fileType)
-      ? id
-      : undefined;
+    );
+  };
+  const active = () => {
+    const id = activeId();
+    return id && canEnter(id) ? id : undefined;
   };
   return {
     active,
     enter(id: string) {
-      const item = document.items[id];
-      if (
-        item?.type !== 'document' ||
-        item.geometry.display !== 'embed' ||
-        !canEmbedDocument(item.geometry.fileType)
-      )
-        return;
+      if (!canEnter(id)) return;
       prepare();
       editor.select(id);
       setActiveId(id);

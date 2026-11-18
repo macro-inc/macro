@@ -30,6 +30,8 @@ export type TeamCrmConfig = {
   teamViews?: TeamCrmSavedView[];
   /** Team view applied by default when a member opens the Customers view. */
   defaultTeamViewId?: string;
+  /** Whether email sync keeps personal addresses (gmail.com etc.) out. */
+  excludePersonalEmails?: boolean;
 };
 
 /**
@@ -46,6 +48,7 @@ export type TeamCrmConfigPatch = {
     | TeamCrmSavedView[]
     | ((current: TeamCrmSavedView[]) => TeamCrmSavedView[]);
   defaultTeamViewId?: string | null;
+  excludePersonalEmails?: boolean;
 };
 
 export const DEFAULT_CRM_PERMISSIONS: CrmPermissions = {

@@ -18,6 +18,9 @@ let
     partOf = [ "observability-secrets.service" ];
   };
   relayUrl = "http://127.0.0.1:8090/goalert";
+  # services/bots/goalert-bot: posts alerts to Macro Alerts with thread replies and
+  # mentions. The webhook secret follows this prefix in the escalation step URL.
+  goalertBotUrl = "https://goalert-bot.macroverse.workers.dev/goalert/";
   # GoAlert's config.Config, applied with `goalert set-config` before every
   # start. `@name@` strings are replaced with the credential of that name.
   goalertConfig = {
@@ -38,7 +41,10 @@ let
     };
     Webhook = {
       Enable = true;
-      AllowedURLs = [ relayUrl ];
+      AllowedURLs = [
+        relayUrl
+        goalertBotUrl
+      ];
     };
     Maintenance = {
       AlertCleanupDays = 180;

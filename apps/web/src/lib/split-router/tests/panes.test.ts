@@ -162,8 +162,8 @@ describe('panes', () => {
 
   it('inserts, moves and removes panes in order', () => {
     const { panes, removed } = setup();
-    panes.insert(pane('a'), card('1'), 0);
-    panes.insert(pane('b'), card('2'), 1);
+    panes.insert(pane('a'), card('1'), { insertAt: 0 });
+    panes.insert(pane('b'), card('2'), { insertAt: 1 });
     expect(panes.ids()).toEqual(['a', 'b']);
 
     expect(panes.move(pane('b'), 0)).toBe(true);
@@ -185,15 +185,15 @@ describe('panes', () => {
     expect(insertionIndex([a, b], 1, [b])).toBe(1);
 
     const { panes } = setup();
-    panes.insert(a, card('1'), 0);
-    panes.insert(b, card('2'), 1, [a]);
-    panes.insert(c, card('3'), 1, [a]);
+    panes.insert(a, card('1'), { insertAt: 0 });
+    panes.insert(b, card('2'), { insertAt: 1 }, [a]);
+    panes.insert(c, card('3'), { insertAt: 1 }, [a]);
     expect(panes.ids()).toEqual(['a', 'b', 'c']);
   });
 
   it('records each change and how the pane arrived', () => {
     const { panes } = setup();
-    panes.insert(pane('a'), card('1'), 0);
+    panes.insert(pane('a'), card('1'), { insertAt: 0 });
     expect(panes.arrival(pane('a'))).toBe('fresh');
     panes.commit(pane('a'), { type: 'push', entry: card('2') }, 'fresh');
     panes.commit(pane('a'), { type: 'go', index: 0, entry: card('1') }, 'back');
@@ -203,10 +203,10 @@ describe('panes', () => {
 
   it('applies a diff: moving through history, changing and removing panes', () => {
     const { panes, removed } = setup();
-    panes.insert(pane('a'), card('1', 'home'), 0);
+    panes.insert(pane('a'), card('1', 'home'), { insertAt: 0 });
     panes.commit(pane('a'), { type: 'push', entry: card('2', 'mail') });
-    panes.insert(pane('b'), card('3', 'drive'), 1);
-    panes.insert(pane('c'), card('4', 'tasks'), 2);
+    panes.insert(pane('b'), card('3', 'drive'), { insertAt: 1 });
+    panes.insert(pane('c'), card('4', 'tasks'), { insertAt: 2 });
 
     const diff = panes.diff(
       [
@@ -242,7 +242,7 @@ describe('panes', () => {
         return { type: 'keep' };
       },
     });
-    panes.insert(pane('a'), card('1'), 0);
+    panes.insert(pane('a'), card('1'), { insertAt: 0 });
     expect(panes.placeNewPane({ destination: 'doc' })).toEqual({
       pane: 'a',
     });

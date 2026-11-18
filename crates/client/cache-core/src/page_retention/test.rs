@@ -67,12 +67,42 @@ fn retains_recent_writes_across_reopen_and_keeps_non_page_fields() {
 }
 
 #[test]
+fn contact_queries_share_the_page_budget_and_are_omitted_during_hydration() {
+    let mut record = viewer();
+    for n in 0..MAX_SOUP_PAGES * 2 {
+        let field = ["contacts", "contactsByUserIds", "contactsByEmails", "soup"][n % 4];
+        let mut update = viewer();
+        update.fields.insert(format!("{field}({n})"), page());
+        record.merge(update);
+    }
+    assert_eq!(
+        record
+            .fields
+            .keys()
+            .filter(|key| is_page_field(key))
+            .count(),
+        MAX_SOUP_PAGES
+    );
+    assert!(!record.fields.contains_key("contacts(0)"));
+    record
+        .fields
+        .insert("contactsSettings".into(), CacheValue::Bool(true));
+    let mut updates =
+        RecordUpdates::from([(EntityKey::entity("GraphqlUser", &["viewer"]), record)]);
+    omit_hydration_pages(&mut updates);
+    let viewer = &updates[&EntityKey::entity("GraphqlUser", &["viewer"])];
+    assert!(viewer.fields.keys().all(|key| !is_page_field(key)));
+    assert_eq!(viewer.fields["contactsSettings"], CacheValue::Bool(true));
+    assert!(!viewer.fields.contains_key(PAGE_ORDER_FIELD));
+}
+
+#[test]
 fn combined_flat_and_grouped_pages_obey_encoded_byte_budget() {
     let mut record = viewer();
     for n in 0..MAX_SOUP_PAGES {
         record.fields.insert(
             format!("groupSoup({n})"),
-            CacheValue::String("x".repeat(32 * 1024)),
+            CacheValue::String("x".repeat(64 * 1024)),
         );
     }
     record.fields.insert(key(0), page());
@@ -149,4 +179,31 @@ fn hydration_drops_only_viewer_pages_not_children_or_other_relations() {
         updates[&EntityKey("GraphqlSoupEmailThread:one".into())],
         child
     );
+}
+
+#[test]
+fn database_view_pages_share_retention_and_hydration_policy() {
+    let initial = r#"databaseViewRows({"databaseId":"db","input":{"tableId":"table","query":{"sort":[]},"limit":500}})"#;
+    let mut record = viewer();
+    for cursor in 0..MAX_SOUP_PAGES * 2 {
+        let mut update = viewer();
+        update.fields.insert(format!(r#"databaseViewRows({{"databaseId":"db","input":{{"tableId":"table","query":{{"sort":[]}},"cursor":"{cursor:04}","limit":500}}}})"#), page());
+        record.merge(update);
+    }
+    let mut update = viewer();
+    update.fields.insert(initial.into(), page());
+    record.merge(update);
+    assert_eq!(
+        record
+            .fields
+            .keys()
+            .filter(|key| key.starts_with("databaseViewRows("))
+            .count(),
+        64
+    );
+    assert!(record.fields.contains_key(initial));
+    let viewer_key = EntityKey("GraphqlUser:viewer".into());
+    let mut updates = [(viewer_key.clone(), record)].into();
+    omit_hydration_pages(&mut updates);
+    assert_eq!(updates[&viewer_key], viewer());
 }

@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO harness_runtime_connection\n                    (harness_id, id, replica_id, lease_expires_at)\n                SELECT live.harness_id, live.id, $3, now() + make_interval(secs => $4)\n                FROM UNNEST($1::uuid[], $2::uuid[]) AS live(harness_id, id)\n                JOIN harnesses ON harnesses.id = live.harness_id\n                ON CONFLICT (harness_id, id) DO UPDATE\n                SET lease_expires_at = EXCLUDED.lease_expires_at\n                RETURNING harness_id, id, (xmax = 0) AS \"restored!\"\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harness_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "restored!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "e40e811009a56836ce10a1cd8d731a74aaaf7f7ddda8ff82abb89d6c10fc8524"
+}

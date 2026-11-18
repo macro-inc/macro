@@ -27,6 +27,7 @@ fn joined_webhook(
         id: "participant-joined-event-id".to_string(),
         room_name: Some(room_name.to_string()),
         participant_identity: participant_identity.map(|email| user(email).into_owned()),
+        bot_identity: None,
         egress_id: None,
         file_url: None,
         created_at: 1_775_000_000,
@@ -104,6 +105,39 @@ async fn guest_joining_an_archived_call_room_is_removed_and_the_room_deleted() {
     let mut repo = untracked_room_repo(Some(archived_record(ORPHAN_CALL_ID)));
     repo.expect_reconcile_guest().never();
 
+    process_join(repo, rtc_client).await;
+}
+
+#[tokio::test]
+async fn bot_joining_an_archived_call_room_is_removed_without_attendance() {
+    let room_name = ORPHAN_CALL_ID.to_string();
+    let bot_id = bot_id::BotId::new_from_uuid(ORPHAN_GUEST_ID);
+    let event = CallWebhookEvent {
+        event: "participant_joined".to_string(),
+        id: "bot-joined".to_string(),
+        room_name: Some(room_name.clone()),
+        participant_identity: None,
+        guest_identity: None,
+        bot_identity: Some(bot_id),
+        egress_id: None,
+        file_url: None,
+        created_at: 1_775_000_000,
+    };
+    let mut rtc_client = MockCallRtcClient::new();
+    rtc_client
+        .expect_receive_webhook()
+        .times(1)
+        .return_once(move |_, _| Ok(event));
+    rtc_client
+        .expect_remove_bot()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    rtc_client
+        .expect_delete_room()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(()) }));
+    let mut repo = untracked_room_repo(Some(archived_record(ORPHAN_CALL_ID)));
+    repo.expect_add_participant().never();
     process_join(repo, rtc_client).await;
 }
 

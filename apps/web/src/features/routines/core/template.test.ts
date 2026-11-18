@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { createEmptyDraft } from './routine-draft';
 import {
   extractTemplateVariables,
   fillTemplatePrompt,
   fillTemplateTrigger,
+  templateShareBody,
 } from './template';
 
 const AUTHOR =
@@ -33,7 +35,7 @@ describe('extractTemplateVariables', () => {
   it('fills the author and time zone as the activator and keeps other references', () => {
     expect(
       extractTemplateVariables({
-        prompt: PROMPT,
+        texts: [PROMPT],
         timezone: CRON.timezone,
         authorId: 'macro|eric@macro.com',
       })
@@ -71,7 +73,7 @@ describe('extractTemplateVariables', () => {
   it('has no time zone for event-only routines', () => {
     expect(
       extractTemplateVariables({
-        prompt: 'Summarize it',
+        texts: ['Summarize it'],
         timezone: undefined,
         authorId: 'macro|eric@macro.com',
       })
@@ -81,7 +83,7 @@ describe('extractTemplateVariables', () => {
 
 describe('fillTemplatePrompt', () => {
   const variables = extractTemplateVariables({
-    prompt: PROMPT,
+    texts: [PROMPT],
     timezone: CRON.timezone,
     authorId: 'macro|eric@macro.com',
   });
@@ -150,5 +152,132 @@ describe('fillTemplateTrigger', () => {
         activator: ACTIVATOR,
       })
     ).toEqual(CRON);
+  });
+});
+
+describe('templateShareBody', () => {
+  it('shares references from the Ask AI step’s text', () => {
+    const draft = {
+      ...createEmptyDraft(''),
+      triggers: [
+        {
+          id: 'tasks',
+          kind: 'event' as const,
+          events: ['task.created' as const],
+        },
+      ],
+      steps: [
+        {
+          id: 'label',
+          kind: 'code' as const,
+          title: 'Label it',
+          summary: '',
+          source: 'export async function main() {}',
+          knobs: [],
+        },
+        {
+          id: 'tell',
+          kind: 'agent' as const,
+          target: { kind: 'model' as const, model: 'model' },
+          instructions: `Tell ${AUTHOR}, cc ${TEAMMATE}`,
+        },
+      ],
+    };
+    expect(
+      templateShareBody({
+        draft,
+        authorId: 'macro|eric@macro.com',
+        shared: null,
+      }).variables
+    ).toEqual([
+      {
+        kind: 'user',
+        id: 'macro|eric@macro.com',
+        label: 'Eric',
+        fill: 'activator',
+      },
+      {
+        kind: 'user',
+        id: 'macro|priya@macro.com',
+        label: 'Priya Shah',
+        fill: 'shared',
+      },
+    ]);
+  });
+
+  it('keeps the shared template’s fills and description for references the routine still has', () => {
+    const draft = {
+      ...createEmptyDraft(''),
+      target: { kind: 'agent' as const, agentId: 'agent-1' },
+    };
+    expect(
+      templateShareBody({
+        draft: { ...draft, prompt: PROMPT, timezone: CRON.timezone },
+        authorId: 'macro|eric@macro.com',
+        shared: {
+          active_count: 2,
+          appearance: { icon: null, color: null },
+          author: 'macro|eric@macro.com',
+          created_at: '2026-10-01T00:00:00Z',
+          description: 'Weekly renewals digest',
+          id: 'routine-1',
+          name: 'Renewals',
+          task: { prompt: '', user_prompt: PROMPT, model: 'model' },
+          trigger: CRON,
+          updated_at: '2026-10-01T00:00:00Z',
+          variables: [
+            {
+              kind: 'item',
+              id: 'doc-1',
+              block_name: 'md',
+              label: 'Acme account',
+              fill: 'choice',
+            },
+            {
+              kind: 'item',
+              id: 'doc-removed',
+              block_name: 'md',
+              label: 'Old notes',
+              fill: 'choice',
+            },
+          ],
+        },
+      })
+    ).toEqual({
+      description: 'Weekly renewals digest',
+      variables: [
+        {
+          kind: 'item',
+          id: 'channel-1',
+          block_name: 'channel',
+          label: 'customer-success',
+          fill: 'shared',
+        },
+        {
+          kind: 'item',
+          id: 'doc-1',
+          block_name: 'md',
+          label: 'Acme account',
+          fill: 'choice',
+        },
+        {
+          kind: 'user',
+          id: 'macro|priya@macro.com',
+          label: 'Priya Shah',
+          fill: 'shared',
+        },
+        {
+          kind: 'user',
+          id: 'macro|eric@macro.com',
+          label: 'Eric',
+          fill: 'activator',
+        },
+        {
+          kind: 'time_zone',
+          timezone: CRON.timezone,
+          fill: 'activator',
+        },
+      ],
+    });
   });
 });

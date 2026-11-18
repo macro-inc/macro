@@ -1,6 +1,9 @@
 use models_opensearch::SearchIndex;
 
-use crate::{Result, error::OpensearchClientError};
+use crate::{
+    Result,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 #[tracing::instrument(skip(client))]
 pub async fn delete_call_record_by_id(
@@ -12,7 +15,7 @@ pub async fn delete_call_record_by_id(
         client,
         "entity_id",
         call_id,
-        "delete_call_record_by_id",
+        OpensearchOperation::DeleteCallRecordById,
         index_override,
     )
     .await
@@ -28,7 +31,7 @@ pub async fn delete_call_records_by_channel_id(
         client,
         "channel_id",
         channel_id,
-        "delete_call_records_by_channel_id",
+        OpensearchOperation::DeleteCallRecordsByChannelId,
         index_override,
     )
     .await
@@ -38,7 +41,7 @@ async fn delete_by_term(
     client: &opensearch::OpenSearch,
     field: &str,
     value: &str,
-    method: &str,
+    operation: OpensearchOperation,
     index_override: Option<&str>,
 ) -> Result<()> {
     let query = serde_json::json!({ "query": { "term": { field: value } } });
@@ -50,25 +53,18 @@ async fn delete_by_term(
         .refresh(true)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some(method.to_string()),
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed(operation, &err))?;
 
     let status = response.status_code();
     if !status.is_success() {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some(method.to_string()),
-                })?;
+        let body = response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::deserialization_failed(operation, &err))?;
         tracing::error!(status_code = ?status, body = ?body, "error deleting call records");
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some(method.to_string()),
+            operation,
         });
     }
 

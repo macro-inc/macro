@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO mcp_oauth_revoked_grants (grant_id, expires_at)\n            VALUES ($1, $2)\n            ON CONFLICT (grant_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ee8909b218259300b169b35afc1ad6667b2efe911688f1a5dd7285a98eb3afb1"
+}

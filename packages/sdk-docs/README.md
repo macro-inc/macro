@@ -16,28 +16,20 @@ are excluded from the reference.
 From this directory:
 
 ```sh
-bun run generate
-bun run check:generated
+bun run build
 bun run type-check
 bun run test
 bun run docs:dev
 ```
 
-The generated [Markdown reference](reference/README.md) is checked in under
-`reference/` so SDK changes include reviewable documentation. Edit SDK source
-comments or declarations, then run `bun run generate` and commit the regenerated
-reference. Generated pages are collapsed by default in pull requests.
-
-`bun run check:generated` renders fresh Markdown and HTML into ignored
-`dist/docs/` and compares every Markdown path and byte against `reference/`.
-It fails on changed, added or removed pages without rewriting the reference.
-`bun run test` performs this check before testing public contracts, so CI catches
-stale documentation. `bun run build` produces only ignored build assets.
+`bun run build` renders the Markdown and HTML into ignored `dist/docs/`; nothing
+generated is committed. `bun run test` builds them before testing public
+contracts. Edit SDK source comments or declarations and rebuild to see the
+result.
 
 Wrangler serves the HTML as static assets without a request handler, credentials,
-database or model calls. It builds the docs before serving them without modifying
-the checked-in reference. To publish to your configured Cloudflare account,
-run `bun run docs:deploy`.
+database or model calls. It builds the docs before serving them. To publish to
+your configured Cloudflare account, run `bun run docs:deploy`.
 
 The production address is `https://sdk.macro.com`, configured as a Worker
 custom domain. The `Deploy SDK Docs` workflow publishes relevant changes on

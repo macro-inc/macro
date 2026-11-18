@@ -1,18 +1,22 @@
 import { toast } from '@core/component/Toast/Toast';
+import type { IUser } from '@core/user';
+import { idToDisplayName, idToEmail } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
 import { useMutation } from '@tanstack/solid-query';
+import { type Accessor, createMemo } from 'solid-js';
 import {
   invalidateAiBillingSummary,
   invalidateSubscriptionStatus,
 } from '../auth';
 import { queryClient } from '../client';
+import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { teamKeys } from './keys';
-import { invalidateTeam } from './teams';
+import { invalidateTeam, useCurrentTeamQuery } from './teams';
 
 type RemoveUserFromTeamArgs = { teamId: string; userId: string };
 type RemoveUserFromTeamContext = { previousTeam: TeamWithMembers | undefined };
@@ -22,6 +26,27 @@ type RemoveUserFromTeamCallbacks = MutationCallbacks<
   RemoveUserFromTeamArgs,
   RemoveUserFromTeamContext
 >;
+
+/** The cached current team roster, independent of the viewer's contacts. */
+export function useTeamMembers(enabled: Accessor<boolean>) {
+  const query = useCurrentTeamQuery(enabled);
+  const users = createMemo((): IUser[] => {
+    if (!enabled()) return [];
+    if (!queryReadyGate(query)) return [];
+
+    return (query.data?.members ?? []).map(({ user_id }) => ({
+      id: user_id,
+      email: idToEmail(user_id),
+      name: idToDisplayName(user_id),
+    }));
+  });
+
+  return {
+    users,
+    isLoading: () => enabled() && query.isPending,
+    isError: () => enabled() && query.isError,
+  };
+}
 
 export function useRemoveUserFromTeamMutation(
   callbacks?: RemoveUserFromTeamCallbacks

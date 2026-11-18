@@ -17,6 +17,7 @@ fn connection(app_slug: &str, enabled: bool) -> PipedreamConnection {
         server_name: format!("{app_slug} display name"),
         account_id: format!("apn_{app_slug}"),
         enabled,
+        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
     }
 }
 
@@ -109,7 +110,12 @@ async fn resolves_an_app_slug_verbatim() {
     );
 
     let McpResolution::Connected(call) = credentials
-        .resolve(&owner(), BotId::TEST_A, &connected("google_sheets"))
+        .resolve(
+            &owner(),
+            BotId::TEST_A,
+            uuid::Uuid::nil(),
+            &connected("google_sheets"),
+        )
         .await
         .expect("resolved")
     else {
@@ -131,7 +137,12 @@ async fn carries_the_scoping_headers_next_to_the_bearer() {
     );
 
     let McpResolution::Connected(call) = credentials
-        .resolve(&owner(), BotId::TEST_A, &connected("linear"))
+        .resolve(
+            &owner(),
+            BotId::TEST_A,
+            uuid::Uuid::nil(),
+            &connected("linear"),
+        )
         .await
         .expect("resolved")
     else {
@@ -165,7 +176,12 @@ async fn a_disabled_connection_resolves_as_unconnected() {
     );
 
     let resolution = credentials
-        .resolve(&owner(), BotId::TEST_A, &connected("linear"))
+        .resolve(
+            &owner(),
+            BotId::TEST_A,
+            uuid::Uuid::nil(),
+            &connected("linear"),
+        )
         .await
         .expect("resolved");
 
@@ -191,7 +207,12 @@ async fn a_slug_nobody_connected_resolves_as_unconnected_for_the_owner() {
         PipedreamMcpCredentials::new(Arc::new(FixedConnections(Vec::new())), upstream.clone());
 
     let McpResolution::Unconnected(call) = credentials
-        .resolve(&owner(), BotId::TEST_A, &connected("linear"))
+        .resolve(
+            &owner(),
+            BotId::TEST_A,
+            uuid::Uuid::nil(),
+            &connected("linear"),
+        )
         .await
         .expect("resolved")
     else {
@@ -220,7 +241,12 @@ async fn refuses_a_cleartext_upstream() {
     );
 
     let refusal = credentials
-        .resolve(&owner(), BotId::TEST_A, &connected("linear"))
+        .resolve(
+            &owner(),
+            BotId::TEST_A,
+            uuid::Uuid::nil(),
+            &connected("linear"),
+        )
         .await
         .expect_err("refused");
 

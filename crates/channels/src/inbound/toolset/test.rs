@@ -80,6 +80,7 @@ impl RecordingMessages {
         reactions: Vec<messages::domain::models::CountedReaction>,
     ) -> messages::domain::models::Message {
         messages::domain::models::Message {
+            kind: messages::domain::models::MessageKind::Message,
             id,
             parent: messages::domain::models::MessageParent::parse("channel", channel_id).unwrap(),
             thread_id: None,
@@ -149,6 +150,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             _ => Sender::new_from_user(user_id()),
         };
         let message = messages::domain::models::Message {
+            kind: messages::domain::models::MessageKind::Message,
             id: Uuid::new_v4(),
             parent,
             thread_id: input.thread_id,
@@ -204,6 +206,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             vec![messages::domain::models::CountedReaction {
                 emoji: emoji.clone(),
                 users: vec![TEST_USER_ID.to_string()],
+                names: None,
             }]
         } else {
             vec![]
@@ -1235,6 +1238,7 @@ async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
         channel_id,
         thread_id: None,
         attachments: vec![],
+        silent: false,
     };
 
     tool.call(
@@ -1282,7 +1286,43 @@ async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
         messages::domain::models::MessageAttribution::ActingUser
     );
     assert_eq!(default_input.content, "hello");
+    assert_eq!(
+        default_input.notification_policy,
+        messages::domain::models::PostMessageNotificationPolicy::Default
+    );
     assert_eq!(bot_of(custom_access), Some(BotId::TEST_A));
+}
+
+#[tokio::test]
+async fn send_channel_message_silent_posts_without_notifying() {
+    let messages = RecordingMessages::default();
+    let posts = messages.posts.clone();
+    let tool: SendChannelMessage = serde_json::from_value(serde_json::json!({
+        "content": "nightly sync done",
+        "channel_id": Uuid::new_v4(),
+        "silent": true,
+    }))
+    .expect("silent deserializes");
+
+    tool.call(
+        ServiceContext(ChannelToolContext::new(
+            Arc::new(messages),
+            ToolTestChannelService::default(),
+            ToolTestAccessService::default(),
+        )),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("member can post");
+
+    let posts = posts.lock().expect("post lock");
+    let [(_, input)] = posts.as_slice() else {
+        panic!("expected one post, got {}", posts.len());
+    };
+    assert_eq!(
+        input.notification_policy,
+        messages::domain::models::PostMessageNotificationPolicy::Silent
+    );
 }
 
 #[tokio::test]

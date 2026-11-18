@@ -1,6 +1,7 @@
+import { ssoFallbackNotice } from '../core/sso-fallback';
 import '@fontsource-variable/inter';
 import '../../../index.css';
-import { For, Match, onMount, Show, Switch } from 'solid-js';
+import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { render } from 'solid-js/web';
 import { OnboardingProvider } from '../../onboarding/context/onboarding-context';
@@ -60,6 +61,7 @@ const auth = createFakeAuth(
             id: `macro|${email}`,
             email,
             tutorialComplete: draft.accounts[email].tutorialComplete,
+            isAgent: false,
           };
         });
         location.assign(location.href);
@@ -76,6 +78,38 @@ const auth = createFakeAuth(
     verifyLatencyMs,
   }
 );
+// A verified code can precede a failed local cache/session cleanup. Keep the
+// mounted view signed out until completion succeeds, as the real identity gate does.
+if (params.cleanupFailure === 'once') {
+  const session = auth.context.session;
+  const completeLogin = auth.context.completeLogin;
+  const verifyEmailCode = auth.context.verifyEmailCode;
+  const sendEmailCode = auth.context.sendEmailCode;
+  const consumed = new Set<string>();
+  auth.context.verifyEmailCode = async (input) => {
+    if (consumed.has(input.email)) return { t: 'invalid-code' };
+    const result = await verifyEmailCode(input);
+    if (result.t === 'verified') consumed.add(input.email);
+    return result;
+  };
+  auth.context.sendEmailCode = async (input) => {
+    const result = await sendEmailCode(input);
+    if (result.t === 'code-sent') consumed.delete(input.email);
+    return result;
+  };
+  const [ready, setReady] = createSignal(false);
+  let failed = false;
+  auth.context.session = () => (ready() ? session() : { t: 'signed-out' });
+  auth.context.completeLogin = async () => {
+    if (!failed) {
+      failed = true;
+      auth.context.notifyFailure('Local cleanup failed. Try signing in again.');
+      throw new Error('Injected login cleanup failure');
+    }
+    await completeLogin();
+    setReady(true);
+  };
+}
 write(FIXTURE_KEYS.auth, structuredClone(unwrap(auth.world)));
 
 /** The onboarding backend, which sees the account auth just signed in. */
@@ -171,9 +205,12 @@ function Fixture() {
           <AuthView
             intent={page === 'signup' ? 'signup' : 'login'}
             showApple={params.apple !== undefined}
+            // On, as in dev builds; `?microsoft=off` is the production default.
+            showMicrosoft={params.microsoft !== 'off'}
             compact={false}
             initialEmail={params.email}
             token={sessionTokenParam(params.token)}
+            ssoFallbackNotice={ssoFallbackNotice(params.sso_error)}
             signupJourney={
               page === 'signup'
                 ? (slots) => <SignupJourney {...slots} />

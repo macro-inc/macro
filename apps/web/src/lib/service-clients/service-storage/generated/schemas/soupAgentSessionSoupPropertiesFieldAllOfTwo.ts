@@ -7,6 +7,8 @@
 
 import type { AgentSessionSource } from './agentSessionSource';
 import type { AgentSessionVisibility } from './agentSessionVisibility';
+import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoArchivedAt } from './soupAgentSessionSoupPropertiesFieldAllOfTwoArchivedAt';
+import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoArchivedBy } from './soupAgentSessionSoupPropertiesFieldAllOfTwoArchivedBy';
 import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestId } from './soupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestId';
 import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestState } from './soupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestState';
 import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestUrl } from './soupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestUrl';
@@ -18,6 +20,9 @@ import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoViewedAt } from './soup
 import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoWorkingBranch } from './soupAgentSessionSoupPropertiesFieldAllOfTwoWorkingBranch';
 
 export type SoupAgentSessionSoupPropertiesFieldAllOfTwo = {
+  /** When the session was archived, or `None` while it is active. */
+  archivedAt?: SoupAgentSessionSoupPropertiesFieldAllOfTwoArchivedAt;
+  archivedBy?: SoupAgentSessionSoupPropertiesFieldAllOfTwoArchivedBy;
   /** The bot running this session */
   botId: string;
   /** The time the session was created */
@@ -26,8 +31,6 @@ export type SoupAgentSessionSoupPropertiesFieldAllOfTwo = {
   harness: string;
   /** The agent session uuid */
   id: string;
-  /** Whether the session is archived and read-only. */
-  isArchived: boolean;
   /** The user-facing name of the session */
   name: string;
   /** Who the session belongs to */

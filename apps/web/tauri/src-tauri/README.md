@@ -5,6 +5,29 @@ single Vite build that runs identically for web, desktop, iOS, and Android — t
 platform is detected at runtime via `getPlatform()` rather than baked into the
 bundle.
 
+## Scoped cache hydration
+
+Contact backfill uses the additive `graphql_cache_hydrate_scoped` command with a
+required account/storage-generation guard. Register it alongside the deployed
+unscoped command; never silently drop the guard for older binaries. JS checks
+projection 5 support, and a missing scoped command must reject without fallback.
+This requires a native rebuild; legacy unscoped callers remain compatible.
+
+Context-aware person search also needs a rebuild for `graphql_cache_people_context`,
+`graphql_cache_people_update`, `graphql_cache_people_search`, and the additive
+`graphql_cache_people_resolve_references` and `graphql_cache_people_read_sql` reads. OTA clients detect
+missing commands as unavailable, never as an empty directory or a successful write.
+These commands keep account/generation admission and ranking inside the shared
+engine lock. The leader publisher and Quick Access reader are implemented.
+Rebuild native code for person policy version 4 before relying on current before-limit
+recipient exclusions and ranked mention/property windows; older policy responses
+use bounded server pages. Reference reads return at most two witnesses per label,
+never a directory, and cannot bind an unowned cache. A missing reference command
+is independently unsupported, not a reason to disable working person search.
+SQL support is independent too: execute in the native Turso cache, return bounded
+final results, and never replace a missing command with server SQL or enumeration.
+Remaining planner/full-list migrations are tracked in the contact design plan.
+
 ## Native authentication cookies
 
 The native HTTP plugin stores its cookie jar at `$APPLOCALDATA/.cookies`, which
@@ -20,6 +43,50 @@ the old cache file, so the first launch after this native update requires
 sign-in again. Cookie expiry, refresh, and write behavior are unchanged. This
 requires a native app release; an OTA frontend bundle cannot relocate the jar.
 
+## Native HTTP connections
+
+Service requests from the native apps go through the HTTP plugin
+(`src/lib/core/util/platformFetch.ts`), not the WebView. The plugin fork keeps
+one client for them, so requests to a host share its connections. A client per
+request gives every request its own TCP and TLS handshake, which on a slow
+mobile network is most of the time the request takes.
+
+Keep the plugin's `gzip` feature on: the services compress a response only for
+a client that asks. The feature belongs to `reqwest`, so it also applies to the
+app's other native clients (the bundle updater, the desktop updater, uploads).
+A decoded response has no `Content-Length`, which is the one thing a web bundle
+can see of this.
+
+A connection kept from before a mobile app was suspended can be dead without
+either end knowing, and a request sent on it hangs. The mobile resume handler in
+`src/lib.rs` therefore calls `Http::reset_connections`; call it from any new
+path that learns the network changed. The plugin drops them itself when the
+machine slept ten seconds or more since the last request, which covers a
+desktop machine waking. Nothing does it for a network change with the machine
+awake (the network status plugin reports only online and offline). A
+connection that dies silently is then noticed by the plugin's HTTP/2 probe: a
+request that hears nothing for five seconds probes, and the connection is
+dropped after twenty more without an answer. The wait is that long because the
+answer queues behind data in flight, and a shorter one drops connections that
+are slow, not dead. An HTTP/1.1 connection, such as one to file storage, has no
+probe and waits for TCP to give up. All of this needs a native app release.
+
+Requests on a shared connection share its flow control, so a response body the
+page neither reads nor cancels holds data against the others until it is read
+or released. The plugin gives a connection a window far larger than a few
+abandoned bodies can fill, but not an unlimited one; read or cancel every body
+you fetch.
+
+## OTA bundle storage
+
+On iOS, the bundle updater stores downloads and their persistence markers in
+`Library/Application Support/<bundle-identifier>/bundle-updates`, not the
+purgeable `Library/Caches` directory. The directory is excluded from backup
+because the server can supply the bundles again. The updater deliberately
+ignores legacy cache contents: the first launch uses embedded assets and checks
+for a fresh download. Other platforms retain their existing cache location.
+This storage change requires a native app release.
+
 ## File saving and sharing
 
 The optional `file_export_plugin` registers iOS save/share commands. The web
@@ -28,6 +95,34 @@ save picker or share sheet without an intermediate Macro dialog. Android uses
 its existing `android_mobile_plugin` export commands. Older iOS installations
 retain Web Share until the next native release; see
 [the bridge guide](../file_export_plugin/AGENTS.md).
+
+## Desktop pasted files
+
+The Tauri HTTP plugin copies an upload body into the renderer, so a large
+pasted file (a video copied in Finder) crashed the desktop app. A desktop
+paste carrying a file of 16 MB or more calls `stage_desktop_pasteboard_files`
+(`src/desktop/pasteboard.rs`): on macOS it reads the pasteboard's file URLs,
+clones each file into the pasteboard staging directory, and hashes it, as the
+iOS pasteboard plugin stages images. The web client tags the pasted `File`s
+with the staged token, keeps them for local previews, and uploads through
+`upload_staged_file_to_presigned_url`. Other desktop platforms stage nothing
+and keep the browser upload. This needs a desktop native release.
+
+## macOS app menu and Cmd+W
+
+`src/desktop/app_menu.rs` replaces Tauri's default macOS menu with a copy whose
+File menu has **Close Tab** (Cmd+W) instead of Close Window. The menu claims
+Cmd+W before the page sees the key, so the item emits `desktop-close-tab` to the
+focused window, and `useCloseTabShortcut` (`components/app/tab-layout`) closes
+the active desktop tab, or the window when no other tab is open or tabs are off.
+Window > Close Window has no shortcut; the title bar's close button is unchanged.
+When the key window isn't a Tauri window (a popup wry opened, Web Inspector),
+both items close it natively. Until the frontend mounts its listener (a blank
+or crashed webview), Cmd+W does nothing; the close button still works.
+The frontend's window close needs `core:window:allow-close` in
+`capabilities/desktop.json`. Both the WKWebView and Chromium builds use this
+menu; Linux and Windows have no app menu and no desktop tabs. The menu is a
+native change: it ships with the next desktop release.
 
 ## Desktop app icons
 
@@ -81,6 +176,45 @@ process terminated (for example, memory pressure versus a crash); device
 crash/termination reports are needed for that distinction. Native counters
 require a full app release, while the frontend remains compatible with older
 binaries.
+
+Each native launch also records how the bundle updater chose its bundle, and
+every document in the launch reports it on `native_webview_started`:
+`native_bundle_startup_selection` (`saved_ota`, `completed_download`, or
+`embedded`), `native_bundle_startup_saved_selection` (what the saved selection
+held: `none`, `unreadable`, `embedded`, or `ota`),
+`native_bundle_startup_rejection` (which check a saved OTA bundle failed),
+`native_bundle_startup_read_error` (the I/O error kind, such as `NotFound` or
+`PermissionDenied`), and `native_bundle_startup_dirs_found` /
+`native_bundle_startup_dirs_removed` (numbered bundle directories before and
+after startup cleanup). A user who was on an OTA bundle and starts a new launch
+on the embedded one without a reload dispatch lost it at startup: `none` with
+no directories means bundle storage was emptied, `unreadable` means the files
+were there but could not be read, and a rejection names the failed check. On
+iOS, the first launch of the release that moved bundles out of `Library/Caches`
+also reports `none`, because it ignores the old location. An older
+release's embedded bundle predates these fields, but the record lives for the
+whole launch, so the document an update reload brings up reports it. Missing
+fields mean an older binary or a build with automatic updates disabled.
+
+An update reload normally lands while the page is hidden, which is harmless for
+a list and fatal for anything the page is waiting on. A native auth sheet is the
+sharp case: leaving the app for a sign-in code hides the page, the reload drops
+the JavaScript awaiting the sheet, and the finished sign-in has nowhere to go.
+Returning from the sheet foregrounds the app, so a reload that lands while the
+session code is still being redeemed, before the login hint is down, loses the
+sign-in just the same. The new document never checks identity and shows sign-in
+over the session in the native cookie jar.
+`holdAutomaticReload` covers this work on the page and sends
+`set_bundle_reload_hold` here, because the mobile foreground handler applies a
+completed bundle without asking the page. `apply_update` then answers `Held` and
+the bundle stays pending until the next hide or foreground after the release.
+Each document sends its hold state on mount, so a hold whose owner died cannot
+block updates until the next launch. Desktop has no foreground handler to hold
+and does not call the command. Mobile requires it. The iOS floor reaches a
+binary that has it; the Android floor does not yet. Android binaries without
+the command still apply bundles over a pending sign-in, and their embedded
+bundle predates the page-side hold, so a fresh install's first sign-in stays
+exposed until a newer native release.
 
 `frontend_instance_id` is generated once per document and attached to every
 PostHog event (including automatic exceptions/pageviews) and OTel resource.
@@ -167,6 +301,26 @@ UPDATE_NATIVE_DIAGNOSTIC_TYPES=1 cargo test --manifest-path apps/web/tauri/Cargo
 ```
 
 The same tests without that environment variable check for drift.
+
+## Linux rendering diagnostics
+
+The app leaves WebKitGTK hardware acceleration and DMABUF negotiation at their
+platform defaults. WebKit's default hardware acceleration policy is `ALWAYS`,
+subject to system support; an available GPU, compatible driver, display server,
+and WebKitGTK build determine the actual rendering path. See the upstream
+[hardware policy](https://webkitgtk.org/reference/webkit2gtk/stable/property.Settings.hardware-acceleration-policy.html)
+and [graphics architecture](https://docs.webkit.org/Ports/WebKitGTK%20and%20WPE%20WebKit/Graphics.html).
+
+Distinguish software-only test machines from GPU-equipped desktops. Check device
+access (`/dev/dri`), the actual EGL renderer in the app's runtime environment,
+and driver/display compatibility. A masked JavaScript WebGL renderer string is
+not reliable hardware evidence. Do not globally disable compositing or DMABUF as
+a performance workaround: that can force more painting onto the CPU. Continuous
+status animations must stay inexpensive on software compositing too.
+
+Run native performance investigations, including all WebKit child processes,
+in the memory-capped scope from the
+[running guide](../../../../docs/development/running-locally.md).
 
 ## Running in development
 
@@ -279,7 +433,19 @@ cargo tauri android build
 
 The `beforeBuildCommand` is `just build-tauri`, which runs `bun run build` and
 emits the frontend into `dist`. Tauri then packages that output
-according to `tauri.conf.json`.
+according to `tauri.conf.json`. Tauri embeds every file in `dist`, so
+`build-tauri` (and `build-tauri-dev`) delete the source maps first; the OTA
+archive leaves them out too. The macOS release DMG builds its frontend in Nix
+and still embeds them. PostHog exception frames from native apps are rewritten
+to the public web copies (`rewriteNativeFrameUrls` in
+`src/lib/analytics/exceptionList.ts`); they resolve while that build's chunks
+are still published. Web Inspector on a native build shows minified code and a
+failed source map load.
+
+Videos are left out the same way, including from the Nix desktop frontend:
+Vite writes them to `dist/web-hosted/`, every native bundle deletes that
+directory, and the apps stream them from the web deploy through `webHostedUrl`
+(see [videos in native bundles](../../AGENTS.md#videos-stay-out-of-native-bundles)).
 
 From `apps/web`, use `just ios-build` for a release build or
 `just ios-build --no-update` to disable automatic bundle updates.
@@ -343,6 +509,13 @@ Old schema 2 updaters reject schema 3 and continue using their existing bundle.
 Android cannot receive legacy schema 2 updates because their shared minimum
 cannot establish Android compatibility. `MIN_NATIVE_BUILD` remains supported
 for iOS/desktop-only schema 2 releases.
+
+Desktop reads `minNativeBuild` (`MIN_NATIVE_BUILD`) from schema 3 manifests too.
+Its release numbers come from hand-typed tags, so they never gate updater
+capabilities: each check sends `manifest_schema`, the newest manifest schema the
+updater reads, and the endpoint offers desktop no bundle with a newer schema.
+Desktop updaters that predate the parameter reject schema 3 after downloading
+it, so they keep their bundle until a native update.
 
 Every new native command used by shared JS must raise the corresponding
 platform minimum to a binary that implements it. Optional reachability falls
@@ -421,6 +594,11 @@ position that no longer lands on a connected monitor is ignored and the OS
 places the window. State is written to `.window-state.json` in the app config
 directory on quit; delete that file to reset. Mobile is unaffected.
 
+Launching Macro while it is already running exits the new process in
+`tauri-plugin-single-instance` before it creates a window. The running process
+then unhides the app and shows, unminimizes and focuses its window, rebuilding
+it from the startup config if it no longer exists (`src/desktop/main_window.rs`).
+
 ## Desktop native updates
 
 Release builds for macOS Apple Silicon and Linux AppImage check for native updates
@@ -442,7 +620,13 @@ defaults disable updates for local builds. `bun apps/web/scripts/desktop-release
 (run from the repository root) updates this tracked file in CI
 before Nix evaluates either package. Both packages receive the same native version,
 OTA compatibility build number, and source commit timestamp for the embedded
-frontend. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
+frontend. That timestamp is earlier than the OTA bundle the web deploy builds from
+the same commit (numbered by build time), so the embedded bundle manifest also
+records the commit (`prepare` writes `gitSha` into `desktop-release.json`, since
+the file it rewrites leaves the Nix flake without a rev; Nix passes it as
+`GIT_SHA`), and desktop update checks send it as
+`current_git_sha` while the embedded bundle is active: the server offers no
+update when the deployed bundle comes from that commit. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
 `YEAR.MMDD.REVISION` SemVer, e.g. `v2026.10.6.1` → `2026.1006.1`. Three-part stable
 SemVer tags also work. Each component must be at most 9999. Do not reuse a version
 or rebuild an already published tag; publish a higher version for fixes/reverts.
@@ -486,6 +670,18 @@ fixture-backed backfill smoke test, and offline Mail filter regression. Use
 `nix develop .#tauri-e2e`; this exercises the native cache, not browser WASM.
 
 ## Platform aware UI
+
+On iOS, `layout_plugin` publishes UIKit's current horizontal size class and
+preferred vertical navigation edge to the shared UI. The mobile dock becomes a
+sidebar on iPhone Duo's vertical-bar layouts, follows the outer edge in Split
+View, and returns to the bottom in horizontal-bar layouts. The vertical dock
+uses UIKit's bar layout region within the system column, below its controls;
+content and composers retain their independent safe areas without reserving a
+second navigation column. The app supports
+iPhone landscape as well as portrait; do not infer layout from orientation or
+the main screen. The layout bridge also corrects keyboard frame changes against
+the current webview's bottom edge; floating and off-window keyboard frames do not
+reserve the full keyboard height. See [the layout bridge](../layout_plugin/AGENTS.md).
 
 Use the helpers in `@core/util/platform` (`isTauri()`, `getPlatform()`,
 `isMobilePlatform()`, etc.) anywhere you need to branch behaviour, register

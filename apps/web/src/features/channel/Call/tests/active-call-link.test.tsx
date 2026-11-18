@@ -23,11 +23,9 @@ vi.mock('@service-call/client', () => ({
 vi.mock('../CallContext', () => ({
   useCallContext: () => ({ activeCallId: () => 'call-id' }),
 }));
-vi.mock('../../../meetings/use-quick-calls-flag', () => ({
-  useQuickCallsFlag: () => () => ({ loading: false, enabled: true }),
-}));
 vi.mock('@ui', async () => ({
   ...(await import('../../../../components/ui/components/Button')),
+  ...(await import('../../../../components/ui/components/CopyButton')),
   Tooltip: (props: { children: JSX.Element }) => props.children,
 }));
 

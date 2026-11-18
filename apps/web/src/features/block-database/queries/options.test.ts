@@ -32,6 +32,7 @@ const detail: DatabaseDetail = {
     owner_id: 'owner',
     created_at: '',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'owner',
   tables: [

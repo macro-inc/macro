@@ -14,11 +14,12 @@ use shared_entity_registry::{OwnedPurgeOutcome, PurgeOwnedEntity};
 use super::ProjectServiceImpl;
 use crate::domain::models::ProjectError;
 use crate::domain::ports::{
-    BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService, ProjectUploadUrlPort,
-    ShaCounterPort,
+    BulkUploadRequestPort, FiledItemsUnfiler, ProjectRepo, ProjectSearchIndexer, ProjectService,
+    ProjectUploadUrlPort, ShaCounterPort,
 };
 
-impl<R, U, D, Sha, Eam, Idx, B> PurgeOwnedEntity for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+impl<R, U, D, Sha, Eam, Idx, Unf, B> PurgeOwnedEntity
+    for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -26,6 +27,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
 {
     #[tracing::instrument(

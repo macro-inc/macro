@@ -1,3 +1,4 @@
+mod mentions_only;
 mod publication;
 mod state;
 
@@ -28,6 +29,13 @@ struct TestMessageNotification {
 
 impl Notification for TestMessageNotification {
     const TYPE_NAME: &'static str = "test_message_notification";
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct TestCalendarJoinRequest;
+
+impl Notification for TestCalendarJoinRequest {
+    const TYPE_NAME: &'static str = "calendar_event_join_request";
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -120,7 +128,7 @@ async fn test_get_unsubscribed_users(pool: Pool<Postgres>) {
     let other = test_user("other@test.com");
 
     let result = pool
-        .get_unsubscribed_users("item-123", &[unsub.clone(), other])
+        .get_unsubscribed_users("item-123", false, &[unsub.clone(), other])
         .await
         .unwrap();
 
@@ -136,7 +144,7 @@ async fn test_get_unsubscribed_users_different_item(pool: Pool<Postgres>) {
     let unsub = test_user("unsub@test.com");
 
     let result = pool
-        .get_unsubscribed_users("other-item", &[unsub])
+        .get_unsubscribed_users("other-item", false, &[unsub])
         .await
         .unwrap();
 
@@ -216,6 +224,25 @@ async fn test_create_notification(pool: Pool<Postgres>) {
     .await
     .unwrap();
     assert_eq!(user_row.user_id, recipient.to_string());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_join_request_for_an_event_that_has_gone_is_nothing_to_deliver(pool: Pool<Postgres>) {
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::CalendarEvent
+            .with_entity_string(Uuid::now_v7().to_string()),
+        secondary_notification_entity: None,
+        notification: TaggedContent::new(TestCalendarJoinRequest),
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([test_user("sharer@example.com")]),
+    };
+
+    assert!(
+        pool.create_notification(request, Uuid::now_v7(), "test_service", None)
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -621,6 +648,7 @@ async fn test_mark_notifications_done_returns_owned_rows_in_requested_order(pool
         .await
         .unwrap();
 
+    pool.mark_notifications_seen(&user, &[first]).await.unwrap();
     let rows = pool
         .mark_notifications_done(&user, &[second, other_only, first], true)
         .await
@@ -639,6 +667,25 @@ async fn test_mark_notifications_done_returns_owned_rows_in_requested_order(pool
     assert!(
         rows.iter()
             .all(|notification| notification.state == NotificationState::Done)
+    );
+
+    // Reopening restores the state each had before its done: `first` was
+    // seen, `second` unseen. Only done notifications reopen.
+    let reopened = pool
+        .reopen_notifications(&user, &[first, second], &[second])
+        .await
+        .unwrap();
+    let states: std::collections::HashMap<_, _> = reopened
+        .iter()
+        .map(|row| (row.notification_id, row.state))
+        .collect();
+    assert_eq!(states.get(&first), Some(&NotificationState::Seen));
+    assert_eq!(states.get(&second), Some(&NotificationState::Unseen));
+    assert!(
+        pool.reopen_notifications(&user, &[first, second], &[second])
+            .await
+            .unwrap()
+            .is_empty()
     );
 }
 

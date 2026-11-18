@@ -165,11 +165,48 @@ struct MockMutations {
     created: Mutex<Vec<RecordedCreate>>,
     create_error: Mutex<Option<CalendarMutationError>>,
     updated: Mutex<Vec<(Uuid, CalendarEventPatch, CalendarUpdateScope)>>,
+    switched_to_macro_call: Mutex<Vec<(Uuid, CalendarEventPatch, CalendarUpdateScope)>>,
+    macro_call_error: Mutex<Option<MacroCallEventError>>,
     deleted: Mutex<Vec<(Uuid, CalendarDeletionScope)>>,
     answered: Mutex<Vec<(Uuid, AttendeeResponseStatus, CalendarRsvpScope)>>,
     calendars: Mutex<Vec<VisibleCalendar>>,
     copied: Mutex<Vec<(Uuid, Option<Uuid>)>>,
     copy_error: Mutex<Option<CalendarMutationError>>,
+}
+
+impl CalendarMacroCallService for MockMutations {
+    async fn create_event_with_macro_call(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Option<Uuid>,
+        _calendar_id: Option<Uuid>,
+        _draft: CalendarEventDraft,
+    ) -> Result<crate::domain::models::CalendarEvent, MacroCallEventError> {
+        unreachable!("the create tool mints its call through the meeting link port")
+    }
+
+    async fn update_event_with_macro_call(
+        &self,
+        _requester_id: &str,
+        event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+        patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
+    ) -> Result<crate::domain::models::CalendarEvent, MacroCallEventError> {
+        if let Some(error) = self.macro_call_error.lock().unwrap().take() {
+            return Err(error);
+        }
+        self.switched_to_macro_call
+            .lock()
+            .unwrap()
+            .push((event_id, patch, scope));
+        Ok(crate::domain::models::CalendarEvent {
+            description: Some(format!(
+                "<p>Join Macro call: <a href=\"{MEETING_URL}\">{MEETING_URL}</a></p>"
+            )),
+            ..sample_event(Vec::new())
+        })
+    }
 }
 
 impl CalendarMutationService for MockMutations {
@@ -351,7 +388,7 @@ impl CalendarOccurrenceService for MockOccurrences {
         &self,
         _requester_id: &str,
     ) -> Result<Option<String>, rootcause::Report> {
-        unreachable!("no calendar tool resolves the primary time zone")
+        Ok(Some("America/New_York".to_string()))
     }
 
     async fn meeting_copies(
@@ -615,7 +652,7 @@ async fn create_converts_input_into_a_domain_draft() {
         description: Some("Quarterly".to_string()),
         location: None,
         attendees: vec![AttendeeInput {
-            email: "guest@example.com".to_string(),
+            email: EmailAddress::try_new("guest@example.com".to_string()).unwrap(),
             is_optional: true,
         }],
         recurrence_lines: vec!["RRULE:FREQ=WEEKLY".to_string()],
@@ -775,7 +812,7 @@ fn macro_call_tool() -> CreateCalendarEvent {
         description: Some("<p>Agenda</p>".to_string()),
         location: None,
         attendees: vec![AttendeeInput {
-            email: "guest@example.com".to_string(),
+            email: EmailAddress::try_new("guest@example.com".to_string()).unwrap(),
             is_optional: false,
         }],
         recurrence_lines: Vec::new(),
@@ -934,11 +971,55 @@ async fn create_with_a_macro_call_explains_an_unwired_host() {
 }
 
 #[tokio::test]
+async fn update_can_switch_the_event_to_a_macro_call() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let event_id = Uuid::from_u128(11);
+
+    let tool: UpdateCalendarEvent = serde_json::from_value(serde_json::json!({
+        "eventId": event_id,
+        "scope": "all",
+        "title": "Renamed",
+        "addMacroCall": true,
+    }))
+    .unwrap();
+    let response = tool.call(context, request_context()).await.unwrap();
+
+    assert_eq!(response.macro_call_url.as_deref(), Some(MEETING_URL));
+    assert!(mutations.updated.lock().unwrap().is_empty());
+    let switched = mutations.switched_to_macro_call.lock().unwrap();
+    let (switched_id, patch, _) = switched.first().expect("one switch");
+    assert_eq!(*switched_id, event_id);
+    assert_eq!(patch.title.as_deref(), Some("Renamed"));
+}
+
+#[tokio::test]
+async fn update_refuses_both_a_macro_call_and_a_conference() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool: UpdateCalendarEvent = serde_json::from_value(serde_json::json!({
+        "eventId": Uuid::from_u128(11),
+        "scope": "all",
+        "conference": "google_meet",
+        "addMacroCall": true,
+    }))
+    .unwrap();
+    let error = tool.call(context, request_context()).await.unwrap_err();
+
+    assert!(
+        error.description.contains("mutually exclusive"),
+        "unexpected description: {}",
+        error.description
+    );
+    assert!(mutations.switched_to_macro_call.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn update_converts_input_into_a_domain_patch() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
     let event_id = Uuid::from_u128(11);
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id,
         calendar_id: None,
         inbox: None,
@@ -949,7 +1030,7 @@ async fn update_converts_input_into_a_domain_patch() {
         location: None,
         time: None,
         attendees: Some(vec![AttendeeInput {
-            email: "guest@example.com".to_string(),
+            email: EmailAddress::try_new("guest@example.com".to_string()).unwrap(),
             is_optional: false,
         }]),
         recurrence_lines: None,
@@ -982,6 +1063,7 @@ async fn update_maps_out_of_office_settings_into_the_patch() {
     let event_id = Uuid::from_u128(11);
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id,
         calendar_id: None,
         inbox: None,
@@ -1022,6 +1104,7 @@ async fn update_passes_the_selected_occurrence_scope() {
     let event_id = Uuid::from_u128(11);
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id,
         calendar_id: None,
         inbox: None,
@@ -1060,6 +1143,7 @@ async fn scoped_update_requires_a_recurrence_id() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1090,6 +1174,7 @@ async fn series_update_rejects_a_stray_recurrence_id() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1117,6 +1202,7 @@ async fn update_carries_reminders_into_the_patch() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1164,6 +1250,7 @@ async fn rsvp_alone_answers_without_patching() {
     let event_id = Uuid::from_u128(11);
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id,
         calendar_id: None,
         inbox: None,
@@ -1200,6 +1287,7 @@ async fn rsvp_follows_the_occurrence_scope_of_the_call() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1237,6 +1325,7 @@ async fn update_answers_after_applying_the_patch() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1247,7 +1336,7 @@ async fn update_answers_after_applying_the_patch() {
         location: None,
         time: None,
         attendees: Some(vec![AttendeeInput {
-            email: "guest@example.com".to_string(),
+            email: EmailAddress::try_new("guest@example.com".to_string()).unwrap(),
             is_optional: false,
         }]),
         recurrence_lines: None,
@@ -1268,6 +1357,7 @@ async fn update_without_a_change_or_an_rsvp_is_rejected() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1361,9 +1451,61 @@ async fn list_events_maps_occurrences_and_skips_cancelled_ones() {
     assert_eq!(item.my_response.as_deref(), Some("accepted"));
     assert_eq!(item.attendee_count, 2);
     assert!(!item.is_all_day);
+    assert!(item.start_local.ends_with(" America/New_York"));
     assert_eq!(response.sync_status, "syncing");
     assert!(response.summary.contains("still syncing"));
     assert!(!response.truncated);
+}
+
+#[test]
+fn local_times_prefer_the_users_zone_then_the_events_then_utc() {
+    let time = EventTime::Timed {
+        starts_at: Utc.with_ymd_and_hms(2026, 11, 10, 3, 0, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2026, 11, 10, 5, 0, 0).unwrap(),
+        time_zone: Some("Asia/Tokyo".to_string()),
+    };
+
+    assert_eq!(
+        local_time_fields(&time, Some("America/New_York")),
+        (
+            "Monday, November 9, 2026, 10:00 PM America/New_York".to_string(),
+            "Tuesday, November 10, 2026, 12:00 AM America/New_York".to_string(),
+        )
+    );
+    assert_eq!(
+        local_time_fields(&time, Some("Not/AZone")).0,
+        "Tuesday, November 10, 2026, 12:00 PM Asia/Tokyo"
+    );
+    assert_eq!(
+        local_time_fields(&time, None).0,
+        "Tuesday, November 10, 2026, 12:00 PM Asia/Tokyo"
+    );
+
+    let time_without_zone = EventTime::Timed {
+        starts_at: Utc.with_ymd_and_hms(2026, 11, 10, 3, 0, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2026, 11, 10, 5, 0, 0).unwrap(),
+        time_zone: None,
+    };
+    assert_eq!(
+        local_time_fields(&time_without_zone, None).0,
+        "Tuesday, November 10, 2026, 3:00 AM UTC"
+    );
+}
+
+#[test]
+fn all_day_local_times_keep_their_dates_in_any_zone() {
+    let time = EventTime::AllDay {
+        start_date: NaiveDate::from_ymd_opt(2026, 11, 5).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 11, 10).unwrap(),
+    };
+
+    assert_eq!(
+        local_time_fields(&time, Some("Pacific/Auckland")),
+        (
+            "Thursday, November 5, 2026".to_string(),
+            "Tuesday, November 10, 2026".to_string(),
+        )
+    );
 }
 
 #[tokio::test]
@@ -1444,6 +1586,7 @@ async fn list_calendars_maps_visible_calendars() {
             is_primary: true,
             is_writable: true,
             is_subscription: false,
+            contributes_to_availability: true,
             sync_error: None,
             default_reminders: Vec::new(),
         }]),
@@ -1469,6 +1612,7 @@ async fn list_calendars_maps_visible_calendars() {
     assert_eq!(calendar.email_address, "gab@example.com");
     assert!(calendar.is_primary);
     assert!(calendar.is_writable);
+    assert!(calendar.contributes_to_availability);
     assert_eq!(
         calendar.provider,
         crate::domain::models::CalendarProvider::Google
@@ -1500,6 +1644,7 @@ fn visible_calendar(id: u128, email_link_id: u128, inbox: &str, name: &str) -> V
         is_primary: true,
         is_writable: true,
         is_subscription: false,
+        contributes_to_availability: true,
         sync_error: None,
         default_reminders: Vec::new(),
     }
@@ -1575,10 +1720,11 @@ async fn list_events_names_the_inbox_and_role_of_each_copy() {
     );
 }
 
-#[tokio::test]
-async fn list_events_labels_each_calendar_copy_of_one_entity() {
-    let mut event = sample_event(Vec::new());
-    let copy = |calendar_id: u128, title: &str| crate::domain::models::CalendarEventSourceContent {
+fn source_copy(
+    calendar_id: u128,
+    title: &str,
+) -> crate::domain::models::CalendarEventSourceContent {
+    crate::domain::models::CalendarEventSourceContent {
         calendar_id: Uuid::from_u128(calendar_id),
         title: title.to_string(),
         description: None,
@@ -1590,8 +1736,13 @@ async fn list_events_labels_each_calendar_copy_of_one_entity() {
         reminders: EventReminders::default(),
         creator_email: None,
         creator_name: None,
-    };
-    event.sources = vec![copy(9, "Standup"), copy(12, "Team standup")];
+    }
+}
+
+#[tokio::test]
+async fn list_events_labels_each_calendar_copy_of_one_entity() {
+    let mut event = sample_event(Vec::new());
+    event.sources = vec![source_copy(9, "Standup"), source_copy(12, "Team standup")];
     let mutations = MockMutations {
         calendars: Mutex::new(vec![
             visible_calendar(9, 1, "owner@example.com", "Owner"),
@@ -1626,22 +1777,27 @@ async fn list_events_labels_each_calendar_copy_of_one_entity() {
 
 #[test]
 fn role_follows_the_copy_inbox() {
+    let labels =
+        CalendarLabels::from_calendars(vec![visible_calendar(9, 1, "owner@example.com", "Owner")]);
     let mut event = sample_event(Vec::new());
     assert_eq!(
-        ToolEventRole::of(&event),
+        ToolEventRole::of(&event, &labels),
         Some(ToolEventRole::Organizer),
         "the inbox's own row organizes"
     );
 
     event.attendees[0].is_self = false;
     assert_eq!(
-        ToolEventRole::of(&event),
+        ToolEventRole::of(&event, &labels),
         None,
         "neither organizer nor guest"
     );
 
     event.attendees[1].is_self = true;
-    assert_eq!(ToolEventRole::of(&event), Some(ToolEventRole::Guest));
+    assert_eq!(
+        ToolEventRole::of(&event, &labels),
+        Some(ToolEventRole::Guest)
+    );
 
     event.attendees.clear();
     event.viewer_can = ViewerCapabilities {
@@ -1649,9 +1805,216 @@ fn role_follows_the_copy_inbox() {
         ..ViewerCapabilities::NONE
     };
     assert_eq!(
-        ToolEventRole::of(&event),
+        ToolEventRole::of(&event, &labels),
         Some(ToolEventRole::Organizer),
         "an own event without guests"
+    );
+}
+
+/// Writing a calendar lets the user act as its organizer, which says nothing
+/// about whose calendar or event it is.
+#[test]
+fn role_never_claims_an_event_on_someone_elses_calendar() {
+    let mut shared = visible_calendar(9, 1, "owner@example.com", "colleague@example.com");
+    shared.contributes_to_availability = false;
+    let labels = CalendarLabels::from_calendars(vec![shared]);
+    let writer = ViewerCapabilities {
+        organize: true,
+        ..ViewerCapabilities::NONE
+    };
+
+    let mut event = sample_event(Vec::new());
+    event.viewer_can = writer;
+    event.attendees[0].is_self = false;
+    assert_eq!(
+        ToolEventRole::of(&event, &labels),
+        None,
+        "their meeting, seen on their calendar"
+    );
+
+    event.attendees.clear();
+    assert_eq!(
+        ToolEventRole::of(&event, &labels),
+        None,
+        "their event without guests"
+    );
+
+    let own_calendar =
+        CalendarLabels::from_calendars(vec![visible_calendar(9, 1, "owner@example.com", "Owner")]);
+    let mut invited = sample_event(Vec::new());
+    invited.viewer_can = writer;
+    invited.attendees[0].is_self = false;
+    invited.attendees[1].is_self = true;
+    assert_eq!(
+        ToolEventRole::of(&invited, &own_calendar),
+        Some(ToolEventRole::Guest),
+        "invited by someone whose calendar the user can write"
+    );
+}
+
+fn holidays_calendar(id: u128, email_link_id: u128) -> VisibleCalendar {
+    VisibleCalendar {
+        is_primary: false,
+        is_writable: false,
+        contributes_to_availability: false,
+        ..visible_calendar(
+            id,
+            email_link_id,
+            "owner@example.com",
+            "United States holidays",
+        )
+    }
+}
+
+/// Microsoft Graph names the mailbox owner as organizer on every event of a
+/// read-only calendar such as Outlook's holidays, so that row proves nothing
+/// there. It is not a guest's row either, whatever availability says.
+#[test]
+fn role_ignores_an_organizer_row_on_a_read_only_calendar() {
+    let mut holiday = sample_event(Vec::new());
+    holiday.is_read_only = true;
+    assert!(holiday.attendees[0].is_self && holiday.attendees[0].is_organizer);
+
+    let off_availability = CalendarLabels::from_calendars(vec![holidays_calendar(9, 1)]);
+    assert_eq!(ToolEventRole::of(&holiday, &off_availability), None);
+
+    let on_availability = CalendarLabels::from_calendars(vec![VisibleCalendar {
+        contributes_to_availability: true,
+        ..holidays_calendar(9, 1)
+    }]);
+    assert_eq!(
+        ToolEventRole::of(&holiday, &on_availability),
+        None,
+        "counting a calendar as busy time does not make the user its organizer"
+    );
+}
+
+/// The copy rules add guests from the copy the user organizes, so that copy
+/// keeps its role off availability and when a read-only calendar shows the
+/// meeting too.
+#[test]
+fn role_keeps_the_organizer_of_a_writable_copy() {
+    let own = VisibleCalendar {
+        contributes_to_availability: false,
+        ..visible_calendar(9, 1, "owner@example.com", "Owner")
+    };
+    let labels = CalendarLabels::from_calendars(vec![own, holidays_calendar(12, 1)]);
+    let mut event = sample_event(Vec::new());
+    event.sources = vec![
+        source_copy(9, "Standup"),
+        crate::domain::models::CalendarEventSourceContent {
+            is_read_only: true,
+            ..source_copy(12, "Standup")
+        },
+    ];
+
+    assert_eq!(
+        ToolEventRole::of(&event, &labels),
+        Some(ToolEventRole::Organizer)
+    );
+}
+
+#[tokio::test]
+async fn list_gives_a_read_only_calendars_event_no_role() {
+    let organized = sample_event(Vec::new());
+    let mut holiday = sample_event(Vec::new());
+    holiday.id = Uuid::from_u128(8);
+    holiday.ical_uid = "uid-holiday".to_string();
+    holiday.calendar_id = Some(Uuid::from_u128(12));
+    holiday.attendees.truncate(1);
+    holiday.is_read_only = true;
+    let mutations = MockMutations {
+        calendars: Mutex::new(vec![
+            visible_calendar(9, 1, "owner@example.com", "Owner"),
+            holidays_calendar(12, 1),
+        ]),
+        ..Default::default()
+    };
+    let occurrences = MockOccurrences {
+        rows: Mutex::new(vec![
+            (organized.clone(), occurrence_of(&organized, "k-1", false)),
+            (holiday.clone(), occurrence_of(&holiday, "k-1", false)),
+        ]),
+        status: CalendarSyncStatus::Ready,
+        copies: Mutex::new(Vec::new()),
+    };
+    let (_, context) = context(mutations, occurrences);
+
+    let tool = ListCalendarEvents {
+        start: Utc.with_ymd_and_hms(2026, 8, 20, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 8, 21, 0, 0, 0).unwrap(),
+    };
+    let response = tool.call(context, request_context()).await.unwrap();
+
+    assert_eq!(response.events[0].my_role, Some(ToolEventRole::Organizer));
+    assert_eq!(response.events[1].my_role, None);
+    assert!(
+        response
+            .summary
+            .contains("outside the user's schedule (United States holidays)"),
+        "{}",
+        response.summary
+    );
+}
+
+/// Availability counts each copy, so the canonical copy's calendar alone
+/// cannot say the event is off the user's schedule.
+#[test]
+fn any_copy_on_the_schedule_puts_an_event_on_it() {
+    let mut primary = visible_calendar(9, 1, "owner@example.com", "Owner");
+    primary.contributes_to_availability = false;
+    let labels = CalendarLabels::from_calendars(vec![
+        primary,
+        visible_calendar(10, 1, "owner@example.com", "Personal"),
+    ]);
+    let mut event = sample_event(Vec::new());
+    assert_eq!(labels.event_on_schedule(&event), Some(false));
+
+    event.sources = vec![source_copy(9, "Standup"), source_copy(10, "Standup")];
+    assert_eq!(labels.event_on_schedule(&event), Some(true));
+}
+
+#[tokio::test]
+async fn list_names_a_colleagues_calendar_and_keeps_the_inbox() {
+    let mut event = sample_event(Vec::new());
+    event.attendees.clear();
+    event.viewer_can = ViewerCapabilities {
+        organize: true,
+        ..ViewerCapabilities::NONE
+    };
+    let mut shared = visible_calendar(9, 1, "owner@example.com", "colleague@example.com");
+    shared.contributes_to_availability = false;
+    let mutations = MockMutations {
+        calendars: Mutex::new(vec![shared]),
+        ..Default::default()
+    };
+    let occurrences = MockOccurrences {
+        rows: Mutex::new(vec![(event.clone(), occurrence_of(&event, "k-1", false))]),
+        status: CalendarSyncStatus::Ready,
+        copies: Mutex::new(Vec::new()),
+    };
+    let (_, context) = context(mutations, occurrences);
+
+    let tool = ListCalendarEvents {
+        start: Utc.with_ymd_and_hms(2026, 8, 20, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 8, 21, 0, 0, 0).unwrap(),
+    };
+    let response = tool.call(context, request_context()).await.unwrap();
+
+    let listed = &response.events[0];
+    assert_eq!(
+        listed.calendar_name.as_deref(),
+        Some("colleague@example.com")
+    );
+    assert_eq!(listed.contributes_to_availability, Some(false));
+    assert_eq!(listed.inbox.as_deref(), Some("owner@example.com"));
+    assert_eq!(listed.my_role, None);
+    assert!(
+        response
+            .summary
+            .contains("outside the user's schedule (colleague@example.com)"),
+        "{}",
+        response.summary
     );
 }
 
@@ -1664,6 +2027,7 @@ async fn update_result_names_the_copy_it_changed() {
     let (_, context) = context(mutations, empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(7),
         calendar_id: None,
         inbox: None,

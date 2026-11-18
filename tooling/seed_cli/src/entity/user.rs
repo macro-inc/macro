@@ -60,6 +60,7 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
     let user_id = ctx
         .fusionauth_client
         .create_user(fusionauth::user::create::User {
+            data: None,
             email: Cow::Borrowed(&args.email),
             username: Some(Cow::Borrowed(&args.email)),
             // TODO: do we want to bother with random generated passwords?
@@ -98,6 +99,7 @@ async fn bulk_create(args: BulkCreateArgs, ctx: SeedCliContext) -> anyhow::Resul
         match ctx
             .fusionauth_client
             .create_user(fusionauth::user::create::User {
+                data: None,
                 email: Cow::Borrowed(email),
                 username: Some(Cow::Borrowed(email)),
                 password: "hardcodeLocalPassword123!".into(),

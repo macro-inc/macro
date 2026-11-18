@@ -15,7 +15,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::{
     MACRO_SUPPORT_EMAILS, UserCreateWebhookError, dispatch_user_create_webhook,
-    identity_provider_name, support_channel_name, user_create_webhook_error_response,
+    identity_provider_name, signup_requested_agent, support_channel_name,
+    user_create_webhook_error_response,
 };
 
 /// A bad entry would skip support channel creation for every signup.
@@ -220,4 +221,20 @@ fn identity_provider_name_keeps_partial_name() {
         identity_provider_name(&user),
         (Some("Evan".to_string()), None)
     );
+}
+
+#[test]
+fn only_explicit_signup_metadata_requests_an_agent() {
+    let with_data = |data: Option<Value>| FusionAuthWebhookUser {
+        data,
+        ..webhook_user(None, None, None)
+    };
+
+    assert!(signup_requested_agent(&with_data(Some(
+        serde_json::json!({ "isAgent": true })
+    ))));
+    assert!(!signup_requested_agent(&with_data(Some(
+        serde_json::json!({ "isAgent": false })
+    ))));
+    assert!(!signup_requested_agent(&with_data(None)));
 }

@@ -2,8 +2,10 @@ import {
   Contact,
   type ContactSection,
   ContactTabs,
+  ContactVisibilityButton,
 } from '@app/features/crm/crm-contact';
 import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -58,7 +60,10 @@ export function ContactBlockAdapter() {
       </SplitHeaderLeft>
       <SplitHeaderRight>
         <HeaderIsland class="p-0">
-          <CrmCopyLinkButton type="contact" id={contactId} />
+          <HeaderActionGroup label="Contact actions">
+            <CrmCopyLinkButton grouped type="contact" id={contactId} />
+            <ContactVisibilityButton grouped contactId={contactId} />
+          </HeaderActionGroup>
         </HeaderIsland>
       </SplitHeaderRight>
       <ParamsProvider state={params}>

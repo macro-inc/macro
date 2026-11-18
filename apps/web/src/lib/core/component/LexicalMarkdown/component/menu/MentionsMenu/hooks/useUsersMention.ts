@@ -1,16 +1,28 @@
 import { type UserItem, useQuickAccess } from '@core/context/quickAccess';
-import { useEmail } from '@core/context/user';
+import { useEmail, useUserId } from '@core/context/user';
 import type { IUser } from '@core/user';
-import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
+import {
+  peopleBeforeAgents,
+  placeAgentsAfterPeople,
+  rankAgentsAfterPeople,
+} from '@core/user/people-before-agents';
+import {
+  createFreshSearch,
+  FreshSearchPresets,
+  NAME_MATCH_RANKING,
+} from '@core/util/freshSort';
+import { preservePersonOrder } from '@core/util/ordered-window';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
 import { isBotMentionUser } from '../utils/botMention';
 
 type UseUsersMentionOptions = {
-  /** Custom users list if necessary */
-  users?: Accessor<IUser[]>;
+  /** Undefined uses personal search; [] remains a closed, empty scope. */
+  users?: Accessor<IUser[] | undefined>;
+  transformUsers?: (users: readonly IUser[]) => IUser[];
   searchTerm: Accessor<string>;
+  enabled?: Accessor<boolean>;
   /**
    * Whether the composer posts to a channel. Group mentions are an editor
    * configuration, not a block-context lookup: the channels view hosts a
@@ -21,11 +33,15 @@ type UseUsersMentionOptions = {
 };
 
 type UseUsersMentionResult = {
-  availableUsers: Accessor<UserItem[]>;
   users: Accessor<UserItem[]>;
   currentUserDomain: Accessor<string | undefined>;
   groups: Accessor<GroupMentionItem[]>;
   usersAndGroups: Accessor<(UserItem | GroupMentionItem)[]>;
+  windowKey: Accessor<string | undefined>;
+  hasMore: Accessor<boolean>;
+  isLoading: Accessor<boolean>;
+  isLoadingMore: Accessor<boolean>;
+  loadMore: () => Promise<void>;
 };
 
 /** Available group aliases and their match functions */
@@ -36,8 +52,6 @@ const GROUPS = [
   },
 ] as const;
 
-const BOT_MENTION_BOOST = 10;
-
 /**
  * Hook for managing user mentions in the mentions menu.
  * Handles user list retrieval, search, filtering, and special groups.
@@ -47,8 +61,17 @@ export function useUsersMention(
 ): UseUsersMentionResult {
   const { users: customUsers, searchTerm, isChannelBlock } = options;
   const quickAccess = useQuickAccess();
-  const workspaceUsers = quickAccess.useList('person').items;
+  const usesDirectory = () =>
+    options.enabled?.() !== false && customUsers?.() === undefined;
+  const workspace = quickAccess.useList({
+    buckets: ['person'],
+    searchTerm,
+    peopleMode: 'mention',
+    enabled: usesDirectory,
+  });
+  const workspaceUsers = workspace.items;
   const currentUserEmail = useEmail();
+  const currentUserId = useUserId();
 
   const currentUserDomain = () => {
     const email = currentUserEmail();
@@ -56,26 +79,35 @@ export function useUsersMention(
   };
 
   const usersList = createLazyMemo((): UserItem[] => {
-    if (!customUsers) return workspaceUsers();
-
-    // Custom lists scope who can be mentioned, but should retain the same
-    // interaction ranking as the document body's workspace list.
-    const workspaceUsersById = new Map(
-      workspaceUsers().map((item) => [item.id, item])
-    );
-    return customUsers().map((user) => ({
-      id: user.id,
-      data: user,
-      kind: 'user',
-      bucket: 'person',
-      sortTimestamp: workspaceUsersById.get(user.id)?.sortTimestamp ?? 0,
-      timestamps: {
-        lastInteraction:
-          workspaceUsersById.get(user.id)?.timestamps.lastInteraction ??
-          user.lastInteraction,
-      },
-      searchText: `${user.name || user.email} | ${user.email}`,
-    }));
+    if (options.enabled?.() === false) return [];
+    const scoped = customUsers?.();
+    if (scoped === undefined && !options.transformUsers)
+      return workspaceUsers();
+    const window = scoped === undefined ? workspaceUsers() : [];
+    const rows = new Map(window.map((item) => [item.id, item]));
+    const base = scoped ?? window.map((item) => item.data);
+    const users = options.transformUsers?.(base) ?? base;
+    // Scoped lists retain their supplied display data. Untouched native rows
+    // retain the context/timestamps used to rank that window before limiting.
+    return users.map((user): UserItem => {
+      const row = rows.get(user.id);
+      if (row?.data === user) return row;
+      if (row) return { ...row, data: user };
+      return {
+        id: user.id,
+        data: user,
+        kind: 'user',
+        bucket: 'person',
+        sortTimestamp: new Date(
+          quickAccess.interactionForUser(user.id) ?? user.lastInteraction ?? 0
+        ).getTime(),
+        timestamps: {
+          lastInteraction:
+            quickAccess.interactionForUser(user.id) ?? user.lastInteraction,
+        },
+        searchText: `${user.name || user.email} | ${user.email}`,
+      };
+    });
   });
 
   const userSearch = () => {
@@ -85,23 +117,68 @@ export function useUsersMention(
     );
 
     return createFreshSearch<UserItem>({
-      config: {
-        ...baseConfig,
-        boostFn: (item) =>
-          (baseConfig.boostFn?.(item) ?? 0) +
-          (isBotMentionUser(item) ? BOT_MENTION_BOOST : 0),
-      },
+      config: { ...baseConfig, ...NAME_MATCH_RANKING },
       getName: (item) => item.searchText,
+      getDisplayName: (item) => item.data.name || item.data.email,
+      isPersonItem: (item) => !isBotMentionUser(item),
       getTimestamp: (item) => ({
         lastInteraction: item.timestamps.lastInteraction,
       }),
     });
   };
 
+  // Macro leads, then people come before the other agents and bots, as in
+  // assignee menus. The directory's personal window keeps its own order among
+  // people: its rows take the slots the ranking gives people, and search ranks
+  // only the rows outside it.
   const users = createLazyMemo(() => {
-    const term = searchTerm();
+    const term = searchTerm().trim();
     const list = usersList();
-    return userSearch()(list, term).map(({ item }) => item);
+    const results = userSearch()(list, term);
+    const order = { viewerId: currentUserId(), mention: true };
+    if (!usesDirectory()) {
+      if (term) {
+        return rankAgentsAfterPeople(results, (item) => item.id, order);
+      }
+      return peopleBeforeAgents(
+        results.map(({ item }) => item),
+        (item) => item.id,
+        order
+      );
+    }
+
+    const people = list.filter((item) => !isBotMentionUser(item));
+    const extras = results
+      .map(({ item }) => item)
+      .filter(
+        (item) => !isBotMentionUser(item) && item.personOrder === undefined
+      );
+    const orderedPeople = preservePersonOrder(
+      [...people.filter((item) => item.personOrder !== undefined), ...extras],
+      people
+    );
+    const agents = results
+      .map(({ item }) => item)
+      .filter((item) => isBotMentionUser(item));
+    if (!term) {
+      return peopleBeforeAgents(
+        [...orderedPeople, ...agents],
+        (item) => item.id,
+        order
+      );
+    }
+
+    const ranks = new Map(
+      results.map((result) => [result.item.id, result.nameMatchRank])
+    );
+    const rank = (item: UserItem) => ranks.get(item.id) ?? -1;
+    return placeAgentsAfterPeople(
+      orderedPeople,
+      agents.filter((item) => rank(item) >= 0),
+      rank,
+      (item) => item.id,
+      order
+    );
   });
 
   /**
@@ -123,14 +200,27 @@ export function useUsersMention(
   };
 
   const usersAndGroups = createLazyMemo((): (UserItem | GroupMentionItem)[] => {
-    return [...groups(), ...users()];
+    // A group leads while browsing and once its alias is typed in full. A
+    // partial alias is also the start of people's names ("he" for Helen), so
+    // people matching it come first.
+    const term = searchTerm().trim().toLowerCase();
+    const matched = groups();
+    const leading = matched.filter((group) => !term || group.id === term);
+    const trailing = matched.filter((group) => !leading.includes(group));
+    return [...leading, ...users(), ...trailing];
   });
 
   return {
-    availableUsers: usersList,
     users,
     currentUserDomain,
     groups,
     usersAndGroups,
+    windowKey: () => (usesDirectory() ? workspace.windowKey?.() : undefined),
+    hasMore: () => usesDirectory() && workspace.hasMore(),
+    isLoading: () => usesDirectory() && workspace.isLoading(),
+    isLoadingMore: () => usesDirectory() && workspace.isLoadingMore(),
+    loadMore: async () => {
+      if (usesDirectory()) await workspace.loadMore();
+    },
   };
 }

@@ -1,7 +1,9 @@
 //! Calendar business policy.
 
+use std::collections::HashMap;
+
 use chrono::Utc;
-use futures::future::{Either, select};
+use futures::future::{BoxFuture, Either, select};
 use rootcause::Report;
 use uuid::Uuid;
 
@@ -13,18 +15,21 @@ use super::{
         CalendarEventExportAccess, CalendarEventForward, CalendarEventForwardKind,
         CalendarEventIcs, IcsParticipant, IcsPurpose, render_event_ics,
     },
+    labels::{CalendarLabels, EventLabels},
     models::{
         ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
-        CalendarEventUpsert, CalendarGrantIntent, CalendarOccurrenceCursor,
-        GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
+        CalendarEventUpsert, CalendarGrantIntent, CalendarOccurrenceCursor, CalendarSyncFailure,
+        CalendarSyncHealth, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet,
+        OccurrenceRange,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventForwardSource,
-        CalendarEventWrite, CalendarEventWriteOutcome, CalendarOccurrenceService,
-        CalendarProviderError, CalendarProviderErrorKind, CalendarReauthNotifier,
-        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
-        GoogleEventSyncContext, RetiredCalendarEvent,
+        CalendarEventLabelReader, CalendarEventWrite, CalendarEventWriteOutcome,
+        CalendarOccurrenceService, CalendarProviderError, CalendarProviderErrorKind,
+        CalendarReauthNotifier, CalendarRepository, CalendarSyncHealthReader,
+        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
+        RetiredCalendarEvent,
     },
 };
 
@@ -120,6 +125,40 @@ where
             }
         }
         Ok(rows)
+    }
+
+    /// Label events for a reader outside the calendar: one read of the
+    /// requester's calendars and inboxes, whatever the number of events.
+    #[tracing::instrument(
+        name = "calendar.event_labels",
+        skip(self, requester_id, event_ids),
+        fields(event_count = event_ids.len()),
+        err
+    )]
+    pub async fn event_labels(
+        &self,
+        requester_id: &str,
+        event_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, EventLabels>, Report> {
+        if event_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        // One read at a time: search runs this on every keystroke with calendar
+        // hits, and a burst of searches must not fan out across the read pool.
+        let copies = self.repository.event_copies(event_ids).await?;
+        let calendars = CalendarLabels::from_calendars(
+            self.repository.list_visible_calendars(requester_id).await?,
+        );
+        let viewer = ActorInboxes::from_owned(self.repository.owned_inboxes(requester_id).await?);
+        Ok(copies
+            .into_iter()
+            .map(|copy| {
+                (
+                    copy.event_id,
+                    EventLabels::of(copy, viewer.as_ref(), &calendars),
+                )
+            })
+            .collect())
     }
 
     /// Query teammates' out-of-office occurrences in a bounded viewport.
@@ -340,6 +379,19 @@ where
     }
 }
 
+impl<R> CalendarEventLabelReader for CalendarService<R>
+where
+    R: CalendarRepository,
+{
+    fn event_labels<'a>(
+        &'a self,
+        requester_id: &'a str,
+        event_ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<HashMap<Uuid, EventLabels>, Report>> {
+        Box::pin(CalendarService::event_labels(self, requester_id, event_ids))
+    }
+}
+
 impl<R> CalendarOccurrenceService for CalendarService<R>
 where
     R: CalendarRepository,
@@ -407,6 +459,16 @@ where
         event_id: Uuid,
     ) -> impl Future<Output = Result<Option<CalendarEventIcs>, Report>> + Send {
         CalendarService::event_ics(self, requester_id, event_id)
+    }
+}
+
+impl<R> CalendarSyncHealthReader for CalendarService<R>
+where
+    R: CalendarSyncHealthReader,
+{
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn calendar_sync_health(&self, requester_id: &str) -> Result<CalendarSyncHealth, Report> {
+        self.repository.calendar_sync_health(requester_id).await
     }
 }
 
@@ -869,7 +931,7 @@ where
         // failing the account. The run fails only when no calendar is healthy,
         // so the coordinator can still classify a wholesale outage.
         let mut any_calendar_healthy = false;
-        let mut isolated_failures: Vec<(Uuid, String)> = Vec::new();
+        let mut isolated_failures: Vec<(Uuid, CalendarSyncFailure, String)> = Vec::new();
         let mut last_isolated_error: Option<CalendarProviderError> = None;
 
         for provider_calendar in calendars {
@@ -952,7 +1014,11 @@ where
                         calendar_id=%calendar_id,
                         "isolating a failed Google Calendar and continuing the account sync"
                     );
-                    isolated_failures.push((calendar_id, error.message().to_owned()));
+                    isolated_failures.push((
+                        calendar_id,
+                        error.kind().into(),
+                        error.message().to_owned(),
+                    ));
                     report.team_ooo_changed = true;
                     // A retryable failure outranks a permanent one so a total
                     // failure still surfaces as retryable.
@@ -1012,7 +1078,7 @@ where
             // gone once the commit lands, so nothing downstream can rediscover
             // it by re-reading Postgres.
             report.events_retired += retired.len();
-            report.team_ooo_changed |= !retired.is_empty() || cancellation_count > 0;
+            report.team_ooo_changed |= retired.iter().any(|event| event.team_ooo_changed);
             self.publish_retirements(retired);
             // Tombstones only apply inside the snapshot commit, so they
             // count once it succeeds.
@@ -1085,21 +1151,38 @@ where
 
         // No calendar is healthy: a wholesale outage the coordinator classifies
         // for retry. The account-level failure carries it, so no calendar is
-        // badged for it.
+        // badged for it, except one that failed for good: its calendar records
+        // that, since the account's retry would read as transient.
         if !any_calendar_healthy && let Some(error) = last_isolated_error {
+            for (calendar_id, kind, message) in isolated_failures {
+                if kind == CalendarSyncFailure::Transient {
+                    continue;
+                }
+                self.repository
+                    .record_google_calendar_sync_error(
+                        key,
+                        lease_token,
+                        account_id,
+                        calendar_id,
+                        kind,
+                        &message,
+                    )
+                    .await?;
+            }
             return Err(rootcause::report!(error).into());
         }
 
         // Record each isolated failure for the settings badge, leaving the
         // calendar's sync state untouched so the next poll retries it. This
         // write must succeed before the account can report healthy coverage.
-        for (calendar_id, message) in isolated_failures {
+        for (calendar_id, kind, message) in isolated_failures {
             self.repository
                 .record_google_calendar_sync_error(
                     key,
                     lease_token,
                     account_id,
                     calendar_id,
+                    kind,
                     &message,
                 )
                 .await?;
@@ -1112,7 +1195,7 @@ where
             .reconcile_google_calendar_list(key, lease_token, account_id, calendar_ids)
             .await?;
         report.events_retired += retired.len();
-        report.team_ooo_changed |= !retired.is_empty();
+        report.team_ooo_changed |= retired.iter().any(|event| event.team_ooo_changed);
         self.publish_retirements(retired);
 
         Ok(())

@@ -104,7 +104,8 @@ export type InputHandle = {
   /** Read the current draft, including restored persisted content. */
   snapshot: () => InputSnapshot;
   clear: () => void;
-  focus: () => void;
+  /** Recheck an optional guard if focus must wait for the editor to connect. */
+  focus: (options?: { when?: () => boolean }) => void;
   send: () => Promise<boolean>;
   attachFiles: (files: File[]) => Promise<void>;
   restoreSnapshot: (

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(id) AS \"count!\"\n        FROM comms_messages\n        WHERE parent_entity_type = 'channel' AND parent_entity_id = $1::uuid::text\n          AND kind = 'message'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c5aad9db60c32894274cd1a42fbb16059eb17135cf9651dd1bdfd4bf981ede55"
+}

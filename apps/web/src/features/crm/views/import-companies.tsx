@@ -2,6 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Button, Dialog, Panel, Select } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
+import { PipelineImportFailures } from '../components/pipeline-import-failures';
 import type { CompanyImportPipelines } from '../context/pipelines';
 import {
   createCompanyImport,
@@ -213,6 +214,10 @@ export function CrmImport(props: {
               </p>
             )}
           </Show>
+          <PipelineImportFailures
+            addLabel="Add deal"
+            failures={pipeline()?.invalid}
+          />
           <Show when={error()}>
             <p role="alert" class="text-sm text-failure">
               {error()}

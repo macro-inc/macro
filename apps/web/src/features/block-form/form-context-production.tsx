@@ -5,12 +5,13 @@
  * contract from `context/form-context`.
  */
 import { createPublicBookingSource } from '@app/features/scheduling/queries/public';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DatabaseMentionValue } from '@block-database/database-mentions';
 import { exportDatabaseTableCsv } from '@block-database/queries/transfer';
 import { toast } from '@core/component/Toast/Toast';
-import { enableCalendarScheduling } from '@core/constant/featureFlags';
-import { staticFileIdEndpoint } from '@core/constant/servers';
+import {
+  staticFileIdEndpoint,
+  staticFileSizedEndpoint,
+} from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { uploadFile } from '@core/util/upload';
 import { downloadFile } from '@filesystem/download';
@@ -24,7 +25,7 @@ import { errAsync, ResultAsync } from 'neverthrow';
 import type { DatabaseRelatedDestination } from '../database/core/database-relations';
 import type { FormContext, FormWriteFailure } from './context/form-context';
 import { FormConditionEditor } from './form-condition-editor';
-import { FormEditors } from './form-editors';
+import { FormEditors, FormPerson } from './form-editors';
 import { FormEntityPicker, FormRelationPicker } from './form-pickers';
 import { FormResponsesGrid } from './form-responses-grid';
 import {
@@ -81,10 +82,14 @@ function exportTableCsv(
 }
 
 function uploadStaticFile(file: File): ResultAsync<string, FormWriteFailure> {
+  return uploadStaticFileId(file).map(staticFileIdEndpoint);
+}
+
+function uploadStaticFileId(file: File): ResultAsync<string, FormWriteFailure> {
   const uploaded = async () => {
     const result = await uploadFile(file, 'static');
     if (result.failed) throw result.error;
-    return staticFileIdEndpoint(result.id);
+    return result.id;
   };
   return ResultAsync.fromPromise(uploaded(), (error) => ({
     message: error instanceof Error ? error.message : 'The upload failed.',
@@ -103,7 +108,6 @@ export type FormHostActions = {
 export function createAppFormContext(host: FormHostActions): FormContext {
   const userId = useUserId();
   const navigate = useNavigate();
-  const scheduling = useFeatureFlag(enableCalendarScheduling);
   return {
     viewer: { userId },
     createFormSource: createFormDetailSource,
@@ -136,13 +140,13 @@ export function createAppFormContext(host: FormHostActions): FormContext {
       exportCsv: exportTableCsv,
     },
     uploadFile: uploadStaticFile,
+    branding: {
+      uploadImage: uploadStaticFileId,
+      imageUrl: staticFileSizedEndpoint,
+    },
     booking: {
-      available: () => scheduling().enabled,
-      createLinks: (enabled) =>
-        createBookingLinksSource(
-          userId,
-          () => enabled() && scheduling().enabled
-        ),
+      available: () => true,
+      createLinks: (enabled) => createBookingLinksSource(userId, enabled),
       createEvent: createBookingEventSource,
       createSource: createPublicBookingSource,
       // The public booking page's own receipt, reached the way it reaches it.
@@ -163,6 +167,7 @@ export function createAppFormContext(host: FormHostActions): FormContext {
         <FormResponsesGrid
           databaseId={props.databaseId}
           tableId={props.tableId}
+          hideColumnId={props.hideColumnId}
           onOpenRelated={host.openRelated}
         />
       ),
@@ -173,6 +178,7 @@ export function createAppFormContext(host: FormHostActions): FormContext {
         />
       ),
       renderEditors: (props) => <FormEditors {...props} />,
+      renderPerson: (userId) => <FormPerson userId={userId} />,
     },
   };
 }

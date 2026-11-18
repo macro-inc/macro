@@ -1,10 +1,7 @@
 import type { ListFilterGroup } from '@app/components/view-shell';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { UserIcon } from '@core/component/UserIcon';
-import { enableDatabases, enableForms } from '@core/constant/featureFlags';
+import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
-import { useContacts } from '@queries/contacts/contacts';
 import { createMemo } from 'solid-js';
 import { useDriveView } from '../context/drive-context';
 
@@ -28,43 +25,9 @@ const typeOptions = [
 
 /** Filter model shared by the desktop filter dropdown and the mobile drawer. */
 export function useDriveFilters() {
-  const { state, actions } = useDriveView();
-
-  const userId = actions.userId;
-
-  const contacts = useContacts();
-  const databasesFlag = useFeatureFlag(enableDatabases);
-  const formsFlag = useFeatureFlag(enableForms);
+  const { state } = useDriveView();
 
   const tagGroup = useTagFilterGroup();
-
-  const people = createMemo(() => {
-    const sorted = [...contacts()].sort(
-      (a, b) => Number(b.id === userId()) - Number(a.id === userId())
-    );
-
-    return sorted.map((person) => {
-      let label = person.name || person.id;
-
-      if (person.id === userId()) {
-        label = person.name ? `${person.name} (me)` : 'Me';
-      }
-
-      return {
-        id: person.id,
-        label,
-
-        icon: () => (
-          <UserIcon
-            id={person.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      };
-    });
-  });
 
   // Menu structure only depends on location/scope, not the selected facets.
   // Reading the whole state in `groups` remounts its submenus on each selection.
@@ -91,18 +54,12 @@ export function useDriveFilters() {
       groups.push({
         id: 'type',
         label: 'Type',
-        options: typeOptions
-          .filter(
-            (option) =>
-              (option.id !== 'database' || databasesFlag().enabled) &&
-              (option.id !== 'form' || formsFlag().enabled)
-          )
-          .map((option) => ({
-            id: option.id,
-            label: option.label,
+        options: typeOptions.map((option) => ({
+          id: option.id,
+          label: option.label,
 
-            icon: () => <EntityIcon targetType={option.type} size="xs" />,
-          })),
+          icon: () => <EntityIcon targetType={option.type} size="xs" />,
+        })),
       });
 
       if (showCreators()) {
@@ -110,7 +67,8 @@ export function useDriveFilters() {
           id: 'created-by',
           label: 'Created by',
           searchPlaceholder: 'Search creators...',
-          options: people(),
+          options: [],
+          createSource: useContactFilterOptions,
         });
       }
     }

@@ -1,41 +1,65 @@
+import { startUiOperation } from '@app/observability/ui-operation';
 import { usePreference } from '@app/preferences/use-preference';
 import {
-  type BreakpointAccessors,
   type BreakpointThresholds,
   createSizeBreakpoints,
 } from '@app/util/create-size-breakpoints';
+import { FloatRegionScope } from '@components/app/mobile/float-regions/FloatRegionScope';
 import { SplitHeaderContextMenu } from '@components/app/split-layout/components/SplitHeaderContextMenu';
 import { SplitPanelContext } from '@components/app/split-layout/context';
-import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
-import CloseIcon from '@icon/system/regular/x.svg';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { mergeRefs } from '@solid-primitives/refs';
-import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn } from '@ui';
+import { cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { tourTarget } from '@ui/components/Tour';
 import {
-  type Accessor,
   batch,
-  type ComponentProps,
   createComputed,
-  createContext,
+  createEffect,
+  createMemo,
   createSignal,
   createUniqueId,
   type JSX,
   Match,
   on,
+  onCleanup,
   Show,
   Switch,
   splitProps,
   untrack,
   useContext,
 } from 'solid-js';
+import { createFrameWidth } from './create-frame-width';
 import { createSidebarMotion } from './create-sidebar-motion';
+import { NavigationSheet } from './NavigationSheet';
+import {
+  createTouchTopBarInset,
+  TopBarActions,
+  TopBarIsland,
+  TopBarTitle,
+  TouchTopBarFade,
+  TouchTopBarInsetProvider,
+  touchTopBarInsetStyle,
+  useTouchTopBarInset,
+} from './touch-top-bar';
+import { ViewNavigationControls } from './ViewNavigationControls';
+import {
+  useViewShellInternal,
+  ViewShellContext,
+  type ViewShellInternal,
+  ViewShellPaneContext,
+} from './view-shell-context';
+
+export {
+  ViewNavigationControls,
+  ViewSidebarCloseButton,
+  ViewSidebarToggle,
+} from './ViewNavigationControls';
+
 import { VIEW_SHELL_TOUR } from './tour';
 import {
   type AsideLayout,
@@ -48,65 +72,17 @@ import {
   type DetailLayout,
   type DetailPlacement,
   type MainLayout,
+  WIDE_TOUCH_ASIDE_SCALE,
 } from './view-shell-layout';
-
-export type ViewShellLayout = {
-  width: Accessor<number | undefined>;
-  /**
-   * Keyed reactive breakpoints from {@link createSizeBreakpoints}.
-   * Read as `breakpoints.narrow?.()`, `breakpoints.dense?.()`, …
-   */
-  breakpoints: BreakpointAccessors;
-  aside: {
-    layout: Accessor<AsideLayout>;
-    mode: Accessor<AsideMode>;
-    isCollapsed: Accessor<boolean>;
-    canCollapse: Accessor<boolean>;
-    isOverlay: Accessor<boolean>;
-    collapse: () => void;
-    expand: () => void;
-    toggle: () => void;
-  };
-  main: {
-    layout: Accessor<MainLayout>;
-  };
-  detail: {
-    layout: Accessor<DetailLayout>;
-    isOpen: Accessor<boolean>;
-    placement: Accessor<DetailPlacement>;
-    open: () => void;
-    close: () => void;
-    toggle: () => void;
-  };
-};
-
-type ViewShellInternal = ViewShellLayout & {
-  id: string;
-  atLayoutBreakpoint: Accessor<boolean>;
-};
 
 const RESIZE_GUTTER = 1;
 
-const ViewShellContext = createContext<ViewShellInternal>();
-
-function useViewShellInternal(): ViewShellInternal {
-  const ctx = useContext(ViewShellContext);
-  if (!ctx) {
-    throw new Error('ViewShell slots require <ViewShell.Root>');
-  }
-  return ctx;
+/** Where a shell with `asidePreferenceKey` saves whether its navigation is hidden. */
+export function asideCollapsedPreferenceKey(app: string) {
+  return `macro:pref:view-sidebar:collapsed:${app}`;
 }
 
-export function useViewShell(): ViewShellLayout {
-  const ctx = useViewShellInternal();
-  return {
-    width: ctx.width,
-    breakpoints: ctx.breakpoints,
-    aside: ctx.aside,
-    main: ctx.main,
-    detail: ctx.detail,
-  };
-}
+export { useViewShell, type ViewShellLayout } from './view-shell-context';
 
 export type ViewShellRootProps = Omit<
   JSX.HTMLAttributes<HTMLDivElement>,
@@ -129,11 +105,16 @@ export type ViewShellRootProps = Omit<
    * Defaults to false — panels still size via the Resize solver, without handles.
    */
   resizable?: boolean;
+  /** Collection views keep their list beside details and put sub-view navigation
+   * in a sheet on wide touch. Desktop and narrow layouts keep their own behavior. */
+  contentLayout?: 'collection';
   /** Set to false when the workspace has no navigation region. */
   aside?: false | Partial<AsideLayout>;
   /**
-   * Sticky navigation visibility, scoped to this app type rather than an entry.
-   * Only the first split uses it; other splits start collapsed.
+   * Sticky navigation visibility and width, scoped to this app type rather
+   * than an entry. Only the first split follows the saved visibility; other
+   * splits start collapsed. Every split opens at the last saved width; a drag
+   * in one split leaves the others' current widths alone.
    */
   asidePreferenceKey?: string;
   /**
@@ -150,6 +131,13 @@ export type ViewShellRootProps = Omit<
    * overlay closed.
    */
   asidePinned?: boolean;
+  /**
+   * For a view whose aside holds its entity list and whose Main shows the
+   * entity open from it. Narrow layouts then show one of them at full width
+   * instead of the navigation overlay: the list until `open`, then Main, with
+   * a back button that calls `onBack` in place of Show navigation.
+   */
+  asideList?: { open: boolean; onBack: () => void };
   main?: Partial<MainLayout>;
   detail?: Partial<DetailLayout>;
   /** Controlled detail open state. Omit for uncontrolled. */
@@ -171,10 +159,12 @@ function Root(props: ViewShellRootProps) {
     'breakpoints',
     'layoutBreakpoint',
     'resizable',
+    'contentLayout',
     'aside',
     'asidePreferenceKey',
     'asideRequired',
     'asidePinned',
+    'asideList',
     'main',
     'detail',
     'detailOpen',
@@ -193,15 +183,23 @@ function Root(props: ViewShellRootProps) {
   const [wideAsideCollapsed, setWideAsideCollapsed] = secondarySplit
     ? (panel?.navigationCollapsed ?? createSignal(true))
     : local.asidePreferenceKey
-      ? usePreference(
-          `macro:pref:view-sidebar:collapsed:${local.asidePreferenceKey}`,
-          { default: false }
-        )
+      ? usePreference(asideCollapsedPreferenceKey(local.asidePreferenceKey), {
+          default: false,
+        })
       : createSignal(false);
+  // A width the user dragged to wins over the configured default.
+  const [chosenAsideWidth, setChosenAsideWidth] = local.asidePreferenceKey
+    ? usePreference<number | undefined>(
+        `macro:pref:view-sidebar:width:${local.asidePreferenceKey}`,
+        { default: undefined }
+      )
+    : createSignal<number>();
   const id = createUniqueId();
   const [root, setRoot] = createSignal<HTMLDivElement>();
+  const [navigationTrigger, setNavigationTrigger] =
+    createSignal<HTMLButtonElement>();
   const animateSidebar = createSidebarMotion(root);
-  const size = createElementSize(root);
+  const width = createFrameWidth(root);
 
   const thresholds = (): BreakpointThresholds =>
     local.breakpoints ?? DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS;
@@ -215,19 +213,58 @@ function Root(props: ViewShellRootProps) {
     return key;
   };
 
-  const asideLayout = (): AsideLayout => ({
-    ...DEFAULT_ASIDE_LAYOUT,
-    ...(local.aside || {}),
-  });
+  const asideScale = () =>
+    isTouchDevice() && !atLayoutBreakpoint() ? WIDE_TOUCH_ASIDE_SCALE : 1;
+  const asideLayout = (): AsideLayout => {
+    const layout = { ...DEFAULT_ASIDE_LAYOUT, ...(local.aside || {}) };
+    const chosen = chosenAsideWidth();
+    // Store widths in desktop units so fold/unfold and device changes don't compound scaling.
+    const preferred =
+      chosen !== undefined && Number.isFinite(chosen)
+        ? Math.min(layout.max, Math.max(layout.min, chosen))
+        : layout.width;
+    const scale = asideScale();
+    return {
+      ...layout,
+      width: preferred * scale,
+      min: layout.min * scale,
+      max: layout.max * scale,
+      preserveDuringResize: scale !== 1 ? true : layout.preserveDuringResize,
+    };
+  };
 
+  const navigationSheet = () =>
+    local.contentLayout === 'collection' && isTouchDevice();
+  const collectionLayout = () => navigationSheet() && !atLayoutBreakpoint();
+  // Custom reading panes declare a root Detail; CollectionPanes owns its
+  // nested columns so its list and editor can survive breakpoint changes.
+  const collectionColumns = () =>
+    collectionLayout() && local.detail !== undefined;
   const mainLayout = (): MainLayout => ({
     ...DEFAULT_MAIN_LAYOUT,
     ...local.main,
+    ...(collectionColumns()
+      ? {
+          width:
+            local.main?.width ??
+            DEFAULT_ASIDE_LAYOUT.width * WIDE_TOUCH_ASIDE_SCALE,
+          min: 320,
+          max: local.main?.max ?? 720,
+        }
+      : {}),
   });
 
   const detailLayout = (): DetailLayout => ({
     ...DEFAULT_DETAIL_LAYOUT,
     ...local.detail,
+    ...(collectionColumns()
+      ? {
+          initialWidth: 'auto' as const,
+          min: 320,
+          max: 4000,
+          whenNarrow: 'hide' as const,
+        }
+      : {}),
   });
 
   const controlled = () => local.detailOpen !== undefined;
@@ -236,7 +273,8 @@ function Root(props: ViewShellRootProps) {
   );
 
   const isOpen = () =>
-    controlled() ? (local.detailOpen ?? false) : uncontrolledOpen();
+    collectionColumns() ||
+    (controlled() ? (local.detailOpen ?? false) : uncontrolledOpen());
 
   const setOpen = (next: boolean) => {
     if (isOpen() === next) return;
@@ -245,7 +283,6 @@ function Root(props: ViewShellRootProps) {
   };
 
   const resizable = () => local.resizable ?? false;
-  const width = () => size.width ?? undefined;
   const breakpoints = createSizeBreakpoints(width, thresholds);
 
   const atLayoutBreakpoint = () => {
@@ -253,7 +290,14 @@ function Root(props: ViewShellRootProps) {
     return match ? match() : false;
   };
 
+  // Retain the docked panel only while its narrow-layout exit is animating.
+  const [asideHost, setAsideHost] = createSignal<
+    'docked' | 'closing' | 'overlay'
+  >(untrack(atLayoutBreakpoint) ? 'overlay' : 'docked');
   const asideRequired = () => local.asideRequired ?? false;
+  const [sheetOpen, setSheetOpen] = createWritableMemo<boolean>(
+    on(collectionLayout, () => false)
+  );
   // Each narrow layout starts closed, independently of the saved wide layout,
   // unless navigation is required, which opens the overlay until dismissed.
   const [narrowAsideOpen, setNarrowAsideOpen] = createWritableMemo<boolean>(
@@ -262,27 +306,109 @@ function Root(props: ViewShellRootProps) {
   // Only a docked aside can be pinned open: a pinned overlay would hide Main
   // behind a backdrop with no way to dismiss it.
   const asidePinned = () =>
-    (asideRequired() || (local.asidePinned ?? false)) && !atLayoutBreakpoint();
+    (asideRequired() || (local.asidePinned ?? false)) &&
+    !atLayoutBreakpoint() &&
+    !collectionLayout();
+  // A list aside takes turns with Main in narrow layouts rather than
+  // overlaying it, so the overlay and its open state don't apply there.
+  const narrowList = (): 'list' | 'main' | undefined => {
+    if (!local.asideList || local.aside === false || !atLayoutBreakpoint()) {
+      return undefined;
+    }
+    return local.asideList.open ? 'main' : 'list';
+  };
 
-  const asideMode = (): AsideMode =>
-    local.aside === false ||
-    (atLayoutBreakpoint()
-      ? !narrowAsideOpen()
-      : wideAsideCollapsed() && !asidePinned())
+  const asideMode = (): AsideMode => {
+    if (collectionLayout()) return sheetOpen() ? 'docked' : 'collapsed';
+    const list = narrowList();
+    if (list) return list === 'list' ? 'docked' : 'collapsed';
+
+    return local.aside === false ||
+      (atLayoutBreakpoint()
+        ? !narrowAsideOpen()
+        : wideAsideCollapsed() && !asidePinned())
       ? 'collapsed'
       : 'docked';
-  const asideOverlay = () => atLayoutBreakpoint() && asideMode() === 'docked';
+  };
+  const asideOverlay = () =>
+    (atLayoutBreakpoint() || collectionLayout()) &&
+    !narrowList() &&
+    asideMode() === 'docked';
 
   const setAsideOpen = (open: boolean) => {
+    if (collectionLayout()) {
+      if (sheetOpen() === open) return;
+      const operation = startUiOperation('workspace.navigation-sheet', {
+        attributes: { 'navigation.open': open },
+      });
+      setSheetOpen(open);
+      operation.afterPaint();
+      return;
+    }
+    if (narrowList()) return;
     if (!open && asidePinned()) return;
+    // Repeated requests must not cancel an exit that still owns host cleanup.
+    if (open === (asideMode() === 'docked')) return;
     animateSidebar(() => {
-      if (atLayoutBreakpoint()) setNarrowAsideOpen(open);
-      else setWideAsideCollapsed(!open);
+      if (atLayoutBreakpoint()) {
+        // An explicit overlay replaces an unfinished docked exit.
+        if (open) setAsideHost('overlay');
+        setNarrowAsideOpen(open);
+      } else setWideAsideCollapsed(!open);
     });
   };
-  // The pin flips the docked aside without a setter, so animate it here.
+  // Keep the last measured breakpoint while the view is detached or hidden.
+  const measuredLayoutBreakpoint = createMemo<boolean | undefined>(
+    (previous) => {
+      const currentWidth = width();
+      return currentWidth === undefined || currentWidth <= 0
+        ? previous
+        : atLayoutBreakpoint();
+    }
+  );
+  // Measure the old host before the slots react to a breakpoint transition.
   createComputed(
-    on(asidePinned, () => animateSidebar(() => {}), { defer: true })
+    on(measuredLayoutBreakpoint, (narrow, previous) => {
+      if (narrow === undefined || narrow === previous) return;
+      // The first measurable layout is not a user-initiated resize.
+      if (previous === undefined) {
+        setAsideHost(narrow ? 'overlay' : 'docked');
+        return;
+      }
+      const docked = Array.from(
+        root()?.querySelectorAll<HTMLElement>(
+          ':scope > [data-resize-zone] > [data-resize-panel]'
+        ) ?? []
+      ).find((panel) => panel.querySelector('[data-view-shell-aside]'));
+      const retain =
+        narrow &&
+        !local.asideList &&
+        !asideRequired() &&
+        !!docked &&
+        !docked.classList.contains('hidden');
+      animateSidebar(
+        () => {
+          if (!narrow) setAsideHost('docked');
+          else setAsideHost(retain ? 'closing' : 'overlay');
+        },
+        () => {
+          if (narrow) setAsideHost('overlay');
+        }
+      );
+    })
+  );
+  // Pin changes animate the current docked host, but cannot interrupt its exit.
+  createComputed(
+    on(
+      [() => local.asidePinned, asideRequired],
+      () => {
+        if (!atLayoutBreakpoint()) animateSidebar(() => {});
+        else if (asideRequired()) {
+          animateSidebar(() => setAsideHost('overlay'));
+        }
+      },
+      { defer: true }
+    )
   );
 
   const canFitInlineDetail = () => {
@@ -310,9 +436,24 @@ function Root(props: ViewShellRootProps) {
 
   const value: ViewShellInternal = {
     id,
+    root,
     width,
     breakpoints,
     atLayoutBreakpoint,
+    asideHost: () => (navigationSheet() ? 'sheet' : asideHost()),
+    collectionLayout,
+    navigationTrigger,
+    registerNavigationTrigger: (element) => {
+      setNavigationTrigger(element);
+      onCleanup(() =>
+        setNavigationTrigger((current) =>
+          current === element ? undefined : current
+        )
+      );
+    },
+    narrowList,
+    returnToList: () => local.asideList?.onBack(),
+    chooseAsideWidth: (width) => setChosenAsideWidth(width / asideScale()),
     aside: {
       layout: asideLayout,
       mode: asideMode,
@@ -320,8 +461,10 @@ function Root(props: ViewShellRootProps) {
       canCollapse: () =>
         local.asidePreferenceKey !== undefined &&
         local.aside !== false &&
-        !asidePinned(),
+        !asidePinned() &&
+        !narrowList(),
       isOverlay: asideOverlay,
+      isSheet: navigationSheet,
       collapse: () => setAsideOpen(false),
       expand: () => setAsideOpen(true),
       toggle: () => {
@@ -353,7 +496,7 @@ function Root(props: ViewShellRootProps) {
       hotkey: 'cmd+.',
       hotkeyToken: TOKENS.workspace.toggleNavigation,
       scopeId: panel.splitHotkeyScope,
-      description: 'Toggle workspace navigation',
+      description: 'Toggle navigation',
       condition: () => panel.isPanelActive() && value.aside.canCollapse(),
       runWithInputFocused: true,
       keyDownHandler: () => {
@@ -378,6 +521,7 @@ function Root(props: ViewShellRootProps) {
         <Resize.Zone
           direction="horizontal"
           gutter={RESIZE_GUTTER}
+          showTouchDividers={isTouchDevice() && !atLayoutBreakpoint()}
           resizable={resizable()}
         >
           {local.children}
@@ -391,33 +535,87 @@ function Root(props: ViewShellRootProps) {
  * Sizing region for navigation. Renders a div, not aside.
  * ViewSidebar.Root inside keeps the landmark.
  */
-type ViewShellAsideProps = JSX.HTMLAttributes<HTMLDivElement> & {
-  /** Called with the solved aside width after a drag or keyboard resize. */
-  onWidthChangeEnd?: (width: number) => void;
-};
+function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const ws = useViewShellInternal();
+  return (
+    <ViewShellPaneContext.Provider value="aside">
+      <Switch>
+        <Match when={ws.asideHost() === 'sheet'}>
+          <NavigationSheet {...props} />
+        </Match>
+        <Match when={ws.narrowList()}>
+          <NarrowListAside {...props} />
+        </Match>
+        <Match when={true}>
+          <AsideHost {...props} />
+        </Match>
+      </Switch>
+    </ViewShellPaneContext.Provider>
+  );
+}
 
-function Aside(props: ViewShellAsideProps) {
-  const [local, rest] = splitProps(props, [
-    'children',
-    'class',
-    'onWidthChangeEnd',
-  ]);
+/**
+ * A narrow list fills the shell over Main, which waits beneath it. While an
+ * entity is open the list stays mounted but hidden, so it keeps its scroll.
+ */
+function NarrowListAside(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
   const ws = useViewShellInternal();
   const asideTarget = tourTarget(VIEW_SHELL_TOUR.aside);
-  const [resizedWidth, setResizedWidth] = createSignal<{
-    configuredWidth: number;
-    width: number;
-    mainWidth?: number;
-  }>();
-  const resizePreference = () => {
-    const resized = resizedWidth();
-    return resized?.configuredWidth === ws.aside.layout().width
-      ? resized
-      : undefined;
-  };
-  const preferredWidth = () => {
-    return resizePreference()?.width ?? ws.aside.layout().width;
-  };
+  const hidden = () => ws.narrowList() === 'main';
+  let list: HTMLDivElement | undefined;
+
+  // Back leaves with the entity it was on; hand focus to the list, unless
+  // the user has already moved it outside this view.
+  createEffect(
+    on(
+      hidden,
+      (isHidden) => {
+        if (isHidden || !list) return;
+        const active = document.activeElement;
+        const shell = list.closest('[data-view-shell]');
+        // Removing a focused scope hands focus to the pane around this view.
+        const focusLost =
+          !active || active === document.body || active.contains(shell);
+        if (!focusLost && !shell?.contains(active)) return;
+        if (list.contains(active)) return;
+
+        list.focus({ preventScroll: true });
+      },
+      { defer: true }
+    )
+  );
+
+  return (
+    <div
+      {...rest}
+      ref={(element) => {
+        list = element;
+        asideTarget(element);
+      }}
+      tabIndex={-1}
+      class={cn(
+        'absolute inset-0 z-20 min-h-0 bg-panel outline-none',
+        hidden() && 'invisible',
+        local.class
+      )}
+      data-view-shell-aside=""
+      inert={hidden()}
+      aria-hidden={hidden()}
+    >
+      {local.children}
+    </div>
+  );
+}
+
+/** Docked or overlay navigation, whichever the layout hosts. */
+function AsideHost(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+  const ws = useViewShellInternal();
+  const asideTarget = tourTarget(VIEW_SHELL_TOUR.aside);
+  // Main's width after this mount's last drag; only the aside width is saved.
+  const [resizedMainWidth, setResizedMainWidth] = createSignal<number>();
+  const preferredWidth = () => ws.aside.layout().width;
   const onWidthChangeEnd = (width: number) => {
     const shellWidth = ws.width();
     // A drag also chooses how much space Main gives up. Keeping its old soft
@@ -427,13 +625,8 @@ function Aside(props: ViewShellAsideProps) {
         ? shellWidth - RESIZE_GUTTER - width
         : undefined;
     batch(() => {
-      local.onWidthChangeEnd?.(width);
-      // A consumer may persist the width back into the layout in this callback.
-      setResizedWidth({
-        configuredWidth: ws.aside.layout().width,
-        width,
-        mainWidth,
-      });
+      ws.chooseAsideWidth(width);
+      setResizedMainWidth(mainWidth);
     });
   };
   const redistributionPreferredSize = () => {
@@ -455,10 +648,7 @@ function Aside(props: ViewShellAsideProps) {
       shellWidth -
       RESIZE_GUTTER -
       Math.max(
-        Math.min(
-          mainLayout.preferredWidth,
-          resizePreference()?.mainWidth ?? Infinity
-        ),
+        Math.min(mainLayout.preferredWidth, resizedMainWidth() ?? Infinity),
         mainLayout.min
       );
 
@@ -473,7 +663,7 @@ function Aside(props: ViewShellAsideProps) {
   // while its exit animation is still retaining the first one.
   return (
     <Show
-      when={ws.atLayoutBreakpoint()}
+      when={ws.asideHost() === 'overlay'}
       fallback={
         <Resize.Panel
           id={`${ws.id}-aside`}
@@ -482,7 +672,11 @@ function Aside(props: ViewShellAsideProps) {
           maxSize={ws.aside.layout().max}
           redistributionPreferredSize={redistributionPreferredSize()}
           target={{ kind: 'px', px: preferredWidth() }}
-          collapsed={() => ws.aside.isCollapsed()}
+          collapsed={() =>
+            ws.atLayoutBreakpoint()
+              ? ws.asideHost() === 'closing'
+              : ws.aside.isCollapsed()
+          }
           onSizeChangeEnd={onWidthChangeEnd}
         >
           <div
@@ -490,8 +684,8 @@ function Aside(props: ViewShellAsideProps) {
             ref={asideTarget}
             class={cn('size-full min-h-0 min-w-0', local.class)}
             data-view-shell-aside=""
-            inert={ws.aside.isCollapsed()}
-            aria-hidden={ws.aside.isCollapsed()}
+            inert={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
+            aria-hidden={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
           >
             {local.children}
           </div>
@@ -550,90 +744,6 @@ function Aside(props: ViewShellAsideProps) {
   );
 }
 
-/** Keep split close available in both docked and overlay navigation. */
-export function ViewSidebarCloseButton(
-  props: ComponentProps<typeof SplitPanel.CloseButton>
-) {
-  const [local, rest] = splitProps(props, ['children', 'size']);
-  return (
-    <SplitPanel.CloseButton {...rest} size={local.size ?? 'icon-xs'}>
-      {local.children ?? <CloseIcon class="size-4" />}
-    </SplitPanel.CloseButton>
-  );
-}
-
-/** Safe outside a shell so block preview headers can share this control. */
-export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
-  const ws = useContext(ViewShellContext);
-  // A conditional expression as `ref` is dropped by the Solid compiler, so
-  // only the expand toggle registers, from inside the callback.
-  const toggleTarget = tourTarget(VIEW_SHELL_TOUR.sidebarToggle);
-  const visible = () =>
-    ws?.aside.canCollapse() &&
-    (props.action === 'expand'
-      ? ws.aside.isCollapsed() || ws.aside.isOverlay()
-      : !ws.aside.isCollapsed());
-  // Show and Hide are separate actions, not a persistently pressed toggle.
-  return (
-    <Show when={visible()}>
-      <Button
-        aria-label={
-          props.action === 'expand' ? 'Show navigation' : 'Hide navigation'
-        }
-        tooltip={{
-          content:
-            props.action === 'expand' ? 'Show navigation' : 'Hide navigation',
-          hotkey: TOKENS.workspace.toggleNavigation,
-        }}
-        variant="ghost"
-        size="icon-xs"
-        class={cn(
-          'shrink-0 touch:hidden',
-          props.action === 'collapse' && 'ml-auto',
-          props.action === 'collapse' &&
-            ws?.aside.isOverlay() &&
-            'motion-safe:animate-[dialog-overlay-open_60ms_ease-out_80ms_both]'
-        )}
-        ref={(element) => {
-          if (props.action === 'expand') toggleTarget(element);
-        }}
-        data-view-sidebar-toggle={props.action}
-        onClick={(event) => {
-          const shell = event.currentTarget.closest('[data-view-shell]');
-          if (props.action === 'expand') ws?.aside.expand();
-          else ws?.aside.collapse();
-          const nextAction = props.action === 'expand' ? 'collapse' : 'expand';
-          queueMicrotask(() =>
-            shell
-              ?.querySelector<HTMLButtonElement>(
-                `[data-view-sidebar-toggle="${nextAction}"]`
-              )
-              ?.focus()
-          );
-        }}
-      >
-        <SidebarIcon class="size-4" />
-      </Button>
-    </Show>
-  );
-}
-
-/** Shared leading controls, kept in place beneath navigation overlays. */
-export function ViewNavigationControls() {
-  const ws = useContext(ViewShellContext);
-  return (
-    <Show when={ws?.aside.isCollapsed() || ws?.aside.isOverlay()}>
-      <SplitPanel.ControlGroup
-        inert={ws?.aside.isOverlay()}
-        aria-hidden={ws?.aside.isOverlay()}
-      >
-        <SplitPanel.CloseButton />
-        <ViewSidebarToggle action="expand" />
-      </SplitPanel.ControlGroup>
-    </Show>
-  );
-}
-
 type ViewShellMainProps = JSX.HTMLAttributes<HTMLElement> & {
   /** Called with the solved width after a drag beside an inline detail. */
   onWidthChangeEnd?: (width: number) => void;
@@ -644,9 +754,20 @@ function Main(props: ViewShellMainProps) {
     'children',
     'class',
     'ref',
+    'style',
     'onWidthChangeEnd',
   ]);
   const ws = useViewShellInternal();
+  const [frame, setFrame] = createSignal<HTMLElement>();
+  const topBarInset = createTouchTopBarInset();
+  // Main keeps the panel's inset (lists reserve their own) unless a
+  // floating top bar covers it.
+  const mainStyle = () => {
+    const inset = touchTopBarInsetStyle(topBarInset.height());
+    if (!inset) return local.style;
+    if (typeof local.style === 'string') return local.style;
+    return { ...local.style, ...inset };
+  };
   const layout = ws.main.layout;
   const target = () => {
     const width = layout().width;
@@ -655,6 +776,29 @@ function Main(props: ViewShellMainProps) {
     }
     return { kind: 'px' as const, px: width };
   };
+  // The detail joins with a share of its own, which would otherwise shrink
+  // Main's. Holding the width through automatic layouts leaves the detail
+  // what is left; in a tight shell Main gives way before the aside does.
+  const widthBesideDetail = () => {
+    const width = layout().width;
+    const shellWidth = ws.width();
+    if (
+      ws.detail.placement() !== 'inline' ||
+      width === undefined ||
+      shellWidth === undefined
+    ) {
+      return undefined;
+    }
+
+    const asideDocked = ws.aside.mode() === 'docked' && !ws.aside.isOverlay();
+    const asideWidth = asideDocked
+      ? ws.aside.layout().width + RESIZE_GUTTER
+      : 0;
+    const availableForMain =
+      shellWidth - asideWidth - RESIZE_GUTTER - ws.detail.layout().min;
+
+    return Math.min(width, Math.max(layout().min, availableForMain));
+  };
 
   return (
     <Resize.Panel
@@ -662,32 +806,73 @@ function Main(props: ViewShellMainProps) {
       index={1}
       minSize={layout().min}
       maxSize={ws.detail.placement() === 'inline' ? layout().max : undefined}
+      redistributionPreferredSize={widthBesideDetail()}
       target={target()}
       onSizeChangeEnd={local.onWidthChangeEnd}
     >
-      <main
-        {...rest}
-        ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.main))}
-        class={cn('flex size-full min-h-0 min-w-0 flex-col', local.class)}
-        data-view-shell-main=""
-      >
-        {local.children}
-      </main>
+      <ViewShellPaneContext.Provider value="main">
+        <FloatRegionScope
+          anchor={frame}
+          active={() => ws.narrowList() !== 'list'}
+        >
+          <TouchTopBarInsetProvider value={topBarInset.value}>
+            <main
+              {...rest}
+              ref={mergeRefs(
+                setFrame,
+                local.ref,
+                tourTarget(VIEW_SHELL_TOUR.main)
+              )}
+              class={cn(
+                'flex size-full min-h-0 min-w-0 flex-col',
+                topBarInset.height() > 0 && 'touch:relative',
+                local.class
+              )}
+              style={mainStyle()}
+              data-view-shell-main=""
+              inert={ws.narrowList() === 'list'}
+              aria-hidden={ws.narrowList() === 'list'}
+            >
+              {local.children}
+              <TouchTopBarFade height={topBarInset.height()} />
+            </main>
+          </TouchTopBarInsetProvider>
+        </FloatRegionScope>
+      </ViewShellPaneContext.Provider>
     </Resize.Panel>
   );
 }
 
-function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
+function TopBar(
+  props: JSX.HTMLAttributes<HTMLDivElement> & { floating?: boolean }
+) {
+  const [local, rest] = splitProps(props, [
+    'children',
+    'class',
+    'ref',
+    'floating',
+  ]);
+  const [bar, setBar] = createSignal<HTMLDivElement>();
+  // On touch the bar floats over its pane as islands, like a standalone
+  // split header; `floating` bars are positioned by their own layout.
+  const inset = useTouchTopBarInset(bar, () => !local.floating);
+  const floats = inset.floats;
   return (
     <SplitHeaderContextMenu>
       <div
         {...rest}
-        ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
+        ref={mergeRefs(setBar, local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
         class={cn(
           '@container/split-header flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden',
-          local.class
+          local.class,
+          floats() &&
+            'touch:pointer-events-none touch:absolute touch:inset-x-0 touch:top-0 touch:z-split-panel-chrome touch:h-auto touch:min-h-0 touch:gap-2 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)] touch:pb-3'
         )}
+        style={
+          floats() && inset.offset() > 0
+            ? { top: `${inset.offset()}px`, 'padding-top': '0px' }
+            : undefined
+        }
         data-view-shell-top-bar=""
       >
         <ViewNavigationControls />
@@ -731,8 +916,15 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
 }
 
 function Detail(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+  const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
   const ws = useViewShellInternal();
+  const [frame, setFrame] = createSignal<HTMLElement>();
+  const setDetailFrame = (element: HTMLDivElement) => {
+    setFrame(element);
+    onCleanup(() =>
+      setFrame((current) => (current === element ? undefined : current))
+    );
+  };
   const layout = ws.detail.layout;
   const target = () => {
     const initialWidth = layout().initialWidth;
@@ -742,52 +934,74 @@ function Detail(props: JSX.HTMLAttributes<HTMLDivElement>) {
       px: initialWidth ?? layout().width,
     };
   };
+  const topBarInset = createTouchTopBarInset();
 
   return (
-    <Switch>
-      <Match when={ws.detail.placement() === 'inline'}>
-        <Resize.Panel
-          id={`${ws.id}-detail`}
-          index={2}
-          minSize={layout().min}
-          maxSize={layout().max}
-          target={target()}
-        >
-          <div
-            {...rest}
-            class={cn('size-full min-h-0 min-w-0', local.class)}
-            data-view-shell-detail=""
-            data-view-shell-detail-placement="inline"
-          >
-            {local.children}
-          </div>
-        </Resize.Panel>
-      </Match>
-      <Match when={ws.detail.placement() === 'overlay'}>
-        <div
-          {...rest}
-          class={cn(
-            'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge-frame bg-panel shadow-menu',
-            local.class
-          )}
-          style={{ width: `${layout().width}px`, 'max-width': '100%' }}
-          data-view-shell-detail=""
-          data-view-shell-detail-placement="overlay"
-        >
-          {local.children}
-        </div>
-      </Match>
-      <Match when={ws.detail.placement() === 'replace'}>
-        <div
-          {...rest}
-          class={cn('absolute inset-0 z-10 min-h-0 min-w-0', local.class)}
-          data-view-shell-detail=""
-          data-view-shell-detail-placement="replace"
-        >
-          {local.children}
-        </div>
-      </Match>
-    </Switch>
+    <ViewShellPaneContext.Provider value="detail">
+      <FloatRegionScope
+        anchor={frame}
+        active={() => ws.detail.placement() !== 'hidden'}
+      >
+        <TouchTopBarInsetProvider value={topBarInset.value}>
+          <Switch>
+            <Match when={ws.detail.placement() === 'inline'}>
+              <Resize.Panel
+                id={`${ws.id}-detail`}
+                index={2}
+                minSize={layout().min}
+                maxSize={layout().max}
+                target={target()}
+              >
+                <div
+                  {...rest}
+                  ref={mergeRefs(setDetailFrame, local.ref)}
+                  class={cn('relative size-full min-h-0 min-w-0', local.class)}
+                  style={touchTopBarInsetStyle(topBarInset.height(), '0px')}
+                  data-view-shell-detail=""
+                  data-view-shell-detail-placement="inline"
+                >
+                  {local.children}
+                  <TouchTopBarFade height={topBarInset.height()} />
+                </div>
+              </Resize.Panel>
+            </Match>
+            <Match when={ws.detail.placement() === 'overlay'}>
+              <div
+                {...rest}
+                ref={mergeRefs(setDetailFrame, local.ref)}
+                class={cn(
+                  'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge-frame bg-panel shadow-menu',
+                  local.class
+                )}
+                style={{
+                  width: `${layout().width}px`,
+                  'max-width': '100%',
+                  ...touchTopBarInsetStyle(topBarInset.height()),
+                }}
+                data-view-shell-detail=""
+                data-view-shell-detail-placement="overlay"
+              >
+                {local.children}
+                <TouchTopBarFade height={topBarInset.height()} />
+              </div>
+            </Match>
+            <Match when={ws.detail.placement() === 'replace'}>
+              <div
+                {...rest}
+                ref={mergeRefs(setDetailFrame, local.ref)}
+                class={cn('absolute inset-0 z-10 min-h-0 min-w-0', local.class)}
+                style={touchTopBarInsetStyle(topBarInset.height())}
+                data-view-shell-detail=""
+                data-view-shell-detail-placement="replace"
+              >
+                {local.children}
+                <TouchTopBarFade height={topBarInset.height()} />
+              </div>
+            </Match>
+          </Switch>
+        </TouchTopBarInsetProvider>
+      </FloatRegionScope>
+    </ViewShellPaneContext.Provider>
   );
 }
 
@@ -796,6 +1010,9 @@ export const ViewShell = Object.assign(Root, {
   Aside,
   Main,
   TopBar,
+  TopBarIsland,
+  TopBarTitle,
+  TopBarActions,
   Header,
   Content,
   Detail,

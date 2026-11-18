@@ -6,6 +6,7 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import type {
   SavedViewSource,
   SavedViewsSource,
@@ -13,10 +14,7 @@ import type {
 import { normalizeFacetSelection } from '@app/features/soup';
 import { createTagFacetContext } from '@app/features/soup/filters/facets/tag-facet';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  enableGantt,
-  enableProjects,
-} from '@app/lib/core/constant/featureFlags';
+import { enableGantt } from '@app/lib/core/constant/featureFlags';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
@@ -29,6 +27,7 @@ import {
   tasksSplitRoute,
 } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
@@ -37,6 +36,7 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import {
@@ -58,10 +58,12 @@ import {
 } from 'solid-js/store';
 import { TASK_DEFAULT_GROUP_BY } from './constants';
 import { toTaskBoardGrouping } from './core/task-board';
+import type { DateBucketBoundaries } from './core/task-due-date';
 import { isProjectTab } from './core/task-navigation';
 import type { TaskFacetContext } from './filters/task-facets';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
 import { createTasksViewPersistence } from './persistence';
+import { createDateBucketBoundariesSignal } from './primitives/create-date-bucket-boundaries';
 import {
   createTaskSavedViewDraft,
   type TaskSavedViewDraft,
@@ -123,6 +125,7 @@ type TasksListController = ListController<
 export type TasksViewContext = {
   scopeKey?: string;
   state: Store<TasksViewState>;
+  calendar: Accessor<DateBucketBoundaries>;
   savedViews?: TaskSavedViewDraft;
   savedViewsList?: SavedViewsSource;
   savedViewSource?: SavedViewSource;
@@ -136,7 +139,6 @@ export type TasksViewContext = {
   savedViewTeam?: Accessor<{ id: string; name: string } | undefined>;
   facetContext: Accessor<TaskFacetContext>;
   createTask?: TasksViewProviderProps['onCreateTask'];
-  projectsEnabled: Accessor<boolean>;
   showTaskProject: Accessor<boolean>;
   ganttEnabled: Accessor<boolean>;
   setState: SetStoreFunction<TasksViewState>;
@@ -164,6 +166,8 @@ export type TasksViewContext = {
    * "filter by tag" button on entity rows.
    */
   filterByTag: (optionId: string) => void;
+  /** Filters by one assignee the same way, from an assignee's hover card. */
+  filterByAssignee: (userId: string) => void;
   setPrimarySort: (id: TaskSortId) => void;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
@@ -174,6 +178,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   TasksViewProviderProps
 >('TasksView', (props) => {
   const panel = useSplitPanelOrThrow();
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const navigate = useNavigate();
   const routeParams = useParams<{
     taskId?: string;
@@ -192,11 +197,10 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const tagSetsReady = useTagSetsReady();
   const [newSavedView, setNewSavedView] = createSignal<boolean | string>(false);
   const [savedViewNavigation, setSavedViewNavigation] = createSignal({});
-  const projectsFlag = useFeatureFlag(enableProjects);
-  const projectsEnabled = () => projectsFlag().enabled;
-  const showTaskProject = () => projectsEnabled() && !props.hideTaskProject;
+  const showTaskProject = () => !props.hideTaskProject;
   const ganttFlag = useFeatureFlag(enableGantt);
   const ganttEnabled = () => ganttFlag().enabled;
+  const calendar = createDateBucketBoundariesSignal();
 
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'my-tasks';
@@ -216,6 +220,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         facets: normalizeFacetSelection(
           initial.facets ?? DEFAULT_TASK_FACET_SELECTION
         ),
+        dueDate: initial.dueDate,
         collapsedGroupIds: [...(initial.collapsedGroupIds ?? [])],
         collapsedSidebarSectionIds: [
           ...(initial.collapsedSidebarSectionIds ?? []),
@@ -250,9 +255,6 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return persistedState.layout;
     },
     get groupBy() {
-      if (persistedState.groupBy === 'project' && !projectsEnabled()) {
-        return 'status';
-      }
       if (state.layout !== 'board') {
         return persistedState.groupBy;
       }
@@ -260,9 +262,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return toTaskBoardGrouping(persistedState.groupBy);
     },
     get tab(): TasksTab {
-      return isProjectTab(persistedState.tab) && !projectsEnabled()
-        ? 'my-tasks'
-        : persistedState.tab;
+      return persistedState.tab;
     },
   });
 
@@ -300,6 +300,10 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         : undefined,
       // Layout and rollout fallbacks must not overwrite the selected grouping.
       groupBy: persistedState.groupBy,
+      dueDate: state.dueDate?.type ?? 'any',
+      dueStart:
+        state.dueDate?.type === 'range' ? state.dueDate.start : undefined,
+      dueEnd: state.dueDate?.type === 'range' ? state.dueDate.end : undefined,
     });
   const isGroupExpanded = (groupId: string) =>
     !state.collapsedGroupIds.includes(groupId);
@@ -333,6 +337,15 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         groupBy: persistedState.groupBy,
         sort: persistedState.sort[0]?.id,
         sortReversed: persistedState.sort[0]?.reversed ? 'true' : 'false',
+        dueDate: persistedState.dueDate?.type ?? 'any',
+        dueStart:
+          persistedState.dueDate?.type === 'range'
+            ? persistedState.dueDate.start
+            : undefined,
+        dueEnd:
+          persistedState.dueDate?.type === 'range'
+            ? persistedState.dueDate.end
+            : undefined,
       },
       { history: 'replace' }
     );
@@ -353,6 +366,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     batch(() => {
       setNewSavedView(true);
       applyTaskFacets('team-tasks', DEFAULT_TASK_FACET_SELECTION);
+      setState('dueDate', undefined);
       setState('search', '');
       navigateSavedView(undefined);
     });
@@ -361,6 +375,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       savedViews?.reset();
       setNewSavedView(false);
       applyTaskFacets('my-tasks', DEFAULT_TASK_FACET_SELECTION);
+      setState('dueDate', undefined);
       navigateSavedView(undefined);
     });
   if (savedView) {
@@ -371,9 +386,10 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       creating: () => Boolean(newSavedView()),
       state: persistedState,
       facetContext,
-      apply: ({ facets, layout, groupBy, sort }) =>
+      apply: ({ facets, layout, groupBy, sort, dueDate }) =>
         batch(() => {
           applyTaskFacets('team-tasks', facets);
+          setState('dueDate', dueDate);
           setState('layout', layout);
           setState('groupBy', groupBy);
           setState(
@@ -386,6 +402,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
               groupBy,
               sort: sort[0]?.id,
               sortReversed: sort[0]?.reversed ? 'true' : 'false',
+              dueDate: dueDate?.type ?? 'any',
+              dueStart: dueDate?.type === 'range' ? dueDate.start : undefined,
+              dueEnd: dueDate?.type === 'range' ? dueDate.end : undefined,
             },
             { history: 'replace' }
           );
@@ -429,6 +448,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
             accountChanged ? 'my-tasks' : state.tab,
             DEFAULT_TASK_FACET_SELECTION
           );
+          setState('dueDate', undefined);
         }
       }
     )
@@ -457,6 +477,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         return kind !== 'loading' && kind !== 'unavailable';
       },
       board: () => state.layout === 'board',
+      calendar,
     })
   );
   type ActivationHandler = (
@@ -499,7 +520,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const opensInline = (options?: EntityDetailNavigationOptions) => {
     const event = options?.event;
     return (
-      !isTouchDevice() &&
+      inlinePreviewLayout() &&
       !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
   };
@@ -520,13 +541,27 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       'tasks-view'
     );
   };
+  const notificationSource = useGlobalNotificationSource();
+  const markTaskSeen = (id: string) => {
+    const rows = source.boardRows?.() ?? source.items();
+    const row = rows.find(
+      (row) => row.kind === 'entity' && row.entity.id === id
+    );
+    if (row?.kind === 'entity')
+      markRowNotificationsSeenOnOpen(row.entity, notificationSource);
+  };
   const openTask = (
     task: TaskDetailTarget,
     options?: EntityDetailNavigationOptions
   ) => {
-    if (props.onOpenTask) return props.onOpenTask(task, options);
+    if (props.onOpenTask) {
+      const opened = props.onOpenTask(task, options);
+      if (opened) markTaskSeen(task.id);
+      return opened;
+    }
     if (!opensInline(options)) return false;
     if (!selectPreview.canSelect(taskSelection(task.id))) return true;
+    markTaskSeen(task.id);
     fireAndForget(
       navigate(
         { route: taskDetailRoute, params: { taskId: task.id } },
@@ -590,7 +625,6 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   );
 
   const setTab = (tab: TasksTab) => {
-    if (isProjectTab(tab) && !projectsEnabled()) return;
     const leavingSavedView = state.savedViewActive;
     if (leavingSavedView) leaveSavedView();
     if (persistedState.tab === tab && !leavingSavedView) {
@@ -602,6 +636,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         draft.tab = tab;
         draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
         draft.facets = normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION);
+        draft.dueDate = undefined;
         draft.collapsedGroupIds = [];
       })
     );
@@ -620,6 +655,14 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     setState(
       'facets',
       reconcile(normalizeFacetSelection({ tags: [optionId] }))
+    );
+  };
+
+  const filterByAssignee = (userId: string) => {
+    closeTask();
+    setState(
+      'facets',
+      reconcile(normalizeFacetSelection({ assignees: [userId] }))
     );
   };
 
@@ -648,7 +691,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return props.onCreateTask;
     },
     state,
-    projectsEnabled,
+    calendar,
     showTaskProject,
     ganttEnabled,
     setState: setStateWithSearch,
@@ -661,6 +704,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     setTab,
     setFacets,
     filterByTag,
+    filterByAssignee,
     setPrimarySort,
     isSidebarSectionOpen,
     setSidebarSectionOpen,

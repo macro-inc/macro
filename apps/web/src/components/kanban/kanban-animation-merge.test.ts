@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import {
-  createKanbanAnimation,
-  type KanbanAnimationItem,
-} from './kanban-animation';
+  createLayoutAnimation,
+  type LayoutAnimationItem,
+} from '../drag-drop/create-layout-animation';
 
 let cancel: (() => void) | undefined;
 const originalAnimate = Object.getOwnPropertyDescriptor(
@@ -46,7 +46,7 @@ function fixture() {
   const viewport = document.createElement('div');
   viewport.getBoundingClientRect = () => new DOMRect(0, 0, 900, 600);
   document.body.append(viewport);
-  let items: KanbanAnimationItem[] = [];
+  let items: LayoutAnimationItem[] = [];
 
   function placement(key: string, x: number, parentKey?: string) {
     const layout = document.createElement('div');
@@ -75,7 +75,7 @@ function fixture() {
     };
   }
 
-  const motion = createKanbanAnimation({
+  const motion = createLayoutAnimation({
     viewport: () => viewport,
     items: () => items,
   });

@@ -1,5 +1,11 @@
 import deepEqual from 'fast-deep-equal';
+import { hasColumns, type LayoutShape } from '../panes/layout-tree';
 import { createId, isRecord } from '../utils';
+import {
+  formatLayoutShape,
+  LAYOUT_SEARCH_KEY,
+  parseLayoutShape,
+} from './layout-param';
 import {
   decodeFirstPane,
   decodePane,
@@ -29,7 +35,8 @@ import type {
 } from './types';
 
 type DecodedPane = { paneId?: PaneId; entry: Entry };
-type DecodedPanes = { panes: readonly DecodedPane[] };
+/** `shape` is how the URL tiles its panes, when it says. */
+type DecodedPanes = { panes: readonly DecodedPane[]; shape?: LayoutShape };
 type EncodedPane = { paneId: PaneId; entry: Entry };
 
 const LOCATION_BASE = 'http://split-router.invalid';
@@ -181,6 +188,8 @@ export function decodePanes(
 
   const search = parsePaneSearch(location.search);
   const stored = storedPanes(location.state, parts.length);
+  const layout = new URLSearchParams(location.search).get(LAYOUT_SEARCH_KEY);
+  const shape = layout === null ? undefined : parseLayoutShape(layout);
 
   const panes = decoded.map((route, position): DecodedPane => {
     const pane = stored?.[position];
@@ -198,7 +207,7 @@ export function decodePanes(
     return pane ? { paneId: pane.pane, entry } : { entry };
   });
 
-  return { panes };
+  return shape ? { panes, shape } : { panes };
 }
 
 export function formatPanePath(
@@ -230,14 +239,15 @@ function panesPath(
 function panesSearch(
   routes: SplitRoutesManifest,
   entries: readonly Entry[],
-  previousSearch: string
+  previousSearch: string,
+  layout: LayoutShape | undefined
 ): string {
   const owned = externalSearchKeys(routes, entries);
   const keepsAll = keepsAllExternalSearch(routes, entries);
   const query = new URLSearchParams();
 
   for (const [key, value] of new URLSearchParams(previousSearch)) {
-    const external = !isSplitSearchKey(key);
+    const external = !isSplitSearchKey(key) && key !== LAYOUT_SEARCH_KEY;
     const keep = external && (keepsAll || owned.includes(key));
     if (keep) query.append(key, value);
   }
@@ -246,6 +256,9 @@ function panesSearch(
     filterRouteSearch(routes, entry.location.route, entry.location.search)
   );
   replacePaneSearchParams(query, paneSearch);
+  if (layout && hasColumns(layout)) {
+    query.set(LAYOUT_SEARCH_KEY, formatLayoutShape(layout));
+  }
   query.sort();
 
   const search = query.toString();
@@ -261,18 +274,19 @@ function historyPane({ paneId, entry }: EncodedPane): SplitHistoryPane {
 }
 
 /**
- * The URL for `panes`. The hash from `previous` survives when the path is
- * unchanged, or with `keepHash` when rewriting the URL a URL navigation landed on.
+ * The URL for `panes`, tiled as `layout` says. The hash from `previous`
+ * survives when the path is unchanged, or with `keepHash` when rewriting the
+ * URL a URL navigation landed on.
  */
 export function encodePanes(
   routes: SplitRoutesManifest,
   panes: readonly EncodedPane[],
   previous: Pick<ExternalLocation, 'path' | 'search' | 'hash'>,
-  options: { keepHash?: boolean } = {}
+  options: { keepHash?: boolean; layout?: LayoutShape } = {}
 ): ExternalLocation {
   const entries = panes.map(({ entry }) => entry);
   const path = panesPath(routes, entries);
-  const search = panesSearch(routes, entries, previous.search);
+  const search = panesSearch(routes, entries, previous.search, options.layout);
   const samePath = normalizePath(path) === normalizePath(previous.path);
   const keepHash = options.keepHash || samePath;
 

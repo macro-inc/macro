@@ -65,6 +65,36 @@ export function finishColor(color: PendingColor): string | undefined {
   return `#${hex.toUpperCase()}`;
 }
 
+/**
+ * Office's shades of the accents for the seventh color on, six at a time:
+ * darker, lighter, a little darker, lighter still, darkest.
+ */
+const PALETTE_SHADES: [string, number][][] = [
+  [],
+  [['lumMod', 60_000]],
+  [
+    ['lumMod', 80_000],
+    ['lumOff', 20_000],
+  ],
+  [['lumMod', 80_000]],
+  [
+    ['lumMod', 60_000],
+    ['lumOff', 40_000],
+  ],
+  [['lumMod', 50_000]],
+];
+
+/**
+ * The `index`th automatic color of a chart: the palette's colors in turn,
+ * then shades of them, as Excel colors series and points past the sixth.
+ */
+export function paletteColor(palette: string[], index: number): string {
+  const base = palette[index % palette.length];
+  const shade = PALETTE_SHADES[Math.floor(index / palette.length) % 6];
+  if (!shade.length || !/^#[0-9a-f]{6}$/i.test(base)) return base;
+  return finishColor({ hex: base.slice(1), modifiers: shade }) ?? base;
+}
+
 /** Office's default theme colors, by `SCHEME_COLORS` index. */
 export const DEFAULT_THEME = [
   'FFFFFF',

@@ -8,6 +8,7 @@ version = "0.1.0"
 async-graphql = { workspace = true, features = ["dataloader"] }
 axum = { workspace = true }
 axum-extra = { workspace = true }
+chrono = { workspace = true }
 filter_ast = { path = "../filter_ast" }
 item_filters = { path = "../item_filters" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
@@ -20,7 +21,6 @@ models_properties = { path = "../models_properties" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
-tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

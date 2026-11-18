@@ -3,8 +3,8 @@ use super::DocumentToolContext;
 use crate::domain::{
     ports::{DocumentService, create::DocumentCreationService, editing::EditingWorkerService},
     spreadsheet::{
-        SpreadsheetFormula, SpreadsheetOperation, SpreadsheetOverride, SpreadsheetRequest,
-        SpreadsheetResponse,
+        SpreadsheetCaller, SpreadsheetError, SpreadsheetFormula, SpreadsheetOperation,
+        SpreadsheetOverride, SpreadsheetRequest, SpreadsheetResponse,
     },
 };
 use ai_toolset::{
@@ -63,7 +63,7 @@ pub struct CalculateSpreadsheet {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "EditSpreadsheet",
-    description = "Apply one atomic batch to a native Macro spreadsheet: set cell values/formulas, format or clear ranges, fill with relative formulas, add rows, resize columns, add or remove in-cell dropdowns (list data validation with a clickable arrow, optionally with a color per choice), insert checkboxes backed by TRUE/FALSE values, convert a range with a header row to a named table (filterable, sortable, referenced as Table1[Column], with typed columns such as currency, date, checkbox or dropdown), or add/rename/duplicate/delete sheets. Requires expectedRevision from a fresh ReadSpreadsheet. If the workbook changed, nothing is written: reread and reconsider, never blindly retry. All operations validate before saving; at most 25 operations and 2000 affected cells. Sheet IDs are stable; an exact sheet name may address a sheet added earlier in the same batch. Existing directly referenced sheets cannot be renamed/deleted, and the last sheet cannot be deleted. Read affected ranges after editing to verify computed results. Formula errors are returned as warnings, not silently repaired."
+    description = "Apply one atomic batch to a native Macro spreadsheet: set cell values/formulas, format or clear ranges, fill with relative formulas, add rows, resize columns, add or remove in-cell dropdowns (list data validation with a clickable arrow, optionally with a color per choice), insert checkboxes backed by TRUE/FALSE values, convert a range with a header row to a named table (filterable, sortable, referenced as Table1[Column], with typed columns such as currency, date, checkbox or dropdown), or add/rename/duplicate/delete sheets. Requires expectedRevision from a fresh ReadSpreadsheet. If the workbook changed, nothing is written: reread and reconsider, never blindly retry. All operations validate before saving; at most 25 operations and 2000 affected cells. Sheet IDs are stable; an exact sheet name may address a sheet added earlier in the same batch. Existing directly referenced sheets cannot be renamed/deleted, and the last sheet cannot be deleted. Read affected ranges after editing to verify computed results. Formula errors are returned as warnings, not silently repaired. Prefer formulas for derived values and keep existing formatting unless asked. Give a column of choices (status, owner, priority) a dropdown with light, distinct choice colors, and a done or yes/no column checkboxes, rather than text or ✓/X. Convert records the user will sort, filter or total into a table. This is the only way to edit a workbook: EditDocument and CSV or plaintext replacement cannot."
 )]
 pub struct EditSpreadsheet {
     /// Native spreadsheet document ID.
@@ -93,7 +93,7 @@ fn failure(error: impl Into<anyhow::Error>) -> ToolCallError {
 
 async fn cancellable<T>(
     req: &RequestContext,
-    operation: impl Future<Output = anyhow::Result<T>>,
+    operation: impl Future<Output = Result<T, SpreadsheetError>>,
 ) -> ToolResult<T> {
     tokio::select! {
         biased;
@@ -131,8 +131,10 @@ where
             &req,
             ctx.spreadsheet.read(
                 receipt,
-                &req.user_id,
-                ctx.actor.into_storage_id().as_ref(),
+                SpreadsheetCaller::Agent {
+                    user: &req.user_id,
+                    actor: ctx.actor.into_storage_id().as_ref(),
+                },
                 SpreadsheetRequest::Read {
                     sheet_id: self.sheet_id.clone(),
                     ranges: self.ranges.clone(),
@@ -170,8 +172,10 @@ where
             &req,
             ctx.spreadsheet.read(
                 receipt,
-                &req.user_id,
-                ctx.actor.into_storage_id().as_ref(),
+                SpreadsheetCaller::Agent {
+                    user: &req.user_id,
+                    actor: ctx.actor.into_storage_id().as_ref(),
+                },
                 SpreadsheetRequest::Calculate {
                     sheet_id: self.sheet_id.clone(),
                     formulas: self.formulas.clone(),
@@ -209,8 +213,10 @@ where
             &req,
             ctx.spreadsheet.edit(
                 receipt,
-                &req.user_id,
-                ctx.actor.into_storage_id().as_ref(),
+                SpreadsheetCaller::Agent {
+                    user: &req.user_id,
+                    actor: ctx.actor.into_storage_id().as_ref(),
+                },
                 self.expected_revision.clone(),
                 self.operations.clone(),
             ),

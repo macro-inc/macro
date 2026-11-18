@@ -1,6 +1,11 @@
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { setGlobalSplitManager } from '@app/signal/splitLayout';
+import type {
+  SplitContent,
+  SplitManager,
+} from '@components/app/split-layout/layoutManager';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { DatabaseCard } from '@core/component/LexicalMarkdown/component/decorator/DatabaseCard';
 import { DatabaseQuery } from '@core/component/LexicalMarkdown/component/decorator/DatabaseQuery';
@@ -28,7 +33,6 @@ import {
 } from '@macro-inc/lexical-core';
 import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
-import { contactsKeys } from '@queries/contacts/keys';
 import { databasesKeys } from '@queries/storage/keys';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { $createParagraphNode, $createTextNode, $getRoot } from 'lexical';
@@ -46,7 +50,13 @@ queryClient.setQueryData(
   databasesKeys.detail(databaseId).queryKey,
   documentDatabaseDetail()
 );
-queryClient.setQueryData(contactsKeys.all.queryKey, { contacts: [] });
+// Stands in for the app's splits: shows where the card asked to navigate.
+setGlobalSplitManager({
+  openWithSplit(content: SplitContent) {
+    document.getElementById('opened')!.textContent = JSON.stringify(content);
+    return { status: 'navigating' };
+  },
+} as SplitManager);
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: 'macro|fixture@example.com',
   authenticated: true,
@@ -138,6 +148,7 @@ function DocumentFixture() {
             actionContext={{ disableMentionTracking: true }}
           />
         </div>
+        <output id="opened" aria-label="Opened split" class="sr-only" />
         <output aria-label="Document state" class="sr-only">
           {state()}
         </output>

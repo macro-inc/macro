@@ -34,6 +34,36 @@ password: macroIsGreat!
 api-key: bf69486b-4733-4954-a44e-2e1b5f2c8a91
 ```
 
+## Sign-in validation error message
+
+`update-theme-message.ts` sets `[IdentityProviderValidationException]` to
+conditional sign-in recovery guidance. It replaces or adds this one single-line
+entry, preserving the rest of `defaultMessages`. Authentication and
+reconciliation are unchanged.
+
+FusionAuth rejects any save of a theme that lacks a message key or page
+template its version requires, which happens to a theme copied before an
+upgrade. The updater therefore also adds whatever the theme lacks, unchanged
+from FusionAuth's built-in theme, in the same PATCH; the preview lists each
+key and template it would add. Existing entries and templates are never
+modified.
+The updater and Pulumi configuration share the theme IDs in `theme-ids.ts`.
+Before applying, save any existing value of this entry for rollback.
+
+```sh
+# From this directory; uses the stack's existing Pulumi host and API key.
+bun update-theme-message.ts dev          # read-only preview (or use prod)
+bun update-theme-message.ts dev --apply  # only after authorization
+```
+
+Merging or deploying this stack does **not** apply the copy. Run the updater
+separately for the authorized environment. A JSON Patch `test` prevents a stale
+read from overwriting another message edit; preview again after a conflict.
+For rollback, restore the prior value of this property in the theme editor,
+or remove it if it was previously inherited.
+
+Use Biome from `nix develop` to match infrastructure CI.
+
 # TODO
 - [ ] configure idps
 - [ ] sync prod with pulumi stack

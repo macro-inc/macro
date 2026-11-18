@@ -4,7 +4,11 @@ use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
 use super::properties::IndexedProperty;
-use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
+use crate::{
+    Result,
+    date_format::EpochMillis,
+    error::{OpensearchClientError, OpensearchOperation, WriteRefusal},
+};
 
 /// Relation name for parent docs in the join field.
 const PARENT_RELATION: &str = "document";
@@ -70,6 +74,9 @@ pub struct UpsertDocumentArgs {
     /// custom) used for search filtering. Empty for documents without
     /// properties.
     pub properties: Vec<IndexedProperty>,
+    /// Whether a `document_email` row links the document to an email
+    /// attachment. Written on the parent only.
+    pub is_email_attachment: bool,
 }
 
 /// Resolve `index_override` to the physical/alias name we'll write to.
@@ -88,6 +95,7 @@ fn parent_doc_body(any_chunk: &UpsertDocumentArgs) -> serde_json::Value {
         "owner_id": &any_chunk.owner_id,
         "file_type": &any_chunk.file_type,
         "updated_at_millis": any_chunk.updated_at_millis,
+        "is_email_attachment": any_chunk.is_email_attachment,
         "document_relation": PARENT_RELATION,
     });
     if let Some(sub_type) = &any_chunk.sub_type {
@@ -164,8 +172,13 @@ async fn bulk_upsert_single_chunk(
         bulk_body.push(child_doc_body(doc).to_string());
     }
 
-    let result =
-        super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_single_chunk").await?;
+    let result = super::bulk_upsert_to_index(
+        client,
+        index,
+        bulk_body,
+        OpensearchOperation::BulkUpsertSingleChunk,
+    )
+    .await?;
 
     tracing::trace!(
         chunk_total = documents.len(),
@@ -287,7 +300,13 @@ pub(crate) async fn upsert_document(
         child_doc_body(args).to_string(),
     ];
 
-    let result = super::bulk_upsert_to_index(client, index, bulk_body, "upsert_document").await?;
+    let result = super::bulk_upsert_to_index(
+        client,
+        index,
+        bulk_body,
+        OpensearchOperation::UpsertDocument,
+    )
+    .await?;
 
     if result.failed > 0 {
         return Err(OpensearchClientError::Unknown {
@@ -295,7 +314,7 @@ pub(crate) async fn upsert_document(
                 "upsert_document had {} failures: {:?}",
                 result.failed, result.errors
             ),
-            method: Some("upsert_document".to_string()),
+            operation: OpensearchOperation::UpsertDocument,
         });
     }
 
@@ -320,7 +339,7 @@ fn parent_only_bulk_body(args: &UpsertDocumentArgs) -> Vec<String> {
 /// (e.g. archives, media). Writes the same full-overwrite parent body as
 /// the chunked paths — `node_id`/`content` on `args` are ignored — and
 /// touches no children.
-#[tracing::instrument(skip(client), err)]
+#[tracing::instrument(skip(client))]
 pub(crate) async fn upsert_parent_document(
     client: &opensearch::OpenSearch,
     args: &UpsertDocumentArgs,
@@ -329,8 +348,13 @@ pub(crate) async fn upsert_parent_document(
     let index = resolve_destination(index_override);
     let bulk_body = parent_only_bulk_body(args);
 
-    let result =
-        super::bulk_upsert_to_index(client, index, bulk_body, "upsert_parent_document").await?;
+    let result = super::bulk_upsert_to_index(
+        client,
+        index,
+        bulk_body,
+        OpensearchOperation::UpsertParentDocument,
+    )
+    .await?;
 
     if result.failed > 0 {
         return Err(OpensearchClientError::Unknown {
@@ -338,7 +362,7 @@ pub(crate) async fn upsert_parent_document(
                 "upsert_parent_document had {} failures: {:?}",
                 result.failed, result.errors
             ),
-            method: Some("upsert_parent_document".to_string()),
+            operation: OpensearchOperation::UpsertParentDocument,
         });
     }
 
@@ -373,9 +397,8 @@ pub(crate) async fn update_document_metadata(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_document_metadata".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::UpdateDocumentMetadata, &err)
         })?;
 
     let status_code = response.status_code();
@@ -388,14 +411,12 @@ pub(crate) async fn update_document_metadata(
         return Ok(());
     }
 
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("update_document_metadata".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpdateDocumentMetadata,
+            &err,
+        )
+    })?;
 
     // A *missing document* 404 is a no-op: the doc isn't indexed yet, so the
     // next full index will carry the current name. A *missing index* 404
@@ -423,7 +444,7 @@ pub(crate) async fn update_document_metadata(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_document_metadata".to_string()),
+        operation: OpensearchOperation::UpdateDocumentMetadata,
     })
 }
 
@@ -443,7 +464,7 @@ pub(crate) async fn update_document_properties(
     let properties_value =
         serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
             details: err.to_string(),
-            method: Some("update_document_properties".to_string()),
+            operation: OpensearchOperation::UpdateDocumentProperties,
         })?;
     let body = json!({ "doc": { "properties": properties_value } });
 
@@ -453,9 +474,11 @@ pub(crate) async fn update_document_properties(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_document_properties".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(
+                OpensearchOperation::UpdateDocumentProperties,
+                &err,
+            )
         })?;
 
     let status_code = response.status_code();
@@ -463,14 +486,12 @@ pub(crate) async fn update_document_properties(
         tracing::trace!(document_id=%document_id, "document properties updated");
         return Ok(());
     }
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("update_document_properties".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpdateDocumentProperties,
+            &err,
+        )
+    })?;
 
     // A *missing document* 404 is a no-op: the doc isn't indexed yet, so the
     // next full index will include its properties. A *missing index* 404
@@ -499,8 +520,189 @@ pub(crate) async fn update_document_properties(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_document_properties".to_string()),
+        operation: OpensearchOperation::UpdateDocumentProperties,
     })
+}
+
+/// How many times OpenSearch re-reads and reapplies an update whose document
+/// changed underneath it before reporting a version conflict.
+const UPDATE_RETRY_ON_CONFLICT: u8 = 3;
+
+/// Outcome of setting `is_email_attachment` on a batch of parent documents.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct EmailAttachmentUpdateResult {
+    /// Parents that now carry the value.
+    pub updated: usize,
+    /// Documents with no parent in the index. Their first full index writes
+    /// the value, so these are not failures.
+    pub missing: usize,
+    /// Items OpenSearch failed for any other reason.
+    pub failed: Vec<FailedDocumentUpdate>,
+}
+
+/// One document whose update OpenSearch failed.
+#[derive(Debug, PartialEq, Eq)]
+pub struct FailedDocumentUpdate {
+    /// The document id.
+    pub document_id: String,
+    /// The item's HTTP status.
+    pub status: u16,
+    /// OpenSearch's `error.type`, such as `version_conflict_engine_exception`.
+    pub error_type: String,
+}
+
+/// The bulk body that sets `is_email_attachment` on each document's parent:
+/// one partial `update` per document, routed to the parent's shard. It sends
+/// `doc` alone, with no upsert, so a document that is not indexed stays absent.
+fn email_attachment_update_bulk_body(
+    document_ids: &[String],
+    is_email_attachment: bool,
+) -> Vec<String> {
+    // With `detect_noop` off, every update reindexes the parent even when its
+    // `_source` already holds the value. A parent written before the mapping
+    // had the field holds the value only in `_source`; reindexing it is what
+    // makes the field searchable.
+    let update = serde_json::json!({
+        "doc": { "is_email_attachment": is_email_attachment },
+        "detect_noop": false,
+    })
+    .to_string();
+
+    let mut body = Vec::with_capacity(document_ids.len() * 2);
+    for document_id in document_ids {
+        let action = serde_json::json!({
+            "update": {
+                "_id": document_id,
+                "routing": document_id,
+                "retry_on_conflict": UPDATE_RETRY_ON_CONFLICT,
+            }
+        });
+        body.push(action.to_string());
+        body.push(update.clone());
+    }
+    body
+}
+
+/// The refusal, if any, in a request's or an item's status and `error`.
+fn write_refusal(status: u16, error: &serde_json::Value) -> Option<WriteRefusal> {
+    if error["type"].as_str() == Some("cluster_block_exception") {
+        return Some(WriteRefusal::ClusterBlock);
+    }
+    (status == 429).then_some(WriteRefusal::TooManyRequests)
+}
+
+/// Classify a bulk update response. A refusal of the request or of any one
+/// item fails the whole call with [`OpensearchClientError::WritesRefused`],
+/// since the other items meet the same pressure. A document that is not
+/// indexed counts as missing; any other failed item goes in `failed`.
+fn classify_email_attachment_update_response(
+    status: u16,
+    body: &str,
+) -> Result<EmailAttachmentUpdateResult> {
+    const OPERATION: OpensearchOperation = OpensearchOperation::BulkUpdateDocumentEmailAttachment;
+    let parsed = serde_json::from_str::<serde_json::Value>(body);
+
+    if !(200..300).contains(&status) {
+        // A refusal from a proxy in front of OpenSearch has no JSON body.
+        let error = parsed
+            .map(|value| value["error"].clone())
+            .unwrap_or_default();
+        if let Some(cause) = write_refusal(status, &error) {
+            return Err(OpensearchClientError::WritesRefused {
+                details: body.to_owned(),
+                cause,
+                operation: OPERATION,
+            });
+        }
+        tracing::error!(status, body, "bulk email attachment update failed");
+        return Err(OpensearchClientError::Unknown {
+            details: body.to_owned(),
+            operation: OPERATION,
+        });
+    }
+
+    let response = parsed.map_err(|error| OpensearchClientError::DeserializationFailed {
+        details: error.to_string(),
+        operation: OPERATION,
+    })?;
+
+    // A success without per-item results acknowledges nothing.
+    let items = response["items"].as_array().ok_or_else(|| {
+        OpensearchClientError::DeserializationFailed {
+            details: "bulk response has no items array".to_owned(),
+            operation: OPERATION,
+        }
+    })?;
+    let mut result = EmailAttachmentUpdateResult::default();
+    for item in items {
+        let update = &item["update"];
+        let item_status = update["status"]
+            .as_u64()
+            .and_then(|status| u16::try_from(status).ok())
+            .unwrap_or_default();
+        if (200..300).contains(&item_status) {
+            result.updated += 1;
+            continue;
+        }
+
+        let error = &update["error"];
+        if let Some(cause) = write_refusal(item_status, error) {
+            return Err(OpensearchClientError::WritesRefused {
+                details: error.to_string(),
+                cause,
+                operation: OPERATION,
+            });
+        }
+
+        let error_type = error["type"].as_str().unwrap_or_default();
+        if item_status == 404 && error_type == "document_missing_exception" {
+            result.missing += 1;
+            continue;
+        }
+        result.failed.push(FailedDocumentUpdate {
+            document_id: update["_id"].as_str().unwrap_or_default().to_owned(),
+            status: item_status,
+            error_type: error_type.to_owned(),
+        });
+    }
+
+    Ok(result)
+}
+
+/// Set `is_email_attachment` on the parents of `document_ids` in one `_bulk`
+/// request through the `documents` alias.
+pub(crate) async fn bulk_update_email_attachment(
+    client: &opensearch::OpenSearch,
+    document_ids: &[String],
+    is_email_attachment: bool,
+) -> Result<EmailAttachmentUpdateResult> {
+    const OPERATION: OpensearchOperation = OpensearchOperation::BulkUpdateDocumentEmailAttachment;
+    if document_ids.is_empty() {
+        return Ok(EmailAttachmentUpdateResult::default());
+    }
+
+    let response = client
+        .bulk(opensearch::BulkParts::Index(
+            SearchIndex::Documents.as_ref(),
+        ))
+        // An update can auto-create its target; a missing alias must fail
+        // instead of gaining a bare index under its name.
+        .require_alias(true)
+        .body(email_attachment_update_bulk_body(
+            document_ids,
+            is_email_attachment,
+        ))
+        .send()
+        .await
+        .map_err(|error| OpensearchClientError::request_failed(OPERATION, &error))?;
+
+    let status = response.status_code().as_u16();
+    let body = response
+        .text()
+        .await
+        .map_err(|error| OpensearchClientError::deserialization_failed(OPERATION, &error))?;
+
+    classify_email_attachment_update_response(status, &body)
 }
 
 #[cfg(test)]

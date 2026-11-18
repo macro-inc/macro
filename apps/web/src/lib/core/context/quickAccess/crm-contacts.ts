@@ -1,5 +1,8 @@
 import type { CrmContactEntity } from '@entity';
-import { crmContactEmailKey } from '@entity/types/entity';
+import {
+  crmContactEmailKey,
+  crmContactIdentityKey,
+} from '@entity/types/entity';
 import { toDate } from 'date-fns';
 import type { EntityItem, QuickAccessItem, UserItem } from './types';
 
@@ -38,7 +41,7 @@ export function deduplicateContactItems<T extends QuickAccessItem>(
   const winners = new Map<string, T>();
   for (const item of items) {
     if (!isCrmContactItem(item) || item.data.hidden) continue;
-    const email = crmContactEmailKey(item.data.email);
+    const email = crmContactIdentityKey(item.data);
     const previous = winners.get(email);
     if (
       !previous ||
@@ -51,7 +54,7 @@ export function deduplicateContactItems<T extends QuickAccessItem>(
   return items.filter(
     (item) =>
       !isCrmContactItem(item) ||
-      winners.get(crmContactEmailKey(item.data.email)) === item
+      winners.get(crmContactIdentityKey(item.data)) === item
   );
 }
 
@@ -75,7 +78,9 @@ export function resolveContactPeople(
       ? [
           {
             contact: item,
-            user: usersByEmail.get(crmContactEmailKey(item.data.email)),
+            user: item.data.email
+              ? usersByEmail.get(crmContactEmailKey(item.data.email))
+              : undefined,
           },
         ]
       : []

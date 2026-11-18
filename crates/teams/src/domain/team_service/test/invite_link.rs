@@ -218,6 +218,38 @@ async fn joining_by_link_adds_the_user_and_publishes_the_join_method() {
 }
 
 #[tokio::test]
+async fn joining_by_link_rewards_the_link_creator() {
+    let token = TeamInviteLinkToken::generate();
+    let team_repository = repository_with_link(token);
+    *team_repository.invite_link_creator.lock().unwrap() = Some(caller());
+    let rewarder = Arc::new(RecordingInviteRewarder::default());
+    let service = TeamServiceImpl::new(
+        team_repository,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_invite_rewarder(rewarder.clone());
+
+    service
+        .join_team_by_invite_link(&token, &joiner())
+        .await
+        .unwrap();
+
+    let events = rewarder.events.lock().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].inviter, caller());
+    assert_eq!(events[0].joined, joiner());
+    assert_eq!(
+        events[0].event_key,
+        format!("team-invite-link:{TEAM_ID}:{JOINER}")
+    );
+}
+
+#[tokio::test]
 async fn joining_by_a_wrong_token_changes_nothing() {
     let team_repository = repository_with_link(TeamInviteLinkToken::generate());
     let service = service(team_repository.clone());

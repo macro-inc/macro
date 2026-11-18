@@ -2,13 +2,8 @@ import { CombinedError } from '@urql/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  graphql: true,
   mutation: vi.fn(),
   refresh: vi.fn(),
-}));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: {},
-  isFeatureEnabled: () => mocks.graphql,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getEntityGraphqlClient: () => ({ mutation: mocks.mutation }),
@@ -34,7 +29,6 @@ import {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.graphql = true;
   mocks.refresh.mockResolvedValue(undefined);
   mocks.mutation.mockReturnValue({
     toPromise: async () => ({
@@ -56,8 +50,12 @@ afterEach(() => queryClient.clear());
 
 it('shows a confirmed restore immediately while retaining unrelated and newer deletes', async () => {
   mocks.refresh.mockReturnValue(new Promise<void>(() => {}));
-  const earlier = createGraphqlSoupDeletion(['restored', 'sibling']);
-  earlier.settle(['restored', 'sibling']);
+  const earlier = createGraphqlSoupDeletion([
+    'GraphqlSoupDocument:restored',
+    'GraphqlSoupDocument:sibling',
+    'GraphqlSoupChat:restored',
+  ]);
+  earlier.settle(earlier.keys());
   let finish!: () => void;
   const network = new Promise<void>((resolve) => {
     finish = resolve;
@@ -85,13 +83,16 @@ it('shows a confirmed restore immediately while retaining unrelated and newer de
     },
   });
   const restore = restoreEntity({ type: 'DOCUMENT', id: 'restored' });
-  const newer = createGraphqlSoupDeletion(['restored']);
-  newer.settle(['restored']);
+  const newer = createGraphqlSoupDeletion(['GraphqlSoupDocument:restored']);
+  newer.settle(['GraphqlSoupDocument:restored']);
   try {
     finish();
     await restore;
-    expect(earlier.ids()).toEqual(['sibling']);
-    expect(newer.ids()).toEqual(['restored']);
+    expect(earlier.keys()).toEqual([
+      'GraphqlSoupDocument:sibling',
+      'GraphqlSoupChat:restored',
+    ]);
+    expect(newer.keys()).toEqual(['GraphqlSoupDocument:restored']);
   } finally {
     earlier.release();
     newer.release();
@@ -100,8 +101,8 @@ it('shows a confirmed restore immediately while retaining unrelated and newer de
 
 it('keeps prior deletion markers when the server refuses restoration', async () => {
   mocks.refresh.mockReturnValue(new Promise<void>(() => {}));
-  const deletion = createGraphqlSoupDeletion(['deleted']);
-  deletion.settle(['deleted']);
+  const deletion = createGraphqlSoupDeletion(['GraphqlSoupDocument:deleted']);
+  deletion.settle(['GraphqlSoupDocument:deleted']);
   mocks.mutation.mockReturnValue({
     toPromise: async () => ({
       data: {
@@ -121,7 +122,7 @@ it('keeps prior deletion markers when the server refuses restoration', async () 
     await expect(
       restoreEntity({ type: 'DOCUMENT', id: 'deleted' })
     ).rejects.toBeDefined();
-    expect(deletion.ids()).toEqual(['deleted']);
+    expect(deletion.keys()).toEqual(['GraphqlSoupDocument:deleted']);
   } finally {
     deletion.release();
   }
@@ -185,7 +186,7 @@ it('leaves omitted sharing fields absent on the wire', async () => {
   });
 });
 
-it('reads the rollout flag at invocation and excludes unsupported kinds', () => {
+it('excludes unsupported kinds from the GraphQL share policy', () => {
   expect(usesGraphqlSharePolicy('document')).toBe(true);
   for (const kind of [
     'agent_session',
@@ -196,8 +197,6 @@ it('reads the rollout flag at invocation and excludes unsupported kinds', () => 
     'channel',
   ])
     expect(usesGraphqlSharePolicy(kind)).toBe(false);
-  mocks.graphql = false;
-  expect(usesGraphqlSharePolicy('document')).toBe(false);
 });
 
 it.each([

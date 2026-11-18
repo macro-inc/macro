@@ -5,14 +5,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ReviewDecisionOneOfAction } from './reviewDecisionOneOfAction';
+import type { ReviewDecisionOneOfDraft } from './reviewDecisionOneOfDraft';
 
 /**
  * Save one edited draft.
  */
 export type ReviewDecisionOneOf = {
   action: ReviewDecisionOneOfAction;
-  /** Replacement action arguments. */
-  draft: unknown;
+  /** Replacement action arguments, keyed by the review's kind. */
+  draft: ReviewDecisionOneOfDraft;
   /** Pending item to update. */
   item: string;
   /** Revision displayed by the caller. */

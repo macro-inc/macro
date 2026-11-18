@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::LazyLock;
 
+use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
 use regex::Regex;
 use serde::Deserialize;
 
@@ -145,6 +146,8 @@ pub struct ValidatedGithubWebhookEvent {
     pub event_type: String,
     /// The parsed JSON payload
     pub payload: serde_json::Value,
+    /// The `X-GitHub-Delivery` header, when the request carried one.
+    pub delivery_id: Option<String>,
 }
 
 impl ValidatedGithubWebhookEvent {
@@ -153,7 +156,14 @@ impl ValidatedGithubWebhookEvent {
         Self {
             event_type,
             payload,
+            delivery_id: None,
         }
+    }
+
+    /// Record the delivery id GitHub sent with the event.
+    pub fn with_delivery_id(mut self, delivery_id: Option<String>) -> Self {
+        self.delivery_id = delivery_id;
+        self
     }
 
     /// Parse the raw event type string into a [`GithubWebhookEventType`].
@@ -331,6 +341,30 @@ impl ValidatedGithubWebhookEvent {
             .get("installation")
             .and_then(|i| i.get("id"))
             .and_then(|v| v.as_u64())
+    }
+
+    /// The pull request and GitHub account behind this event's task status
+    /// change: whoever merged it on a merge, the webhook sender otherwise. A
+    /// comment on a plain issue also changes status, but has no pull request.
+    pub fn task_status_source(&self) -> Option<PropertyChangeSource> {
+        if !self.is_associated_with_pull_request() {
+            return None;
+        }
+        let pull_request = self
+            .payload
+            .get("pull_request")
+            .or_else(|| self.payload.get("issue"))?;
+        let merged_by = pull_request
+            .get("merged_by")
+            .filter(|merged_by| !merged_by.is_null() && self.action() == Some("closed"));
+        let account = merged_by.or_else(|| self.payload.get("sender"))?;
+        Some(PropertyChangeSource::GithubPullRequest {
+            url: pull_request.get("html_url")?.as_str()?.to_string(),
+            account: GithubAccount {
+                id: account.get("id")?.as_u64()?.to_string(),
+                login: account.get("login")?.as_str()?.to_string(),
+            },
+        })
     }
 
     /// Extract the sender's GitHub user ID from the webhook payload.

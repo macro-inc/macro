@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT client_id, grant_id\n                FROM mcp_oauth_refresh_token_bindings\n                WHERE refresh_token_digest = $1 AND expires_at > now()\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "grant_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "84dcc76fc48c10724dbb6e228c2f077a52a0fcc13fba01e58721b81a51bbadd9"
+}

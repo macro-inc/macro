@@ -263,7 +263,7 @@ function isGateSchema(section: SectionSchema): section is GateSchema {
 const gateSchema =
   putFormLayoutBody.shape.sections.element.options.find(isGateSchema);
 if (!gateSchema) throw new Error('The form layout schema has no gate.');
-/** A gate's rules; the generated schema leaves nested groups unchecked. */
+/** A gate's rules or a section's condition; the generated schema leaves nested groups unchecked. */
 const gateRules = gateSchema.shape.rules;
 
 function isFilterGroup(value: unknown): value is FilterGroup {
@@ -283,7 +283,11 @@ function decodeSections(value: unknown): FormSection[] | undefined {
   for (const section of parsed.data.sections) {
     const decoded = match(section)
       .returnType<FormSection | undefined>()
-      .with({ kind: 'questions' }, (questions) => questions)
+      .with({ kind: 'questions' }, (questions) => {
+        const { showWhen, ...always } = questions;
+        if (showWhen === undefined) return always;
+        return isFilterGroup(showWhen) ? { ...always, showWhen } : undefined;
+      })
       .with({ kind: 'booking' }, (booking) => booking)
       .with({ kind: 'gate' }, (gate) => {
         const { rules } = gate;

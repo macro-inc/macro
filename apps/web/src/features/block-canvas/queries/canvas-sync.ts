@@ -3,6 +3,7 @@ import {
   thrownResultErrorHasCode,
   throwOnErr,
 } from '@core/util/result';
+import type { Span } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { documentLoadKeys } from '@queries/storage/documentLoad/keys';
 import { fetchFileDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
@@ -14,7 +15,8 @@ import type { CanvasSessionOptions } from './canvas-session';
 
 export function canvasSyncSource(
   documentId: string,
-  userId: Accessor<string | undefined>
+  userId: Accessor<string | undefined>,
+  parentSpan?: Span
 ): Pick<
   CanvasSessionOptions,
   'exists' | 'initialize' | 'connect' | 'authorize'
@@ -136,7 +138,12 @@ export function canvasSyncSource(
     connect: () => {
       if (!authorized)
         throw new Error('Canvas synchronization requires authorization.');
-      return createSyncServiceSource(documentId, token, authorization);
+      return createSyncServiceSource(
+        documentId,
+        token,
+        authorization,
+        parentSpan
+      );
     },
   };
 }

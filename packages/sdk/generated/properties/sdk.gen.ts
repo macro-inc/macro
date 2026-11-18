@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-    
+
     constructor(args?: {
         client?: Client;
     }) {
@@ -30,9 +30,9 @@ class HeyApiClient {
 
 class HeyApiRegistry<T> {
     private readonly defaultKey = 'default';
-    
+
     private readonly instances: Map<string, T> = new Map();
-    
+
     get(key?: string): T {
         const instance = this.instances.get(key ?? this.defaultKey);
         if (!instance) {
@@ -40,7 +40,7 @@ class HeyApiRegistry<T> {
         }
         return instance;
     }
-    
+
     set(value: T, key?: string): void {
         this.instances.set(key ?? this.defaultKey, value);
     }
@@ -48,7 +48,7 @@ class HeyApiRegistry<T> {
 
 export class Sdk extends HeyApiClient {
     public static readonly __registry: HeyApiRegistry<Sdk> = new HeyApiRegistry<Sdk>();
-    
+
     constructor(args?: {
         client?: Client;
         key?: string;
@@ -56,14 +56,14 @@ export class Sdk extends HeyApiClient {
         super(args);
         Sdk.__registry.set(this, args?.key);
     }
-    
+
     /**
      * List property definitions with flexible filtering
      */
     public listProperties<ThrowOnError extends boolean = false>(options: Options<ListPropertiesData, ThrowOnError>): RequestResult<ListPropertiesResponses, ListPropertiesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListPropertiesResponses, ListPropertiesErrors, ThrowOnError>({ url: '/properties/definitions', ...options });
     }
-    
+
     /**
      * Create a new property definition
      */
@@ -77,28 +77,28 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete a property definition
      */
     public deletePropertyDefinition<ThrowOnError extends boolean = false>(options: Options<DeletePropertyDefinitionData, ThrowOnError>): RequestResult<DeletePropertyDefinitionResponses, DeletePropertyDefinitionErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeletePropertyDefinitionResponses, DeletePropertyDefinitionErrors, ThrowOnError>({ url: '/properties/definitions/{definition_id}', ...options });
     }
-    
+
     /**
      * Get a property definition by ID
      */
     public getPropertyDefinition<ThrowOnError extends boolean = false>(options: Options<GetPropertyDefinitionData, ThrowOnError>): RequestResult<GetPropertyDefinitionResponses, GetPropertyDefinitionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetPropertyDefinitionResponses, GetPropertyDefinitionErrors, ThrowOnError>({ url: '/properties/definitions/{definition_id}', ...options });
     }
-    
+
     /**
      * Get all options for a property (for dropdowns)
      */
     public getPropertyOptions<ThrowOnError extends boolean = false>(options: Options<GetPropertyOptionsData, ThrowOnError>): RequestResult<GetPropertyOptionsResponses, GetPropertyOptionsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetPropertyOptionsResponses, GetPropertyOptionsErrors, ThrowOnError>({ url: '/properties/definitions/{definition_id}/options', ...options });
     }
-    
+
     /**
      * Add a new option to a property dropdown
      */
@@ -112,14 +112,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete a property option
      */
     public deletePropertyOption<ThrowOnError extends boolean = false>(options: Options<DeletePropertyOptionData, ThrowOnError>): RequestResult<DeletePropertyOptionResponses, DeletePropertyOptionErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeletePropertyOptionResponses, DeletePropertyOptionErrors, ThrowOnError>({ url: '/properties/definitions/{definition_id}/options/{option_id}', ...options });
     }
-    
+
     /**
      * Update a property option in place (rename / recolor / reorder).
      *
@@ -135,7 +135,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Get properties for multiple entities in bulk (public endpoint with user auth)
      *
@@ -152,14 +152,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Get all properties for an entity
      */
     public getEntityProperties<ThrowOnError extends boolean = false>(options: Options<GetEntityPropertiesData, ThrowOnError>): RequestResult<GetEntityPropertiesResponses, GetEntityPropertiesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetEntityPropertiesResponses, GetEntityPropertiesErrors, ThrowOnError>({ url: '/properties/entities/{entity_type}/{entity_id}', ...options });
     }
-    
+
     /**
      * Apply a complete tag-picker selection across an entity's multi-select
      * properties in one request.
@@ -180,7 +180,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Set or update a property value for an entity, or attach a property without a value
      */
@@ -194,7 +194,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Remove a single option from an entity's multi-select property value.
      *
@@ -205,7 +205,7 @@ export class Sdk extends HeyApiClient {
     public removeEntityPropertyOption<ThrowOnError extends boolean = false>(options: Options<RemoveEntityPropertyOptionData, ThrowOnError>): RequestResult<RemoveEntityPropertyOptionResponses, RemoveEntityPropertyOptionErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<RemoveEntityPropertyOptionResponses, RemoveEntityPropertyOptionErrors, ThrowOnError>({ url: '/properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}', ...options });
     }
-    
+
     /**
      * Add a single option to an entity's multi-select property value.
      *
@@ -217,14 +217,14 @@ export class Sdk extends HeyApiClient {
     public addEntityPropertyOption<ThrowOnError extends boolean = false>(options: Options<AddEntityPropertyOptionData, ThrowOnError>): RequestResult<AddEntityPropertyOptionResponses, AddEntityPropertyOptionErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AddEntityPropertyOptionResponses, AddEntityPropertyOptionErrors, ThrowOnError>({ url: '/properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}', ...options });
     }
-    
+
     /**
      * Remove a specific entity property by its ID
      */
     public deleteEntityProperty<ThrowOnError extends boolean = false>(options: Options<DeleteEntityPropertyData, ThrowOnError>): RequestResult<DeleteEntityPropertyResponses, DeleteEntityPropertyErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteEntityPropertyResponses, DeleteEntityPropertyErrors, ThrowOnError>({ url: '/properties/entity_properties/{entity_property_id}', ...options });
     }
-    
+
     /**
      * Apply one shared option delta (add / remove option ids on a single
      * multi-select property) to many entities in one request — e.g. tag a set of
@@ -247,7 +247,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List the caller's tag sets: their personal set, plus their team's set when on a team.
      * Pure read - a scope with no provisioned definition yet returns an empty set.
@@ -255,7 +255,7 @@ export class Sdk extends HeyApiClient {
     public listTags<ThrowOnError extends boolean = false>(options?: Options<ListTagsData, ThrowOnError>): RequestResult<ListTagsResponses, ListTagsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListTagsResponses, ListTagsErrors, ThrowOnError>({ url: '/properties/tags', ...options });
     }
-    
+
     /**
      * Provision (get-or-create) the caller's tag set for a scope and return it. Called when
      * the caller creates their first label for that scope, so the read path stays side-effect free.
@@ -270,7 +270,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Replace one of the caller's personal labels with an existing team label.
      *
@@ -289,7 +289,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Share one of the caller's personal labels with their team.
      *

@@ -1,4 +1,3 @@
-import { ViewShell } from '@app/components/view-shell';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import { buildChannelMessageListMeta } from '@channel/Channel/message-list-meta';
 import { ChannelInput } from '@channel/Input/ChannelInput';
@@ -11,9 +10,9 @@ import { DateDivider } from '@channel/Message/DateDivider';
 import { NewDivider } from '@channel/Message/NewDivider';
 import { SenderName } from '@channel/Message/SenderName';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
@@ -26,31 +25,26 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ShareFatIcon from '@phosphor/share-fat.svg';
-import TimerIcon from '@phosphor/timer.svg';
-import { Button, ConfirmDialog, Tooltip } from '@ui';
+import { Button, ConfirmDialog } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   For,
   type JSX,
-  mapArray,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { ChatDetails } from '../components/chat-details';
+import { ExternalChatHeader } from '../components/chat-header';
 import { AttachmentChip } from '../components/inbound-attachment';
-import {
-  InboundMedia,
-  type InboundMediaFile,
-} from '../components/inbound-media';
+import { MessageMedia } from '../components/message-media';
 import { RichCard } from '../components/rich-cards';
 import { ExternalChatSystemLine } from '../components/system-line';
 import { useExternalChat } from '../context/external-chat-context';
-import { type InboundAttachment, inlineMediaKind } from '../core/attachments';
+import { inlineMediaKind } from '../core/attachments';
 import {
   backfillStatus,
   type ChatDetail,
@@ -65,6 +59,7 @@ import {
 import { mentionToken } from '../core/mentions';
 import { chatMessageData, senderKey } from '../core/message-data';
 import { richPreview } from '../core/rich';
+import { messageTask } from '../core/task';
 import {
   type ConversationTarget,
   createConversation,
@@ -116,73 +111,6 @@ function ForwardedTag() {
   );
 }
 
-function sameMediaFile(
-  a: InboundMediaFile | undefined,
-  b: InboundMediaFile | undefined
-): boolean {
-  if (!a || !b) return a === b;
-  return (Object.keys(a) as (keyof InboundMediaFile)[]).every(
-    (key) => a[key] === b[key]
-  );
-}
-
-/**
- * A message's images, video and voice notes, played inline. `sent` is what
- * this page showed for a file it sent: its local preview and size stand in
- * until the stored file loads.
- */
-function MessageMedia(props: {
-  attachments: InboundAttachment[];
-  sent?: InboundAttachment[];
-}) {
-  const source = useExternalChat();
-  const media = createMemo(() =>
-    props.attachments.flatMap((attachment, index) => {
-      const local = props.sent?.[index];
-      const file: InboundAttachment = local
-        ? {
-            ...attachment,
-            previewUrl: attachment.previewUrl ?? local.previewUrl,
-            width: attachment.width ?? local.width,
-            height: attachment.height ?? local.height,
-          }
-        : attachment;
-      const kind = inlineMediaKind(file);
-      return kind ? [{ attachment: file, kind }] : [];
-    })
-  );
-  const files = mapArray(
-    () => media().map((file) => file.attachment.fileId ?? ''),
-    (fileId, index) =>
-      // One object per change, so Chat's media rows don't remount.
-      createMemo(
-        (): InboundMediaFile | undefined => {
-          const file = media()[index()];
-          if (!file) return undefined;
-          return {
-            id: fileId || `${file.attachment.ordinal}`,
-            kind: file.kind,
-            fileName: file.attachment.fileName,
-            url: fileId ? source.fileUrl(fileId) : file.attachment.previewUrl,
-            previewUrl: file.attachment.previewUrl,
-            width: file.attachment.width,
-            height: file.attachment.height,
-            durationSeconds: file.attachment.durationSeconds,
-            presentation: file.attachment.presentation,
-          };
-        },
-        undefined,
-        { equals: sameMediaFile }
-      )
-  );
-  const shown = () => files().flatMap((file) => file() ?? []);
-  return (
-    <Show when={shown().length > 0}>
-      <InboundMedia files={shown()} />
-    </Show>
-  );
-}
-
 export function ExternalChatView(props: {
   userId?: string;
   leading?: JSX.Element;
@@ -212,6 +140,7 @@ export function ExternalChatView(props: {
   });
   const [deleting, setDeleting] = createSignal<string>();
   const sidePanel = useSidePanel();
+  const { popoverSplit } = useSplitLayout();
   // The floating details card covers the right of the pane; where the pane
   // is wide enough, the timeline and composer make room for it instead.
   const detailsBeside = () => !isTouchDevice() && !!sidePanel?.isOpen();
@@ -275,11 +204,7 @@ export function ExternalChatView(props: {
     scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
   /** Rows render only once the chat, and so its provider, has loaded. */
   const messageData = (message: ChatMessage) =>
-    chatMessageData(
-      message,
-      props.userId,
-      provider()?.formatting.toMarkdown ?? (() => '')
-    );
+    chatMessageData(message, provider()?.formatting.toMarkdown ?? (() => ''));
   const markRead = () =>
     fireAndForget(conversation.markRead(), 'external-chat.read');
   const rows = () => (source.chat.data ? conversation.rows() : []);
@@ -372,6 +297,21 @@ export function ExternalChatView(props: {
       source.chat.data?.backfill,
       source.chat.data?.accessLevel === 'owner'
     );
+  /** The owner can start the import here; it is the one place it always is. */
+  const canImport = () =>
+    source.chat.data?.accessLevel === 'owner' &&
+    source.chat.data.backfill?.state === 'waiting_for_phone';
+  const [startingImport, setStartingImport] = createSignal(false);
+  const startImport = async () => {
+    setStartingImport(true);
+    try {
+      await source.importHistory();
+    } catch {
+      toast.failure("Couldn't start importing earlier messages. Try again.");
+    } finally {
+      setStartingImport(false);
+    }
+  };
   const historyStart = () =>
     source.hasOlder()
       ? undefined
@@ -455,6 +395,23 @@ export function ExternalChatView(props: {
             }
           : undefined;
       },
+      get onCreateTask() {
+        const group = source.chat.data;
+        const task = group && messageTask(message, group);
+        if (!task) return undefined;
+        return () => {
+          popoverSplit({
+            type: 'component',
+            id: 'task-compose',
+            params: {
+              initialTitle: task.title,
+              initialContent: task.content,
+              initialAssigneeIds:
+                task.assigneeIds.length > 0 ? task.assigneeIds : undefined,
+            },
+          });
+        };
+      },
     };
   };
 
@@ -477,50 +434,40 @@ export function ExternalChatView(props: {
   };
 
   return (
-    <div class="flex h-full min-h-0 min-w-0 flex-col bg-panel text-ink">
-      {/* Desktop chrome is the view shell's top bar; touch keeps it as the
-          page header, below the safe area. */}
-      <ViewShell.TopBar class="touch:flex touch:h-auto touch:min-h-12 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
-        {props.leading}
-        <Show when={provider()}>
-          {(provider) => (
-            <span
-              aria-hidden="true"
-              class={`flex size-5 shrink-0 items-center justify-center rounded-full ${provider().badgeClass}`}
-            >
-              <Dynamic component={provider().icon} class="size-3" />
-            </span>
-          )}
-        </Show>
-        <div class="flex min-w-0 flex-1 items-baseline gap-2">
-          <h1 class="ph-no-capture min-w-0 truncate text-sm font-semibold">
-            {source.chat.data ? chatTitle(source.chat.data) : 'Chat'}
-          </h1>
-          <Show when={source.chat.data && disappearingNote(source.chat.data)}>
-            {(note) => (
-              <Tooltip
-                label={note()}
-                as="span"
-                class="flex shrink-0 self-center"
-              >
-                <TimerIcon
-                  class="size-3.5 text-ink-extra-muted"
-                  aria-label={note()}
-                  data-whatsapp-disappearing
-                />
-              </Tooltip>
-            )}
-          </Show>
-          <span class="shrink-0 truncate text-xs text-ink-extra-muted mobile:hidden">
-            {provider()?.label}
-            <Show when={importing()}>{(status) => <> · {status()}</>}</Show>
+    <div class="flex h-full min-h-0 min-w-0 flex-col bg-panel text-ink touch:pt-(--mobile-content-inset-top)">
+      <ExternalChatHeader
+        title={source.chat.data ? chatTitle(source.chat.data) : 'Chat'}
+        provider={provider()}
+        pictureUrl={source.chat.data?.pictureUrl}
+        leading={props.leading}
+        share={props.share}
+        details={<SidePanel.Toggle />}
+        disappearing={
+          source.chat.data ? disappearingNote(source.chat.data) : undefined
+        }
+        importing={importing()}
+      />
+      {/* Always reachable, however far back the timeline is scrolled. */}
+      <Show when={canImport()}>
+        <div class="flex min-w-0 items-center gap-3 border-b border-edge-muted px-4 py-2 text-xs text-ink-muted">
+          <span class="min-w-0 flex-1">
+            Open WhatsApp on your phone to import earlier messages.
           </span>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            class="shrink-0"
+            aria-label="Import earlier messages"
+            disabled={startingImport()}
+            onClick={() =>
+              fireAndForget(startImport(), 'external-chat.import-history')
+            }
+          >
+            {startingImport() ? 'Starting…' : 'Import'}
+          </Button>
         </div>
-        <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
-          <HeaderActionGroup label="Sharing">{props.share}</HeaderActionGroup>
-          <SidePanel.Toggle />
-        </div>
-      </ViewShell.TopBar>
+      </Show>
       {/* Members, sharing and syncing open in the generic floating side
           panel over the timeline, like an email thread's details. */}
       <div class="relative min-h-0 min-w-0 flex-1">

@@ -12,8 +12,10 @@ sender/generic-address checks.
   `sanitize_html_fragment` — every HTML body that reaches
   `body_html_sanitized` must pass through one of these.
 - `src/body_replyless.rs` + `src/body_replyless/`: strips quoted reply chains
-  from HTML and plaintext bodies.
-- `src/body_parsed.rs`: the parsed-body representation used across callers.
+  from HTML and plaintext bodies; `reply_snippet` is the Outlook snippet that
+  ingest and `backfill_outlook_snippets` both derive from them.
+- `src/body_parsed.rs`: the parsed-body representation used across callers,
+  and `html_to_undecorated_text` for one-line previews (no emphasis marks).
 
 ## Scope
 

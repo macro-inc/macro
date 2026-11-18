@@ -232,7 +232,7 @@ fn reload_below_the_stripe_minimum_is_skipped() {
 #[test]
 fn default_thresholds_are_valid() {
     let defaults = AutoReloadThresholds::default();
-    assert_eq!(defaults, thresholds(1_000, 10_000, None));
+    assert_eq!(defaults, thresholds(500, 2_500, None));
     assert!(defaults.validate().is_ok());
 }
 
@@ -287,6 +287,7 @@ fn snapshot_for(
         chargeable,
         ledger,
         balance,
+        0,
         AiPricing::testing(),
     )
 }
@@ -435,8 +436,8 @@ fn snapshot_reports_auto_reload_settings_and_activity() {
         PeriodLedger::default(),
         0,
     );
-    assert_eq!(s.auto_reload.minimum_balance_cents, 1_000);
-    assert_eq!(s.auto_reload.target_balance_cents, 10_000);
+    assert_eq!(s.auto_reload.minimum_balance_cents, 500);
+    assert_eq!(s.auto_reload.target_balance_cents, 2_500);
     assert_eq!(s.auto_reload.monthly_spend_limit_cents, None);
     assert!(!s.auto_reload.suspended);
     assert!(!s.auto_reload.active, "overage off: reloads never fire");
@@ -524,6 +525,7 @@ fn unlimited_is_never_blocked() {
         AiPricing::testing().extra_customer_cents(97_999),
         PeriodLedger::default(),
         0,
+        0,
         AiPricing::testing(),
     );
     assert_eq!(decide(&s), AllowanceDecision::Allow);
@@ -553,6 +555,7 @@ fn credit_scope_follows_team_ownership_even_with_only_one_seat() {
             0,
             PeriodLedger::default(),
             2_500,
+            0,
             AiPricing::testing(),
         );
         assert_eq!(snapshot.seats, 1);
@@ -583,6 +586,7 @@ fn team_member_is_not_the_payer() {
         0,
         0,
         PeriodLedger::default(),
+        0,
         0,
         AiPricing::testing(),
     );

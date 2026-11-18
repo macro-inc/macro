@@ -23,7 +23,7 @@ use model_entity::Entity;
 use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, UploadExtractFolderRequest,
-    UploadExtractFolderResponseData,
+    UploadExtractFolderResponseData, UploadExtractStatusResponseData,
 };
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::TeamShareFacts;
@@ -201,6 +201,12 @@ pub trait BulkUploadRequestPort: Send + Sync + 'static {
         &self,
         upload_request_id: &str,
     ) -> impl Future<Output = anyhow::Result<BulkUploadRequestDocuments>> + Send;
+
+    /// Find a bulk-upload request, or `None` when none has this id.
+    fn find_bulk_upload_request(
+        &self,
+        upload_request_id: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<BulkUploadRequest>>> + Send;
 }
 
 /// Port for generating project-upload destinations.
@@ -257,6 +263,18 @@ pub trait ProjectSearchIndexer: Send + Sync + 'static {
     fn enqueue_document_deletes(
         &self,
         documents: Vec<(String, String)>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Port for the items other domains file in folders but do not trash with
+/// them (databases and forms). The composition root implements it over the
+/// owning domains, so the projects domain never depends on their crates.
+pub trait FiledItemsUnfiler: Send + Sync + 'static {
+    /// Return the items filed directly in any of `project_ids` to the root,
+    /// without the grants those folders passed down.
+    fn unfile_from_projects(
+        &self,
+        project_ids: Vec<String>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
@@ -357,6 +375,13 @@ impl BulkUploadRequestPort for UnavailableBulkUploadRequestPort {
     ) -> anyhow::Result<BulkUploadRequestDocuments> {
         anyhow::bail!("bulk-upload requests are not available in this host")
     }
+
+    async fn find_bulk_upload_request(
+        &self,
+        _upload_request_id: &str,
+    ) -> anyhow::Result<Option<BulkUploadRequest>> {
+        anyhow::bail!("bulk-upload requests are not available in this host")
+    }
 }
 
 /// Unwired content-hash counter for hosts that expose project operations
@@ -385,6 +410,15 @@ impl ProjectSearchIndexer for UnavailableProjectSearchIndexer {
         _documents: Vec<(String, String)>,
     ) -> anyhow::Result<()> {
         anyhow::bail!("project search indexing is not available in this host")
+    }
+}
+
+/// Unfiler for hosts that never trash folders; it fails if one tries.
+pub struct UnavailableFiledItemsUnfiler;
+
+impl FiledItemsUnfiler for UnavailableFiledItemsUnfiler {
+    async fn unfile_from_projects(&self, _project_ids: Vec<String>) -> anyhow::Result<()> {
+        anyhow::bail!("unfiling folder contents is not available in this host")
     }
 }
 
@@ -505,6 +539,13 @@ pub trait ProjectService: Send + Sync + 'static {
         actor: MacroUserIdStr<'static>,
         args: UploadExtractFolderRequest,
     ) -> impl Future<Output = Result<UploadExtractFolderResponseData, ProjectError>> + Send;
+
+    /// Where the caller's own archive extraction request stands.
+    fn get_upload_extract_status(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        upload_request_id: &str,
+    ) -> impl Future<Output = Result<UploadExtractStatusResponseData, ProjectError>> + Send;
 
     /// Finalize the uploaded state of a project tree.
     fn mark_projects_uploaded(

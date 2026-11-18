@@ -26,6 +26,7 @@ function invite(lastSentHoursAgo: number): TeamInviteDetails {
     invited_by: 'macro|owner@acme.com',
     created_at: lastSent,
     last_sent_at: lastSent,
+    is_agent: false,
   };
 }
 

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE work_registration\n        SET ended_at = NOW(), end_reason = 'session_archived'\n        WHERE agent_session_id = $1 AND ended_at IS NULL\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e346331f6fdffe1949e7d8574d41e1a73c605a757324396675cfd0b17921eebd"
+}

@@ -7,6 +7,6 @@
 
 /**
  * Price per million cache-read input tokens (USD), absent when the model
-has no published rate and for audio billing.
+has no published rate and for audio and credit billing.
  */
 export type PricePricePerMillionCacheRead = number | null;

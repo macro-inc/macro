@@ -42,7 +42,7 @@ const MENUS: {
       'entityActions.setChannelPicture',
       'entityActions.removeChannelPicture',
       'entityActions.unfavorite',
-      'entityActions.snoozeNotifications',
+      'entityActions.muteNotifications',
       'entityActions.unmuteNotifications',
       'entityActions.remindMe',
       'entityActions.addTag',
@@ -171,6 +171,7 @@ function Fixture() {
             <SettingsSidebar
               groups={groups}
               results={[]}
+              searchable
               searchQuery=""
               onSearchQueryChange={() => {}}
               isItemActive={(tab) => tab === 'Appearance'}

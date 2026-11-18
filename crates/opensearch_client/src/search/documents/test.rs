@@ -240,10 +240,14 @@ fn test_build_bool_query_property_filters_emit_nested() -> anyhow::Result<()> {
                     "00000001-0000-0000-0002-000000000001".to_string(),
                     "00000001-0000-0000-0002-000000000004".to_string(),
                 ],
+                date_range: None,
+                has_date: None,
             },
             PropertyFilterArg {
                 definition_id: "00000001-0000-0000-0000-000000000001".to_string(),
                 values: vec!["macro|alice@example.com".to_string()],
+                date_range: None,
+                has_date: None,
             },
         ]);
 
@@ -283,6 +287,8 @@ fn test_build_bool_query_property_filter_empty_values_skipped() -> anyhow::Resul
         .property_filters(vec![PropertyFilterArg {
             definition_id: "00000001-0000-0000-0000-000000000002".to_string(),
             values: vec![],
+            date_range: None,
+            has_date: None,
         }]);
 
     let json = builder.build_bool_query()?.build().to_json();
@@ -409,4 +415,364 @@ fn document_index_deserializes_parent_shape() {
         serde_json::from_value(parent).expect("parent _source should deserialize");
     assert_eq!(doc.document_name, "Q3 Planning");
     assert_eq!(doc.owner_id, "macro|alice@example.com");
+}
+
+#[test]
+fn date_property_filters_constrain_candidates_before_search_pagination() -> anyhow::Result<()> {
+    let start =
+        chrono::DateTime::parse_from_rfc3339("2025-12-31T23:59:59Z")?.with_timezone(&chrono::Utc);
+    let end =
+        chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")?.with_timezone(&chrono::Utc);
+    let arg = PropertyFilterArg {
+        definition_id: "00000001-0000-0000-0000-000000000004".into(),
+        values: vec![],
+        date_range: Some(PropertyDateRange {
+            start: Some(start),
+            end: Some(end),
+        }),
+        has_date: Some(true),
+    };
+    let query = DocumentQueryBuilder::new(vec!["foo".into()])
+        .user_id("alice")
+        .property_filters(vec![arg.clone()])
+        .build_bool_query()?
+        .build()
+        .to_json();
+    let filter = query["bool"]["filter"].as_array().unwrap();
+    let range = filter.iter().find(|v| v["bool"].is_object()).unwrap();
+    let nested = &range["bool"]["filter"][0]["nested"]["query"]["bool"]["filter"];
+    assert_eq!(
+        nested[0]["term"]["properties.definition_id"],
+        arg.definition_id
+    );
+    assert_eq!(
+        nested[1]["range"]["properties.date_value"]["gte"],
+        start.timestamp_millis()
+    );
+    assert_eq!(
+        nested[1]["range"]["properties.date_value"]["lt"],
+        end.timestamp_millis()
+    );
+    assert_eq!(
+        range["bool"]["filter"][1]["nested"]["query"]["bool"]["filter"][1]["exists"]["field"],
+        "properties.date_value"
+    );
+    let missing = DocumentQueryBuilder::new(vec!["foo".into()])
+        .user_id("alice")
+        .property_filters(vec![PropertyFilterArg {
+            date_range: None,
+            has_date: Some(false),
+            ..arg
+        }])
+        .build_bool_query()?
+        .build()
+        .to_json();
+    let missing_clause = missing["bool"]["filter"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["bool"].is_object())
+        .unwrap();
+    assert_eq!(
+        missing_clause["bool"]["must_not"][0]["nested"]["query"]["bool"]["filter"][1]["exists"]["field"],
+        "properties.date_value"
+    );
+    Ok(())
+}
+
+#[test]
+fn open_date_ranges_only_emit_supplied_search_bounds() -> anyhow::Result<()> {
+    let boundary =
+        chrono::DateTime::parse_from_rfc3339("2026-10-21T00:00:00Z")?.with_timezone(&chrono::Utc);
+    for (start, end, expected, absent) in [
+        (Some(boundary), None, "gte", "lt"),
+        (None, Some(boundary), "lt", "gte"),
+    ] {
+        let query = build_property_filter(&PropertyFilterArg {
+            definition_id: "00000001-0000-0000-0000-000000000004".to_owned(),
+            values: vec![],
+            date_range: Some(PropertyDateRange { start, end }),
+            has_date: None,
+        })
+        .unwrap()
+        .to_json();
+        let range = &query["bool"]["filter"][0]["nested"]["query"]["bool"]["filter"][1]["range"]["properties.date_value"];
+        assert_eq!(range[expected], boundary.timestamp_millis());
+        assert!(range.get(absent).is_none());
+    }
+    Ok(())
+}
+
+fn content_terms(terms: &[&str]) -> DocumentQueryBuilder {
+    DocumentQueryBuilder::new(terms.iter().map(|term| term.to_string()).collect())
+        .match_type("partial")
+        .user_id("alice")
+}
+
+#[test]
+fn inner_hits_return_only_the_chunk_fields_a_hit_carries() -> anyhow::Result<()> {
+    let json = content_terms(&["foo", "bar"])
+        .build_bool_query()?
+        .build()
+        .to_json();
+
+    for clause in json["bool"]["must"].as_array().expect("must array") {
+        assert_eq!(
+            clause["has_child"]["inner_hits"]["_source"],
+            serde_json::json!(["node_id", "raw_content"]),
+            "inner hits must not ship chunk content: {clause:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn term_clauses_share_one_chunk_budget_per_document() -> anyhow::Result<()> {
+    for (terms, expected_size) in [
+        (vec!["one"], 10),
+        (vec!["one", "two"], 5),
+        (vec!["one", "two", "three"], 3),
+        (vec!["one", "two", "three", "four", "five"], 2),
+        (
+            vec!["one", "two", "three", "four", "five", "six", "seven"],
+            1,
+        ),
+    ] {
+        let json = content_terms(&terms).build_bool_query()?.build().to_json();
+        let must = json["bool"]["must"].as_array().expect("must array");
+
+        assert_eq!(must.len(), terms.len());
+        for clause in must {
+            assert_eq!(
+                clause["has_child"]["inner_hits"]["size"],
+                expected_size,
+                "{} terms",
+                terms.len()
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn only_the_first_ten_term_clauses_carry_inner_hits() -> anyhow::Result<()> {
+    let terms = [
+        "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
+        "twelve",
+    ];
+    let json = content_terms(&terms).build_bool_query()?.build().to_json();
+    let must = json["bool"]["must"].as_array().expect("must array");
+
+    assert_eq!(must.len(), 12, "every term still has to match");
+    let inner_hit_sizes: Vec<Option<u64>> = must
+        .iter()
+        .map(|clause| clause["has_child"]["inner_hits"]["size"].as_u64())
+        .collect();
+    let mut expected = vec![Some(1); 10];
+    expected.extend([None, None]);
+    assert_eq!(inner_hit_sizes, expected);
+    Ok(())
+}
+
+#[test]
+fn inner_hit_groups_expand_in_clause_order() {
+    let chunk = |id: &str| {
+        serde_json::json!({
+            "_id": id,
+            "_score": 1.0,
+            "_source": { "node_id": id },
+            "highlight": { "content": ["<macro_em>match</macro_em>"] },
+        })
+    };
+    let inner_hits = serde_json::json!({
+        "term_10": { "hits": { "hits": [chunk("d")] } },
+        "term_2": { "hits": { "hits": [chunk("c"), chunk("a")] } },
+        "term_0": { "hits": { "hits": [chunk("a")] } },
+        "term_1": { "hits": { "hits": [chunk("b")] } },
+    });
+
+    let hits = expand_inner_hits_to_search_hits(uuid::Uuid::nil(), None, &inner_hits);
+
+    let node_ids: Vec<String> = hits
+        .into_iter()
+        .map(|hit| match hit.goto {
+            Some(SearchGotoContent::Documents(goto)) => goto.node_id,
+            other => panic!("expected a document goto, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(node_ids, ["a", "b", "c", "d"]);
+}
+
+#[test]
+fn dynamic_matching_keeps_short_queries_a_strict_and() -> anyhow::Result<()> {
+    for terms in [vec!["foo"], vec!["foo", "bar"]] {
+        let strict = content_terms(&terms).build_bool_query()?.build().to_json();
+        let dynamic = content_terms(&terms)
+            .term_matching(DocumentTermMatching::Dynamic)
+            .build_bool_query()?
+            .build()
+            .to_json();
+
+        assert_eq!(strict, dynamic);
+    }
+    Ok(())
+}
+
+#[test]
+fn dynamic_matching_requires_most_significant_terms_in_one_passage() -> anyhow::Result<()> {
+    let json = content_terms(&[
+        "This",
+        "is",
+        "a",
+        "quarterly",
+        "revenue",
+        "forecast",
+        "dash",
+    ])
+    .term_matching(DocumentTermMatching::Dynamic)
+    .build_bool_query()?
+    .build()
+    .to_json();
+
+    let must = json["bool"]["must"].as_array().expect("must array");
+    assert_eq!(must.len(), 1, "one passage clause, not one per term");
+    let has_child = &must[0]["has_child"];
+    assert_eq!(has_child["type"], "chunk");
+
+    // Stopwords are left out; four terms remain, so three must share a chunk.
+    // Only the last term, the one still being typed, expands as a prefix.
+    let expected_terms = serde_json::json!([
+        {"match_phrase": {"content": "quarterly"}},
+        {"match_phrase": {"content": "revenue"}},
+        {"match_phrase": {"content": "forecast"}},
+        {"match_phrase_prefix": {"content": {"query": "dash", "max_expansions": 256}}},
+    ]);
+    assert_eq!(has_child["query"]["bool"]["should"], expected_terms);
+    assert_eq!(has_child["query"]["bool"]["minimum_should_match"], 3);
+
+    let inner_hits = &has_child["inner_hits"];
+    assert_eq!(inner_hits["name"], "passage");
+    assert_eq!(inner_hits["size"], 10);
+    assert_eq!(
+        inner_hits["_source"],
+        serde_json::json!(["node_id", "raw_content"])
+    );
+    assert_eq!(
+        inner_hits["highlight"]["fields"]["content"]["highlight_query"]["bool"]["should"],
+        expected_terms,
+        "the highlight tags the terms the passage matched on"
+    );
+    Ok(())
+}
+
+#[test]
+fn dynamic_matching_counts_a_repeated_term_once_and_keeps_phrases() -> anyhow::Result<()> {
+    let json = content_terms(&["deal review", "Acme", "acme", "notes"])
+        .term_matching(DocumentTermMatching::Dynamic)
+        .build_bool_query()?
+        .build()
+        .to_json();
+
+    let passage = &json["bool"]["must"][0]["has_child"]["query"]["bool"];
+    assert_eq!(
+        passage["should"],
+        serde_json::json!([
+            {"match_phrase": {"content": "deal review"}},
+            {"match_phrase": {"content": "Acme"}},
+            {"match_phrase_prefix": {"content": {"query": "notes", "max_expansions": 256}}},
+        ])
+    );
+    assert_eq!(passage["minimum_should_match"], 2);
+    Ok(())
+}
+
+#[test]
+fn dynamic_matching_of_only_stopwords_stays_a_strict_and() -> anyhow::Result<()> {
+    let terms = ["to", "be", "or", "not", "to", "be"];
+    let strict = content_terms(&terms).build_bool_query()?.build().to_json();
+    let dynamic = content_terms(&terms)
+        .term_matching(DocumentTermMatching::Dynamic)
+        .build_bool_query()?
+        .build()
+        .to_json();
+
+    assert_eq!(strict, dynamic);
+    Ok(())
+}
+
+#[test]
+fn dynamic_matching_leaves_the_name_branch_a_strict_and() -> anyhow::Result<()> {
+    let terms = ["quarterly", "revenue", "forecast"];
+    let strict = content_terms(&terms)
+        .mode(DocumentSearchMode::NameContent)
+        .build_bool_query()?
+        .build()
+        .to_json();
+    let dynamic = content_terms(&terms)
+        .mode(DocumentSearchMode::NameContent)
+        .term_matching(DocumentTermMatching::Dynamic)
+        .build_bool_query()?
+        .build()
+        .to_json();
+
+    let branches = |json: &serde_json::Value| json["bool"]["must"][0]["bool"]["should"].clone();
+    assert_eq!(
+        branches(&dynamic)[0]["bool"]["must"]
+            .as_array()
+            .map(Vec::len),
+        Some(1),
+        "content branch is the single passage clause"
+    );
+    assert_eq!(
+        branches(&dynamic)[1],
+        branches(&strict)[1],
+        "name branch is unchanged"
+    );
+    Ok(())
+}
+
+#[test]
+fn required_term_count_is_all_up_to_two_then_three_quarters() {
+    let required: Vec<usize> = (1..=8).map(required_term_count).collect();
+    assert_eq!(required, [1, 2, 2, 3, 3, 4, 5, 6]);
+}
+
+#[test]
+fn dynamic_matching_keeps_a_last_term_that_may_be_a_word_in_progress() -> anyhow::Result<()> {
+    let passage_terms = |terms: &[&str], match_type: &str| -> anyhow::Result<serde_json::Value> {
+        let json = content_terms(terms)
+            .match_type(match_type)
+            .term_matching(DocumentTermMatching::Dynamic)
+            .build_bool_query()?
+            .build()
+            .to_json();
+        Ok(json["bool"]["must"][0]["has_child"]["query"]["bool"]["should"].clone())
+    };
+
+    // `for` may be the start of `forecast`.
+    assert_eq!(
+        passage_terms(&["revenue", "q3", "for"], "partial")?,
+        serde_json::json!([
+            {"match_phrase": {"content": "revenue"}},
+            {"match_phrase": {"content": "q3"}},
+            {"match_phrase_prefix": {"content": {"query": "for", "max_expansions": 256}}},
+        ])
+    );
+    // An exact search has no word in progress, and neither has a stopword too
+    // short to expand.
+    assert_eq!(
+        passage_terms(&["revenue", "q3", "for"], "exact")?,
+        serde_json::json!([
+            {"match_phrase": {"content": "revenue"}},
+            {"match_phrase": {"content": "q3"}},
+        ])
+    );
+    assert_eq!(
+        passage_terms(&["revenue", "q3", "in"], "partial")?,
+        serde_json::json!([
+            {"match_phrase": {"content": "revenue"}},
+            {"match_phrase": {"content": "q3"}},
+        ])
+    );
+    Ok(())
 }

@@ -1,9 +1,10 @@
-//! Awareness relays reach the gateway, and a refused relay is an error.
+//! Awareness relays reach the gateway stamped with whether the viewer can
+//! edit, and a refused relay is an error.
 
 use super::*;
 
 #[tokio::test]
-async fn awareness_is_relayed_for_the_viewer() {
+async fn an_editors_awareness_is_relayed_as_editable() {
     let seeded = seeded().await;
     let state = Awareness {
         peer_id: Some(uuid::Uuid::from_u128(7)),
@@ -18,6 +19,34 @@ async fn awareness_is_relayed_for_the_viewer() {
     seeded
         .service
         .share_awareness(
+            receipt::<ViewAccessLevel>(seeded.database_id, VIEWER, AccessLevel::Edit),
+            viewer(VIEWER),
+            state.clone(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        seeded.world.lock().unwrap().awareness,
+        vec![(seeded.database_id, VIEWER.to_string(), true, state)]
+    );
+}
+
+#[tokio::test]
+async fn a_view_only_awareness_is_relayed_as_viewing_and_never_editing() {
+    let seeded = seeded().await;
+    let state = Awareness {
+        peer_id: Some(uuid::Uuid::from_u128(7)),
+        table_id: seeded.table_id,
+        row_id: Some(seeded.row_id),
+        column_id: Some(seeded.name_column.id),
+        end_row_id: None,
+        end_column_id: None,
+        editing: true,
+        left: false,
+    };
+    seeded
+        .service
+        .share_awareness(
             receipt::<ViewAccessLevel>(seeded.database_id, VIEWER, AccessLevel::View),
             viewer(VIEWER),
             state.clone(),
@@ -26,7 +55,15 @@ async fn awareness_is_relayed_for_the_viewer() {
         .unwrap();
     assert_eq!(
         seeded.world.lock().unwrap().awareness,
-        vec![(seeded.database_id, VIEWER.to_string(), state)]
+        vec![(
+            seeded.database_id,
+            VIEWER.to_string(),
+            false,
+            Awareness {
+                editing: false,
+                ..state
+            }
+        )]
     );
 }
 

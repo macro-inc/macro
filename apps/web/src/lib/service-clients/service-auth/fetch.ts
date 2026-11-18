@@ -1,4 +1,5 @@
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import {
   type BaseFetchErrorCode,
@@ -7,6 +8,7 @@ import {
   safeFetch,
   type TextResponse,
 } from '@core/util/safeFetch';
+import { Telemetry } from '@macro-inc/observability';
 import { err, ok, type Result } from 'neverthrow';
 import { authServiceClient, getExpiresAt } from './client';
 
@@ -16,27 +18,40 @@ function isExpired(token: string) {
 }
 
 let macroApiTokenPromise: Promise<string> | null = null;
+let tokenGeneration = 0;
 
+/** Login/account replacement must not reuse the previous viewer's bearer token. */
+export function resetMacroApiToken() {
+  tokenGeneration++;
+  macroApiTokenPromise = null;
+}
+function assertTokenGeneration(generation: number) {
+  if (generation !== tokenGeneration)
+    throw new DOMException('Authentication session changed', 'AbortError');
+}
+async function readMacroApiToken(generation: number) {
+  const result = await authServiceClient.macroApiToken();
+  assertTokenGeneration(generation);
+  if (result.isErr()) throw result.error;
+  return result.value.macro_api_token;
+}
+async function releaseFailedToken(promise: Promise<string>) {
+  try {
+    await promise;
+  } catch {
+    if (macroApiTokenPromise === promise) macroApiTokenPromise = null;
+  }
+}
 function requestMacroApiToken() {
-  const promise = authServiceClient.macroApiToken().then((result) => {
-    if (result.isErr()) {
-      throw result.error;
-    }
-    return result.value.macro_api_token;
-  });
-
+  const promise = readMacroApiToken(tokenGeneration);
   macroApiTokenPromise = promise;
-  void promise.catch(() => {
-    // A failed request must not poison the cache permanently. Keep the
-    // identity check so an older rejection cannot clear a newer request.
-    if (macroApiTokenPromise === promise) {
-      macroApiTokenPromise = null;
-    }
-  });
+  fireAndForget(releaseFailedToken(promise), 'auth-token');
   return promise;
 }
 
-export async function getMacroApiToken() {
+export async function getMacroApiToken(): Promise<string> {
+  const parent = Telemetry.captureContext();
+  const generation = tokenGeneration;
   if (LOCAL_ONLY) {
     const apiToken = import.meta.env.__LOCAL_JWT__;
     if (apiToken) {
@@ -46,10 +61,11 @@ export async function getMacroApiToken() {
 
   const cachedPromise = macroApiTokenPromise;
   if (!cachedPromise) {
-    return requestMacroApiToken();
+    return parent.run(requestMacroApiToken);
   }
 
   const apiToken = await cachedPromise;
+  assertTokenGeneration(generation);
   if (!isExpired(apiToken)) {
     return apiToken;
   }
@@ -58,10 +74,10 @@ export async function getMacroApiToken() {
   // caller was suspended awaiting it. Reuse that replacement instead of
   // issuing a duplicate request.
   if (macroApiTokenPromise !== cachedPromise) {
-    return getMacroApiToken();
+    return parent.run(getMacroApiToken);
   }
 
-  return requestMacroApiToken();
+  return parent.run(requestMacroApiToken);
 }
 
 type TextContentType = `text/${string}`;
@@ -92,7 +108,12 @@ export async function fetchWithAuth<
   input: RequestInfo,
   init?: fetchWithAuthOptions<T, CustomErrorCode>
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
-  const apiToken = await getMacroApiToken();
+  const generation = tokenGeneration;
+  init?.signal?.throwIfAborted();
+  const parentSpan = init?.trace?.parentSpan ?? Telemetry.captureContext();
+  const apiToken = await parentSpan.run(getMacroApiToken);
+  init?.signal?.throwIfAborted();
+  assertTokenGeneration(generation);
   if (!apiToken) {
     return err([
       { code: 'UNAUTHORIZED', message: 'No access and/or refresh token found' },
@@ -101,6 +122,7 @@ export async function fetchWithAuth<
 
   const safeFetchInit = {
     ...init,
+    trace: { ...init?.trace, parentSpan },
     headers: {
       ...init?.headers,
       Authorization: `Bearer ${apiToken}`,
@@ -160,6 +182,7 @@ export async function fetchWithAuth<
     safeFetchErrorHandler
   );
 
+  assertTokenGeneration(generation);
   if (result.isErr()) {
     return err(result.error);
   }

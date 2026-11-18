@@ -11,9 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
 
 const mocks = vi.hoisted(() => ({ client: vi.fn(), local: vi.fn() }));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: vi.fn() },
-}));
+
 vi.mock('@app/lib/graphql-cache', () => ({
   normalizedCacheResultMetadata: () => undefined,
 }));

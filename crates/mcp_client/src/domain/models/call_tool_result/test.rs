@@ -1,5 +1,5 @@
 use super::*;
-use rmcp::model::Content;
+use rmcp::model::ContentBlock;
 use serde_json::json;
 
 #[test]
@@ -22,7 +22,10 @@ fn structured_tool_results_are_preserved() {
 
 #[test]
 fn unstructured_text_results_preserve_block_boundaries() {
-    let result = CallToolResult::success(vec![Content::text("first"), Content::text("second")]);
+    let result = CallToolResult::success(vec![
+        ContentBlock::text("first"),
+        ContentBlock::text("second"),
+    ]);
 
     assert_eq!(result.into_value(), json!("first\nsecond"));
 }
@@ -30,8 +33,8 @@ fn unstructured_text_results_preserve_block_boundaries() {
 #[test]
 fn embedded_text_resources_are_not_discarded() {
     let result = CallToolResult::success(vec![
-        Content::text("# Page"),
-        Content::embedded_text("notion://page/abc", "Page content"),
+        ContentBlock::text("# Page"),
+        ContentBlock::embedded_text("notion://page/abc", "Page content"),
     ]);
 
     assert_eq!(result.into_value(), json!("# Page\nPage content"));

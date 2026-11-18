@@ -21,6 +21,7 @@ import AgentIcon from '@icon/system/regular/sparkle.svg';
 import SwatchesIcon from '@icon/system/regular/swatches.svg';
 import TagIcon from '@icon/system/regular/tag-simple.svg';
 import UserIconPhosphor from '@icon/system/regular/user.svg';
+import UserGearIcon from '@icon/system/regular/user-gear.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
@@ -30,14 +31,10 @@ import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
 import { isPlatform } from '../util/platform';
 import {
-  botManagement,
   DEV_MODE_ENV,
   desktopApp,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_EMAIL,
-  enableCalendarScheduling,
-  enableChatV3Agents,
-  enableCrm,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -249,7 +246,15 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       tabItem('tabRuntimes', {
         tab: 'Harness',
         icon: HardDrivesIcon,
-        keywords: ['cursor', 'harness', 'runtime', 'credential', 'api key'],
+        keywords: [
+          'cursor',
+          'harness',
+          'runtime',
+          'machine',
+          'computer',
+          'credential',
+          'api key',
+        ],
       }),
       tabItem('tabMcpServer', {
         tab: 'Agent',
@@ -260,6 +265,11 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         tab: 'API Keys',
         icon: KeyIcon,
         keywords: ['api', 'key', 'token', 'authentication'],
+      }),
+      tabItem('tabAccountManagers', {
+        tab: 'Account Managers',
+        icon: UserGearIcon,
+        keywords: ['agent', 'manager', 'token', 'revoke', 'access'],
       }),
       tabItem('tabBots', {
         tab: 'Bots',
@@ -285,6 +295,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
 const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Account: 'account',
   'API Keys': 'api-keys',
+  'Account Managers': 'account-managers',
   Notifications: 'notifications',
   Usage: 'usage',
   Billing: 'billing',
@@ -343,10 +354,6 @@ export const settingsSlugToTab = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
-  const calendarSchedulingFlag = useFeatureFlag(enableCalendarScheduling);
-  const botManagementFlag = useFeatureFlag(botManagement);
-  const chatV3AgentsFlag = useFeatureFlag(enableChatV3Agents);
-  const crmFlag = useFeatureFlag(enableCrm);
   const desktopAppFlag = useFeatureFlag(desktopApp);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
@@ -361,20 +368,19 @@ export const useSettingsTabAvailable = () => {
       case 'Email':
         return ENABLE_EMAIL;
       case 'Calendar':
-        return calendarSchedulingFlag().enabled;
+        return true;
       // Issuing and copying a key is desk work, and the mobile sheet has no
       // good place for a one-time secret.
       case 'API Keys':
         return !isMobile();
+      // Cutting off a manager can't wait for a desktop.
+      case 'Account Managers':
+        return true;
       case 'Team':
       case 'Team Members':
       case 'Tags':
-        return true;
-      // CRM is still rolling out (Macro-internal only); keep the settings tab
-      // behind the same enable-crm gate as every other CRM surface so it never
-      // leaks into teams that can't actually use the CRM.
       case 'CRM':
-        return crmFlag().enabled;
+        return true;
       case 'Connected':
         return true;
       case 'Shortcuts':
@@ -388,18 +394,15 @@ export const useSettingsTabAvailable = () => {
         );
       case 'Agent':
         return !isNativeMobilePlatform();
-      // Configurable agents are still rolling out; keep both tabs behind the
-      // same enable-chat-v3-agents gate as the channel mention surfaces, so
-      // settings never advertises agents to a user who cannot mention one.
       case 'Harness':
       case 'Agents':
-        return chatV3AgentsFlag().enabled;
+        return true;
       // Touch hides the Agents sidebar that lists Routines on desktop, so
       // phones and tablets reach the list here, beside Agents.
       case 'Routines':
-        return chatV3AgentsFlag().enabled && isTouchDevice();
+        return isTouchDevice();
       case 'Bots':
-        return botManagementFlag().enabled;
+        return true;
       case 'Mobile':
         return isNativeMobilePlatform() && DEV_MODE_ENV;
       case 'Admin':

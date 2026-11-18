@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentSessionResponseAcpSessionId } from './agentSessionResponseAcpSessionId';
+import type { AgentSessionResponseArchivedAt } from './agentSessionResponseArchivedAt';
+import type { AgentSessionResponseArchivedBy } from './agentSessionResponseArchivedBy';
 import type { AgentSessionResponseExternal } from './agentSessionResponseExternal';
 import type { AgentSessionResponseInstructions } from './agentSessionResponseInstructions';
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
@@ -16,6 +18,7 @@ import type { AgentSessionResponseThreadId } from './agentSessionResponseThreadI
 import type { AgentSessionResponseThreadParent } from './agentSessionResponseThreadParent';
 import type { SandboxSize } from './sandboxSize';
 import type { SessionStatusDto } from './sessionStatusDto';
+import type { TriggerOrigin } from './triggerOrigin';
 
 /**
  * Response body describing an agent session.
@@ -25,6 +28,9 @@ Clients deserialize this, so both derives are used.
 export interface AgentSessionResponse {
   /** The ACP session id, if one exists. */
   acpSessionId?: AgentSessionResponseAcpSessionId;
+  /** When the session was archived, or `None` while it is active. */
+  archivedAt?: AgentSessionResponseArchivedAt;
+  archivedBy?: AgentSessionResponseArchivedBy;
   /** The bot running the agent. */
   botId: string;
   /** Whether the caller may drive the session - prompt it, answer its
@@ -41,14 +47,15 @@ creator owns the session, so a create response always says so. */
   /** Instructions the session's runtime works under, when any were stated
 at creation. Absent otherwise, so existing payloads are unchanged. */
   instructions?: AgentSessionResponseInstructions;
-  /** Whether the session is archived and read-only. */
-  isArchived: boolean;
   /** Model slug. */
   model: string;
   /** When the session was last modified. */
   modifiedAt: string;
   /** User-facing session name. */
   name: string;
+  /** What opened the session: who or what started it, and what it is about.
+`unknown` when nothing recorded it. */
+  origin?: TriggerOrigin;
   /** The exact message that invoked the bot, if any. */
   originatingMessageId?: AgentSessionResponseOriginatingMessageId;
   /** The user who created and owns the session. */

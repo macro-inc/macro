@@ -1,6 +1,5 @@
 import './ListEntity.css';
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SwipableRow,
   SwipableRowContext,
@@ -9,11 +8,7 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { stackNotifications } from '@notifications';
-import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
-  enqueueDocumentWakeup,
-  isWakeableDocument,
-} from '@queries/preview';
+import { enqueueDocumentWakeup, isWakeableDocument } from '@queries/preview';
 import {
   getStreamState,
   subscribeToStreamState,
@@ -65,6 +60,7 @@ import {
 import { WideLayout } from './list-entity/wide-layout';
 
 export {
+  type EmailRowStyle,
   ListLayoutProvider,
   type NarrowLayoutVariant,
 } from './list-entity/shared';
@@ -81,6 +77,8 @@ export function MaybeEntityRow(props: {
   entityId: string;
   children: JSX.Element;
   config?: EntityRowConfig;
+  /** The swipe surface's opaque fill, when the row has one of its own. */
+  rowBgClass?: string;
 }) {
   const ctx = useContext(SwipableRowContext);
   return (
@@ -91,6 +89,7 @@ export function MaybeEntityRow(props: {
         swipeLeftRevealedComponent={props.config?.swipeLeftRevealedComponent}
         swipeRightColor={props.config?.swipeRightColor}
         swipeRightRevealedComponent={props.config?.swipeRightRevealedComponent}
+        rowBgClass={props.rowBgClass}
       >
         {props.children}
       </SwipableRow>
@@ -102,20 +101,22 @@ export function ListEntity(props: ListEntityProps) {
   // Legacy Soup callers do not pass row behavior explicitly yet.
   const soupView = useMaybeSoupView();
   const rowActions = children(() => props.actions);
+  const touchActions = children(() => props.touchActions);
   const leadingAction = children(() => props.leadingAction);
   const titleLeading = children(() => props.titleLeading);
   const icon = children(() => props.icon);
   const titleTrailing = children(() => props.titleTrailing);
   const meta = children(() => props.meta);
   const metaEnd = children(() => props.metaEnd);
+  const previewLeading = children(() => props.previewLeading);
   const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
+  const classic = () =>
+    props.rowStyle === 'classic' && isEmailEntity(props.entity);
   const isShared = useIsShared(props.entity);
-  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
   createEffect(() => {
-    if (!bulkWakeupEnabled().enabled) return;
     if (!isWakeableDocument(props.entity)) return;
 
     enqueueDocumentWakeup(props.entity);
@@ -162,34 +163,89 @@ export function ListEntity(props: ListEntityProps) {
 
   const showContentHits = () => showHitSnippet() && !isContentHitsRedundant();
 
-  const layoutProps = (): LayoutProps => ({
-    entity: props.entity,
-    actions: !isTouchDevice() ? rowActions() : undefined,
-    leadingAction: !isTouchDevice() ? leadingAction() : undefined,
-    titleLeading: titleLeading(),
-    icon: icon(),
-    titleTrailing: titleTrailing(),
-    meta: meta(),
-    metaEnd: metaEnd(),
-    scheduleStatus: scheduleStatus(),
-    referenceProperties: referenceProperties(),
-    authorDisplayName: props.authorDisplayName,
-    checked: props.checked,
-    hideCheckbox: props.hideCheckbox,
-    onChecked: props.onChecked,
-    unread: unread(),
-    isShared: isShared(),
-    hasNotifications: hasNotifications(),
-    showHitSnippet: showHitSnippet(),
-    streamState: streamState(),
+  // Forward fields independently. A dynamic object spread would make a
+  // selection change reevaluate every layout input and its downstream memos.
+  const layoutProps: LayoutProps = {
+    get entity() {
+      return props.entity;
+    },
+    get actions() {
+      return !isTouchDevice() ? rowActions() : undefined;
+    },
+    get leadingAction() {
+      return isTouchDevice() ? touchActions() : leadingAction();
+    },
+    get titleLeading() {
+      return titleLeading();
+    },
+    get icon() {
+      return icon();
+    },
+    get titleTrailing() {
+      return titleTrailing();
+    },
+    get meta() {
+      return meta();
+    },
+    get metaEnd() {
+      return metaEnd();
+    },
+    get previewLeading() {
+      return previewLeading();
+    },
+    get scheduleStatus() {
+      return scheduleStatus();
+    },
+    get referenceProperties() {
+      return referenceProperties();
+    },
+    get authorDisplayName() {
+      return props.authorDisplayName;
+    },
+    get checked() {
+      return props.checked;
+    },
+    get hideCheckbox() {
+      return props.hideCheckbox;
+    },
+    get onChecked() {
+      return props.onChecked;
+    },
+    get unread() {
+      return unread();
+    },
+    get classic() {
+      return classic();
+    },
+    get isShared() {
+      return isShared();
+    },
+    get hasNotifications() {
+      return hasNotifications();
+    },
+    get showHitSnippet() {
+      return showHitSnippet();
+    },
+    get streamState() {
+      return streamState();
+    },
     setSnippetContainerRef,
-    chars: chars(),
-    onProjectClick: props.onProjectClick,
-    onFilterByTag: props.onFilterByTag ?? soupView?.filterByTag,
-    showCalendarAttendance:
-      props.showCalendarAttendance ??
-      (soupView?.activeTab() ?? 'all') === 'all',
-  });
+    get chars() {
+      return chars();
+    },
+    get onProjectClick() {
+      return props.onProjectClick;
+    },
+    get onFilterByTag() {
+      return props.onFilterByTag ?? soupView?.filterByTag;
+    },
+    get showCalendarAttendance() {
+      return (
+        props.showCalendarAttendance ??
+        (soupView?.activeTab() ?? 'all') === 'all'
+      );
+    },
+  };
 
   const draggable = createEntityDraggable({
     entity: props.entity,
@@ -225,6 +281,20 @@ export function ListEntity(props: ListEntityProps) {
       email: isEmailEntity(props.entity),
     });
 
+  // A touch row's swipe surface is opaque so the swipe actions stay hidden
+  // under it, which covers the row's own fill; a Classic row paints the
+  // surface with its fill instead. The selection tint is translucent, so it
+  // goes over the panel color rather than replacing it.
+  const swipeFill = () => {
+    if (!classic()) return undefined;
+    if (props.checked)
+      return 'bg-panel bg-linear-to-b from-list-selected to-list-selected';
+    return unread() ? 'bg-control' : undefined;
+  };
+
+  // Classic rows run wall to wall too, square, with a line between rows.
+  const fullBleed = () => isNarrowEmail() || classic();
+
   const mobileStacks = createMemo(() => {
     if (!isTouchDevice()) return [];
     if (!props.showUnrollNotifications) return [];
@@ -257,17 +327,30 @@ export function ListEntity(props: ListEntityProps) {
         // to track which layout the Switch actually renders.
         isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
         'soup-list-entity @container/entity relative group/narrow flex flex-col py-0.5',
-        isNarrowEmail()
+        fullBleed()
           ? // The gutter moves inside, so text still lines up with the headers.
             'w-full px-(--soup-row-gutter)'
           : 'rounded-xl w-[calc(100%-0.5rem)] mr-1',
         // Keep avatar-group separators in sync with the row background so they
         // blend into it instead of creating visible rings.
         '[--avatar-group-separator:var(--color-panel)]',
+        // Every Classic row ends in the same faint line, wall to wall, so
+        // each pair of rows shares exactly one, read or unread. It sits on
+        // the row's own last pixel, which the stacked layouts reserve with
+        // their (hidden) `InboxDivider`.
+        classic() &&
+          'after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-divider',
+        // Unread rows are lifted onto the control surface of the sidebar's
+        // Accounts section, with no edge of their own beside the shared line.
+        // State fills below (selected, highlighted, hover) still win over it.
+        classic() &&
+          unread() &&
+          'bg-control [--avatar-group-separator:var(--color-control)]',
         {
           'min-h-10': !isMobile() && !usesCondensedNarrowLayout(),
           'min-h-9': !isMobile() && usesCondensedNarrowLayout(),
-          'mx-(--soup-row-gutter)': !isMobile() && !isNarrowEmail(),
+          'touch:min-h-[44px]': isEmailEntity(props.entity),
+          'mx-(--soup-row-gutter)': !isMobile() && !fullBleed(),
           'bg-list-selected [--avatar-group-separator:var(--color-list-selected)]':
             props.checked,
           'bg-list-selected-highlighted [--avatar-group-separator:var(--color-list-selected-highlighted)]':
@@ -280,9 +363,8 @@ export function ListEntity(props: ListEntityProps) {
             !!rowActions() && !props.highlighted && !props.checked,
           'before:absolute before:left-0 before:w-0.5 before:bg-accent':
             props.current,
-          'before:inset-y-2 before:rounded-full':
-            props.current && !isNarrowEmail(),
-          'before:inset-y-0': props.current && isNarrowEmail(),
+          'before:inset-y-2 before:rounded-full': props.current && !fullBleed(),
+          'before:inset-y-0': props.current && fullBleed(),
         }
       )}
       aria-current={props.current ? 'true' : undefined}
@@ -293,8 +375,9 @@ export function ListEntity(props: ListEntityProps) {
           <MaybeEntityRow
             entityId={props.entity.id}
             config={props.entityRowConfig}
+            rowBgClass={swipeFill()}
           >
-            <WideLayout {...layoutProps()} />
+            <WideLayout {...layoutProps} />
           </MaybeEntityRow>
         </Match>
         {/* Mixed-type lists (Search) render every entity as one line, ahead
@@ -304,7 +387,7 @@ export function ListEntity(props: ListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <NarrowSingleLineLayout {...layoutProps()} />
+            <NarrowSingleLineLayout {...layoutProps} />
           </MaybeEntityRow>
         </Match>
         {/* Email lists on desktop stack their rows compactly; mixed lists keep
@@ -317,7 +400,7 @@ export function ListEntity(props: ListEntityProps) {
               entityId={props.entity.id}
               config={props.entityRowConfig}
             >
-              <NarrowEmailLayout {...layoutProps()} entity={entity()} />
+              <NarrowEmailLayout {...layoutProps} entity={entity()} />
             </MaybeEntityRow>
           )}
         </Match>
@@ -340,8 +423,9 @@ export function ListEntity(props: ListEntityProps) {
           <MaybeEntityRow
             entityId={props.entity.id}
             config={props.entityRowConfig}
+            rowBgClass={swipeFill()}
           >
-            <NarrowInboxLayout {...layoutProps()} />
+            <NarrowInboxLayout {...layoutProps} />
           </MaybeEntityRow>
         </Match>
         <Match when={!isMobile() && usesCondensedNarrowLayout()}>
@@ -349,7 +433,7 @@ export function ListEntity(props: ListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <NarrowCondensedLayout {...layoutProps()} />
+            <NarrowCondensedLayout {...layoutProps} />
           </MaybeEntityRow>
         </Match>
         <Match when={true}>
@@ -357,7 +441,7 @@ export function ListEntity(props: ListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <NarrowLayout {...layoutProps()} />
+            <NarrowLayout {...layoutProps} />
           </MaybeEntityRow>
         </Match>
       </Switch>
@@ -387,6 +471,19 @@ export function ListEntity(props: ListEntityProps) {
             />
           </div>
         </div>
+      </Show>
+
+      {/* A Classic row that opens its group (or the list) also gets the line
+          above it, so every row has one on each edge. Rows within a group
+          share the previous row's line instead, so none is doubled. Like
+          the bottom line, it sits in the row's own top padding, outside a
+          touch row's opaque swipe surface. */}
+      <Show when={classic() && props.isFirstInGroup}>
+        <div
+          aria-hidden="true"
+          data-row-top-line
+          class="pointer-events-none absolute inset-x-0 top-0 h-px bg-edge-divider"
+        />
       </Show>
     </Entity.Root>
   );

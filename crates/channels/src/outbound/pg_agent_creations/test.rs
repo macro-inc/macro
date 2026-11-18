@@ -3,6 +3,7 @@ use crate::domain::models::ReferencedShareItemType;
 use chrono::{Duration, SubsecRound};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
+const CHANNEL: Uuid = Uuid::from_u128(100);
 const THREAD_ROOT: Uuid = Uuid::from_u128(1);
 const REPLYING_BOT: BotId = BotId::TEST_A;
 const OTHER_BOT: BotId = BotId::TEST_B;
@@ -16,14 +17,27 @@ fn person() -> MacroUserIdStr<'static> {
 async fn post(pool: &PgPool, id: Uuid, thread_id: Option<Uuid>, sender: &str, at: DateTime<Utc>) {
     sqlx::query!(
         r#"
+        INSERT INTO comms_channels (id, channel_type, owner_id)
+        VALUES ($1, 'private', $2)
+        ON CONFLICT DO NOTHING
+        "#,
+        CHANNEL,
+        PERSON,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
         INSERT INTO comms_messages
             (id, thread_id, sender_id, content, parent_entity_type, parent_entity_id, created_at)
-        VALUES ($1, $2, $3, 'message', 'document', 'parent', $4)
+        VALUES ($1, $2, $3, 'message', 'channel', $5, $4)
         "#,
         id,
         thread_id,
         sender,
         at,
+        CHANNEL.to_string(),
     )
     .execute(pool)
     .await
@@ -112,6 +126,46 @@ async fn the_request_is_the_persons_latest_message_in_the_thread_before_the_repl
             .await
             .unwrap(),
         None
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_channel_request_is_the_persons_latest_message_anywhere_in_the_channel(pool: PgPool) {
+    let asked_at = Utc::now() - Duration::minutes(5);
+    let posted_at = asked_at + Duration::minutes(2);
+    post(
+        &pool,
+        THREAD_ROOT,
+        None,
+        PERSON,
+        asked_at - Duration::hours(1),
+    )
+    .await;
+    post(&pool, Uuid::from_u128(2), None, PERSON, asked_at).await;
+    post(
+        &pool,
+        Uuid::from_u128(3),
+        None,
+        SOMEONE_ELSE,
+        asked_at + Duration::minutes(1),
+    )
+    .await;
+    let bot_post = Uuid::from_u128(4);
+    post(
+        &pool,
+        bot_post,
+        None,
+        "bot|00000000-0000-0000-0000-00000000a2a2",
+        posted_at,
+    )
+    .await;
+
+    assert_eq!(
+        PgAgentCreations::new(pool)
+            .channel_request_sent_at(CHANNEL, &person(), posted_at)
+            .await
+            .unwrap(),
+        Some(asked_at.trunc_subsecs(6))
     );
 }
 

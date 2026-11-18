@@ -1,3 +1,4 @@
+pub mod colleague_directory;
 pub mod contacts_enqueuer;
 pub mod crm_enqueuer;
 pub mod customer_repo;

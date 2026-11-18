@@ -63,7 +63,9 @@ use entity_access::domain::{
 };
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::{api::MessageServiceApi, ports::MessageError, service::MessageWrite};
+use messages::domain::{
+    api::MessageServiceApi, models::MessageAttribution, ports::MessageError, service::MessageWrite,
+};
 use model_owner::CreationPrincipal;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
@@ -156,6 +158,10 @@ pub struct DocumentToolContext<
     /// already read, so it hands the name over rather than have every tool
     /// look it up again.
     actor_name: Option<EditorName>,
+
+    /// The client the requesting user drives these tools through, such as an
+    /// MCP client, set with [`Self::with_via`]; comments carry it as a label.
+    via: Option<String>,
 }
 
 impl<
@@ -185,6 +191,7 @@ impl<
             recorder: self.recorder.clone(),
             actor: self.actor,
             actor_name: self.actor_name.clone(),
+            via: self.via.clone(),
         }
     }
 }
@@ -255,6 +262,7 @@ impl<
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             actor: bot_id::MACRO_AI_BOT_ID,
             actor_name: None,
+            via: None,
         }
     }
 
@@ -332,6 +340,23 @@ impl<
     pub fn with_actor_name(mut self, name: &str) -> Self {
         self.actor_name = EditorName::new(name);
         self
+    }
+
+    /// Label the comments these tools post with the client the requesting
+    /// user works through, such as an MCP client.
+    pub fn with_via(mut self, client: String) -> Self {
+        self.via = Some(client);
+        self
+    }
+
+    /// How a comment posted by these tools is attributed.
+    pub fn attribution(&self) -> MessageAttribution {
+        match &self.via {
+            Some(client) => MessageAttribution::ActingUserVia {
+                client: client.clone(),
+            },
+            None => MessageAttribution::ActingUser,
+        }
     }
 
     /// The name readers see on what these tools write as it happens - the

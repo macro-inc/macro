@@ -31,7 +31,7 @@ use item_filters::{
         database_row::DatabaseRowLiteral,
         date::DateLiteral,
         document::DocumentLiteral,
-        email::{Email, EmailLiteral},
+        email::{AttachmentKind, Email, EmailLiteral, SubjectQuery},
         foreign_entity::ForeignEntityLiteral,
         github_pull_request::{
             GithubPullRequestLiteral, GithubPullRequestReviewStatus, GithubPullRequestState,
@@ -282,6 +282,19 @@ enum GraphqlFilterPropertyMatchValue {
     SelectOption(ID),
     /// Entity reference id to match.
     EntityRef(ID),
+    /// Match a DATE property in a UTC range.
+    DateRange(GraphqlPropertyDateRange),
+}
+
+/// Explicit UTC bounds for a DATE property.
+#[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GraphqlPropertyDateRange {
+    /// Inclusive UTC start, or no lower bound.
+    start: Option<String>,
+    /// Exclusive UTC end, or no upper bound.
+    end: Option<String>,
 }
 
 impl GraphqlFilterPropertyMatchValue {
@@ -295,6 +308,24 @@ impl GraphqlFilterPropertyMatchValue {
                 EntityRefId::new(value.to_string())
                     .map_err(|err| InputError::new(format!("invalid entityRef: {err}")))?,
             ),
+            Self::DateRange(range) => {
+                PropertyMatchValue::DateRange(item_filters::ast::properties::DateRange {
+                    start: range
+                        .start
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| InputError::new(format!("invalid dateRange.start: {err}")))?
+                        .map(|value| value.with_timezone(&Utc)),
+                    end: range
+                        .end
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| InputError::new(format!("invalid dateRange.end: {err}")))?
+                        .map(|value| value.with_timezone(&Utc)),
+                })
+            }
         })
     }
 }
@@ -339,6 +370,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
     fn try_from(value: GraphqlPropertyEntityType) -> Result<Self, Self::Error> {
         Ok(match value {
             GraphqlPropertyEntityType::CalendarEvent => Self::CalendarEvent,
+            GraphqlPropertyEntityType::CallRecord => Self::CallRecord,
             GraphqlPropertyEntityType::Channel => Self::Channel,
             GraphqlPropertyEntityType::Chat => Self::Chat,
             GraphqlPropertyEntityType::Company => Self::Company,
@@ -349,8 +381,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
             GraphqlPropertyEntityType::Initiative => Self::Initiative,
-            other
-            @ (GraphqlPropertyEntityType::CallRecord | GraphqlPropertyEntityType::Contact) => {
+            other @ GraphqlPropertyEntityType::Contact => {
                 return Err(other);
             }
         })
@@ -366,7 +397,7 @@ pub struct GraphqlEntityFilterAst {
     favorites_only: Option<bool>,
     /// Restrict every entity type to items associated with this CRM record,
     /// or to activity across visible CRM-enabled teams.
-    /// Requires an expanded, timestamp-sorted query.
+    /// Requires an expanded query sorted by a timestamp or selected property.
     crm_association: Option<GraphqlCrmAssociation>,
     /// The calendar event filter to apply.
     calendar_event_filter: Option<GraphqlCalendarEventExpr>,
@@ -703,8 +734,8 @@ enum GraphqlDocumentLiteral {
     /// Uploaded from an email attachment sent by, or to, a matching address.
     EmailAttachmentParticipant(GraphqlEmailValue),
     /// Associated with a CRM record through its Companies or Contacts
-    /// property or a reference to the record. Requires an expanded,
-    /// timestamp-sorted query.
+    /// property or a reference to the record. Requires an expanded query
+    /// sorted by a timestamp or task due date.
     CrmAssociated(GraphqlCrmAssociation),
     /// Case-insensitive substring of the document name.
     NameContains(String),
@@ -917,6 +948,8 @@ enum GraphqlEmailLiteral {
     Bcc(GraphqlEmailValue),
     /// The recipient option.
     Recipient(GraphqlEmailValue),
+    /// A message whose subject contains this text, ignoring case (1-200 characters).
+    Subject(String),
     /// The thread id option.
     ThreadId(ID),
     /// The owner option.
@@ -935,6 +968,8 @@ enum GraphqlEmailLiteral {
     Shared(GraphqlSharedEmailFilter),
     /// The calendar only option.
     CalendarOnly(bool),
+    /// Threads with at least one attachment of this kind.
+    Attachment(GraphqlAttachmentKind),
     /// The created at option.
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
@@ -951,6 +986,9 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::Cc(value) => EmailLiteral::Cc(value.into_ast()?),
             Self::Bcc(value) => EmailLiteral::Bcc(value.into_ast()?),
             Self::Recipient(value) => EmailLiteral::Recipient(value.into_ast()?),
+            Self::Subject(value) => EmailLiteral::Subject(
+                SubjectQuery::try_from(value).map_err(|err| InputError::new(err.to_string()))?,
+            ),
             Self::ThreadId(id) => EmailLiteral::ThreadId(parse_id(id, "threadId")?),
             Self::Owner(id) => EmailLiteral::Owner(parse_id(id, "owner")?),
             Self::ProjectId(id) => EmailLiteral::ProjectId(id),
@@ -960,6 +998,7 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::InboxVisible(visible) => EmailLiteral::InboxVisible(visible),
             Self::Shared(shared) => EmailLiteral::Shared(shared.into_model()),
             Self::CalendarOnly(calendar_only) => EmailLiteral::CalendarOnly(calendar_only),
+            Self::Attachment(kind) => EmailLiteral::Attachment(kind.into_model()),
             Self::CreatedAt(date) => EmailLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => EmailLiteral::UpdatedAt(date.into_ast()?),
             Self::ViewedAt(date) => EmailLiteral::ViewedAt(date.into_ast()?),
@@ -995,6 +1034,30 @@ impl GraphqlEmailValue {
             ),
             Self::Domain(value) => Email::Domain(value),
         })
+    }
+}
+
+/// GraphQL input naming a kind of email attachment.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum GraphqlAttachmentKind {
+    /// PDF files.
+    Pdf,
+    /// PNG, JPEG, GIF, WebP or SVG images.
+    Image,
+    /// Word, Excel and PowerPoint files, plain text and CSV.
+    Document,
+}
+
+impl GraphqlAttachmentKind {
+    /// Convert this GraphQL option into the email-filter model.
+    fn into_model(self) -> AttachmentKind {
+        match self {
+            Self::Pdf => AttachmentKind::Pdf,
+            Self::Image => AttachmentKind::Image,
+            Self::Document => AttachmentKind::Document,
+        }
     }
 }
 

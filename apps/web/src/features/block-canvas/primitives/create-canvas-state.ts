@@ -26,7 +26,7 @@ export type CanvasTool =
   | 'pan'
   | 'arrow'
   | 'line'
-  | Exclude<ShapeKind, 'image' | 'video' | 'document'>;
+  | Exclude<ShapeKind, 'image' | 'video' | 'document' | 'artifact'>;
 export type CanvasState = ReturnType<typeof createCanvasState>;
 
 export function createCanvasState(

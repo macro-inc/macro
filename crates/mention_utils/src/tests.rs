@@ -33,7 +33,7 @@ fn parse_single_document_mention() {
     let input = r#"<m-document-mention>{"documentName":"My Doc"}</m-document-mention>"#;
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name }))
+        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name, .. }))
     ] => {
         assert_eq!(document_name.as_ref(), "My Doc");
     });
@@ -46,9 +46,9 @@ fn parse_document_mentions_with_text() {
 
     assert_matches!(out.0, [
         TextSegment::Plain("I'm testing sending a message with a document  "),
-        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name: name1 })),
+        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name: name1, .. })),
         TextSegment::Plain(" mention  "),
-        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name: name2 })),
+        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name: name2, .. })),
     ] => {
         assert_eq!(name1.as_ref(), "Document 1");
         assert_eq!(name2.as_ref(), "Document 2");
@@ -56,11 +56,59 @@ fn parse_document_mentions_with_text() {
 }
 
 #[test]
-fn parse_document_mention_missing_name() {
-    // Missing "documentName" field - should fail to parse as document mention
-    let input = r#"<m-document-mention>{"documentId":"123","blockName":"md","blockParams":{}}</m-document-mention>"#;
-    let result = ParsedXmlText::parse(input);
-    assert!(result.is_err());
+fn nameless_document_mentions_render_as_their_kind() {
+    let input = concat!(
+        r#"I made <m-document-mention>{"documentId":"d1","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#,
+        r#" from <m-document-mention>{"documentId":"d2","documentName":"","blockName":"database","blockParams":{}}</m-document-mention>"#,
+        r#", filed <m-document-mention>{"documentId":"t1","documentName":" ","blockName":"task","blockParams":{}}</m-document-mention>"#,
+        r#" under <m-document-mention>{"documentId":"i1","documentName":"","blockName":"initiative","blockParams":{}}</m-document-mention>"#,
+        r#" in <m-document-mention>{"documentId":"p1","documentName":"","blockName":"project","blockParams":{}}</m-document-mention>"#,
+        r#" and replied to <m-document-mention>{"documentId":"c1","documentName":"","blockName":"channel","blockParams":{"channel_message_id":"m1"}}</m-document-mention>"#,
+        r#" in <m-document-mention>{"documentId":"c1","documentName":"","blockName":"channel","blockParams":{}}</m-document-mention>"#,
+        r#" about <m-document-mention>{"documentId":"x1","documentName":"","blockName":"unheard-of","blockParams":{}}</m-document-mention>."#,
+    );
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(
+        rendered,
+        "I made <document> from <database>, filed <task> under <project> in <folder> and replied to <message> in <channel> about <item>."
+    );
+}
+
+#[test]
+fn document_mention_without_name_or_params_renders_as_its_kind() {
+    // Agents omit documentName, and routine mentions carry no blockParams.
+    let input = concat!(
+        r#"<m-document-mention>{"documentId":"r1","blockName":"routine"}</m-document-mention>"#,
+        r#" and <m-document-mention>{"documentId":"x1"}</m-document-mention>"#,
+    );
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "<routine> and <item>");
+}
+
+#[test]
+fn document_mention_with_odd_block_params_still_renders() {
+    let input = concat!(
+        r#"<m-document-mention>{"documentId":"d1","documentName":"","blockName":"md","blockParams":"x"}</m-document-mention>"#,
+        r#" and <m-document-mention>{"documentId":"c1","documentName":"","blockName":"channel","blockParams":{"channel_message_id":null}}</m-document-mention>"#,
+    );
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "<document> and <channel>");
+}
+
+#[test]
+fn named_document_mention_renders_its_name() {
+    let input = r#"<m-document-mention>{"documentId":"t1","documentName":"Ship it","blockName":"task","blockParams":{}}</m-document-mention>"#;
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "Ship it");
+}
+
+#[test]
+fn kind_placeholder_is_not_read_back_as_a_tag() {
+    let input = r#"see <m-document-mention>{"documentId":"d1","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#;
+    let once = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    let twice = PlainTextFormatter::format_xml_text(ParsedXmlText::parse_lenient(&once)).0;
+    assert_eq!(once, "see <document>");
+    assert_eq!(twice, once);
 }
 
 #[test]
@@ -265,6 +313,37 @@ fn parse_date_mention_missing_display_format() {
 }
 
 #[test]
+fn parse_date_mention_bare_date_body() {
+    // Models sometimes write the date itself as the body instead of the JSON
+    // object; the app renders that as a chip, so plain text must too.
+    let input = "due <m-date-mention>2026-11-13</m-date-mention>";
+    let result = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(result.0, [
+        TextSegment::Plain("due "),
+        TextSegment::Xml(XmlTag::Date(ParsedDateMention { display_format })),
+    ] => {
+        assert_eq!(display_format.as_ref(), "Nov 13, 2026");
+    });
+}
+
+#[test]
+fn parse_date_mention_bare_timestamp_body() {
+    let input = "<m-date-mention>2026-11-13T15:00:00-05:00</m-date-mention>";
+    let result = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(result.0, [
+        TextSegment::Xml(XmlTag::Date(ParsedDateMention { display_format })),
+    ] => {
+        assert_eq!(display_format.as_ref(), "Nov 13, 2026, 3:00 PM");
+    });
+}
+
+#[test]
+fn parse_date_mention_impossible_bare_date() {
+    let input = "<m-date-mention>2026-02-30</m-date-mention>";
+    assert!(ParsedXmlText::parse(input).is_err());
+}
+
+#[test]
 fn parse_date_mention_invalid_json() {
     let input = r#"<m-date-mention>{broken</m-date-mention>"#;
     let result = ParsedXmlText::parse(input);
@@ -403,7 +482,7 @@ fn parse_mixed_mentions() {
         TextSegment::Plain("Hi "),
         TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
         TextSegment::Plain(", let's discuss "),
-        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name })),
+        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name, .. })),
         TextSegment::Plain(" with "),
         TextSegment::Xml(XmlTag::Contact(ParsedContactMention { name })),
         TextSegment::Plain(" on "),
@@ -425,7 +504,7 @@ fn parse_mixed_mentions_with_links() {
         TextSegment::Plain(", check out "),
         TextSegment::Xml(XmlTag::Link(ParsedLink { text, url })),
         TextSegment::Plain(" and "),
-        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name })),
+        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name, .. })),
     ] => {
         assert_eq!(text.as_ref(), "Our Docs");
         assert_eq!(url.as_ref(), "https://docs.example.com");
@@ -440,9 +519,9 @@ fn parse_content_with_multiple_document_and_user_mentions() {
     assert_matches!(out.0, [
         TextSegment::Xml(XmlTag::User(ParsedUserMention {  .. })),
         TextSegment::Plain(" I'm testing sending a message with a document  "),
-        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name: name1 })),
+        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name: name1, .. })),
         TextSegment::Plain(" mention  "),
-        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name: name2 })),
+        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name: name2, .. })),
     ] => {
         assert_eq!(name1.as_ref(), "Document 1");
         assert_eq!(name2.as_ref(), "Document 2");
@@ -527,7 +606,7 @@ fn parse_document_mention_with_surrounding_text() {
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
         TextSegment::Plain("asdf "),
-        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name })),
+        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name, .. })),
         TextSegment::Plain(" asdf"),
     ] => {
         assert_eq!(document_name.as_ref(), "Test Doc 34");
@@ -625,7 +704,7 @@ fn parse_mixed_mentions_with_multiple_links() {
         TextSegment::Plain(", check out "),
         TextSegment::Xml(XmlTag::Link(ParsedLink { text: t1, .. })),
         TextSegment::Plain(" and "),
-        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name })),
+        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name, .. })),
         TextSegment::Plain(" on "),
         TextSegment::Xml(XmlTag::Date(ParsedDateMention { display_format })),
         TextSegment::Plain(" or visit "),
@@ -649,7 +728,7 @@ fn parse_link_user_document_mixed() {
         TextSegment::Plain(" and "),
         TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
         TextSegment::Plain(" this doc "),
-        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name })),
+        TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name, .. })),
     ] => {
         assert_eq!(text.as_ref(), "Example");
         assert_eq!(url.as_ref(), "https://example.com");
@@ -694,8 +773,8 @@ fn parse_contact_mention_missing_name_with_suffix() {
 #[test]
 fn parse_document_mention_missing_name_with_suffix() {
     let input = r#"<m-document-mention>{"documentId":"6e01eaf5-f497-4b2e-96d0-ea3d527ef47d","blockName":"md","blockParams":{},"collapsed":false}</m-document-mention> asdf"#;
-    let result = ParsedXmlText::parse(input);
-    assert!(result.is_err());
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "<document> asdf");
 }
 
 // =============================================================================
@@ -934,4 +1013,48 @@ fn parse_unknown_tag_mixed_with_recognized() {
             TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
         ]
     );
+}
+
+// =============================================================================
+// Lenient parsing (prose that need not be valid markup)
+// =============================================================================
+
+fn lenient_plain_text(input: &str) -> String {
+    PlainTextFormatter::format_xml_text(ParsedXmlText::parse_lenient(input)).0
+}
+
+#[test]
+fn lenient_parse_unwraps_mentions_beside_stray_angle_brackets() {
+    let input = r#"Fixed Vec<String> for <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention> when 5 < 10 in <m-document-mention>{"documentId":"doc-1","documentName":"the request","blockName":"channel","blockParams":{}}</m-document-mention>"#;
+    assert!(ParsedXmlText::parse(input).is_err());
+    assert_eq!(
+        lenient_plain_text(input),
+        "Fixed Vec<String> for user@example.com when 5 < 10 in the request"
+    );
+}
+
+#[test]
+fn lenient_parse_drops_unknown_tags_like_strict_parse() {
+    let input = r#"<m-await>{"text":"thinking"}</m-await>Done <m-await/>"#;
+    assert_eq!(lenient_plain_text(input), "Done ");
+}
+
+#[test]
+fn lenient_parse_keeps_a_malformed_mention_as_text() {
+    let input = r#"Hi <m-user-mention>invalid</m-user-mention>"#;
+    assert_eq!(lenient_plain_text(input), input);
+}
+
+#[test]
+fn lenient_parse_keeps_text_after_an_unclosed_tag_as_written() {
+    // One scan per unclosed tag would make this input quadratic to parse.
+    let input = "<m-link>x ".repeat(16 * 1024);
+    assert_eq!(lenient_plain_text(&input), input);
+}
+
+#[test]
+fn lenient_parse_of_valid_markup_matches_strict_parse() {
+    let input = r#"<m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention> see <m-link>{"text":"docs","url":"https://example.com"}</m-link>"#;
+    let strict = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(lenient_plain_text(input), strict);
 }

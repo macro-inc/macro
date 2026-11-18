@@ -12,9 +12,10 @@ use crate::domain::create::{MarkdownSubtype, NewDocumentMetadata, NewMarkdownTex
 use crate::domain::models::{CreateSkillRequest, CreateSkillResponse, DocumentError};
 use crate::domain::ports::DocumentService;
 use crate::domain::ports::create::DocumentCreationService;
+use crate::domain::skill_description::SkillDescription;
 
-/// Creates a skill document with initialized markdown content in one
-/// backend-owned lifecycle. Skills are markdown documents containing
+/// Creates a skill document with initialized markdown content and its
+/// routing description in one backend-owned lifecycle. Skills are markdown documents containing
 /// instructions that AI reads and follows when the skill is referenced in an
 /// AI input.
 #[utoipa::path(
@@ -24,7 +25,7 @@ use crate::domain::ports::create::DocumentCreationService;
     request_body = CreateSkillRequest,
     responses(
         (status = 200, body = inline(CreateSkillResponse)),
-        (status = 400, body = model_error_response::ErrorResponse),
+        (status = 400, description = "The description is blank, longer than one line or 300 characters, or does not start \"Use when\"", body = model_error_response::ErrorResponse),
         (status = 401, body = model_error_response::ErrorResponse),
         (status = 500, body = model_error_response::ErrorResponse),
     )
@@ -40,6 +41,8 @@ pub async fn create_skill_handler<
     project: ProjectBodyAccessLevelExtractorV2<EditAccessLevel, CreateSkillRequest, Svc, Auth>,
 ) -> Result<Json<CreateSkillResponse>, DocumentError> {
     let req = project.into_inner();
+    // Validate before creating, so a bad description creates nothing.
+    let description = SkillDescription::parse(&req.description)?;
 
     let mut metadata = NewDocumentMetadata::builder(req.skill_name);
     if let Some(project_id) = req.project_id {
@@ -58,7 +61,11 @@ pub async fn create_skill_handler<
         )
         .await?;
 
-    Ok(Json(CreateSkillResponse {
-        document_id: created.document_id().to_string(),
-    }))
+    let document_id = created.document_id().to_string();
+    state
+        .service
+        .describe_new_skill(&document_id, description)
+        .await?;
+
+    Ok(Json(CreateSkillResponse { document_id }))
 }

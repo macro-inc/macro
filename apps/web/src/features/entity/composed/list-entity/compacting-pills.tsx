@@ -25,7 +25,7 @@ export function CompactingPills(props: {
         'group/pills flex min-w-0 items-center gap-1 overflow-hidden',
         'data-compact:gap-0 data-compact:[&_[data-pill-text]]:hidden',
         // Pill groups render as `contents`, so their pills stack here too.
-        'data-compact:[&>*+*]:-ml-1.5 data-compact:[&>.contents:not(:first-child)>*]:-ml-1.5 data-compact:[&>.contents>*+*]:-ml-1.5',
+        'data-compact:[&>:not(:first-child)]:-ml-1.5 data-compact:[&>.contents:not(:first-child)>*]:-ml-1.5 data-compact:[&>.contents>:not(:first-child)]:-ml-1.5',
         '[&>*]:relative [&>.contents>*]:relative [&_*:hover]:z-10',
         props.class
       )}

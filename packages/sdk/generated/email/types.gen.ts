@@ -179,6 +179,12 @@ export type ApiDraftInput = {
      * Generation from the last loaded draft; legacy clients begin at zero.
      */
     draft_generation?: number;
+    /**
+     * The address to send from: the selected inbox's own address or one of
+     * its verified Gmail send-as aliases, which sends under the alias's
+     * display name. Omit it to send from the inbox's own address.
+     */
+    from?: string | null;
     headers_json?: null | Value;
     /**
      * Per-message override for whether to include the signature on send:
@@ -425,6 +431,11 @@ export type ApiThread = {
     access_level: AccessLevel;
     created_at: string;
     db_id: string;
+    /**
+     * Whether any message was received rather than drafted or sent. Only
+     * threads with received mail can return to the inbox.
+     */
+    has_received_mail: boolean;
     inbox_visible: boolean;
     is_read: boolean;
     latest_inbound_message_ts?: string | null;
@@ -931,7 +942,7 @@ export type CalendarMutationApiError = {
 /**
  * Machine-readable failure category for calendar mutations.
  */
-export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'not_organizer' | 'guests_cannot_invite' | 'guest_list_hidden' | 'guests_cannot_modify' | 'already_on_calendar' | 'join_request_open' | 'copy_refused' | 'snapshot' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed' | 'copy_choice_required';
+export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'not_organizer' | 'guests_cannot_invite' | 'guest_list_hidden' | 'guests_cannot_modify' | 'already_on_calendar' | 'join_request_open' | 'copy_refused' | 'snapshot' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed' | 'copy_choice_required' | 'confirmation_required';
 
 /**
  * A materialized recurrence instance optimized for range queries.
@@ -1172,7 +1183,7 @@ export type ForwardCalendarEventError = {
 /**
  * Why a forward was not sent.
  */
-export type ForwardCalendarEventErrorCode = 'not_found' | 'invalid_recipients' | 'inbox_unavailable' | 'send_failed';
+export type ForwardCalendarEventErrorCode = 'not_found' | 'invalid_recipients' | 'inbox_unavailable' | 'send_failed' | 'confirmation_required';
 
 /**
  * One person a forwarded invitation goes to.
@@ -1654,6 +1665,28 @@ export type MessageOperationResponse = {
     operation?: null | ApiMessageOperation;
 };
 
+/**
+ * Open state of one tracked, sent message.
+ */
+export type MessageReadReceipt = {
+    /**
+     * First counted fetch.
+     */
+    first_opened_at?: string | null;
+    /**
+     * Latest counted fetch.
+     */
+    last_opened_at?: string | null;
+    /**
+     * The tracked message.
+     */
+    message_id: string;
+    /**
+     * Counted pixel fetches.
+     */
+    open_count: number;
+};
+
 export type ParsedMessage = {
     bcc: Array<ContactInfo>;
     body_parsed?: string | null;
@@ -1683,9 +1716,9 @@ export type PatchSettingsResponse = {
 /**
  * View type. Supported values include standard labels and a custom user label user:<label>
  */
-export type PreviewView = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'important' | 'other' | string;
+export type PreviewView = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'spam' | 'trash' | 'important' | 'other' | string;
 
-export type PreviewViewStandardLabel = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'important' | 'other';
+export type PreviewViewStandardLabel = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'spam' | 'trash' | 'important' | 'other';
 
 /**
  * Payload for the `refresh_email` connection gateway event: identifies the
@@ -1716,6 +1749,10 @@ export type RefreshEmailEvent = {
     link_id: string;
     status: BackfillStatus;
     total_threads: number;
+} | {
+    event: 'focus_updated';
+    link_id: string;
+    traceparent?: string | null;
 };
 
 /**
@@ -1769,6 +1806,10 @@ export type SendMessageResponse = {
 };
 
 export type Settings = {
+    /**
+     * Whether messages sent from this inbox carry an open-tracking pixel.
+     */
+    read_receipts_enabled?: boolean | null;
     /**
      * The user's email signature content (HTML). On a patch, omit or send
      * `null` to leave unchanged (both deserialize to `None`); pass an empty
@@ -1846,6 +1887,13 @@ export type ThreadPreviewCursor = {
     sortTs: string;
     updatedAt: string;
     viewedAt?: string | null;
+};
+
+/**
+ * Open state of the caller's tracked, sent messages in one thread.
+ */
+export type ThreadReadReceipts = {
+    receipts: Array<MessageReadReceipt>;
 };
 
 /**
@@ -1994,6 +2042,12 @@ export type UpsertScheduledRequest = {
      * The time to send the message (ISO 8601 format).
      */
     send_time: string;
+    /**
+     * The user's own reply approving this send, quoted verbatim. Required
+     * from an agent's program, which is refused without it; ignored for a
+     * person in the app, whose Send Later is their confirmation.
+     */
+    user_confirmation?: string | null;
 };
 
 export type UpsertScheduledResponse = {
@@ -2203,7 +2257,7 @@ export type ForwardCalendarEventErrors = {
      */
     401: unknown;
     /**
-     * The inbox holding the copy cannot send for the viewer
+     * The inbox holding the copy cannot send for the viewer, or an agent's program asked to forward
      */
     403: ForwardCalendarEventError;
     /**
@@ -3021,6 +3075,10 @@ export type SendMessageData = {
 
 export type SendMessageErrors = {
     400: ErrorResponse;
+    /**
+     * An agent's program asked to send; it must go through a review or a confirmed send
+     */
+    403: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
 };
@@ -3581,6 +3639,29 @@ export type UpdateThreadProjectResponses = {
 
 export type UpdateThreadProjectResponse2 = UpdateThreadProjectResponses[keyof UpdateThreadProjectResponses];
 
+export type GetThreadReadReceiptsData = {
+    body?: never;
+    path: {
+        /**
+         * Authorized email thread
+         */
+        thread_id: string;
+    };
+    query?: never;
+    url: '/email/threads/{thread_id}/read-receipts';
+};
+
+export type GetThreadReadReceiptsErrors = {
+    401: unknown;
+    403: unknown;
+};
+
+export type GetThreadReadReceiptsResponses = {
+    200: ThreadReadReceipts;
+};
+
+export type GetThreadReadReceiptsResponse = GetThreadReadReceiptsResponses[keyof GetThreadReadReceiptsResponses];
+
 export type HealthHandlerData = {
     body?: never;
     path?: never;
@@ -3596,3 +3677,22 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
+
+export type GetReadReceiptPixelData = {
+    body?: never;
+    path: {
+        /**
+         * Opaque pixel token
+         */
+        token: string;
+    };
+    query?: never;
+    url: '/opens/{token}';
+};
+
+export type GetReadReceiptPixelResponses = {
+    /**
+     * Transparent pixel, for any token
+     */
+    200: unknown;
+};

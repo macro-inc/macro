@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { focusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
@@ -64,7 +65,7 @@ export function ComposerAddMenu(props: {
         variant="ghost"
         size="icon-md"
         class={props.class}
-        aria-label="Add"
+        aria-label={t('common.add')}
         aria-haspopup="dialog"
         disabled={props.disabled}
         // Keep compatibility mouse focus from blurring the editor before the
@@ -99,12 +100,12 @@ function AddDropdown(props: {
   return (
     <Dropdown placement={props.placement ?? 'top-start'} gutter={8}>
       <Dropdown.Trigger
-        tooltip="Add"
+        tooltip={t('common.add')}
         data-composer-menu-anchor
         variant="ghost"
         size="icon-md"
         class={props.class}
-        aria-label="Add"
+        aria-label={t('common.add')}
         disabled={props.disabled}
       >
         <PlusIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
@@ -191,7 +192,7 @@ export function ComposerAddDrawer(props: {
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label="Add to message">
+        <MobileDrawer.Content aria-label={t('channelComposer.addToMessage')}>
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody class="gap-3">
             <For each={nonEmpty(props.groups)}>

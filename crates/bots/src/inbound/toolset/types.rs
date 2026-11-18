@@ -55,7 +55,7 @@ pub struct BotSummary {
     pub description: Option<String>,
     /// Optional profile-picture URL.
     pub avatar_url: Option<String>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session.
+    /// Whether this bot runs as an AI agent: mentions and DMs start an agent session.
     pub has_agent: bool,
 }
 

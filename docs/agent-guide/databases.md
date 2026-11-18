@@ -17,6 +17,9 @@ the background; a slow discovery refresh must not delay the new database card.
 Databases open at
 `/app/database/<uuid>`; from Drive (its list, favorites, or **New → Database**)
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
+`?tableId=<uuid>&viewId=<uuid>` (what the SDK's table and view `webUrl()` hand out)
+opens that table and view over the viewer's remembered tab; without `viewId` the
+table opens on its remembered view.
 A database contains tables; records belong to a table and
 its properties describe each record. The database name in the split header is a
 static label until edited. Double-click it or choose **Rename** in Database actions
@@ -25,6 +28,17 @@ use **Database actions → Rename**. Enter or leaving the input saves and closes
 a title does not enter the grid, and a failed rename shows a toast. Reload to verify
 the saved name persists. Viewers cannot enter rename from either entry point and
 see the split header's `viewer` badge instead.
+
+**Database actions → Duplicate** (any grant, viewers included) copies the database
+into a new one named "<name> copy" that you own, and opens it in the same split.
+The copy has every table, column (options and colours, formulas, relations within
+the database), view (filters, sorts, layouts and hand-placed board cards) and
+record, under new ids. A relation into another database stays only if you can see
+that database; otherwise the column and its view references are left out.
+Sharing, forms, webhooks, saved queries and row history stay with the original.
+Drive and list rows offer the same **Duplicate**, and agents use `DuplicateItem`
+with `entityType: "database"`. Verify by editing a record in the copy and
+checking the original is unchanged.
 
 Reopening a loaded table or view shows its cached rows while a background read
 checks for changes. Wait for refreshing to finish before asserting server
@@ -53,34 +67,44 @@ require edit access. Pass returned `readVersions` as `baseVersions` to guard a
 follow-up write, check `truncatedTables` before reporting aggregate totals, and
 never automatically retry a write statement.
 
+`POST /databases/queries` saves a question; the service compiles it against the
+caller's databases, refuses anything but one `SELECT`, and, when the request names
+chart columns, refuses columns the `SELECT` does not return. The SDK's
+`database.saveQuery({ sql, title, display })` (or `table.saveQuery`, or
+`macro.databases.saveQuery` for a question whose tables span databases) returns a
+`SavedQuery` whose `toBlock()` is the `<m-db-query>` block to put in a document,
+and whose `withView()` restyles the answer without saving a new question.
+
+The browser compiles table dependencies before reading. Direct `macro.people`
+SELECTs execute filtering, grouping, DISTINCT, ordering and limits in the existing
+local Turso cache, including fresh queries offline after contact synchronization.
+Results are bounded to 500 rows, 64 columns and 512 KiB of scalar text; explicit
+small SQL limits are not marked truncated. Keyed joins read only the current
+bounded identity set; an unbounded people join is an explicit capability error.
+People joins on email, name or generated row IDs are unsupported and must report
+an error rather than treating those keys as user IDs and displaying an empty answer.
+There is no `/databases/read` route and no remote SQL or full-directory fallback.
+Cold/incomplete synchronization and unsupported native binaries remain errors,
+not empty answers. Ordinary tables keep their existing GraphQL/cache row source.
+Account/session, storage generation and input transitions fence publication;
+authority changes clear old answers. One physical local read and one replaceable
+pending input prevent obsolete queries accumulating. Contact hydration/completion
+and committed changes refresh visible results without querying a server.
+Contact synchronization completes after bounded exact-membership verification,
+not merely after downloading pages. Failed/interrupted verification stays incomplete;
+verified removals disappear from local SQL, while delayed older hydration cannot
+restore them. A later successful positive lookup/backfill can add them again.
 ## Feature flag
 
-Databases is behind the `enable-databases` PostHog flag. A deployed app reads it
-at runtime, and a fresh `/app/database/<uuid>` link waits up to three seconds for
-PostHog before deciding. `VITE_ENABLE_DATABASES=true|false` overrides it at build
-time; `bun run dev` defaults it on, and a local stack's static build defers to
-PostHog unless the variable was set when it was built. With the flag off:
-
-- `/app/database/<uuid>` and a `~/database/<uuid>` split show the 404 view. The
-  database block's code is never fetched and no database request is made.
-- **Create → Database**, its **C → L** shortcut, the command palette entry and
-  the slash menu's **Database** and **Query** actions are absent, and no starter database is
-  created.
-- The sidebar, mentions, search and Quick Access list no databases; Activity
-  and the ReadActivity tool leave out database rows.
-- A document's database answer shows its title (or "Database answer") as a
-  plain label, keeps the node unchanged, and never loads the SQL engine.
-- Database tool calls in a chat render as a muted "Database tool" line.
-- The SQL engine's wasm and the database bundles are only fetched once a
-  database surface mounts with the flag on.
-
-`showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) is separate and only hides SQL.
+`showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) shows the SQL behind database answers.
 
 The table selector matches the inset project/channel navigation. In narrow panes,
 scroll its tabs horizontally with a trackpad, mouse wheel, or the arrow buttons.
 The **+** menu stays visible, and focusing or selecting a table reveals its tab.
 
-The grid’s sticky bottom summary shows the saved records in the current view.
+The grid’s sticky bottom summary shows the loaded saved records in the current view.
+While more pages remain, it says **records loaded** and calculations cover only
+those records. Loading every page makes the summary cover the full view.
 Choose **+ Add calculation** in a column’s footer for filled/unique counts, or
 sum, average, min, and max on numeric columns. Numeric columns default to Sum.
 Calculation choices are local to the open table, not saved with the view.
@@ -123,7 +147,9 @@ all records, including records beyond the first page, and that opening a record
 keeps it available when a view filter excludes it. Cell edits and **Add column**
 use pipeline authorization. Viewer grants hide editing controls. The CRM editor
 fixture (`features/crm/browser-test/editor.html`) covers the real pipeline API
-adapter and shared provider against local test responses.
+adapter and shared provider against local test responses, including wrapped and
+multi-line notes; the plain-database counterpart is
+`features/block-database/browser-test/records.html?multiline`.
 Pipelines poll every five seconds. A poll that returns unchanged data must not
 remount company previews or request them again.
 
@@ -141,6 +167,8 @@ row (within the five-second poll) and the company page's **Pipelines** card both
 show the new stage. The company's own Stage, Owner and Revenue properties in the
 side panel are a separate field these tools do not change. A pipeline created or
 renamed from chat appears in the CRM sidebar as soon as the tool finishes.
+In code mode every pipeline tool, `CreatePipeline` included, runs through
+`macro.crm.pipelines` in `ExecuteCode`, shown as an ExecuteCode row.
 
 ## Properties and records
 
@@ -167,11 +195,14 @@ must use.
 The current type has a checkmark in **Change type**; selecting it leaves the column unchanged. Types that cannot convert any existing values are omitted, while empty columns can still choose a new type.
 
 The header arrow menu groups schema and view actions. **Change type** checks the
-column's values against Text, Number, Select, Multi-select, Date, Time range,
-Checkbox, URL, People, Documents, Tasks, and relations to tables in this database, showing
+column's values against Text, Number, Percentage, Select, Multi-select, Date, Time range,
+Checkbox, URL, People, Documents, Tasks, and relations to tables in this database
+(**Related table**) or in any other database you can see (**Other databases**, one
+submenu per database, by name), showing
 "Checking values…" meanwhile, then lists only the types the column can become (a
 checkbox can only become text; only an empty column can become People or a
-relation). A type some values would not survive shows how many, such
+relation). Number and Percentage share the same stored values: 0.25 as a number
+is 25% as a percentage, with no rescaling when the type changes. A type some values would not survive shows how many, such
 as "3 values aren't numbers · Converts into a new column"; it never changes the
 column in place. Choosing it opens a confirmation listing a few of those values,
 and **Convert into a new column** adds a column of that type right after this
@@ -182,7 +213,9 @@ option does. Plain number strings can become numbers; padding, leading zeros and
 ambiguous values count as values that don't fit. A date becomes its `YYYY-MM-DD`
 text, or a one-day range. Text and single selects become ranges when each value
 is `start/end` or one date; a range can only become text. Changing a placement never changes another table that uses the same property.
-A relation can hold multiple records.
+A relation can hold multiple records. A relation into another database reads,
+searches and opens that database's records (in a split when the grid is a full
+database), and people who can't see that database see its cells as unavailable.
 
 **Formula columns.** **Change type → Formula** opens the formula editor under the
 header. On a new, never-filled column the formula column takes its place and name;
@@ -195,7 +228,8 @@ by a number.`); **Save** stays disabled until it does, and Enter saves. Names wi
 spaces go in braces. Numbers added to a date count days; a date minus a date is
 the days between them. An empty number counts as 0 unless every input is empty.
 Formula columns show an ƒ icon, their cells are read-only, and their header menu
-has **Edit formula** instead of **Change type**. Values follow edits to their inputs
+has **Edit formula**. A number formula also offers **Change type** between Number
+and Percentage. Values follow edits to their inputs
 at once, and sort and filter like numbers or dates. Deleting a column a formula uses
 is refused ("Total's formula uses Quantity; change that formula first").
 **Delete column** opens a confirmation;
@@ -278,15 +312,23 @@ toast. A database's only table cannot be deleted: the item is disabled there.
 An editable empty row always follows the records. Enter a value in any of its
 cells to create a record; the next empty row appears immediately. Merely focusing
 or tabbing through an empty row does not save an empty record.
-Click a cell to edit, or focus it with the arrow keys and start typing. The
+Click a cell to edit, or focus it with the arrow keys and start typing. A link
+in a text or URL cell opens like a link in a document (hover shows its preview,
+right-click shows the browser's link menu); clicking anywhere else in the cell,
+Enter, or typing edits it. A URL value that names no domain, such as `TBD`,
+stays plain text. The
 whole cell takes the click, including the space below its value when wrapped
 pills make the row taller; values sit vertically centered in such rows. Enter
 saves and immediately edits the same column in the next row, including the empty
 new-record row. Typing there starts the next record without waiting for the
-previous save. Shift+Enter moves up. Both place the typing cursor at the end of
+previous save. Shift+Enter moves up, except in a text cell, where it starts a new
+line, as Alt+Enter does. Moving places the typing cursor at the end of
 the destination cell's text, ready to type. The active cell has one subtle outline,
-with no additional border around its editor. Arrow keys inside a text editor keep their native cursor
-behavior. Escape cancels. Tab saves and immediately edits the next writable cell;
+with no additional border around its editor. A text cell opens in place at the
+weight and line height it shows, and its row grows to fit a long or multi-line
+value; closed, the cell shows a multi-line value's lines joined on one line. Arrow
+keys inside a text editor move through its lines, wrapped or not, and leave the
+cell only from its first or last line. Escape cancels. Tab saves and immediately edits the next writable cell;
 Shift+Tab moves backward, and both wrap between rows. Read-only columns are
 skipped. If a pending save infers a column's type, the cell currently being typed
 in keeps its editor, draft and focus until it is committed or canceled.
@@ -303,6 +345,11 @@ rounded value. **Enter a valid number** appears in an opaque, focus-only hint. L
 the field hides the hint but keeps the draft and outline; other fields remain
 editable, including through Tab or Shift+Tab. Correct the value or press Escape to
 cancel. Signed decimals and scientific notation remain supported.
+Percentage cells store a fraction and display it with a percent sign (`0.25` shows
+as `25%`). The editor shows percentage points without the sign, so typing `25`
+stores `0.25`. A trailing `%` is accepted. Changing Number to Percentage does not
+rescale existing values. Filters and column totals use the displayed percent, not
+the stored fraction.
 
 Date cells open Macro's date selector (the one tasks use): type a date or phrase
 such as `tomorrow`, `3d`, or `feb 17` and press Enter, or pick **Custom date...**
@@ -329,7 +376,12 @@ after, so a 1 PM to 5 PM range contains its day. Properties of type **Time range
 edit with the same fields.
 Invalid numbers remain in the editor for correction.
 Drag across table cells to select a rectangle, or Shift-click another cell to
-extend from the first cell. Delete or Backspace clears editable cells in that
+extend from the first cell. From the keyboard, Shift+Arrow grows or shrinks the
+rectangle from the focused cell, Shift+Cmd/Ctrl+Arrow runs to the edge of the
+data, Shift+Home/End to the ends of the row, and Cmd/Ctrl+A selects every loaded
+cell; a plain arrow collapses it. The grid marks itself
+`data-owns-arrow-keys`, so these keys don't move split focus. Inside an open cell editor Shift+Arrow selects
+text as usual. Delete or Backspace clears editable cells in that
 rectangle as one undoable change; read-only cells are skipped. Newly saved rows
 can be included immediately; unsaved insertion rows are excluded. Escape clears
 the selection. Other participants see the selected range with a colored outline and
@@ -462,10 +514,13 @@ horizontally to reach more lanes; each lane scrolls vertically on its own. A car
 or lane being dragged stays mounted while scrolling. After a card move, its
 destination is revealed. Starting a new card reveals the lane's draft at the
 bottom and focuses its title, including after the lane was offscreen.
+If a move is refused, the card returns to its saved lane and order; other pending
+moves stay visible until their own responses arrive.
 
 Lane headers show a color or type icon, a name, and an adjacent record count.
-Cards use the Tasks board's header and compact, wrapping property layout rather than
-stacked field rows. Cards without fields do not render an empty property area.
+Cards use the Tasks board's header, with wrapping titles and each configured field's
+label above its full-width value. Unset fields show a dash. Cards without fields
+do not render an empty property area.
 Title editing keeps the displayed title's typography, wrapping, and spacing.
 Cards have a six-dot drag handle; their custom fields share a CSS grid with the title
 and align below its left edge. **Open record details** (the expand
@@ -478,8 +533,11 @@ medium-size icon buttons as Drive. View tabs and New use the shared Button styli
 A board has a lane per option (or person). Records without a grouping value are
 currently omitted from the board; they remain available in the table. Drag a card within
 a lane or into another lane; it moves at once, and moving it to another lane also
-sets its Select value. The order is saved for everyone and survives a reload. A
-sorted board keeps the sort's order, so dragging a card asks **Remove sort to
+sets its Select value. The order is saved for everyone and survives a reload.
+Switching boards during a save clears the previous board's temporary placement;
+the response updates only the board where the move started. Verify both a successful
+save and a refused move without changing the newly selected board's order.
+A sorted board keeps the sort's order, so dragging a card asks **Remove sort to
 arrange cards manually?**; **Remove sort** clears the sort and then places the
 card. The insertion marker stays visible above the first card when reordering
 within a lane. Drag a lane header to reorder lanes. Click an editable option lane's name to
@@ -492,7 +550,7 @@ be cleared, but records will not be deleted; **Delete group** uses danger stylin
 **Hide empty lanes** remains only in the board's **Board menu**, with a right-side
 checkmark when enabled. The card's **Move …** menu offers the same moves without
 dragging. Click a card’s title or field to edit it in place using the same editors
-as the table. Card-field inline editors fill the value area beside their icon and
+as the table. Card-field inline editors fill the value area below their label and
 keep its width, height, and typography; longer drafts scroll inside rather than
 pushing neighboring fields.
 Inline field edits save on Enter or leaving the field. Each save changes only that
@@ -522,18 +580,23 @@ A timeline draws one bar per record across its date-range column, on the shared
 Gantt chart: an all-day range spans whole days, and a range with times starts and
 ends at its exact times in the viewer's time zone. The chart is the whole view:
 the record list drawer at the left starts closed (**Show timeline items** opens
-it), beside **Today**, grid settings and zoom controls. A bar shows its record's
+it), and **Today**, grid settings and the **Timeline menu** sit at the top right
+over the header, with zoom controls at the bottom right. A bar shows its record's
 name, then, as room allows, its times (**9:30 AM – 4 PM** within a day,
 **Oct 9, 10:30 AM → Oct 13, 5 PM** across days; all-day bars show none), then
 its bar fields separated by middots. What does not fit drops whole from the
-end (fields first, then times); only a name longer than its bar is cut short.
+end (fields first, then times). A bar too short for its name, such as a one-day
+bar at month zoom or a meeting at week zoom, shows the name beside it, to its
+right, in muted text; it moves back inside once zooming in makes room. A bar
+field cut short (each shows at most about 160px) does not move the name out.
 Records with an empty range show a dashed chip with their name and **No
 dates** in their row at today (now at hours zoom), kept at the nearest visible
 edge when today is scrolled away; ungrouped, they sit under an **Undated**
 heading. Clicking a bar or chip, or Enter on it (they are focusable in row
 order), opens its record.
-The **Timeline menu** (the **⋯** above the chart, for anyone who can change the
-view) chooses **Time range** (which time-range column the bars span), **Bar label**
+The **Timeline menu** (the **⋯** after grid settings, for anyone who can change
+the view; above the message when the timeline has no time range column, or has
+no records and the viewer cannot add one) chooses **Time range** (which time-range column the bars span), **Bar label**
 (the column each record is named by, the table's first by default), **Bar
 fields** (other columns shown after the name, in the order turned on), **Group
 by** (**None**, or a single select or single person) and **Color by** (**None**,
@@ -700,6 +763,15 @@ Escape cancels. Renaming keeps the question and its saved query unchanged. A sav
 query names databases, tables, and columns by their display names, so renaming one
 it reads makes the answer fail until the question is updated.
 
+AI document editing (the selection toolbar's **AI edit**, `EditDocument`) works with
+database blocks.
+It inserts a saved answer or chart from the `<m-db-query>` block that
+`SaveDatabaseQuery` returns, can change an existing answer's chart type, title,
+or height without changing its question, and can switch an embedded database
+to another table or view. To check, have chat save a chart and add it to a
+document, then select nearby text, choose **AI edit**, and ask for a pie chart; the same question
+should redraw as a pie.
+
 An existing document keeps its answer label when Databases is off and does not
 fetch its database results; see [Feature flag](#feature-flag).
 
@@ -744,14 +816,25 @@ type menu afterward to convert it. The limit is 8 MB, 100 columns, and 10,000 ro
 A failed response offers **Retry import** with the same request, so retrying a
 completed import does not create a second table.
 
-**Webhooks** (editors only) opens a dialog for the current table. **Create
-webhook** shows its URL once, with a copy button and a `curl` example built from
-the table's columns; the list below shows each webhook's token prefix and a
-delete button. POSTing a JSON object to the URL inserts one row (an array inserts
+**Webhooks** (editors only) opens a dialog for the current table (a drawer on
+phones). After a fresh list response confirms the table has no webhooks,
+opening it creates the first webhook and shows its URL directly, with a copy
+button and a `curl` example built from the table's columns. Automatic creation
+waits while the list request is paused offline. If webhooks already exist, it
+opens management without creating another. Changing the active table resets
+the dialog to that table. **Create webhook** creates another URL or retries a
+failed creation. The dialog stays open while creation is pending. Each new URL is
+shown only once; copy it before closing. The list
+below shows each webhook's token prefix and a delete button. Deleting the last
+webhook does not create a replacement until the dialog is reopened. POSTing a JSON object to the URL inserts one row (an array inserts
 one per object, up to 100). Keys name columns, ignoring case; `null` leaves a
 cell empty; unknown keys or values that do not fit refuse the whole call with a
-400 listing every problem. The row is written as the webhook's creator, and the
+400 listing every problem. Number and percentage columns take the stored
+number (0.25 is 25%); a trailing `%` is not accepted. The row is written as the webhook's creator, and the
 webhook stops working if they lose edit access.
+
+Browser examples: [desktop](media/database-webhooks/desktop.png) and
+[phone](media/database-webhooks/phone.png).
 
 ## Side panel and activity
 
@@ -770,6 +853,13 @@ Database awareness identifies each mounted client with a random peer ID while th
 server supplies its authenticated user. Open the same database in two tabs signed
 in as the same user: each should show the other tab's selection and name. Moving
 or leaving one peer must not overwrite or remove another peer's selection.
+Another viewer's selection is an outline in their color laid over the cells, and
+their name sits above the selection's top-right corner, over the sticky header
+while that edge is in view. Neither ever changes a row's or cell's size. Anyone
+who can view the database shares and sees presence: a view-only viewer's label
+shows an eye (`Lee is viewing`), and the server never relays them as editing.
+Sign in as an editor and a viewer to check both directions; the viewer still
+cannot change cells.
 Refresh failures emit a `database.rows.read_refresh` span with the database ID,
 table ID, and failure kind, plus a `database rows could not be refreshed` log.
 
@@ -777,6 +867,35 @@ Schema edits update their UI optimistically and finish after the write commits;
 they do not wait for the background catalog refresh. A refused edit rolls back
 its optimistic state when no newer cache update has replaced it, then refreshes.
 A slow or failed refresh is not a reason to resend a successful mutation.
+
+## Checking large tables locally
+
+Use synthetic records on an isolated local stack and the
+[database profiling harness](../../apps/web/scripts/database-profile/README.md).
+Table views without formula columns filter and sort all stored records on the
+server before fetching pages of 500. Scroll near the bottom or choose **Load more**
+for the next page.
+The footer reports loaded records while more pages remain. Only visible grid
+rows are mounted, so count loaded records separately from DOM rows. Test a
+filter whose matches occur beyond the first page, and a sort whose first record
+would otherwise occur near the end of the table.
+
+**New** opens the blank row even in a long table. A duplicated record outside
+the loaded rows opens its record panel. A saved-record notice can also open a
+record that is not loaded; this does not mean it fails the current filters.
+Arrow keys and Tab must reveal and focus cells beyond the visible window.
+
+Boards, tables containing formula columns, and arbitrary SQL still use the
+existing engine reader with its 20,000-record cap. The engine computes formula
+values before filtering and sorting. Board lane/card ordering is applied to that
+result; check the incomplete-results notice when auditing those surfaces.
+
+After loading, switch between tables and views several times, edit a cell,
+open a select picker, add and delete a temporary record, and scroll. Confirm
+that edits preserve focus and that background refreshes leave the grid mounted.
+Count a browser crash or the database error boundary as a failed run, even if
+the grid appeared before it. Keep heap/CPU profiling runs separate from timing
+runs, and preserve existing local data.
 
 ### Embedded database editors
 
@@ -786,6 +905,11 @@ opens the editor. **Collapse** returns it to a small mention. Cell and schema
 edits use the same database grid and authorization as the standalone app. The
 document stores only the database reference and selected table/view, never a
 copy of its rows. See [Databases in documents](documents.md#databases-in-documents).
+Opening a row there (its row-number button, **Open record**, a board card, or a
+timeline bar) opens the database in its own split at that table and view, with
+the row highlighted or its record panel open; the card shows no record panel of
+its own. A record just created in the card still opens in place, and so does
+every record where the card has no splits to open into (call chat).
 
 The shared editor also runs under a host's `DatabaseProvider`, using schema reads,
 row queries and operation batches from that host's API. Verify cell edits and

@@ -307,6 +307,20 @@ async fn an_owner_reaches_every_route_with_their_own_receipt() {
 }
 
 #[tokio::test]
+async fn a_form_an_agent_creates_with_its_sdk_token_is_attributed_to_the_agent() {
+    let body = json!({ "name": "Lunch?", "source": { "kind": "new" } });
+    for (token, bot) in [("agent", Some(AGENT)), ("owner", None)] {
+        let (router, service) = router(Grants::default());
+        let created = router
+            .oneshot(request(Method::POST, "/", Some(token), Some(body.clone())))
+            .await
+            .unwrap();
+        assert_eq!(created.status(), StatusCode::CREATED, "{token}");
+        assert_eq!(*service.creating_bots.lock().unwrap(), vec![bot], "{token}");
+    }
+}
+
+#[tokio::test]
 async fn creating_over_a_table_needs_owner_on_its_database() {
     let body = json!({
         "name": "RSVP",
@@ -451,6 +465,11 @@ async fn refusals_read_as_a_code_status_and_the_question_at_fault() {
         (FormError::OwnerOnly, StatusCode::FORBIDDEN, "ownerOnly"),
         (FormError::TallyHidden, StatusCode::FORBIDDEN, "tallyHidden"),
         (
+            FormError::InvalidBranding("the image must be one you uploaded"),
+            StatusCode::BAD_REQUEST,
+            "invalidBranding",
+        ),
+        (
             FormError::Repository(rootcause::report!("down").into_dynamic()),
             StatusCode::INTERNAL_SERVER_ERROR,
             "internal",
@@ -505,6 +524,7 @@ fn the_openapi_document_names_every_operation_the_sdk_wraps() {
             "list_accessible_forms",
             "list_forms",
             "put_form_layout",
+            "set_form_appearance",
             "submit_form_response",
             "update_form",
             "update_form_permissions",
@@ -602,4 +622,36 @@ async fn collaboration_requires_edit_and_passes_the_receipt_to_the_service() {
         assert_eq!(response.status(), status);
     }
     assert_eq!(service.handed.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn appearance_requires_edit_and_forwards_the_saved_value() {
+    for (level, expected) in [
+        (AccessLevel::View, StatusCode::FORBIDDEN),
+        (AccessLevel::Edit, StatusCode::OK),
+        (AccessLevel::Owner, StatusCode::OK),
+    ] {
+        let (router, service) = router(Grants {
+            users: [(OWNER.to_string(), level)].into(),
+            public: None,
+        });
+        let response = router
+            .oneshot(request(
+                Method::PUT,
+                "/00000000-0000-0000-0000-0000000000f0/appearance",
+                Some("owner"),
+                Some(json!({"color": "blue"})),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+        let handed = service.handed.lock().unwrap();
+        if expected == StatusCode::OK {
+            assert_eq!(handed.len(), 1);
+            assert_eq!(handed[0].call, "set_appearance");
+            assert_eq!(handed[0].entity_id, FORM.to_string());
+        } else {
+            assert!(handed.is_empty());
+        }
+    }
 }

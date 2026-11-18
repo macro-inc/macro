@@ -42,6 +42,7 @@ impl<P: ConnectedAppProxy> GranolaApi<P> {
             server_name: "Granola".into(),
             account_id: connection.account_id.clone(),
             enabled: true,
+            provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
         };
         let response = self
             .0

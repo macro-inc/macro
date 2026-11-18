@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_credit_reload\n            SET status = ($2::text)::ai_credit_reload_status,\n                stripe_invoice_id = $1,\n                updated_at = NOW()\n            WHERE (stripe_invoice_id = $1\n                   OR ($4 AND id = $3 AND stripe_invoice_id IS NULL))\n              AND status <> 'paid'\n              AND status <> ($2::text)::ai_credit_reload_status\n            RETURNING user_id, amount_cents, kind::text AS \"kind!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "532864b237e27757186e3837f18f2b01abc52c838406382afa3874fe6e8b3b9f"
+}

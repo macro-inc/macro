@@ -16,6 +16,9 @@ mod tests;
 mod external_chat;
 pub use external_chat::{ExternalChatKind, ExternalChatProvider};
 
+mod appearance;
+pub use appearance::{AppearanceColor, AppearanceIcon, EntityAppearance};
+
 /// The type of an entity in Macro
 #[derive(
     Debug,
@@ -67,6 +70,9 @@ pub enum EntityType {
     CrmPipeline,
     /// The entity is a reminder set by a user
     Reminder,
+    /// A registered runtime: a computer running macrod. Shared with people and
+    /// teams, never with channels or the public.
+    Harness,
     /// The entity is an AI skill: either a skill document or a built-in
     /// system skill (see the `system_skills` crate)
     Skill,
@@ -133,17 +139,20 @@ impl EntityType {
             // Initiatives hold `entity_access` rows but are not something
             // you file into a project.
             EntityType::Initiative => false,
-            // A database's permissions are `entity_access` rows - the creator
-            // as owner, plus whoever it is later shared with - but, like agent
-            // sessions, a database is not something you file into a project.
-            EntityType::Database => false,
+            // A database's permissions are `entity_access` rows: the creator
+            // as owner, whoever it is later shared with, and the grants of
+            // the folder it is filed in.
+            EntityType::Database => true,
             // Rows carry no `entity_access` rows of their own; access
             // resolves through the parent database.
             EntityType::DatabaseRow => false,
-            // A form's grants are `entity_access` rows, but, like a
-            // database, a form is not something you file into a project.
-            EntityType::Form => false,
+            // A form's grants are `entity_access` rows, including those of
+            // the folder it is filed in.
+            EntityType::Form => true,
             EntityType::ExternalChat => true,
+            // A runtime's grants are `entity_access` rows, but it is not something
+            // you file into a project.
+            EntityType::Harness => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

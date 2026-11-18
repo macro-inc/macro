@@ -30,7 +30,7 @@ export function EmailThreadTitle(props: {
       onMouseLeave={() => setTitleHovered(false)}
     >
       {cluster().lead}
-      <span class={cluster().lead ? 'whitespace-nowrap' : undefined}>
+      <span class={cn('select-text', cluster().lead && 'whitespace-nowrap')}>
         {cluster().last}
         <Show
           when={props.trailing}

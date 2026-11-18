@@ -19,6 +19,8 @@ export type IntegrationKind = 'native' | 'mcp';
 export type IntegrationItem = {
   id: string;
   name: string;
+  /** Shown right after the name, e.g. a Beta badge. */
+  badge?: JSX.Element;
   kind: IntegrationKind;
   icon: JSX.Element;
   /** What it does in Macro, or which accounts are connected. */
@@ -143,6 +145,8 @@ export function IntegrationsListHeader() {
 export function IntegrationListRow(props: {
   icon: JSX.Element;
   name: string;
+  /** Shown right after the name, e.g. a Beta badge. */
+  badge?: JSX.Element;
   kind: IntegrationKind;
   description: string;
   categories: string[];
@@ -172,7 +176,13 @@ export function IntegrationListRow(props: {
           {props.icon}
         </span>
         <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div class="flex min-w-0 items-center gap-2">
+          {/* With a badge, narrow rows wrap instead of truncating the name away. */}
+          <div
+            class={cn(
+              'flex min-w-0 items-center gap-2',
+              props.badge && 'flex-wrap gap-y-1'
+            )}
+          >
             <span
               class={cn(
                 'min-w-0 truncate font-medium',
@@ -181,6 +191,7 @@ export function IntegrationListRow(props: {
             >
               {props.name}
             </span>
+            {props.badge}
             <Badge
               variant="outline"
               size="xs"
@@ -234,6 +245,7 @@ export function IntegrationItemRow(props: { item: IntegrationItem }) {
     <IntegrationListRow
       icon={props.item.icon}
       name={props.item.name}
+      badge={props.item.badge}
       kind={props.item.kind}
       description={props.item.description}
       categories={props.item.categories}

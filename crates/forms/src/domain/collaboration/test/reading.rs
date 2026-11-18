@@ -65,6 +65,7 @@ fn reading_refuses_an_update_missing_its_history() {
                 title: "Details".to_owned(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             }],
         },
     )
@@ -236,6 +237,7 @@ fn a_newer_revision_includes_an_older_one() {
                 title: "Details".to_owned(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             }],
         },
     )
@@ -260,6 +262,7 @@ fn concurrent_revisions_include_neither_other() {
                 title: "Details".to_owned(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             }],
         },
     )
@@ -273,12 +276,14 @@ fn concurrent_revisions_include_neither_other() {
                     title: "Contact".to_owned(),
                     description: String::new(),
                     questions: vec![],
+                    show_when: None,
                 },
                 FormSection::Questions {
                     id: DETAILS,
                     title: "More".to_owned(),
                     description: String::new(),
                     questions: vec![],
+                    show_when: None,
                 },
             ],
         },

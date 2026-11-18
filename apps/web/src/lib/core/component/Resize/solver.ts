@@ -46,7 +46,7 @@ function getUsable(panelCount: number, total: number, gutter: number) {
  * @param gutter The pixel gutter size
  * @returns A result with
  */
-function computeFractionalShares(
+export function computeFractionalShares(
   panels: Panel[],
   total: number,
   gutter: number
@@ -233,6 +233,108 @@ function applyRedistributionPreferences(
     }
     return panel;
   });
+}
+
+/**
+ * The shares after dragging the handle between panels `index` and `index + 1`
+ * by `deltaPx`, starting from `shares`. The shrinking side gives up space from
+ * the handle outward until each panel reaches its minimum. Undefined when the
+ * handle can't move.
+ */
+export function moveHandleShares(params: {
+  panels: readonly Pick<Panel, 'minSize' | 'maxSize'>[];
+  shares: readonly number[];
+  index: number;
+  deltaPx: number;
+  usable: number;
+}): number[] | undefined {
+  const { panels, shares, index: L, usable } = params;
+  const n = shares.length;
+  if (L < 0 || L >= n - 1) return;
+  if (usable <= 0) return;
+
+  // +dShare => handle right: left grows, right stack shrinks
+  // -dShare => handle left: left stack shrinks, right grows
+  const dShare = params.deltaPx / usable;
+  if (!Number.isFinite(dShare) || dShare === 0) return;
+
+  const R = L + 1;
+
+  const bounds = (i: number) => {
+    if (i < 0 || i >= panels.length) return [0, 0];
+    const minPx = panels[i].minSize ?? 0;
+    const maxPx = panels[i].maxSize ?? Infinity;
+    const minS = Math.max(0, minPx / usable);
+    const maxS = Number.isFinite(maxPx) ? maxPx / usable : 1;
+    return [minS, maxS] as const;
+  };
+
+  const growCap = (i: number) => {
+    const [, maxS] = bounds(i);
+    return Math.max(0, maxS - shares[i]);
+  };
+
+  // Shrink panels outward from the handle until the requested space is freed.
+  const shrinkStack = (
+    newShares: number[],
+    from: number,
+    dir: 1 | -1,
+    amount: number
+  ) => {
+    let remain = amount;
+    for (let i = from; i >= 0 && i < n && remain > EPSILON; i += dir) {
+      const [minS] = bounds(i);
+      const take = Math.min(Math.max(0, newShares[i] - minS), remain);
+      newShares[i] -= take;
+      remain -= take;
+    }
+  };
+
+  const shrinkCapLeftStack = () => {
+    let cap = 0;
+    for (let i = L; i >= 0; i--) {
+      const [minS] = bounds(i);
+      cap += Math.max(0, shares[i] - minS);
+    }
+    return cap;
+  };
+
+  const shrinkCapRightStack = () => {
+    let cap = 0;
+    for (let i = R; i < n; i++) {
+      const [minS] = bounds(i);
+      cap += Math.max(0, shares[i] - minS);
+    }
+    return cap;
+  };
+
+  const newShares = shares.slice();
+
+  if (dShare < 0) {
+    // Move LEFT: shrink LEFT stack, grow RIGHT
+    const req = -dShare;
+    const applied = Math.min(req, shrinkCapLeftStack(), growCap(R));
+    if (applied <= 0) return;
+
+    // shrink from the handle outward: L, L-1, L-2, ...
+    shrinkStack(newShares, L, -1, applied);
+    newShares[R] += applied;
+  } else {
+    // dShare > 0: Move RIGHT: shrink RIGHT stack, grow LEFT
+    const req = dShare;
+    const applied = Math.min(req, shrinkCapRightStack(), growCap(L));
+    if (applied <= 0) return;
+
+    shrinkStack(newShares, R, 1, applied);
+    newShares[L] += applied;
+  }
+
+  const sum = sumArray(newShares);
+  if (Math.abs(sum - 1) > EPSILON && sum > 0 && Number.isFinite(sum)) {
+    return newShares.map((share) => share / sum);
+  }
+
+  return newShares;
 }
 
 /**
@@ -453,22 +555,6 @@ export function createResizeSolver(params: {
   function moveHandle(ndx: number, deltaPx: number) {
     const ids = order();
     const n = ids.length;
-    if (ndx < 0 || ndx >= n - 1) return;
-
-    const panels = panelsInOrder();
-    const usable = Math.max(
-      0,
-      params.size() - Math.max(0, n - 1) * params.gutter()
-    );
-    if (usable <= 0) return;
-
-    // +dShare => handle right: left grows, right stack shrinks
-    // -dShare => handle left: left stack shrinks, right grows
-    const dShare = deltaPx / usable;
-    if (!Number.isFinite(dShare) || dShare === 0) return;
-
-    const L = ndx;
-    const R = ndx + 1;
 
     // Drags anchor to the RENDERED layout (what the user sees), which can
     // differ from the intent shares when constraints or pins are active.
@@ -476,94 +562,17 @@ export function createResizeSolver(params: {
     // manual resizing is the one interaction that redefines intent from
     // rendered reality.
     const rendered = untrack(layout).shares;
-    const shares = ids.map((id) => rendered.get(id) ?? panelData[id]!.share);
+    const next = moveHandleShares({
+      panels: panelsInOrder(),
+      shares: ids.map((id) => rendered.get(id) ?? panelData[id]!.share),
+      index: ndx,
+      deltaPx,
+      usable: Math.max(0, params.size() - Math.max(0, n - 1) * params.gutter()),
+    });
+    if (!next) return;
 
-    const bounds = (i: number) => {
-      if (i < 0 || i >= panels.length) return [0, 0];
-      const minPx = panels[i].minSize ?? 0;
-      const maxPx = panels[i].maxSize ?? Infinity;
-      const minS = Math.max(0, minPx / usable);
-      const maxS = Number.isFinite(maxPx) ? maxPx / usable : 1;
-      return [minS, maxS] as const;
-    };
-
-    const growCap = (i: number) => {
-      const [, maxS] = bounds(i);
-      return Math.max(0, maxS - shares[i]);
-    };
-
-    // Shrink panels outward from the handle until the requested space is freed.
-    const shrinkStack = (
-      newShares: number[],
-      from: number,
-      dir: 1 | -1,
-      amount: number
-    ) => {
-      let remain = amount;
-      for (let i = from; i >= 0 && i < n && remain > EPSILON; i += dir) {
-        const [minS] = bounds(i);
-        const take = Math.min(Math.max(0, newShares[i] - minS), remain);
-        newShares[i] -= take;
-        remain -= take;
-      }
-    };
-
-    const shrinkCapLeftStack = () => {
-      let cap = 0;
-      for (let i = L; i >= 0; i--) {
-        const [minS] = bounds(i);
-        cap += Math.max(0, shares[i] - minS);
-      }
-      return cap;
-    };
-
-    const shrinkCapRightStack = () => {
-      let cap = 0;
-      for (let i = R; i < n; i++) {
-        const [minS] = bounds(i);
-        cap += Math.max(0, shares[i] - minS);
-      }
-      return cap;
-    };
-
-    if (dShare < 0) {
-      // Move LEFT: shrink LEFT stack, grow RIGHT
-      const req = -dShare;
-      const capShrinkLeft = shrinkCapLeftStack();
-      const capGrowR = growCap(R);
-      const applied = Math.min(req, capShrinkLeft, capGrowR);
-      if (applied <= 0) return;
-
-      const newShares = shares.slice();
-      // shrink from the handle outward: L, L-1, L-2, ...
-      shrinkStack(newShares, L, -1, applied);
-      newShares[R] += applied;
-
-      for (let i = 0; i < n; i++) {
-        panelData[ids[i]].share = newShares[i];
-      }
-    } else {
-      // dShare > 0: Move RIGHT: shrink RIGHT stack, grow LEFT
-      const req = dShare;
-      const capShrinkRight = shrinkCapRightStack();
-      const capGrowL = growCap(L);
-      const applied = Math.min(req, capShrinkRight, capGrowL);
-      if (applied <= 0) return;
-
-      const newShares = shares.slice();
-      shrinkStack(newShares, R, 1, applied);
-      newShares[L] += applied;
-
-      for (let i = 0; i < n; i++) {
-        panelData[ids[i]].share = newShares[i];
-      }
-    }
-
-    const sum = sumArray(ids.map((id) => panelData[id]?.share ?? 0));
-    if (Math.abs(sum - 1) > EPSILON && sum > 0 && Number.isFinite(sum)) {
-      for (const id of ids) {
-        panelData[id].share = panelData[id].share / sum;
-      }
+    for (let i = 0; i < n; i++) {
+      panelData[ids[i]].share = next[i];
     }
 
     setDirty('manual');

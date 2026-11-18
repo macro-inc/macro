@@ -1,40 +1,22 @@
 import { QueryClient } from '@tanstack/solid-query';
-import { ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountEmailMutation } from './tests/mutation';
 
 const mocks = vi.hoisted(() => ({
-  graphqlEnabled: true,
   cacheEnabled: true,
-  markSeen: vi.fn(),
-  updateLabel: vi.fn(),
   getLabels: vi.fn(),
-  legacyPatch: vi.fn(),
   graphqlMutation: vi.fn(),
   refresh: vi.fn(),
 }));
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => mocks.graphqlEnabled,
-}));
 vi.mock('@service-email/client', () => ({
-  emailClient: {
-    markThreadAsSeen: mocks.markSeen,
-    updateThreadLabel: mocks.updateLabel,
-    updateThreadState: mocks.updateLabel,
-    getUserLabels: mocks.getLabels,
-  },
+  emailClient: { getUserLabels: mocks.getLabels },
 }));
 vi.mock('../client', () => ({
   get queryClient() {
     return client;
   },
 }));
-vi.mock('../soup/cache', () => ({
-  optimisticUpdateSoupEntity: mocks.legacyPatch,
-  refetchSoupEntity: vi.fn(),
-}));
+vi.mock('../soup/cache', () => ({ refetchSoupEntity: vi.fn() }));
 vi.mock('../soup/graphql/active-queries', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../soup/graphql/active-queries')>()),
   refreshActiveGraphqlSoupQueries: mocks.refresh,
@@ -48,9 +30,6 @@ vi.mock('./graphql/thread', () => ({
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
-}));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.graphqlEnabled }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@macro-inc/observability', () => ({ Telemetry: { error: vi.fn() } }));
@@ -67,6 +46,7 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { soupOptimisticResolvers } from '../optimistic-resolvers';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
+import { soupKeys } from '../soup/keys';
 import { emailKeys } from './keys';
 import {
   trackExternalThreadArchive,
@@ -91,9 +71,7 @@ function hasReadPatch(value: unknown, isRead: boolean): boolean {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.graphqlEnabled = true;
   mocks.cacheEnabled = true;
-  mocks.legacyPatch.mockReturnValue({ rollback: vi.fn() });
   mocks.refresh.mockResolvedValue(undefined);
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   client.setQueryData(emailKeys.labels.queryKey, {
@@ -132,23 +110,26 @@ describe('external archive disposition', () => {
 });
 
 describe('email read state with GraphQL Soup', () => {
-  it.each([
-    { read: true, graphql: true },
-    { read: false, graphql: true },
-    { read: true, graphql: false },
-    { read: false, graphql: false },
-  ])(
-    'propagates isRead=$read before the request settles (GraphQL=$graphql)',
-    async ({ read, graphql }) => {
-      mocks.graphqlEnabled = graphql;
+  it.each([true, false])(
+    'propagates isRead=%s before the request settles',
+    async (read) => {
+      const folderKeys = ['spam', 'trash'].map(
+        (emailView) =>
+          soupKeys.astItems({
+            params: {},
+            body: { emailView },
+            transport: 'rest',
+          }).queryKey
+      );
+      const allKey = soupKeys.astItems({
+        params: {},
+        body: { emailView: 'all' },
+      }).queryKey;
+      for (const key of [...folderKeys, allKey])
+        client.setQueryData(key, { pages: [] });
       let finish!: () => void;
       const network = new Promise<void>((resolve) => {
         finish = resolve;
-      });
-      const restRequest = read ? mocks.markSeen : mocks.updateLabel;
-      restRequest.mockImplementation(async () => {
-        await network;
-        return ok(undefined);
       });
       // The call supplies variables; the shared registry supplies the optimistic fields.
       mocks.graphqlMutation.mockReturnValue({
@@ -165,54 +146,40 @@ describe('email read state with GraphQL Soup', () => {
         read ? useMarkThreadAsSeenMutation : useMarkThreadAsUnreadMutation,
         client
       );
-      const result = mutation.mutateAsync({
-        threadId: 'thread',
-        linkId: 'inbox',
-      });
+      const result = mutation.mutateAsync({ threadId: 'thread' });
       try {
         await vi.waitFor(() =>
-          expect(
-            graphql ? mocks.graphqlMutation : restRequest
-          ).toHaveBeenCalledOnce()
+          expect(mocks.graphqlMutation).toHaveBeenCalledOnce()
         );
         expect(mutation.isPending).toBe(true);
-        if (graphql) {
-          const [document, variables] = mocks.graphqlMutation.mock.calls[0];
-          expect(document).toBe(
-            read ? MarkEmailThreadSeenDocument : MarkEmailThreadUnreadDocument
-          );
-          expect(variables).toEqual({
-            input: { threadId: 'thread' },
-          });
-          expect(
-            hasReadPatch(
-              predictOptimisticMutation(
-                soupOptimisticResolvers,
-                document,
-                variables
-              )?.response,
-              read
-            ),
-            'A legacy Soup patch does not update GraphqlSoupEmailThread.isRead'
-          ).toBe(true);
-          expect(restRequest).not.toHaveBeenCalled();
-          expect(mocks.legacyPatch).not.toHaveBeenCalled();
-        } else {
-          expect(mocks.graphqlMutation).not.toHaveBeenCalled();
-          expect(mocks.legacyPatch).toHaveBeenCalledWith(
-            expect.objectContaining({
-              tag: 'emailThread',
-              data: { id: 'thread', isRead: read },
-            })
-          );
-        }
+        const [document, variables] = mocks.graphqlMutation.mock.calls[0];
+        expect(document).toBe(
+          read ? MarkEmailThreadSeenDocument : MarkEmailThreadUnreadDocument
+        );
+        expect(variables).toEqual({
+          input: { threadId: 'thread' },
+        });
+        expect(
+          hasReadPatch(
+            predictOptimisticMutation(
+              soupOptimisticResolvers,
+              document,
+              variables
+            )?.response,
+            read
+          ),
+          'A legacy Soup patch does not update GraphqlSoupEmailThread.isRead'
+        ).toBe(true);
         expect(mocks.refresh).not.toHaveBeenCalled();
       } finally {
         finish();
         await result;
       }
-      // The cached record carries the change to every list.
+      // Shared-cache lists stay local; isolated folder previews need a new read.
       expect(mocks.refresh).not.toHaveBeenCalled();
+      for (const key of folderKeys)
+        expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+      expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
     }
   );
 
@@ -248,10 +215,7 @@ describe('email read state with GraphQL Soup', () => {
         useMarkThreadAsUnreadMutation,
         client
       );
-      const result = mutation.mutateAsync({
-        threadId: 'thread',
-        linkId: 'secondary-inbox',
-      });
+      const result = mutation.mutateAsync({ threadId: 'thread' });
       try {
         await vi.waitFor(() =>
           expect(mocks.graphqlMutation).toHaveBeenCalledOnce()
@@ -271,7 +235,6 @@ describe('email read state with GraphQL Soup', () => {
         ).toBe(true);
         expect(mutation.isPending).toBe(true);
         expect(mocks.getLabels).not.toHaveBeenCalled();
-        expect(mocks.legacyPatch).not.toHaveBeenCalled();
         expect(mocks.refresh).not.toHaveBeenCalled();
       } finally {
         finish();
@@ -332,7 +295,6 @@ describe('email read state with GraphQL Soup', () => {
             .revalidations
         ).toEqual([{ document: SoupDocument, variables: grouped }]);
         expect(mocks.refresh).not.toHaveBeenCalled();
-        expect(mocks.markSeen).not.toHaveBeenCalled();
       } finally {
         unregisterMaintained();
         unregisterGrouped();

@@ -1,4 +1,5 @@
 import { isInBlock } from '@core/block';
+import { virtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { getScrollParent } from '@core/util/scrollParent';
 import {
@@ -17,7 +18,7 @@ import {
 } from '@floating-ui/dom';
 import { Telemetry } from '@macro-inc/observability';
 import type { Accessor, JSX } from 'solid-js';
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup, onMount } from 'solid-js';
 import { iosSafePadding, iosSizeMiddleware } from './iosFloatingMiddleware';
 
 const DEFAULT_SPACING = 8;
@@ -36,6 +37,8 @@ function style(el: HTMLElement, styles: Partial<JSX.CSSProperties>) {
 
 type FloatWithSelectionOptions = {
   selection: Selection | undefined | null;
+  /** Use this anchor when the browser selection is missing or has no geometry. */
+  fallbackElement?: Element | null;
   reactiveOnContainer?: HTMLElement | null;
   useBlockBoundary?: boolean;
   spacing?: number;
@@ -110,8 +113,15 @@ export function floatWithSelection(
     null
   );
   let decidedPlacement: Placement | null = null;
+  let positionVersion = 0;
 
   function toReference(anchor: Range | Element): ReferenceElement {
+    const fallback = accessor()?.fallbackElement;
+    if (fallback) {
+      const rect = anchor.getBoundingClientRect();
+      // Removing an inline command can leave a caret with no geometry.
+      if (rect.width === 0 && rect.height === 0) return fallback;
+    }
     return accessor()?.clipToVisible && anchor instanceof Range
       ? visibleRangeReference(anchor)
       : anchor;
@@ -124,6 +134,7 @@ export function floatWithSelection(
   ) {
     let room = 0;
     await computePosition(toReference(anchor), floatingEl, {
+      strategy: 'fixed',
       placement,
       middleware: [
         offset(spacing),
@@ -154,10 +165,9 @@ export function floatWithSelection(
   async function setInitialFloatingPosition(
     selection: Selection | null | undefined
   ) {
-    if (!selection) return;
-    let anchor: Range | Element | null = null;
+    let anchor: Range | Element | null = accessor()?.fallbackElement ?? null;
 
-    if (selection.rangeCount >= 1) {
+    if (selection && selection.rangeCount >= 1) {
       // Snapshot the caret. getRangeAt() is live, so focusing a picker
       // search field would rewrite this anchor and hide() the menu.
       const range = selection.getRangeAt(0).cloneRange();
@@ -168,7 +178,7 @@ export function floatWithSelection(
       } else {
         anchor = range;
       }
-    } else if (selection.anchorNode instanceof Element) {
+    } else if (selection?.anchorNode instanceof Element) {
       anchor = selection.anchorNode;
     }
 
@@ -177,7 +187,6 @@ export function floatWithSelection(
       const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
       const fullHeight = accessor()?.fullHeight;
       if (fullHeight !== undefined) {
-        decidedPlacement = await sideWithRoomFor(anchor, fullHeight, spacing);
         await updatePosition();
         return;
       }
@@ -204,6 +213,7 @@ export function floatWithSelection(
             hide(),
           ],
           ...floatingOptions,
+          strategy: 'fixed',
         }
       );
 
@@ -214,15 +224,24 @@ export function floatWithSelection(
 
   async function updatePosition() {
     let current = currentAnchor();
-    if (!current || !decidedPlacement) return;
+    if (!current) return;
+    const version = ++positionVersion;
 
     const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
+    const fullHeight = accessor()?.fullHeight;
+    if (fullHeight !== undefined) {
+      const placement = await sideWithRoomFor(current, fullHeight, spacing);
+      if (version !== positionVersion) return;
+      decidedPlacement = placement;
+    }
+    if (!decidedPlacement) return;
     const onAvailableHeight = accessor()?.onAvailableHeight;
     const { x, y, middlewareData } = await computePosition(
       toReference(current),
       floatingEl,
       {
         placement: decidedPlacement,
+        strategy: 'fixed',
         middleware: [
           offset(spacing),
           shift({ padding: iosSafePadding(spacing), boundary }),
@@ -233,6 +252,7 @@ export function floatWithSelection(
         ],
       }
     );
+    if (version !== positionVersion) return;
 
     style(floatingEl, {
       left: `${x}px`,
@@ -298,6 +318,9 @@ export function floatWithSelection(
     }
   });
 
+  createEffect(
+    on(virtualKeyboardHeight, repositionInBackground, { defer: true })
+  );
   createEffect(() => {
     cleanupAutoUpdate();
     const reference = currentAnchor();
@@ -318,6 +341,7 @@ export function floatWithSelection(
   });
 
   onCleanup(() => {
+    positionVersion++;
     document.removeEventListener('selectionchange', selectionChangeHandler);
     scrollParent?.removeEventListener('scroll', scrollHandler);
     resizeObserver.disconnect();

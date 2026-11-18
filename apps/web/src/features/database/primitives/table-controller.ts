@@ -167,7 +167,14 @@ export function createTableController(
           if (written.isErr()) {
             const failure = written.error;
             const outcomeUnknown = failure.kind === 'outcome-unknown';
-            if (outcomeUnknown && (await source.refresh('after-write')).isErr())
+            if (
+              outcomeUnknown &&
+              (
+                await span.span('database.rows.refresh', async () =>
+                  source.refresh('after-write')
+                )
+              ).isErr()
+            )
               setRefreshWarning(true);
             const failed: FailedWrite = {
               mutation,

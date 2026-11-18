@@ -110,7 +110,7 @@ describe('MacroToolCall unfinished calls', () => {
       <MacroToolCall
         detail={{
           kind: 'macro',
-          input: { input: query() },
+          input: { query: query() },
           output: null,
           error: null,
         }}

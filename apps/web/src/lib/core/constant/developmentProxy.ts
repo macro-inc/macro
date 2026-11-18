@@ -6,6 +6,8 @@ export const DEVELOPMENT_PROXY_TARGETS = {
   pdf: 'https://pdf-service-dev.macro.com',
   sync: 'https://sync-service-dev3.macroverse.workers.dev',
   editing: 'https://ai-editing-worker-dev.macroverse.workers.dev',
+  // The machine's local LGTM collector (`just run_local` starts it).
+  otlp: 'http://localhost:4318',
 } as const;
 
 export const DEVELOPMENT_PROXY_PREFIX = '/__macro_dev';

@@ -930,6 +930,45 @@ fn a_prompt_error_carrying_a_notice_fails_its_turn_with_the_notice() {
     );
 }
 
+/// A native Herdr turn stopped while a Macro prompt waited behind it: the
+/// native turn's own `cancelled` end arrives first and must not close the
+/// prompt's turn, so the prompt's not-delivered error is what the reader sees.
+#[test]
+fn a_prompt_stopped_before_delivery_fails_with_its_notice_after_the_native_turn_ends() {
+    let log = concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s1","prompt":[{"type":"text","text":"merge conflict fix"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"CI is still running."}}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s1"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"_session/turn_complete","params":{"sessionId":"s1","outcome":{"kind":"cancelled"}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","error":{"code":-32603,"#,
+        r#""message":"the prompt was stopped before it reached the native agent","#,
+        r#""data":{"kind":"prompt_not_delivered","title":"Message not delivered","#,
+        r#""body":"Send it again."}}}}"#,
+    );
+
+    let messages = fold(parse_log(log));
+
+    // The prompt, the native turn's output it failed on, and the Stop.
+    assert_eq!(messages.len(), 3);
+    let agent = &messages[1];
+    assert_eq!(
+        agent.stop,
+        Some(StopReason::Failed {
+            message: "the prompt was stopped before it reached the native agent".to_owned(),
+            notice: Some(FailureNotice {
+                kind: FailureNoticeKind::PromptNotDelivered,
+                title: "Message not delivered".to_owned(),
+                body: "Send it again.".to_owned(),
+                link: None,
+            }),
+        })
+    );
+}
+
 /// Error `data` that is not a notice - another runtime's debugging payload -
 /// leaves the failure opaque rather than half-parsed.
 #[test]

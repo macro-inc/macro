@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, str::FromStr, thread, time::Duration};
+use std::{fs::File, io::Write, str::FromStr};
 
 use anyhow::Context;
 use axum::{
@@ -14,15 +14,11 @@ use model::{
     document::FileType,
     response::{EmptyResponse, ErrorResponse},
 };
-use nix::{
-    libc::exit,
-    unistd::{ForkResult, fork},
-};
-use rs_libreoffice_bindings::Office;
 
 use crate::{
     config::LOK_PATH,
-    utils::{cleanup_folder, get_lok_filter_from_file_types},
+    process::convert::run_lok_conversion,
+    utils::{cleanup_folder, conversion_timeout, get_lok_filter_from_file_types},
 };
 
 use super::context::{ApiContext, AuthorizationService};
@@ -124,8 +120,11 @@ pub async fn handler(
             .into_response()
     })?;
 
-    let mut file =
-        File::create(format!("./{}/IN.{}", job_id, from_file_type.as_str())).map_err(|e| {
+    let in_file_path = format!("./{}/IN.{}", job_id, from_file_type.as_str());
+    let out_file_path = format!("./{}/OUT.{}", job_id, to_file_type.as_str());
+
+    let result = async {
+        let mut file = File::create(&in_file_path).map_err(|e| {
             tracing::error!(error=?e, job_id=%job_id, "unable to create file");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -136,138 +135,68 @@ pub async fn handler(
                 .into_response()
         })?;
 
-    file.write_all(&file_content).map_err(|e| {
-        tracing::error!(error=?e, job_id=%job_id, "unable to write file");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "unable to write file".into(),
-            }),
-        )
-            .into_response()
-    })?;
-
-    let in_file_path = format!("./{}/IN.{}", job_id, from_file_type.as_str());
-    let out_file_path = format!("./{}/OUT.{}", job_id, to_file_type.as_str());
-
-    let office_path = &*LOK_PATH;
-    let mut child_pids = vec![];
-    match unsafe { fork() } {
-        Ok(ForkResult::Parent { child }) => {
-            tracing::info!(job_id=%job_id, "parent process: spawned child with PID: {}", child);
-            child_pids.push(child);
-        }
-        Ok(ForkResult::Child) => unsafe {
-            tracing::info!(job_id=%job_id, "child process: initializing lok");
-            std::env::set_var("SAL_LOG", "");
-            let result: anyhow::Result<()> = (|| {
-                let office = Office::new(office_path)
-                    .map_err(|e| anyhow::anyhow!(e))
-                    .context("unable to initialize lok")?;
-                let document = office
-                    .load_document(&in_file_path)
-                    .map_err(|e| anyhow::anyhow!(e))
-                    .context("unable to load document")?;
-                document
-                    .save_as(&out_file_path, to_file_type.as_str(), &filter)
-                    .map_err(|e| anyhow::anyhow!(e))
-                    .context("unable to save document")?;
-
-                drop(document);
-                drop(office);
-                Ok(())
-            })();
-
-            match result {
-                Ok(_) => exit(0),
-                Err(e) => {
-                    tracing::error!(job_id=%job_id, error=?e, "unable to convert");
-                    exit(1)
-                }
-            }
-        },
-        Err(err) => {
-            tracing::error!(job_id=%job_id, error=?err, "fork failed");
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "fork failed".into(),
-                }),
-            )
-                .into_response());
-        }
-    }
-
-    let mut status_code = 1;
-    loop {
-        if child_pids.is_empty() {
-            break;
-        }
-
-        thread::sleep(Duration::from_millis(100));
-
-        // check for completed children
-        child_pids.retain(|&pid| {
-            match nix::sys::wait::waitpid(
-                nix::unistd::Pid::from_raw(pid.into()),
-                Some(nix::sys::wait::WaitPidFlag::WNOHANG),
-            ) {
-                Ok(nix::sys::wait::WaitStatus::StillAlive) => true,
-                Ok(nix::sys::wait::WaitStatus::Exited(_, status)) => {
-                    tracing::debug!(job_id=%job_id, status=status, "pid {} completed", pid);
-                    status_code = status;
-                    false
-                }
-                _ => {
-                    tracing::warn!(job_id=%job_id, "pid {} completed without exiting", pid);
-                    false
-                }
-            }
-        });
-    }
-
-    if status_code != 0 {
-        tracing::error!(job_id=%job_id, status=status_code, "conversion failed with non-zero status code");
-        if let Err(e) = cleanup_folder(&job_id) {
-            tracing::error!(error=?e, job_id=%job_id, "unable to cleanup folder");
-        }
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "conversion failed".into(),
-            }),
-        )
-            .into_response());
-    }
-
-    let file_content = std::fs::read(out_file_path).map_err(|e| {
-        tracing::error!(error=?e, job_id=%job_id, "unable to read file");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "unable to read file".into(),
-            }),
-        )
-            .into_response()
-    })?;
-
-    ctx.s3_client
-        .put(&req.to_bucket, &req.to_key, &file_content)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, job_id=%job_id, "unable to upload file");
+        file.write_all(&file_content).map_err(|e| {
+            tracing::error!(error=?e, job_id=%job_id, "unable to write file");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to upload file".into(),
+                    message: "unable to write file".into(),
                 }),
             )
                 .into_response()
         })?;
 
+        run_lok_conversion(
+            &job_id,
+            &LOK_PATH,
+            &in_file_path,
+            &out_file_path,
+            to_file_type.as_str(),
+            &filter,
+            conversion_timeout(&from_file_type, &to_file_type),
+        )
+        .map_err(|e| {
+            tracing::error!(error=?e, job_id=%job_id, "conversion failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "conversion failed".into(),
+                }),
+            )
+                .into_response()
+        })?;
+
+        let file_content = std::fs::read(&out_file_path).map_err(|e| {
+            tracing::error!(error=?e, job_id=%job_id, "unable to read file");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to read file".into(),
+                }),
+            )
+                .into_response()
+        })?;
+
+        ctx.s3_client
+            .put(&req.to_bucket, &req.to_key, &file_content)
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, job_id=%job_id, "unable to upload file");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        message: "unable to upload file".into(),
+                    }),
+                )
+                    .into_response()
+            })
+    }
+    .await;
+
     if let Err(e) = cleanup_folder(&job_id) {
         tracing::error!(error=?e, job_id=%job_id, "unable to cleanup folder");
     }
+    result?;
 
     Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())
 }

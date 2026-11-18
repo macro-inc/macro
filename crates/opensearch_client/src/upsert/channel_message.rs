@@ -1,6 +1,10 @@
 use models_opensearch::SearchIndex;
 
-use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
+use crate::{
+    Result,
+    date_format::EpochMillis,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 /// The arguments for upserting a channel message into the opensearch index.
 /// Threadless messages are indexed with `thread_id == message_id`.
@@ -38,23 +42,20 @@ pub(crate) async fn upsert_channel_message(
         .body(args)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_channel_message".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::UpsertChannelMessage, &err)
         })?;
 
     let status_code = response.status_code();
     if status_code.is_success() {
         tracing::trace!(id=%id, "channel message upserted successfully");
     } else {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some("upsert_channel_message".to_string()),
-                })?;
+        let body = response.text().await.map_err(|err| {
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::UpsertChannelMessage,
+                &err,
+            )
+        })?;
 
         tracing::error!(
             status_code=%status_code,
@@ -64,7 +65,7 @@ pub(crate) async fn upsert_channel_message(
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("upsert_channel_message".to_string()),
+            operation: OpensearchOperation::UpsertChannelMessage,
         });
     }
     Ok(())

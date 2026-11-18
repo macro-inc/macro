@@ -52,6 +52,40 @@ describe('updateNotificationsForEntities', () => {
     vi.clearAllMocks();
   });
 
+  it.each(['MARK_SEEN', 'MARK_DONE'] as const)(
+    'sends %s for modern projects without targeting legacy folders',
+    async (operation) => {
+      const initiative = toNotificationEntityRef({
+        type: 'initiative',
+        id: 'project-1',
+      });
+      const folder = toNotificationEntityRef({
+        type: 'project',
+        id: 'project-1',
+      });
+      if (!initiative || !folder) {
+        throw new Error('Both project types must support notification writes');
+      }
+
+      await updateNotificationsForEntities({
+        entities: [initiative, folder],
+        operation,
+        expectedNotificationIds: ['notification-1'],
+      });
+
+      expect(
+        mocks.updateGraphqlNotificationsForEntities
+      ).toHaveBeenCalledExactlyOnceWith({
+        entities: [
+          { entityType: 'INITIATIVE', entityId: 'project-1' },
+          { entityType: 'PROJECT', entityId: 'project-1' },
+        ],
+        operation,
+        expectedNotificationIds: ['notification-1'],
+      });
+    }
+  );
+
   it('relies on normalized cache updates when the cache is active', async () => {
     await updateNotificationsForEntities({
       entities: [{ type: 'channel', id: 'channel-1' }],
