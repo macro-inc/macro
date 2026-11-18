@@ -39,7 +39,7 @@ export type ChannelParticipantsMutationVariables = {
 
 /**
  * Re-reads the channel's GraphQL record after a write the normalized cache
- * cannot apply itself (a bot or agent joining, an approved request,
+ * cannot apply itself (a bot or agent change, an approved request,
  * auto-join), so a cached roster no reader has open does not stay stale for
  * the next cache-first read. Never fails the write that asked for it.
  */
