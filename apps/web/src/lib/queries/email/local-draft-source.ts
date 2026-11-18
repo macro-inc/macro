@@ -5,6 +5,7 @@ import type {
 } from '@app/features/next-soup/filters/filter-store/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
+import { hashKey } from '@tanstack/solid-query';
 import {
   type Accessor,
   createEffect,
@@ -19,7 +20,7 @@ import { listLocalDrafts, localDraftStore } from './local-drafts';
 
 export { localDraftEntities } from './local-draft-entities';
 
-const userInfoHash = JSON.stringify(authKeys.userInfo.queryKey);
+const userInfoHash = hashKey(authKeys.userInfo.queryKey);
 
 /**
  * What `listLocalDrafts` reads from `userInfo`: the signed-in account, and
@@ -41,6 +42,7 @@ export function createLocalDraftSource(enabled: Accessor<boolean>) {
   const [ready, setReady] = createSignal(false);
   let generation = 0;
   let disposed = false;
+  let failed = false;
   const refresh = async () => {
     const request = ++generation;
     if (!enabled()) {
@@ -52,11 +54,16 @@ export function createLocalDraftSource(enabled: Accessor<boolean>) {
     try {
       const entries = await listLocalDrafts();
       span.setAttr('email.draft_count', entries.length);
-      if (!disposed && request === generation)
+      if (!disposed && request === generation) {
+        failed = false;
         setDrafts(entries.sort((a, b) => b.updatedAt - a.updatedAt));
+      }
     } catch {
       span.error('Unable to read local email drafts');
-      if (!disposed && request === generation) setDrafts([]);
+      if (!disposed && request === generation) {
+        failed = true;
+        setDrafts([]);
+      }
     } finally {
       span.end();
       if (!disposed && request === generation) setReady(true);
@@ -64,18 +71,24 @@ export function createLocalDraftSource(enabled: Accessor<boolean>) {
   };
   // Notifications can arrive mid-disposal (an observer removed by navigation),
   // where reading `enabled` re-runs the disposing owner's stale memos.
-  const scheduleRefresh = () =>
+  let scheduled = false;
+  const scheduleRefresh = () => {
+    if (scheduled) return;
+    scheduled = true;
     queueMicrotask(() => {
+      scheduled = false;
       if (!disposed) fireAndForget(refresh(), 'email-local-drafts');
     });
+  };
   const unsubscribe = localDraftStore.subscribe(scheduleRefresh);
   // Observer and fetch-status events leave the identity unchanged, and fire
-  // many times a second while views mount.
+  // many times a second while views mount. A signed-in listing that failed
+  // (storage unavailable) still retries on them, as nothing else would.
   let identity = storageIdentity();
   const auth = queryClient.getQueryCache().subscribe((event) => {
     if (event.query.queryHash !== userInfoHash) return;
     const next = storageIdentity();
-    if (next === identity) return;
+    if (next === identity && !(failed && next)) return;
     identity = next;
     scheduleRefresh();
   });

@@ -105,7 +105,9 @@ describe('local draft discovery', () => {
       queryClient.setQueryData(authKeys.userInfo.queryKey, (user) => user, {
         updatedAt: performance.timeOrigin - 1,
       });
-      queryClient.setQueryData(authKeys.userQuota.queryKey, { unrelated: true });
+      queryClient.setQueryData(authKeys.userQuota.queryKey, {
+        unrelated: true,
+      });
       await settle();
       expect(runtime.list).not.toHaveBeenCalled();
 
@@ -139,6 +141,34 @@ describe('local draft discovery', () => {
       expect(runtime.list).toHaveBeenCalledTimes(5);
     } finally {
       dispose();
+    }
+  });
+
+  it('retries a failed listing on the next user-info event until it succeeds', async () => {
+    signIn('owner');
+    runtime.list.mockRejectedValueOnce(new Error('storage unavailable'));
+    const state = createRoot((dispose) => ({
+      source: createLocalDraftSource(() => true),
+      dispose,
+    }));
+    const observe = () =>
+      new QueryObserver(queryClient, {
+        queryKey: authKeys.userInfo.queryKey,
+        enabled: false,
+      }).subscribe(() => {})();
+    try {
+      await settle();
+      expect(state.source.drafts()).toEqual([]);
+      runtime.list.mockResolvedValue([draft()]);
+      observe();
+      await settle();
+      expect(state.source.drafts()).toHaveLength(1);
+      expect(runtime.list).toHaveBeenCalledTimes(2);
+      observe();
+      await settle();
+      expect(runtime.list).toHaveBeenCalledTimes(2);
+    } finally {
+      state.dispose();
     }
   });
 
