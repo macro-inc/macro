@@ -1,0 +1,269 @@
+.github/workspace-dep-closures.json
+  s_6ef9a2b0a7dc1c::t_bd0475cc302644 975-976,1398-1440
+.sqlx/query-0f6c9ac05ceabd7985b1fff67574cd19b63bf853992d21f61ae2bbd26924e165.json
+  s_6ef9a2b0a7dc1c::t_04f56e1173d668 1-15
+.sqlx/query-35ad8c76578312391c49b1d5afa74f8d9ad20780de12e5eea561204bf9803e22.json
+  s_6ef9a2b0a7dc1c::t_36b6ca1fbd7f62 1-16
+.sqlx/query-448d1a581faae48a83e7c897263b2574739e4ae9c3e2a3c3a49fc688d737117e.json
+  s_6ef9a2b0a7dc1c::t_a37dbb88f98e1f 1-19
+.sqlx/query-551739bf4326e610a344884239ad020ccf46aeccfbf8fd8ad9bfdcb9f9321f51.json
+  s_6ef9a2b0a7dc1c::t_447ba99252c875 1-16
+.sqlx/query-63fecf5720079a9eb0ef3c0493b410f5a3660abf907b52475804eeff9da142e0.json
+  s_6ef9a2b0a7dc1c::t_6846875ecec188 1-47
+.sqlx/query-816e87bbb5c4693cd20456f1a32c3ca06da29c573045e810ad8b5aa485b5d6d6.json
+  s_6ef9a2b0a7dc1c::t_24dcb0f878906c 1-46
+.sqlx/query-aab41e689f69a5afb18863aad8a1ec6c2d18bc7092e78dfc1a27c9b80088c490.json
+  s_6ef9a2b0a7dc1c::t_c4ece423345ece 1-19
+.sqlx/query-c50fc0191728afca30adc7095234550c9f28c29134fca1db62c354f0c2758435.json
+  s_6ef9a2b0a7dc1c::t_97eca59f5ea2d3 1-18
+.sqlx/query-e62baf832a861e8737a777680cc386bbbb1547b94a25602d51ca21cecb2b3138.json
+  s_6ef9a2b0a7dc1c::t_b5ff7a5bb29332 1-17
+.sqlx/query-ee67841194dbd676956e9a873597c35008c1b58d81255698171025cad844270c.json
+  s_6ef9a2b0a7dc1c::t_09f68a9779ba05 1-14
+.sqlx/query-ff090fde68a39849c07cfaad092aee8d4a7258a3f26e1a3a9d7003d74f36dec0.json
+  s_6ef9a2b0a7dc1c::t_7eab1b429fbe13 1-40
+Cargo.lock
+  s_6ef9a2b0a7dc1c::t_00bb165c10dd43 663,920-951
+Cargo.toml
+  s_6ef9a2b0a7dc1c::t_2190daa7b14206 34
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_6ef9a2b0a7dc1c::t_d51229541074f5 20,84-87,4073-4138,4389-4445,4503-4789
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentToolPermissions.ts
+  s_6ef9a2b0a7dc1c::t_821c7426937e5a 1-40
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentToolPermissionsSessionRules.ts
+  s_6ef9a2b0a7dc1c::t_a6d81e7b91e199 1-13
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_6ef9a2b0a7dc1c::t_6ecdbc0c757083 109-110,320,343,474,478-500
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/loosenedOperation.ts
+  s_6ef9a2b0a7dc1c::t_91c606fc0670ac 1-23
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/permissionAction.ts
+  s_6ef9a2b0a7dc1c::t_24f35ba05d0070 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/tightenToolPermissionsResponse.ts
+  s_6ef9a2b0a7dc1c::t_92afa8ae337cda 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionAction.ts
+  s_6ef9a2b0a7dc1c::t_18d6ee0f6444f6 1-29
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionAppliedTo.ts
+  s_6ef9a2b0a7dc1c::t_11a8d43f534820 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalog.ts
+  s_6ef9a2b0a7dc1c::t_68f081ec2a8ef7 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalogAction.ts
+  s_6ef9a2b0a7dc1c::t_474b084f83f1d8 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalogGroup.ts
+  s_6ef9a2b0a7dc1c::t_60c80e478c785a 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalogTool.ts
+  s_6ef9a2b0a7dc1c::t_1cd0fec0a77432 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionChange.ts
+  s_6ef9a2b0a7dc1c::t_7cc049df6a24db 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionChangeState.ts
+  s_6ef9a2b0a7dc1c::t_dfabd560e82150 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionChanges.ts
+  s_6ef9a2b0a7dc1c::t_ab1ebb9389d722 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionError.ts
+  s_6ef9a2b0a7dc1c::t_3590fb39fc7b5b 1-23
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionErrorOperations.ts
+  s_6ef9a2b0a7dc1c::t_dfe9511c9e194c 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionErrorTargets.ts
+  s_6ef9a2b0a7dc1c::t_c02e1b563f543a 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionGroup.ts
+  s_6ef9a2b0a7dc1c::t_4bc170027773dd 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionOrigin.ts
+  s_6ef9a2b0a7dc1c::t_367f8cb96f11d2 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionOverride.ts
+  s_6ef9a2b0a7dc1c::t_e1b8366558bbdf 1-24
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionPolicyKind.ts
+  s_6ef9a2b0a7dc1c::t_5bbe5bdcfd2532 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionRule.ts
+  s_6ef9a2b0a7dc1c::t_dccd5128dabae1 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionState.ts
+  s_6ef9a2b0a7dc1c::t_e2fa8234e68f58 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTarget.ts
+  s_6ef9a2b0a7dc1c::t_73a0ad36b5f605 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOf.ts
+  s_6ef9a2b0a7dc1c::t_1cb9109ade397e 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfKind.ts
+  s_6ef9a2b0a7dc1c::t_a94cc0d0b32097 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfThree.ts
+  s_6ef9a2b0a7dc1c::t_d83bc28eed622b 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfThreeKind.ts
+  s_6ef9a2b0a7dc1c::t_354f37f92ae7c2 1-14
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_6ef9a2b0a7dc1c::t_f333058f4444a8 3544-3604,3803-3841,3876-4166,5675-5737,7743-7769,7948-7952,9120-9134,9150-9475,9893-9896
+crates/agent_correlation/src/scope.rs
+  s_6ef9a2b0a7dc1c::t_79cc9e9b9d5ee5 34-35,101-102
+crates/agent_correlation/src/scope/test.rs
+  s_6ef9a2b0a7dc1c::t_2371e4a745bb7e 185-189,224-225
+crates/agent_permission_registry/Cargo.toml
+  s_6ef9a2b0a7dc1c::t_ea6a7a8d027f7e 8-11,15-16
+crates/agent_permission_registry/registry.json
+  s_a79cb5c5d752a9::t_b3932df5499da9 54-56,88,92,96,149,208,530,669,671-673,784,786-787,833-843,852,854,883-884,961,975
+crates/agent_permission_registry/src/lib.rs
+  s_6ef9a2b0a7dc1c::t_5a280c635d4ca4 13-14,22-23,39-67,136-150
+crates/agent_permission_registry/src/test.rs
+  s_6ef9a2b0a7dc1c::t_5954516f8d0aa4 69-83
+crates/agent_permissions/AGENTS.md
+  s_6ef9a2b0a7dc1c::t_78e13cf63102d4 1-51
+crates/agent_permissions/CLAUDE.md
+  s_6ef9a2b0a7dc1c::t_62bffefd3003bd 1
+crates/agent_permissions/Cargo.toml
+  s_6ef9a2b0a7dc1c::t_5b7a4c0f2e8ef3 1-36
+crates/agent_permissions/fixtures/permissions.sql
+  s_6ef9a2b0a7dc1c::t_79f938fc3ec4ca 1-10
+crates/agent_permissions/src/domain.rs
+  s_6ef9a2b0a7dc1c::t_68db21c284ed4b 1-7
+crates/agent_permissions/src/domain/model.rs
+  s_6ef9a2b0a7dc1c::t_6c1b5fbd172ed8 1-493
+crates/agent_permissions/src/domain/ports.rs
+  s_6ef9a2b0a7dc1c::t_10a39184bdbe3f 1-101
+crates/agent_permissions/src/domain/resolve.rs
+  s_6ef9a2b0a7dc1c::t_f7fbb4d3b54520 1-331
+crates/agent_permissions/src/domain/resolve/test.rs
+  s_6ef9a2b0a7dc1c::t_3497d24800b9b9 1-348
+crates/agent_permissions/src/domain/service.rs
+  s_6ef9a2b0a7dc1c::t_dca9a546bf6c58 1-640
+crates/agent_permissions/src/domain/service/test.rs
+  s_6ef9a2b0a7dc1c::t_2ca90b7066399d 1-676
+crates/agent_permissions/src/inbound.rs
+  s_6ef9a2b0a7dc1c::t_fafeabf4356086 1-3
+crates/agent_permissions/src/inbound/axum_router.rs
+  s_6ef9a2b0a7dc1c::t_8c9ef70cb897dc 1-438
+crates/agent_permissions/src/inbound/axum_router/test.rs
+  s_6ef9a2b0a7dc1c::t_6400ca68fb3a6a 1-345
+crates/agent_permissions/src/lib.rs
+  s_6ef9a2b0a7dc1c::t_82f2967a86d3cf 1-14
+crates/agent_permissions/src/outbound.rs
+  s_6ef9a2b0a7dc1c::t_38ef201fac2740 1-4
+crates/agent_permissions/src/outbound/pg.rs
+  s_6ef9a2b0a7dc1c::t_26a954e0efdf06 1-396
+crates/agent_permissions/src/outbound/pg/test.rs
+  s_6ef9a2b0a7dc1c::t_3df40cdb08aa3a 1-333
+crates/agent_permissions/src/outbound/registry.rs
+  s_6ef9a2b0a7dc1c::t_301160319bd218 1-27
+crates/macro_db_client/migrations/20261118191436_agent_tool_permissions.sql
+  s_6ef9a2b0a7dc1c::t_d22aa139c4972c 1-71
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_33167d4cf077ea::t_797b2387e6f884 9,12-13
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_33167d4cf077ea::t_ef9ea6d57a18b9 13-14,20,51
+packages/sdk-ocaml/generated/agent_harness.ml
+  s_33167d4cf077ea::t_08accd6a80606c 2666-3043,6084-6119,6883-7182,9162-9192,9315-9336,9360-9492
+packages/sdk-ocaml/generated/agent_harness.mli
+  s_33167d4cf077ea::t_791f960bb70da6 1516-1708,3501-3522,3994-4170,4959-4968,5015-5021,5031-5073
+packages/sdk-ocaml/generated/auth.ml
+  s_33167d4cf077ea::t_6a88ad2174402c 675-690,1125-1127,1129,1146,1148,1159,1161,1167-1168,4087-4114,5062,5073,5084,5151-5179,5899-5907,8118-8140,8790-8791,8818-8857,8859-8883
+packages/sdk-ocaml/generated/auth.mli
+  s_33167d4cf077ea::t_39efc8d6aa6b7d 383-393,647-649,651,668,670,2375-2387,2970,3012-3031,3476-3484,4150-4159,4387-4388,4391,4397-4405
+packages/sdk-ocaml/generated/calendar.ml
+  s_33167d4cf077ea::t_cec436d55516e3 184-187,215,239,259,265,713
+packages/sdk-ocaml/generated/calendar.mli
+  s_661bd9a2a08729::t_db6c2b9177fab3 97-100,128,379
+packages/sdk-ocaml/generated/email.ml
+  s_33167d4cf077ea::t_a18ac653e7fbc0 3532,3543,3555
+packages/sdk-ocaml/generated/email.mli
+  s_33167d4cf077ea::t_67b847d5f70ae8 1809
+packages/sdk-ocaml/generated/notification.ml
+  s_33167d4cf077ea::t_ec3628c4d39e41 2815-2818,2830-2833,2845,2849-2850,4631-4632,4643,4653,4658-4659,4725-4726,4728,4751-4754
+packages/sdk-ocaml/generated/notification.mli
+  s_33167d4cf077ea::t_a2f0c41fd7c418 1555-1558,1567,2476-2477,2488,2518,2523-2524
+packages/sdk-ocaml/generated/scheduled_action.ml
+  s_33167d4cf077ea::t_41e145b51fa257 6374-6378
+packages/sdk-ocaml/generated/scheduled_action.mli
+  s_ce4c4fb10e3875::t_03f4d04fbf3a03 3239-3243
+packages/sdk-ocaml/generated/search.ml
+  s_33167d4cf077ea::t_1ed3877fe02426 222-244,3224-3243,3245-3247,3262-3263,3270-3275,3296-3303,3311,3319-3320,3326,3342,3349-3350,3357,3373,3376-3379,3381,3387,3399,3428-3430,3445-3446,3453-3458,3479-3486,3494,3508-3509,3515,3531,3543-3544,3551,3567,3575-3579,3581,3587,3599
+packages/sdk-ocaml/generated/search.mli
+  s_33167d4cf077ea::t_d326700368e2ed 133-142,1825-1833,1835-1837,1852-1853,1860-1865,1886-1893,1901,1909,1915,1927,1946-1948,1963-1964,1971-1976,1997-2004,2012,2026,2032,2044
+packages/sdk-ocaml/generated/storage.ml
+  s_33167d4cf077ea::t_8a24a471c3bae1 7999-8021,13280-13311,13318-13323,13327-13334,13336-13337,28769-28824,28848-28867,28869-28871,28886-28887,28894-28899,28920-28927,28935,28943-28944,28950,28966,28973-28974,28981,28997,29000-29003,29005,29011,29023,29223-29976,30082-30103,30113-30114,30117-30118,30133-30135,30138-30140,30153-30156,30159-30162,30168-30171,30177,30179,30184-30215,30274-30315,32827-32831,32844,32855,32859-32861,40998,47537-47540,47557-47559,47575-47577,47582-47592,59212,59242,59416-59418,59444-59445,60143,60149-60157,60163,60166,60192-60398,60402,60416-60419,65086,65107,66924-66925,66947-66956
+packages/sdk-ocaml/generated/storage.mli
+  s_33167d4cf077ea::t_b0798e7bb37494 4191-4200,7062-7080,7087-7090,15400-15432,15443-15451,15453-15455,15470-15471,15478-15483,15504-15511,15519,15527,15533,15545,15656-16078,16125-16133,16143-16144,16147-16148,16162,16164,16170-16181,16215-16238,17595-17599,17613,22055,25717-25720,25735,31526,31589-31591,31597-31598,31839,31841,31858-31938,31941,33518,34141
+packages/sdk-ocaml/generated/untyped.txt
+  s_33167d4cf077ea::t_ae463d1995f082 83
+packages/sdk/generated/agent-harness/index.ts
+  s_33167d4cf077ea::t_04078800a89bfb 4
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_33167d4cf077ea::t_489e903952f8e8 5,727-735,783-789,797-845
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_33167d4cf077ea::t_076afa353aed9d 749-791,2330-2355,2466-2471,3159-3172,3188-3449,5246-5271,5367-5389,5410-5525
+packages/sdk/specs/agent-harness.json
+  s_6ef9a2b0a7dc1c::t_f309fda5c8e62a 3544-3604,3803-3841,3876-4166,5675-5737,7743-7769,7948-7952,9120-9134,9150-9475,9893-9896
+packages/sdk/src/coverage/skipped.ts
+  s_6ef9a2b0a7dc1c::t_ea3f37069f6fad 45-46
+packages/sdk/src/entities/agent-sessions/agent-session.ts
+  s_6ef9a2b0a7dc1c::t_a95da4bacd8442 21-25,240-255
+packages/sdk/src/entities/agents/agent.ts
+  s_6ef9a2b0a7dc1c::t_14f3945bac71c7 14-19,198-237
+packages/sdk/src/entities/agents/namespace.ts
+  s_6ef9a2b0a7dc1c::t_c8f788719ae8c7 4,58-70
+packages/sdk/src/entities/agents/tool-permissions.ts
+  s_6ef9a2b0a7dc1c::t_fa866f3460fcd3 1-51
+packages/sdk/src/macro.ts
+  s_6ef9a2b0a7dc1c::t_22ed2ae5ad68e2 419-430
+packages/sdk/src/utils/verbs.ts
+  s_6ef9a2b0a7dc1c::t_48017897a25a0a 57,64,71
+services/agent_harness_service/AGENTS.md
+  s_6ef9a2b0a7dc1c::t_8b1f06b51ffb2b 71-77
+services/agent_harness_service/Cargo.toml
+  s_6ef9a2b0a7dc1c::t_f5e48fb8e58126 43
+services/agent_harness_service/src/api.rs
+  s_6ef9a2b0a7dc1c::t_0bfedd7e6c66f4 94,153,307-312,480
+services/agent_harness_service/src/api/swagger.rs
+  s_6ef9a2b0a7dc1c::t_d1e862859f1f74 23-26,142-147,233-237,250-251
+services/agent_harness_service/src/api/test.rs
+  s_6ef9a2b0a7dc1c::t_cbbf257557a36f 439-488
+services/agent_harness_service/src/code_mode.rs
+  s_6ef9a2b0a7dc1c::t_64a2cf13f1b431 396-423
+services/agent_harness_service/src/code_mode/test.rs
+  s_6ef9a2b0a7dc1c::t_cc7ecf33742974 445-446,938-970
+services/agent_harness_service/src/lib.rs
+  s_33167d4cf077ea::t_b8f4b7a42bcd31 47,2154-2176,2266
+services/agent_harness_service/src/tool_permissions.rs
+  s_6ef9a2b0a7dc1c::t_3c8a4355563f72 1-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c20f0b8dd03f83a4212e4acdd31fd2fb9aaacdd9",
+  "prompts": {},
+  "sessions": {
+    "s_33167d4cf077ea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "744ef236-3548-43fa-ada2-62959115fcce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_661bd9a2a08729": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d2d88736-ecda-463f-806d-69cacb50e672",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_6ef9a2b0a7dc1c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11051fc0-48b0-475e-b5e4-4d8327fea0b3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_a79cb5c5d752a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8bf8f92a-181b-4d3a-aaa6-3d5c01f60534",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_ce4c4fb10e3875": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b6b57a6-b78c-40d9-9d42-b7ccad1c549b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
