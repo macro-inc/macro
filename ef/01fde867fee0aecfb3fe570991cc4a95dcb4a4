@@ -1,0 +1,49 @@
+crates/agent_permissions/src/domain/service/test.rs
+  s_6966afebcdde0a::t_5abebec5c7abb7 605-676
+  s_6966afebcdde0a::t_fc25a75c073546 65,102,104-123
+crates/agent_permission_registry/registry.json
+  s_6966afebcdde0a::t_63cbe6d9150d3e 88
+crates/agent_permissions/src/outbound/pg/test.rs
+  s_6966afebcdde0a::t_5abebec5c7abb7 9,16-56,293-328
+  s_ce4c4fb10e3875::t_8cedadc0ffa07c 329-333
+crates/agent_permissions/src/domain/ports.rs
+  s_8981afc07f2525::t_4e4bda84877130 10,12,29-35,37-41,43-44,48-71
+crates/agent_permissions/src/domain/resolve.rs
+  s_8981afc07f2525::t_7f36acb262c8c4 253-257,260,264-266,273
+crates/agent_permissions/src/domain/service.rs
+  s_8981afc07f2525::t_133163db571d35 28-30,150,163,166,363-366,433-438,466-472,474,476,495-499,507,510-544
+crates/agent_permissions/src/outbound/pg.rs
+  s_ce4c4fb10e3875::t_72e8d1cc20d8b2 5-6,14,16-17,94-106,108-195,197,199,202-203,205-207,209-232,234,238-239,241-262,265-315,319-320,323-324,326-331,333-358,362-363,367,372-373,380,389,393
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ef01fde867fee0aecfb3fe570991cc4a95dcb4a4",
+  "prompts": {},
+  "sessions": {
+    "s_6966afebcdde0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13694447-aca1-404a-8fbf-c900186fe6c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8981afc07f2525": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6da24f07-efe5-49b0-8d7a-0a105d9c7ebd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_ce4c4fb10e3875": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b6b57a6-b78c-40d9-9d42-b7ccad1c549b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
