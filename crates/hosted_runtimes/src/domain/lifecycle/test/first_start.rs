@@ -349,3 +349,22 @@ fn a_person_computer_runs_on_a_macrod_that_cannot_take_an_agent() {
     assert_eq!(without, apply(&setting_up(), Event::MacrodConnected));
     assert_eq!(without.0.phase, Phase::Running);
 }
+
+/// A computer that gave up waits for a retry: macrod reconnecting to it hands
+/// no agent over and starts no new deadline.
+#[test]
+fn macrod_reconnecting_to_a_computer_that_gave_up_hands_no_agent_over() {
+    let (connected, _) = apply(&agent_setting_up(), Event::MacrodConnected);
+    let (failed, _) = apply(&connected, Event::AgentStartDue);
+
+    let (_, effects) = apply(&failed, Event::MacrodConnected);
+
+    assert!(!effects.contains(&Effect::DeliverAgent));
+    assert!(!effects.iter().any(|effect| matches!(
+        effect,
+        Effect::ScheduleTimer {
+            kind: TimerKind::AgentStartDue | TimerKind::AgentRedeliver,
+            ..
+        }
+    )));
+}

@@ -553,8 +553,13 @@ pub fn transition(
             next.macrod_connected = true;
             next.macrod_misses = 0;
             // An agent's credentials are handed over only once its
-            // computer is paid for: a charging one waits for the charge.
-            if state.awaiting_agent && !state.macrod_connected && !state.billing.is_charging() {
+            // computer is paid for: a charging one waits for the charge, and
+            // one that gave up waits for a retry.
+            if state.awaiting_agent
+                && !state.macrod_connected
+                && !gave_up(&state.phase)
+                && !state.billing.is_charging()
+            {
                 deliver_agent(&mut effects, now);
             }
             if let Phase::Booting = state.phase {
