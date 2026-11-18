@@ -1,8 +1,21 @@
 import { createTagFacetContext } from '@app/features/soup';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { EmailEntity, EmailFocus } from '@entity';
+import { useEmailFocusQuery } from '@queries/email/focus';
+import { createGraphqlSoupDoneProjection } from '@queries/soup/graphql/done-projection';
+import { usePendingGraphqlSoupDone } from '@queries/soup/graphql/optimistic-done';
+import { batch, createRoot } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { describe, expect, it, vi } from 'vitest';
+import { useEmailTabAvailability } from '../tab-availability';
 import type { EmailDataSourceInput } from './use-email-query';
-import { buildFocusRows, selectFocusEmails } from './use-focus-email-source';
+import {
+  buildFocusRows,
+  selectFocusEmails,
+  useFocusEmailSource,
+} from './use-focus-email-source';
 
 // Exercise the pure selection without UI barrels or live connections.
 vi.mock('@queries/email/focus', () => ({ useEmailFocusQuery: vi.fn() }));
@@ -16,6 +29,7 @@ vi.mock('../tab-availability', () => ({ useEmailTabAvailability: vi.fn() }));
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
+  ...(await import('@app/features/soup/collection/row-store')),
 }));
 vi.mock('@app/features/soup/collection', async () => ({
   ...(await import('@app/features/soup/collection/date-buckets')),
@@ -34,6 +48,9 @@ vi.mock('@entity', async () => ({
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
   createWebSocketJob: vi.fn(),
+}));
+vi.mock('@app/lib/analytics/analytics-context', () => ({
+  useAnalytics: vi.fn(),
 }));
 vi.mock('@service-connection/websocket', () => ({
   ws: { addEventListener: vi.fn(), send: vi.fn() },
@@ -261,5 +278,127 @@ describe('buildFocusRows', () => {
         .filter((row) => row.kind === 'entity')
         .map((row) => row.id);
     expect(entityRowIds('recent')).toEqual(entityRowIds('importance'));
+  });
+});
+
+type FakeFocusQuery = {
+  data: EmailEntity[] | undefined;
+  isFetching: boolean;
+  isLoading: boolean;
+  error: Error | null;
+};
+
+/** The real source over a Focus read the test answers, and what it tracked. */
+function focusSourceHarness() {
+  const track = vi.fn();
+  vi.mocked(useAnalytics).mockReturnValue({
+    track,
+  } as unknown as ReturnType<typeof useAnalytics>);
+  vi.mocked(useGlobalNotificationSource).mockReturnValue(
+    {} as ReturnType<typeof useGlobalNotificationSource>
+  );
+  vi.mocked(withEntityNotifications).mockImplementation(
+    (entity) => entity as ReturnType<typeof withEntityNotifications>
+  );
+  vi.mocked(useEmailTabAvailability).mockReturnValue(() => 'on');
+  vi.mocked(usePendingGraphqlSoupDone).mockReturnValue(() => []);
+  vi.mocked(createGraphqlSoupDoneProjection).mockReturnValue(
+    ((_key: string, data: unknown) => data) as ReturnType<
+      typeof createGraphqlSoupDoneProjection
+    >
+  );
+  const [query, setQuery] = createStore<FakeFocusQuery>({
+    data: undefined,
+    isFetching: false,
+    isLoading: false,
+    error: null,
+  });
+  vi.mocked(useEmailFocusQuery).mockReturnValue(
+    query as unknown as ReturnType<typeof useEmailFocusQuery>
+  );
+  const [state, setState] = createStore<EmailDataSourceInput>({
+    tab: 'all',
+    search: '',
+    inboxIds: undefined,
+    facets: {},
+    focusSort: 'recent',
+  });
+  const dispose = createRoot((dispose) => {
+    useFocusEmailSource(state, {
+      tagSets: () => [],
+      tagSetsReady: () => true,
+    });
+    return dispose;
+  });
+  /** Shows the tab and answers the read it starts with `emails`. */
+  const open = (emails: EmailEntity[]) => {
+    batch(() => {
+      setState('tab', 'focus');
+      setQuery('isFetching', true);
+    });
+    batch(() => {
+      setQuery('data', emails);
+      setQuery('isFetching', false);
+    });
+  };
+  const opened = () =>
+    track.mock.calls
+      .filter(([event]) => event === 'email_focus_tab_opened')
+      .map(([, payload]) => payload);
+  return { state, setState, setQuery, open, opened, dispose };
+}
+
+describe('useFocusEmailSource analytics', () => {
+  it('reports a visit with the rows the tab shows', () => {
+    const tab = focusSourceHarness();
+    tab.open(EMAILS);
+    expect(tab.opened()).toEqual([
+      { rows: 3, threads: 3, narrowed: false, sort: 'recent' },
+    ]);
+    tab.dispose();
+  });
+
+  it('reports a filtered tab as narrowed, with the threads behind it', () => {
+    const tab = focusSourceHarness();
+    tab.setState('search', 'Casey');
+    tab.setState('focusSort', 'importance');
+    tab.open(EMAILS);
+    expect(tab.opened()).toEqual([
+      { rows: 1, threads: 3, narrowed: true, sort: 'importance' },
+    ]);
+    tab.dispose();
+  });
+
+  it('leaves Done threads out of the count', () => {
+    const tab = focusSourceHarness();
+    tab.open([...EMAILS, email('done', { importance: 40 }, { done: true })]);
+    expect(tab.opened()).toEqual([
+      { rows: 3, threads: 3, narrowed: false, sort: 'recent' },
+    ]);
+    tab.dispose();
+  });
+
+  it('reports a return from its own read, not the rows kept from the last', () => {
+    const tab = focusSourceHarness();
+    tab.open([]);
+    tab.setState('tab', 'all');
+    // The kept empty list shows at once, before the new read is answered.
+    tab.open(EMAILS);
+    expect(tab.opened().map((payload) => payload.rows)).toEqual([0, 3]);
+    tab.dispose();
+  });
+
+  it('does not report a read that fails', () => {
+    const tab = focusSourceHarness();
+    batch(() => {
+      tab.setState('tab', 'focus');
+      tab.setQuery('isFetching', true);
+    });
+    batch(() => {
+      tab.setQuery('error', new Error('read failed'));
+      tab.setQuery('isFetching', false);
+    });
+    expect(tab.opened()).toEqual([]);
+    tab.dispose();
   });
 });
