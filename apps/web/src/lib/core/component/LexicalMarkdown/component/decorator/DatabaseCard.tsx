@@ -1,18 +1,12 @@
 import { DatabaseCardSkeleton } from '@app/features/block-database/component/DatabaseCardSkeleton';
+import { lazy } from '@core/util/lazy';
 import {
   $convertCardToMention,
   $isDocumentCardNode,
   type DocumentCardDecoratorProps,
 } from '@macro-inc/lexical-core';
 import { $getNodeByKey, SKIP_DOM_SELECTION_TAG } from 'lexical';
-import {
-  createSignal,
-  lazy,
-  onCleanup,
-  Show,
-  Suspense,
-  useContext,
-} from 'solid-js';
+import { createSignal, onCleanup, Show, Suspense, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { LexicalInteractiveBoundary } from '../core/LexicalInteractiveBoundary';
 

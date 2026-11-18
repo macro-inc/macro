@@ -23,3 +23,6 @@ pub mod tool_approvals;
 
 /// MCP tool exchanges with credentials isolated per invocation.
 pub mod actor_mcp;
+
+/// Pacing each account's MCP exchanges per upstream, with 429 retries.
+pub mod budgeted_mcp;

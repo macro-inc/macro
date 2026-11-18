@@ -208,6 +208,8 @@ where
         .await
         {
             Ok(result) => Ok(result),
+            // Refused before it ran: the caller paces and retries it.
+            Err(error @ EgressError::RateLimited { .. }) => Err(error),
             Err(error) if !listing => {
                 tracing::warn!(?error, "actor MCP exchange failed");
                 Ok(tool_error_result(UNKNOWN_OUTCOME.into()))
@@ -278,6 +280,9 @@ where
     }
 }
 
+/// What a call the upstream refused with HTTP 429 says: it did not run.
+const RATE_LIMITED: &str = "The app is rate limiting the selected account; this call did not run. Make fewer calls and try again later.";
+
 /// One MCP exchange with an upstream server, as an outbound span: where it
 /// went, how big it was and how it ended. Never its arguments or result.
 async fn traced_exchange(
@@ -328,8 +333,15 @@ async fn traced_exchange(
             };
             span.record("mcp.outcome", outcome);
         }
-        Err(_) => {
-            span.record("mcp.outcome", "upstream_error");
+        Err(error) => {
+            // The limiter's own `mcp.call_budget` span, inside this one,
+            // records its waits, attempts and refusals.
+            let outcome = if matches!(error, EgressError::RateLimited { .. }) {
+                "rate_limited"
+            } else {
+                "upstream_error"
+            };
+            span.record("mcp.outcome", outcome);
             span.record("otel.status_code", "ERROR");
         }
     }
@@ -370,6 +382,9 @@ async fn exchange_result(
     let mut result =
         match traced_exchange(transport, session, actor, upstream, destination, request).await {
             Ok(result) => result,
+            Err(EgressError::RateLimited { .. }) if !listing => {
+                return Ok(tool_result_response(id, RATE_LIMITED.into()));
+            }
             Err(error) if !listing => {
                 tracing::warn!(?error, "actor MCP exchange failed");
                 return Ok(tool_result_response(id, UNKNOWN_OUTCOME.into()));

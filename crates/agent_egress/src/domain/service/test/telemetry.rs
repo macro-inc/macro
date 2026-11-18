@@ -12,8 +12,15 @@ use tracing::span::{Attributes, Id, Record};
 use tracing_subscriber::layer::{Context as LayerContext, Layer, SubscriberExt as _};
 use tracing_subscriber::registry::LookupSpan;
 
-/// Answers a call with `answer`, or fails the exchange when it is `None`.
-struct AnsweringTransport(Option<Value>);
+/// How the upstream answers a call.
+#[derive(Clone)]
+enum Answer {
+    Result(Value),
+    Fails,
+    RateLimited,
+}
+
+struct AnsweringTransport(Answer);
 
 #[async_trait::async_trait]
 impl ActorMcpTransport for AnsweringTransport {
@@ -24,9 +31,15 @@ impl ActorMcpTransport for AnsweringTransport {
         _: UpstreamCall,
         _: Value,
     ) -> Result<Value, EgressError> {
-        self.0
-            .clone()
-            .ok_or_else(|| EgressError::Upstream(rootcause::report!("HTTP 429 Too Many Requests")))
+        match self.0.clone() {
+            Answer::Result(value) => Ok(value),
+            Answer::Fails => Err(EgressError::Upstream(rootcause::report!(
+                "HTTP 502 Bad Gateway"
+            ))),
+            Answer::RateLimited => Err(EgressError::RateLimited {
+                retry_after: Some(std::time::Duration::from_secs(1)),
+            }),
+        }
     }
 }
 
@@ -90,7 +103,7 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for ClosedSpans {
     }
 }
 
-async fn exchange(answer: Option<Value>, destination: McpDestination) -> Fields {
+async fn exchange(answer: Answer, destination: McpDestination) -> Fields {
     let captured = closed_exchanges();
     let service = gated(prompted_by(Some(owner())), SpyCredentials::knowing())
         .with_actor_mcp(Arc::new(AnsweringTransport(answer)));
@@ -120,7 +133,7 @@ async fn exchange(answer: Option<Value>, destination: McpDestination) -> Fields 
 async fn an_exchange_records_where_it_went_how_big_and_how_it_ended() {
     let linear = McpDestination::Connected(McpServerSlug::parse("linear").unwrap());
     let ok = exchange(
-        Some(json!({"content":[{"type":"text","text":"ok"}]})),
+        Answer::Result(json!({"content":[{"type":"text","text":"ok"}]})),
         linear.clone(),
     )
     .await;
@@ -138,18 +151,22 @@ async fn an_exchange_records_where_it_went_how_big_and_how_it_ended() {
     );
 
     let refused = exchange(
-        Some(json!({"content":[{"type":"text","text":"no"}],"isError":true})),
+        Answer::Result(json!({"content":[{"type":"text","text":"no"}],"isError":true})),
         linear.clone(),
     )
     .await;
     assert_eq!(refused["mcp.outcome"], "tool_error");
 
-    let failed = exchange(None, linear).await;
+    let failed = exchange(Answer::Fails, linear.clone()).await;
     assert_eq!(failed["mcp.outcome"], "upstream_error");
     assert_eq!(failed["otel.status_code"], "ERROR");
 
+    let paced = exchange(Answer::RateLimited, linear).await;
+    assert_eq!(paced["mcp.outcome"], "rate_limited");
+    assert_eq!(paced["otel.status_code"], "ERROR");
+
     let key = CustomMcpServerKey::parse("c491e4f2db62532ac6bc94f43fb214cf").unwrap();
-    let custom = exchange(Some(json!({"content":[]})), McpDestination::Custom(key)).await;
+    let custom = exchange(Answer::Result(json!({"content":[]})), McpDestination::Custom(key)).await;
     assert_eq!(custom["app.kind"], "custom");
     assert_eq!(custom["app.key"], "c491e4f2db62532ac6bc94f43fb214cf");
 }

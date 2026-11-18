@@ -12,8 +12,8 @@
 //! newer mail arrives, since nothing reclassifies a thread as it ages.
 //! A thread that can be in Focus also gets the day its mail says it is due.
 //! Threads holding only the owner's own sent mail stay out:
-//! they are not inbox threads, and nothing marks one Done. Only inboxes on the
-//! worker's allowlist are classified.
+//! they are not inbox threads, and nothing marks one Done. Only inboxes whose
+//! owner is in the Focus rollout are classified.
 
 mod calendar;
 mod importance;
@@ -30,14 +30,16 @@ pub use importance::importance_at;
 pub use input::{is_dismissive_reply, new_text};
 pub use models::{
     CalendarNotice, CalendarPart, DueDateInput, DueDateMessage, FocusAnswers, FocusCategory,
-    FocusInbox, FocusMail, FocusMessage, FocusRecord, FocusSignals, FocusThread, FocusVerdict,
-    ImportanceTrend, SentNote, StaleThread, StoredClassification, ThreadFocus,
+    FocusInbox, FocusInboxOwner, FocusMail, FocusMessage, FocusRecord, FocusSignals, FocusThread,
+    FocusVerdict, ImportanceTrend, SentNote, StaleThread, StoredClassification, ThreadFocus,
 };
 pub use ports::{
-    DueDateExtractor, FocusClassifier, FocusClassifierError, FocusNotifier, FocusStore,
-    ProfileSource,
+    DueDateExtractor, FocusClassifier, FocusClassifierError, FocusEnrollment, FocusNotifier,
+    FocusStore, ProfileSource,
 };
 pub use questions::{FOCUS_QUESTIONS, FocusQuestion};
 pub use rule::{FOCUS_RULE_VERSION, decide};
-pub use service::{ClassifyOutcome, FocusQueries, FocusService, SweepReport};
+pub use service::{
+    ClassifyOutcome, DueDates, EnrolledInboxes, FocusQueries, FocusService, SweepReport,
+};
 pub use signals::RECENT_CONTACT_DAYS;
