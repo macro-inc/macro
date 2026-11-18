@@ -67,6 +67,31 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             }),
         };
         if let Err(error) = result {
+            // A refusal is decided before anything reaches the calendar, so a
+            // move refused on its first attempt left the event where it was:
+            // put the booking back at that time and release the time it asked
+            // for. A later attempt follows one whose outcome was never
+            // recorded and may have moved the event, so it is only abandoned.
+            if let (
+                Error::CalendarRejected,
+                CalendarOperationKind::Move {
+                    status,
+                    original_start,
+                },
+                0,
+            ) = (&error, &operation.kind, operation.attempt)
+            {
+                let length = record.booking.ends_at - record.booking.starts_at;
+                record.booking.starts_at = *original_start;
+                record.booking.ends_at = *original_start + length;
+                record.busy_start = record.booking.starts_at
+                    - Duration::minutes(i64::from(record.event.before_minutes));
+                record.busy_end = record.booking.ends_at
+                    + Duration::minutes(i64::from(record.event.after_minutes));
+                record.booking.status = *status;
+                tracing::warn!(booking_id = %record.booking.id, error = ?error, "scheduling move refused; booking kept at its original time");
+                return self.persist_completion(record).await;
+            }
             record.booking.status = BookingStatus::Failed;
             // A failure that may still clear is retried until the meeting
             // starts: an event in the past is not worth creating or moving.
