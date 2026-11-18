@@ -423,6 +423,9 @@ In that backtest, both fired only for search-processing-service, whose
 11-10. The 10-28 and 11-04 bursts stayed quiet, and no other group fired.
 
 Lag goes missing while a group rebalances, and the monitors do not notify on
-missing data: a crash-looping consumer shows gaps, not an alert. Consumers that
+missing data: a crash-looping consumer shows gaps, not an alert. The day-long
+monitor also skips a group whose day has more than three hours without data,
+or none in its first hour, and keeps its last state; the far-behind monitor
+still covers a large backlog. Consumers that
 commit no offsets, such as the independent notification consumers, report no
 lag ([Notification retention coverage](#notification-retention-coverage)).

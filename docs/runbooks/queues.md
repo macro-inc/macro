@@ -65,7 +65,8 @@ days before that happens.
   not lag.
 - A group no running code reads (a renamed `GROUP_NAME`, a topic dropped from
   a subscription) keeps its committed offsets for 7 days after its last member
-  leaves, and its lag grows until Kafka expires them. Deleting its offsets or
+  leaves, or for a dropped topic, after its last commit there. Its lag grows
+  until Kafka expires them. Deleting its offsets or
   muting that group is for the owners.
 - Do not read `aws.kafka.estimated_max_time_lag` as event age: it divides
   lag by the current consumption rate and reads years when a consumer slows.

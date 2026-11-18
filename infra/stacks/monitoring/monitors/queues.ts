@@ -165,7 +165,7 @@ prodMonitor('kafka-consumer-not-caught-up', {
   requireFullWindow: true,
   pages: false,
   description:
-    "{{consumer_group.name}}'s lag on {{topic.name}} has not dropped below {{value}} events in 24 hours; healthy groups fall under 100 within a day. When this first fires on a busy topic, the oldest unread event is about a day old: about six days remain before the topic's 7-day retention deletes events the group has not read.",
+    "{{consumer_group.name}}'s lag on {{topic.name}} has not dropped below {{value}} events in 24 hours; healthy groups fall under 100 within a day. When this first fires on a busy topic, the oldest unread event is at most about a day old: about six days remain before the topic's 7-day retention deletes events the group has not read.",
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/queues.md#kafka-consumer-lag',
 });
