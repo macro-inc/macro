@@ -242,17 +242,23 @@ export function createInputActions(
       return selectedAgent()?.unavailableReason;
   };
   const emailDrafts = new Map<string, SubmissionDraft>();
-  // A submission saves under a draft id the client mints, sent as a client
-  // handle until a save returns the server's ids. It keeps that draft until
-  // it succeeds, so a retry after a lost response or a failed send saves the
-  // same draft rather than a second one. A draft stays in the inbox it was
-  // saved to, so choosing another inbox starts a new draft.
-  const submissionDraft = (
+  // Each submission saves into one draft and keeps it until the submission
+  // succeeds. A new draft is saved under a handle the client mints, which the
+  // service maps to one row, so a save retried after a lost response lands on
+  // the same draft. A draft stays in its inbox: choosing another inbox after
+  // a failed send deletes the saved draft and starts a new one there.
+  const submissionDraft = async (
     input: Submission,
     inboxId: string
-  ): SubmissionDraft => {
+  ): Promise<SubmissionDraft> => {
     const known = emailDrafts.get(input.id);
     if (known?.inboxId === inboxId) return known;
+    if (known?.kind === 'saved')
+      await email.drafts.deleteDraft({
+        draftId: known.draftId,
+        threadId: known.threadId,
+        inboxId: known.inboxId,
+      });
     const minted: SubmissionDraft = {
       kind: 'minted',
       inboxId,
@@ -291,12 +297,9 @@ export function createInputActions(
     const account = captureQueryAccount(userId);
     assertQueryAccount(account);
     const inboxId = selectedInbox(input.fields)!.id;
-    const { ids, clientHandles } = draftAddress(
-      submissionDraft(input, inboxId)
-    );
+    const draft = await submissionDraft(input, inboxId);
     const saved = await email.drafts.saveDraft({
-      draft: { ...emailMessage(input), ...ids },
-      clientHandles,
+      ...draftSave(draft, emailMessage(input)),
       inboxId,
     });
     assertQueryAccount(account);
@@ -396,23 +399,29 @@ export function createInputActions(
       })
       .with('email', async () => {
         const inboxId = selectedInbox(f)!.id;
-        const prior = submissionDraft(input, inboxId);
-        const { ids, clientHandles } = draftAddress(prior);
         const message = emailMessage(input);
-        const saved = await email.drafts.saveDraft({
-          draft: { ...message, ...ids },
-          clientHandles,
-          inboxId,
-        });
+        const prior = await submissionDraft(input, inboxId);
+        // A send carries the whole message, so a retry after a failed send
+        // sends the draft it saved without saving it again.
+        const draft =
+          prior.kind === 'saved'
+            ? prior
+            : savedDraft(
+                prior,
+                await email.drafts.saveDraft({
+                  ...draftSave(prior, message),
+                  inboxId,
+                })
+              );
         assertQueryAccount(account);
-        // A failed send is retried with the draft this save made.
-        const draft = savedDraft(prior, saved);
         emailDrafts.set(input.id, draft);
-        const address = draftAddress(draft);
         const sent = await email.delivery.sendMessage({
           inboxId,
-          message: { ...message, ...address.ids },
-          clientHandles: address.clientHandles,
+          message: {
+            ...message,
+            db_id: draft.draftId,
+            thread_db_id: draft.threadId,
+          },
         });
         emailDrafts.delete(input.id);
         return {
@@ -545,33 +554,36 @@ export type InputActions = ReturnType<typeof createInputActions>;
  */
 type SubmissionDraft = { inboxId: string } & (
   | { kind: 'minted'; handles: DraftClientHandles }
-  | { kind: 'saved'; draftId: string; threadId?: string }
+  | SavedDraft
 );
 
+type SavedDraft = { kind: 'saved'; draftId: string; threadId: string };
+
 /**
- * How a save or send names a submission's draft: by the server's ids once a
- * save returned them, before that by the minted handle. The handle goes in
+ * A save of a submission's draft: by the server's ids once a save returned
+ * them, before that by the minted handle. The handle goes in
  * `clientHandles`, because `draft.db_id` holds only server ids.
  */
-function draftAddress(draft: SubmissionDraft) {
+function draftSave<T extends object>(draft: SubmissionDraft, message: T) {
   return match(draft)
     .with({ kind: 'saved' }, ({ draftId, threadId }) => ({
-      ids: { db_id: draftId, thread_db_id: threadId },
+      draft: { ...message, db_id: draftId, thread_db_id: threadId },
       clientHandles: undefined,
     }))
     .with({ kind: 'minted' }, ({ handles }) => ({
-      ids: {},
+      draft: message,
       clientHandles: handles,
     }))
     .exhaustive();
 }
 
-/** The draft a submission keeps after a save: the ids the save returned. */
+/** The draft a submission keeps once a save returned the server's ids. */
 function savedDraft(
   prior: SubmissionDraft,
   saved: DraftSaveResult
-): SubmissionDraft {
-  if (!saved.draftId) return prior;
+): SubmissionDraft & SavedDraft {
+  if (!saved.draftId || !saved.threadId)
+    throw new Error('The email draft was saved without an id');
   return {
     kind: 'saved',
     inboxId: prior.inboxId,

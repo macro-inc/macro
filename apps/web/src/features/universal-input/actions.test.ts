@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   accountCurrent: true,
   referencesUnavailable: false,
   saveEmail: vi.fn(),
+  deleteEmail: vi.fn(),
   sendEmail: vi.fn(),
   connectGoogle: vi.fn(),
   event: vi.fn(),
@@ -178,7 +179,7 @@ vi.mock('@app/features/email-compose/compose-adapter', () => ({
       primaryId: () => 'inbox',
       loading: () => false,
     },
-    drafts: { saveDraft: mocks.saveEmail },
+    drafts: { saveDraft: mocks.saveEmail, deleteDraft: mocks.deleteEmail },
     delivery: { sendMessage: mocks.sendEmail },
   }),
 }));
@@ -245,10 +246,7 @@ const UUID_V7 =
   /^[\da-f]{8}-[\da-f]{4}-7[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/;
 async function withActions<T>(
   snapshot: Submission,
-  run: (
-    actions: ReturnType<typeof createInputActions>,
-    snapshot: Submission
-  ) => Promise<T>
+  run: (actions: ReturnType<typeof createInputActions>) => Promise<T>
 ) {
   return await createRoot(async (dispose) => {
     try {
@@ -260,27 +258,14 @@ async function withActions<T>(
           intent: () => snapshot.intent,
         }
       );
-      return await run(actions, snapshot);
+      return await run(actions);
     } finally {
       dispose();
     }
   });
 }
 async function execute(snapshot: Submission) {
-  return await createRoot(async (dispose) => {
-    try {
-      return await createInputActions(
-        () => snapshot.fields,
-        'macro|me@example.com',
-        {
-          navigate: (next) => mocks.replace({ next }),
-          intent: () => snapshot.intent,
-        }
-      ).submit(snapshot);
-    } finally {
-      dispose();
-    }
-  });
+  return await withActions(snapshot, (actions) => actions.submit(snapshot));
 }
 beforeEach(() => {
   vi.clearAllMocks();
@@ -541,7 +526,8 @@ describe('destination adapters', () => {
     expect(clientHandles).toBeUndefined();
   });
   it('saves a new draft under a draft handle the save accepts', async () => {
-    await withActions(input('email'), (actions, submission) =>
+    const submission = input('email');
+    await withActions(submission, (actions) =>
       actions.saveEmailDraft(submission)
     );
     const { draft, clientHandles, inboxId } = mocks.saveEmail.mock.calls[0][0];
@@ -553,7 +539,8 @@ describe('destination adapters', () => {
   });
   it('retries a failed save under the same draft handle', async () => {
     mocks.saveEmail.mockRejectedValueOnce(new Error('offline'));
-    await withActions(input('email'), async (actions, submission) => {
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
       await expect(actions.submit(submission)).rejects.toThrow('offline');
       await actions.submit(submission);
     });
@@ -564,26 +551,52 @@ describe('destination adapters', () => {
     expect(second).toBe(first);
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
   });
-  it('retries a failed send with the draft it saved', async () => {
+  it('retries a failed send by sending the draft it saved', async () => {
     mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
-    await withActions(input('email'), async (actions, submission) => {
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
       await expect(actions.submit(submission)).rejects.toThrow('refused');
+      submission.fields.body = 'Hello John, see you at one';
       await actions.submit(submission);
     });
-    const retry = mocks.saveEmail.mock.calls[1][0];
-    expect(retry.draft).toMatchObject({
+    // Saving a confirmed draft again would queue a working copy the send
+    // then refuses; the send carries the whole message instead.
+    expect(mocks.saveEmail).toHaveBeenCalledTimes(1);
+    const [first, retry] = mocks.sendEmail.mock.calls.map(([call]) => call);
+    for (const send of [first, retry])
+      expect(send.message).toMatchObject({
+        db_id: 'draft',
+        thread_db_id: 'thread',
+      });
+    expect(retry.message.body_macro).toBe('Hello John, see you at one');
+  });
+  it('saves into the draft a failed send saved', async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
+      await expect(actions.submit(submission)).rejects.toThrow('refused');
+      await actions.saveEmailDraft(submission);
+    });
+    const save = mocks.saveEmail.mock.calls[1][0];
+    expect(save.draft).toMatchObject({
       db_id: 'draft',
       thread_db_id: 'thread',
     });
-    expect(retry.clientHandles).toBeUndefined();
+    expect(save.clientHandles).toBeUndefined();
   });
-  it('starts a new draft when a retry is sent from another inbox', async () => {
+  it('moves a failed send to another inbox by deleting its draft', async () => {
     mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
-    await withActions(input('email'), async (actions, submission) => {
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
       await expect(actions.submit(submission)).rejects.toThrow('refused');
       // A draft stays in its inbox: the retry from another one saves anew.
       submission.fields.inboxId = 'work';
       await actions.submit(submission);
+    });
+    expect(mocks.deleteEmail).toHaveBeenCalledWith({
+      draftId: 'draft',
+      threadId: 'thread',
+      inboxId: 'inbox',
     });
     const retry = mocks.saveEmail.mock.calls[1][0];
     expect(retry.inboxId).toBe('work');
@@ -592,9 +605,11 @@ describe('destination adapters', () => {
     expect(retry.clientHandles.draftId).not.toBe(
       mocks.saveEmail.mock.calls[0][0].clientHandles.draftId
     );
+    expect(mocks.sendEmail.mock.calls[1][0].inboxId).toBe('work');
   });
   it('saves a later submission as a new draft', async () => {
-    await withActions(input('email'), async (actions, submission) => {
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
       await actions.submit(submission);
       await actions.submit({ ...submission, id: 'next-id' });
     });
