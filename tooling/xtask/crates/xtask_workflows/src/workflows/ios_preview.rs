@@ -71,9 +71,10 @@ fn preview() -> Job {
         .runs_on(runners::Runner::MacOsTahoeArm.to_string())
         .cond(Expression::new(labelled_and_open()))
         // A cold run — fresh nix store, no cached aarch64-apple-ios-sim
-        // artifacts — measured 11m15s. This leaves room for a slower runner
-        // without letting a genuinely hung xcodebuild sit for an hour.
-        .timeout_minutes(40u32)
+        // artifacts — measured 11m15s on Sequoia, but 40 minutes on the Tahoe
+        // image, 31 of them fetching the dev shell from cache.nixos.org. This
+        // leaves room for that without letting a hung xcodebuild sit for long.
+        .timeout_minutes(60u32)
         .permissions(
             Permissions::default()
                 .contents(Level::Read)
