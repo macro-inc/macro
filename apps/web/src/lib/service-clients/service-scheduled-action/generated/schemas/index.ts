@@ -351,5 +351,7 @@ export * from './templateVariableOneOfFiveKind';
 export * from './templateVariableOneOfKind';
 export * from './templateVariableOneOfThree';
 export * from './templateVariableOneOfThreeKind';
+export * from './unusableKnob';
+export * from './unusableKnobItem';
 export * from './upgradeOutcome';
 export * from './variableFill';

@@ -7,7 +7,11 @@
  */
 
 /**
- * A kind of item an entity knob names: one Macro's SDK has a handle for.
+ * A kind of item an entity knob names: each kind the app's entity picker
+offers, which Macro's SDK has a handle for, and whole databases. Its
+name is the SDK's for the kind (`EntityReference`'s `type`, which the
+handle's `entityType` repeats), except `task`, a document that is a
+task.
  */
 export type RoutineKnobEntityType =
   (typeof RoutineKnobEntityType)[keyof typeof RoutineKnobEntityType];
@@ -19,4 +23,10 @@ export const RoutineKnobEntityType = {
   project: 'project',
   database: 'database',
   user: 'user',
+  task: 'task',
+  email_thread: 'email_thread',
+  chat: 'chat',
+  crm_company: 'crm_company',
+  crm_contact: 'crm_contact',
+  initiative: 'initiative',
 } as const;
