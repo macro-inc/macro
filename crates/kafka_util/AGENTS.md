@@ -21,8 +21,9 @@ environments, with trace propagation and typed grouped/ungrouped consumers.
 ## Checks
 
 - `cargo test -p kafka_util` (`SQLX_OFFLINE` unset).
-- The in-process librdkafka mock broker test verifies statistics and uncommitted
-  application offsets; no external Kafka/Docker setup is needed.
+- The in-process librdkafka mock broker tests verify statistics, uncommitted
+  application offsets and the bounded prefetch; no external Kafka/Docker setup
+  is needed.
 
 ## Gotchas
 

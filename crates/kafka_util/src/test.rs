@@ -73,10 +73,6 @@ impl GroupName for BoundedPrefetchGroup {
     };
 }
 
-/// How long the application spends on each record, slower than librdkafka
-/// fetches so its prefetch queue fills.
-const PROCESSING_TIME: Duration = Duration::from_millis(1);
-
 #[tokio::test]
 async fn bounded_prefetch_keeps_a_quiet_partition_close_behind_a_backlog() {
     let cluster = MockCluster::new(1).expect("mock cluster");
@@ -116,9 +112,9 @@ async fn bounded_prefetch_keeps_a_quiet_partition_close_behind_a_backlog() {
         .expect("quiet assignment");
     consumer.assign(&assignment).expect("assign");
 
-    // The quiet record is published once the application has spent 50 ms on
-    // the backlog, long enough for librdkafka's defaults to fetch all of it, so
-    // it can only arrive soon after if the consumer stopped fetching early.
+    // The quiet record is published once 50 backlog records have arrived. By
+    // then librdkafka's defaults have fetched most of the backlog ahead of it,
+    // so it arrives soon after only if the consumer stopped fetching early.
     let mut backlog_received = 0;
     loop {
         let message = tokio::time::timeout(Duration::from_secs(10), consumer.recv())
@@ -138,7 +134,6 @@ async fn bounded_prefetch_keeps_a_quiet_partition_close_behind_a_backlog() {
                 .await
                 .expect("publish quiet record");
         }
-        tokio::time::sleep(PROCESSING_TIME).await;
     }
 
     assert!(
