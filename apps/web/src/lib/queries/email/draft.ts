@@ -212,31 +212,26 @@ async function requestDraftTransfer(
   span: Span
 ): Promise<TransferDraftResponse> {
   const deadline = Date.now() + TRANSFER_SYNC_WAIT_MS;
-  let attempts = 0;
-  try {
-    while (true) {
-      attempts += 1;
-      const result = await emailClient.transferDraft(
-        input.draftId,
-        {
-          operation_id: input.operationId,
-          draft_generation: input.draftGeneration ?? 0,
-          destination_link_id: input.destinationInboxId,
-        },
-        input.sourceInboxId
-      );
-      if (result.isOk()) return result.value;
-      const refused = result.error.some((error) => error.code === 'CONFLICT');
-      const retry =
-        refused &&
-        attempts < TRANSFER_ATTEMPTS &&
-        (await span.span('email.draft_transfer.await_sync', (wait) =>
-          awaitDraftSynchronized(input.draftId, deadline, wait)
-        ));
-      if (!retry) throw new ThrownResultError(result.error);
-    }
-  } finally {
-    span.setAttr('email.draft_transfer.attempts', attempts);
+  for (let attempt = 1; ; attempt += 1) {
+    span.setAttr('email.draft_transfer.attempts', attempt);
+    const result = await emailClient.transferDraft(
+      input.draftId,
+      {
+        operation_id: input.operationId,
+        draft_generation: input.draftGeneration ?? 0,
+        destination_link_id: input.destinationInboxId,
+      },
+      input.sourceInboxId
+    );
+    if (result.isOk()) return result.value;
+    const refused = result.error.some((error) => error.code === 'CONFLICT');
+    const retry =
+      refused &&
+      attempt < TRANSFER_ATTEMPTS &&
+      (await span.span('email.draft_transfer.await_sync', (wait) =>
+        awaitDraftSynchronized(input.draftId, deadline, wait)
+      ));
+    if (!retry) throw new ThrownResultError(result.error);
   }
 }
 
