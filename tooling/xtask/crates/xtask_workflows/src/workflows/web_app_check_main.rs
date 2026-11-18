@@ -284,6 +284,7 @@ fn generated_code() -> Job {
         .add_step(check_specta_types())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 fn biome_check() -> Job {

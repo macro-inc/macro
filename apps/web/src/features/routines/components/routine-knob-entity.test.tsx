@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { type Accessor, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type Knob, withKnobValue } from '../core/knobs';
-import { StepSentence } from './routine-step-knobs';
+import { KnobSettings, StepSentence } from './routine-step-knobs';
 
 const touch = { value: false };
 vi.mock('@core/mobile/isTouchDevice', () => ({
@@ -13,6 +13,16 @@ vi.mock('@property/hooks', () => ({
   usePropertyEntityDisplay: (id: Accessor<string>) => ({
     name: () => NAMES[id()] ?? 'Unknown',
     icon: () => <span data-testid="channel-icon" />,
+  }),
+}));
+vi.mock('@core/context/quickAccess', () => ({
+  useQuickAccess: () => ({
+    useList: () => ({
+      items: () => [
+        { id: 'db1', data: { name: 'Bugs' } },
+        { id: 'db2', data: { name: 'Hiring' } },
+      ],
+    }),
   }),
 }));
 // The app's entity picker, standing in with the channel it would offer.
@@ -62,11 +72,11 @@ const bugs: Knob = {
   value: { type: 'channel', id: 'c1' },
 };
 
-function renderSentence(knob: Knob) {
+function renderSentence(knob: Knob, sentence = 'Post open bugs in {bugs}.') {
   const [current, setCurrent] = createSignal([knob]);
   render(() => (
     <StepSentence
-      sentence="Post open bugs in {bugs}."
+      sentence={sentence}
       knobs={current()}
       onKnob={(name, value) =>
         setCurrent(withKnobValue(current(), name, value))
@@ -76,43 +86,136 @@ function renderSentence(knob: Knob) {
   return current;
 }
 
+const sentence = () => screen.getByText(/Post open bugs in/).textContent;
+
 describe('an entity knob', () => {
-  it('shows the picked channel by name and swaps it from the entity picker', async () => {
+  it('shows the picked channel by name and swaps it only on Save', async () => {
     const current = renderSentence(bugs);
-    expect(screen.getByText(/Post open bugs in/).textContent).toBe(
-      'Post open bugs in bug-reports.'
-    );
+    expect(sentence()).toBe('Post open bugs in bug-reports.');
     expect(screen.getByTestId('channel-icon')).toBeTruthy();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Channel to post in: change it' })
+      screen.getByRole('button', {
+        name: 'Channel to post in: the chosen channel. Change it',
+      })
     );
     fireEvent.click(
       await screen.findByRole('button', { name: 'Pick triage (CHANNEL)' })
     );
+    // A pick is a draft: neither it nor Enter saves.
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Enter' });
+    expect(current()[0]).toMatchObject({
+      value: { type: 'channel', id: 'c1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(current()[0]).toMatchObject({
       value: { type: 'channel', id: 'c2' },
     });
-    expect(screen.getByText(/Post open bugs in/).textContent).toBe(
-      'Post open bugs in triage.'
-    );
+    expect(sentence()).toBe('Post open bugs in triage.');
   });
 
-  it('asks for a channel when a starter has none, and on touch picks only on Done', async () => {
-    touch.value = true;
-    const current = renderSentence({ ...bugs, value: null });
-    expect(screen.getByText(/Post open bugs in/).textContent).toBe(
-      'Post open bugs in Pick a channel.'
-    );
+  it('clears to pick another, and Cancel keeps the saved channel', async () => {
+    const current = renderSentence(bugs);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Channel to post in: pick a channel' })
+      screen.getByRole('button', {
+        name: 'Channel to post in: the chosen channel. Change it',
+      })
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
+    expect(screen.getByText('Pick a channel.')).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Clear' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(current()[0]).toMatchObject({
+      value: { type: 'channel', id: 'c1' },
+    });
+    expect(sentence()).toBe('Post open bugs in bug-reports.');
+  });
+
+  it('shows a starter’s unpicked channel as still to set', async () => {
+    const current = renderSentence({ ...bugs, value: null });
+    expect(sentence()).toBe('Post open bugs in Channel to post in.');
+    const trigger = screen.getByRole('button', {
+      name: 'Channel to post in: not set. Set it',
+    });
+    expect(trigger.className).toContain('decoration-dashed');
+    fireEvent.click(trigger);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Pick triage (CHANNEL)' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(current()[0]).toMatchObject({
+      value: { type: 'channel', id: 'c2' },
+    });
+  });
+
+  it('reads Not set beside its label in Settings', () => {
+    render(() => (
+      <KnobSettings knobs={[{ ...bugs, value: null }]} onKnob={() => {}} />
+    ));
+    expect(
+      screen.getByRole('button', {
+        name: 'Channel to post in: not set. Set it',
+      }).textContent
+    ).toBe('Not set');
+  });
+
+  it('picks a database from the ones the owner has', async () => {
+    const current = renderSentence(
+      {
+        type: 'entity',
+        name: 'bugs',
+        label: 'Database to log in',
+        entity_types: ['database'],
+        value: { type: 'database', id: 'db1' },
+      },
+      'Post open bugs in {bugs}.'
+    );
+    expect(sentence()).toBe('Post open bugs in Bugs.');
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Database to log in: the chosen database. Change it',
+      })
+    );
+    fireEvent.input(
+      await screen.findByRole('searchbox', { name: 'Find a database' }),
+      { target: { value: 'hir' } }
+    );
+    expect(screen.queryByRole('radio', { name: 'Bugs' })).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'Hiring' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(current()[0]).toMatchObject({
+      value: { type: 'database', id: 'db2' },
+    });
+    expect(sentence()).toBe('Post open bugs in Hiring.');
+  });
+
+  it('on touch picks in a sheet, only on Done, and clears there', async () => {
+    touch.value = true;
+    const current = renderSentence(bugs);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Channel to post in: the chosen channel. Change it',
+      })
     );
     // The sheet shows its list once it has slid in.
     const sheet = document.querySelector<HTMLElement>(
       '[data-corvu-drawer-content]'
     )!;
     fireEvent(sheet, new Event('transitionend'));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(
+      (screen.getByText('Done').closest('button') as HTMLButtonElement).disabled
+    ).toBe(true);
     fireEvent.click(await screen.findByText('Pick triage (CHANNEL)'));
-    expect(current()[0]).toMatchObject({ value: null });
+    expect(current()[0]).toMatchObject({
+      value: { type: 'channel', id: 'c1' },
+    });
     fireEvent.click(screen.getByText('Done'));
     expect(current()[0]).toMatchObject({
       value: { type: 'channel', id: 'c2' },

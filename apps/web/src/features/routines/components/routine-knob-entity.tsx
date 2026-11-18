@@ -2,12 +2,12 @@ import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { EditorPopover } from '@property/editors/popover/EditorPopover';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Dropdown } from '@ui';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { Button, InputGroup, RadioGroup } from '@ui';
+import { createSignal, For, Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   entityKnobNoun,
@@ -15,7 +15,6 @@ import {
   type KnobEntity,
   type KnobEntityType,
 } from '../core/knobs';
-import { SearchMenu } from './routine-search-menu';
 
 type EntityKnob = Extract<Knob, { type: 'entity' }>;
 
@@ -28,7 +27,7 @@ function pickerType(type: KnobEntityType): EntityType | undefined {
       .with('document', () => 'DOCUMENT')
       .with('project', () => 'PROJECT')
       .with('user', () => 'USER')
-      // Databases aren't entity property targets; they have their own menu.
+      // Databases aren't entity property targets; they have their own list.
       .with('database', () => undefined)
       .exhaustive()
   );
@@ -48,155 +47,10 @@ function pickerTypes(knob: EntityKnob): EntityType[] {
   return knob.entity_types.flatMap((type) => pickerType(type) ?? []);
 }
 
-function samePick(a: KnobEntity | null, b: KnobEntity | null) {
-  return a?.type === b?.type && a?.id === b?.id;
-}
-
-/**
- * An entity knob's item, picked from the app's entity picker (a popover on
- * desktop, a picker sheet on touch) and shown by its name and icon. A
- * database knob picks from the databases Macro knows the owner has.
- */
-export function KnobEntityControl(props: {
-  knob: EntityKnob;
-  /** The underlined value's classes, shared with the other knobs. */
-  class: string;
-  onChange(value: KnobEntity): void;
-}) {
-  return (
-    <Show
-      when={pickerTypes(props.knob).length}
-      fallback={
-        <DatabaseKnobMenu knob={props.knob} onChange={props.onChange} />
-      }
-    >
-      <EntityKnobPicker
-        knob={props.knob}
-        class={props.class}
-        onChange={props.onChange}
-      />
-    </Show>
-  );
-}
-
-function EntityKnobPicker(props: {
-  knob: EntityKnob;
-  class: string;
-  onChange(value: KnobEntity): void;
-}) {
-  const [open, setOpen] = createSignal(false);
-  // The sheet applies its pick on Done; the popover applies it at once.
-  const [draft, setDraft] = createSignal<KnobEntity | null>(null);
-  let trigger: HTMLButtonElement | undefined;
-  const types = () => pickerTypes(props.knob);
-  const changeOpen = (next: boolean) => {
-    if (next) setDraft(props.knob.value);
-    setOpen(next);
-    if (!next && !isTouchDevice()) trigger?.focus();
-  };
-  const choose = (value: KnobEntity) => {
-    changeOpen(false);
-    if (!samePick(value, props.knob.value)) props.onChange(value);
-  };
-  const select = (
-    ids: Set<string>,
-    picked?: { id: string; entity_type: EntityType }[]
-  ) => {
-    const id = ids.values().next().value;
-    if (!id) return;
-    const entityType = picked?.find((entity) => entity.id === id)?.entity_type;
-    const [first, ...rest] = types();
-    const only = first && !rest.length ? knobType(first) : undefined;
-    const type = entityType ? knobType(entityType) : only;
-    if (!type || !props.knob.entity_types.includes(type)) return;
-    if (isTouchDevice()) setDraft({ type, id });
-    else choose({ type, id });
-  };
-  const noun = () => entityKnobNoun(props.knob);
-  const selector = () => (
-    <Suspense
-      fallback={<p class="p-3 text-sm text-ink-muted">Loading {noun()}s…</p>}
-    >
-      <PropertyEntitySelector
-        config={{
-          isMultiSelect: false,
-          placeholder: `Find a ${noun()}`,
-          specificEntityType: types().length === 1 ? types()[0] : types(),
-          fillHeight: isTouchDevice(),
-        }}
-        selectedOptions={() => new Set(draft() ? [draft()!.id] : [])}
-        setSelectedOptions={select}
-        onCancel={() => changeOpen(false)}
-      />
-    </Suspense>
-  );
-  const button = () => (
-    <button
-      ref={trigger}
-      type="button"
-      class={props.class}
-      aria-label={`${props.knob.label}: ${props.knob.value ? 'change it' : `pick a ${noun()}`}`}
-      aria-expanded={open()}
-      aria-haspopup="dialog"
-      // The sheet's search field keeps the keyboard.
-      onPointerDown={(event) => {
-        if (isTouchDevice()) event.preventDefault();
-      }}
-      onMouseDown={(event) => {
-        if (isTouchDevice()) event.preventDefault();
-      }}
-      onClick={() => changeOpen(true)}
-    >
-      <KnobEntityValue knob={props.knob} />
-    </button>
-  );
-  return (
-    <Show
-      when={isTouchDevice()}
-      fallback={
-        <Dropdown
-          open={open()}
-          onOpenChange={changeOpen}
-          getAnchorRect={() => trigger?.getBoundingClientRect()}
-          placement="bottom-start"
-          fitViewport
-        >
-          {button()}
-          <Show when={open()}>
-            <EditorPopover onClose={() => changeOpen(false)}>
-              {selector()}
-            </EditorPopover>
-          </Show>
-        </Dropdown>
-      }
-    >
-      {button()}
-      <PickerSheet.Root open={open()} onCancel={() => changeOpen(false)}>
-        <div on:keydown={(event) => event.stopPropagation()}>
-          <PickerSheet.Header
-            title={props.knob.label}
-            onDone={() => {
-              const value = draft();
-              if (value) choose(value);
-              else changeOpen(false);
-            }}
-            doneDisabled={!draft()}
-          />
-        </div>
-        <PickerSheet.Body>{selector()}</PickerSheet.Body>
-      </PickerSheet.Root>
-    </Show>
-  );
-}
-
-/** The item's icon and name, or what to pick when there is none. */
+/** The picked item's icon and name, as the step's sentence shows it. */
 export function KnobEntityValue(props: { knob: EntityKnob }) {
   return (
-    <Show
-      when={props.knob.value}
-      keyed
-      fallback={`Pick a ${entityKnobNoun(props.knob)}`}
-    >
+    <Show when={props.knob.value} keyed>
       {(value) => (
         <span class="inline-flex max-w-full items-center gap-1 align-bottom">
           <Show
@@ -240,35 +94,200 @@ function DatabaseName(props: { id: string }) {
   );
 }
 
-function DatabaseKnobMenu(props: {
+/**
+ * The items an entity knob can take, to pick one into a draft: the app's
+ * entity picker, or the databases Macro knows the owner has. Picking never
+ * saves, Enter included; the editor around it saves.
+ */
+export function KnobEntityPicker(props: {
   knob: EntityKnob;
-  onChange(value: KnobEntity): void;
+  value: KnobEntity | null;
+  problem: string | undefined;
+  onInput(value: KnobEntity | null): void;
+  /** Escape in the search. */
+  onCancel(): void;
+}) {
+  return (
+    <div class="flex min-h-0 flex-auto flex-col gap-1.5">
+      <Show
+        when={pickerTypes(props.knob).length}
+        fallback={
+          <DatabaseList
+            knob={props.knob}
+            value={props.value}
+            onInput={props.onInput}
+          />
+        }
+      >
+        <EntityList
+          knob={props.knob}
+          value={props.value}
+          onInput={props.onInput}
+          onCancel={props.onCancel}
+        />
+      </Show>
+      <Show when={props.problem}>
+        {(problem) => (
+          <p class="shrink-0 px-1 text-xs text-ink-muted">{problem()}</p>
+        )}
+      </Show>
+    </div>
+  );
+}
+
+function EntityList(props: {
+  knob: EntityKnob;
+  value: KnobEntity | null;
+  onInput(value: KnobEntity | null): void;
+  onCancel(): void;
+}) {
+  const types = () => pickerTypes(props.knob);
+  const noun = () => entityKnobNoun(props.knob);
+  const select = (
+    ids: Set<string>,
+    picked?: { id: string; entity_type: EntityType }[]
+  ) => {
+    const id = ids.values().next().value;
+    // Picking the picked item again unpicks it, as Clear does.
+    if (!id) return props.onInput(null);
+    const entityType = picked?.find((entity) => entity.id === id)?.entity_type;
+    const [first, ...rest] = types();
+    const only = first && !rest.length ? knobType(first) : undefined;
+    const type = entityType ? knobType(entityType) : only;
+    if (!type || !props.knob.entity_types.includes(type)) return;
+    props.onInput({ type, id });
+  };
+  return (
+    <Suspense
+      fallback={<p class="p-3 text-sm text-ink-muted">Loading {noun()}s…</p>}
+    >
+      <PropertyEntitySelector
+        config={{
+          isMultiSelect: false,
+          placeholder: `Find a ${noun()}`,
+          specificEntityType: types().length === 1 ? types()[0] : types(),
+          fillHeight: isTouchDevice(),
+        }}
+        selectedOptions={() => new Set(props.value ? [props.value.id] : [])}
+        setSelectedOptions={select}
+        onCancel={props.onCancel}
+      />
+    </Suspense>
+  );
+}
+
+function DatabaseList(props: {
+  knob: EntityKnob;
+  value: KnobEntity | null;
+  onInput(value: KnobEntity | null): void;
 }) {
   const quickAccess = useQuickAccess();
-  const items = () =>
-    quickAccess
+  const [query, setQuery] = createSignal('');
+  const databases = () => {
+    const words = query().trim().toLowerCase();
+    return quickAccess
       .useList('database')
       .items()
       .map((item) => ({
-        key: item.id,
-        label: item.data.name ?? 'Untitled database',
-        icon: (iconProps: { class?: string }) => (
-          <EntityIcon targetType="database" size="sm" class={iconProps.class} />
-        ),
-        selected: props.knob.value?.id === item.id,
-        onSelect: () => {
-          if (props.knob.value?.id !== item.id)
-            props.onChange({ type: 'database', id: item.id });
-        },
-      }));
+        id: item.id,
+        name: item.data.name ?? 'Untitled database',
+      }))
+      .filter((item) => !words || item.name.toLowerCase().includes(words));
+  };
   return (
-    <SearchMenu
-      label={`${props.knob.label}: ${props.knob.value ? 'change it' : 'pick a database'}`}
-      trigger={<KnobEntityValue knob={props.knob} />}
-      triggerVariant="ghost"
-      placeholder="Find a database"
-      sections={[{ items: items() }]}
-      empty="No databases found"
-    />
+    <div class="flex min-h-0 flex-auto flex-col gap-2">
+      <InputGroup class="shrink-0">
+        <InputGroup.Input
+          type="search"
+          value={query()}
+          onInput={(event) => setQuery(event.currentTarget.value)}
+          placeholder="Find a database"
+          aria-label="Find a database"
+        />
+        <InputGroup.Addon align="inline-start">
+          <MagnifyingGlassIcon aria-hidden="true" />
+        </InputGroup.Addon>
+      </InputGroup>
+      <Show
+        when={databases().length}
+        fallback={<p class="px-1 text-sm text-ink-muted">No databases found</p>}
+      >
+        <RadioGroup
+          class="min-h-0 overflow-y-auto text-sm text-ink"
+          // Cleared, no database is picked.
+          value={props.value?.id ?? ''}
+          onChange={(id) => props.onInput({ type: 'database', id })}
+        >
+          <RadioGroup.Label class="sr-only">
+            {props.knob.label}
+          </RadioGroup.Label>
+          <For each={databases()}>
+            {(database) => (
+              <RadioGroup.Item value={database.id} class="touch:min-h-11">
+                <RadioGroup.ItemControl />
+                <RadioGroup.ItemLabel class="flex min-w-0 flex-1 items-center gap-1.5 self-stretch">
+                  <EntityIcon
+                    targetType="database"
+                    size="xs"
+                    class="shrink-0"
+                  />
+                  <span class="truncate">{database.name}</span>
+                </RadioGroup.ItemLabel>
+              </RadioGroup.Item>
+            )}
+          </For>
+        </RadioGroup>
+      </Show>
+    </div>
+  );
+}
+
+/**
+ * An entity knob's picker on touch: a sheet stacked over the page, as the
+ * app's other searchable pickers are. Picks stay a draft until Done; Clear
+ * empties it and Cancel drops it.
+ */
+export function KnobEntitySheet(props: {
+  knob: EntityKnob;
+  open: boolean;
+  value: KnobEntity | null;
+  problem: string | undefined;
+  onInput(value: KnobEntity | null): void;
+  onCancel(): void;
+  onSave(): void;
+}) {
+  return (
+    <PickerSheet.Root open={props.open} onCancel={props.onCancel}>
+      <div on:keydown={(event) => event.stopPropagation()}>
+        <PickerSheet.Header
+          title={props.knob.label}
+          onDone={props.onSave}
+          doneDisabled={!!props.problem}
+        />
+        <div class="flex justify-end px-4 pb-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={!props.value}
+            // The search field keeps the keyboard.
+            onPointerDown={(event) => event.preventDefault()}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => props.onInput(null)}
+          >
+            Clear
+          </Button>
+        </div>
+      </div>
+      <PickerSheet.Body>
+        <KnobEntityPicker
+          knob={props.knob}
+          value={props.value}
+          problem={undefined}
+          onInput={props.onInput}
+          onCancel={props.onCancel}
+        />
+      </PickerSheet.Body>
+    </PickerSheet.Root>
   );
 }

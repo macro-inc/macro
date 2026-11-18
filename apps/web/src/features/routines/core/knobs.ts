@@ -174,10 +174,11 @@ export function knobText(knob: Knob): string {
 }
 
 /**
- * Whether a knob has no value to show: only text can be blank, since the
- * scheduler requires every other kind's value.
+ * Whether a knob has no value to show: blank text, or an item not picked
+ * yet (as in a starter). The scheduler requires every other kind's value.
  */
 export function knobIsEmpty(knob: Knob): boolean {
+  if (knob.type === 'entity') return !knob.value;
   return knob.type === 'text' && !knob.value.trim();
 }
 
