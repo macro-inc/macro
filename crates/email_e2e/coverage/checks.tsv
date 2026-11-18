@@ -355,3 +355,4 @@ F-026	state_contacts outlook_a_contacts_photo_shows_in_macro
 F-197	journey_organise gmail_junk_leaves_the_inbox
 F-170	ai_tools gmail_agent_reports_spam_and_takes_it_back
 F-170	ai_tools outlook_agent_reports_spam_and_takes_it_back
+F-176	crm outlook_a_correspondent_leaves_the_crm_with_their_mail
