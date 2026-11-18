@@ -2,18 +2,26 @@ import type { EntityDetailTarget } from '@app/components/entity-detail/entity-de
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DriveLocation } from './core/types';
-import type { DriveRouteParams } from './primitives/drive-route';
+import { driveDetailTrailSchema } from './primitives/drive-detail-trail';
+import {
+  type DriveRouteParams,
+  driveLocationFromParams,
+} from './primitives/drive-route';
 
 const [params, setParams] = createSignal<DriveRouteParams>({});
 const [routeState, setRouteState] = createSignal<unknown>();
+// The router keeps only what the route's state schema accepts.
 const navigate = vi.fn(
   async (
     destination: { params: DriveRouteParams },
     options?: { state?: unknown }
   ) => {
     setParams(destination.params);
-    setRouteState(options?.state);
+    setRouteState(
+      options?.state === undefined
+        ? undefined
+        : driveDetailTrailSchema.parse(options.state)
+    );
   }
 );
 
@@ -47,7 +55,7 @@ import {
   useDriveDetailNavigation,
 } from './drive-detail-navigation';
 
-const MY_FILES: DriveLocation = { kind: 'tab', tab: 'owned' };
+const FOLDER: DriveRouteParams = { view: 'folder', folderId: 'folder-1' };
 
 const pdf = (id: string): EntityDetailTarget => ({
   type: 'document',
@@ -55,14 +63,17 @@ const pdf = (id: string): EntityDetailTarget => ({
   fileType: 'pdf',
 });
 
-function mountDrive(location: DriveLocation = MY_FILES) {
+function mountDrive(route: DriveRouteParams = {}) {
+  setParams(route);
   let navigation!: ReturnType<typeof useDriveDetailNavigation>;
   const Capture = () => {
     navigation = useDriveDetailNavigation();
     return null;
   };
   render(() => (
-    <DriveDetailNavigationProvider location={() => location}>
+    <DriveDetailNavigationProvider
+      location={() => driveLocationFromParams(params())}
+    >
       <Capture />
     </DriveDetailNavigationProvider>
   ));
@@ -70,7 +81,6 @@ function mountDrive(location: DriveLocation = MY_FILES) {
 }
 
 beforeEach(() => {
-  setParams({});
   setRouteState(undefined);
   navigate.mockClear();
 });
@@ -83,27 +93,30 @@ describe('the Drive location a detail names', () => {
     expect(navigation.showsLocation()).toBe(true);
   });
 
-  it('names the list a document was opened from', () => {
-    const navigation = mountDrive({ kind: 'folder', id: 'folder-1' });
+  it('names My Files for a document opened from it', () => {
+    const navigation = mountDrive();
 
     navigation.openRoot(pdf('report'));
 
-    expect(params()).toMatchObject({ folderId: 'folder-1' });
     expect(navigation.active()?.data.id).toBe('report');
     expect(navigation.showsLocation()).toBe(true);
   });
 
   it('names no location for a document opened outside Drive', () => {
-    setParams({ documentId: 'attachment', documentType: 'pdf' });
-    const navigation = mountDrive();
+    const navigation = mountDrive({
+      documentId: 'attachment',
+      documentType: 'pdf',
+    });
 
     expect(navigation.active()?.data.id).toBe('attachment');
     expect(navigation.showsLocation()).toBe(false);
   });
 
   it('names no location for a document opened from one opened outside Drive', () => {
-    setParams({ documentId: 'attachment', documentType: 'pdf' });
-    const navigation = mountDrive();
+    const navigation = mountDrive({
+      documentId: 'attachment',
+      documentType: 'pdf',
+    });
 
     navigation.navigate(pdf('copy'));
 
@@ -114,22 +127,53 @@ describe('the Drive location a detail names', () => {
     expect(navigation.showsLocation()).toBe(false);
   });
 
-  it('keeps the list location through documents opened from its detail', () => {
+  it('keeps My Files through documents opened from its detail and back', () => {
     const navigation = mountDrive();
     navigation.openRoot(pdf('report'));
-
     navigation.navigate(pdf('appendix'));
 
-    expect(navigation.active()?.data.id).toBe('appendix');
+    expect(navigation.showsLocation()).toBe(true);
+
+    navigation.popTo(navigation.entries()[0]!.value);
+
+    expect(navigation.active()?.data.id).toBe('report');
     expect(navigation.showsLocation()).toBe(true);
   });
 
-  it('names no location for a favorite opened at My Files from a folder', () => {
-    const navigation = mountDrive({ kind: 'folder', id: 'folder-1' });
+  it('names the folder of a folder document restored from its URL alone', () => {
+    const navigation = mountDrive({
+      ...FOLDER,
+      documentId: 'report',
+      documentType: 'pdf',
+    });
 
-    navigation.openRoot(pdf('shared-favorite'), { location: MY_FILES });
+    expect(navigation.showsLocation()).toBe(true);
+  });
+
+  it('opens a sidebar shortcut at My Files with no location', () => {
+    const navigation = mountDrive(FOLDER);
+
+    navigation.openRoot(pdf('shared-favorite'), { shortcut: true });
 
     expect(params()).not.toHaveProperty('folderId');
+    expect(navigation.active()?.data.id).toBe('shared-favorite');
+    expect(navigation.showsLocation()).toBe(false);
+  });
+
+  it('opens an item at the list that holds it', () => {
+    const navigation = mountDrive({ tab: 'shared' });
+
+    navigation.openRoot(pdf('new-document'), {
+      location: { kind: 'tab', tab: 'owned' },
+    });
+
+    expect(params()).not.toHaveProperty('tab');
+    expect(navigation.showsLocation()).toBe(true);
+  });
+
+  it('names no location for a call, which Drive never lists', () => {
+    const navigation = mountDrive({ callId: 'call-1' } as DriveRouteParams);
+
     expect(navigation.showsLocation()).toBe(false);
   });
 });

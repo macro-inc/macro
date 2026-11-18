@@ -36,15 +36,21 @@ import {
 } from './primitives/drive-route';
 
 type DriveDetailRootOptions = EntityDetailNavigationOptions & {
-  /** Opens here instead of from the list on screen, so with no location. */
   location?: DriveLocation;
+  /**
+   * Opened from a sidebar shortcut (a favorite, the Databases section) rather
+   * than a list: it opens at My Files and names no location.
+   */
+  shortcut?: boolean;
 };
+
+const MY_FILES: DriveLocation = { kind: 'tab', tab: 'owned' };
 
 type DriveDetailNavigation = {
   activeCallId: Accessor<string | undefined>;
   entries: Accessor<readonly EntityDetailNavigationEntry[]>;
   active: Accessor<EntityDetailNavigationEntry | undefined>;
-  /** Whether there is a list to name: the one on screen, or the detail's own. */
+  /** Whether the breadcrumbs name a Drive list the open item is listed in. */
   showsLocation: Accessor<boolean>;
   navigate: (
     target: EntityDetailTarget,
@@ -112,7 +118,15 @@ export function DriveDetailNavigationProvider(
     }))
   );
   const active = () => entries().at(-1);
-  const showsLocation = () => !activeDocument() || openedFromList(trail());
+  const showsLocation = () => {
+    if (activeCallId()) return false;
+    if (!activeDocument()) return true;
+    const location = props.location();
+    // Every document opened from outside Drive lands on My Files' route, so
+    // only that route needs the trail to say it came from the list.
+    if (location.kind === 'folder' || location.tab !== 'owned') return true;
+    return openedFromList(trail());
+  };
 
   const resolveTarget = (
     target: EntityDetailTarget,
@@ -179,18 +193,15 @@ export function DriveDetailNavigationProvider(
       const resolved = resolveTarget(target, options);
       if (!resolved) return false;
 
+      const location = options?.shortcut
+        ? MY_FILES
+        : (options?.location ?? props.location());
       fireAndForget(
-        navigate(
-          driveDestination(
-            options?.location ?? props.location(),
-            resolved.document
-          ),
-          {
-            state: options?.location
-              ? [resolved.target]
-              : listTrail(resolved.target),
-          }
-        ),
+        navigate(driveDestination(location, resolved.document), {
+          state: options?.shortcut
+            ? [resolved.target]
+            : listTrail(resolved.target),
+        }),
         'drive-view'
       );
       return true;
