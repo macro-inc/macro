@@ -664,8 +664,18 @@ fn document_favorite_optimism_survives_without_restoring_the_old_mixed_list() {
 fn authored_inspection_recovers_legacy_draft_without_exposing_its_thread_snapshot() {
     block_on(async {
         use cache_core::engine::BeginOptimisticWrite;
+        use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
         let mut engine = Engine::new(InMemoryStorage::new());
-        engine.begin_optimistic_write(None, BeginOptimisticWrite { uuid: &Uuid::now_v7().to_string(), client_metadata: None, query: "mutation SaveEmailDraft($input: Input!) { saveEmailDraft(input:$input) { draft { id subject linkId attachmentsDraft { id fileName s3Key } } thread { __typename id name } } }", operation_name: Some("SaveEmailDraft"), variables: json!({"input":{"draftId":"draft","subject":"authored subject","bodyText":"authored reply"}}).as_object().unwrap(), data: &json!({"saveEmailDraft":{"draft":{"id":"draft","subject":"copied draft","linkId":"mailbox","attachmentsDraft":[{"id":"file","fileName":"draft.txt","s3Key":"object"}]},"thread":{"__typename":"GraphqlSoupEmailThread","id":"thread","name":"private thread"}}}), link_patches: &[], revalidations: &[], identity_bindings: &[], created_at_ms: 1 }).await.unwrap();
+        let (id, _) = engine.begin_optimistic_write(None, BeginOptimisticWrite { uuid: &Uuid::now_v7().to_string(), client_metadata: None, query: "mutation SaveEmailDraft($input: Input!) { saveEmailDraft(input:$input) { draft { id subject linkId attachmentsDraft { id fileName s3Key } } thread { __typename id name } } }", operation_name: Some("SaveEmailDraft"), variables: json!({"input":{"draftId":"draft","subject":"authored subject","bodyText":"authored reply"}}).as_object().unwrap(), data: &json!({"saveEmailDraft":{"draft":{"id":"draft","subject":"copied draft","linkId":"mailbox","attachmentsDraft":[{"id":"file","fileName":"draft.txt","s3Key":"object"}]},"thread":{"__typename":"GraphqlSoupEmailThread","id":"thread","name":"private thread"}}}), link_patches: &[], revalidations: &[], identity_bindings: &[], created_at_ms: 1 }).await.unwrap();
+        let claim = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "departed-page".into(),
+                now_ms: 10,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
         let commands = inspect_authored_mutations(&engine).await.unwrap();
         assert_eq!(commands[0].optimistic_data, json!({}));
         assert_eq!(commands[0].variables["input"]["bodyText"], "authored reply");
@@ -679,6 +689,31 @@ fn authored_inspection_recovers_legacy_draft_without_exposing_its_thread_snapsho
                 .unwrap()
                 .contains("private thread")
         );
+        // Redacting copied content must preserve the lease needed to release
+        // a departed page's claim; the engine still requires its exact token.
+        let lease = commands[0].lease.as_ref().unwrap();
+        assert_eq!(lease.owner, "departed-page");
+        assert_eq!(lease.generation, claim.lease_generation.to_string());
+        assert_eq!(lease.expires_at_ms, 100);
+        let mut token = MutationClaimToken {
+            owner: lease.owner.clone(),
+            generation: lease.generation.parse().unwrap(),
+        };
+        token.generation += 1;
+        assert!(
+            engine
+                .defer_optimistic_write(id, token.clone(), 20, "page left".into(), false)
+                .await
+                .is_err()
+        );
+        token.generation -= 1;
+        engine
+            .defer_optimistic_write(id, token, 20, "page left".into(), false)
+            .await
+            .unwrap();
+        let commands = inspect_authored_mutations(&engine).await.unwrap();
+        assert!(commands[0].lease.is_none());
+        assert_eq!(commands[0].optimistic_data, json!({}));
     });
 }
 
