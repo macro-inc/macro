@@ -146,6 +146,8 @@ pub(super) struct FakeMachines {
     pub(super) weights: Arc<Mutex<HashMap<ComputerId, u16>>>,
     /// Computers whose memory was reclaimed, in order.
     pub(super) reclaims: Arc<Mutex<Vec<ComputerId>>>,
+    /// Every `memory.swap.max` write: whether VMs may swap.
+    pub(super) guest_swap: Arc<Mutex<Vec<bool>>>,
 }
 
 impl Machines for FakeMachines {
@@ -242,6 +244,10 @@ impl Machines for FakeMachines {
     async fn set_guest_memory_max(&self, _: u64) -> Result<(), FakeError> {
         Ok(())
     }
+    async fn set_guest_swap(&self, allowed: bool) -> Result<(), FakeError> {
+        self.guest_swap.lock().unwrap().push(allowed);
+        Ok(())
+    }
     fn usage(&self, record: &ComputerRecord, _: Process) -> Option<Usage> {
         self.usage.lock().unwrap().get(&record.computer_id).copied()
     }
@@ -306,9 +312,18 @@ impl Machines for FakeMachines {
 }
 
 /// A 128 GiB host with as much memory in use, and as many disk swap
-/// devices, as the test sets.
-#[derive(Clone, Default)]
-pub(super) struct FakeProbe(pub(super) Arc<Mutex<u64>>, pub(super) Arc<Mutex<u32>>);
+/// devices, as the test sets (none unless set).
+#[derive(Clone)]
+pub(super) struct FakeProbe(
+    pub(super) Arc<Mutex<u64>>,
+    pub(super) Arc<Mutex<Option<u32>>>,
+);
+
+impl Default for FakeProbe {
+    fn default() -> Self {
+        Self(Arc::default(), Arc::new(Mutex::new(Some(0))))
+    }
+}
 
 impl HostProbe for FakeProbe {
     fn measure(&self) -> HostMeasurement {

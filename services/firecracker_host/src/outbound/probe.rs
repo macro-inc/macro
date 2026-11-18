@@ -41,24 +41,35 @@ impl HostProbe for ProcProbe {
             swap_total_bytes: kib("SwapTotal"),
             swap_used_bytes: kib("SwapTotal").saturating_sub(kib("SwapFree")),
             zram_used_bytes: zram_used_bytes(),
-            // Unreadable reads as none: `SwapTotal` still shows swap exists.
             disk_swap_devices: std::fs::read_to_string("/proc/swaps")
-                .map(|swaps| disk_swap_devices(&swaps))
-                .unwrap_or(0),
+                .ok()
+                .map(|swaps| disk_swap_devices(&swaps, zram_backing_device)),
         }
     }
 }
 
 /// Swap devices in `/proc/swaps` (a header, then one line per device) that
-/// are not zram.
-fn disk_swap_devices(swaps: &str) -> u32 {
+/// put pages on a disk: every one but zram, and zram whose `backing_device`
+/// (by device name, e.g. `zram0`) is a writeback device rather than `none`.
+fn disk_swap_devices(swaps: &str, backing_device: impl Fn(&str) -> Option<String>) -> u32 {
     let devices = swaps
         .lines()
         .skip(1)
         .filter_map(|line| line.split_whitespace().next())
-        .filter(|device| !device.starts_with("/dev/zram"))
+        .filter(|device| match device.strip_prefix("/dev/") {
+            Some(name) if name.starts_with("zram") => {
+                backing_device(name).is_some_and(|backing| backing.trim() != "none")
+            }
+            _ => true,
+        })
         .count();
     u32::try_from(devices).unwrap_or(u32::MAX)
+}
+
+/// A zram device's writeback device (`/sys/block/<name>/backing_dev`);
+/// `None` without writeback support in the kernel (no such file).
+fn zram_backing_device(name: &str) -> Option<String> {
+    std::fs::read_to_string(format!("/sys/block/{name}/backing_dev")).ok()
 }
 
 /// `mem_used_total` (the third `mm_stat` field) of every zram device.

@@ -207,9 +207,17 @@ pub struct HostMeasurement {
     pub swap_used_bytes: u64,
     /// RAM zram devices hold, compressed (`mm_stat` `mem_used_total`).
     pub zram_used_bytes: u64,
-    /// Active swap devices that are not zram (`/proc/swaps`): guest memory
-    /// swapped there lands on a disk.
-    pub disk_swap_devices: u32,
+    /// Active swap devices that put pages on a disk (`/proc/swaps`): any
+    /// but zram, and zram with a writeback device. `None` when unreadable,
+    /// which counts as on disk.
+    pub disk_swap_devices: Option<u32>,
+}
+
+impl HostMeasurement {
+    /// Whether all swap is known to stay in RAM (zram without writeback).
+    pub fn swap_only_in_ram(&self) -> bool {
+        self.disk_swap_devices == Some(0)
+    }
 }
 
 type Entry = Arc<Mutex<Option<ComputerRecord>>>;
@@ -246,6 +254,8 @@ pub struct HostService<S, D, G, M, P> {
     tasks: TaskTracker,
     /// Running computers' activity and squeeze state (`pressure`).
     activity: std::sync::Mutex<HashMap<ComputerId, pressure::Tracked>>,
+    /// Whether VMs may swap, as last applied (`None`: not yet).
+    guest_swap: std::sync::Mutex<Option<bool>>,
 }
 
 impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D, G, M, P> {
@@ -311,6 +321,7 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
             reconcile_clean: std::sync::atomic::AtomicBool::new(report.unresolved.is_empty()),
             tasks,
             activity: std::sync::Mutex::new(HashMap::new()),
+            guest_swap: std::sync::Mutex::new(None),
         })
     }
 

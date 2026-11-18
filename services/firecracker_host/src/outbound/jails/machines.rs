@@ -258,6 +258,16 @@ impl Machines for Jails {
             .map_err(io("write", &path))
     }
 
+    #[tracing::instrument(name = "firecracker_host.guest_swap", skip(self), err)]
+    async fn set_guest_swap(&self, allowed: bool) -> Result<(), JailError> {
+        let path = Path::new("/sys/fs/cgroup")
+            .join(&self.settings.cgroup_parent)
+            .join("memory.swap.max");
+        tokio::fs::write(&path, if allowed { "max" } else { "0" })
+            .await
+            .map_err(io("write", &path))
+    }
+
     fn usage(&self, record: &ComputerRecord, _process: Process) -> Option<Usage> {
         let cgroup = self.cgroup(&JailId::computer(record.computer_id));
         let resident_memory_bytes = std::fs::read_to_string(cgroup.join("memory.current"))

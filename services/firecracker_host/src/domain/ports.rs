@@ -303,6 +303,10 @@ pub trait Machines: Send + Sync + 'static {
         bytes: u64,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Let all VMs swap, or none (`memory.swap.max` of their parent cgroup:
+    /// `max` or 0).
+    fn set_guest_swap(&self, allowed: bool) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Set the VM cgroup's `cpu.weight` (1..=10000; the default is 100).
     fn set_cpu_weight(
         &self,

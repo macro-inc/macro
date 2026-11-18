@@ -1,6 +1,7 @@
 //! What the agent's periodic upkeep reads from the service: a sample for
 //! the gauges and the service's own readiness checks.
 
+use std::sync::PoisonError;
 use std::sync::atomic::Ordering;
 
 use firecracker_host_api::{GoldenKey, GoldenState, PowerState};
@@ -40,6 +41,37 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
             .await
         {
             tracing::warn!(error = ?error, "refilling spare disk sets failed; creates clone meanwhile");
+        }
+    }
+
+    /// Let VMs swap only while all swap stays in RAM: a swap device on
+    /// disk (say, one added by hand) gets none of their memory, whether the
+    /// squeeze or the kernel's own reclaim would push it. Applied on change.
+    pub async fn guard_guest_swap(&self) {
+        let allowed = self.probe.measure().swap_only_in_ram();
+        if *self
+            .guest_swap
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            == Some(allowed)
+        {
+            return;
+        }
+        match self.machines.set_guest_swap(allowed).await {
+            Ok(()) => {
+                *self
+                    .guest_swap
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner) = Some(allowed);
+                if allowed {
+                    tracing::info!("all swap is in RAM: VMs may swap");
+                } else {
+                    tracing::warn!("swap may reach a disk: VMs may not swap");
+                }
+            }
+            Err(error) => {
+                tracing::error!(error = ?error, allowed, "setting the VMs' swap limit failed; retrying next pass");
+            }
         }
     }
 
@@ -118,10 +150,15 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
             )
         };
         let measurement = self.probe.measure();
-        let swap = if measurement.disk_swap_devices > 0 {
+        let swap = if measurement.disk_swap_devices.is_none() {
             CheckOutcome::failed(
                 HealthCheck::Swap,
-                "a swap device besides zram is active: guest memory could be swapped to disk",
+                "/proc/swaps is unreadable: swap may be on disk, so VMs may not swap",
+            )
+        } else if !measurement.swap_only_in_ram() {
+            CheckOutcome::failed(
+                HealthCheck::Swap,
+                "a swap device that writes to disk is active (not zram, or zram with writeback): VMs may not swap",
             )
         } else if self.squeeze_window().is_some() && measurement.swap_total_bytes == 0 {
             CheckOutcome::failed(

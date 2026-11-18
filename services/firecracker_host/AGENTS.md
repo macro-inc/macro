@@ -44,8 +44,10 @@ mesh: pre-copy while it runs, then a final round after `release`), then
   the squeeze is the agent's, from guest CPU; "idle" for hibernation relief
   is the control plane's (`crates/hosted_runtimes` overcommit), from
   sessions and activity it sees. The control plane sets the window. The
-  only swap is zram (the NixOS module's `zramSwap`): any other swap device
-  in `/proc/swaps` fails the swap health check and the squeeze stops.
+  only swap is zram (the NixOS module's `zramSwap`): any swap that can reach
+  a disk (a non-zram device, zram with a writeback device, or an unreadable
+  `/proc/swaps`) fails the swap health check, stops the squeeze, and sets the
+  VMs' parent `memory.swap.max` to 0 until it is gone (each upkeep pass).
 - `src/domain/metrics.rs`: metric names and attributes, a contract with the
   monitors in `infra/stacks/monitoring`.
 - `src/domain/service.rs`: operations, locking, idempotency; `service/host.rs`

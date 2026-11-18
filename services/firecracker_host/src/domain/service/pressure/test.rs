@@ -224,7 +224,7 @@ async fn a_disk_swap_device_fails_the_swap_check_and_stops_the_squeeze() {
         .unwrap()
         .insert(computer_id(), usage(0));
     *host.probe.0.lock().unwrap() = 95 * GIB;
-    *host.probe.1.lock().unwrap() = 1;
+    *host.probe.1.lock().unwrap() = Some(1);
     let settings = ActivitySettings::default();
     let start = Instant::now();
     host.service.activity_pass(start, &settings);
@@ -242,5 +242,64 @@ async fn a_disk_swap_device_fails_the_swap_check_and_stops_the_squeeze() {
     assert!(
         !swap.healthy,
         "no squeeze asked, but a disk swap device is active"
+    );
+}
+
+#[tokio::test]
+async fn vms_may_swap_only_while_all_swap_is_in_ram_and_the_limit_is_applied_on_change() {
+    let host = host_with(FakeStore::default(), FakeMachines::default(), 1).await;
+    let writes = || host.machines.guest_swap.lock().unwrap().clone();
+
+    host.service.guard_guest_swap().await;
+    host.service.guard_guest_swap().await;
+    assert_eq!(writes(), [true], "zram only: allowed, written once");
+
+    *host.probe.1.lock().unwrap() = Some(1);
+    host.service.guard_guest_swap().await;
+    assert_eq!(writes(), [true, false], "a disk swap device: none");
+
+    *host.probe.1.lock().unwrap() = None;
+    host.service.guard_guest_swap().await;
+    assert_eq!(writes(), [true, false], "unreadable stays none");
+
+    *host.probe.1.lock().unwrap() = Some(0);
+    host.service.guard_guest_swap().await;
+    assert_eq!(writes(), [true, false, true], "back to zram only");
+}
+
+#[tokio::test]
+async fn an_unreadable_swap_list_fails_the_swap_check_and_stops_the_squeeze() {
+    let host = host_with(FakeStore::default(), FakeMachines::default(), 2).await;
+    host.service
+        .create(computer_id(), create_request(1, true))
+        .await
+        .unwrap();
+    host.machines
+        .usage
+        .lock()
+        .unwrap()
+        .insert(computer_id(), usage(0));
+    *host.probe.0.lock().unwrap() = 95 * GIB;
+    *host.probe.1.lock().unwrap() = None;
+    let settings = ActivitySettings::default();
+    let start = Instant::now();
+    host.service.activity_pass(start, &settings);
+    let late = start + SQUEEZE_AFTER;
+    host.service.activity_pass(late, &settings);
+
+    assert_eq!(host.service.squeeze_once(WINDOW, late).await, None);
+    let swap = host
+        .service
+        .service_checks()
+        .into_iter()
+        .find(|check| check.check == HealthCheck::Swap)
+        .unwrap();
+    assert!(!swap.healthy);
+    assert!(
+        swap.detail
+            .as_deref()
+            .unwrap_or_default()
+            .contains("unreadable"),
+        "{swap:?}"
     );
 }

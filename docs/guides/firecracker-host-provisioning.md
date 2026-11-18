@@ -12,8 +12,9 @@ each time ([Rules](../../CLAUDE.md)).
 - **KVM**: bare metal, or a VM shape with nested virtualization.
 - **zram as the only swap**: the module turns on `zramSwap` (zstd, `zramPercent`
   of RAM, 25 % by default) for the memory squeeze and asserts `swapDevices` is
-  empty; the agent's swap check fails on any other swap device, so the host
-  image must not bring its own swap file or partition.
+  empty; any other swap (or zram with a writeback device) fails the agent's
+  swap check and makes it forbid VMs swap altogether, so the host image must
+  not bring its own swap file or partition.
 - **One durable disk** holding the ZFS pool `tank`. Everything lives under
   `tank/firecracker` (lz4, ARC capped at 8 GiB): each golden is a dataset
   (`rootfs.ext4`, `mem`, `vmstate` and an empty `/home` of every sold size),
