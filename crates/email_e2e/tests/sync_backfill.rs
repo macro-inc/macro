@@ -466,6 +466,90 @@ async fn outlook_mail_arriving_during_the_import_is_kept_once() -> Result<(), Re
     mail_arriving_during_the_import_is_kept_once(Provider::Outlook).await
 }
 
+/// Mail that reaches an Outlook inbox while the inbox's first import is
+/// still being read shows in Macro before that import ends, once. When it
+/// fails, new mail waits until the whole of its folder is imported, and a
+/// large mailbox looks as if it stopped syncing after linking.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "known bug: outlook-new-mail-waits-for-folder-import"]
+async fn outlook_mail_arriving_mid_import_shows_before_the_import_ends() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let letters: Vec<Letter> = (1..=150)
+        .map(|number| Letter::received(&format!("Old {number:03}"), true))
+        .collect();
+    seed_mailbox(&stack, Provider::Outlook, ada.email(), &letters)?;
+
+    // The inbox's first import round reads its first page of 100 and no
+    // further until the scenario lets it; every other folder syncs.
+    let inbox_delta =
+        |error: Option<outlook_emulator::FaultError>, times| outlook_emulator::Fault {
+            mailbox: Some(ada.email().to_owned()),
+            route: Some(outlook_emulator::Route::MessagesDelta),
+            folder: Some("inbox".to_owned()),
+            error,
+            times,
+            ..Default::default()
+        };
+    let first_page = stack.outlook().inject_fault(inbox_delta(None, Some(1)));
+    let held = stack.outlook().inject_fault(inbox_delta(
+        Some(outlook_emulator::FaultError::Unavailable),
+        None,
+    ));
+    let inbox = ada.start_link(Provider::Outlook, ada.email()).await?;
+    eventually(
+        "the inbox's first page and the service's subscription",
+        DEFAULT_TIMEOUT,
+        async || {
+            let outlook = stack.outlook();
+            let page_read = outlook.faults().iter().all(|(id, _)| *id != first_page);
+            let subscribed = outlook
+                .subscriptions()
+                .iter()
+                .any(|subscription| subscription.mailbox == ada.email());
+            Ok((page_read && subscribed).then_some(()))
+        },
+    )
+    .await?;
+
+    inbox.deliver(&Mail::new(
+        "Alan <alan@example.com>",
+        "Arrived mid-import",
+        "Sent while the inbox was still being imported.",
+    ))?;
+    let arrived = inbox
+        .wait_for_preview("inbox", "Arrived mid-import")
+        .await?;
+    assert_eq!(arrived["isRead"], false);
+    assert_eq!(
+        inbox.link().await?["sync_status"],
+        SYNCING,
+        "the new mail showed while the import was still running"
+    );
+
+    stack.outlook().remove_fault(held);
+    inbox.wait_until_synced().await?;
+    // A later message is the event after which a duplicate would show: the
+    // round after the import lists the new mail again.
+    inbox.deliver(&Mail::new(
+        "Alan <alan@example.com>",
+        "Arrived afterwards",
+        "Sent once the import was done.",
+    ))?;
+    inbox
+        .wait_for_preview("inbox", "Arrived afterwards")
+        .await?;
+    let in_inbox = inbox.previews("inbox").await?;
+    assert_eq!(named(&in_inbox, "Arrived mid-import"), 1);
+    assert_eq!(in_inbox.len(), 152, "threads in the inbox view");
+    let thread = inbox
+        .thread(arrived["id"].as_str().unwrap_or_default())
+        .await?;
+    assert_eq!(thread["messages"].as_array().map_or(0, Vec::len), 1);
+
+    stack.finish().await
+}
+
 /// Linking a mailbox that is already linked and imported answers the same
 /// inbox and lists no thread twice; for Gmail, where the import is a job
 /// and its requests can be counted, it also starts no second import and
