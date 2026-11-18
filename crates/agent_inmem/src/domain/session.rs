@@ -217,8 +217,8 @@ pub enum HistoryEntry {
 /// words went.
 pub const SUMMARY_PREAMBLE: &str = "The earlier conversation was summarized to keep it within \
 your context. The summary below is history: the actions it records already happened, so do \
-not repeat them. ContentSearch over this agent session finds the exact words of anything it \
-covers.";
+not repeat them. macro.search.page with this agent session in agentSessions finds the exact \
+words of anything it covers.";
 
 /// A summary being written in the background. A session has at most one.
 #[derive(Debug)]

@@ -365,6 +365,7 @@ dependencies = [
  "nom 8.0.0",
  "nutype",
  "pipedream_mcp",
+ "prompt",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -1349,7 +1350,6 @@ dependencies = [
  "sync_service_client",
  "system_properties",
  "teams",
- "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",
@@ -15968,7 +15968,6 @@ version = "0.1.0"
 dependencies = [
  "ai_toolset",
  "anyhow",
- "async-trait",
  "axum",
  "base64 0.22.1",
  "chrono",

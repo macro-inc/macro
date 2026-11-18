@@ -1,22 +1,12 @@
-//! Thin AI adapter for connector discovery.
+//! Connector discovery's response shape and context, which code mode's
+//! `macro.connectedApps.discover` returns.
 
-use crate::domain::{
-    ports::{
-        ConnectionStore, ConnectorCapabilities, ConnectorDirectory, ConnectorOverlays,
-        OverlayConnections,
-    },
-    service::discovery::{ConnectorDiscovery, DiscoveryRequest, DiscoveryResult},
-};
-use ai_toolset::{
-    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolCallError,
-    ToolResult,
-};
-use async_trait::async_trait;
+use crate::domain::service::discovery::{ConnectorDiscovery, DiscoveryResult};
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 
-/// Dependencies for the discovery tool.
+/// Dependencies for connector discovery.
 pub struct ConnectorToolContext<D, S, N> {
     /// Domain service, constructed by the host.
     pub service: Arc<ConnectorDiscovery<D, S, N>>,
@@ -30,55 +20,13 @@ impl<D, S, N> Clone for ConnectorToolContext<D, S, N> {
     }
 }
 
-/// Discover apps when the current tools cannot perform the user's task.
-#[derive(Debug, Deserialize, JsonSchema)]
-#[schemars(
-    title = "DiscoverConnectors",
-    description = "Find an integration when an external app is missing or a workflow requires an unconnected account, including native import tools that need a connector. Use SearchTools for available actions. Search by app name, then inspect a returned app_slug to see its actual tools and connection status. Only recommend connecting if an advertised tool supports the task; an app's name alone is not evidence. Inspection does not load or execute tools. If suitable and unconnected, include the returned connect_markup in your reply and explain what connecting enables. After connection, use SearchTools again in the same agent session to load and call the new tools."
-)]
-pub struct DiscoverConnectors {
-    /// Search for an app, or inspect a catalog result's actual capabilities.
-    pub request: DiscoveryRequest,
-}
-
 /// Discovery metadata and optional markup for a user-controlled auth flow.
-#[derive(Debug, Serialize, JsonSchema, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema, utoipa::ToSchema)]
 pub struct DiscoverConnectorsResponse {
     /// Catalog or capability results.
     pub result: DiscoveryResult,
     /// Include verbatim only if an advertised tool supports the requested task.
     pub connect_markup: Option<String>,
-}
-
-impl ToolAnnotated for DiscoverConnectors {
-    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Discover connectors");
-}
-
-#[async_trait]
-impl<D, S, N> AsyncTool<ConnectorToolContext<D, S, N>> for DiscoverConnectors
-where
-    D: ConnectorDirectory + ConnectorCapabilities,
-    S: ConnectionStore + ConnectorOverlays,
-    N: OverlayConnections,
-{
-    type Output = DiscoverConnectorsResponse;
-
-    #[tracing::instrument(skip_all, err)]
-    async fn call(
-        &self,
-        context: ServiceContext<ConnectorToolContext<D, S, N>>,
-        request: RequestContext,
-    ) -> ToolResult<Self::Output> {
-        let result = context
-            .service
-            .discover(&request.user_id, &self.request)
-            .await
-            .map_err(|error| ToolCallError {
-                description: error.to_string(),
-                internal_error: error,
-            })?;
-        Ok(DiscoverConnectorsResponse::from(result))
-    }
 }
 
 impl From<DiscoveryResult> for DiscoverConnectorsResponse {

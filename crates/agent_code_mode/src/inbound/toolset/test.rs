@@ -67,6 +67,29 @@ async fn entity_catalog_is_compact_and_named_entities_list_their_symbols() {
     );
 }
 
+/// Agent sessions have no SelfKnowledge; its about page is a guide.
+#[tokio::test]
+async fn the_about_macro_guide_is_the_about_page() {
+    for host in [CodeHost::Session, CodeHost::User] {
+        let response = describe(
+            DescribeCodeTools {
+                task: None,
+                names: vec![],
+                topics: vec![CodeGuideTopic::AboutMacro],
+            },
+            host,
+        )
+        .await
+        .unwrap();
+        assert_eq!(response.guides[0].markdown, prompt::about_macro::DOCS_GUIDE);
+        assert!(
+            response.guides[0]
+                .markdown
+                .contains("https://macro.com/docs/llms.txt")
+        );
+    }
+}
+
 #[tokio::test]
 async fn guide_only_discovery_omits_catalog_and_limits_are_enforced() {
     let response = describe(

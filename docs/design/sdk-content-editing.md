@@ -420,12 +420,12 @@ without a model.
 
 ## Hiding the direct tools
 
-`covered_by_code_sdk` (`crates/agent_code_mode/src/domain/service.rs`) lists the
-tools a code-mode session doesn't see because the SDK covers them. Each PR adds
-its tool there once its SDK method lands: `EditDocument` with `doc.edit`,
-`EditSpreadsheet`/`ReadSpreadsheet`/`CalculateSpreadsheet`, the Word and
-PowerPoint tools, and the canvas tools. Hosts without code mode keep the tools
-until they move.
+A code-mode session doesn't see a direct tool the SDK covers. Each PR took its
+tool out of code mode once its SDK method landed: `EditDocument` with
+`doc.edit`, `EditSpreadsheet`/`ReadSpreadsheet`/`CalculateSpreadsheet`, the Word
+and PowerPoint tools, and the canvas tools. Agent sessions now register only
+the tools the SDK can't replace (`ai_tools::tools_for_agent_code_mode`); hosts
+without code mode keep the tools until they move.
 
 ## How Lexical reaches programs
 
@@ -532,8 +532,8 @@ method documents how to use it in its TSDoc:
 
 Each PR is small and independently mergeable, adds tests first, documents every
 new method as above (the SDK reference, code-mode bundle and documentation are
-generated at build time), and adds the direct tool it replaces to
-`covered_by_code_sdk`.
+generated at build time), and takes the direct tool it replaces out of code
+mode.
 
 1. **This design** (docs only, #9404).
 2. **Documents and tasks** (MACRO-4588).

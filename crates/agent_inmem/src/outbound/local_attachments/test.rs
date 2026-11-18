@@ -160,7 +160,6 @@ fn request(messages: Vec<ChatMessage>) -> TurnRequest {
         mcp_tools: None,
         cancel: CancellationToken::new(),
         user_input: None,
-        reviewer: None,
         agent_key: None,
     }
 }

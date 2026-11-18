@@ -30,6 +30,7 @@ macro_uuid = { path = "../macro_uuid" }
 nom = { workspace = true }
 nutype = { workspace = true }
 pipedream_mcp = { path = "../pipedream_mcp" }
+prompt = { path = "../prompt" }
 rootcause = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }

@@ -42,8 +42,8 @@ agent tools (any model, any host) and cognition's `POST /web/search` and
   Never log the key.
 - Only the HTTP routes are rate limited; tool calls are bounded by agent turns.
 - Usage is recorded only when Tavily reports `usage.credits`; the service warns otherwise.
-- Code mode hides the tools (`agent_code_mode::domain::covered_by_code_sdk`);
-  agents there use the SDK.
+- Agent sessions run code mode and never get the tools
+  (`ai_tools::tools_for_agent_code_mode`); they use `macro.web`.
 
 ## Related
 
