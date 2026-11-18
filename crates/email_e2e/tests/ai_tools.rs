@@ -239,8 +239,10 @@ async fn outlook_agent_archive_reaches_the_provider() -> Result<(), Report> {
 
 /// The agent reporting a thread as spam (adding `SPAM`) files it under the
 /// provider's junk and takes it out of the inbox, as the Report spam button
-/// does; taking `SPAM` off brings it back to the inbox. When this fails the
-/// reported thread stays in the inbox, or the rescued one stays out of it.
+/// does; taking `SPAM` off brings it back to the inbox. On Gmail the report
+/// passes the label's id from ListLabels, as ListLabels tells the agent to,
+/// and the take-back its name. When this fails the reported thread stays in
+/// the inbox, or the rescued one stays out of it.
 async fn agent_reports_spam_and_takes_it_back(provider: Provider) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let (ada, _primary, second, _correspondent, thread) =
@@ -251,13 +253,31 @@ async fn agent_reports_spam_and_takes_it_back(provider: Provider) -> Result<(), 
         Provider::Outlook => "Junk Email",
     };
     let in_junk = |labels: &[String]| labels.iter().any(|label| label == junk);
+    // Outlook has no SPAM label row, so there the label is always named.
+    let report_by_id = match provider {
+        Provider::Gmail => {
+            let labels = tools
+                .call(&ada, "ListLabels", &json!({ "thread_id": thread["db_id"] }))
+                .await?
+                .map_err(refused)?;
+            let id = labels["labels"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|label| label["name"] == "SPAM")
+                .map(|label| label["id"].clone());
+            assert!(id.is_some(), "ListLabels has no SPAM label: {labels}");
+            id
+        }
+        Provider::Outlook => None,
+    };
     let spam = async |add: bool| -> Result<(), Report> {
+        let label = match (&report_by_id, add) {
+            (Some(id), true) => json!({ "thread_id": thread["db_id"], "label_id": id, "add": add }),
+            _ => json!({ "thread_id": thread["db_id"], "label": "SPAM", "add": add }),
+        };
         let done = tools
-            .call(
-                &ada,
-                "UpdateThreadLabels",
-                &json!({ "thread_id": thread["db_id"], "label": "SPAM", "add": add }),
-            )
+            .call(&ada, "UpdateThreadLabels", &label)
             .await?
             .map_err(refused)?;
         assert_eq!(done["failedCount"], 0, "{done}");
