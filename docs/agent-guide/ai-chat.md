@@ -276,10 +276,10 @@ unified diff with **Back to conversation**; returning preserves the unsent draft
 
 The phone list shows startable custom agents as bubbles above the Favorites, Waiting on you, and Conversations sections. Tap a bubble to focus the accessory composer with that agent selected. New agent opens the roster creation flow. The title menu opens Conversations, Agents, Routines, and Archived. Archived has Back and search, but no composer or dock. Long-press a row for its entity actions. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
-draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet. Its search and
-Suggested models sit above Built-in and Your agents; All models opens the
-complete catalog. Reasoning effort and Speed appear below the list when the
-selected runtime and model support them. Tap an option to set it, or Back to
+draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet.
+Suggested models, provider groups, and agent groups share one scrolling list.
+Providers with more than three models initially show two and a Show all count;
+Reasoning effort and Speed appear below the list when supported. Tap an option or Back to
 return to the list. An agent without access offers its existing connection
 flow. Search filters models and agents without changing the current selection.
 
@@ -620,12 +620,12 @@ the shimmer.
 - The agent dropdown includes saved agents of the selected mode regardless of
   runtime, plus Cursor in Code mode.
   Macro's models use the same searchable catalog as running sessions:
-  **Suggested** lists **Opus 5.5**, **Sonnet 5.5**, **GPT-5.6** (Sol in
-  runtime catalogs), **GPT-6 Astra**, and **Gemini**, when available, in that order. The
-  **More models** submenu contains the complete catalog grouped by provider,
-  including the Suggested choices and effort/speed variants. Your agents
-  follow Suggested and More models in the root menu. Choosing a model
-  does not reorder the sections. Search matches names, IDs, and provider names. The compact borderless search
+  **Suggested** contains the advertised frontier models, followed by provider
+  groups without duplicates, then the agent groups. Providers with more than
+  three models show two and **Show all n**; **Show fewer** folds them again.
+  A provider containing the current hidden model starts expanded. Closing the
+  selector resets manual folds. Search ignores folds and retains group labels,
+  matching names, IDs, and providers; no matches shows a noninteractive status. The compact borderless search
   field receives focus when the selector opens or reopens. Its opaque header
   meets the top of the scroll area so rows cannot show through above it.
   **Built-in**, **Your agents**, and **Needs connection** groups follow when
@@ -751,9 +751,9 @@ the shimmer.
   Inline and standalone sessions use the same unified agent/model selector as
   Home and new conversations. The session host applies model and effort changes;
   new-chat preferences do not overwrite existing session configuration.
-  **Suggested** models and custom agents share the root list. **All models** retains
-  the provider catalog submenu on desktop and its pushed page on phone. Search
-  includes every model. Universal-input AI drafts and routine agent/model targets
+  **Suggested**, provider groups, and custom agents share one list on desktop and
+  phone; there is no All models submenu or page. Search includes every model.
+  Universal-input AI drafts and routine agent/model targets
   use the same selector, but omit effort and speed because those hosts store only
   an agent/model target.
 - **Reasoning effort** and **Speed** live inside that selector, as desktop submenus
@@ -2383,12 +2383,10 @@ slide and fade. On touch devices, messages lift into place with a gentle settle;
 the text reaches full opacity early and keeps its final size. History and
 remounted messages stay still; reduced-motion preferences disable the transition.
 
-Every model control — production chat, the agent composer, running sessions,
-and the default-model fields in Settings — is the same `ModelCatalogPicker`: a
-searchable popover on desktop and a searchable `Choose a model` bottom sheet on
-touch devices, both with **Suggested** first and the complete provider catalog
-behind **More models**. Tapping or choosing a model applies it and closes the
-menu. Locked models stay listed, dimmed with a lock, and open the upgrade flow.
+Legacy production chat and default-model fields in Settings retain
+`ModelCatalogPicker`, with Suggested and a More models catalog. Agent composers
+instead use the unified selector described above. Choosing an available model
+applies it and closes the menu. Legacy locked models still open the upgrade flow.
 
 On phones, the chat model control appears as a provider icon while the software
 keyboard is open. Its accessible name is `Choose model, <model name>`.
@@ -2433,9 +2431,9 @@ There is no periodic PR lookup polling.
 The Agents composers use one model selector for models, custom agents, reasoning
 effort, and speed. The desktop pill shows the provider or agent avatar, bounded
 name, available effort, and selected speed glyph. Its shared tooltip gives the
-full choice. Search filters model labels and agent names; All models opens the
-catalog. Selecting an agent keeps the desktop menu open; selecting a model or
-option closes it. In the phone sheet, search and pinned settings remain above
+full choice. Search filters models within their provider groups and agents by
+name, ignoring folds. Selecting an agent keeps the desktop menu open; selecting a
+model or option closes it. In the phone sheet, search and pinned settings remain above
 and below the scrolling list. Effort and speed open pushed views; choosing an
 option returns to the list, while model and agent choices close the sheet and
 restore editor focus. One-choice settings remain hidden.
