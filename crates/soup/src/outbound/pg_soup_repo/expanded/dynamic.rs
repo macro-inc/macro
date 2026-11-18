@@ -282,41 +282,6 @@ async fn fetch_user_source_ids(
     Ok(source_ids.into_iter().flatten().collect())
 }
 
-/// `PREFIX`, with the source list materialized when the query reads `source_items`, whose
-/// source scans read it; referenced once, Postgres would inline it and re-read the user's
-/// channels and teams per scan. The item-table arms match the bound source ids instead.
-fn prefix(reads_source_items: bool) -> String {
-    if reads_source_items {
-        PREFIX.replacen(
-            "user_source_ids AS (",
-            "user_source_ids AS MATERIALIZED (",
-            1,
-        )
-    } else {
-        PREFIX.to_string()
-    }
-}
-
-/// Whether the user holds the source of the `source_items` row `g`, checked
-/// with index probes so the cost does not grow with the user's sources. Must
-/// accept exactly the sources `user_source_ids` lists. Channel ids only match
-/// as canonical uuid text there, so other text skips the cast.
-static USER_HOLDS_GRANT_SOURCE: &str = r#"(
-                            g.source_id = $1
-                            OR EXISTS (
-                                SELECT 1 FROM team_user tu
-                                WHERE tu.user_id = $1 AND tu.team_id::text = g.source_id
-                            )
-                            OR EXISTS (
-                                SELECT 1 FROM comms_channel_participants cp
-                                WHERE cp.user_id = $1 AND cp.left_at IS NULL
-                                AND cp.channel_id = CASE
-                                    WHEN g.source_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-                                    THEN g.source_id::uuid
-                                END
-                            )
-                        )"#;
-
 // -- Lightweight top clauses: only id + sort_ts (plus filter-required joins) --
 
 static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
@@ -2110,7 +2075,7 @@ const SOURCE_SCAN_SOURCES: i64 = 400;
 
 /// What decides whether a page may read `source_items` in order.
 struct ScanBound {
-    /// How many sources `user_source_ids` lists for the user.
+    /// How many sources `fetch_user_source_ids` returned for the user.
     sources: i64,
     /// Whether the session's time zone is UTC. Projected scans order and bound the stored
     /// `timestamp` values, which order like the item-table path's `timestamptz` casts only
@@ -2132,28 +2097,22 @@ impl ScanBound {
 
 async fn scan_bound(
     connection: &mut sqlx::PgConnection,
-    user_id: &str,
+    source_ids: &[String],
 ) -> Result<ScanBound, sqlx::Error> {
+    let sources = i64::try_from(source_ids.len()).unwrap_or(i64::MAX);
     let span = tracing::info_span!(
         "soup.source_items.bound",
-        sources = tracing::field::Empty,
+        sources,
         utc = tracing::field::Empty
     );
-    let bound = sqlx::query_as!(
-        ScanBound,
-        r#"SELECT 1
-                + (SELECT count(*) FROM comms_channel_participants
-                   WHERE user_id = $1 AND left_at IS NULL)
-                + (SELECT count(*) FROM team_user WHERE user_id = $1) AS "sources!",
-            current_setting('TimeZone') IN ('UTC', 'Etc/UTC') AS "utc!""#,
-        user_id
+    let utc = sqlx::query_scalar!(
+        r#"SELECT current_setting('TimeZone') IN ('UTC', 'Etc/UTC') AS "utc!""#
     )
     .fetch_one(connection)
     .instrument(span.clone())
     .await?;
-    span.record("sources", bound.sources);
-    span.record("utc", bound.utc);
-    Ok(bound)
+    span.record("utc", utc);
+    Ok(ScanBound { sources, utc })
 }
 
 /// Where `build_query` finds documents, chats and projects.
@@ -2309,12 +2268,13 @@ fn build_query_from<'a>(
             Feed::new(
                 sort_method,
                 exclude_frecency,
+                source_ids,
                 [document_arm, chat_arm, project_arm].into_iter().flatten(),
             )
         })
         .flatten();
 
-    let mut builder = sqlx::QueryBuilder::new(prefix(feed.is_some()));
+    let mut builder = sqlx::QueryBuilder::new(PREFIX);
     if let Some(predicate) = optimized_notification_predicate {
         let mut item_types = Vec::with_capacity(3);
         if include_documents && document_notification.is_some() {
@@ -2945,7 +2905,7 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     };
     let (mut builder, ordered_scans) = build(item_source, &mut document_ids);
     if let Some(scans) = ordered_scans
-        && !scan_bound(&mut transaction, user_id.as_ref())
+        && !scan_bound(&mut transaction, &source_ids)
             .await?
             .allows(scans, query_limit)
     {

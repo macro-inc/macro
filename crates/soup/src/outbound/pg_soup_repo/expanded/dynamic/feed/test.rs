@@ -585,7 +585,7 @@ fn shapes_reach_every_driver_and_phase() {
         })
         .collect();
     for (reach, marker) in [
-        ("sources", "FROM user_source_ids s"),
+        ("sources", "FROM unnest($9::text[]) s(source_id)"),
         ("updated_at bounds", "AND si.sort_ts >= '"),
         ("owner", r#"ORDER BY d."updatedAt" DESC, d.id DESC"#),
         ("notifications", "FROM NotificationItems ni"),
