@@ -59,10 +59,10 @@ export function RoutineSettingRow(props: {
   return (
     <div class="flex min-h-16 items-center gap-4 border-t border-edge-divider px-6 py-4 first:border-t-0 @max-[600px]/routine:px-4">
       <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span class="text-base text-ink">{props.label}</span>
+        <span class="text-base text-ink wrap-anywhere">{props.label}</span>
         <Show when={props.description}>
           {(description) => (
-            <span class="text-sm text-ink-muted">{description()}</span>
+            <span class="text-sm text-ink-muted wrap-anywhere">{description()}</span>
           )}
         </Show>
       </div>
