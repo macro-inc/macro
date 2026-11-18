@@ -1745,8 +1745,10 @@ recordings for that channel
 (same rows as the Calls soup view, filtered to this channel). The live `Call` tab
 appears while a call is in progress. `Ask Macro` opens a new chat pane with the channel
 already @mentioned as context (see ai-chat.md). On touch, at every width, the title menu is a
-drawer (`SoupEntityActionsSheet`) with the view choices above the actions. Clicking the radio input can time out — click the adjacent label text
-instead.
+drawer (`SoupEntityActionsSheet`) with the view choices above the actions. Each
+choice has one leading icon; the live `Call` choice uses the same waveform as
+its desktop tab, with no second waveform inside its label. Clicking the radio
+input can time out — click the adjacent label text instead.
 
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
