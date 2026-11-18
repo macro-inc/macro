@@ -6,6 +6,7 @@ import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import { ComposerSurface, cn, TabSelector } from '@ui';
 import { For, type JSX, type ParentProps, Show } from 'solid-js';
 import type { ScheduleDraft } from '../core/draft';
+
 import { RoutineDescription } from './routine-description';
 
 /**
@@ -101,6 +102,14 @@ function RoutineSection(props: {
  */
 export function RoutineEditor(props: {
   draft: ScheduleDraft;
+  mobile?: boolean;
+  mobileHeader?: (props: {
+    name: string;
+    identityIcon?: JSX.Element;
+    headerActions?: JSX.Element;
+    actions?: JSX.Element;
+    onBack: () => void;
+  }) => JSX.Element;
   onChange: (update: (draft: ScheduleDraft) => ScheduleDraft) => void;
   disabled?: boolean;
   tab: 'settings' | 'history';
@@ -195,6 +204,15 @@ export function RoutineEditor(props: {
           </div>
         )}
       </ViewBreadcrumbs.Item>
+      <Show when={props.mobile}>
+        {props.mobileHeader?.({
+          name: breadcrumbName(),
+          identityIcon: props.identityIcon,
+          headerActions: props.headerActions,
+          actions: props.actions,
+          onBack: props.onBack,
+        })}
+      </Show>
       <TabSelector.Root
         value={props.tab}
         onChange={(value) => {
@@ -202,43 +220,70 @@ export function RoutineEditor(props: {
         }}
         class="@container/routine flex size-full min-h-0 min-w-0 flex-col text-ink"
       >
-        <ViewShell.TopBar
-          class="gap-x-3 gap-y-2 touch:flex @max-[600px]/routine:h-auto @max-[600px]/routine:flex-wrap"
-          aria-label="Routine toolbar"
-        >
-          <ViewBreadcrumbs.Outlet
-            aria-label="Routine location"
-            class="min-w-0 @max-[600px]/routine:flex-1"
-          />
-          <Show when={!props.creating}>
-            <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
-              <TabSelector class="w-fit">
-                <TabSelector.List aria-label="Routine details">
-                  <For each={tabs()}>
-                    {(tab) => (
-                      <TabSelector.Tab value={tab.value}>
-                        {tab.label}
-                        <Show when={tab.count}>
-                          {(count) => (
-                            <span
-                              aria-hidden="true"
-                              class="ml-1.5 tabular-nums text-ink-extra-muted"
-                            >
-                              {count()}
-                            </span>
-                          )}
-                        </Show>
-                      </TabSelector.Tab>
-                    )}
-                  </For>
-                </TabSelector.List>
-              </TabSelector>
+        <Show when={!props.mobile}>
+          <ViewShell.TopBar
+            class="gap-x-3 gap-y-2 touch:flex @max-[600px]/routine:h-auto @max-[600px]/routine:flex-wrap"
+            aria-label="Routine toolbar"
+          >
+            <ViewBreadcrumbs.Outlet
+              aria-label="Routine location"
+              class="min-w-0 @max-[600px]/routine:flex-1"
+            />
+            <Show when={!props.creating}>
+              <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
+                <TabSelector class="w-fit">
+                  <TabSelector.List aria-label="Routine details">
+                    <For each={tabs()}>
+                      {(tab) => (
+                        <TabSelector.Tab value={tab.value}>
+                          {tab.label}
+                          <Show when={tab.count}>
+                            {(count) => (
+                              <span
+                                aria-hidden="true"
+                                class="ml-1.5 tabular-nums text-ink-extra-muted"
+                              >
+                                {count()}
+                              </span>
+                            )}
+                          </Show>
+                        </TabSelector.Tab>
+                      )}
+                    </For>
+                  </TabSelector.List>
+                </TabSelector>
+              </div>
+            </Show>
+            <div class="ml-auto flex shrink-0 items-center gap-2">
+              {props.headerActions}
             </div>
-          </Show>
-          <div class="ml-auto flex shrink-0 items-center gap-2">
-            {props.headerActions}
+          </ViewShell.TopBar>
+        </Show>
+        <Show when={props.mobile && !props.creating}>
+          <div class="shrink-0 px-4 pt-3">
+            <TabSelector class="w-fit">
+              <TabSelector.List aria-label="Routine details">
+                <For each={tabs()}>
+                  {(tab) => (
+                    <TabSelector.Tab value={tab.value}>
+                      {tab.label}
+                      <Show when={tab.count}>
+                        {(count) => (
+                          <span
+                            aria-hidden="true"
+                            class="ml-1.5 tabular-nums text-ink-extra-muted"
+                          >
+                            {count()}
+                          </span>
+                        )}
+                      </Show>
+                    </TabSelector.Tab>
+                  )}
+                </For>
+              </TabSelector.List>
+            </TabSelector>
           </div>
-        </ViewShell.TopBar>
+        </Show>
         <TabSelector.Panel
           value="settings"
           class="relative min-h-0 flex-1 outline-none"

@@ -909,6 +909,11 @@ the shimmer.
 
 ## Routine run history
 
+On phones, Routines uses the shared header islands: its title, Search, and Create
+Routine actions stay above the list. Opening a routine replaces them with Back,
+the routine title, save status, and its action menu. Overview and Runs tabs remain
+in the page below the islands; desktop breadcrumbs and toolbar stay unchanged.
+
 A routine's **Runs** tab can contain both legacy chats and agent sessions. Each
 row opens the surface created by that run; changing the routine's execution
 target does not change older links. Shift-click opens the run in a new split.

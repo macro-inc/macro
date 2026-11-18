@@ -1,5 +1,9 @@
 import { useViewControlHotkeys } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  SplitHeaderScope,
+  useSplitHeaderScope,
+} from '@components/app/SplitHeaderScope';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { openInNewTab } from '@components/app/tab-layout/open-in-new-tab';
@@ -12,6 +16,7 @@ import {
   enableRoutineStarterTemplates,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Show, Suspense } from 'solid-js';
 import { useRoutinesDiscover } from '../routine-suggestions/routine-suggestions';
 import { getErrorMessage } from './core/routine-draft';
@@ -27,6 +32,7 @@ import { startRoutineDraft } from './routine-draft-start';
 import { routineContent, routineIdFromContent } from './routine-navigation';
 import { RoutineNew } from './routine-new';
 import { useRoutineRowMenuActions } from './routine-row-menu-actions';
+import { MobileRoutinesListHeader } from './views/mobile/routines-list-header';
 import { RoutinesListView } from './views/routines-list';
 
 function RoutinesContent() {
@@ -95,6 +101,12 @@ function RoutinesContent() {
       keyed
       fallback={
         <RoutinesListView
+          mobileHeader={(focusSearch) => (
+            <MobileRoutinesListHeader
+              onSearch={focusSearch}
+              onCreate={create}
+            />
+          )}
           source={source}
           userId={userId}
           registerSearchFocus={(focus) => (focusSearch = focus)}
@@ -128,12 +140,27 @@ function RoutinesContent() {
     </Show>
   );
 }
+
+function RoutinesTopBar() {
+  const scope = useSplitHeaderScope();
+  return (
+    <Show when={scope}>
+      <SplitHeaderScope.TopBar />
+    </Show>
+  );
+}
+
 export function RoutinesPage() {
   return (
-    <Suspense
-      fallback={<div class="p-6 text-sm text-ink-muted">Loading routines…</div>}
-    >
-      <RoutinesContent />
-    </Suspense>
+    <SplitHeaderScope.Root when={isTouchDevice()}>
+      <RoutinesTopBar />
+      <Suspense
+        fallback={
+          <div class="p-6 text-sm text-ink-muted">Loading routines…</div>
+        }
+      >
+        <RoutinesContent />
+      </Suspense>
+    </SplitHeaderScope.Root>
   );
 }

@@ -37,6 +37,7 @@ import {
   RoutineTemplatePage,
 } from './routine-template';
 import { RoutineTriggers } from './routine-triggers';
+import { MobileRoutineEditorHeader } from './views/mobile/routine-editor-header';
 import { RoutineDetailView } from './views/routine-detail';
 
 /** The built-in skill for composing routines (crates/system_skills). */
@@ -156,6 +157,7 @@ export function RoutineDetail(props: {
       }
     >
       <RoutineDetailView
+        mobileHeader={(header) => <MobileRoutineEditorHeader {...header} />}
         source={source}
         userId={userId}
         identityIcon={
