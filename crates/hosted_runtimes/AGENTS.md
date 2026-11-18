@@ -29,8 +29,14 @@ read it before changing behaviour.
 - `src/outbound/pg/agents.rs`: `ComputerAgents`, also alone as
   `PgComputerAgents`, which implements harnesses' `ComputerTeamAgents` so
   harness listings mark an agent teammate's computer.
-- `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
-  `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
+- `src/outbound/`: Postgres repo, `FirecrackerFleet` (the Firecracker host
+  agent, `crates/firecracker_host_api`), dev-only `DockerFleet`,
+  `ConfiguredFleet` (one host's fleet) and `HostFleets` (the `ports::Fleets`
+  the operator drives: a `FirecrackerFleet` per host row with an endpoint,
+  or the local Docker home host).
+- `src/domain/operator/`: `hosts.rs` (home registration, per-host fleets,
+  reconcile) and `effects.rs` (the effect pass: each host's effects in lease
+  order, `max_concurrent_starts` at a time).
 
 ## Scope
 
@@ -41,7 +47,8 @@ read it before changing behaviour.
 
 ## Boundaries
 
-- Depends on: `incus_client` (fleet), `feature_flags` (rollout),
+- Depends on: `firecracker_host_api`, `pinned_tls` (fleets),
+  `feature_flags` (rollout),
   `entity_access`, `macro_authorization`; with `outbound`, `harnesses` (its
   repository for Claude logins, never its tables).
 - Used by: authentication_service (routes, billing worker), agent_harness_service
@@ -50,8 +57,8 @@ read it before changing behaviour.
 ## Checks
 
 - `cargo test -p hosted_runtimes` (`SQLX_OFFLINE` unset for DB tests).
-- `cargo run -p hosted_runtimes --example incus_fleet_smoke -- …` drives
-  create → stop → start → destroy against a dev Incus host.
+- `cargo run -p hosted_runtimes --example firecracker_fleet_smoke -- …` drives
+  create → exec → power → destroy against a Firecracker host agent.
 - With `macro-box:latest` loaded, run the Docker isolation regression with
   `cargo test -p hosted_runtimes listing_cannot_expose_another_fleets_containers_to_reconciliation -- --ignored`.
 - With `busybox:latest` pulled, run the Docker exec regression with
@@ -79,9 +86,10 @@ read it before changing behaviour.
   (`ComputerAgents::agent_of`), so the adapter can tell its inviter by name;
   for such a computer the adapter skips `Ready`, which the agent's own
   online report sends instead.
-- The operator leases fleet effects and timers only for its own host
-  (`ports::HostScope::Only`); billing passes `HostScope::Every`. Purchases
-  land only on admitting hosts (`hosted_runtime_host.admitting`).
+- The operator leases fleet effects and timers only for the hosts it drives
+  (`ports::HostScope::Only`: the local home host, or every host row with a
+  connection); billing passes `HostScope::Every`. Purchases land only on
+  admitting hosts (`hosted_runtime_host.admitting`).
 - First start: until setup completes, and for an agent computer until its
   agent reports online (`ComputerState::awaiting_agent`, cleared by
   `Event::AgentOnline` from team_agents; each macrod connection meanwhile
@@ -89,7 +97,8 @@ read it before changing behaviour.
   the replica holding macrod's socket; `TimerKind::AgentStartDue` gives it
   `AGENT_START_DEADLINE` after macrod connects, then fails it with
   `Failure::AgentNotStarted`). A give-up during the first start counts in
-  `first_start_failures`; the first leaves the computer for a team retry
+  `first_start_failures`, except `Failure::HostLost` (a host outage is not the
+  computer's failure); the first leaves the computer for a team retry
   (no new charge), the second (`MAX_FIRST_START_FAILURES`) releases it
   (`EndsAt{now}`, Destroy), queues `Effect::RefundPurchase` (billing worker:
   a credit note on the purchase's invoice under `computer-refund:{id}`,

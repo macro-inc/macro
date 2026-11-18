@@ -1,9 +1,9 @@
-//! [`Fleet`] on the local Docker daemon, for dev stacks without an Incus host.
+//! [`Fleet`] on the local Docker daemon, for dev stacks without KVM.
 //!
 //! Each computer is a `macro-box` container running systemd.
 //! The disk size is not enforced (overlayfs has no per-container quota).
 //!
-//! Like an Incus computer's data disk, two named volumes hold `/home` and
+//! Like a Firecracker computer's `/home` volume, two named volumes hold `/home` and
 //! `/var/lib/macrod` (the enrollment marker and Claude credential).
 //! Destroy deletes them; a guest recreated after a loss reuses them. They
 //! carry the computer and control-plane labels, so a stack reset finds them.
@@ -69,7 +69,7 @@ pub struct DockerFleetConfig {
     /// Host directory holding one enrollment directory per computer.
     pub enrollment_dir: PathBuf,
     /// Name used to register host capacity.
-    pub host_name: String,
+    pub host_name: crate::domain::models::HostName,
     /// Memory in GiB.
     pub memory_gb: u32,
     /// Memory in GiB reserved for the host.
@@ -527,7 +527,7 @@ impl ContainerLabels {
             .try_into()
             .map_err(|_| malformed())?;
         Ok(Self {
-            control_plane_id: ControlPlaneId::parse(owner.to_owned()).map_err(|_| malformed())?,
+            control_plane_id: ControlPlaneId::try_new(owner).map_err(|_| malformed())?,
             generation: EnrollmentGeneration::new(generation.parse().map_err(|_| malformed())?),
             pairing_id: pairing.parse().map_err(|_| malformed())?,
             created_at: DateTime::parse_from_rfc3339(created_at)

@@ -209,7 +209,9 @@ fn production_loader_accepts_no_fleet_and_rejects_invalid_or_incomplete_selectio
         (Some(""), false),
         (Some("off"), false),
         (Some("unknown"), false),
-        (Some("incus"), false),
+        // Retired: attaches no fleet and needs no settings.
+        (Some("incus"), true),
+        (Some("firecracker"), false),
         (Some("docker"), false),
     ] {
         let mut input = production.clone();

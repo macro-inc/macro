@@ -26,7 +26,7 @@ mounted by authentication_service.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
   A failed fleet effect retries with backoff up to `MAX_EFFECT_ATTEMPTS`, except
-  a `FleetError::is_permanent` one (Incus refused the request as invalid), which
+  a `FleetError::is_permanent` one (the host refused the request as invalid), which
   fails the computer at once (`EffectFailed`, shown to the team as Failed).
   A give-up stores a `lifecycle::Failure` kind; `ComputerStatus.failureReason`
   is its fixed user-safe sentence, and the raw error stays in the logs and the
@@ -57,8 +57,9 @@ reject unavailable purchases in the domain before reserving capacity. Map
 keep missing subscription and unsupported billing intervals distinct.
 
 Require both images, host reserve and oversell factor for either enabled fleet;
-require Docker memory for Docker, and explicit profile, storage pool,
-request/connect/operation/state-change limits and shutdown grace for Incus.
+require Docker memory for Docker, and the client certificate and key every
+Firecracker host agent trusts for Firecracker (each host's endpoint and pinned
+certificate are on its `hosted_runtime_host` row).
 See [the required variable list](../development/running-locally.md#macro-computers).
 Retention (14 days) and past-due grace (7 days) are the typed
 `lifecycle::BillingPolicy`, from `COMPUTER_RETENTION_DAYS` and
@@ -132,7 +133,7 @@ attempt, so a busy database never fails a computer or abandons a removal.
 - **Effect shutdown and leases**: Keep `FOR UPDATE SKIP LOCKED` and ten-minute
   leases. Bound composite fleet calls to seven minutes and the entire leased
   batch (including lease acquisition, queueing and completion writes) to eight
-  minutes; there is no lease heartbeat. Incus request/operation limits alone
+  minutes; there is no lease heartbeat. Host agent request timeouts alone
   do not bound a composite effect. On cancellation, stop leasing, drain the
   current effect for up to thirty seconds, drop its future, then return only
   this batch's unfinished leases with their original deadline to `run_after =
@@ -140,13 +141,13 @@ attempt, so a busy database never fails a computer or abandons a removal.
   Persist fleet completion, its lifecycle event, effects and timers atomically;
   preserve a macrod connection observed before creation completion.
   SIGKILL cannot release leases; replacements recover them at lease expiry.
-  RPC cancellation does not cancel an Incus operation already accepted by the
-  host (or a Docker daemon operation). Fleet create/start idempotence and
+  RPC cancellation does not cancel a host agent operation already accepted by
+  the host (or a Docker daemon operation). Fleet create/start idempotence and
   idempotent crash recovery remain required; leases bound worker execution,
   not exactly-once execution of remote commands.
 - **Fleet ownership**: Require explicit `COMPUTERS_CONTROL_PLANE_ID` whenever
-  `COMPUTERS_FLEET` is `incus` or `docker`, shared across replicas but distinct per control plane.
-  Stamp Incus `user.macro.control_plane` / Docker `macro.control_plane` at create;
+  `COMPUTERS_FLEET` is `firecracker` or `docker`, shared across replicas but distinct per control plane.
+  Stamp the Firecracker computer's `controlPlaneId` / Docker `macro.control_plane` at create;
   `Fleet::instances` lists only that owner's instances. Reconcile independently
   checks ownership and deletes orphans only after ten minutes. Creation timestamps
   are stamped once as `user.macro.created_at` / `macro.created_at`; missing or
@@ -335,17 +336,15 @@ attempt, so a busy database never fails a computer or abandons a removal.
   The new enrollment generation makes `macrod enroll` run again: it claims
   the new pairing and replaces only the enrollment marker and credential.
 - **Data disk**: every computer has one, created with the guest and deleted
-  by `Fleet::destroy` after the instance (Incus keeps custom volumes). Incus:
-  block volume `<instance>-data` in the configured pool, disk device `data`
-  in the instance create request, so no instance exists without it. The
-  instance sets `migration.stateful=false`: Incus attaches extra disks to a
-  stateful VM only from a shared pool, and stop is always a cold shutdown. The guest
-  mounts it at `/home` and keeps `/var/lib/macrod` there. Docker: named
+  by `Fleet::destroy` with it. Firecracker: the host agent creates the
+  computer's `/home` volume (`homeDiskGib`) beside its copy-on-write root disk
+  and reuses one a lost guest left behind. The guest mounts it at `/home` and
+  keeps `/var/lib/macrod` there. Docker: named
   volumes `macro-computer-<id>-home` (`/home`) and `-macrod`
   (`/var/lib/macrod`). Create and destroy are idempotent and leave no volume
   behind a destroyed computer: a retried Create reuses the volume an earlier
-  attempt made (Incus reports it as `VolumeCreation::AlreadyExists`, not an error).
-- **Images**: images are versioned aliases (`macro-box/<version>` on Incus,
+  attempt made.
+- **Images**: images are versioned names (`macro-box/<version>` on Firecracker,
   `macro-box:<tag>` on Docker); `COMPUTERS_IMAGE` names the one new computers
   get, `COMPUTERS_AGENT_IMAGE` the agent-mode build of the same guest
   (`macro-box-agent/<version>`, `macro-box-agent:<tag>`) for agent teammates'
@@ -411,8 +410,9 @@ attempt, so a busy database never fails a computer or abandons a removal.
   for an agent teammate's computer, until the agent reports online
   (`awaiting_agent`; the report applies `AgentOnline`, and an
   `AgentStartDue` timer `AGENT_START_DEADLINE` (3 min) after macrod connects
-  fails it with `Failure::AgentNotStarted`). The first give-up in it waits
-  for a team retry on the same computer, with no new charge. The second
+  fails it with `Failure::AgentNotStarted`). A lost host is no strike: a
+  host outage must not release every computer setting up on it. The first
+  give-up in it waits for a team retry on the same computer, with no new charge. The second
   (`MAX_FIRST_START_FAILURES`) releases the computer (`EndsAt{now}`, Destroy,
   RevokeHarness), queues `RefundPurchase` and `UndoAgentInvite`, and notifies
   `SetupOutcome::Released` (a `computer_setup` `Failed` notice with
@@ -477,16 +477,22 @@ runtime lists read `useRunnableHarnessesQuery` /
 
 - DockerFleet enforces recorded vCPU and memory limits through cgroups without
   CPU pinning; dev-only Docker guests still see host totals in `/proc` and
-  `nproc`. Do not add lxcfs; Incus VMs see their real CPU and memory limits.
+  `nproc`. Do not add lxcfs; Firecracker guests see their real CPU and memory limits.
 
 - Lifecycle state stores the phase tag at `state.phase.phase` and the billing
   tag at `state.billing.billing`; SQL selectors must read those nested tags.
   Size, effect worker, timer kind, notice stage and provider are Postgres
   enums mapped with `sqlx::Type` (`ComputerSize`, the adapter's
   `OutboxWorker`, `TimerKind`, `ClaudeSignInStage`, `AgentProvider`).
-- V1 runs one fleet (one host) per control plane. The operator leases fleet
-  effects and fires timers only for computers on the host it registered
-  (`ports::HostScope::Only`); billing serves every host (`HostScope::Every`).
+- A deployed control plane drives every Firecracker host: each
+  `hosted_runtime_host` row with an `endpoint` and pinned
+  `server_certificate_pem` gets its own `FirecrackerFleet` (`HostFleets`),
+  registered (its capacity and heartbeat) on every reconcile pass. A local
+  stack drives one Docker home host its environment configures. The operator
+  leases fleet effects and fires timers only for computers on the hosts it
+  drives (`ports::HostScope::Only`); billing serves every host
+  (`HostScope::Every`). Each host runs its effects in lease order,
+  `max_concurrent_starts` (default 1) at a time.
 - `hosted_runtime_host.admitting` (default true): purchases are placed only on
   admitting hosts, and `allocation` (offers, capacity gauges) counts only
   those, so turning it off drains a host of new purchases.
@@ -524,7 +530,8 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
 - Metrics: `computer.setup.phase.duration` (seconds, by `phase`),
   `computer.setup.duration` (reservation → first macrod connection),
   `computer.provisioning.duration` (the same total, unlabelled),
-  `computer.effect.failures` (by phase) and `computer.incus.reachable` (0/1).
+  `computer.effect.failures` (by phase) and `computer.firecracker.reachable`
+  (0/1, by `host` and `url.template`).
 - Capacity gauges, every reconcile pass: `computer.capacity.allocated` and
   `computer.capacity.total` by `scope` (`host`/`fleet`), `host_id`, `host`
   and `resource` (`sold_units`, `vcpus`, `memory_gib`, `disk_gib`). Only

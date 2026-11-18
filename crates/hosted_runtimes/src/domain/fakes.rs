@@ -18,8 +18,8 @@ use crate::domain::lifecycle::{
     Billing, BillingPolicy, Context, Effect, EffectWorker, Event, HostId, provision, transition,
 };
 use crate::domain::models::{
-    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostAllocation, HostRegistration,
-    NewReservation, PurchaseKey, Reservation, Reserved, SanitizedReason,
+    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostAllocation, HostRecord,
+    HostRegistration, NewReservation, PurchaseKey, Reservation, Reserved, SanitizedReason,
 };
 use crate::domain::ports::{
     Applied, ComputerRepo, DueTimer, GuestProcess, PendingEffect, ReserveError,
@@ -118,6 +118,12 @@ pub struct FakeRepo {
     pub agent_counts: Mutex<HashMap<ComputerId, u32>>,
     /// The agent teammate each computer was bought for.
     pub agents: Mutex<HashMap<ComputerId, MacroUserIdStr<'static>>>,
+    /// Host rows besides the home host [`HOST`].
+    pub other_hosts: Mutex<Vec<HostRecord>>,
+    /// Registrations of other hosts, by name.
+    pub registered: Mutex<Vec<crate::domain::models::HostName>>,
+    /// The home host row's `max_concurrent_starts`; one when unset.
+    pub home_max_concurrent_starts: Option<u32>,
 }
 
 impl crate::domain::agent::ComputerAgents for FakeRepo {
@@ -207,6 +213,7 @@ impl FakeRepo {
                 computer_id: computer.id,
                 effect,
                 attempts: 0,
+                queued_at: now,
             });
             self.effect_run_after.lock().unwrap().insert(id, now);
         }
@@ -770,8 +777,19 @@ impl ComputerRepo for FakeRepo {
 
     async fn register_host(&self, registration: HostRegistration) -> Result<Host, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        let other = self
+            .other_hosts
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|host| host.name == registration.name)
+            .map(|host| host.id);
+        self.registered
+            .lock()
+            .unwrap()
+            .push(registration.name.clone());
         Ok(Host {
-            id: HOST,
+            id: other.unwrap_or(HOST),
             awake_capacity_units: registration.awake_capacity_units(),
             sold_capacity_units: registration.sold_capacity_units(),
             name: registration.name,
@@ -782,6 +800,18 @@ impl ComputerRepo for FakeRepo {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.heartbeats.lock().unwrap().push((host, now));
         Ok(())
+    }
+
+    async fn hosts(&self) -> Result<Vec<HostRecord>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let mut hosts = vec![HostRecord {
+            id: HOST,
+            name: crate::domain::models::HostName::try_new("runtime-dev-1").unwrap(),
+            connection: None,
+            max_concurrent_starts: self.home_max_concurrent_starts.unwrap_or(1),
+        }];
+        hosts.extend(self.other_hosts.lock().unwrap().iter().cloned());
+        Ok(hosts)
     }
 
     async fn allocation(&self) -> Result<Vec<HostAllocation>, FakeError> {
@@ -801,7 +831,7 @@ impl ComputerRepo for FakeRepo {
         Ok(vec![HostAllocation {
             host: Host {
                 id: HOST,
-                name: "fake".to_owned(),
+                name: crate::domain::models::HostName::try_new("fake").unwrap(),
                 awake_capacity_units: self.awake_units(),
                 sold_capacity_units: self.sold_units,
             },

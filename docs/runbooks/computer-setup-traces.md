@@ -15,7 +15,7 @@ runs ([Macro computers: Observability](../architecture/macro-computers.md#observ
 | `computer.setup.payment` | authentication_service | Reservation until the charge settled or the comp; overlaps `computer.setup.create`. |
 | `computer.billing.effect` → `computer.billing.charge` / `computer.billing.settle_charge` | authentication_service | Delayed payment recovery, when the request did not settle the charge, and the fence of a computer released while charging. |
 | `computer.setup.create` | agent_harness_service | Conversion until the guest boots: outbox wait, fleet create, capacity wait (`capacity_waited`). |
-| `computer.fleet.work` → `incus_fleet.create` / `docker_fleet.create` → `computer.enrollment.issue` | agent_harness_service | The fleet create effect itself. |
+| `computer.fleet.work` → `firecracker_fleet.create` / `docker_fleet.create` → `computer.enrollment.issue` | agent_harness_service | The fleet create effect itself. |
 | `computer.setup.boot` | agent_harness_service | Guest boot until macrod first connects (boot, `macrod enroll`, harness claim, connect). |
 | `claim_pairing` | document_storage_service | macrod claiming its harness (its request carries the setup `traceparent`). |
 | `computer.macrod.connected` | agent_harness_service | The first connection being recorded. |

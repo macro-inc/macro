@@ -737,7 +737,6 @@ dependencies = [
  "import_jira",
  "import_linear",
  "import_notion",
- "incus_client",
  "initiative",
  "jev",
  "jsonwebtoken 10.3.0",
@@ -842,6 +841,7 @@ dependencies = [
  "web_search",
  "wiremock",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -5065,6 +5065,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "utoipa",
  "workspace-hack",
@@ -10514,11 +10515,13 @@ dependencies = [
  "chrono",
  "clap",
  "computer_id",
+ "computer_types",
  "entity_access",
  "feature_flags",
+ "firecracker_host_api",
+ "futures",
  "harness_id",
  "harnesses",
- "incus_client",
  "macro_authorization",
  "macro_db_migrator",
  "macro_env",
@@ -10538,6 +10541,8 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
+ "tokio-tungstenite 0.28.0",
+ "tokio-util",
  "tower 0.5.3",
  "tracing",
  "tracing-opentelemetry",
@@ -11373,27 +11378,6 @@ checksum = "7cab85a7ed0bd5f0e76d93846e0147172bed2e2d3f859bcc33a8d9699cad1a75"
 dependencies = [
  "proc-macro2",
  "quote",
-]
-
-[[package]]
-name = "incus_client"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "futures",
- "progenitor-client",
- "reqwest 0.13.4",
- "rustls",
- "serde",
- "serde_json",
- "strum 0.27.2",
- "thiserror 2.0.18",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "tracing",
- "uuid",
- "wiremock",
- "workspace-hack",
 ]
 
 [[package]]

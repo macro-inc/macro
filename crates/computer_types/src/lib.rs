@@ -9,6 +9,20 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 mod test;
 
+/// Whom a computer is for, fixed at purchase. The guest grants its `macro`
+/// user sudo and Docker only on a person's computer. Not a secret.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, strum::Display)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ComputerRole {
+    /// A person's computer: its user may administer it.
+    Person,
+    /// An agent teammate's computer: the agent runs there, and its user gets
+    /// no administrator rights.
+    Agent,
+}
+
 /// Identifies one creation of a computer's guest, including retries of that
 /// creation.
 #[derive(

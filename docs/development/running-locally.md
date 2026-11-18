@@ -701,11 +701,16 @@ Local orchestration supplies reserve `7` GB and oversell factor `3`. The Docker 
 Docker additionally requires `COMPUTERS_DOCKER_NETWORK`,
 `COMPUTERS_DOCKER_ENROLLMENT_DIR`, and `COMPUTERS_DOCKER_MEMORY_GB` (`32` locally).
 
+Firecracker hosts are `hosted_runtime_host` rows with an `endpoint` and
+`server_certificate_pem`. With `COMPUTERS_FLEET=firecracker` the control
+plane drives every such row with the mTLS identity in
+`COMPUTERS_FIRECRACKER_CLIENT_CERT` and `COMPUTERS_FIRECRACKER_CLIENT_KEY`.
+
 Authentication does not read a fleet selector. It resolves physical attachment on
 every computer HTTP request from the owning host heartbeat (fresh within five
 minutes); without attachment these routes answer typed 503 before reads, billing
 or queued effects. The operator refreshes its heartbeat at startup and every
-60-second reconcile pass. PostHog `enable-macro-computers` is the only product
+60-second reconcile pass. PostHog `enable-macro-computers` is the product
 rollout gate. Absent attachment is not a feature switch.
 
 Configure all six

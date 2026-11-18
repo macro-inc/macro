@@ -7,7 +7,7 @@ async fn startup_push_only_changes_this_hosts_macrod_timers(pool: PgPool) {
     let repo = PgComputerRepo::new(pool.clone(), policy());
     let host = repo
         .register_host(HostRegistration {
-            name: "timer-test-host".to_owned(),
+            name: crate::domain::models::HostName::try_new("timer-test-host").unwrap(),
             memory_gb: 31,
             reserve_gb: 7,
             oversell_factor: 3,
@@ -50,7 +50,7 @@ async fn release_only_returns_own_unfinished_fleet_leases(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool.clone(), policy());
     repo.register_host(HostRegistration {
-        name: "lease-test-host".to_owned(),
+        name: crate::domain::models::HostName::try_new("lease-test-host").unwrap(),
         memory_gb: 31,
         reserve_gb: 7,
         oversell_factor: 3,
@@ -104,7 +104,7 @@ async fn completion_and_boot_timer_commit_together_or_roll_back_together(pool: P
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool.clone(), policy());
     repo.register_host(HostRegistration {
-        name: "completion-test-host".to_owned(),
+        name: crate::domain::models::HostName::try_new("completion-test-host").unwrap(),
         memory_gb: 31,
         reserve_gb: 7,
         oversell_factor: 3,

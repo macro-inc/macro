@@ -15,7 +15,7 @@ fn the_data_disk_gets_the_quota_beyond_the_root_disk() {
 }
 
 #[test]
-fn image_names_take_incus_aliases_and_docker_tags_only() {
+fn image_names_take_versioned_names_and_docker_tags_only() {
     for valid in [
         "macro-box/2026-11-10",
         "macro-box:latest",

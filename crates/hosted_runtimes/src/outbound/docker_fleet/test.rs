@@ -6,14 +6,14 @@ const COMPUTER_ID: ComputerId =
 
 fn config() -> DockerFleetConfig {
     DockerFleetConfig {
-        control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+        control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
         images: GuestImages {
             regular: GuestImage::try_new("macro-box:latest").unwrap(),
             agent: GuestImage::try_new("macro-box-agent:latest").unwrap(),
         },
         network: "macro_services".to_owned(),
         enrollment_dir: PathBuf::from("/var/lib/macro/enrollments"),
-        host_name: "docker-local".to_owned(),
+        host_name: crate::domain::models::HostName::try_new("docker-local").unwrap(),
         memory_gb: 64,
         reserve_gb: 16,
         oversell_factor: 4,
@@ -25,7 +25,7 @@ fn create_runs_systemd_with_the_enrollment_directory_mounted_read_only() {
     let spec = CreateSpec {
         generation: EnrollmentGeneration::new(1),
         pairing_id: PairingId::new_from_uuid(Uuid::from_u128(1)),
-        control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+        control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         image: GuestImage::try_new("macro-box:latest").unwrap(),
         network: "macro_services".to_owned(),
@@ -125,7 +125,7 @@ fn labels_keep_the_identity_a_rebuild_reuses() {
         )
         .unwrap(),
         ContainerLabels {
-            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
             generation: EnrollmentGeneration::new(3),
             pairing_id: PairingId::new_from_uuid(Uuid::from_u128(1)),
             created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
@@ -161,7 +161,7 @@ fn listing_prints_the_computer_id_label_and_state() {
     assert_eq!(
         list_args(
             "macro_services",
-            &ControlPlaneId::parse("test-a".to_owned()).unwrap()
+            &ControlPlaneId::try_new("test-a").unwrap()
         ),
         [
             "ps",
@@ -248,14 +248,14 @@ fn listing_maps_docker_states_to_instance_statuses() {
                   01900000-0000-7000-8000-000000000004\tcreated\ttest-a\t2026-11-05T10:00:00Z\n";
 
     assert_eq!(
-        parse_instances(output, &ControlPlaneId::parse("test-a".to_owned()).unwrap()).unwrap(),
+        parse_instances(output, &ControlPlaneId::try_new("test-a").unwrap()).unwrap(),
         [
             FleetInstance {
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(
                     0x0190_0000_0000_7000_8000_0000_0000_0001
                 )),
                 status: InstanceStatus::Running,
-                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                 created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
             },
             FleetInstance {
@@ -263,7 +263,7 @@ fn listing_maps_docker_states_to_instance_statuses() {
                     0x0190_0000_0000_7000_8000_0000_0000_0002
                 )),
                 status: InstanceStatus::Running,
-                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                 created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
             },
             FleetInstance {
@@ -271,7 +271,7 @@ fn listing_maps_docker_states_to_instance_statuses() {
                     0x0190_0000_0000_7000_8000_0000_0000_0003
                 )),
                 status: InstanceStatus::Stopped,
-                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                 created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
             },
             FleetInstance {
@@ -279,7 +279,7 @@ fn listing_maps_docker_states_to_instance_statuses() {
                     0x0190_0000_0000_7000_8000_0000_0000_0004
                 )),
                 status: InstanceStatus::Stopped,
-                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                 created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
             },
         ]
@@ -292,7 +292,7 @@ fn listing_rejects_an_unknown_state() {
         "01900000-0000-7000-8000-000000000001\thibernating\ttest-a\t2026-11-05T10:00:00Z\n";
 
     assert!(matches!(
-        parse_instances(output, &ControlPlaneId::parse("test-a".to_owned()).unwrap()),
+        parse_instances(output, &ControlPlaneId::try_new("test-a").unwrap()),
         Err(DockerFleetError::Malformed(_))
     ));
 }
@@ -317,7 +317,7 @@ async fn the_host_registers_with_its_configured_capacity() {
     assert_eq!(
         fleet.host().await.unwrap(),
         HostRegistration {
-            name: "docker-local".to_owned(),
+            name: crate::domain::models::HostName::try_new("docker-local").unwrap(),
             memory_gb: 64,
             reserve_gb: 16,
             oversell_factor: 4,
@@ -354,11 +354,11 @@ fn only_a_missing_container_is_classified_as_lost() {
 fn listing_ignores_foreign_and_unlabelled_instances() {
     let output = "not-ours\tunknown\ttest-b\tinvalid\nlegacy\tunknown\t\t\n01900000-0000-7000-8000-000000000001\trunning\ttest-a\tinvalid\n";
     assert_eq!(
-        parse_instances(output, &ControlPlaneId::parse("test-a".to_owned()).unwrap()).unwrap(),
+        parse_instances(output, &ControlPlaneId::try_new("test-a").unwrap()).unwrap(),
         vec![FleetInstance {
             computer_id: COMPUTER_ID,
             status: InstanceStatus::Running,
-            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
             created_at: None,
         }]
     );

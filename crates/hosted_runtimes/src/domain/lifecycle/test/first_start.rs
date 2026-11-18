@@ -134,6 +134,26 @@ fn a_comped_computer_failing_twice_is_released_with_nothing_to_refund() {
 }
 
 #[test]
+fn a_lost_host_during_the_first_start_is_no_strike_against_the_computer() {
+    let struck_once = ComputerState {
+        first_start_failures: 1,
+        ..setting_up()
+    };
+
+    let (gave_up, effects) = apply(&struck_once, Event::HostLost);
+
+    assert_eq!(gave_up.first_start_failures, 1);
+    assert_eq!(gave_up.failure, Some(Failure::HostLost));
+    assert_ne!(gave_up.phase, Phase::Destroying);
+    assert!(!effects.contains(&Effect::UndoAgentInvite));
+    assert!(
+        !effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::RefundPurchase { .. }))
+    );
+}
+
+#[test]
 fn failures_after_the_first_start_never_release_the_computer() {
     let (running, _) = apply(&setting_up(), Event::MacrodConnected);
     assert!(running.setup.as_ref().unwrap().complete());

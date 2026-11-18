@@ -1510,6 +1510,12 @@ pub async fn run() -> anyhow::Result<()> {
                 ),
                 harnessd: harnessd.clone(),
             },
+            hosted_runtimes::outbound::pg::PgEffectSignals::listen(
+                pool.clone(),
+                &computer_tasks,
+                service_shutdown.clone(),
+            )
+            .await,
             &computer_tasks,
             service_shutdown.clone(),
         );

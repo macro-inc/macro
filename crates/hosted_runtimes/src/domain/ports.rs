@@ -20,8 +20,8 @@ use crate::domain::lifecycle::{
     SetupOutcome, SubscriptionItemId, TimerKind,
 };
 use crate::domain::models::{
-    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation,
-    HostRegistration, NewReservation, Quote, Reservation, Reserved, SubscriptionItem,
+    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation, HostName,
+    HostRecord, HostRegistration, NewReservation, Quote, Reservation, Reserved, SubscriptionItem,
 };
 use crate::domain::size::ComputerSize;
 
@@ -81,6 +81,8 @@ pub struct PendingEffect {
     pub effect: Effect,
     /// Number of failed execution attempts.
     pub attempts: u32,
+    /// When the transition queued it.
+    pub queued_at: DateTime<Utc>,
 }
 
 /// A timer that came due.
@@ -384,6 +386,9 @@ pub trait ComputerRepo: Send + Sync + 'static {
     /// Every host purchases may be placed on (admitting hosts), with
     /// what its computers and reservations hold, by host id.
     fn allocation(&self) -> impl Future<Output = Result<Vec<HostAllocation>, Self::Err>> + Send;
+
+    /// Every host row, with its backend and connection, oldest first.
+    fn hosts(&self) -> impl Future<Output = Result<Vec<HostRecord>, Self::Err>> + Send;
 }
 
 /// Takes back an agent teammate whose computer was released after failing
@@ -626,6 +631,76 @@ pub trait Fleet: Send + Sync + 'static {
         computer_id: ComputerId,
         argv: &[&str],
     ) -> impl Future<Output = Result<GuestProcess<Self::Err>, Self::Err>> + Send;
+}
+
+/// The fleets one control plane drives: every Firecracker host row, or a
+/// home host its environment configures (the local Docker host), which
+/// registers itself. A single [`Fleet`] is a control plane with only a home
+/// host.
+pub trait Fleets: Send + Sync + 'static {
+    /// The fleet every host is driven through.
+    type Fleet: Fleet;
+    /// Why a host row cannot be driven: no credentials or no connection.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// The home host's fleet; `None` when every host is a row.
+    fn home(&self) -> Option<&Self::Fleet>;
+
+    /// Whether this control plane drives the row `host`, other than the
+    /// home host. A row it drives but cannot reach is reported, never skipped;
+    /// a row it does not drive belongs to another control plane.
+    fn drives(&self, host: &HostRecord) -> bool;
+
+    /// The fleet driving the row `host`, other than the home host. Building
+    /// one makes no request; an unchanged row gets the same fleet back.
+    fn fleet(&self, host: &HostRecord) -> Result<FleetHandle<'_, Self::Fleet>, Self::Err>;
+}
+
+/// A fleet a [`Fleets`] hands out: its home fleet, or a shared one built
+/// from a host row.
+pub enum FleetHandle<'a, Machines> {
+    /// The home host's fleet.
+    Home(&'a Machines),
+    /// Another host's fleet.
+    Host(std::sync::Arc<Machines>),
+}
+
+impl<Machines> std::ops::Deref for FleetHandle<'_, Machines> {
+    type Target = Machines;
+
+    fn deref(&self) -> &Machines {
+        match self {
+            Self::Home(fleet) => fleet,
+            Self::Host(fleet) => fleet,
+        }
+    }
+}
+
+/// A single fleet drives only its home host.
+#[derive(Debug, thiserror::Error)]
+#[error("this control plane drives only its home host, not {host}")]
+pub struct HomeHostOnly {
+    /// The host row that was asked for.
+    pub host: HostName,
+}
+
+impl<Machines: Fleet> Fleets for Machines {
+    type Fleet = Machines;
+    type Err = HomeHostOnly;
+
+    fn home(&self) -> Option<&Machines> {
+        Some(self)
+    }
+
+    fn drives(&self, _host: &HostRecord) -> bool {
+        false
+    }
+
+    fn fleet(&self, host: &HostRecord) -> Result<FleetHandle<'_, Machines>, HomeHostOnly> {
+        Err(HomeHostOnly {
+            host: host.name.clone(),
+        })
+    }
 }
 
 /// The guest account [`Fleet::exec`] runs programs as.

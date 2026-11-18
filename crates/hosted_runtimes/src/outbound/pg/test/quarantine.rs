@@ -7,7 +7,7 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
     let repo = PgComputerRepo::new(pool.clone(), policy());
     let host = repo
         .register_host(HostRegistration {
-            name: "quarantine-test".to_owned(),
+            name: crate::domain::models::HostName::try_new("quarantine-test").unwrap(),
             memory_gb: 64,
             reserve_gb: 8,
             oversell_factor: 3,

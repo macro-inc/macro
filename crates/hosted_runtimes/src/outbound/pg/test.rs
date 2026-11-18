@@ -6,6 +6,7 @@ mod redeploy;
 mod agents;
 mod billing_races;
 mod boot;
+mod effect_signals;
 mod host_scope;
 
 use chrono::{Duration, TimeZone};
@@ -136,7 +137,7 @@ async fn host(
     oversell_factor: u32,
 ) -> Host {
     repo.register_host(HostRegistration {
-        name: name.to_owned(),
+        name: crate::domain::models::HostName::try_new(name).unwrap(),
         memory_gb,
         reserve_gb,
         oversell_factor,
@@ -748,7 +749,7 @@ async fn fleet_attachment_tracks_host_heartbeat_freshness(pool: PgPool) {
     );
     let host = repo
         .register_host(HostRegistration {
-            name: "heartbeat-test".to_owned(),
+            name: crate::domain::models::HostName::try_new("heartbeat-test").unwrap(),
             memory_gb: 32,
             reserve_gb: 8,
             oversell_factor: 2,

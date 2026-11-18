@@ -119,7 +119,6 @@ members = [
   "crates/harnessd_protocol",
   "crates/harnesses",
   "crates/hosted_runtimes",
-  "crates/incus_client",
   "crates/firecracker_host_api",
   "crates/pinned_tls",
   "crates/computer_types",

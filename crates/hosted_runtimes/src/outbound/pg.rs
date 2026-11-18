@@ -25,6 +25,9 @@ use crate::domain::size::{ComputerResources, ComputerSize};
 mod agents;
 pub use agents::PgComputerAgents;
 mod apply;
+mod effect_signals;
+pub use effect_signals::PgEffectSignals;
+mod hosts;
 mod records;
 mod reservations;
 mod row;
@@ -56,6 +59,15 @@ pub enum PgComputerError {
     /// Only fleet and billing effects are stored in the outbox.
     #[error("{0:?} effects are not stored in the outbox")]
     NotAnOutboxWorker(EffectWorker),
+    /// A host row's endpoint is not a URL.
+    #[error("host {name} has an invalid endpoint")]
+    InvalidHostEndpoint {
+        /// Host name.
+        name: crate::domain::models::HostName,
+        /// Why it does not parse.
+        #[source]
+        error: url::ParseError,
+    },
 }
 
 impl From<sqlx::Error> for PgComputerError {
@@ -86,6 +98,12 @@ fn host_uuids(scope: &HostScope) -> Option<Vec<Uuid>> {
     scope
         .hosts()
         .map(|hosts| hosts.iter().map(|host| host.into_inner()).collect())
+}
+
+/// A stored host name; an invalid one is corrupt data.
+fn host_name(name: &str) -> Result<crate::domain::models::HostName, PgComputerError> {
+    crate::domain::models::HostName::try_new(name)
+        .map_err(|error| PgComputerError::Corrupt(error.to_string()))
 }
 
 /// The outbox's `computer_effect_worker`: the workers that lease effects.
@@ -680,7 +698,7 @@ impl ComputerRepo for PgComputerRepo {
                 LIMIT $2
                 FOR UPDATE SKIP LOCKED
             )
-            RETURNING id, computer_id, effect, attempts
+            RETURNING id, computer_id, effect, attempts, created_at
             "#,
             worker as OutboxWorker,
             i64::from(limit),
@@ -698,6 +716,7 @@ impl ComputerRepo for PgComputerRepo {
                     computer_id: ComputerId::new_from_uuid(row.computer_id),
                     effect: serde_json::from_value(row.effect)?,
                     attempts: u32::try_from(row.attempts)?,
+                    queued_at: row.created_at,
                 })
             })
             .collect()
@@ -882,7 +901,7 @@ impl ComputerRepo for PgComputerRepo {
             RETURNING id, name, awake_capacity_units, sold_capacity_units
             "#,
             Uuid::now_v7(),
-            registration.name,
+            registration.name.as_str(),
             awake,
             sold,
         )
@@ -891,7 +910,7 @@ impl ComputerRepo for PgComputerRepo {
 
         Ok(Host {
             id: HostId::new(row.id),
-            name: row.name,
+            name: host_name(&row.name)?,
             awake_capacity_units: u32::try_from(row.awake_capacity_units)?,
             sold_capacity_units: u32::try_from(row.sold_capacity_units)?,
         })
@@ -911,6 +930,11 @@ impl ComputerRepo for PgComputerRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn hosts(&self) -> Result<Vec<crate::domain::models::HostRecord>, PgComputerError> {
+        self.host_rows().await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -950,7 +974,7 @@ impl ComputerRepo for PgComputerRepo {
                 Ok(HostAllocation {
                     host: Host {
                         id: HostId::new(row.id),
-                        name: row.name,
+                        name: host_name(&row.name)?,
                         awake_capacity_units: u32::try_from(row.awake_capacity_units)?,
                         sold_capacity_units: u32::try_from(row.sold_capacity_units)?,
                     },

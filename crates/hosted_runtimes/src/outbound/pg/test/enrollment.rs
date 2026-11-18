@@ -6,7 +6,7 @@ async fn generations_and_create_outbox_never_persist_issuance_material(pool: PgP
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool.clone(), policy());
     repo.register_host(HostRegistration {
-        name: "fixture-host".to_owned(),
+        name: crate::domain::models::HostName::try_new("fixture-host").unwrap(),
         memory_gb: 31,
         reserve_gb: 7,
         oversell_factor: 3,

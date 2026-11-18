@@ -34,11 +34,11 @@ pub mod host;
 pub mod mmds;
 
 pub use computer::{
-    Action, Computer, ComputerResources, ComputerRole, CreateComputer, DiskBackend,
-    EnrollmentDocument, LaunchSource, LaunchTimings, PowerState, SetEnrollment, Usage,
+    Action, Computer, ComputerResources, CreateComputer, DiskBackend, EnrollmentDocument,
+    LaunchSource, LaunchTimings, PowerState, SetEnrollment, Usage,
 };
 pub use computer_id::ComputerId;
-pub use computer_types::{ControlPlaneId, EnrollmentGeneration, GuestImage};
+pub use computer_types::{ComputerRole, ControlPlaneId, EnrollmentGeneration, GuestImage};
 pub use error::{ErrorCode, ErrorResponse};
 pub use host::{
     GoldenImage, GoldenKey, GoldenState, HostInfo, HostLimits, InvalidHostLimits, NetworkSlots,

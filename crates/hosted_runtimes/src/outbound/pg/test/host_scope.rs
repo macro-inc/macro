@@ -89,3 +89,60 @@ async fn a_control_plane_leases_only_its_own_hosts_effects_and_timers(pool: PgPo
         .collect();
     assert_eq!(leased_for_second, vec![on_second.id]);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn host_rows_carry_their_connection_and_start_concurrency(pool: PgPool) {
+    let repo = PgComputerRepo::new(pool.clone(), policy());
+    let local = host(&repo, "docker-local", 31, 7, 3).await;
+    let microvm = HostId::new(Uuid::now_v7());
+    sqlx::query!(
+        r#"
+        INSERT INTO hosted_runtime_host
+            (id, name, awake_capacity_units, sold_capacity_units, endpoint,
+             server_certificate_pem, max_concurrent_starts)
+        VALUES ($1, 'microvm-1', 0, 0, 'https://10.0.0.2:8443', 'pinned', 8)
+        "#,
+        microvm.into_inner(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let rows = repo.hosts().await.unwrap();
+
+    assert_eq!(
+        rows,
+        vec![
+            crate::domain::models::HostRecord {
+                id: local.id,
+                name: crate::domain::models::HostName::try_new("docker-local").unwrap(),
+                connection: None,
+                max_concurrent_starts: 1,
+            },
+            crate::domain::models::HostRecord {
+                id: microvm,
+                name: crate::domain::models::HostName::try_new("microvm-1").unwrap(),
+                connection: Some(crate::domain::models::HostConnection {
+                    endpoint: "https://10.0.0.2:8443".parse().unwrap(),
+                    server_certificate_pem: "pinned".to_owned(),
+                }),
+                max_concurrent_starts: 8,
+            },
+        ]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_host_has_both_an_endpoint_and_a_certificate_or_neither(pool: PgPool) {
+    let refused = sqlx::query!(
+        r#"
+        INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units, endpoint)
+        VALUES ($1, 'half', 0, 0, 'https://10.0.0.3:8443')
+        "#,
+        Uuid::now_v7(),
+    )
+    .execute(&pool)
+    .await;
+
+    assert!(refused.is_err());
+}

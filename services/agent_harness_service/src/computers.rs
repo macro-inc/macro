@@ -26,9 +26,9 @@ use hosted_runtimes::domain::ports::{DefaultAgent, Harnesses, HostedPairing};
 use hosted_runtimes::domain::service::SystemClock;
 use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
 use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
-use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
-use hosted_runtimes::outbound::pg::{PgComputerAgents, PgComputerRepo};
-use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
+use hosted_runtimes::outbound::firecracker_fleet;
+use hosted_runtimes::outbound::host_fleets::{FirecrackerSettings, HostFleets};
+use hosted_runtimes::outbound::pg::{PgComputerAgents, PgComputerRepo, PgEffectSignals};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo;
@@ -77,7 +77,7 @@ pub type SetupNotifications =
 
 pub type Operator = ComputerOperator<
     PgComputerRepo,
-    ConfiguredFleet,
+    HostFleets,
     HostedHarnesses,
     SystemClock,
     team_agents::outbound::setup_notices::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
@@ -99,68 +99,52 @@ pub(crate) async fn operator(
         return Ok(None);
     };
     let fleet = match fleet_config {
-        ComputerFleetConfig::Incus(settings) => ConfiguredFleet::Incus(
-            IncusFleet::new(IncusFleetConfig {
-                endpoint: IncusEndpoint {
-                    url: settings.computers_incus_url.clone(),
-                    timeouts: IncusTimeouts {
-                        state_change_secs: settings.computers_incus_state_change_timeout_secs,
-                        request: Duration::from_secs(settings.computers_incus_request_timeout_secs),
-                        connect: Duration::from_secs(settings.computers_incus_connect_timeout_secs),
-                        operation_wait_secs: settings.computers_incus_operation_wait_secs,
-                        operation_waits: settings.computers_incus_operation_waits,
-                    },
-                    client_cert_pem: settings.computers_incus_client_cert.clone(),
-                    client_key_pem: settings.computers_incus_client_key.clone(),
-                    server_cert_pem: settings.computers_incus_server_cert.clone(),
-                },
-                host_name: settings.computers_host_name.clone(),
-                control_plane_id: ControlPlaneId::parse(
-                    settings.computers_control_plane_id.clone(),
-                )?,
+        ComputerFleetConfig::Firecracker(settings) => HostFleets::new(
+            None,
+            Some(FirecrackerSettings {
+                control_plane_id: ControlPlaneId::try_new(&settings.computers_control_plane_id)?,
+                client_cert_pem: settings.computers_firecracker_client_cert.clone(),
+                client_key_pem: zeroize::Zeroizing::new(
+                    settings.computers_firecracker_client_key.clone(),
+                ),
+                connect_timeout: firecracker_fleet::CONNECT_TIMEOUT,
+                request_timeout: firecracker_fleet::REQUEST_TIMEOUT,
+                images: GuestImages {
+                    regular: settings.computers_image.as_str(),
+                    agent: settings.computers_agent_image.as_str(),
+                }
+                .try_map(hosted_runtimes::domain::image::GuestImage::try_new)?,
                 reserve_gb: settings.computers_host_reserve_gb,
                 oversell_factor: settings.computers_oversell_factor,
-                images: GuestImages {
-                    regular: &settings.computers_image,
-                    agent: &settings.computers_agent_image,
-                }
-                .try_map(|alias| {
-                    Ok::<_, incus_client::InvalidName>(ImageSource {
-                        reference: ImageReference::Alias(incus_client::ImageAlias::try_new(alias)?),
-                        remote: None,
-                    })
-                })?,
-                profile: incus_client::ProfileName::try_new(
-                    &settings.computers_incus_profile.clone(),
-                )?,
-                storage_pool: incus_client::StoragePoolName::try_new(
-                    &settings.computers_incus_storage_pool.clone(),
-                )?,
-                shutdown_grace: Duration::from_secs(settings.computers_incus_shutdown_grace_secs),
-            })
-            .context("could not build the Incus fleet")?,
+            }),
         ),
-        ComputerFleetConfig::Docker(settings) => ConfiguredFleet::Docker(
-            DockerFleet::new(
-                DockerFleetConfig {
-                    control_plane_id: ControlPlaneId::parse(
-                        settings.computers_control_plane_id.clone(),
-                    )?,
-                    images: GuestImages {
-                        regular: settings.computers_image.as_str(),
-                        agent: settings.computers_agent_image.as_str(),
-                    }
-                    .try_map(hosted_runtimes::domain::image::GuestImage::try_new)?,
-                    network: settings.computers_docker_network.clone(),
-                    enrollment_dir: settings.computers_docker_enrollment_dir.clone().into(),
-                    host_name: settings.computers_host_name.clone(),
-                    memory_gb: settings.computers_docker_memory_gb,
-                    reserve_gb: settings.computers_host_reserve_gb,
-                    oversell_factor: settings.computers_oversell_factor,
-                },
-                config.environment,
-            )
-            .context("could not build the Docker fleet")?,
+        ComputerFleetConfig::Docker(settings) => HostFleets::new(
+            Some(ConfiguredFleet::Docker(
+                DockerFleet::new(
+                    DockerFleetConfig {
+                        control_plane_id: ControlPlaneId::try_new(
+                            &settings.computers_control_plane_id,
+                        )?,
+                        images: GuestImages {
+                            regular: settings.computers_image.as_str(),
+                            agent: settings.computers_agent_image.as_str(),
+                        }
+                        .try_map(hosted_runtimes::domain::image::GuestImage::try_new)?,
+                        network: settings.computers_docker_network.clone(),
+                        enrollment_dir: settings.computers_docker_enrollment_dir.clone().into(),
+                        host_name: hosted_runtimes::domain::models::HostName::try_new(
+                            &settings.computers_host_name,
+                        )?,
+                        memory_gb: settings.computers_docker_memory_gb,
+                        reserve_gb: settings.computers_host_reserve_gb,
+                        oversell_factor: settings.computers_oversell_factor,
+                    },
+                    config.environment,
+                )
+                .context("could not build the Docker fleet")?,
+            )),
+            // A local stack drives no Firecracker hosts.
+            None,
         ),
     };
 
@@ -268,10 +252,13 @@ pub struct ClaudeSignInWatch<Ingress> {
 /// [`harnessd::Harnessd`] over the harness table.
 pub type HostedHarnessd = harnessd::Harnessd<PgHarnessService>;
 
-/// Run the operator's passes until `shutdown`.
+/// Run the operator's passes until `shutdown`. The effect pass also runs as
+/// soon as `effect_signals` hears of a queued fleet effect, so a purchase
+/// does not wait out [`EFFECT_TICK`].
 pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
     operator: Arc<Operator>,
     claude_sign_ins: ClaudeSignInWatch<Ingress>,
+    effect_signals: PgEffectSignals,
     tracker: &TaskTracker,
     shutdown: CancellationToken,
 ) {
@@ -287,6 +274,7 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
             pass,
             Arc::clone(&operator),
             Arc::clone(&claude_sign_ins),
+            effect_signals.clone(),
             shutdown.clone(),
         ));
     }
@@ -296,6 +284,7 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
     pass: Pass,
     operator: Arc<Operator>,
     claude_sign_ins: Arc<ClaudeSignInWatch<Ingress>>,
+    effect_signals: PgEffectSignals,
     shutdown: CancellationToken,
 ) {
     let mut interval = tokio::time::interval(pass.tick());
@@ -303,10 +292,21 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
     // Consecutive passes skipped because the database had no connection to give.
     let mut skipped: u32 = 0;
     loop {
+        // The tick stays as the backstop for retries that come due and for
+        // notifications lost while the listener reconnected.
+        let queued = async {
+            match pass {
+                Pass::Effects => effect_signals.fleet_effect_queued().await,
+                Pass::Timers | Pass::Reconcile | Pass::ClaudeSignIns | Pass::ClaudeStatus => {
+                    std::future::pending().await
+                }
+            }
+        };
         tokio::select! {
             biased;
             () = shutdown.cancelled() => return,
             _ = interval.tick() => {}
+            () = queued => {}
         }
         let outcome: anyhow::Result<()> =
             match pass {
@@ -701,9 +701,12 @@ impl harnessd::HarnessdTransport for FleetTransport {
 
             let deadline = harnessd::answer_timeout(&request);
             let exchange = async {
-                let process = self
+                let fleet = self
                     .operator
-                    .fleet()
+                    .fleet_of(computer_id)
+                    .await
+                    .map_err(|error| harnessd::HarnessdError::Unreachable(error.to_string()))?;
+                let process = fleet
                     .exec(computer_id, &[harnessd::HARNESSD])
                     .await
                     .map_err(|error| harnessd::HarnessdError::Unreachable(error.to_string()))?;

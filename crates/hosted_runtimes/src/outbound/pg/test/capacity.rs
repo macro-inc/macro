@@ -6,7 +6,7 @@ async fn offers_use_free_sold_units_per_size(pool: PgPool) {
     let repo = PgComputerRepo::new(pool, policy());
     // 32 GB: 4 awake units, sold 3x.
     repo.register_host(HostRegistration {
-        name: "capacity-test".to_owned(),
+        name: crate::domain::models::HostName::try_new("capacity-test").unwrap(),
         memory_gb: 32,
         reserve_gb: 0,
         oversell_factor: 3,
@@ -48,7 +48,7 @@ async fn concurrent_purchases_share_the_sold_unit_limit(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool, policy());
     repo.register_host(HostRegistration {
-        name: "capacity-test".to_owned(),
+        name: crate::domain::models::HostName::try_new("capacity-test").unwrap(),
         memory_gb: 24,
         reserve_gb: 0,
         oversell_factor: 3,

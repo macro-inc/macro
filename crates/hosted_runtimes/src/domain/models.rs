@@ -15,6 +15,11 @@ use crate::domain::lifecycle::{
 };
 use crate::domain::size::{CatalogEntryId, ComputerResources, ComputerSize};
 
+mod host;
+pub use host::{
+    Host, HostAllocation, HostConnection, HostName, HostRecord, HostRegistration, InvalidHostName,
+};
+
 /// How long a host heartbeat advertises an attached operator.
 pub const HOST_HEARTBEAT_FRESHNESS: chrono::Duration = chrono::Duration::minutes(5);
 
@@ -51,34 +56,7 @@ impl FleetAttachment {
 #[error("computers are not available")]
 pub struct FleetUnavailable;
 
-/// Stable identity shared by replicas of one computer control plane.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(transparent)]
-pub struct ControlPlaneId(String);
-
-/// An identity that cannot safely be used in fleet ownership metadata.
-#[derive(Debug, thiserror::Error)]
-#[error("COMPUTERS_CONTROL_PLANE_ID must be nonempty ASCII alphanumerics, hyphens or underscores")]
-pub struct InvalidControlPlaneId;
-
-impl ControlPlaneId {
-    /// Reject empty identities and characters outside ASCII letters, digits, `_` and `-`.
-    pub fn parse(value: String) -> Result<Self, InvalidControlPlaneId> {
-        if value.is_empty()
-            || !value
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
-        {
-            return Err(InvalidControlPlaneId);
-        }
-        Ok(Self(value))
-    }
-
-    /// The exact identity written into fleet ownership metadata.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
+pub use computer_types::{ControlPlaneId, InvalidControlPlaneId};
 
 /// One computer allocated to a team.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -537,74 +515,6 @@ pub struct SizeOffer {
     pub sold_out: bool,
 }
 
-/// A fleet host, counted in resource units.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Host {
-    /// Stable resource identity.
-    pub id: HostId,
-    /// Display name.
-    pub name: String,
-    /// Units available for awake guests.
-    pub awake_capacity_units: u32,
-    /// Units available for purchase.
-    pub sold_capacity_units: u32,
-}
-
-/// What a host's reservations and computers hold against its capacity, with
-/// the same holdings `ComputerRepo::reserve` counts: every reservation and
-/// every computer until release, running or stopped.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostAllocation {
-    /// The host and its capacity.
-    pub host: Host,
-    /// Units held against [`Host::sold_capacity_units`].
-    pub sold_units: u32,
-    /// Virtual CPUs sold on the host.
-    pub vcpus: u32,
-    /// Memory in GiB sold on the host.
-    pub memory_gib: u32,
-    /// Root disk in GiB sold on the host.
-    pub disk_gib: u32,
-}
-
-impl HostAllocation {
-    /// Whether a computer of `units` fits on the host while awake.
-    pub fn runs(&self, units: u32) -> bool {
-        units <= self.host.awake_capacity_units
-    }
-
-    /// Whether the host can sell a computer of `units`: it runs it and has
-    /// that much sold capacity left, as `ComputerRepo::reserve` decides.
-    pub fn sells(&self, units: u32) -> bool {
-        self.runs(units) && self.sold_units + units <= self.host.sold_capacity_units
-    }
-}
-
-/// What a host reports when it registers.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostRegistration {
-    /// Display name.
-    pub name: String,
-    /// Memory in GiB.
-    pub memory_gb: u32,
-    /// RAM kept for the host itself.
-    pub reserve_gb: u32,
-    /// How many units are sold per awake unit.
-    pub oversell_factor: u32,
-}
-
-impl HostRegistration {
-    /// Compute awake capacity after reserving host memory.
-    pub fn awake_capacity_units(&self) -> u32 {
-        self.memory_gb.saturating_sub(self.reserve_gb) / 8
-    }
-
-    /// Compute sellable capacity with overselling.
-    pub fn sold_capacity_units(&self) -> u32 {
-        self.awake_capacity_units() * self.oversell_factor
-    }
-}
-
 /// Why a purchase was refused, as a stable code the buy and add-agent dialogs
 /// show their own way. One vocabulary for `/team/computers` and
 /// `/team_agents`.
@@ -974,20 +884,7 @@ impl std::fmt::Display for ComputerName {
     }
 }
 
-impl TryFrom<String> for ControlPlaneId {
-    type Error = InvalidControlPlaneId;
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::parse(value)
-    }
-}
-
 impl<'de> Deserialize<'de> for ComputerName {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
-    }
-}
-
-impl<'de> Deserialize<'de> for ControlPlaneId {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
     }

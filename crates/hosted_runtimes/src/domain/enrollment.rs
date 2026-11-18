@@ -1,8 +1,8 @@
 //! What a computer reads at first boot to join Macro.
 //!
-//! The control plane writes one [`Enrollment`] as JSON into the instance
-//! config key [`INCUS_ENROLLMENT_KEY`] (read in the guest from `/dev/incus`),
-//! or into a file for Docker computers, and deletes it once macrod connects.
+//! The control plane hands one [`Enrollment`] as JSON to the Firecracker host,
+//! which serves it to the guest through MMDS, or writes it into a file for
+//! Docker computers, and deletes it once macrod connects.
 //! These types are the contract between the control plane and
 //! `macrod enroll`; macrod depends on this crate with default features off.
 
@@ -10,9 +10,6 @@ use crate::domain::ids::{ComputerId, PairingId};
 
 use crate::domain::models::ComputerName;
 use serde::{Deserialize, Serialize};
-
-/// Instance config key carrying the JSON [`Enrollment`].
-pub const INCUS_ENROLLMENT_KEY: &str = "user.macro.enrollment";
 
 /// One-time join material. The device secret claims a pre-approved harness
 /// pairing exactly once; a copy read after that claim is useless.
@@ -42,18 +39,6 @@ pub struct Enrollment {
     pub role: ComputerRole,
 }
 
-/// Whom a computer is for, fixed at purchase.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum ComputerRole {
-    /// A person's computer: its user may administer it.
-    Person,
-    /// An agent teammate's computer: the agent runs there, and its user gets
-    /// no administrator rights.
-    Agent,
-}
-
 /// The service addresses of the deployment a computer joins, as the guest
 /// reaches them. Never persisted: each enrollment carries the current ones.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,27 +64,7 @@ pub trait DeploymentSource: Send + Sync + 'static {
     fn deployment(&self) -> Result<Deployment, DeploymentUnavailable>;
 }
 
-/// Identifies one creation of a computer's guest, including retries of that creation.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct EnrollmentGeneration(u32);
-
-impl EnrollmentGeneration {
-    /// Construct a persisted generation; zero means no guest has been created.
-    pub const fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    /// The persisted counter value.
-    pub const fn get(self) -> u32 {
-        self.0
-    }
-
-    /// Reserve the next creation without wrapping the counter.
-    pub fn next(self) -> Option<Self> {
-        self.0.checked_add(1).map(Self)
-    }
-}
+pub use computer_types::{ComputerRole, EnrollmentGeneration};
 
 /// Issuing an enrollment failed; never carries the pairing secret.
 #[derive(Debug, thiserror::Error)]

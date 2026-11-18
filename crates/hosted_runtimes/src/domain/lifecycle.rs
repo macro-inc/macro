@@ -908,7 +908,13 @@ pub fn transition(
     if next.billing != state.billing {
         next.billing_changed_at = now;
     }
-    if state.first_start() && !gave_up(&state.phase) && gave_up(&next.phase) {
+    // A host outage is not the computer's failure: counting it would release
+    // and refund every computer that was setting up on the host.
+    if state.first_start()
+        && !gave_up(&state.phase)
+        && gave_up(&next.phase)
+        && next.failure != Some(Failure::HostLost)
+    {
         next.first_start_failures = state.first_start_failures.saturating_add(1);
         if next.first_start_failures >= MAX_FIRST_START_FAILURES {
             release_failed_start(state, &mut next, &mut effects, host, now);

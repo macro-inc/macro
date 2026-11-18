@@ -3,7 +3,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::{ComputerId, ControlPlaneId, EnrollmentGeneration, GuestImage, PairingId};
+use crate::{
+    ComputerId, ComputerRole, ControlPlaneId, EnrollmentGeneration, GuestImage, PairingId,
+};
 
 /// What the computer was sold, enforced by the agent: vCPUs and memory by
 /// the golden's shape and the VM's cgroup, disks by their files' sizes.
@@ -37,19 +39,6 @@ impl std::fmt::Debug for EnrollmentDocument {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("EnrollmentDocument(<redacted>)")
     }
-}
-
-/// Whom a computer is for; the guest grants its `macro` user sudo and
-/// Docker only on a person's computer. Not a secret.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, strum::Display)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-#[strum(serialize_all = "camelCase")]
-pub enum ComputerRole {
-    /// A person's computer.
-    Person,
-    /// An agent teammate's computer.
-    Agent,
 }
 
 /// `PUT /v1/computers/{computer_id}`.

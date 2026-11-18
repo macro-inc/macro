@@ -6,7 +6,7 @@ async fn releasing_awake_units_notifies_waiters_in_the_same_transaction(pool: Pg
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool, policy());
     repo.register_host(HostRegistration {
-        name: "capacity-test".to_owned(),
+        name: crate::domain::models::HostName::try_new("capacity-test").unwrap(),
         memory_gb: 8,
         reserve_gb: 0,
         oversell_factor: 9,
