@@ -1,5 +1,5 @@
 import type { SoupPage } from '@service-storage/generated/schemas';
-import { SoupDocument } from '@service-storage/graphql/generated/graphql';
+import { SoupPreviewPageDocument } from '@service-storage/graphql/generated/graphql';
 import {
   type FetchGraphqlSoupOptions,
   fetchGraphqlSoup,
@@ -15,6 +15,7 @@ import {
  * Reads one page of a Soup list over GraphQL, for imperative callers (exports,
  * preview batches). Reactive lists use `useSoupAstItemsQuery`. Throws
  * `UnsupportedGraphqlSoupError` when the request has no GraphQL translation.
+ * Rows come without their notifications, which these readers never show.
  */
 export async function fetchGraphqlSoupPage(
   args: {
@@ -25,7 +26,7 @@ export async function fetchGraphqlSoupPage(
   options: FetchGraphqlSoupOptions = {}
 ): Promise<SoupPage> {
   return await fetchGraphqlSoup(
-    SoupDocument,
+    SoupPreviewPageDocument,
     { input: makeGraphqlSoupInput(args) },
     options
   );
@@ -41,5 +42,5 @@ export async function fetchGraphqlSoupEntities(
 ): Promise<SoupPage> {
   const input = buildGraphqlEntitiesSoupInput(entities);
   if (!input) return { items: [] };
-  return await fetchGraphqlSoup(SoupDocument, { input }, options);
+  return await fetchGraphqlSoup(SoupPreviewPageDocument, { input }, options);
 }

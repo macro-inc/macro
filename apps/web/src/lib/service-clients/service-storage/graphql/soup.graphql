@@ -11,6 +11,22 @@ query Soup($input: SoupInput!) {
 	}
 }
 
+# One-shot reads (exports, previews, recently viewed): the list rows without
+# their notifications, which these readers never show and the server would
+# otherwise look up for every row.
+query SoupPreviewPage($input: SoupInput!) {
+	user {
+		id
+		emailLinks @cacheOnly { ...MailAccountFields }
+		soup(input: $input) {
+			items {
+				...SoupItemPreviewFields
+			}
+			nextCursor
+		}
+	}
+}
+
 query SoupBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly
