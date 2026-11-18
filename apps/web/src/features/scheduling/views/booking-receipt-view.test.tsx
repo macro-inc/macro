@@ -66,6 +66,9 @@ it('offers only Cancel on a booking Macro stopped retrying', async () => {
   ).toBeTruthy();
   expect(screen.queryByText(/retrying/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Reschedule' })).toBeNull();
+  expect(
+    screen.getByText('Keep this private link to cancel your booking.')
+  ).toBeTruthy();
   await confirmCancel();
   expect(cancel).toHaveBeenCalledOnce();
   expect(

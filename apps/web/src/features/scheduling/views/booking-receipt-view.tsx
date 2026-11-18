@@ -127,7 +127,9 @@ export function BookingReceiptView(props: {
                         : ''}
               </p>
               <p class="mt-4 text-xs leading-relaxed text-ink-muted">
-                Keep this private link to reschedule or cancel your booking.
+                {bookingAbandoned(r().booking)
+                  ? 'Keep this private link to cancel your booking.'
+                  : 'Keep this private link to reschedule or cancel your booking.'}
               </p>
               <Show
                 when={

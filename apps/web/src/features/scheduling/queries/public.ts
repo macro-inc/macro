@@ -3,7 +3,10 @@ import { queryClient } from '@queries/client';
 import { schedulingClient } from '@service-email/scheduling';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import { BookingRejectedError } from '../core/booking-error';
+import {
+  BookingRejectedError,
+  RescheduleRefusedError,
+} from '../core/booking-error';
 import type { BookingReceipt, BookingRequest } from '../core/types';
 import { schedulingKeys } from './keys';
 
@@ -150,8 +153,23 @@ export function createBookingReceiptSource(
     retry: false,
   }));
   const reschedule = useMutation(() => ({
-    mutationFn: (startsAt: string) =>
-      throwOnErr(() => schedulingClient.reschedule(id(), token(), startsAt)),
+    mutationFn: async (startsAt: string) => {
+      try {
+        return await throwOnErr(() =>
+          schedulingClient.reschedule(id(), token(), startsAt)
+        );
+      } catch (error) {
+        if (
+          error instanceof ThrownResultError &&
+          error.errors.some(
+            (e) =>
+              e.code === 'HTTP_ERROR' && /status: 422$/.test(e.message ?? '')
+          )
+        )
+          throw new RescheduleRefusedError();
+        throw error;
+      }
+    },
     retry: false,
   }));
   return {

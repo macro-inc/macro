@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, DatePicker } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import { RescheduleRefusedError } from '../core/booking-error';
 import { Field, SelectInput, TimeZoneInput } from './fields';
 
 export function RescheduleForm(props: {
@@ -53,9 +54,11 @@ export function RescheduleForm(props: {
     setSaving(true);
     try {
       await props.submit(selected());
-    } catch {
+    } catch (error) {
       setError(
-        'Could not reschedule this meeting. Refresh before trying again.'
+        error instanceof RescheduleRefusedError
+          ? 'Your host’s calendar couldn’t take the new time. Your booking stays at its original time.'
+          : 'Could not reschedule this meeting. Refresh before trying again.'
       );
     } finally {
       setSaving(false);
