@@ -36247,6 +36247,37 @@
           }
         }
       },
+      "ChannelBotParticipant": {
+        "type": "object",
+        "description": "A bot's membership in a channel, stored under the principal `bot|<id>`.",
+        "required": ["channel_id", "bot_id", "role", "joined_at"],
+        "properties": {
+          "bot_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Participant bot id."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id for the participant membership."
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the bot joined the channel."
+          },
+          "left_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Timestamp when the bot left the channel, if any."
+          },
+          "role": {
+            "$ref": "#/components/schemas/ParticipantRole",
+            "description": "Participant role in the channel."
+          }
+        }
+      },
       "ChannelCreatedMetadata": {
         "type": "object",
         "description": "Metadata for [`ChannelTopicEvent::Created`].",
@@ -37002,6 +37033,13 @@
         "description": "Channel metadata together with its participants.",
         "required": ["channel", "participants"],
         "properties": {
+          "bot_participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelBotParticipant"
+            },
+            "description": "Bots that are participants in the channel."
+          },
           "channel": {
             "$ref": "#/components/schemas/Channel",
             "description": "Channel metadata."
@@ -37015,7 +37053,7 @@
             "items": {
               "$ref": "#/components/schemas/ChannelParticipant"
             },
-            "description": "Participants in the channel."
+            "description": "Participants in the channel. Bots are in `bot_participants`."
           }
         }
       },

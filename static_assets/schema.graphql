@@ -8813,6 +8813,10 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	participants: [GraphqlSoupChannelParticipant!]!
 	"""
+	The bots that participate in the channel. `participants` lists users only.
+	"""
+	botParticipants: [GraphqlSoupChannelBotParticipant!]!
+	"""
 	The latest message.
 	"""
 	latestMessage: GraphqlSoupChannelMessagePreview
@@ -8866,6 +8870,32 @@ type GraphqlSoupChannelAgentDm {
 	The persona's avatar URL, when it has one.
 	"""
 	avatarUrl: String
+}
+
+"""
+A bot that participates in a soup channel.
+"""
+type GraphqlSoupChannelBotParticipant {
+	"""
+	The identifier of the channel.
+	"""
+	channelId: ID!
+	"""
+	The identifier of the bot.
+	"""
+	botId: ID!
+	"""
+	The role.
+	"""
+	role: String!
+	"""
+	The joined timestamp in RFC 3339 format.
+	"""
+	joinedAt: String!
+	"""
+	The left timestamp in RFC 3339 format.
+	"""
+	leftAt: String
 }
 
 """

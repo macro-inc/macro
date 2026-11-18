@@ -4,18 +4,22 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { Channel } from './channel';
+import type { ChannelBotParticipant } from './channelBotParticipant';
 import type { ChannelParticipant } from './channelParticipant';
 
 /**
  * Channel metadata together with its participants.
  */
 export interface ChannelWithParticipants {
+  /** Bots that are participants in the channel. */
+  bot_participants?: ChannelBotParticipant[];
   /** Channel metadata. */
   channel: Channel;
   /** Whether the requesting user is an active participant of the channel.
 False for team channels of the user's teams they have not joined. */
   is_participant?: boolean;
-  /** Participants in the channel. */
+  /** Participants in the channel. Bots are in `bot_participants`. */
   participants: ChannelParticipant[];
 }

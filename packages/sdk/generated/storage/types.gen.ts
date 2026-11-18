@@ -3575,6 +3575,32 @@ export type ChannelAccessRequestedMetadata = {
 };
 
 /**
+ * A bot's membership in a channel, stored under the principal `bot|<id>`.
+ */
+export type ChannelBotParticipant = {
+    /**
+     * Participant bot id.
+     */
+    bot_id: string;
+    /**
+     * Channel id for the participant membership.
+     */
+    channel_id: string;
+    /**
+     * Timestamp when the bot joined the channel.
+     */
+    joined_at: string;
+    /**
+     * Timestamp when the bot left the channel, if any.
+     */
+    left_at?: string | null;
+    /**
+     * Participant role in the channel.
+     */
+    role: ParticipantRole;
+};
+
+/**
  * Metadata for [`ChannelTopicEvent::Created`].
  */
 export type ChannelCreatedMetadata = {
@@ -4071,6 +4097,10 @@ export type ChannelWebhookResponse = {
  */
 export type ChannelWithParticipants = {
     /**
+     * Bots that are participants in the channel.
+     */
+    bot_participants?: Array<ChannelBotParticipant>;
+    /**
      * Channel metadata.
      */
     channel: Channel;
@@ -4080,7 +4110,7 @@ export type ChannelWithParticipants = {
      */
     is_participant?: boolean;
     /**
-     * Participants in the channel.
+     * Participants in the channel. Bots are in `bot_participants`.
      */
     participants: Array<ChannelParticipant>;
 };
