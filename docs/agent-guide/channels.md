@@ -1757,7 +1757,10 @@ input can time out — click the adjacent label text instead.
 On phones, the active call's own channel hides the bottom floating call pill.
 Its Messages tab shows the call-in-progress banner above the composer, with
 `Return to call` for a joined call and `Join` otherwise. The banner shares the
-composer's horizontal gutters. Other channels and views retain the floating pill.
+composer's horizontal gutters and keeps its 8px gap above the composer. Its
+success tint sits on an opaque `surface` base in light and dark themes; scroll
+messages behind it to check that message content does not show through.
+Other channels and views retain the floating pill.
 
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the

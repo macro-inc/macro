@@ -63,32 +63,34 @@ export function ActiveCallMessage(props: { channelId: string }) {
   return (
     <Show when={showBanner()}>
       <div class="mb-2 flex w-full justify-center touch:px-(--mobile-chrome-gutter) touch:pointer-events-auto">
-        <div class="macro-message-width flex w-full min-w-0 items-center gap-3 rounded-2xl border border-success/20 bg-success/10 p-2.5">
-          <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-success/10">
-            <CallWaveform class="size-5" />
-          </span>
-          <div class="flex min-w-0 flex-1 items-center gap-2 mobile:flex-col mobile:items-start mobile:gap-0">
-            <span class="truncate text-sm font-medium">
-              {t('calls.inProgress')}
+        <div class="macro-message-width w-full min-w-0 rounded-2xl bg-surface">
+          <div class="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-success/20 bg-success/10 p-2.5">
+            <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-success/10">
+              <CallWaveform class="size-5" />
             </span>
-            <CallLiveChip bare hideWave startedAt={startedAt()} />
+            <div class="flex min-w-0 flex-1 items-center gap-2 mobile:flex-col mobile:items-start mobile:gap-0">
+              <span class="truncate text-sm font-medium">
+                {t('calls.inProgress')}
+              </span>
+              <CallLiveChip bare hideWave startedAt={startedAt()} />
+            </div>
+            <UserGroup
+              isHighlighted={isSpeaking}
+              userIds={participantIds()}
+              maxUsers={isMobile() ? 3 : 4}
+              size="sm"
+              suppressClick
+            />
+            <Button
+              variant="success"
+              size="sm"
+              disabled={call.isJoining()}
+              onClick={() => fireAndForget(handleJoin(), 'channel-call')}
+            >
+              <PhoneIcon class="size-4" />
+              {call.isInThisChannel() ? t('nav.returnToCall') : t('calls.join')}
+            </Button>
           </div>
-          <UserGroup
-            isHighlighted={isSpeaking}
-            userIds={participantIds()}
-            maxUsers={isMobile() ? 3 : 4}
-            size="sm"
-            suppressClick
-          />
-          <Button
-            variant="success"
-            size="sm"
-            disabled={call.isJoining()}
-            onClick={() => fireAndForget(handleJoin(), 'channel-call')}
-          >
-            <PhoneIcon class="size-4" />
-            {call.isInThisChannel() ? t('nav.returnToCall') : t('calls.join')}
-          </Button>
         </div>
       </div>
     </Show>
