@@ -278,7 +278,7 @@ async fn only_restricts_to_known_items(pool: Pool<Postgres>) -> anyhow::Result<(
 /// Copy each notification's entity onto its recipient rows, as notification
 /// ingress does; the fixtures insert recipient rows without it.
 async fn copy_entities_onto_recipient_rows(pool: &Pool<Postgres>) -> anyhow::Result<()> {
-    sqlx::query(
+    sqlx::query!(
         "UPDATE user_notification un \
          SET event_item_type = n.event_item_type, \
              event_item_id = n.event_item_id, \

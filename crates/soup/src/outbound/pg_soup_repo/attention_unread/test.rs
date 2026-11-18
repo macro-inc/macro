@@ -34,8 +34,7 @@ async fn notify(
     minute: i32,
     deleted: bool,
 ) -> anyhow::Result<()> {
-    let id = uuid::Uuid::now_v7();
-    sqlx::query(
+    sqlx::query!(
         r#"
         WITH filed AS (
             INSERT INTO notification
@@ -47,18 +46,18 @@ async fn notify(
              event_item_type, event_item_id, notification_event_type)
         VALUES (
             $2, $1, timestamp '2024-06-01 10:00:00' + make_interval(mins => $6),
-            $5::notification_state, CASE WHEN $7 THEN now() END,
+            $5::text::notification_state, CASE WHEN $7::bool THEN now() END,
             $4, $3, 'test_event'
         )
         "#,
+        uuid::Uuid::now_v7(),
+        user,
+        item_id,
+        item_type,
+        state,
+        minute,
+        deleted,
     )
-    .bind(id)
-    .bind(user)
-    .bind(item_id)
-    .bind(item_type)
-    .bind(state)
-    .bind(minute)
-    .bind(deleted)
     .execute(pool)
     .await?;
     Ok(())
@@ -70,14 +69,13 @@ async fn mail_thread(
     inbox_visible: bool,
     is_read: bool,
 ) -> anyhow::Result<()> {
-    sqlx::query(
-        "INSERT INTO email_threads (id, link_id, inbox_visible, is_read) \
-         VALUES ($1::uuid, $2::uuid, $3, $4)",
+    sqlx::query!(
+        "INSERT INTO email_threads (id, link_id, inbox_visible, is_read) VALUES ($1, $2, $3, $4)",
+        uuid::Uuid::parse_str(id)?,
+        uuid::Uuid::parse_str(LINK_1)?,
+        inbox_visible,
+        is_read,
     )
-    .bind(id)
-    .bind(LINK_1)
-    .bind(inbox_visible)
-    .bind(is_read)
     .execute(pool)
     .await?;
     Ok(())

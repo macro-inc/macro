@@ -61,7 +61,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Find where a viewer's unread rows may be without paging a feed:
   `src/outbound/pg_soup_repo/attention_unread.rs`. It is neither gated nor
   filtered and runs for every signed-in viewer; its two reads are bounded by
-  their `limit` and must stay so (plans in the PR that added it).
+  their `limit` and must stay so.
 - Give a kind with no list of its own (runtimes, teams) inbox rows: an
   attention-only kind like `pg_soup_repo/harness.rs` or `team.rs`, a gate in
   `attention/query.sql`'s attention stream only, a by-ids leg, and the type in
