@@ -1,5 +1,5 @@
 use crate::domain::models::{
-    BundleAction, BundleManifest, BundleUpdateRequest, PlatformVerifier, UpdateErr,
+    BundleAction, BundleUpdateRequest, DeployedManifest, PlatformVerifier, UpdateErr,
 };
 use rootcause::Report;
 use url::Url;
@@ -9,13 +9,13 @@ pub trait GetJsBundleManifest: Send + Sync + 'static {
     /// fetch the manifest of the current app bundle over the network
     fn get_app_bundle_manifest(
         &self,
-    ) -> impl Future<Output = Result<BundleManifest, Report<UpdateErr>>> + Send;
+    ) -> impl Future<Output = Result<DeployedManifest, Report<UpdateErr>>> + Send;
     /// get the Url of the bundle
     fn get_app_bundle_path(&self) -> Url;
-    /// get the SHA-256 hex digest of the bundle archive for the given bundle build
+    /// get the SHA-256 hex digest of the bundle archive the given manifest describes
     fn get_app_bundle_checksum(
         &self,
-        bundle_build: u64,
+        manifest: &DeployedManifest,
     ) -> impl Future<Output = Result<String, Report<UpdateErr>>> + Send;
 }
 

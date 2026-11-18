@@ -4,7 +4,7 @@ use std::sync::Arc;
 use macro_env_var::maybe_env_vars;
 use native_app_service::{
     domain::{
-        models::{BundleManifest, BundleUpdatePolicy, PlatformData, UpdateErr},
+        models::{BundleUpdatePolicy, DeployedManifest, PlatformData, UpdateErr},
         ports::GetJsBundleManifest,
         service::NativeAppServiceImpl,
     },
@@ -25,7 +25,7 @@ struct ArchiveBundleFetcher {
 }
 
 impl GetJsBundleManifest for ArchiveBundleFetcher {
-    async fn get_app_bundle_manifest(&self) -> Result<BundleManifest, Report<UpdateErr>> {
+    async fn get_app_bundle_manifest(&self) -> Result<DeployedManifest, Report<UpdateErr>> {
         let archive_path = self.archive_path.clone();
         tokio::task::spawn_blocking(move || read_archive_manifest(&archive_path))
             .await
@@ -38,7 +38,7 @@ impl GetJsBundleManifest for ArchiveBundleFetcher {
 
     async fn get_app_bundle_checksum(
         &self,
-        _bundle_build: u64,
+        _manifest: &DeployedManifest,
     ) -> Result<String, Report<UpdateErr>> {
         sha256_hex(&self.archive_path).await.map_err(|e| {
             tracing::error!(error=?e, path=?self.archive_path, "failed to hash bundle archive");
@@ -47,14 +47,17 @@ impl GetJsBundleManifest for ArchiveBundleFetcher {
     }
 }
 
-fn read_archive_manifest(path: &Path) -> Result<BundleManifest, Report<UpdateErr>> {
+fn read_archive_manifest(path: &Path) -> Result<DeployedManifest, Report<UpdateErr>> {
     let file = std::fs::File::open(path).map_err(|e| report!(e).context(UpdateErr::Network))?;
     let mut archive =
         zip::ZipArchive::new(file).map_err(|e| report!(e).context(UpdateErr::Network))?;
-    let manifest = archive
+    let mut manifest = archive
         .by_name("bundle-manifest.json")
         .map_err(|e| report!(e).context(UpdateErr::Network))?;
-    serde_json::from_reader(manifest).map_err(|e| report!(e).context(UpdateErr::Network))
+    let mut json = String::new();
+    std::io::Read::read_to_string(&mut manifest, &mut json)
+        .map_err(|e| report!(e).context(UpdateErr::Network))?;
+    DeployedManifest::from_json(&json).map_err(|e| report!(e).context(UpdateErr::Manifest))
 }
 
 async fn sha256_hex(path: &Path) -> std::io::Result<String> {

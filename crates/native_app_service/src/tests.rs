@@ -2,8 +2,9 @@ use crate::{
     domain::{
         self,
         models::{
-            AllTargets, Arch, BundleAction, BundleManifest, BundlePolicyAction, BundlePolicyRule,
-            BundleUpdatePolicy, DesktopTarget, MobileTarget, PlatformData, UpdateErr,
+            AllTargets, Arch, BundleAction, BundlePolicyAction, BundlePolicyRule,
+            BundleUpdatePolicy, DeployedManifest, DesktopTarget, LegacyManifest, MobileTarget,
+            PlatformData, UpdateErr,
         },
         ports::{GetJsBundleManifest, NativeAppService},
         service::NativeAppServiceImpl,
@@ -14,6 +15,9 @@ use crate::{
 use axum::{
     body::Body,
     http::{Request, StatusCode},
+};
+use bundle_identity::{
+    BuiltAt, BundleBuild, BundleManifest, CommitTime, NativeFloor, SourceCommit,
 };
 use cool_asserts::assert_matches;
 use reqwest::Url;
@@ -36,21 +40,29 @@ fn all_urls_work() {
 const DEPLOYED_GIT_SHA: &str = "cd959802";
 
 struct MockBundleFetcher {
-    manifest: BundleManifest,
+    manifest: DeployedManifest,
 }
 
 impl MockBundleFetcher {
     fn new(bundle_build: u64, min_native_build: u64) -> Self {
         Self {
-            manifest: BundleManifest {
+            manifest: DeployedManifest::Legacy(LegacyManifest {
                 schema_version: 2,
                 min_native_builds: None,
                 bundle_build,
                 min_native_build,
                 git_sha: Some(DEPLOYED_GIT_SHA.to_string()),
                 app_version: "2.5.0".to_string(),
-            },
+            }),
         }
+    }
+}
+
+/// The legacy manifest a test service deploys, for tests that reshape it.
+fn legacy(service: &mut NativeAppServiceImpl<MockBundleFetcher>) -> &mut LegacyManifest {
+    match &mut service.bundle_fetcher.manifest {
+        DeployedManifest::Legacy(manifest) => manifest,
+        DeployedManifest::Stamped(_) => panic!("test service deploys a legacy manifest"),
     }
 }
 
@@ -85,7 +97,7 @@ fn restore_env_var(name: &str, value: Option<&str>) {
 }
 
 impl GetJsBundleManifest for MockBundleFetcher {
-    async fn get_app_bundle_manifest(&self) -> Result<BundleManifest, Report<UpdateErr>> {
+    async fn get_app_bundle_manifest(&self) -> Result<DeployedManifest, Report<UpdateErr>> {
         Ok(self.manifest.clone())
     }
 
@@ -95,7 +107,7 @@ impl GetJsBundleManifest for MockBundleFetcher {
 
     async fn get_app_bundle_checksum(
         &self,
-        _bundle_build: u64,
+        _manifest: &DeployedManifest,
     ) -> Result<String, Report<UpdateErr>> {
         Ok("abc123".to_string())
     }
@@ -129,10 +141,11 @@ fn request(
     domain::models::BundleUpdateRequest {
         target,
         arch,
-        current_bundle_build,
+        current_bundle_build: BundleBuild::reported(current_bundle_build),
         native_build,
         manifest_schema: Some(3),
         current_git_sha: None,
+        stamped_manifests: false,
     }
 }
 
@@ -150,7 +163,7 @@ async fn returns_update_when_deployed_bundle_is_newer() {
             ))
             .await,
         Ok(Some(BundleAction::Update(update))) => {
-            assert_eq!(update.bundle_build, 20);
+            assert_eq!(update.bundle_build.get(), 20);
             assert_eq!(update.min_native_build, 0);
             assert_eq!(update.url.as_str(), "https://example.com/");
             assert_eq!(update.checksum, "abc123");
@@ -191,7 +204,7 @@ async fn returns_native_update_required_when_newer_bundle_requires_too_new_nativ
             ))
             .await,
         Ok(Some(BundleAction::NativeUpdateRequired(required))) => {
-            assert_eq!(required.bundle_build, 20);
+            assert_eq!(required.bundle_build.get(), 20);
             assert_eq!(required.min_native_build, 200);
         }
     );
@@ -208,7 +221,7 @@ async fn policy_blocks_updates_for_matching_target_native_and_bundle_ranges() {
                 target: Some(AllTargets::Mobile(MobileTarget::Ios)),
                 native_build_gte: None,
                 native_build_lte: Some(142),
-                bundle_build_gte: Some(20),
+                bundle_build_gte: Some(BundleBuild::reported(20)),
                 bundle_build_lte: None,
                 reason: Some("ios_142_breakage".to_string()),
             }],
@@ -239,8 +252,8 @@ async fn policy_returns_clear_when_current_active_bundle_is_revoked() {
                 target: Some(AllTargets::Mobile(MobileTarget::Ios)),
                 native_build_gte: None,
                 native_build_lte: Some(142),
-                bundle_build_gte: Some(15),
-                bundle_build_lte: Some(15),
+                bundle_build_gte: Some(BundleBuild::reported(15)),
+                bundle_build_lte: Some(BundleBuild::reported(15)),
                 reason: Some("bundle_revoked".to_string()),
             }],
         },
@@ -285,7 +298,7 @@ async fn legacy_manifests_only_update_platforms_with_legacy_numbering() {
                     .get_bundle_update(request(target, arch, 10, 100))
                     .await,
                 Ok(Some(BundleAction::Update(update))) => {
-                    assert_eq!(update.bundle_build, 20);
+                    assert_eq!(update.bundle_build.get(), 20);
                 }
             );
         }
@@ -418,8 +431,8 @@ fn with_policy_env(json: Option<&str>, file: Option<&str>, test: impl FnOnce()) 
 #[tokio::test]
 async fn shared_bundle_uses_independent_mobile_build_minima() {
     let mut service = service(20, 0, BundleUpdatePolicy::default());
-    service.bundle_fetcher.manifest.schema_version = 3;
-    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::MobileBuildMinima {
+    legacy(&mut service).schema_version = 3;
+    legacy(&mut service).min_native_builds = Some(domain::models::MobileBuildMinima {
         android: 2_050_001,
         ios: 184,
     });
@@ -445,9 +458,9 @@ async fn shared_bundle_uses_independent_mobile_build_minima() {
 #[tokio::test]
 async fn schema_3_reaches_only_desktop_updaters_that_read_it() {
     let mut service = service(20, 0, BundleUpdatePolicy::default());
-    service.bundle_fetcher.manifest.schema_version = 3;
-    service.bundle_fetcher.manifest.min_native_build = 5;
-    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::MobileBuildMinima {
+    legacy(&mut service).schema_version = 3;
+    legacy(&mut service).min_native_build = 5;
+    legacy(&mut service).min_native_builds = Some(domain::models::MobileBuildMinima {
         android: 2_050_001,
         ios: 184,
     });
@@ -478,8 +491,8 @@ async fn schema_3_reaches_only_desktop_updaters_that_read_it() {
 #[tokio::test]
 async fn route_reads_the_updater_manifest_schema() {
     let mut service = service(20, 0, BundleUpdatePolicy::default());
-    service.bundle_fetcher.manifest.schema_version = 3;
-    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::MobileBuildMinima {
+    legacy(&mut service).schema_version = 3;
+    legacy(&mut service).min_native_builds = Some(domain::models::MobileBuildMinima {
         android: 2_050_001,
         ios: 184,
     });
@@ -514,7 +527,7 @@ async fn route_reads_the_updater_manifest_schema() {
 async fn ambiguous_or_unknown_manifest_cannot_offer_an_update() {
     let mut service = service(20, 0, BundleUpdatePolicy::default());
     for schema in [3, 4] {
-        service.bundle_fetcher.manifest.schema_version = schema;
+        legacy(&mut service).schema_version = schema;
         assert_matches!(
             service
                 .get_bundle_update(request(
@@ -527,8 +540,8 @@ async fn ambiguous_or_unknown_manifest_cannot_offer_an_update() {
             Ok(None)
         );
     }
-    service.bundle_fetcher.manifest.schema_version = 2;
-    service.bundle_fetcher.manifest.min_native_builds =
+    legacy(&mut service).schema_version = 2;
+    legacy(&mut service).min_native_builds =
         Some(domain::models::MobileBuildMinima { android: 9, ios: 2 });
     assert_matches!(
         service
@@ -559,7 +572,7 @@ async fn bundle_from_the_running_commit_is_not_an_update() {
     for other in ["f2cc9fe", "cd9598", "unknown", ""] {
         assert_matches!(
             service.get_bundle_update(from_commit(other)).await,
-            Ok(Some(BundleAction::Update(update))) => assert_eq!(update.bundle_build, 20)
+            Ok(Some(BundleAction::Update(update))) => assert_eq!(update.bundle_build.get(), 20)
         );
     }
 }
@@ -593,5 +606,267 @@ async fn route_reads_the_running_git_sha() {
         status("current_bundle_build=10&native_build=1&manifest_schema=3&current_git_sha=f2cc9fe")
             .await,
         StatusCode::OK
+    );
+}
+
+/// Commit X: the native release embeds its bundle.
+const COMMIT_X_SECS: u64 = 1_794_870_406;
+const COMMIT_X: &str = "cd95980272a4cfd4d0d5e6d2a3a8a1b0c9f8e7d6";
+/// Commit W, merged an hour before X.
+const COMMIT_W_SECS: u64 = COMMIT_X_SECS - 3_600;
+const COMMIT_W: &str = "0123456789abcdef0123456789abcdef01234567";
+
+fn stamped(sha: &str, commit_secs: u64, built_at_ms: u64) -> DeployedManifest {
+    DeployedManifest::Stamped(BundleManifest::new(
+        SourceCommit::new(
+            sha.parse().unwrap(),
+            CommitTime::try_new(commit_secs).unwrap(),
+        ),
+        Some(BuiltAt::from_unix_millis(built_at_ms)),
+        NativeFloor::Shared {
+            min_native_build: 0,
+        },
+        "2.5.0".to_string(),
+    ))
+}
+
+fn deploying(manifest: DeployedManifest) -> NativeAppServiceImpl<MockBundleFetcher> {
+    let mut service = service(0, 0, BundleUpdatePolicy::default());
+    service.bundle_fetcher.manifest = manifest;
+    service
+}
+
+/// The number a native build of `sha` embeds, as bundle-stamp derives it.
+fn embedded(sha: &str, commit_secs: u64) -> u64 {
+    SourceCommit::new(
+        sha.parse().unwrap(),
+        CommitTime::try_new(commit_secs).unwrap(),
+    )
+    .bundle_build()
+    .get()
+}
+
+#[tokio::test]
+async fn the_deploy_of_the_embedded_commit_is_not_an_update() {
+    // Deployed an hour after the commit; no git sha needed to tell.
+    let service = deploying(stamped(
+        COMMIT_X,
+        COMMIT_X_SECS,
+        (COMMIT_X_SECS + 3_600) * 1000,
+    ));
+
+    for target in [
+        AllTargets::Mobile(MobileTarget::Ios),
+        AllTargets::Desktop(DesktopTarget::Darwin),
+    ] {
+        assert_matches!(
+            service
+                .get_bundle_update(request(
+                    target,
+                    Arch::Aarch64,
+                    embedded(COMMIT_X, COMMIT_X_SECS),
+                    1
+                ))
+                .await,
+            Ok(None)
+        );
+    }
+}
+
+#[tokio::test]
+async fn an_older_commit_built_later_is_never_offered() {
+    // W's deploy ran after X was committed, which build-time numbering read
+    // as newer than X's embedded bundle.
+    let service = deploying(stamped(
+        COMMIT_W,
+        COMMIT_W_SECS,
+        (COMMIT_X_SECS + 600) * 1000,
+    ));
+
+    assert_matches!(
+        service
+            .get_bundle_update(request(
+                AllTargets::Mobile(MobileTarget::Ios),
+                Arch::Aarch64,
+                embedded(COMMIT_X, COMMIT_X_SECS),
+                1
+            ))
+            .await,
+        Ok(None)
+    );
+}
+
+#[tokio::test]
+async fn a_newer_commit_is_offered_with_its_derived_number() {
+    let service = deploying(stamped(
+        COMMIT_X,
+        COMMIT_X_SECS,
+        (COMMIT_X_SECS + 60) * 1000,
+    ));
+
+    assert_matches!(
+        service
+            .get_bundle_update(request(
+                AllTargets::Mobile(MobileTarget::Ios),
+                Arch::Aarch64,
+                embedded(COMMIT_W, COMMIT_W_SECS),
+                1
+            ))
+            .await,
+        Ok(Some(BundleAction::Update(update))) => {
+            assert_eq!(update.bundle_build.get(), COMMIT_X_SECS * 1000);
+        }
+    );
+}
+
+#[tokio::test]
+async fn legacy_client_numbers_take_the_first_newer_commit() {
+    let service = deploying(stamped(
+        COMMIT_X,
+        COMMIT_X_SECS,
+        (COMMIT_X_SECS + 60) * 1000,
+    ));
+    let ios = AllTargets::Mobile(MobileTarget::Ios);
+
+    // A legacy number is the build time of the client's bundle.
+    assert_matches!(
+        service
+            .get_bundle_update(request(ios, Arch::Aarch64, COMMIT_X_SECS * 1000 - 1, 1))
+            .await,
+        Ok(Some(BundleAction::Update(_)))
+    );
+    assert_matches!(
+        service
+            .get_bundle_update(request(ios, Arch::Aarch64, COMMIT_X_SECS * 1000 + 1, 1))
+            .await,
+        Ok(None)
+    );
+}
+
+#[tokio::test]
+async fn policy_ranges_select_commits() {
+    let mut service = deploying(stamped(
+        COMMIT_X,
+        COMMIT_X_SECS,
+        (COMMIT_X_SECS + 60) * 1000,
+    ));
+    service.bundle_policy = BundleUpdatePolicy {
+        rules: vec![BundlePolicyRule {
+            action: BundlePolicyAction::Block,
+            target: None,
+            native_build_gte: None,
+            native_build_lte: None,
+            bundle_build_gte: Some(BundleBuild::reported(embedded(COMMIT_X, COMMIT_X_SECS))),
+            bundle_build_lte: Some(BundleBuild::reported(embedded(COMMIT_X, COMMIT_X_SECS))),
+            reason: None,
+        }],
+    };
+
+    assert_matches!(
+        service
+            .get_bundle_update(request(
+                AllTargets::Mobile(MobileTarget::Ios),
+                Arch::Aarch64,
+                embedded(COMMIT_W, COMMIT_W_SECS),
+                1
+            ))
+            .await,
+        Ok(None)
+    );
+}
+
+#[test]
+fn policy_json_reads_bundle_ranges_as_numbers() {
+    let policy: BundleUpdatePolicy = serde_json::from_str(
+        r#"{"rules":[{"action":"revoke","bundleBuildGte":1794870406000,"reason":"bad"}]}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        policy.rules[0].bundle_build_gte,
+        Some(BundleBuild::reported(1_794_870_406_000))
+    );
+    assert_eq!(policy.rules[0].bundle_build_lte, None);
+}
+
+#[test]
+fn live_manifests_are_read_strictly_once_stamped() {
+    let legacy = DeployedManifest::from_json(
+        r#"{"schemaVersion":2,"bundleBuild":1794871234567,"minNativeBuild":0,"gitSha":"cd95980","appVersion":"2.5.0"}"#,
+    )
+    .unwrap();
+    assert_eq!(legacy.bundle_build().get(), 1_794_871_234_567);
+    assert_eq!(legacy.built_at(), None);
+
+    let stamped = DeployedManifest::from_json(&format!(
+        r#"{{"schemaVersion":2,"bundleBuild":1794870406000,"commitTime":1794870406,"gitSha":"{COMMIT_X}","builtAt":1794871234567,"minNativeBuild":0,"appVersion":"2.5.0"}}"#
+    ))
+    .unwrap();
+    assert_eq!(stamped.bundle_build().get(), 1_794_870_406_000);
+    assert_eq!(
+        stamped.built_at(),
+        Some(BuiltAt::from_unix_millis(1_794_871_234_567))
+    );
+
+    // Naming a commit time but disagreeing with it is never read as legacy.
+    let inconsistent = DeployedManifest::from_json(&format!(
+        r#"{{"schemaVersion":2,"bundleBuild":1794871234567,"commitTime":1794870406,"gitSha":"{COMMIT_X}","minNativeBuild":0,"appVersion":"2.5.0"}}"#
+    ));
+    assert!(inconsistent.is_err());
+}
+
+#[tokio::test]
+async fn updaters_that_need_stamped_manifests_are_not_offered_legacy_ones() {
+    let legacy = service(20, 0, BundleUpdatePolicy::default());
+    let stamped_only = |current: u64| domain::models::BundleUpdateRequest {
+        stamped_manifests: true,
+        ..request(
+            AllTargets::Mobile(MobileTarget::Ios),
+            Arch::Aarch64,
+            current,
+            1,
+        )
+    };
+    assert_matches!(legacy.get_bundle_update(stamped_only(10)).await, Ok(None));
+
+    let stamped = deploying(stamped(
+        COMMIT_X,
+        COMMIT_X_SECS,
+        (COMMIT_X_SECS + 60) * 1000,
+    ));
+    assert_matches!(
+        stamped.get_bundle_update(stamped_only(10)).await,
+        Ok(Some(BundleAction::Update(_)))
+    );
+}
+
+#[tokio::test]
+async fn route_reads_the_stamped_manifests_capability() {
+    let app = native_app_router::<_, ()>(RouterState {
+        inner: Arc::new(service(20, 0, BundleUpdatePolicy::default())),
+    });
+    let status = |query: &'static str| {
+        let app = app.clone();
+        async move {
+            app.oneshot(
+                Request::builder()
+                    .uri(format!("/update/bundle/ios/aarch64?{query}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+            .status()
+        }
+    };
+
+    assert_eq!(
+        status("current_bundle_build=10&native_build=1&manifest_schema=3").await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        status("current_bundle_build=10&native_build=1&manifest_schema=3&stamped_manifests=true")
+            .await,
+        StatusCode::NO_CONTENT
     );
 }

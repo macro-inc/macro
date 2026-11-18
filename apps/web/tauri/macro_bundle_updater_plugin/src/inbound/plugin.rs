@@ -1,5 +1,6 @@
 use tokio::sync::Mutex;
 
+use bundle_identity::BundleBuild;
 use rootcause::Report;
 use serde::Serialize;
 use std::time::Duration;
@@ -194,7 +195,7 @@ impl BundleUpdateEvent {
             },
             Ok(UpdateStatus::NativeUpdateRequired(required)) => {
                 BundleUpdateEvent::NativeUpdateRequired {
-                    bundle_build: required.bundle_build,
+                    bundle_build: required.bundle_build.get(),
                     min_native_build: required.min_native_build,
                 }
             }
@@ -215,7 +216,7 @@ impl BundleUpdateEvent {
 /// Tauri plugin that manages OTA bundle updates.
 pub struct MacroBundleUpdaterPlugin {
     base_url: Url,
-    embedded_bundle_build: u64,
+    embedded_bundle_build: BundleBuild,
     embedded_git_sha: Option<&'static str>,
     bundle_routes: BundleRoutes,
     auto_update: bool,
@@ -223,7 +224,11 @@ pub struct MacroBundleUpdaterPlugin {
 
 impl MacroBundleUpdaterPlugin {
     /// Create the plugin targeting the given update server URL.
-    pub fn new(base_url: Url, embedded_bundle_build: u64, bundle_routes: BundleRoutes) -> Self {
+    pub fn new(
+        base_url: Url,
+        embedded_bundle_build: BundleBuild,
+        bundle_routes: BundleRoutes,
+    ) -> Self {
         Self {
             base_url,
             embedded_bundle_build,
@@ -401,7 +406,7 @@ pub async fn ack_bundle_update_reload<R: Runtime>(
     service
         .lock()
         .await
-        .acknowledge_update_reload(&cache_dir, loaded_bundle_build)
+        .acknowledge_update_reload(&cache_dir, BundleBuild::reported(loaded_bundle_build))
         .await
         .map_err(|e| e.to_string())
 }
@@ -434,7 +439,7 @@ pub async fn get_bundle_debug_info(
     let embedded_bundle_build = service.embedded_bundle_build();
     let cached_bundle_build = service.bundle_build().await;
     Ok(BundleDebugInfo {
-        bundle_build: cached_bundle_build.unwrap_or(embedded_bundle_build),
+        bundle_build: cached_bundle_build.unwrap_or(embedded_bundle_build).get(),
         source: if cached_bundle_build.is_some() {
             BundleDebugSource::Ota
         } else {

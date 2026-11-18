@@ -18,7 +18,7 @@
     "dev:billing": "vite -c vite.config.ts --open /billing-lab.html",
     "build": "vite build -c vite.config.ts && bun run postbuild:semver && bun run postbuild:bundle-manifest",
     "postbuild:semver": "echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt",
-    "postbuild:bundle-manifest": "bun ./scripts/write-bundle-manifest.mjs",
+    "postbuild:bundle-manifest": "cargo run --quiet --locked --manifest-path ../../Cargo.toml -p bundle_stamp -- stamp --dist dist --package-json package.json",
     "test": "bunx vitest run --fsModuleCache",
     "test:functional": "just test-functional",
     "i18n:status": "bun scripts/i18n-status.ts",

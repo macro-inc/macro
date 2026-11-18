@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 type Bucket = {
-  /** Build number to the keys that build published. */
+  /** Build time to the keys that build published. */
   records: Record<string, string[]>;
   /** Every key currently in the bucket under the prefix. */
   objects: string[];
@@ -135,8 +135,14 @@ process.exit(1);
   };
 }
 
-const manifest = (build: number) =>
-  JSON.stringify({ schemaVersion: 3, bundleBuild: build });
+/** A stamped manifest; records are keyed by when the build ran. */
+const manifest = (builtAt: number) =>
+  JSON.stringify({
+    schemaVersion: 3,
+    bundleBuild: 1794870406000,
+    commitTime: 1794870406,
+    builtAt,
+  });
 
 describe('retaining recent builds', () => {
   it('keeps what recent builds still refer to and drops what none do', () => {
@@ -307,6 +313,38 @@ describe('retaining recent builds', () => {
     // and take the live assets with it.
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('refusing to prune');
+    expect(deleted).toEqual([]);
+  });
+
+  it('keeps a separate record for each rebuild of one commit', () => {
+    // A re-run deploys the same commit (same bundleBuild) with new chunks; the
+    // first run's tabs still need theirs.
+    const { result, uploaded, deleted } = run(
+      { 'bundle-manifest.json': manifest(300), 'index.html': '', 'app-rerun.js': '' },
+      {
+        records: { '200': ['app/index.html', 'app/app-first-run.js'] },
+        objects: ['app/index.html', 'app/app-first-run.js', 'app/app-rerun.js'],
+      },
+      2
+    );
+
+    expect(result.status).toBe(0);
+    expect(uploaded).toEqual(['s3://example/app/_builds/300.txt']);
+    expect(deleted).toEqual([]);
+  });
+
+  it('refuses a manifest without a build time', () => {
+    const { result, deleted } = run(
+      {
+        'bundle-manifest.json': JSON.stringify({ schemaVersion: 2, bundleBuild: 300 }),
+        'index.html': '',
+      },
+      { records: {}, objects: ['app/app-live.js'] },
+      10
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('no builtAt');
     expect(deleted).toEqual([]);
   });
 

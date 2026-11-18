@@ -2570,6 +2570,7 @@
       "crates/bot_token",
       "crates/bots",
       "crates/broadcast",
+      "crates/bundle_identity",
       "crates/calendar_events",
       "crates/call",
       "crates/channel_sender",
@@ -2866,6 +2867,13 @@
     "broadcast": [
       "crates/broadcast",
       "crates/workspace-hack"
+    ],
+    "bundle_identity": [
+      "crates/bundle_identity"
+    ],
+    "bundle_stamp": [
+      "crates/bundle_identity",
+      "tooling/bundle_stamp"
     ],
     "cache-core": [
       "crates/bot_id",
@@ -12539,12 +12547,14 @@
       "crates/workspace-hack"
     ],
     "native_app_server": [
+      "crates/bundle_identity",
       "crates/macro_env_var",
       "crates/native_app_service",
       "crates/workspace-hack",
       "tooling/native_app_server"
     ],
     "native_app_service": [
+      "crates/bundle_identity",
       "crates/macro_env_var",
       "crates/native_app_service",
       "crates/workspace-hack"

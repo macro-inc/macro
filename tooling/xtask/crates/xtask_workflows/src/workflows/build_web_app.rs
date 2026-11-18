@@ -42,6 +42,11 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: true
                 type: string
                 description: The environment to build for. e.g. (dev, prod)
+              rollback:
+                required: false
+                type: boolean
+                default: false
+                description: Allow a prod bundle older than the live one
             secrets:
               SEGMENT_WRITE_KEY:
                 required: true
@@ -77,6 +82,7 @@ fn build_job() -> Job {
         .add_step(build_wasm_packages())
         .add_step(save_wasm_packages())
         .add_step(build())
+        .add_step(verify_bundle_identity())
         .add_step(steps::show_sccache_stats())
         .add_step(upload_dist())
         .add_step(steps::teardown_nix())
@@ -164,6 +170,19 @@ fn build() -> Step<Run> {
             "VITE_OTEL_ENV",
             "${{ inputs.environment == 'prod' && 'prod' || 'development' }}",
         ))
+}
+
+/// The production manifest the rollback guard compares against.
+pub const LIVE_PROD_MANIFEST_URL: &str = "https://macro.com/app/bundle-manifest.json";
+
+/// `bundle-stamp verify`: the bundle is stamped from the deployed commit and,
+/// in production, is not older than the live one (see the script).
+fn verify_bundle_identity() -> Step<Run> {
+    Step::new("Verify bundle identity")
+        .run(include_str!("scripts/verify_bundle_identity.sh"))
+        .add_env(("ENVIRONMENT", "${{ inputs.environment }}"))
+        .add_env(("ROLLBACK", "${{ inputs.rollback }}"))
+        .add_env(("LIVE_MANIFEST_URL", LIVE_PROD_MANIFEST_URL))
 }
 
 fn upload_dist() -> Step<Use> {

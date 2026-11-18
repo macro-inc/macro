@@ -1,8 +1,8 @@
 use super::{
     ApplyUpdateResult, BundleRoot, BundleSource, StartupSelection, UpdateStatus,
     tests::{
-        FakeFs, cache_dir, clear_required_status, seed_bundle, seed_pending_bundle_root,
-        seed_persisted_bundle_root, service_with_status_and_fs,
+        FakeFs, cache_dir, clear_required_status, commit_build, seed_bundle,
+        seed_pending_bundle_root, seed_persisted_bundle_root, service_with_status_and_fs,
     },
 };
 use crate::domain::ports::{AutoUpdateService, FsRepo};
@@ -18,7 +18,7 @@ async fn rollback_interrupted_before_reload_ack_does_not_restore_retired_bundles
     service.bundle_root = BundleRoot::from_path(active.clone());
     service
         .bundle_routes
-        .restore(BundleSource::ota(101, active))
+        .restore(BundleSource::ota(commit_build(101), active))
         .await;
 
     assert_eq!(
@@ -68,7 +68,7 @@ async fn an_explicit_embedded_selection_can_restore_a_later_pending_download() {
         service.apply_update(&cache_dir).await.unwrap(),
         ApplyUpdateResult::ReloadNeeded
     );
-    assert_eq!(service.bundle_build().await, Some(102));
+    assert_eq!(service.bundle_build().await, Some(commit_build(102)));
     assert_eq!(
         fs.read_to_string(&cache_dir.join("bundle_root"))
             .await

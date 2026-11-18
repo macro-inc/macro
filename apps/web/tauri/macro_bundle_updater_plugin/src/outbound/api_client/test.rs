@@ -1,9 +1,10 @@
 use super::*;
 use crate::domain::models::{AppInfo, Arch, Target};
+use bundle_identity::BundleBuild;
 
 fn app_info() -> AppInfo {
     AppInfo {
-        current_bundle_build: 42,
+        current_bundle_build: BundleBuild::reported(42),
         current_git_sha: None,
         native_build: 7,
         arch: Arch::Aarch64,
@@ -21,7 +22,7 @@ fn update_check_url_joins_gateway_prefix_with_or_without_trailing_slash() {
     ] {
         let client = BundleClient::new(base.parse().unwrap());
         let request = AppInfo {
-            current_bundle_build: 1790022571617,
+            current_bundle_build: BundleBuild::reported(1790022571617),
             native_build: 183,
             ..app_info()
         };
@@ -30,7 +31,7 @@ fn update_check_url_joins_gateway_prefix_with_or_without_trailing_slash() {
 
         assert_eq!(
             url.as_str(),
-            "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=1790022571617&native_build=183&manifest_schema=3",
+            "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=1790022571617&native_build=183&manifest_schema=3&stamped_manifests=true",
             "incorrect update URL for base {base}"
         );
     }
@@ -44,7 +45,7 @@ fn update_check_url_still_supports_gateway_root_base() {
 
     assert_eq!(
         url.as_str(),
-        "https://gateway.macro.com/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7&manifest_schema=3"
+        "https://gateway.macro.com/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7&manifest_schema=3&stamped_manifests=true"
     );
 }
 
@@ -60,7 +61,7 @@ fn update_check_url_strips_base_query_and_fragment() {
 
     assert_eq!(
         url.as_str(),
-        "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7&manifest_schema=3"
+        "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7&manifest_schema=3&stamped_manifests=true"
     );
 }
 
@@ -76,6 +77,6 @@ fn update_check_url_names_the_embedded_commit_when_known() {
 
     assert_eq!(
         url.as_str(),
-        "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7&manifest_schema=3&current_git_sha=cd95980"
+        "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7&manifest_schema=3&stamped_manifests=true&current_git_sha=cd95980"
     );
 }

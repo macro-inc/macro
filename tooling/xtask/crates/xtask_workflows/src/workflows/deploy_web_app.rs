@@ -14,6 +14,9 @@ use gh_workflow::{
 
 use crate::workflows::{build_web_app, runners, steps, vars};
 
+#[cfg(test)]
+mod test;
+
 /// Build the workflow. The `workflow_dispatch`/`workflow_call` input blocks
 /// are filled in by [`patch`] (choice options + ordered maps).
 pub fn deploy_web_app() -> Workflow {
@@ -58,6 +61,11 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: false
                 type: boolean
                 description: Whether to notify the Slack channel of the deployment completion
+              rollback:
+                required: false
+                type: boolean
+                default: false
+                description: Deploy a prod bundle older than the live one (infra/stacks/web-app/README.md#rolling-back)
         "#})?,
     );
     on.insert(
@@ -76,6 +84,11 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 type: boolean
                 default: false
                 description: The caller already ran build_web_app.yml in this run
+              rollback:
+                required: false
+                type: boolean
+                default: false
+                description: Deploy a prod bundle older than the live one
             secrets:
               AWS_ACCESS_KEY:
                 required: true
@@ -98,7 +111,10 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
     build.remove("runs-on");
     build.insert(
         "with".into(),
-        crate::workflows::yaml_fragment("environment: ${{ inputs.environment }}")?,
+        crate::workflows::yaml_fragment(indoc::indoc! {r#"
+            environment: ${{ inputs.environment }}
+            rollback: ${{ inputs.rollback || false }}
+        "#})?,
     );
     build.insert(
         "secrets".into(),
@@ -137,6 +153,7 @@ fn deploy() -> Job {
         .add_step(download_dist(build_web_app::ARTIFACT))
         .add_step(install_infra_dependencies())
         .add_step(configure_aws_credentials())
+        .add_step(guard_live_bundle(ENVIRONMENT, "${{ inputs.rollback }}"))
         .add_step(pulumi_up(ENVIRONMENT))
         .add_step(upload_sourcemaps(ENVIRONMENT))
         .add_step(upload_production_build())
@@ -174,6 +191,17 @@ pub fn configure_aws_credentials() -> Step<Use> {
         .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
         .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
         .add_with(("aws-region", "us-east-1"))
+}
+
+/// Refuse to publish a prod bundle older than the live one unless `rollback`
+/// is `true`. Repeats the build job's check at publish time: a deploy-only
+/// re-run, or a release published after this one was built, would skip it.
+pub fn guard_live_bundle(environment: &str, rollback: &str) -> Step<Run> {
+    Step::new("Check bundle against live")
+        .run(include_str!("scripts/guard_live_bundle.sh"))
+        .add_env(("ENVIRONMENT", environment))
+        .add_env(("ROLLBACK", rollback))
+        .add_env(("LIVE_MANIFEST_URL", build_web_app::LIVE_PROD_MANIFEST_URL))
 }
 
 pub fn pulumi_up(environment: &str) -> Step<Use> {

@@ -1,0 +1,15 @@
+[package]
+edition = "2024"
+name = "bundle_identity"
+publish = false
+version = "0.1.0"
+
+# No workspace-hack: the Tauri workspace path-depends on this crate
+# (.config/hakari.toml excludes it).
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

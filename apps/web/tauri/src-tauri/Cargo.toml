@@ -14,7 +14,7 @@ crate-type = ["rlib", "staticlib", "cdylib"]
 name = "app_lib"
 
 [build-dependencies]
-serde_json = "1.0"
+bundle_identity = { path = "../../../../crates/bundle_identity" }
 tauri-build = { version = "2.3.1", features = [] }
 
 [dev-dependencies]
@@ -33,6 +33,7 @@ default = ["auto_apply_update"]
 cef = []
 
 [dependencies]
+bundle_identity = { path = "../../../../crates/bundle_identity" }
 http = "1"
 log = "0.4"
 logger = { path = "../logger" }

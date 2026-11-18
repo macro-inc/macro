@@ -3763,6 +3763,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d20789868f4b01b2f2caec9f5c4e0213b41e3e5702a50157d699ae31ced2fcb"
 
 [[package]]
+name = "bundle_identity"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "bundle_stamp"
+version = "0.1.0"
+dependencies = [
+ "bundle_identity",
+ "clap",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "bytecount"
 version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14162,7 +14184,6 @@ dependencies = [
  "macro_env_var",
  "native_app_service",
  "rootcause",
- "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "tokio",
@@ -14179,6 +14200,7 @@ name = "native_app_service"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bundle_identity",
  "cool_asserts",
  "futures",
  "macro_env_var",

@@ -85,6 +85,12 @@ workspace-members = [
     "notification_state",
     "item-filter-index",
     "predicate-index",
+    # Bundle identity: the Tauri workspace path-depends on it, and that
+    # workspace has no workspace-hack.
+    "bundle_identity",
+    # bundle-stamp: build tooling every web build runs; its clap features
+    # must not reach the service dependency layers.
+    "bundle_stamp",
     "filter_ast",
     "document_sub_type",
     "model_file_type",

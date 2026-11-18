@@ -1,4 +1,5 @@
-use serde::{Deserialize, Serialize};
+use bundle_identity::{BuiltAt, BundleBuild, BundleManifest, NativePlatform};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
 use thiserror::Error;
 use url::Url;
@@ -67,13 +68,107 @@ pub struct DesktopUpdate {
     inner: BundleUpdate,
 }
 
-/// Metadata generated with each JavaScript bundle build.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+/// The live `bundle-manifest.json`, as deployed.
+///
+/// Until the first web deploy stamped by `bundle-stamp` is live, production
+/// serves manifests numbered by build time. A manifest that names its commit
+/// time is read strictly; one that does not is read as a legacy, reported
+/// number. Reading only stamped manifests is a follow-up once one production
+/// release has shipped them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeployedManifest {
+    /// Stamped from its source commit by `bundle-stamp`.
+    Stamped(BundleManifest),
+    /// Written before commit stamping; its number is a build time.
+    Legacy(LegacyManifest),
+}
+
+/// Field that marks a manifest as stamped from its commit.
+const COMMIT_TIME_FIELD: &str = "commitTime";
+
+impl DeployedManifest {
+    /// Parse a live manifest: strictly when it names a commit time.
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        let value: serde_json::Value = serde_json::from_str(json)?;
+        if value.get(COMMIT_TIME_FIELD).is_some() {
+            return serde_json::from_value(value).map(Self::Stamped);
+        }
+
+        serde_json::from_value(value).map(Self::Legacy)
+    }
+
+    /// The update ordering key.
+    pub fn bundle_build(&self) -> BundleBuild {
+        match self {
+            Self::Stamped(manifest) => manifest.bundle_build(),
+            Self::Legacy(manifest) => BundleBuild::reported(manifest.bundle_build),
+        }
+    }
+
+    /// When this build ran, if the manifest records it. Rebuilds of one commit
+    /// share a [`BundleBuild`] but not a build time.
+    pub fn built_at(&self) -> Option<BuiltAt> {
+        match self {
+            Self::Stamped(manifest) => manifest.built_at(),
+            Self::Legacy(_) => None,
+        }
+    }
+
+    /// The manifest schema version.
+    pub fn schema_version(&self) -> u64 {
+        match self {
+            Self::Stamped(manifest) => manifest.schema_version(),
+            Self::Legacy(manifest) => manifest.schema_version,
+        }
+    }
+
+    /// Select the minimum for the requesting platform, rejecting unknown schemas.
+    pub fn minimum_for(&self, target: AllTargets) -> Option<u64> {
+        match self {
+            Self::Stamped(manifest) => manifest.minimum_for(target.into()),
+            Self::Legacy(manifest) => manifest.minimum_for(target),
+        }
+    }
+
+    /// Whether this bundle was built from the commit `git_sha` names.
+    ///
+    /// Release builds abbreviate SHAs to different lengths, so one may be a
+    /// prefix of the other. Anything shorter than seven hex digits never matches.
+    pub fn built_from(&self, git_sha: &str) -> bool {
+        let own = match self {
+            Self::Stamped(manifest) => Some(manifest.source().sha().as_str()),
+            Self::Legacy(manifest) => manifest.git_sha.as_deref(),
+        };
+        let Some(own) = own else {
+            return false;
+        };
+        let valid =
+            |sha: &str| sha.len() >= MIN_GIT_SHA_LEN && sha.bytes().all(|b| b.is_ascii_hexdigit());
+        if !valid(own) || !valid(git_sha) {
+            return false;
+        }
+        let (own, other) = (own.to_ascii_lowercase(), git_sha.to_ascii_lowercase());
+        own.starts_with(&other) || other.starts_with(&own)
+    }
+}
+
+impl From<AllTargets> for NativePlatform {
+    fn from(target: AllTargets) -> Self {
+        match target {
+            AllTargets::Mobile(MobileTarget::Android) => Self::Android,
+            AllTargets::Mobile(MobileTarget::Ios) => Self::Ios,
+            AllTargets::Desktop(_) => Self::Desktop,
+        }
+    }
+}
+
+/// A manifest written before commit stamping, numbered by build time.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct BundleManifest {
+pub struct LegacyManifest {
     /// Manifest schema version.
     pub schema_version: u64,
-    /// Monotonic JavaScript bundle build number.
+    /// Build time of the bundle, Unix milliseconds.
     pub bundle_build: u64,
     /// Minimum native app build that can safely run this bundle.
     pub min_native_build: u64,
@@ -89,27 +184,8 @@ pub struct BundleManifest {
 /// Shortest abbreviated SHA trusted to identify a commit.
 const MIN_GIT_SHA_LEN: usize = 7;
 
-impl BundleManifest {
-    /// Whether this bundle was built from the commit `git_sha` names.
-    ///
-    /// Release builds abbreviate SHAs to different lengths, so one may be a
-    /// prefix of the other. Anything shorter than seven hex digits never matches.
-    pub fn built_from(&self, git_sha: &str) -> bool {
-        let Some(own) = self.git_sha.as_deref() else {
-            return false;
-        };
-        let valid =
-            |sha: &str| sha.len() >= MIN_GIT_SHA_LEN && sha.bytes().all(|b| b.is_ascii_hexdigit());
-        if !valid(own) || !valid(git_sha) {
-            return false;
-        }
-        let (own, other) = (own.to_ascii_lowercase(), git_sha.to_ascii_lowercase());
-        own.starts_with(&other) || other.starts_with(&own)
-    }
-}
-
 /// Native build numbers are independent across mobile platforms.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct MobileBuildMinima {
     /// Minimum Android versionCode.
     pub android: u64,
@@ -117,7 +193,7 @@ pub struct MobileBuildMinima {
     pub ios: u64,
 }
 
-impl BundleManifest {
+impl LegacyManifest {
     /// Select the minimum for the requesting platform, rejecting unknown schemas.
     pub fn minimum_for(&self, target: AllTargets) -> Option<u64> {
         match (self.schema_version, &self.min_native_builds, target) {
@@ -151,7 +227,7 @@ pub enum BundleAction {
 #[serde(rename_all = "camelCase")]
 pub struct BundleUpdate {
     /// the bundle build that we are going to update to
-    pub(crate) bundle_build: u64,
+    pub(crate) bundle_build: BundleBuild,
     /// the minimum native build that can run this bundle
     pub(crate) min_native_build: u64,
     /// some optional notes about the update
@@ -174,7 +250,7 @@ pub struct BundleClear {
 #[serde(rename_all = "camelCase")]
 pub struct BundleNativeUpdateRequired {
     /// The newer bundle build that could not be offered.
-    pub(crate) bundle_build: u64,
+    pub(crate) bundle_build: BundleBuild,
     /// The minimum native build required by that bundle.
     pub(crate) min_native_build: u64,
 }
@@ -186,8 +262,8 @@ pub struct BundleUpdateRequest {
     pub target: AllTargets,
     /// the arch of the target
     pub arch: Arch,
-    /// the current effective JS bundle build
-    pub current_bundle_build: u64,
+    /// the current effective JS bundle build, as the app reports it
+    pub current_bundle_build: BundleBuild,
     /// the native app build number
     pub native_build: u64,
     /// The newest bundle manifest schema the updater reads. Desktop updaters
@@ -196,6 +272,9 @@ pub struct BundleUpdateRequest {
     /// Short git SHA of the commit the running bundle was built from, when the
     /// app knows it. Older apps send none.
     pub current_git_sha: Option<String>,
+    /// The updater reads only manifests stamped from a commit, so a legacy
+    /// live manifest is never offered to it. Older apps send none.
+    pub stamped_manifests: bool,
 }
 
 /// Server-side compatibility and revocation rules for JS bundle updates.
@@ -218,12 +297,21 @@ pub struct BundlePolicyRule {
     pub native_build_gte: Option<u64>,
     /// Inclusive maximum native build filter.
     pub native_build_lte: Option<u64>,
-    /// Inclusive minimum bundle build filter.
-    pub bundle_build_gte: Option<u64>,
-    /// Inclusive maximum bundle build filter.
-    pub bundle_build_lte: Option<u64>,
+    /// Inclusive minimum bundle build filter (`bundle-stamp number <sha>`).
+    #[serde(default, deserialize_with = "reported_bundle_build")]
+    pub bundle_build_gte: Option<BundleBuild>,
+    /// Inclusive maximum bundle build filter (`bundle-stamp number <sha>`).
+    #[serde(default, deserialize_with = "reported_bundle_build")]
+    pub bundle_build_lte: Option<BundleBuild>,
     /// Optional reason returned for revocation rules.
     pub reason: Option<String>,
+}
+
+/// Policy ranges are numbers an operator wrote down.
+fn reported_bundle_build<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<BundleBuild>, D::Error> {
+    Ok(Option::<u64>::deserialize(deserializer)?.map(BundleBuild::reported))
 }
 
 /// Policy action to apply when a rule matches.
@@ -238,7 +326,12 @@ pub enum BundlePolicyAction {
 
 impl BundlePolicyRule {
     /// Return whether this rule matches the request target, native build, and bundle build.
-    pub fn matches(&self, target: AllTargets, native_build: u64, bundle_build: u64) -> bool {
+    pub fn matches(
+        &self,
+        target: AllTargets,
+        native_build: u64,
+        bundle_build: BundleBuild,
+    ) -> bool {
         if self.target.is_some_and(|expected| expected != target) {
             return false;
         }

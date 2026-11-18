@@ -276,6 +276,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "block2 0.6.2",
+ "bundle_identity",
  "clap",
  "futures-util",
  "graphql_cache_plugin",
@@ -982,6 +983,15 @@ name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+
+[[package]]
+name = "bundle_identity"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "bytemuck"
@@ -4752,6 +4762,7 @@ dependencies = [
 name = "macro_bundle_updater_plugin"
 version = "0.1.0"
 dependencies = [
+ "bundle_identity",
  "digest 0.10.7",
  "futures",
  "jni 0.21.1",

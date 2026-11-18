@@ -279,3 +279,35 @@ fn wasm_step_with_the_real_package_cache() {
     assert!(key.is_some());
     assert!(!curl_called.exists(), "the deploy asked the HTTP cache");
 }
+
+/// Every deploy build checks its bundle is stamped from the deployed commit,
+/// after the build that stamps it; production also refuses a bundle older than
+/// the live one unless dispatched as a rollback.
+#[test]
+fn build_verifies_bundle_identity_after_building() {
+    let steps = build_steps();
+    let build = steps
+        .iter()
+        .position(|step| runs(step, "just build-${{ inputs.environment }}"))
+        .expect("build step");
+    let verify = steps
+        .iter()
+        .position(|step| runs(step, "bundle_stamp -- verify"))
+        .expect("verify step");
+    assert!(verify > build, "verify runs after the build");
+
+    let script = steps[verify]["run"].as_str().expect("verify script");
+    assert!(script.contains(r#"--commit "$GITHUB_SHA""#), "{script}");
+    assert!(script.contains("--not-older-than"), "{script}");
+    assert_eq!(
+        steps[verify]["env"]["ROLLBACK"].as_str(),
+        Some("${{ inputs.rollback }}")
+    );
+    assert_eq!(
+        steps[verify]["env"]["LIVE_MANIFEST_URL"].as_str(),
+        Some("https://macro.com/app/bundle-manifest.json")
+    );
+
+    let inputs = &rendered()["on"]["workflow_call"]["inputs"];
+    assert_eq!(inputs["rollback"]["default"].as_bool(), Some(false));
+}

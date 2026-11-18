@@ -16,14 +16,15 @@ import { networkInterfaces } from 'node:os';
  * Manual smoke server for the native OTA bundle updater.
  *
  * Intended use:
- * 1. Build the embedded app baseline with a deterministic bundle build, e.g.
- *      BUNDLE_BUILD_NUMBER=100 MIN_NATIVE_BUILD=0 bun run build
- * 2. Start this server from apps/web:
+ * 1. Build the embedded app baseline; bundle-stamp numbers it from HEAD's
+ *    commit time (dist/bundle-manifest.json):
+ *      MIN_NATIVE_BUILD=0 bun run build
+ * 2. Start this server from apps/web. Fixtures are numbered relative to that
+ *    baseline: "older" is a commit 10s before it, "101" one second after it
+ *    and "102" two seconds after it:
  *      just bundle-smoke-server older --host 0.0.0.0 --port 3001
- * 3. Build/run the native app with:
+ * 3. Build/run the native app from the same dist with:
  *      MACRO_BUNDLE_UPDATE_BASE_URL=http://<MAC-LAN-IP>:3001
- *      BUNDLE_BUILD_NUMBER=100
- *      MIN_NATIVE_BUILD=0
  *    If testing on a physical iPhone with a plain HTTP LAN URL, iOS ATS may
  *    block the request unless you temporarily allow local networking in the
  *    app's Info.plist. Do not commit that ATS override; remove it after smoke
@@ -44,6 +45,13 @@ type Scenario =
   | 'update-101'
   | 'revoke-101'
   | 'incompatible-102';
+
+/** Commit-time offsets from the baseline, in seconds, per fixture. */
+const OLDER_OFFSET = -10;
+const UPDATE_OFFSET = 1;
+const INCOMPATIBLE_OFFSET = 2;
+/** A well-formed commit id; fixtures name no real commit. */
+const FIXTURE_SHA = '5'.repeat(40);
 
 type BundleArtifact = {
   build: number;
@@ -113,11 +121,11 @@ function printHelp() {
   bun scripts/smoke-bundle-updater-server.ts [scenario] [--host 0.0.0.0] [--port 3001]
 
 Scenarios:
-  older             Advertise bundleBuild 90. A baseline 100 app should get 204.
+  older             Advertise a commit 10s older than dist. The baseline app should get 204.
   no-update         Always return 204.
-  update-101        Advertise bundleBuild 101.
-  revoke-101        Return action: "clear" when current_bundle_build is 101.
-  incompatible-102  Return native_update_required for bundleBuild 102 with minNativeBuild 999999.
+  update-101        Advertise a commit 1s newer than dist.
+  revoke-101        Return action: "clear" when the app runs the update-101 bundle.
+  incompatible-102  Return native_update_required for a commit 2s newer, with minNativeBuild 999999.
 
 Runtime controls:
   GET /__scenario
@@ -125,8 +133,7 @@ Runtime controls:
   GET /__scenario/<scenario>
 
 Native build example:
-  MACRO_BUNDLE_UPDATE_BASE_URL=http://<LAN-IP>:3001 \\
-  BUNDLE_BUILD_NUMBER=100 MIN_NATIVE_BUILD=0 just ios-build
+  MACRO_BUNDLE_UPDATE_BASE_URL=http://<LAN-IP>:3001 MIN_NATIVE_BUILD=0 just ios-build
 `);
 }
 
@@ -138,20 +145,31 @@ function assertDistExists() {
   if (!existsSync(join(distDir, 'index.html'))) {
     throw new Error(
       `Missing ${join(distDir, 'index.html')}. Build the app first, for example:\n` +
-        `  BUNDLE_BUILD_NUMBER=100 MIN_NATIVE_BUILD=0 just ios-build`
+        `  MIN_NATIVE_BUILD=0 just ios-build`
     );
   }
 }
 
-function writeManifest(bundleDir: string, build: number, minNativeBuild: number) {
+/** Commit time of the stamped dist bundle, in seconds. */
+function baselineCommitTime(): number {
+  const manifest = JSON.parse(readFileSync(join(distDir, 'bundle-manifest.json'), 'utf8'));
+  if (!Number.isSafeInteger(manifest.commitTime)) {
+    throw new Error('dist/bundle-manifest.json has no commitTime; rebuild with bun run build');
+  }
+  return manifest.commitTime;
+}
+
+/** Fixtures are stamped like real bundles: bundleBuild = commitTime * 1000. */
+function writeManifest(bundleDir: string, commitTime: number, minNativeBuild: number) {
   writeFileSync(
     join(bundleDir, 'bundle-manifest.json'),
     `${JSON.stringify(
       {
         schemaVersion: 2,
-        bundleBuild: build,
+        bundleBuild: commitTime * 1000,
+        commitTime,
+        gitSha: FIXTURE_SHA,
         minNativeBuild,
-        gitSha: 'smoke',
         appVersion: appVersion(),
       },
       null,
@@ -175,14 +193,15 @@ function sha256(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
-function buildArtifact(build: number, minNativeBuild: number): BundleArtifact {
+function buildArtifact(commitTime: number, minNativeBuild: number): BundleArtifact {
+  const build = commitTime * 1000;
   const bundleDir = join(workDir, `bundle-${build}`);
   const fileName = `bundle-${build}.zip`;
   const zipPath = join(artifactsDir, fileName);
 
   rmSync(bundleDir, { recursive: true, force: true });
   cpSync(distDir, bundleDir, { recursive: true });
-  writeManifest(bundleDir, build, minNativeBuild);
+  writeManifest(bundleDir, commitTime, minNativeBuild);
   zipDir(bundleDir, zipPath);
 
   return {
@@ -198,14 +217,15 @@ function prepareArtifacts() {
   assertDistExists();
   rmSync(artifactsDir, { recursive: true, force: true });
   mkdirSync(artifactsDir, { recursive: true });
+  const baseline = baselineCommitTime();
   const artifacts = new Map<number, BundleArtifact>();
-  for (const [build, minNativeBuild] of [
-    [90, 0],
-    [101, 0],
-    [102, 999999],
+  for (const [offset, minNativeBuild] of [
+    [OLDER_OFFSET, 0],
+    [UPDATE_OFFSET, 0],
+    [INCOMPATIBLE_OFFSET, 999999],
   ] as const) {
-    const artifact = buildArtifact(build, minNativeBuild);
-    artifacts.set(build, artifact);
+    const artifact = buildArtifact(baseline + offset, minNativeBuild);
+    artifacts.set(offset, artifact);
     console.log(
       `[bundle-smoke] prepared ${artifact.fileName} checksum=${artifact.checksum}`
     );
@@ -317,7 +337,7 @@ const server = Bun.serve({
 
     if (scenario === 'no-update') return noContent();
     if (scenario === 'revoke-101') {
-      if (currentBundleBuild === 101) {
+      if (currentBundleBuild === artifacts.get(UPDATE_OFFSET)?.build) {
         return Response.json({ action: 'clear', reason: 'bundle_revoked' });
       }
       return noContent();
@@ -325,10 +345,10 @@ const server = Bun.serve({
 
     const artifact =
       scenario === 'older'
-        ? artifacts.get(90)
+        ? artifacts.get(OLDER_OFFSET)
         : scenario === 'update-101'
-          ? artifacts.get(101)
-          : artifacts.get(102);
+          ? artifacts.get(UPDATE_OFFSET)
+          : artifacts.get(INCOMPATIBLE_OFFSET);
 
     if (!artifact) return noContent();
     if (artifact.build <= currentBundleBuild) return noContent();

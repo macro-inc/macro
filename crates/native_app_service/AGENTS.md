@@ -21,13 +21,24 @@ updating them: update checks and version negotiation.
 
 ## Boundaries
 
-- Depends on: `macro_env_var` for config.
+- Depends on: `bundle_identity` for bundle numbers and the manifest wire type;
+  `macro_env_var` for config.
 - Used by: `services/authentication_service` (mounts the router with
   `axum::Router::with_state`).
 
 ## Checks
 
 - `cargo test -p native_app_service` (`SQLX_OFFLINE` unset).
+
+## Gotchas
+
+- Compare bundles only as `BundleBuild`; numbers from clients and policy config
+  enter through `BundleBuild::reported`.
+- `DeployedManifest` still reads legacy (unstamped) live manifests, and the
+  service keeps the `current_git_sha` same-commit skip. Both go once one
+  production release has served stamped manifests.
+- The checksum cache keys on `(bundle_build, built_at)`: rebuilds of one commit
+  share a bundle build but upload a new archive.
 
 ## Related
 

@@ -1,3 +1,7 @@
+use std::path::Path;
+
+use bundle_identity::BundleManifest;
+
 fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios") {
         // Android needs cdylib, so Cargo also emits an unused iOS dylib. CallKit's
@@ -8,7 +12,7 @@ fn main() {
     }
 
     println!("cargo:rerun-if-changed=.macro-tauri-env");
-    println!("cargo:rerun-if-changed=../../dist/bundle-manifest.json");
+    println!("cargo:rerun-if-changed={EMBEDDED_BUNDLE_MANIFEST}");
     println!("cargo:rerun-if-env-changed=MACRO_BUNDLE_UPDATE_BASE_URL");
 
     let contents = std::fs::read_to_string(".macro-tauri-env").unwrap_or_default();
@@ -30,19 +34,26 @@ fn main() {
         }
     }
 
-    let embedded_bundle_build = match read_embedded_bundle_build() {
-        Ok(bundle_build) => bundle_build,
-        Err(error) if app_env == "production" => {
-            panic!("{error}");
-        }
-        Err(error) => {
-            println!("cargo:warning={error}; falling back to embedded bundle build 0");
-            0
-        }
-    };
+    // The embedded bundle's identity comes from its stamped manifest, so it
+    // equals the OTA bundle deployed from the same commit. Release builds
+    // refuse an unstamped bundle; development builds run without one.
+    let manifest_path = Path::new(EMBEDDED_BUNDLE_MANIFEST);
+    let (embedded_bundle_build, embedded_bundle_git_sha) =
+        match BundleManifest::read_file(manifest_path) {
+            Ok(manifest) => (
+                manifest.bundle_build().get(),
+                manifest.source().sha().to_string(),
+            ),
+            Err(error) if app_env == "production" => {
+                panic!("{error}");
+            }
+            Err(error) => {
+                println!("cargo:warning={error}; falling back to embedded bundle build 0");
+                (0, String::new())
+            }
+        };
     println!("cargo:rustc-env=MACRO_EMBEDDED_BUNDLE_BUILD={embedded_bundle_build}");
-    // Empty when the manifest names no commit; the updater then sends none.
-    let embedded_bundle_git_sha = read_embedded_bundle_git_sha().unwrap_or_default();
+    // Empty without a stamped manifest; the updater then sends no commit.
     println!("cargo:rustc-env=MACRO_EMBEDDED_BUNDLE_GIT_SHA={embedded_bundle_git_sha}");
     // Settings shows this as the app's build date. It stays fixed for the
     // binary; OTA bundles replace the JavaScript, not this value.
@@ -62,29 +73,3 @@ fn main() {
 }
 
 const EMBEDDED_BUNDLE_MANIFEST: &str = "../../dist/bundle-manifest.json";
-
-fn read_embedded_bundle_manifest() -> Result<serde_json::Value, String> {
-    let path = EMBEDDED_BUNDLE_MANIFEST;
-    let contents =
-        std::fs::read_to_string(path).map_err(|e| format!("failed to read {path}: {e}"))?;
-    serde_json::from_str::<serde_json::Value>(&contents)
-        .map_err(|e| format!("failed to parse {path}: {e}"))
-}
-
-/// The commit the embedded bundle was built from, if its manifest records one.
-fn read_embedded_bundle_git_sha() -> Option<String> {
-    read_embedded_bundle_manifest()
-        .ok()?
-        .get("gitSha")?
-        .as_str()
-        .map(str::to_owned)
-}
-
-fn read_embedded_bundle_build() -> Result<u64, String> {
-    let path = EMBEDDED_BUNDLE_MANIFEST;
-    let manifest = read_embedded_bundle_manifest()?;
-    manifest
-        .get("bundleBuild")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| format!("{path} missing unsigned integer bundleBuild"))
-}

@@ -52,15 +52,18 @@ fi
 key_prefix=${prefix:+$prefix/}
 records_prefix=${key_prefix}_builds
 
-# Use the same build timestamp as the bundle manifest and app update checks.
+# Records are named by when the build ran (the manifest's builtAt, Unix ms), so
+# "newest" means most recently deployed. Not bundleBuild: that is the source
+# commit's identity, shared by every rebuild of one commit, and a rebuild must
+# not overwrite the record of the build open tabs still run.
 manifest=$dist_root/bundle-manifest.json
 if [ ! -f "$manifest" ]; then
   echo "no bundle manifest at $manifest" >&2
   exit 1
 fi
-build=$(sed -n 's/.*"bundleBuild"[[:space:]]*:[[:space:]]*\([0-9]\{1,\}\).*/\1/p' "$manifest" | head -1)
-if [ -z "$build" ]; then
-  echo "bundle manifest has no bundleBuild" >&2
+build=$(jq -r '.builtAt // empty' "$manifest")
+if ! [[ "$build" =~ ^[0-9]+$ ]]; then
+  echo "bundle manifest has no builtAt; stamp it with bundle-stamp" >&2
   exit 1
 fi
 

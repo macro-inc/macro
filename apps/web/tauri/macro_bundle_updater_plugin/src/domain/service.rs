@@ -1,13 +1,15 @@
 use crate::domain::{
     bundle_routes::{BundleRoutes, BundleSource, BundleSourceKind},
     models::{
-        AppInfo, BundleAction, BundleManifest, BundleRoot, ClearRequiredStatus, CompletedStatus,
-        NativeUpdateRequiredStatus, ProgressPercentage, Target, UnzipRequest, UnzipStatus,
-        UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateGranted, UpdateStatus,
+        AppInfo, BundleAction, BundleRoot, ClearRequiredStatus, CompletedStatus,
+        NativeUpdateRequiredStatus, OtaManifest, ProgressPercentage, Target, UnzipRequest,
+        UnzipStatus, UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateGranted,
+        UpdateStatus,
     },
     ports::{AutoUpdateService, FsRepo, SystemQuery, TaskSpawner, UpdateRepo},
     startup::{BundleRejection, BundleStartup, StartupSelection},
 };
+use bundle_identity::BundleBuild;
 use rootcause::{Report, prelude::ResultExt, report};
 use std::{
     marker::PhantomData,
@@ -22,11 +24,11 @@ const RELOAD_DISPATCH_RETRY_DELAY: Duration = Duration::from_secs(5);
 pub struct Service<Fs: FsRepo> {
     handle: WorkerHandle,
     fs_repo: Fs,
-    embedded_bundle_build: u64,
+    embedded_bundle_build: BundleBuild,
     native_build: u64,
     bundle_root: BundleRoot,
     bundle_routes: BundleRoutes,
-    pending_reload_bundle_build: Option<u64>,
+    pending_reload_bundle_build: Option<BundleBuild>,
     reload_dispatched_at: Option<Instant>,
     reload_held: bool,
 }
@@ -429,7 +431,7 @@ pub(crate) fn next_bundle_index(names: &[String]) -> u64 {
         .map_or(0, |m| m + 1)
 }
 
-async fn extraction_is_complete(fs: &impl FsRepo, bundle_dir: &Path, build: u64) -> bool {
+async fn extraction_is_complete(fs: &impl FsRepo, bundle_dir: &Path, build: BundleBuild) -> bool {
     fs.read_to_string(&bundle_dir.with_extension("complete"))
         .await
         .is_ok_and(|value| value == build.to_string())
@@ -440,7 +442,7 @@ async fn extraction_is_complete(fs: &impl FsRepo, bundle_dir: &Path, build: u64)
 async fn find_cached_bundle(
     fs: &impl FsRepo,
     update_dir: &std::path::Path,
-    bundle_build: u64,
+    bundle_build: BundleBuild,
     native_build: u64,
 ) -> Option<PathBuf> {
     let names = fs.list_dir_names(update_dir).await;
@@ -452,8 +454,7 @@ async fn find_cached_bundle(
             continue;
         }
         let dir = update_dir.join(&name);
-        let Some(manifest) = BundleManifest::read(&dir.join("bundle-manifest.json"), fs).await
-        else {
+        let Some(manifest) = OtaManifest::read(&dir.join("bundle-manifest.json"), fs).await else {
             tracing::debug!("find_cached_bundle: no valid manifest in {dir:?}");
             continue;
         };
@@ -475,11 +476,11 @@ async fn find_cached_bundle(
 async fn validate_bundle_dir(
     fs: &impl FsRepo,
     bundle_dir: &Path,
-    expected_bundle_build: u64,
+    expected_bundle_build: BundleBuild,
     expected_min_native_build: u64,
     native_build: u64,
 ) -> Result<(), rootcause::Report> {
-    let manifest = BundleManifest::read(&bundle_dir.join("bundle-manifest.json"), fs)
+    let manifest = OtaManifest::read(&bundle_dir.join("bundle-manifest.json"), fs)
         .await
         .ok_or_else(|| report!("Missing or invalid bundle-manifest.json in {bundle_dir:?}"))?;
     if manifest.bundle_build != expected_bundle_build {
@@ -553,7 +554,7 @@ impl<Fs: FsRepo> Service<Fs> {
         update_repo: U,
         fs_repo: Fs,
         system_query: Q,
-        embedded_bundle_build: u64,
+        embedded_bundle_build: BundleBuild,
         native_build: u64,
         bundle_routes: BundleRoutes,
     ) -> Self {
@@ -661,7 +662,7 @@ impl<Fs: FsRepo> Service<Fs> {
     }
 
     /// Bundle build embedded in this native app.
-    pub fn embedded_bundle_build(&self) -> u64 {
+    pub fn embedded_bundle_build(&self) -> BundleBuild {
         self.embedded_bundle_build
     }
 
@@ -771,15 +772,15 @@ impl<Fs: FsRepo> Service<Fs> {
     pub async fn acknowledge_update_reload(
         &mut self,
         cache_dir: &Path,
-        loaded_bundle_build: u64,
+        loaded_bundle_build: BundleBuild,
     ) -> Result<bool, Report> {
         let Some(expected_bundle_build) = self.pending_reload_bundle_build else {
             return Ok(false);
         };
         if loaded_bundle_build != expected_bundle_build {
             tracing::warn!(
-                loaded_bundle_build,
-                expected_bundle_build,
+                %loaded_bundle_build,
+                %expected_bundle_build,
                 "Ignoring bundle reload acknowledgement from a stale document"
             );
             return Ok(false);
@@ -801,7 +802,7 @@ impl<Fs: FsRepo> Service<Fs> {
     async fn set_bundle_root(
         &mut self,
         path: PathBuf,
-        bundle_build: u64,
+        bundle_build: BundleBuild,
         cache_dir: &Path,
     ) -> Result<(), std::io::Error> {
         // Persist first — only commit in-memory if the write succeeds.
@@ -850,7 +851,7 @@ impl<Fs: FsRepo> Service<Fs> {
             }
             let bundle_dir = cache_dir.join(&name);
             let Some(manifest) =
-                BundleManifest::read(&bundle_dir.join("bundle-manifest.json"), &self.fs_repo).await
+                OtaManifest::read(&bundle_dir.join("bundle-manifest.json"), &self.fs_repo).await
             else {
                 continue;
             };
@@ -886,7 +887,7 @@ impl<Fs: FsRepo> Service<Fs> {
         bundle_dir: PathBuf,
     ) -> bool {
         let Some(manifest) =
-            BundleManifest::read(&bundle_dir.join("bundle-manifest.json"), &self.fs_repo).await
+            OtaManifest::read(&bundle_dir.join("bundle-manifest.json"), &self.fs_repo).await
         else {
             let _ = self.clear_pending_bundle(cache_dir).await;
             return false;
@@ -955,7 +956,7 @@ impl<Fs: FsRepo> Service<Fs> {
     }
 
     /// Return the active OTA bundle build, if the embedded bundle is not active.
-    pub async fn bundle_build(&self) -> Option<u64> {
+    pub async fn bundle_build(&self) -> Option<BundleBuild> {
         let identity = self.bundle_routes.active_identity().await;
         (identity.source == BundleSourceKind::Ota).then_some(identity.bundle_build)
     }
@@ -1093,6 +1094,8 @@ impl<Fs: FsRepo> Service<Fs> {
 }
 
 #[cfg(test)]
+mod identity_test;
+#[cfg(test)]
 mod interruption_test;
 #[cfg(test)]
 mod network_test;
@@ -1113,6 +1116,7 @@ mod tests {
         ports::AutoUpdateService,
         startup::SavedSelection,
     };
+    use bundle_identity::{CommitSha, CommitTime, SourceCommit};
     use std::{
         collections::{HashMap, HashSet},
         future::pending,
@@ -1335,6 +1339,15 @@ mod tests {
     /// Commit the fake native app's embedded bundle was built from.
     const EMBEDDED_GIT_SHA: &str = "cd95980";
 
+    /// Commit every fake bundle is stamped with; only its time orders bundles.
+    pub(super) const BUNDLE_GIT_SHA: &str = "cd95980272cd95980272cd95980272cd95980272";
+
+    /// The identity of a bundle built from a commit made at `commit_secs`.
+    pub(super) fn commit_build(commit_secs: u64) -> BundleBuild {
+        let sha: CommitSha = BUNDLE_GIT_SHA.parse().unwrap();
+        SourceCommit::new(sha, CommitTime::try_new(commit_secs).unwrap()).bundle_build()
+    }
+
     #[derive(Clone)]
     pub(super) struct FakeSystemQuery {
         network_type: Arc<StdMutex<Option<String>>>,
@@ -1404,7 +1417,7 @@ mod tests {
 
     fn bundle_update() -> BundleUpdate {
         BundleUpdate {
-            bundle_build: 1,
+            bundle_build: commit_build(1),
             min_native_build: 0,
             notes: None,
             url: "https://example.com/bundle.zip".parse().unwrap(),
@@ -1431,9 +1444,10 @@ mod tests {
         PathBuf::from("/cache")
     }
 
-    fn manifest_json(bundle_build: u64, min_native_build: u64) -> String {
+    fn manifest_json(commit_secs: u64, min_native_build: u64) -> String {
+        let bundle_build = commit_secs * 1000;
         format!(
-            r#"{{"schemaVersion":2,"bundleBuild":{bundle_build},"minNativeBuild":{min_native_build},"gitSha":"test","appVersion":"2.5.0"}}"#
+            r#"{{"schemaVersion":2,"bundleBuild":{bundle_build},"commitTime":{commit_secs},"gitSha":"{BUNDLE_GIT_SHA}","minNativeBuild":{min_native_build},"appVersion":"2.5.0"}}"#
         )
     }
 
@@ -1441,16 +1455,19 @@ mod tests {
         fs: &FakeFs,
         cache_dir: &Path,
         dir_name: &str,
-        bundle_build: u64,
+        commit_secs: u64,
         min_native_build: u64,
     ) -> PathBuf {
         let dir = cache_dir.join(dir_name);
         fs.create_dir(dir.clone());
         fs.write_file(dir.join(ENTRYPOINT_NAME), "<html></html>");
-        fs.write_file(dir.with_extension("complete"), bundle_build.to_string());
+        fs.write_file(
+            dir.with_extension("complete"),
+            commit_build(commit_secs).to_string(),
+        );
         fs.write_file(
             dir.join("bundle-manifest.json"),
-            manifest_json(bundle_build, min_native_build),
+            manifest_json(commit_secs, min_native_build),
         );
         dir
     }
@@ -1476,28 +1493,32 @@ mod tests {
             update_repo,
             FakeFs::default(),
             system_query.clone(),
+            BundleBuild::reported(0),
             0,
-            0,
-            BundleRoutes::new(0),
+            BundleRoutes::new(BundleBuild::reported(0)),
         );
         (service, system_query)
     }
 
     pub(super) fn service_with_status(status: UpdateStatus) -> (Service<FakeFs>, StartRx) {
-        service_with_status_fs_and_embedded_build(status, FakeFs::default(), 0)
+        service_with_status_fs_and_embedded_build(
+            status,
+            FakeFs::default(),
+            BundleBuild::reported(0),
+        )
     }
 
     pub(super) fn service_with_status_and_fs(
         status: UpdateStatus,
         fs_repo: FakeFs,
     ) -> (Service<FakeFs>, StartRx) {
-        service_with_status_fs_and_embedded_build(status, fs_repo, 0)
+        service_with_status_fs_and_embedded_build(status, fs_repo, BundleBuild::reported(0))
     }
 
-    fn service_with_status_fs_and_embedded_build(
+    pub(super) fn service_with_status_fs_and_embedded_build(
         status: UpdateStatus,
         fs_repo: FakeFs,
-        embedded_bundle_build: u64,
+        embedded_bundle_build: BundleBuild,
     ) -> (Service<FakeFs>, StartRx) {
         let (status_tx, status_rx) = tokio::sync::watch::channel(Ok(status));
         let (start_tx, start_rx) = tokio::sync::mpsc::channel(1);
@@ -1538,7 +1559,7 @@ mod tests {
                 update_dir,
                 native_build,
             ),
-            bundle_routes: BundleRoutes::new(0),
+            bundle_routes: BundleRoutes::new(BundleBuild::reported(0)),
             _task_spawner: PhantomData::<TestTaskSpawner>,
             status_tx,
             start_rx,
@@ -1547,7 +1568,7 @@ mod tests {
 
     fn app_info(native_build: u64) -> AppInfo {
         AppInfo {
-            current_bundle_build: 0,
+            current_bundle_build: BundleBuild::reported(0),
             current_git_sha: None,
             native_build,
             arch: Arch::Aarch64,
@@ -1557,12 +1578,12 @@ mod tests {
 
     fn unzip_status(
         cache_dir: &Path,
-        expected_bundle_build: u64,
+        expected_commit_secs: u64,
         expected_min_native_build: u64,
     ) -> UnzipStatus {
         UnzipStatus {
             zip_filename: cache_dir.join("0").join("bundle.zip"),
-            expected_bundle_build,
+            expected_bundle_build: commit_build(expected_commit_secs),
             expected_min_native_build,
             expected_checksum: "checksum".to_string(),
             progress: ProgressPercentage::default(),
@@ -1571,7 +1592,7 @@ mod tests {
 
     fn completed_status() -> UpdateStatus {
         UpdateStatus::Completed(CompletedStatus {
-            bundle_build: 1,
+            bundle_build: commit_build(1),
             entrypoint: PathBuf::from("/tmp/macro-bundle-test/1/index.html"),
         })
     }
@@ -1609,7 +1630,7 @@ mod tests {
         let fs = FakeFs::default();
         let cache_dir = cache_dir();
         let (mut service, _start_rx) =
-            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs, 10);
+            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs, commit_build(10));
 
         let startup = service.load_bundle_root(&cache_dir, 143).await;
 
@@ -1637,8 +1658,11 @@ mod tests {
             bundle_dir.join(ENTRYPOINT_NAME),
             ErrorKind::PermissionDenied,
         );
-        let (mut service, _start_rx) =
-            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 10);
+        let (mut service, _start_rx) = service_with_status_fs_and_embedded_build(
+            UpdateStatus::Idle,
+            fs.clone(),
+            commit_build(10),
+        );
 
         let startup = service.load_bundle_root(&cache_dir, 0).await;
 
@@ -1656,8 +1680,11 @@ mod tests {
         let bundle_dir = seed_bundle(&fs, &cache_dir, "1", 10, 0);
         seed_persisted_bundle_root(&fs, &cache_dir, &bundle_dir);
         seed_bundle(&fs, &cache_dir, "2", 11, 0);
-        let (mut service, _start_rx) =
-            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 20);
+        let (mut service, _start_rx) = service_with_status_fs_and_embedded_build(
+            UpdateStatus::Idle,
+            fs.clone(),
+            commit_build(20),
+        );
 
         let startup = service.load_bundle_root(&cache_dir, 0).await;
 
@@ -1758,8 +1785,11 @@ mod tests {
         let cache_dir = cache_dir();
         let bundle_dir = seed_bundle(&fs, &cache_dir, "1", 20, 143);
         seed_persisted_bundle_root(&fs, &cache_dir, &bundle_dir);
-        let (mut service, _start_rx) =
-            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 10);
+        let (mut service, _start_rx) = service_with_status_fs_and_embedded_build(
+            UpdateStatus::Idle,
+            fs.clone(),
+            commit_build(10),
+        );
 
         let startup = service.load_bundle_root(&cache_dir, 143).await;
 
@@ -1777,8 +1807,11 @@ mod tests {
         let cache_dir = cache_dir();
         let bundle_dir = seed_bundle(&fs, &cache_dir, "1", 20, 143);
         seed_pending_bundle_root(&fs, &cache_dir, &bundle_dir);
-        let (mut service, _start_rx) =
-            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 10);
+        let (mut service, _start_rx) = service_with_status_fs_and_embedded_build(
+            UpdateStatus::Idle,
+            fs.clone(),
+            commit_build(10),
+        );
 
         let startup = service.load_bundle_root(&cache_dir, 143).await;
 
@@ -1797,8 +1830,11 @@ mod tests {
         let cache_dir = cache_dir();
         let bundle_dir = seed_bundle(&fs, &cache_dir, "1", 10, 0);
         seed_pending_bundle_root(&fs, &cache_dir, &bundle_dir);
-        let (mut service, _start_rx) =
-            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 20);
+        let (mut service, _start_rx) = service_with_status_fs_and_embedded_build(
+            UpdateStatus::Idle,
+            fs.clone(),
+            commit_build(20),
+        );
 
         let startup = service.load_bundle_root(&cache_dir, 0).await;
 
@@ -1816,8 +1852,11 @@ mod tests {
         let cache_dir = cache_dir();
         seed_bundle(&fs, &cache_dir, "1", 20, 0);
         let bundle_dir = seed_bundle(&fs, &cache_dir, "2", 30, 0);
-        let (mut service, _start_rx) =
-            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 10);
+        let (mut service, _start_rx) = service_with_status_fs_and_embedded_build(
+            UpdateStatus::Idle,
+            fs.clone(),
+            commit_build(10),
+        );
 
         let startup = service.load_bundle_root(&cache_dir, 0).await;
 
@@ -1837,7 +1876,7 @@ mod tests {
         seed_pending_bundle_root(&fs, &cache_dir, &bundle_dir);
         let (mut service, _start_rx) = service_with_status_and_fs(
             UpdateStatus::Completed(CompletedStatus {
-                bundle_build: 20,
+                bundle_build: commit_build(20),
                 entrypoint: bundle_dir.join(ENTRYPOINT_NAME),
             }),
             fs.clone(),
@@ -1856,10 +1895,13 @@ mod tests {
         let (service, _start_rx) = service_with_status_fs_and_embedded_build(
             UpdateStatus::Idle,
             FakeFs::default(),
-            1780346991624,
+            BundleBuild::reported(1780346991624),
         );
 
-        assert_eq!(service.embedded_bundle_build(), 1780346991624);
+        assert_eq!(
+            service.embedded_bundle_build(),
+            BundleBuild::reported(1780346991624)
+        );
     }
 
     #[tokio::test]
@@ -1869,7 +1911,7 @@ mod tests {
         seed_bundle(&fs, &cache_dir, "1", 29, 0);
         let bundle_dir = seed_bundle(&fs, &cache_dir, "2", 30, 0);
         let mut update = bundle_update();
-        update.bundle_build = 30;
+        update.bundle_build = commit_build(30);
         let mut worker = worker_with_fs_and_native_build(
             fs,
             Some(BundleAction::Update(update)),
@@ -1895,7 +1937,7 @@ mod tests {
         let cache_dir = cache_dir();
         seed_bundle(&fs, &cache_dir, "1", 29, 0);
         let mut update = bundle_update();
-        update.bundle_build = 30;
+        update.bundle_build = commit_build(30);
         let mut worker =
             worker_with_fs_and_native_build(fs, Some(BundleAction::Update(update)), cache_dir, 0);
 
@@ -1940,7 +1982,7 @@ mod tests {
             fs,
             Some(BundleAction::NativeUpdateRequired(
                 BundleNativeUpdateRequired {
-                    bundle_build: 102,
+                    bundle_build: BundleBuild::reported(102),
                     min_native_build: 999,
                 },
             )),
@@ -1956,9 +1998,9 @@ mod tests {
         assert!(matches!(
             status,
             UpdateStatus::NativeUpdateRequired(NativeUpdateRequiredStatus {
-                bundle_build: 102,
+                bundle_build,
                 min_native_build: 999,
-            })
+            }) if bundle_build == BundleBuild::reported(102)
         ));
     }
 
@@ -2168,10 +2210,10 @@ mod tests {
                 start_tx,
             },
             fs_repo: FakeFs::default(),
-            embedded_bundle_build: 0,
+            embedded_bundle_build: BundleBuild::reported(0),
             native_build: 0,
             bundle_root: BundleRoot::new(),
-            bundle_routes: BundleRoutes::new(0),
+            bundle_routes: BundleRoutes::new(BundleBuild::reported(0)),
             pending_reload_bundle_build: None,
             reload_dispatched_at: None,
             reload_held: false,
@@ -2203,13 +2245,16 @@ mod tests {
         service.bundle_root = BundleRoot::from_path(active_dir.clone());
         service
             .bundle_routes
-            .restore(BundleSource::ota(20, active_dir))
+            .restore(BundleSource::ota(commit_build(20), active_dir))
             .await;
 
         let applied = service.apply_update(&cache_dir).await.unwrap();
 
         assert_eq!(applied, ApplyUpdateResult::ReloadNeeded);
-        assert_eq!(service.pending_reload_bundle_build, Some(0));
+        assert_eq!(
+            service.pending_reload_bundle_build,
+            Some(BundleBuild::reported(0))
+        );
         assert!(service.bundle_root_path().is_none());
         assert_eq!(
             fs.read_to_string(&cache_dir.join("bundle_root"))
@@ -2222,7 +2267,7 @@ mod tests {
 
         assert!(
             service
-                .acknowledge_update_reload(&cache_dir, 0)
+                .acknowledge_update_reload(&cache_dir, BundleBuild::reported(0))
                 .await
                 .unwrap()
         );
@@ -2243,7 +2288,7 @@ mod tests {
         let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
 
         assert_eq!(applied, ApplyUpdateResult::ReloadNeeded);
-        assert_eq!(service.pending_reload_bundle_build, Some(1));
+        assert_eq!(service.pending_reload_bundle_build, Some(commit_build(1)));
         assert!(service.reload_dispatched_at.is_none());
         assert!(matches!(
             &*service.status().borrow(),
@@ -2253,7 +2298,7 @@ mod tests {
 
         assert!(
             service
-                .acknowledge_update_reload(Path::new("/tmp"), 1)
+                .acknowledge_update_reload(Path::new("/tmp"), commit_build(1))
                 .await
                 .unwrap()
         );
@@ -2272,7 +2317,7 @@ mod tests {
     #[tokio::test]
     async fn apply_update_requests_reload_while_dispatch_is_pending() {
         let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
-        service.pending_reload_bundle_build = Some(1);
+        service.pending_reload_bundle_build = Some(commit_build(1));
 
         let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
 
@@ -2342,7 +2387,7 @@ mod tests {
 
         assert!(
             !service
-                .acknowledge_update_reload(Path::new("/tmp"), 0)
+                .acknowledge_update_reload(Path::new("/tmp"), BundleBuild::reported(0))
                 .await
                 .unwrap()
         );
@@ -2351,7 +2396,7 @@ mod tests {
     #[tokio::test]
     async fn acknowledge_update_reload_treats_full_command_queue_as_acknowledged() {
         let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
-        service.pending_reload_bundle_build = Some(0);
+        service.pending_reload_bundle_build = Some(BundleBuild::reported(0));
         service
             .handle
             .start_tx
@@ -2360,7 +2405,7 @@ mod tests {
 
         assert!(
             service
-                .acknowledge_update_reload(Path::new("/tmp"), 0)
+                .acknowledge_update_reload(Path::new("/tmp"), BundleBuild::reported(0))
                 .await
                 .unwrap()
         );
@@ -2385,13 +2430,13 @@ mod tests {
         // An applied OTA bundle is identified by its build number alone.
         worker
             .bundle_routes
-            .restore(BundleSource::ota(20, cache_dir().join("1")))
+            .restore(BundleSource::ota(commit_build(20), cache_dir().join("1")))
             .await;
         let ota = worker.next_status(UpdateStatus::Idle).await.unwrap();
         let UpdateStatus::CheckingForDownload(app_info) = ota else {
             panic!("expected an update check, got {ota:?}");
         };
-        assert_eq!(app_info.current_bundle_build, 20);
+        assert_eq!(app_info.current_bundle_build, commit_build(20));
         assert_eq!(app_info.current_git_sha, None);
     }
 }

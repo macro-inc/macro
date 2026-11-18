@@ -1,34 +1,38 @@
-use super::{BundleManifest, Target};
+use bundle_identity::BundleManifest;
+
+use super::Target;
 
 fn manifest(schema: u8, minima: &str) -> BundleManifest {
     serde_json::from_str(&format!(
-        r#"{{"schemaVersion":{schema},"bundleBuild":20,"minNativeBuild":0,"minNativeBuilds":{minima},"appVersion":"2.5.0"}}"#
-    )).unwrap()
+        r#"{{"schemaVersion":{schema},"bundleBuild":1794870406000,"commitTime":1794870406,"gitSha":"cd95980272cd95980272cd95980272cd95980272","minNativeBuild":5,{minima}"appVersion":"2.5.0"}}"#
+    ))
+    .unwrap()
 }
 
 #[test]
-fn mobile_minima_are_independent_and_never_fall_back_to_legacy_zero() {
-    let bundle = manifest(3, r#"{"android":2050001,"ios":184}"#);
-    assert_eq!(bundle.minimum_for(Target::Android), Some(2_050_001));
-    assert_eq!(bundle.minimum_for(Target::Ios), Some(184));
-    assert_eq!(manifest(3, "null").minimum_for(Target::Android), None);
-    assert_eq!(manifest(4, "null").minimum_for(Target::Android), None);
+fn mobile_targets_read_their_own_minimum() {
+    let bundle = manifest(3, r#""minNativeBuilds":{"android":2050001,"ios":184},"#);
+
     assert_eq!(
-        manifest(2, r#"{"android":9,"ios":2}"#).minimum_for(Target::Android),
-        None
+        bundle.minimum_for(Target::Android.native_platform()),
+        Some(2_050_001)
     );
-    assert_eq!(manifest(2, "null").minimum_for(Target::Android), None);
-    assert_eq!(manifest(2, "null").minimum_for(Target::Ios), Some(0));
+    assert_eq!(bundle.minimum_for(Target::Ios.native_platform()), Some(184));
 }
 
 #[test]
-fn desktop_reads_the_shared_minimum_from_schema_3() {
-    let bundle: BundleManifest = serde_json::from_str(
-        r#"{"schemaVersion":3,"bundleBuild":20,"minNativeBuild":5,"minNativeBuilds":{"android":2050001,"ios":184},"appVersion":"2.5.0"}"#,
-    )
-    .unwrap();
+fn android_reads_no_minimum_from_the_shared_schema() {
+    let bundle = manifest(2, "");
+
+    assert_eq!(bundle.minimum_for(Target::Android.native_platform()), None);
+    assert_eq!(bundle.minimum_for(Target::Ios.native_platform()), Some(5));
+}
+
+#[test]
+fn desktop_targets_read_the_shared_minimum() {
+    let bundle = manifest(3, r#""minNativeBuilds":{"android":2050001,"ios":184},"#);
+
     for target in [Target::Darwin, Target::Linux, Target::Windows] {
-        assert_eq!(bundle.minimum_for(target), Some(5));
+        assert_eq!(bundle.minimum_for(target.native_platform()), Some(5));
     }
-    assert_eq!(manifest(3, "null").minimum_for(Target::Darwin), None);
 }

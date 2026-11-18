@@ -163,7 +163,7 @@ build-dev: build-wasm (bundle "development")
 build-staging: build-wasm (bundle "staging")
 
 # Production bundles carry the native build floors checked in at
-# min-native-build.json (schema 3 manifest, see scripts/write-bundle-manifest.mjs);
+# min-native-build.json (schema 3 manifest, see tooling/bundle_stamp);
 # `just ios-bump` raises the iOS one and `just android-bump` the Android one.
 # Explicit MIN_NATIVE_BUILD_* env still wins.
 build-prod: build-wasm

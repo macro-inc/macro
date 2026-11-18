@@ -87,6 +87,25 @@ ignores legacy cache contents: the first launch uses embedded assets and checks
 for a fresh download. Other platforms retain their existing cache location.
 This storage change requires a native app release.
 
+## Bundle identity
+
+The updater orders bundles by `BundleBuild` from `crates/bundle_identity`: the
+committer time of the commit a bundle was built from, in milliseconds. The
+embedded bundle and the OTA bundle of one commit are therefore equal, and an
+OTA bundle of an older commit is older than the embedded one however late it was
+built. `build.rs` reads the embedded identity and commit from the stamped
+`../../dist/bundle-manifest.json`; a `production` build fails on an unstamped or
+invalid manifest, and a `development` build warns and uses 0. The updater reads
+OTA manifests just as strictly: a bundle persisted before stamping (no
+`commitTime`) is rejected as `manifest_invalid` at startup, and the app serves
+its embedded bundle until the next update.
+
+iOS and Android store builds are cut from their PR head, so they embed that
+commit's time, not the time it merged. Once installed they are offered the OTA
+bundle of their own squash-merge commit (a redundant download), and a main commit
+merged before their PR head was committed is not offered until a newer deploy.
+Both settle within one release; neither is the old embedded-versus-OTA desync.
+
 ## File saving and sharing
 
 The optional `file_export_plugin` registers iOS save/share commands. The web
@@ -618,15 +637,14 @@ branch, and `--no-default-features` builds do not auto-install native updates.
 `../desktop-release.json` is the public release configuration; its checked-in
 defaults disable updates for local builds. `bun apps/web/scripts/desktop-release.mjs prepare <ref>`
 (run from the repository root) updates this tracked file in CI
-before Nix evaluates either package. Both packages receive the same native version,
-OTA compatibility build number, and source commit timestamp for the embedded
-frontend. That timestamp is earlier than the OTA bundle the web deploy builds from
-the same commit (numbered by build time), so the embedded bundle manifest also
-records the commit (`prepare` writes `gitSha` into `desktop-release.json`, since
-the file it rewrites leaves the Nix flake without a rev; Nix passes it as
-`GIT_SHA`), and desktop update checks send it as
-`current_git_sha` while the embedded bundle is active: the server offers no
-update when the deployed bundle comes from that commit. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
+before Nix evaluates either package. Both packages receive the same native version
+and OTA compatibility build number. The embedded frontend is stamped by
+`bundle-stamp` (`tooling/bundle_stamp`) from the flake's source commit
+(`self.rev`/`dirtyRev` and `self.lastModified`), so it carries the same
+`bundleBuild` (commit time in milliseconds) as the OTA bundle the web deploy
+builds from that commit, and the server offers no update for it. Desktop update
+checks still send the embedded commit as `current_git_sha`, for servers that
+predate commit-derived numbering. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
 `YEAR.MMDD.REVISION` SemVer, e.g. `v2026.10.6.1` → `2026.1006.1`. Three-part stable
 SemVer tags also work. Each component must be at most 9999. Do not reuse a version
 or rebuild an already published tag; publish a higher version for fixes/reverts.
