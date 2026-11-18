@@ -724,3 +724,33 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         assert_eq!(signed(&run.token).as_deref(), name, "MCP run {scope:?}");
     }
 }
+
+/// Agent permissions are on only with the OCaml rollout too, and off when
+/// the flags can't be read.
+#[tokio::test]
+async fn agent_permissions_need_both_flags() {
+    use agent_permissions::domain::ports::PermissionsRollout;
+    use feature_flags::outbound::fake::FakeFeatureFlags;
+    use feature_flags::{FlagSnapshot, FlagValue};
+
+    let both = MacroUserIdStr::try_from("macro|both@example.com".to_owned()).unwrap();
+    let permissions_only =
+        MacroUserIdStr::try_from("macro|permissions-only@example.com".to_owned()).unwrap();
+    let unreadable = MacroUserIdStr::try_from("macro|unreadable@example.com".to_owned()).unwrap();
+    let on = |keys: &[&str]| {
+        FlagSnapshot::new(
+            keys.iter()
+                .map(|key| ((*key).to_owned(), FlagValue::Boolean(true))),
+        )
+    };
+    let mut flags = FakeFeatureFlags::default();
+    flags.set(both.clone(), Ok(on(&[OCAML_FLAG, PERMISSIONS_FLAG])));
+    flags.set(permissions_only.clone(), Ok(on(&[PERMISSIONS_FLAG])));
+    flags.set(unreadable.clone(), Err("posthog is down".to_owned()));
+    let rollout = PermissionsFlag(Some(flags));
+
+    assert!(rollout.enabled(&both).await);
+    assert!(!rollout.enabled(&permissions_only).await);
+    assert!(!rollout.enabled(&unreadable).await);
+    assert!(!PermissionsFlag::<FakeFeatureFlags>(None).enabled(&both).await);
+}

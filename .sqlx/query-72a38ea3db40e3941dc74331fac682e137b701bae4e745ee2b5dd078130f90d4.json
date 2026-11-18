@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    DELETE FROM persona_tool_permission\n                    WHERE user_id = $1 AND persona_id = $2\n                      AND (kind, target) IN (SELECT * FROM UNNEST($3::text[], $4::text[]))\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "72a38ea3db40e3941dc74331fac682e137b701bae4e745ee2b5dd078130f90d4"
+}

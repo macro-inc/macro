@@ -83,6 +83,8 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         // starts nothing.
         ("POST", "/agent-harness/agent-sessions/01a1/reviews"),
         ("DELETE", "/agent-sessions/01a1/queue/02b2"),
+        // An agent may always restrict itself.
+        ("POST", "/agent-harness/agents/01a1/tool-permissions/tighten"),
     ] {
         assert!(scope.allows(method, path), "{method} {path}");
     }
@@ -107,6 +109,8 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         ("PUT", "/agents/01a1"),
         ("PATCH", "/agents/01a1"),
         ("PUT", "/auth/agents/01a1/api-key"),
+        ("PUT", "/agent-harness/agents/01a1/tool-permissions"),
+        ("DELETE", "/agents/01a1/tool-permissions"),
         ("POST", "/bots"),
         ("PATCH", "/bots/01a1"),
         ("DELETE", "/bots/01a1"),
