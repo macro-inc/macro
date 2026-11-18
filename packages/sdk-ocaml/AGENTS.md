@@ -82,7 +82,7 @@ encoding) and hands the reply to `interpret`.
   fails it. Fix the analyzer, never the test.
 - The analyzer trusts `fetch/` and `code_mode/` (`Analyze.default_libraries`)
   without analyzing them; `analyzer/test/test_trusted.ml` fails if either
-  names `Macro_sdk` or builds a request. Keep them that way: an operation they
+  names `Macro_sdk` or builds or rewrites a request. Keep them that way: an operation they
   sent themselves would be invisible to agent permissions. Never trust
   `Js_of_ocaml`. Their interfaces reach the corpus through copies
   (`analyzer/test/code_mode_interfaces`), which follow the `.mli` files.
