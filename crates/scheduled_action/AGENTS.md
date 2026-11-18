@@ -116,21 +116,35 @@ each run.
   bounded by `DRAFT_TIMEOUT`). It turns the last passing check (else the
   last check) into the draft (a single agent task, which the SDK still
   accepts, becomes one agent step holding its prompt and user prompt, or
-  fails the draft if it declares apps, which a draft can't hold, or that
-  step breaks a program's rules), then stops and deletes the session and the
+  fails the draft if that step breaks a program's rules), then stops and
+  deletes the session and the
   row, also once it sees the request dropped mid-draft (the web composer,
   given no answer, sends the draft once more, `compose-routine.ts`);
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
-  again. The `routine.draft` span records the drafter (`found` or
+  again. A routine draft's prompt (not the cached instructions: they differ
+  per person) lists the apps its owner connected (`drafts/apps.md`, through
+  the `DraftApps` port the harness sets with `RoutineDrafts::with_apps`);
+  without the port, or when it fails, the draft goes on without the list.
+  The session requires (`apps`, the task's `mcp_servers`) the listed ones
+  its Ask AI step uses, and names in its check (`missingApps`, kept as
+  `RoutineCheck::missing_apps` by `named_missing_apps`: well-formed, not
+  already required, at most ten) those it needs that aren't connected; a
+  check never fails for them. The draft holds both (`apps`,
+  `missing_apps`), sorted again against the listed apps so a required one
+  is always connected, and neither when it has no Ask AI step; the review
+  asks the person to connect each missing one before saving. A step draft
+  holds no apps. The `routine.draft` span records the drafter (`found` or
   `session`), names found, left and not looked up, the session id,
   checks, items created, the session's tool calls and turns, status
   reads, whether a single
-  agent task became steps (`routine.draft.agent_task`) and outcome
+  agent task became steps (`routine.draft.agent_task`), the apps listed,
+  required and missing (`routine.draft.connected_apps`, `.apps`,
+  `.missing_apps`) and outcome
   (`timeout` included), never the words or the names; `routine.draft.find` records
   the answer's size and `routine.draft.lookup` what it found;
   `routine.check` records whether a check passed and kept a draft's
-  answer. `DraftContext` still accepts and ignores the `workspace` older
+  answer, and the missing apps it named. `DraftContext` still accepts and ignores the `workspace` older
   web clients send. `bench/` is the drafting eval: 20 requests on a seeded
   workspace, drafted by Draft it and by a bare agent session on a local
   stack against the live model, timed phase by phase and checked three ways

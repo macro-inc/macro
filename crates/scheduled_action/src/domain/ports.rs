@@ -255,12 +255,15 @@ pub trait ScheduledActionService: Send + Sync + 'static {
     /// routine as it would be stored, without saving anything. A check made
     /// by a routine draft's session (`correlation`, the code-mode invocation
     /// the request's credential names) is kept as that draft's answer, with
-    /// the items it says it `created` for the routine.
+    /// the items it says it `created` for the routine and the apps it needs
+    /// that `principal` hasn't connected (`missing_apps`, kept as
+    /// [`super::models::RoutineCheck::missing_apps`] says).
     fn check_action(
         &self,
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         created: Vec<super::models::CreatedItem>,
+        missing_apps: Vec<AgentMcpServer>,
         correlation: Option<Uuid>,
     ) -> impl Future<Output = Result<super::models::RoutineCheck>> + Send;
 
@@ -642,6 +645,15 @@ impl SessionCreations for NoSessionCreations {
     async fn created_by(&self, _session: Uuid) -> Result<Vec<super::models::CreatedItem>> {
         Ok(Vec::new())
     }
+}
+
+/// The apps a person connected, which a routine drafted for them may
+/// require: the ones saving and every run count as connected. Object-safe so
+/// the drafter holds it erased.
+#[async_trait::async_trait]
+pub trait DraftApps: Send + Sync + 'static {
+    /// `owner`'s connected apps, by slug and display name.
+    async fn connected(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<AgentMcpServer>>;
 }
 
 /// The agent session a code-mode request came from, by the invocation its
