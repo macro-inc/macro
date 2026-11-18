@@ -20,7 +20,8 @@ omitting `enabled` keeps the stored value; omitting `run_visibility` or
 `description` keeps them too, so clients that predate them do not reset them.
  */
 export interface ActionConfigurationUpdate {
-  /** An icon and colour an agent picked, as on create. */
+  /** An icon and colour an agent picked, as on create. Saved only when the
+update is made for the routine's owner; skipped for anyone else. */
   appearance?: EntityAppearance;
   /** An empty string clears it. */
   description?: ActionConfigurationUpdateDescription;

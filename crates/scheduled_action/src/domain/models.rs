@@ -249,7 +249,8 @@ pub struct ActionConfigurationUpdate {
     /// An empty string clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// An icon and colour an agent picked, as on create.
+    /// An icon and colour an agent picked, as on create. Saved only when the
+    /// update is made for the routine's owner; skipped for anyone else.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schema(nullable = false)]
     pub appearance: Option<EntityAppearance>,

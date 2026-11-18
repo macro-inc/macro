@@ -49,7 +49,8 @@ export type ActionConfiguration = {
  */
 export type ActionConfigurationUpdate = {
     /**
-     * An icon and colour an agent picked, as on create.
+     * An icon and colour an agent picked, as on create. Saved only when the
+     * update is made for the routine's owner; skipped for anyone else.
      */
     appearance?: EntityAppearance;
     /**
