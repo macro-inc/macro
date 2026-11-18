@@ -34,7 +34,7 @@ use crate::calendar_backfill_adapters::RedisCalendarRequestGate;
 use crate::calendar_outbox::republish_calendar_job;
 use crate::calendar_ratelimit::CalendarRateLimiter;
 use crate::calendar_reauth::LinkManagerReauthNotifier;
-use crate::pubsub_util::cg_refresh_calendar;
+use calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh;
 
 /// The event broker used by the backfill coordinator.
 pub type CalendarEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
@@ -61,12 +61,11 @@ pub struct CalendarBackfillContext {
     sqs_worker: sqs_worker::SQSWorker,
     redis_conn: MultiplexedConnection,
     auth_service_client: AuthServiceClient,
-    connection_gateway_client: connection_gateway_client::client::ConnectionGatewayClient,
+    calendar_refresh: GatewayCalendarRefresh,
     coordinator: Arc<GoogleCalendarBackfillService>,
     failure: Arc<GoogleCalendarBackfillFailureHandler>,
     reauth: Arc<CalendarReauth>,
     calendar_sync_enabled: bool,
-    team_sharing_enabled: bool,
 }
 
 impl CalendarBackfillContext {
@@ -78,12 +77,11 @@ impl CalendarBackfillContext {
         rate_limiter: CalendarRateLimiter,
         redis_conn: MultiplexedConnection,
         auth_service_client: AuthServiceClient,
-        connection_gateway_client: connection_gateway_client::client::ConnectionGatewayClient,
+        calendar_refresh: GatewayCalendarRefresh,
         macro_event_broker: CalendarEventBroker,
         reauth_notifier: LinkManagerReauthNotifier,
         watch: Option<GoogleWatchConfig>,
         calendar_sync_enabled: bool,
-        team_sharing_enabled: bool,
     ) -> Self {
         let repository = PgCalendarRepository::new(db.clone());
         let coordinator = Arc::new(GoogleCalendarBackfillCoordinator::new(
@@ -106,12 +104,11 @@ impl CalendarBackfillContext {
             sqs_worker,
             redis_conn,
             auth_service_client,
-            connection_gateway_client,
+            calendar_refresh,
             coordinator,
             failure,
             reauth,
             calendar_sync_enabled,
-            team_sharing_enabled,
         }
     }
 }
@@ -317,15 +314,13 @@ async fn run_coordinator(
     // failed: per-calendar commits before the error are durable, and the
     // retry's quiet re-run would never report them.
     if report.changed() {
-        cg_refresh_calendar(
-            &ctx.connection_gateway_client,
-            &ctx.db,
-            link.macro_id.as_ref(),
-            link.id,
-            ctx.team_sharing_enabled,
-            report.team_ooo_changed || run_result.is_err(),
-        )
-        .await;
+        ctx.calendar_refresh
+            .refresh_inbox_viewers(
+                link.macro_id.as_ref(),
+                link.id,
+                report.team_ooo_changed || run_result.is_err(),
+            )
+            .await;
     }
     // An organizer's policy change this run reached guest copies in other
     // inboxes; their viewers refetch as well.
@@ -337,15 +332,9 @@ async fn run_coordinator(
     aligned.sort_unstable();
     aligned.dedup();
     for (owner_id, link_id) in aligned {
-        cg_refresh_calendar(
-            &ctx.connection_gateway_client,
-            &ctx.db,
-            owner_id,
-            link_id,
-            ctx.team_sharing_enabled,
-            false,
-        )
-        .await;
+        ctx.calendar_refresh
+            .refresh_inbox_viewers(owner_id, link_id, false)
+            .await;
     }
 
     match run_result {

@@ -20,6 +20,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   (`OVERRIDE_GOOGLE_CALENDAR_API_URL`).
 - `src/outbound/pg/outlook.rs`: durable Outlook synchronization; preserve
   provider-specific coverage on discovery.
+- `src/outbound/gateway_refresh.rs` (feature `gateway-refresh`): the one
+  `CalendarRefreshNotifier` and `CalendarTeamNotifier` every host composes
+  (`calendar_service`, `email_service`, `document_storage_service`). A
+  change to an inbox's calendars is one gateway request to its owner and
+  delegates, found by `link_id` alone, plus their teammates with
+  `with_team_refresh` (only `calendar_service`, with team sharing on). It
+  sends from the host's `event_broker_tracker`, so shutdown drains it; a
+  host awaits `refresh_inbox_viewers` itself only from its own tracked work.
 - `src/inbound/dispatch_worker.rs` + `src/outbound/sqs_dispatch_queue.rs`: reminder
   dispatch queue (feature `dispatch`/`dispatch-sqs`).
 
@@ -223,8 +231,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `OwnCopy`, which refuses the ask. The web also refetches the list when the
   sharer's notification lands, but that is not the signal: it reaches no
   delegate, a muted category never sends it, and the notifier only queues.
-  `document_storage_service` hosts the ask, so it has its own
-  `CalendarRefreshNotifier` (`src/outbound/calendar_refresh.rs`).
+  `document_storage_service` hosts the ask, so it composes the gateway
+  refresh adapter too.
 - `update_event_with_macro_call` (`src/domain/meeting_links.rs`) switches an
   existing event to a Macro call in one provider write, so attendees get one
   update: it reads the stored content through `CalendarEventDetailsReader`,
