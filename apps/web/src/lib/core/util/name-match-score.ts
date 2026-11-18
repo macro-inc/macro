@@ -1,38 +1,60 @@
-/** Longer text (a pasted message, say) is never kept among the names. */
-const REMEMBERED_TEXT_LENGTH = 200;
+/** Text up to this length (any row's name) is remembered with the others. */
+const REMEMBERED_TEXT_LENGTH = 1_000;
+/** Remembered text past this many characters in all is forgotten. */
+const REMEMBERED_CHARACTERS = 4_000_000;
+/** A longer query is a paste: only the latest is kept, up to this length. */
+const KEPT_PASTE_LENGTH = 100_000;
+
+/** A string that shares no memory with the one it came from: text trimmed
+ * from a long paste can, which a remembered key or its words would keep
+ * alive. Joining makes new text, and its slice keeps only that. */
+const copyOf = (value: string) => ` ${value}`.slice(1);
 
 /** Remembers a pure string function's answers. Ranking thousands of rows
- * reads the same names on every keystroke; the bounds only cap memory. */
-function rememberText<R>(compute: (value: string) => R) {
+ * reads the same names on every keystroke; the bounds only cap memory. A
+ * query is read once for every row ranked against it, so a query's function
+ * also keeps the latest text too long to remember with the others. */
+function rememberText<R>(
+  compute: (value: string) => R,
+  of: 'names' | 'queries'
+) {
   const known = new Map<string, R>();
-  // Long text is a typed query, read once for every row ranked against it:
-  // only the latest is kept.
-  let latestLong: { value: string; result: R } | undefined;
+  let characters = 0;
+  let paste: { text: string; result: R } | undefined;
   return (value: string): R => {
     if (value.length > REMEMBERED_TEXT_LENGTH) {
-      if (latestLong?.value !== value)
-        latestLong = { value, result: compute(value) };
-      return latestLong.result;
+      if (paste?.text === value) return paste.result;
+      if (of === 'names' || value.length > KEPT_PASTE_LENGTH)
+        return compute(value);
+      const text = copyOf(value);
+      paste = { text, result: compute(text) };
+      return paste.result;
     }
     const hit = known.get(value);
     if (hit !== undefined) return hit;
-    // A copy: text trimmed from a long paste can share the paste's memory,
-    // which a remembered key or its words would keep alive.
-    const text = value.split('').join('');
+    const text = copyOf(value);
     const result = compute(text);
-    if (known.size >= 50_000) known.clear();
+    if (
+      known.size >= 50_000 ||
+      characters + text.length > REMEMBERED_CHARACTERS
+    ) {
+      known.clear();
+      characters = 0;
+    }
     known.set(text, result);
+    characters += text.length;
     return result;
   };
 }
 
-const normalizedText = rememberText((value) =>
+const normalize = (value: string) =>
   value
     .split(/\p{White_Space}+/u)
     .filter(Boolean)
     .join(' ')
-    .toLowerCase()
-);
+    .toLowerCase();
+const normalizedText = rememberText(normalize, 'names');
+const normalizedQuery = rememberText(normalize, 'queries');
 
 /** Mirrors subsequence_match::ranking; shared fixtures freeze this per-row rule.
  * It never normalizes a score against the other rows in a result window. */
@@ -42,12 +64,16 @@ export function normalizeNameText(value: string): string {
 
 const WORD_BREAK = /[^\p{Alphabetic}\p{Number}]+/u;
 
-const wordsOf = rememberText((text): readonly string[] =>
-  text.toLowerCase().split(WORD_BREAK).filter(Boolean)
+const wordsOf = rememberText(
+  (text): readonly string[] =>
+    text.toLowerCase().split(WORD_BREAK).filter(Boolean),
+  'names'
 );
 
-const queryParts = rememberText((query): readonly string[] =>
-  normalizeNameText(query).split(WORD_BREAK).filter(Boolean)
+const queryParts = rememberText(
+  (query): readonly string[] =>
+    normalizedQuery(query).split(WORD_BREAK).filter(Boolean),
+  'queries'
 );
 
 /** Whether every query term starts a word of the text, as the native people
@@ -85,7 +111,7 @@ function span(
 }
 
 export function nameMatchRank(label: string, query: string): number {
-  const term = normalizeNameText(query);
+  const term = normalizedQuery(query);
   if (!term) return 0;
   const name = normalizeNameText(label);
   if (name === term) return 2;
@@ -99,7 +125,7 @@ export function nameMatchQuality(
   gapWeight: number,
   startDecay: number
 ): number | undefined {
-  const term = normalizeNameText(query);
+  const term = normalizedQuery(query);
   if (!term) return 1;
   const textSpan = span(normalizeNameText(text), term);
   if (!textSpan) return undefined;

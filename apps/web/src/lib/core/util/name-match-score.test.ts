@@ -53,7 +53,7 @@ it('keeps an existing row score unchanged when a stronger unrelated match enters
 
 it('scores text longer than a name as it scores the same words padded short', () => {
   const padded = `${' '.repeat(5_000)}Sam   Lee${' '.repeat(5_000)}`;
-  const long = `sam lee ${'x'.repeat(300)}`;
+  const long = `sam lee ${'x'.repeat(1_200)}`;
   for (let pass = 0; pass < 2; pass++) {
     expect(normalizeNameText(padded.trim())).toBe('sam lee');
     expect(nameMatchRank('Sam Lee', padded)).toBe(2);
