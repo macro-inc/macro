@@ -47,7 +47,7 @@ pub(super) fn without_interim_usage(mut body: BoxedStream) -> BoxedStream {
 
 /// Rewrites a Gemini SSE body as it streams, one complete event at a time.
 #[derive(Default)]
-pub(super) struct InterimUsageFilter {
+struct InterimUsageFilter {
     /// Bytes of the event still being received.
     pending: BytesMut,
     /// Where the current line of `pending` starts.
@@ -65,7 +65,7 @@ pub(super) struct InterimUsageFilter {
 impl InterimUsageFilter {
     /// The complete events in `pending` plus `bytes`, rewritten; an event
     /// still being received waits for the next chunk.
-    pub(super) fn push(&mut self, bytes: &[u8]) -> Bytes {
+    fn push(&mut self, bytes: &[u8]) -> Bytes {
         if self.passthrough {
             return Bytes::copy_from_slice(bytes);
         }
@@ -90,7 +90,7 @@ impl InterimUsageFilter {
     /// Whatever is left when the body ends, unchanged. A stream that ended
     /// before its final chunk gets the last usage it carried back, as an
     /// event of its own, so rig still reports the prompt it sent.
-    pub(super) fn finish(&mut self) -> Bytes {
+    fn finish(&mut self) -> Bytes {
         let mut rest = self.pending.split();
         if rest.is_empty()
             && !self.finished
@@ -154,6 +154,10 @@ impl InterimUsageFilter {
             .and_then(Value::as_array)
             .is_some_and(|candidates| !candidates.is_empty());
         if !has_candidates {
+            // Rig saw this usage, so replaying an older one would undo it.
+            if value.get("usageMetadata").is_some() {
+                self.removed = None;
+            }
             return None;
         }
         self.removed = Some(value.as_object_mut()?.remove("usageMetadata")?);

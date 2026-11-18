@@ -109,3 +109,22 @@ fn usage_removed_before_an_oversized_event_is_not_replayed() {
 
     assert!(filter.finish().is_empty());
 }
+
+#[test]
+fn usage_sent_without_candidates_is_not_overwritten_by_a_replay() {
+    let mut filter = InterimUsageFilter::default();
+
+    let out = filter.push(concat!(
+        "data: {\"candidates\":[{}],\"usageMetadata\":{\"promptTokenCount\":5}}\n\n",
+        "data: {\"usageMetadata\":{\"promptTokenCount\":7}}\n\n",
+    ).as_bytes());
+
+    assert_eq!(
+        std::str::from_utf8(&out).unwrap(),
+        concat!(
+            "data: {\"candidates\":[{}]}\n\n",
+            "data: {\"usageMetadata\":{\"promptTokenCount\":7}}\n\n",
+        )
+    );
+    assert!(filter.finish().is_empty());
+}
