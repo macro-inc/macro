@@ -66,8 +66,8 @@ projects.
   across a large mailbox runs for minutes.
 - A single-message email delete forces no refresh: it deletes the event
   thread's document by id, then delete-by-queries the message's copies under
-  other threads with that id left out, since the query sees only refreshed
-  documents and would count the one just deleted as a conflict. A forced
+  other threads with that thread left out, since the query sees only
+  refreshed documents and would count the one just deleted as a conflict. A forced
   refresh per event refreshes every shard of the index, and a run of such
   events stalls their partition. A delete-by-query that only met conflicts
   deleted nothing and so forces no refresh either: refresh before failing on

@@ -139,9 +139,10 @@ impl EmailMessageRemoved {
 /// search stops finding the message at the index's next scheduled refresh.
 /// The document under the event's thread is deleted by id, which finds it
 /// even before a refresh has made it searchable. A delete-by-query then
-/// removes copies under other threads; it leaves that id out, because its
-/// search still sees the document just deleted until the next refresh and
-/// would count it as a conflict. Deleting cannot go stale, so a copy another
+/// removes copies under other threads, the query
+/// [`delete_email_message_outside_thread`] runs; it leaves the event's thread
+/// out, because its search still sees the document just deleted until the
+/// next refresh and would count it as a conflict. Deleting cannot go stale, so a copy another
 /// write changed mid-query, or deleted within one refresh interval, is
 /// deleted on one more pass, after a refresh lets that pass see the change.
 pub async fn delete_email_message(
@@ -153,16 +154,8 @@ pub async fn delete_email_message(
     let index = resolve_destination(index_override);
     let document_id = crate::upsert::email::email_document_id(thread_id, message_id);
     let by_id = delete_document_by_id(client, &document_id, index).await?;
-    let query = serde_json::json!({
-        "query": {
-            "bool": {
-                "filter": [{ "term": { "message_id": message_id } }],
-                "must_not": [{ "ids": { "values": [document_id] } }],
-            }
-        }
-    });
     let other_threads = delete_with_recheck(
-        || delete_by_query(client, index, &query, false),
+        || delete_outside_thread_pass(client, message_id, thread_id, index),
         || refresh_index(client, index),
     )
     .await?;
@@ -248,7 +241,7 @@ pub(crate) async fn refresh_destination(
     refresh_index(client, resolve_destination(index_override)).await
 }
 
-pub(crate) async fn refresh_index(client: &opensearch::OpenSearch, index: &str) -> Result<()> {
+async fn refresh_index(client: &opensearch::OpenSearch, index: &str) -> Result<()> {
     const OPERATION: OpensearchOperation = OpensearchOperation::RefreshEmailIndex;
     let response = client
         .indices()
@@ -276,22 +269,13 @@ async fn delete_by_message_ids(
     message_ids: &[String],
     index: &str,
 ) -> Result<DeletedByQuery> {
-    let query = serde_json::json!({ "query": { "terms": { "message_id": message_ids } } });
-    delete_by_query(client, index, &query, true).await // Ensure the index reflects changes immediately
-}
-
-async fn delete_by_query(
-    client: &opensearch::OpenSearch,
-    index: &str,
-    query: &serde_json::Value,
-    refresh: bool,
-) -> Result<DeletedByQuery> {
     const OPERATION: OpensearchOperation = OpensearchOperation::DeleteEmailMessages;
+    let query = serde_json::json!({ "query": { "terms": { "message_id": message_ids } } });
     let response = client
         .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .body(query)
         .conflicts(opensearch::params::Conflicts::Proceed)
-        .refresh(refresh)
+        .refresh(true) // Ensure the index reflects changes immediately
         .send()
         .await
         .map_err(|err| OpensearchClientError::request_failed(OPERATION, &err))?;
@@ -308,16 +292,78 @@ async fn delete_by_query(
             operation: OPERATION,
         });
     }
-    parse_deleted_by_query(&body)
+    parse_deleted_by_query(&body, OPERATION)
+}
+
+/// Deletes `message_id`'s documents under every thread but `thread_id`: the
+/// copies a message leaves behind when it moves to another thread. No refresh
+/// is forced unless a copy changed mid-query: then the index is refreshed and
+/// the delete runs once more, as for a single deleted message. A copy written
+/// within the last refresh interval, or after this returns, is not seen and
+/// stays until the message's next delete.
+pub async fn delete_email_message_outside_thread(
+    client: &opensearch::OpenSearch,
+    message_id: &str,
+    thread_id: &str,
+) -> Result<EmailMessageDeleted> {
+    let index = SearchIndex::Emails.as_ref();
+    delete_with_recheck(
+        || delete_outside_thread_pass(client, message_id, thread_id, index),
+        || refresh_index(client, index),
+    )
+    .await
+}
+
+async fn delete_outside_thread_pass(
+    client: &opensearch::OpenSearch,
+    message_id: &str,
+    thread_id: &str,
+    index: &str,
+) -> Result<DeletedByQuery> {
+    const OPERATION: OpensearchOperation = OpensearchOperation::DeleteEmailMessageOutsideThread;
+    let response = client
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
+        .body(outside_thread_query(message_id, thread_id))
+        .conflicts(opensearch::params::Conflicts::Proceed)
+        .send()
+        .await
+        .map_err(|err| OpensearchClientError::request_failed(OPERATION, &err))?;
+    let status_code = response.status_code();
+    let body = response
+        .text()
+        .await
+        .map_err(|err| OpensearchClientError::deserialization_failed(OPERATION, &err))?;
+    if !status_code.is_success() {
+        tracing::error!(status_code = ?status_code, body = ?body, "error deleting a moved message's old copies");
+        return Err(OpensearchClientError::Unknown {
+            details: body,
+            operation: OPERATION,
+        });
+    }
+    parse_deleted_by_query(&body, OPERATION)
+}
+
+pub(crate) fn outside_thread_query(message_id: &str, thread_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "query": {
+            "bool": {
+                "filter": [{ "term": { "message_id": message_id } }],
+                "must_not": [{ "term": { "entity_id": thread_id } }]
+            }
+        }
+    })
 }
 
 /// Reads a delete-by-query response; per-document failures other than the
 /// version conflicts `conflicts=proceed` counts fail the call.
-pub(crate) fn parse_deleted_by_query(body: &str) -> Result<DeletedByQuery> {
+pub(crate) fn parse_deleted_by_query(
+    body: &str,
+    operation: OpensearchOperation,
+) -> Result<DeletedByQuery> {
     let value: serde_json::Value =
         serde_json::from_str(body).map_err(|err| OpensearchClientError::DeserializationFailed {
             details: err.to_string(),
-            operation: OpensearchOperation::DeleteEmailMessages,
+            operation,
         })?;
     if value["failures"]
         .as_array()
@@ -325,12 +371,12 @@ pub(crate) fn parse_deleted_by_query(body: &str) -> Result<DeletedByQuery> {
     {
         return Err(OpensearchClientError::Unknown {
             details: value["failures"].to_string(),
-            operation: OpensearchOperation::DeleteEmailMessages,
+            operation,
         });
     }
     serde_json::from_value(value).map_err(|err| OpensearchClientError::DeserializationFailed {
         details: err.to_string(),
-        operation: OpensearchOperation::DeleteEmailMessages,
+        operation,
     })
 }
 

@@ -19,19 +19,24 @@ fn resolves_overridden_email_destination() {
 #[test]
 fn delete_by_query_counts_default_to_zero_and_failures_fail_the_call() {
     assert_eq!(
-        parse_deleted_by_query(r#"{"deleted":2,"version_conflicts":1,"failures":[]}"#).unwrap(),
+        parse_deleted_by_query(
+            r#"{"deleted":2,"version_conflicts":1,"failures":[]}"#,
+            OpensearchOperation::DeleteEmailMessages
+        )
+        .unwrap(),
         DeletedByQuery {
             deleted: 2,
             version_conflicts: 1
         }
     );
     assert_eq!(
-        parse_deleted_by_query(r#"{"took":3}"#).unwrap(),
+        parse_deleted_by_query(r#"{"took":3}"#, OpensearchOperation::DeleteEmailMessages).unwrap(),
         DeletedByQuery::default()
     );
     assert!(
         parse_deleted_by_query(
-            r#"{"deleted":0,"failures":[{"cause":{"type":"es_rejected_execution_exception"}}]}"#
+            r#"{"deleted":0,"failures":[{"cause":{"type":"es_rejected_execution_exception"}}]}"#,
+            OpensearchOperation::DeleteEmailMessages,
         )
         .is_err()
     );
@@ -270,15 +275,9 @@ async fn a_message_delete_goes_by_id_then_sweeps_other_threads_without_forcing_a
         "{sweep}"
     );
     assert!(sweep.contains("conflicts=proceed"), "{sweep}");
-    assert!(sweep.contains("refresh=false"), "{sweep}");
+    assert!(!sweep.contains("refresh=true"), "{sweep}");
     let body: serde_json::Value = serde_json::from_str(sweep_body).unwrap();
-    assert_eq!(
-        body,
-        serde_json::json!({ "query": { "bool": {
-            "filter": [{ "term": { "message_id": "message-1" } }],
-            "must_not": [{ "ids": { "values": ["thread-1:message-1"] } }],
-        } } })
-    );
+    assert_eq!(body, outside_thread_query("message-1", "thread-1"));
 }
 
 #[tokio::test]
@@ -482,4 +481,45 @@ async fn deleted_messages_leave_every_thread_without_a_forced_refresh() {
         .await
         .ok();
     result.unwrap();
+}
+
+#[test]
+fn a_moved_message_keeps_only_its_copy_under_its_current_thread() {
+    assert_eq!(
+        outside_thread_query("message-1", "thread-2"),
+        serde_json::json!({
+            "query": {
+                "bool": {
+                    "filter": [{ "term": { "message_id": "message-1" } }],
+                    "must_not": [{ "term": { "entity_id": "thread-2" } }]
+                }
+            }
+        })
+    );
+}
+
+#[tokio::test]
+async fn deleting_a_moved_message_s_old_copies_forces_no_refresh() {
+    let (url, server) = crate::test_support::serve_once(
+        "200 OK",
+        r#"{"deleted":1,"version_conflicts":0,"failures":[]}"#,
+    );
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    client
+        .delete_email_message_outside_thread("message-1", "thread-2")
+        .await
+        .unwrap();
+
+    let (request_line, body) = server.join().unwrap();
+    assert!(
+        request_line.starts_with("POST /emails/_delete_by_query?"),
+        "{request_line}"
+    );
+    assert!(request_line.contains("conflicts=proceed"), "{request_line}");
+    assert!(!request_line.contains("refresh"), "{request_line}");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).unwrap(),
+        outside_thread_query("message-1", "thread-2")
+    );
 }
