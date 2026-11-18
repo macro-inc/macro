@@ -70,13 +70,10 @@ impl ConnectorOverlays for Store {
     }
 
     async fn overlay(&self, app_slug: &str) -> anyhow::Result<Option<ConnectorOverlay>> {
-        Ok(self
-            .overlaid
-            .contains(&app_slug)
-            .then(|| ConnectorOverlay {
-                app_slug: app_slug.to_owned(),
-                server_url: format!("https://mcp.{app_slug}.example/mcp"),
-            }))
+        Ok(self.overlaid.contains(&app_slug).then(|| ConnectorOverlay {
+            app_slug: app_slug.to_owned(),
+            server_url: format!("https://mcp.{app_slug}.example/mcp"),
+        }))
     }
 }
 
@@ -118,7 +115,10 @@ async fn an_owner_on_connect_alone_has_only_their_connect_grants_connected() {
         rollout_on.connected_app_slugs(&owner()).await.unwrap(),
         ["notion"]
     );
-    assert_eq!(rollout_on.connected(&owner()).await.unwrap(), [app("notion")]);
+    assert_eq!(
+        rollout_on.connected(&owner()).await.unwrap(),
+        [app("notion")]
+    );
 }
 
 /// An overlaid app is connected to Macro's own MCP server, never to a
