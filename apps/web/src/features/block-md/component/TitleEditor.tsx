@@ -186,12 +186,18 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   let pendingRename: TitleRename | undefined;
   // Renames sent and not yet settled. Until they settle, the saved name can
-  // lag behind the title, so it must not replace the title.
+  // lag behind the title, so it must not replace the title, and the name the
+  // document ends with is the last one sent.
   let renamesInFlight = 0;
+  let lastSentName = '';
+  // Each rename waits for the one before it, so the server applies them in
+  // the order they were typed.
+  let previousRename: Promise<void> = Promise.resolve();
 
-  const saveTitle = async (next: TitleRename) => {
-    renamesInFlight += 1;
-    const saved = await ResultAsync.fromPromise(
+  const saveTitle = async (next: TitleRename, previous: Promise<void>) => {
+    await previous;
+    // A failed rename leaves the title as typed; the mutation reports it.
+    await ResultAsync.fromPromise(
       renameDocumentMutation.mutateAsync({
         entity: {
           type: 'document',
@@ -203,15 +209,15 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       (error) => error
     );
     renamesInFlight -= 1;
-    // The mutation reports the failure; show the name that is still saved.
-    if (saved.isErr() || !saved.value.success) showSavedName();
   };
 
   const flushPendingRename = () => {
     const next = pendingRename;
     pendingRename = undefined;
     if (!next || !canEdit()) return;
-    fireAndForget(saveTitle(next), 'block-md-title');
+    renamesInFlight += 1;
+    lastSentName = next.newName;
+    previousRename = saveTitle(next, previousRename);
   };
 
   const scheduleRename = (newName: string, oldName: string) => {
@@ -336,7 +342,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   createEffect(() => {
     const currentState = state();
-    if (untrack(inlineMenuOpen)) return;
+    // Text typed into an open emoji or tag menu is saved once it closes.
+    if (inlineMenuOpen()) return;
     if (!untrack(initialized)) {
       setInitialized(true);
       return;
@@ -345,9 +352,13 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     if (nextName !== untrack(mdDocumentName)) {
       setOptimisticName(nextName);
     }
-    const persistedName = untrack(persistedDocumentName) ?? '';
-    if (nextName === persistedName || canEdit()) {
-      scheduleRename(nextName, persistedName);
+    // The name the document ends with once the renames already sent settle.
+    const serverName =
+      renamesInFlight > 0
+        ? lastSentName
+        : (untrack(persistedDocumentName) ?? '');
+    if (nextName === serverName || canEdit()) {
+      scheduleRename(nextName, serverName);
     }
   });
 
