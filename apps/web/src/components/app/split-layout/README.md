@@ -81,6 +81,10 @@ leave guards, middleware, URL updates, and single-owner content claims.
 
 Resolve restoration keys and initial entry-state slices from the current router
 entry, not the layout mirror: an outlet can mount before the mirror updates.
+`SplitPanel` also resolves collection ownership from that entry's registered
+component metadata. CRM supplies its own collection state, while Calls requires
+the panel's `SoupViewContextProvider`; choosing the provider from the previous
+mount lets the new route render without its required context.
 
 The remaining notes below describe the original split layout.
 

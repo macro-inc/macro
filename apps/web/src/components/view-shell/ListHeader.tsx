@@ -20,12 +20,17 @@ export function ListHeader(props: {
   title: JSX.Element;
   /** Islands and controls after the title; omit for a title-only header. */
   children?: JSX.Element;
+  /** The row the actions sit in, for a view that makes room when they overflow it. */
+  actionsRef?: (element: HTMLDivElement) => void;
 }) {
   return (
     <ViewShell.TopBar class="gap-2 pr-4">
       {/* Reserve title width before actions; padding keeps focus rings unclipped. */}
       <div class="-m-1 min-w-0 flex-initial truncate p-1">{props.title}</div>
-      <div class="-m-1 flex min-w-0 max-w-full flex-1 items-center justify-end-safe gap-2 overflow-x-auto p-1 [scrollbar-width:none]">
+      <div
+        ref={props.actionsRef}
+        class="-m-1 flex min-w-0 max-w-full flex-1 items-center justify-end-safe gap-2 overflow-x-auto p-1 [scrollbar-width:none]"
+      >
         {props.children}
       </div>
     </ViewShell.TopBar>
@@ -120,7 +125,7 @@ export function ListHeaderSearch(props: {
       ref={props.ref}
       class={cn(
         !expanded() && 'w-8 shrink-0',
-        expanded() && !props.wide && 'w-56 max-w-[40cqw] min-w-24 shrink-0',
+        expanded() && !props.wide && 'w-56 max-w-[40cqw] min-w-24',
         expanded() && props.wide && 'min-w-24 flex-1'
       )}
     >

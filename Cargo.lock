@@ -454,6 +454,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
+ "httpdate",
  "lru 0.16.4",
  "macro_auth",
  "macro_db_client",
@@ -476,6 +477,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "url",
  "uuid",
  "workspace-hack",
@@ -735,7 +737,6 @@ dependencies = [
  "import_jira",
  "import_linear",
  "import_notion",
- "incus_client",
  "initiative",
  "jev",
  "jsonwebtoken 10.3.0",
@@ -780,6 +781,7 @@ dependencies = [
  "notification",
  "onboarding",
  "opentelemetry",
+ "opentelemetry_sdk",
  "pipedream_mcp",
  "png",
  "prompt",
@@ -826,6 +828,8 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "trigger_context",
  "unfurl_service",
  "universal_input",
@@ -837,6 +841,7 @@ dependencies = [
  "web_search",
  "wiremock",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -4038,7 +4043,6 @@ dependencies = [
  "email_api_client",
  "email_db_client",
  "email_utils",
- "futures",
  "google_token",
  "macro_auth",
  "macro_authorization",
@@ -4671,6 +4675,7 @@ dependencies = [
  "code_mode_assets",
  "futures",
  "macro_tower_layers",
+ "nom 8.0.0",
  "opentelemetry",
  "reqwest 0.13.4",
  "rootcause",
@@ -4683,6 +4688,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
  "url",
  "uuid",
  "workspace-hack",
@@ -4774,6 +4780,7 @@ dependencies = [
  "codex_fold",
  "crossterm 0.28.1",
  "eventsource-stream",
+ "firecracker_host_api",
  "flate2",
  "futures",
  "harness_id",
@@ -4794,6 +4801,7 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "pairing_id",
+ "rand 0.9.4",
  "ratatui",
  "reqwest 0.13.4",
  "rootcause",
@@ -4881,6 +4889,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -5047,6 +5056,18 @@ dependencies = [
  "thiserror 2.0.18",
  "utoipa",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "computer_types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "utoipa",
  "workspace-hack",
 ]
 
@@ -5605,6 +5626,7 @@ dependencies = [
  "models_properties",
  "opentelemetry",
  "properties",
+ "psl",
  "rdkafka",
  "readonly_pool",
  "rootcause",
@@ -7607,6 +7629,7 @@ dependencies = [
  "email",
  "entity_access",
  "entity_access_management",
+ "feature_flags",
  "frecency",
  "gmail_emulator",
  "hex",
@@ -7615,6 +7638,7 @@ dependencies = [
  "macro_authorization",
  "macro_aws_config",
  "macro_db_migrator",
+ "macro_env",
  "macro_event_topics",
  "macro_user_id",
  "outlook_emulator",
@@ -7647,6 +7671,8 @@ dependencies = [
  "connection_gateway_client",
  "doppler-config",
  "email",
+ "feature_flags",
+ "futures",
  "jev",
  "kafka_util",
  "macro_auth",
@@ -8431,8 +8457,10 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "sha1 0.10.6",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
  "wiremock",
  "workspace-hack",
 ]
@@ -8514,6 +8542,84 @@ name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
+
+[[package]]
+name = "firecracker_guest_agent"
+version = "0.1.0"
+dependencies = [
+ "firecracker_host_api",
+ "tokio",
+ "tokio-util",
+ "tokio-vsock",
+ "tracing",
+ "tracing-subscriber",
+ "workspace-hack",
+]
+
+[[package]]
+name = "firecracker_host"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "clap",
+ "firecracker_host_api",
+ "futures",
+ "http 1.4.0",
+ "http-body-util",
+ "hyper 1.9.0",
+ "hyper-util",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_tower_layers",
+ "memchr",
+ "opentelemetry",
+ "pinned_tls",
+ "rootcause",
+ "rustix 1.1.6",
+ "rustls",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "toml 0.8.23",
+ "tower 0.5.3",
+ "tracing",
+ "tracing-opentelemetry",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "firecracker_host_api"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "computer_id",
+ "computer_types",
+ "futures",
+ "macro_tower_layers",
+ "pairing_id",
+ "pinned_tls",
+ "reqwest 0.13.4",
+ "rustls",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "subtle",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
+ "zeroize",
+]
 
 [[package]]
 name = "fixedbitset"
@@ -9354,6 +9460,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "url",
  "uuid",
  "workspace-hack",
@@ -10410,17 +10517,20 @@ dependencies = [
  "chrono",
  "clap",
  "computer_id",
+ "computer_types",
  "entity_access",
  "feature_flags",
+ "firecracker_host_api",
+ "futures",
  "harness_id",
  "harnesses",
- "incus_client",
  "macro_authorization",
  "macro_db_migrator",
  "macro_env",
  "macro_user_id",
  "model-error-response",
  "model_user",
+ "nom 8.0.0",
  "opentelemetry",
  "opentelemetry_sdk",
  "pairing_id",
@@ -10434,6 +10544,8 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
+ "tokio-tungstenite 0.28.0",
+ "tokio-util",
  "tower 0.5.3",
  "tracing",
  "tracing-opentelemetry",
@@ -11269,27 +11381,6 @@ checksum = "7cab85a7ed0bd5f0e76d93846e0147172bed2e2d3f859bcc33a8d9699cad1a75"
 dependencies = [
  "proc-macro2",
  "quote",
-]
-
-[[package]]
-name = "incus_client"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "futures",
- "progenitor-client",
- "reqwest 0.13.4",
- "rustls",
- "serde",
- "serde_json",
- "strum 0.27.2",
- "thiserror 2.0.18",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "tracing",
- "uuid",
- "wiremock",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13282,7 +13373,10 @@ dependencies = [
  "ai_toolset",
  "anyhow",
  "futures",
+ "genai_telemetry",
  "macro_user_id",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "regex",
  "rmcp",
  "schemars 1.2.1",
@@ -13290,6 +13384,8 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -14239,6 +14335,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
+ "memoffset",
 ]
 
 [[package]]
@@ -15013,6 +15110,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
@@ -15942,6 +16040,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
+name = "pinned_tls"
+version = "0.1.0"
+dependencies = [
+ "rustls",
+ "thiserror 2.0.18",
+ "workspace-hack",
+]
+
+[[package]]
 name = "pipedream_mcp"
 version = "0.1.0"
 dependencies = [
@@ -16718,6 +16825,21 @@ dependencies = [
  "tiny-skia",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "psl"
+version = "2.1.256"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39aa082f2912d769ed2960bb49d543d0d64402f9dd8a756745966cbea1684360"
+dependencies = [
+ "psl-types",
+]
+
+[[package]]
+name = "psl-types"
+version = "2.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33cb294fe86a74cbcf50d4445b37da762029549ebeea341421c7c70370f86cac"
 
 [[package]]
 name = "pxfm"
@@ -18385,6 +18507,8 @@ dependencies = [
  "models_search",
  "nom 8.0.0",
  "opensearch_client",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "pdfium-render",
  "projects",
  "properties",
@@ -18399,6 +18523,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "sqs_worker",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -18406,6 +18531,8 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
@@ -19585,6 +19712,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "source_items",
  "sqlx",
  "system_properties",
  "thiserror 2.0.18",
@@ -19669,6 +19797,23 @@ dependencies = [
  "tokio-retry",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "source_items"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "macro_db_migrator",
+ "macro_entrypoint",
+ "macro_env_var",
+ "model-entity",
+ "rand 0.9.4",
+ "rootcause",
+ "sqlx",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -20880,15 +21025,20 @@ dependencies = [
  "chrono",
  "entity_access",
  "feature_flags",
+ "harness_id",
  "hosted_runtimes",
  "macro_authorization",
  "macro_db_migrator",
  "macro_service_urls",
  "macro_user_id",
+ "model-entity",
  "model-error-response",
+ "model_notifications",
  "model_user",
+ "notification",
  "rootcause",
  "serde",
+ "serde_json",
  "sqlx",
  "team_agents",
  "teams",
@@ -20915,6 +21065,7 @@ dependencies = [
  "bot_id",
  "channels",
  "chrono",
+ "computer_id",
  "contacts",
  "database_env_vars",
  "entity_access",
@@ -20945,6 +21096,7 @@ dependencies = [
  "shared_entity_registry",
  "sqlx",
  "sqs_client",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -21289,6 +21441,19 @@ dependencies = [
  "futures-util",
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "tokio-vsock"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "676ade3d183052ca2703288b48f63a2e82633a24836ca279eb6724ab2a97b05d"
+dependencies = [
+ "bytes",
+ "futures",
+ "libc",
+ "tokio",
+ "vsock",
 ]
 
 [[package]]
@@ -22446,6 +22611,16 @@ name = "vsimd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
+
+[[package]]
+name = "vsock"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b7d4dba01e366e2ffbdf0700b1876f747c548db72dced534de41c54945c0148"
+dependencies = [
+ "libc",
+ "nix 0.31.3",
+]
 
 [[package]]
 name = "vt100"
@@ -24038,6 +24213,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tokio-util",
+ "toml_edit 0.22.27",
  "tower 0.5.3",
  "tower-http",
  "tracing",
@@ -24237,6 +24413,7 @@ dependencies = [
  "indicatif",
  "indoc",
  "jsonwebtoken 10.3.0",
+ "lazy-regex",
  "libc",
  "macro_aws_config",
  "macro_env_var",

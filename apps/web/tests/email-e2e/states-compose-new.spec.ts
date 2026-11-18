@@ -47,9 +47,7 @@ test('an empty new email hints at each field, and each refused send names what i
   saw('STC-049', 'F-131');
 
   await to.fill('zz');
-  await expect(
-    page.getByText('No matches in this page or cached snapshot.')
-  ).toBeVisible();
+  await expect(page.getByText('No matching options.')).toBeVisible();
   saw('STC-313');
   await to.fill('');
 

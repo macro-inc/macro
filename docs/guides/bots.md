@@ -77,7 +77,9 @@ const [webhook] = await bot.webhooks();
 ```
 
 `secret` is shown only once. POST `{ "content": "..." }` to `webhook.url` with
-the token in `x-macro-bot-token` and `x-macro-bot-scope: user`.
+the token in `x-macro-bot-token` and `x-macro-bot-scope: user`. Add
+`"notification_policy": "Silent"` to post without notifying anyone; the SDK's
+`channel.send(text, { silent: true })` does the same on any credential.
 
 ## What a bot can do
 

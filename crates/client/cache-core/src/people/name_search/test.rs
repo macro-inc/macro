@@ -58,6 +58,10 @@ fn recent_keys_sort_signed_times_then_identity_without_index_row_ids() {
     let mut expected = actual.clone();
     expected.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(b.1)));
     assert_eq!(actual, expected);
+    for (key, time, _) in &entries {
+        assert_eq!(RecentKey::timestamp(key.as_bytes()), Some(*time));
+    }
+    assert_eq!(RecentKey::timestamp(&[0; 7]), None);
     let user = MacroUserIdStr::parse_from_str(users[0]).unwrap();
     assert_eq!(RecentKey::new(None, &user), RecentKey::new(Some(0), &user));
     for epoch in [Uuid::nil(), Uuid::from_u128(9), Uuid::from_u128(u128::MAX)] {

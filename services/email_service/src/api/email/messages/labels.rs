@@ -51,7 +51,7 @@ pub async fn handler(
     let outcome = ctx
         .message_labels
         .change(MessageLabelChange {
-            caller_macro_id: authorization.authorization.user.user_context.user_id,
+            caller: authorization.authorization.user.macro_user_id,
             caller_fusionauth_user_id: authorization.authorization.user.user_context.fusion_user_id,
             message_ids: body.message_ids,
             label_id: body.label_id,
@@ -104,7 +104,7 @@ fn error_response<E>(error: MessageLabelError<E>) -> Response {
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to commit transaction".into(),
         ),
-        MessageLabelError::Unqueued(_) => (
+        MessageLabelError::Unqueued(_) | MessageLabelError::Command(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to queue the label change".into(),
         ),

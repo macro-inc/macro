@@ -4,6 +4,7 @@ import IconJira from '@icon/import/jira.svg';
 import IconNotion from '@icon/import/notion.svg';
 import IconGithub from '@icon/mcp-github.svg';
 import IconLinear from '@icon/mcp-linear.svg';
+import IconOutlook from '@icon/outlook-color.svg';
 import IconSlack from '@icon/slack-color.svg';
 import type { PromotionLogo } from '../components/logo-stack';
 
@@ -43,15 +44,21 @@ export const HOME_SETUP_PROMOTION = {
 export const CALENDAR_ACCOUNTS_PROMOTION = {
   id: 'calendar-accounts',
   logos: [logo('Google Calendar', IconGoogleCalendar)],
+  /** Joins the logos while the server offers this user Outlook connections. */
+  outlookLogo: logo('Outlook', IconOutlook),
   headline: 'Connect more calendars',
   pitch:
-    'Add another Google account to see work and personal calendars together.',
+    'Add another account to see your work and personal calendars together.',
   action: 'Connect a calendar',
   /** Shown instead while one of your accounts lacks calendar access. */
   enableAction: 'Turn on calendar',
   /** Shown instead while a calendar grant has expired. */
   reconnectAction: 'Reconnect calendar',
-} satisfies PromotionCopy & { enableAction: string; reconnectAction: string };
+} satisfies PromotionCopy & {
+  outlookLogo: PromotionLogo;
+  enableAction: string;
+  reconnectAction: string;
+};
 
 export const PULL_REQUEST_REPOSITORIES_PROMOTION = {
   id: 'pull-request-repositories',

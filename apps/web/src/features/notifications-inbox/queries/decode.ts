@@ -50,6 +50,15 @@ const toRowType = (
     .with('ACCESS_REMOVED', () => 'access_removed' as const)
     .exhaustive(() => 'other' as const);
 
+/** The row types this build knows among `types`; newer ones are dropped. */
+const toKnownRowTypes = (
+  types: readonly NotificationInboxRowType[]
+): InboxRowType[] =>
+  types.flatMap((type) => {
+    const known = toRowType(type);
+    return known === 'other' ? [] : [known];
+  });
+
 /** An actor kind this build doesn't know names no author. */
 const toActor = (actor: WireRow['actor']): InboxActor | undefined => {
   if (!actor) return undefined;
@@ -159,10 +168,7 @@ export function toInboxClear(
     id: clear.clearId,
     status: toClearStatus(clear.status),
     takes: {
-      rowTypes: clear.rowTypes.flatMap((type) => {
-        const known = toRowType(type);
-        return known === 'other' ? [] : [known];
-      }),
+      rowTypes: toKnownRowTypes(clear.rowTypes),
       unreadOnly: clear.unreadOnly,
       ...(clear.since ? { since: Date.parse(clear.since) } : {}),
     },
@@ -193,6 +199,7 @@ export function toInboxGroup(
       const decoded: NotificationInboxRow = {
         id: row.id,
         type: toRowType(row.rowType),
+        alsoListedAs: toKnownRowTypes(row.alsoListedAs),
         threadId: row.threadId ?? undefined,
         revision: row.revision,
         latestAt,

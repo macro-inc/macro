@@ -16,6 +16,65 @@ test.beforeEach(async ({ page }) => {
 });
 
 const mailboxId = '00000000-0000-4000-8000-000000000045';
+test('mailbox domain refusals stay beside their input and existing exclusions stay removable', async ({
+  page,
+}) => {
+  await page.goto('/?admin&mailbox-guard&flag-off');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog');
+  for (const [label, domain, explanation] of [
+    [
+      'Domain to block for the team',
+      'example.com',
+      "Colleagues on a mailbox's own company domain are already kept out of the CRM. Blocking this domain would hide all of that mailbox's email.",
+    ],
+    [
+      'Domain to block for my emails',
+      'gmail.com',
+      "Blocking this domain would hide all of a connected mailbox's email from the CRM.",
+    ],
+  ]) {
+    const input = dialog.getByRole('textbox', { name: label });
+    const section = input.locator('xpath=ancestor::section');
+    await expect(section.getByText(explanation, { exact: true })).toBeVisible();
+    const remove = section.getByRole('button', {
+      name: `Remove ${domain}`,
+      exact: true,
+    });
+    await expect(remove).toBeEnabled();
+    await input.fill(domain);
+    await input
+      .locator('..')
+      .getByRole('button', { name: 'Add domain' })
+      .click();
+    const error = section.getByRole('alert');
+    await expect(error).toHaveText(explanation);
+    await expect(input).toHaveAttribute(
+      'aria-describedby',
+      (await error.getAttribute('id')) ?? ''
+    );
+    await expect(input).toHaveValue(domain);
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
+    await input.fill('unrelated.example.org');
+    await expect(error).toHaveCount(0);
+    await input
+      .locator('..')
+      .getByRole('button', { name: 'Add domain' })
+      .click();
+    await expect(
+      section.getByText('unrelated.example.org', { exact: true })
+    ).toBeVisible();
+    await expect(input).toHaveValue('');
+    await remove.click();
+    await expect(remove).toHaveCount(0);
+    await expect(section.getByText(explanation, { exact: true })).toHaveCount(
+      0
+    );
+  }
+});
+
 for (const admin of [false, true]) {
   test(`privacy controls and exact mailbox consent for ${admin ? 'admin' : 'member'}`, async ({
     page,

@@ -70,7 +70,6 @@ import CubeIcon from '@icon/system/regular/cube.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import EnvelopeOpenIcon from '@icon/system/regular/envelope-open.svg';
-import FlagIcon from '@icon/system/regular/flag.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import GitBranchIcon from '@icon/system/regular/git-branch.svg';
 import ImageIcon from '@icon/system/regular/image.svg';
@@ -80,10 +79,12 @@ import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import ProhibitIcon from '@icon/system/regular/prohibit.svg';
 import StarIcon from '@icon/system/regular/star.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
+import TaskInProgressIcon from '@icon/system/regular/task-in-progress.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import UserIcon from '@icon/system/regular/user.svg';
 import SignalIcon from '@icon/system/regular/wave-sine.svg';
 import NoiseIcon from '@icon/system/regular/waveform.svg';
+import PriorityHighIcon from '@icon/wide-priority-high.svg';
 import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -560,13 +561,13 @@ export function createSoupEntityActions(
           SYSTEM_PROPERTY_IDS.STATUS,
           t('entityActions.setStatus'),
           TOKENS.entity.action.status,
-          CheckCircleIcon,
+          TaskInProgressIcon,
         ],
         [
           SYSTEM_PROPERTY_IDS.PRIORITY,
           t('entityActions.setPriority'),
           TOKENS.entity.action.priority,
-          FlagIcon,
+          PriorityHighIcon,
         ],
         [
           SYSTEM_PROPERTY_IDS.ASSIGNEES,

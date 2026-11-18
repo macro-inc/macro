@@ -316,8 +316,8 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
     };
     assert_eq!(
         people[0].user_id.as_ref(),
-        EXACT,
-        "an exact label precedes even a boosted DM prefix"
+        WINNER,
+        "a person the viewer messages precedes a stranger's exact label"
     );
     request.limit = MAX_PEOPLE_BATCH + 1;
     assert!(engine.search_people(&request).await.is_err());
@@ -354,18 +354,23 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         panic!("ready")
     };
     assert_eq!(people[0].user_id.as_ref(), "macro|p000001@example.com");
-    assert_eq!(people[0].match_rank, 5);
+    assert_eq!(people[0].match_rank, 7);
     request.mode = PeopleMode::Mention;
     request.query = "al".into();
+    request.limit = 2;
     let PeopleSearchResult::Page { people, .. } = engine.search_people(&request).await.unwrap()
     else {
         panic!("ready")
     };
     assert_eq!(
-        people[0].user_id.as_ref(),
-        EXACT,
-        "mention name tiers must apply before limiting, not only after hydration"
+        people
+            .iter()
+            .map(|person| person.user_id.as_ref())
+            .collect::<Vec<_>>(),
+        [DUPLICATE, EXACT],
+        "messaged people lead, then mention name tiers apply before limiting, not only after hydration"
     );
+    request.limit = 1;
     request.mode = PeopleMode::Property;
     request.query = "alpha".into();
     request.sender_domain = Some("example.com".into());

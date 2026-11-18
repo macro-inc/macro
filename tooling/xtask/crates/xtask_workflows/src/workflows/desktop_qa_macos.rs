@@ -112,16 +112,15 @@ fn qa_macos_job() -> Job {
 /// The harness comes from the commit that holds this workflow, not from the
 /// ref under test, so any ref can be tested with the current checks.
 fn harness_checkout() -> Step<Use> {
-    Step::new("Checkout QA harness")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .add_with(("ref", "${{ github.sha }}"))
-        .add_with(("path", ".qa-harness"))
-        .add_with(("sparse-checkout", "apps/web/tests/macos"))
-        .add_with(("persist-credentials", false))
+    steps::abort_stalled_fetch(Step::new("Checkout QA harness").uses(
+        "actions",
+        "checkout",
+        "df4cb1c069e1874edd31b4311f1884172cec0e10",
+    )) // v6
+    .add_with(("ref", "${{ github.sha }}"))
+    .add_with(("path", ".qa-harness"))
+    .add_with(("sparse-checkout", "apps/web/tests/macos"))
+    .add_with(("persist-credentials", false))
 }
 
 fn record_sha() -> Step<Run> {

@@ -1,5 +1,25 @@
 use super::*;
 
+mod prompt_at_ready;
+
+#[test]
+fn the_event_stream_reconnects_fast_then_backs_off() {
+    let mut delays = reconnect_delays();
+    let first = delays.next_delay();
+    assert!(
+        first >= Duration::from_millis(187) && first <= Duration::from_millis(313),
+        "first reconnect after {first:?}"
+    );
+    for _ in 0..10 {
+        delays.next_delay();
+    }
+    let capped = delays.next_delay();
+    assert!(
+        capped >= Duration::from_millis(22_500) && capped <= Duration::from_millis(37_500),
+        "capped reconnect after {capped:?}"
+    );
+}
+
 #[test]
 fn a_fresh_dial_is_not_a_held_connection_until_it_has_lasted() {
     let (connected, mut runtime) = watch::channel(false);
@@ -82,6 +102,10 @@ async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime(
         |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
             assert_eq!(request.uri().path(), "/runtime/ws");
             assert_eq!(request.headers()["x-macro-harness-token"], "mhns_test");
+            assert_eq!(
+                request.headers()["x-macro-runtime-accepts"],
+                "agents-changed"
+            );
             Ok(response)
         },
     )

@@ -5,10 +5,10 @@ import {
   loadResult,
 } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
+import { lazy } from '@core/util/lazy';
 import { storageServiceClient } from '@service-storage/client';
 import { getPresignedUrl } from '@service-storage/util/presignedUrl';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 import {
   isVideoPlaybackEnabled,
   PLAYBACK_ENABLED_MIMES,
