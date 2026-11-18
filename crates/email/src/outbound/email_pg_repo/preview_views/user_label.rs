@@ -7,7 +7,7 @@ use uuid::Uuid;
 /// This view includes threads that have at least one message with the given label.
 /// Threads are sorted by the timestamp of the most recent message that has the label.
 /// The preview content is taken from that same most-recent labeled message.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, label_name), err)]
 pub(crate) async fn user_label_preview_cursor(
     pool: &PgPool,
     link_ids: &[Uuid],

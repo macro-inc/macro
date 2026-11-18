@@ -83,8 +83,11 @@ where
     )
 )]
 #[tracing::instrument(
-    skip(links, macro_user, service),
-    fields(fusionauth_user_id = tracing::field::Empty)
+    skip(links, macro_user, service, preview_view),
+    fields(
+        view = preview_view.span_value(),
+        fusionauth_user_id = tracing::field::Empty,
+    )
 )]
 async fn cursor_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(service): State<EmailRouterState<T>>,

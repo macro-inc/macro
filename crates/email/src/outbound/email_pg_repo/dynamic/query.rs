@@ -1237,7 +1237,7 @@ fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Vec<String> {
 /// };
 /// let results = dynamic_email_thread_cursor(&pool, &query).await?;
 /// ```
-#[tracing::instrument(skip(pool, query, user_id), err)]
+#[tracing::instrument(skip(pool, view, query, user_id), fields(view = view.span_value()), err)]
 pub(crate) async fn dynamic_email_thread_cursor(
     pool: &PgPool,
     link_ids: &[Uuid],
