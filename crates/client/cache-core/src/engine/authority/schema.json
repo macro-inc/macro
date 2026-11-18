@@ -82,7 +82,7 @@
           "description": "Current durable permission scope."
         },
         "changed": {
-          "description": "Whether retirement ran for this proof.",
+          "description": "Whether the authority changed or incomplete retirement resumed.",
           "type": "boolean"
         },
         "revision": {

@@ -92,7 +92,7 @@ fn grouped_cache_context_preserves_top_level_ipc_arguments_and_errors() {
                 },
             );
             let error = response.expect_err("the cache was not initialized");
-            if malformed {
+            if malformed && command == "graphql_cache_read" {
                 assert!(error.as_str().unwrap().starts_with(&format!(
                     "invalid args `authority` for command `{command}`:"
                 )));

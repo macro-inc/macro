@@ -395,14 +395,15 @@ fn reopening_an_interrupted_retirement_stays_closed_until_it_is_retried() {
         }), None).await.unwrap();
         // A process may stop immediately after persisting the transition's
         // closed state, before deleting even the first protected record.
-        let pending = CacheAuthority {
-            identity: "viewer".into(),
-            account: None,
-            generation: Uuid::now_v7(),
-            policy: Some("team:denied".into()),
-            ready: false,
-        };
-        engine.store_authority(&pending).await.unwrap();
+        let pending = engine
+            .begin_authority_transition(
+                "viewer",
+                allowed.authority.generation,
+                "team:denied".into(),
+                true,
+            )
+            .await
+            .unwrap();
         let mut reopened = Engine::new(engine.into_storage());
         assert!(
             reopened
@@ -714,6 +715,32 @@ fn retired_calendar_create_can_select_its_committed_identity_without_response_co
                 .unwrap()
                 .fields
                 .contains_key("title")
+        );
+    });
+}
+
+#[test]
+fn authority_is_cached_until_the_single_owner_resets() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let current = engine.current_authority("profile").await.unwrap();
+        assert_eq!(engine.authority.get(), Some(&Some(current.clone())));
+        // Simulate an externally replaced store: cached reads keep the owner's
+        // view until the same reset notification that invalidates identity.
+        engine.storage.clear().await.unwrap();
+        assert_eq!(engine.stored_authority().await.unwrap(), Some(current));
+        engine.external_reset().unwrap();
+        assert_eq!(engine.stored_authority().await.unwrap(), None);
+        let replacement = engine.current_authority("profile").await.unwrap();
+        engine.clear().await.unwrap();
+        assert_eq!(engine.stored_authority().await.unwrap(), None);
+        assert_ne!(
+            engine
+                .current_authority("profile")
+                .await
+                .unwrap()
+                .generation,
+            replacement.generation
         );
     });
 }

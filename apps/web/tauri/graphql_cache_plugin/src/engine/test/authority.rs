@@ -290,3 +290,38 @@ fn native_authoritative_mutations_keep_unrelated_property_ownership_without_pare
         assert!(rows[2].is_none());
     });
 }
+
+#[test]
+fn native_first_non_denied_proof_preserves_offline_mail() {
+    block_on(async {
+        for policy in ["team:allowed", "none"] {
+            let handle = spawn_handle();
+            bind(&handle).await;
+            let query = "{ user { id emailThread(id: \"thread\") { __typename id name } } }";
+            let data = json!({"user":{"id":"viewer","emailThread":{"__typename":"GraphqlSoupEmailThread","id":"thread","name":"offline subject"}}});
+            handle
+                .write(WriteRequest {
+                    origin_op_id: None,
+                    registration: None,
+                    query: query.into(),
+                    operation_name: None,
+                    variables: Variables::new(),
+                    data: data.clone(),
+                    identity: Some("viewer".into()),
+                })
+                .await
+                .unwrap();
+            let before = handle.current_authority("profile").await.unwrap();
+            let allowed = handle
+                .transition_authority("profile", before.generation, policy.into())
+                .await
+                .unwrap();
+            let admitted = handle.with_authority(Some(AuthorityAdmission::protected(Some(
+                allowed.authority.generation,
+            ))));
+            assert!(
+                matches!(admitted.read(None, query.into(), None, Variables::new(), vec![]).await.unwrap(), ReadResultWire::Hit { data: cached } if cached == data)
+            );
+        }
+    });
+}

@@ -207,13 +207,18 @@ pub async fn remember_property_owners<S: PredicateIndexStorage>(
     variables: &Map<String, Value>,
     data: &Value,
 ) -> Result<cache_core::revision::CacheRevision, EngineError<S::Error>> {
-    let owners = assignment_owners::<S::Error>(engine.schema(), query, operation, variables, data)?;
-    if !owners.is_empty() {
-        engine
-            .put_records_with_projections(None, owners.into_iter().collect(), vec![])
-            .await?;
+    async {
+        let owners =
+            assignment_owners::<S::Error>(engine.schema(), query, operation, variables, data)?;
+        if !owners.is_empty() {
+            engine
+                .put_records_with_projections(None, owners.into_iter().collect(), vec![])
+                .await?;
+        }
+        Ok(engine.current_revision())
     }
-    Ok(engine.current_revision())
+    .await
+    .inspect_err(|error| tracing::warn!(%error, "Failed to remember property owners"))
 }
 
 /// Retain only authored legacy draft recovery fields before removing copied
@@ -277,6 +282,7 @@ pub fn legacy_draft_metadata(
     metadata
 }
 
+#[tracing::instrument(name = "crm.access.retire_optimism", skip_all, fields(crm.access.queued = tracing::field::Empty, crm.access.retired = tracing::field::Empty), err)]
 async fn retire_optimism<S: PredicateIndexStorage>(
     engine: &mut Engine<S>,
 ) -> Result<(), EngineError<S::Error>> {
@@ -285,6 +291,7 @@ async fn retire_optimism<S: PredicateIndexStorage>(
         .load_mutation_queue()
         .await
         .map_err(EngineError::Storage)?;
+    tracing::Span::current().record("crm.access.queued", queued.len());
     let mut selected = std::collections::BTreeSet::new();
     for entry in queued {
         let source =
@@ -358,6 +365,7 @@ async fn retire_optimism<S: PredicateIndexStorage>(
             selected.insert(entry.id);
         }
     }
+    tracing::Span::current().record("crm.access.retired", selected.len());
     engine
         .retire_optimistic_snapshots_where(|entry, source| {
             if !selected.contains(&entry.id) {
@@ -421,12 +429,41 @@ pub async fn transition_crm_authority<S: PredicateIndexStorage>(
     expected: Uuid,
     policy: String,
 ) -> Result<AuthorityTransition, EngineError<S::Error>> {
+    // Account changes already reset the engine transactionally. Denial or loss
+    // of the prior team scope retires copied content; initial non-denied
+    // proofs and same-team regrants preserve it.
+    let previous = engine.current_authority(identity).await?;
+    let previous_team = previous
+        .policy
+        .as_deref()
+        .and_then(|value| value.split_once(':'))
+        .map(|(team, _)| team);
+    let next_team = policy.split_once(':').map(|(team, _)| team);
+    let retire_snapshots =
+        policy.ends_with(":denied") || previous_team.is_some_and(|team| Some(team) != next_team);
     let authority = engine
-        .begin_authority_transition(identity, expected, policy)
+        .begin_authority_transition(identity, expected, policy, retire_snapshots)
         .await?;
     if authority.ready {
-        return engine.complete_authority_transition(authority).await;
+        let mut result = engine.complete_authority_transition(authority).await?;
+        result.changed |= result.authority.generation != expected;
+        return Ok(result);
     }
+    retire_property_owners(engine).await?;
+    retire_option_owners(engine).await?;
+    retire_records(engine).await?;
+    retire_projections(engine).await?;
+    // Rebuild retained command recipes only after their copied base aggregates
+    // have been removed, so an unrelated favorite cannot restore an old list.
+    retire_optimism(engine).await?;
+    engine.complete_authority_transition(authority).await
+}
+
+#[tracing::instrument(name = "crm.access.retire_property_owners", skip_all, fields(crm.access.scanned = tracing::field::Empty), err)]
+async fn retire_property_owners<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+) -> Result<(), EngineError<S::Error>> {
+    let mut scanned = 0usize;
     // Collect ownership before parents disappear. Metadata is bounded per
     // page and survives a partial retirement, making retries idempotent.
     for typename in CRM_CONTENT_TYPES.iter().chain(OTHER_PROPERTY_OWNERS) {
@@ -437,6 +474,7 @@ pub async fn transition_crm_authority<S: PredicateIndexStorage>(
                 .record_keys(typename, after.as_deref(), PAGE)
                 .await
                 .map_err(EngineError::Storage)?;
+            scanned += keys.len();
             let Some(last) = keys.last() else {
                 break;
             };
@@ -470,6 +508,15 @@ pub async fn transition_crm_authority<S: PredicateIndexStorage>(
         }
     }
 
+    tracing::Span::current().record("crm.access.scanned", scanned);
+    Ok(())
+}
+
+#[tracing::instrument(name = "crm.access.retire_option_owners", skip_all, fields(crm.access.scanned = tracing::field::Empty), err)]
+async fn retire_option_owners<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+) -> Result<(), EngineError<S::Error>> {
+    let mut scanned = 0usize;
     // Options may be selected without a normalized pipeline column. Preserve
     // only positive shared-definition ownership; unknown legacy options need
     // revalidation like unknown assignment and database-row snapshots.
@@ -480,6 +527,7 @@ pub async fn transition_crm_authority<S: PredicateIndexStorage>(
             .record_keys("GraphqlPropertyDefinition", after.as_deref(), PAGE)
             .await
             .map_err(EngineError::Storage)?;
+        scanned += keys.len();
         let Some(last) = keys.last() else {
             break;
         };
@@ -516,6 +564,15 @@ pub async fn transition_crm_authority<S: PredicateIndexStorage>(
         }
     }
 
+    tracing::Span::current().record("crm.access.scanned", scanned);
+    Ok(())
+}
+
+#[tracing::instrument(name = "crm.access.retire_records", skip_all, fields(crm.access.scanned = tracing::field::Empty), err)]
+async fn retire_records<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+) -> Result<(), EngineError<S::Error>> {
+    let mut scanned = 0usize;
     // Shared definitions stay. Options selected by a pipeline column, and
     // assignments on protected parents, are copied pipeline/record content.
     for typename in CRM_CONTENT_TYPES.iter().copied().chain([
@@ -534,6 +591,7 @@ pub async fn transition_crm_authority<S: PredicateIndexStorage>(
                 .record_keys(typename, after.as_deref(), PAGE)
                 .await
                 .map_err(EngineError::Storage)?;
+            scanned += keys.len();
             let Some(last) = keys.last() else {
                 break;
             };
@@ -572,6 +630,15 @@ pub async fn transition_crm_authority<S: PredicateIndexStorage>(
             }
         }
     }
+    tracing::Span::current().record("crm.access.scanned", scanned);
+    Ok(())
+}
+
+#[tracing::instrument(name = "crm.access.retire_projections", skip_all, fields(crm.access.scanned = tracing::field::Empty), err)]
+async fn retire_projections<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+) -> Result<(), EngineError<S::Error>> {
+    let mut scanned = 0usize;
     // Predicate facts can outlive a partial or missing normalized record. They
     // must not keep authorizing local selection after raw-record retirement.
     for typename in CRM_CONTENT_TYPES.iter().copied().chain([
@@ -589,6 +656,7 @@ pub async fn transition_crm_authority<S: PredicateIndexStorage>(
                 .projection_keys(typename, after.as_deref(), PAGE)
                 .await
                 .map_err(EngineError::Storage)?;
+            scanned += keys.len();
             let Some(last) = keys.last() else {
                 break;
             };
@@ -609,8 +677,6 @@ pub async fn transition_crm_authority<S: PredicateIndexStorage>(
             }
         }
     }
-    // Rebuild retained command recipes only after their copied base aggregates
-    // have been removed, so an unrelated favorite cannot restore an old list.
-    retire_optimism(engine).await?;
-    engine.complete_authority_transition(authority).await
+    tracing::Span::current().record("crm.access.scanned", scanned);
+    Ok(())
 }

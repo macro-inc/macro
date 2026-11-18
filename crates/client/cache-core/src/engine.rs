@@ -392,6 +392,8 @@ pub struct Engine<S: Storage> {
     docs: LruCache<String, Document>,
     deps: DepIndex,
     identity: IdentityState,
+    /// Single-owner authority cache, invalidated alongside the identity witness.
+    authority: std::sync::OnceLock<Option<authority::CacheAuthority>>,
     /// Ordered optimistic mutation layers hydrated from durable storage.
     optimistic: Vec<OptimisticLayer>,
     optimistic_hydrated: bool,
@@ -425,6 +427,7 @@ impl<S: Storage> Engine<S> {
             docs: LruCache::new(NonZeroUsize::new(DOCUMENT_CACHE_CAPACITY).unwrap()),
             deps: DepIndex::new(),
             identity: IdentityState::NotHydrated,
+            authority: std::sync::OnceLock::new(),
             optimistic: Vec::new(),
             optimistic_hydrated: false,
         }
@@ -3099,6 +3102,7 @@ impl<S: Storage> Engine<S> {
         // durable queue, so both identity and optimism must re-hydrate.
         self.optimistic_hydrated = false;
         self.identity = IdentityState::NotHydrated;
+        self.authority = std::sync::OnceLock::new();
         let affected = self.deps.all_ops();
         self.advance_revision()?;
         Ok(self.revisioned(affected))
@@ -3187,6 +3191,7 @@ impl<S: Storage> Engine<S> {
         self.deps = DepIndex::new();
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
+        self.authority = std::sync::OnceLock::from(None);
         self.advance_revision()
     }
 

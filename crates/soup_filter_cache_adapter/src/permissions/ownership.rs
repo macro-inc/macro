@@ -12,6 +12,9 @@ pub(super) fn assignment_owners<E: std::error::Error + 'static>(
 ) -> Result<BTreeMap<EntityKey<'static>, Record>, EngineError<E>> {
     let document = crate::parsed_document::parsed_document(query)?;
     let op = document.operation(operation)?;
+    if !selects_properties(&op.selection_set) {
+        return Ok(BTreeMap::new());
+    }
     let updates = normalize(schema, op, variables, data)?;
     let mut owners = BTreeMap::new();
     for (parent, record) in &updates {
@@ -153,4 +156,15 @@ pub(super) async fn selected_keys<S: PredicateIndexStorage>(
         Some("GraphqlPropertyDefinition") => !shared_definition(record),
         _ => selected_record(key, record),
     }).map(|(key, _)| key.clone()).collect())
+}
+
+fn selects_properties(selections: &[cache_core::document::Selection]) -> bool {
+    use cache_core::document::Selection;
+    selections.iter().any(|selection| match selection {
+        Selection::Field(field) => {
+            matches!(field.name.as_str(), "properties" | "setEntityProperty")
+                || selects_properties(&field.selection_set)
+        }
+        Selection::Fragment { selection_set, .. } => selects_properties(selection_set),
+    })
 }

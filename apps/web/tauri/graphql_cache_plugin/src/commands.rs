@@ -380,12 +380,7 @@ pub async fn graphql_cache_contact_reconcile<R: Runtime>(
         &app,
         &result.affected_ops,
         result.field_changes.as_ref(),
-        authority
-            .as_ref()
-            .and_then(|scope| scope.generation)
-            .as_ref()
-            .map(uuid::Uuid::to_string)
-            .as_deref(),
+        authority_generation(&authority).as_deref(),
     );
     if result.revision_advanced {
         emit_cache_changed_with_hints(
@@ -394,12 +389,7 @@ pub async fn graphql_cache_contact_reconcile<R: Runtime>(
             result.reset,
             result.search_changed_buckets.as_ref(),
             None,
-            authority
-                .as_ref()
-                .and_then(|scope| scope.generation)
-                .as_ref()
-                .map(uuid::Uuid::to_string)
-                .as_deref(),
+            authority_generation(&authority).as_deref(),
         );
     }
     Ok(result)
@@ -509,12 +499,7 @@ pub async fn graphql_cache_calendar_commit<R: Runtime>(
         &app,
         &result.affected_ops,
         result.field_changes.as_ref(),
-        authority
-            .as_ref()
-            .and_then(|scope| scope.generation)
-            .as_ref()
-            .map(uuid::Uuid::to_string)
-            .as_deref(),
+        authority_generation(&authority).as_deref(),
     );
     if result.revision_advanced {
         emit_cache_changed_with_hints(
@@ -523,12 +508,7 @@ pub async fn graphql_cache_calendar_commit<R: Runtime>(
             result.reset,
             result.search_changed_buckets.as_ref(),
             result.unchanged_views.as_ref(),
-            authority
-                .as_ref()
-                .and_then(|scope| scope.generation)
-                .as_ref()
-                .map(uuid::Uuid::to_string)
-                .as_deref(),
+            authority_generation(&authority).as_deref(),
         );
     }
     Ok(result)
@@ -586,12 +566,7 @@ pub async fn graphql_cache_write<R: Runtime>(
         &app,
         &result.affected_ops,
         result.field_changes.as_ref(),
-        authority
-            .as_ref()
-            .and_then(|scope| scope.generation)
-            .as_ref()
-            .map(uuid::Uuid::to_string)
-            .as_deref(),
+        authority_generation(&authority).as_deref(),
     );
     if result.revision_advanced {
         emit_cache_changed_with_hints(
@@ -600,12 +575,7 @@ pub async fn graphql_cache_write<R: Runtime>(
             result.reset,
             result.search_changed_buckets.as_ref(),
             result.unchanged_views.as_ref(),
-            authority
-                .as_ref()
-                .and_then(|scope| scope.generation)
-                .as_ref()
-                .map(uuid::Uuid::to_string)
-                .as_deref(),
+            authority_generation(&authority).as_deref(),
         );
     }
     Ok(result)
@@ -688,24 +658,14 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             &app,
             &result.write_result.affected_ops,
             None,
-            authority
-                .as_ref()
-                .and_then(|scope| scope.generation)
-                .as_ref()
-                .map(uuid::Uuid::to_string)
-                .as_deref(),
+            authority_generation(&authority).as_deref(),
         );
         if result.write_result.revision_advanced {
             emit_cache_changed(
                 &app,
                 &result.write_result.revision,
                 result.write_result.reset,
-                authority
-                    .as_ref()
-                    .and_then(|scope| scope.generation)
-                    .as_ref()
-                    .map(uuid::Uuid::to_string)
-                    .as_deref(),
+                authority_generation(&authority).as_deref(),
             );
         }
     }
@@ -820,24 +780,14 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
         &app,
         &result.result.affected_ops,
         result.result.field_changes.as_ref(),
-        authority
-            .as_ref()
-            .and_then(|scope| scope.generation)
-            .as_ref()
-            .map(uuid::Uuid::to_string)
-            .as_deref(),
+        authority_generation(&authority).as_deref(),
     );
     if result.result.revision_advanced {
         emit_cache_changed(
             &app,
             &result.result.revision,
             result.result.reset,
-            authority
-                .as_ref()
-                .and_then(|scope| scope.generation)
-                .as_ref()
-                .map(uuid::Uuid::to_string)
-                .as_deref(),
+            authority_generation(&authority).as_deref(),
         );
     }
     if let MutationUpsertKindWire::ReplacedPending {
@@ -908,13 +858,11 @@ pub async fn graphql_cache_inspect_query(
 #[tauri::command]
 pub async fn graphql_cache_claim_next_mutation(
     state: State<'_, CacheState>,
-    authority: Option<crate::engine::AuthorityAdmission>,
     owner: String,
     now_ms: i64,
     lease_expires_at_ms: i64,
 ) -> Result<Option<ClaimedMutationWire>, String> {
     engine_handle(&state)?
-        .with_authority(authority.clone())
         .claim_next_mutation(owner, now_ms, lease_expires_at_ms)
         .await
 }
@@ -924,7 +872,6 @@ pub async fn graphql_cache_claim_next_mutation(
 pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
-    authority: Option<crate::engine::AuthorityAdmission>,
     transaction_id: String,
     lease_owner: String,
     lease_generation: String,
@@ -934,7 +881,6 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
 ) -> Result<DeferOptimisticWriteResultWire, String> {
     let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
-        .with_authority(authority.clone())
         .defer_optimistic_write(
             transaction_id,
             lease_owner,
@@ -953,25 +899,10 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
             &app,
             &write_result.affected_ops,
             write_result.field_changes.as_ref(),
-            authority
-                .as_ref()
-                .and_then(|scope| scope.generation)
-                .as_ref()
-                .map(uuid::Uuid::to_string)
-                .as_deref(),
+            None,
         );
         if write_result.revision_advanced {
-            emit_cache_changed(
-                &app,
-                &write_result.revision,
-                write_result.reset,
-                authority
-                    .as_ref()
-                    .and_then(|scope| scope.generation)
-                    .as_ref()
-                    .map(uuid::Uuid::to_string)
-                    .as_deref(),
-            );
+            emit_cache_changed(&app, &write_result.revision, write_result.reset, None);
         }
         emit_mutation_settled(
             &app,
@@ -1033,24 +964,14 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
         &app,
         &write_result.affected_ops,
         write_result.field_changes.as_ref(),
-        authority
-            .as_ref()
-            .and_then(|scope| scope.generation)
-            .as_ref()
-            .map(uuid::Uuid::to_string)
-            .as_deref(),
+        authority_generation(&authority).as_deref(),
     );
     if write_result.revision_advanced {
         emit_cache_changed(
             &app,
             &write_result.revision,
             write_result.reset,
-            authority
-                .as_ref()
-                .and_then(|scope| scope.generation)
-                .as_ref()
-                .map(uuid::Uuid::to_string)
-                .as_deref(),
+            authority_generation(&authority).as_deref(),
         );
     }
     emit_mutation_settled(
@@ -1075,17 +996,15 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
 #[tauri::command]
 pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
     app: AppHandle<R>,
-    command: CacheCommand<'_>,
+    state: State<'_, CacheState>,
     transaction_id: String,
     lease_owner: String,
     lease_generation: String,
     error: String,
     error_code: Option<String>,
 ) -> Result<RollbackOptimisticWriteResultWire, String> {
-    let CacheCommand { state, authority } = command;
     let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
-        .with_authority(authority.clone())
         .rollback_optimistic_write(transaction_id, lease_owner, lease_generation)
         .await?;
     match &result {
@@ -1096,25 +1015,10 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
                 &app,
                 &write_result.affected_ops,
                 write_result.field_changes.as_ref(),
-                authority
-                    .as_ref()
-                    .and_then(|scope| scope.generation)
-                    .as_ref()
-                    .map(uuid::Uuid::to_string)
-                    .as_deref(),
+                None,
             );
             if write_result.revision_advanced {
-                emit_cache_changed(
-                    &app,
-                    &write_result.revision,
-                    write_result.reset,
-                    authority
-                        .as_ref()
-                        .and_then(|scope| scope.generation)
-                        .as_ref()
-                        .map(uuid::Uuid::to_string)
-                        .as_deref(),
-                );
+                emit_cache_changed(&app, &write_result.revision, write_result.reset, None);
             }
             emit_mutation_settled(
                 &app,
@@ -1134,25 +1038,10 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
                 &app,
                 &write_result.affected_ops,
                 write_result.field_changes.as_ref(),
-                authority
-                    .as_ref()
-                    .and_then(|scope| scope.generation)
-                    .as_ref()
-                    .map(uuid::Uuid::to_string)
-                    .as_deref(),
+                None,
             );
             if write_result.revision_advanced {
-                emit_cache_changed(
-                    &app,
-                    &write_result.revision,
-                    write_result.reset,
-                    authority
-                        .as_ref()
-                        .and_then(|scope| scope.generation)
-                        .as_ref()
-                        .map(uuid::Uuid::to_string)
-                        .as_deref(),
-                );
+                emit_cache_changed(&app, &write_result.revision, write_result.reset, None);
             }
             emit_mutation_settled(
                 &app,
@@ -1185,23 +1074,13 @@ pub async fn graphql_cache_invalidate<R: Runtime>(
         &app,
         &affected.affected_ops,
         None,
-        authority
-            .as_ref()
-            .and_then(|scope| scope.generation)
-            .as_ref()
-            .map(uuid::Uuid::to_string)
-            .as_deref(),
+        authority_generation(&authority).as_deref(),
     );
     emit_cache_changed(
         &app,
         &affected.revision,
         false,
-        authority
-            .as_ref()
-            .and_then(|scope| scope.generation)
-            .as_ref()
-            .map(uuid::Uuid::to_string)
-            .as_deref(),
+        authority_generation(&authority).as_deref(),
     );
     Ok(affected)
 }
@@ -1223,23 +1102,13 @@ pub async fn graphql_cache_delete_records<R: Runtime>(
         &app,
         &affected.affected_ops,
         None,
-        authority
-            .as_ref()
-            .and_then(|scope| scope.generation)
-            .as_ref()
-            .map(uuid::Uuid::to_string)
-            .as_deref(),
+        authority_generation(&authority).as_deref(),
     );
     emit_cache_changed(
         &app,
         &affected.revision,
         false,
-        authority
-            .as_ref()
-            .and_then(|scope| scope.generation)
-            .as_ref()
-            .map(uuid::Uuid::to_string)
-            .as_deref(),
+        authority_generation(&authority).as_deref(),
     );
     Ok(affected)
 }
@@ -1268,10 +1137,13 @@ pub async fn graphql_cache_clear<R: Runtime>(
 #[tauri::command]
 pub async fn graphql_cache_inspect_mutations(
     state: State<'_, CacheState>,
-    authority: Option<crate::engine::AuthorityAdmission>,
 ) -> Result<Vec<cache_core::queue::MutationInspection>, String> {
-    engine_handle(&state)?
-        .with_authority(authority.clone())
-        .inspect_mutations()
-        .await
+    engine_handle(&state)?.inspect_mutations().await
+}
+
+fn authority_generation(authority: &Option<crate::engine::AuthorityAdmission>) -> Option<String> {
+    authority
+        .as_ref()
+        .and_then(|scope| scope.generation)
+        .map(|generation| generation.to_string())
 }

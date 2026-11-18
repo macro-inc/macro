@@ -315,6 +315,7 @@ async fn resolved(promise: js_sys::Promise) -> JsValue {
 
 fn empty_js_write_result() -> JsWriteResult {
     JsWriteResult {
+        unchanged_views: None,
         field_changes: None,
         identity_errors: Vec::new(),
         mutation_uuid: None,
@@ -1161,7 +1162,13 @@ async fn soup_updated_v3_recomputes_my_tasks_importance_and_status_locally() {
         ))
         .await,
     );
-    assert_eq!(initial["revision"], "1");
+    let initial_revision = initial["revision"]
+        .as_str()
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
+    assert!(initial_revision > 0);
+    assert_eq!(initial["revisionAdvanced"], true);
 
     let updates = [
         projected_document_item_with_facts(
@@ -1197,7 +1204,15 @@ async fn soup_updated_v3_recomputes_my_tasks_importance_and_status_locally() {
         ))
         .await,
     );
-    assert_eq!(realtime["revision"], "2");
+    let realtime_revision = realtime["revision"]
+        .as_str()
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
+    // Property-owner metadata can advance the revision separately from the
+    // normalized write. Filtering must report the final committed revision.
+    assert!(realtime_revision > initial_revision);
+    assert_eq!(realtime["revisionAdvanced"], true);
 
     let filtered: serde_json::Value =
         from_js(resolved(engine.entity_filter(js(my_tasks_filter(VIEWER)))).await);
@@ -1205,7 +1220,7 @@ async fn soup_updated_v3_recomputes_my_tasks_importance_and_status_locally() {
         filtered,
         serde_json::json!({
             "kind": "complete",
-            "revision": "2",
+            "revision": realtime["revision"],
             "keys": [key(ASSIGNED_TASK), key(OWNER_TASK)],
             "optimistic": false,
         })

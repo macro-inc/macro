@@ -681,3 +681,104 @@ fn authored_inspection_recovers_legacy_draft_without_exposing_its_thread_snapsho
         );
     });
 }
+
+#[test]
+fn first_non_denied_proof_preserves_legacy_offline_snapshots() {
+    block_on(async {
+        for policy in ["team:allowed", "none"] {
+            let keys = [
+                key("GraphqlSoupEmailThread", "thread"),
+                key("GraphqlSoupEmailMessage", "message"),
+                key("GraphqlSoupCrmContact", "contact"),
+                key("GraphqlUser", "viewer"),
+            ];
+            let rows = vec![
+                record(&[("name", CacheValue::String("offline subject".into()))]),
+                record(&[("bodyText", CacheValue::String("offline body".into()))]),
+                record(&[("name", CacheValue::String("offline contact".into()))]),
+                record(&[("emailThread", CacheValue::Ref(keys[0].clone()))]),
+            ];
+            let mut storage = InMemoryStorage::new();
+            storage
+                .put_batch(keys.iter().cloned().zip(rows.iter().cloned()).collect())
+                .await
+                .unwrap();
+            let mut engine = Engine::new(storage);
+            let before = engine.current_authority("profile").await.unwrap();
+            assert_eq!(before.policy, None);
+            let revision = engine.current_revision();
+            let allowed =
+                transition_crm_authority(&mut engine, "profile", before.generation, policy.into())
+                    .await
+                    .unwrap();
+            assert!(allowed.authority.ready);
+            assert_eq!(allowed.revision, revision);
+            assert!(allowed.affected_ops.is_empty());
+            assert_eq!(
+                engine.storage().get_batch(&keys).await.unwrap(),
+                rows.into_iter().map(Some).collect::<Vec<_>>()
+            );
+            engine
+                .check_authority_generation(Some(allowed.authority.generation), true)
+                .await
+                .unwrap();
+            let denied = transition_crm_authority(
+                &mut engine,
+                "profile",
+                allowed.authority.generation,
+                "team:denied".into(),
+            )
+            .await
+            .unwrap();
+            assert!(denied.authority.ready);
+            assert!(
+                engine
+                    .storage()
+                    .get_batch(&keys[..3])
+                    .await
+                    .unwrap()
+                    .iter()
+                    .all(Option::is_none)
+            );
+        }
+    });
+}
+
+#[test]
+fn changing_or_leaving_a_team_retires_the_previous_scope() {
+    block_on(async {
+        for policy in ["none", "other-team:allowed"] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let initial = engine.current_authority("profile").await.unwrap();
+            let allowed = transition_crm_authority(
+                &mut engine,
+                "profile",
+                initial.generation,
+                "team:allowed".into(),
+            )
+            .await
+            .unwrap();
+            let contact = key("GraphqlSoupCrmContact", "contact");
+            engine
+                .put_records_with_projections(
+                    None,
+                    vec![(
+                        contact.clone(),
+                        record(&[("name", CacheValue::String("old team".into()))]),
+                    )],
+                    vec![],
+                )
+                .await
+                .unwrap();
+            transition_crm_authority(
+                &mut engine,
+                "profile",
+                allowed.authority.generation,
+                policy.into(),
+            )
+            .await
+            .unwrap();
+            assert!(engine.storage().get_batch(&[contact]).await.unwrap()[0].is_none());
+        }
+    });
+}

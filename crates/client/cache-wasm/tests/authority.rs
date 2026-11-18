@@ -117,3 +117,32 @@ async fn opfs_abi_missing_and_stale_tokens_keep_commands_without_restoring_retir
     JsFuture::from(reopened.close()).await.unwrap();
     destroy_cache(SCOPE.into()).await.unwrap();
 }
+
+#[wasm_bindgen_test(async)]
+async fn first_non_denied_proof_preserves_offline_mail() {
+    const SCOPE: &str = "cache-wasm-first-proof";
+    for policy in ["team:allowed", "none"] {
+        destroy_cache(SCOPE.into()).await.unwrap();
+        let engine = open_cache(SCOPE.into(), None).await.unwrap();
+        let query = "{ user { id emailThread(id: \"thread\") { __typename id name } } }";
+        let data = json!({"user":{"id":"viewer","emailThread":{"__typename":"GraphqlSoupEmailThread","id":"thread","name":"offline subject"}}});
+        result(engine.write_query(
+            js(json!({})),
+            query.into(),
+            None,
+            js(json!({})),
+            js(data.clone()),
+            Some("viewer".into()),
+        ))
+        .await;
+        let allowed = transition(&engine, SCOPE, policy).await;
+        result(engine.check_authority(Some(allowed["generation"].as_str().unwrap().into()), true))
+            .await;
+        let cached =
+            result(engine.read_query(None, query.into(), None, js(json!({})), js(json!([])))).await;
+        assert_eq!(cached["kind"], "hit");
+        assert_eq!(cached["data"], data);
+        result(engine.close()).await;
+    }
+    destroy_cache(SCOPE.into()).await.unwrap();
+}

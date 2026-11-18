@@ -68,7 +68,12 @@ fn permission_retirement_preserves_reply_command_without_restoring_original_thre
         let key = EntityKey("GraphqlSoupEmailThread:thread".into());
         let before_authority = engine.current_authority("viewer").await.unwrap();
         let retiring = engine
-            .begin_authority_transition("viewer", before_authority.generation, "team:denied".into())
+            .begin_authority_transition(
+                "viewer",
+                before_authority.generation,
+                "team:denied".into(),
+                true,
+            )
             .await
             .unwrap();
         let removable = engine
@@ -91,7 +96,13 @@ fn permission_retirement_preserves_reply_command_without_restoring_original_thre
             "the queued response still supplies the removed base"
         );
         engine
-            .retire_optimistic_snapshots(&["GraphqlSoupEmailThread".into()])
+            .retire_optimistic_snapshots_where(|entry, _source| {
+                entry
+                    .optimistic
+                    .normalized_updates
+                    .keys()
+                    .any(|key| key.typename() == Some("GraphqlSoupEmailThread"))
+            })
             .await
             .unwrap();
         assert!(matches!(
@@ -189,7 +200,13 @@ fn retire_100k_cached_records_in_bounded_pages() {
         let mut engine = Engine::new(storage);
         let started = std::time::Instant::now();
         engine
-            .retire_optimistic_snapshots(&["GraphqlSoupCrmContact".into()])
+            .retire_optimistic_snapshots_where(|entry, _source| {
+                entry
+                    .optimistic
+                    .normalized_updates
+                    .keys()
+                    .any(|key| key.typename() == Some("GraphqlSoupCrmContact"))
+            })
             .await
             .unwrap();
         let mut count = 0;

@@ -8,6 +8,7 @@ use crate::value::CacheValue;
 
 const AUTHORITY_KEY: &str = "__meta:authority";
 const AUTHORITY_FIELD: &str = "state";
+#[cfg(test)]
 const RETIREMENT_PAGE_SIZE: usize = 500;
 
 #[cfg(test)]
@@ -54,7 +55,7 @@ pub struct AuthorityTransitionWire {
     pub revision: String,
     /// Host operation names whose previous results must be discarded.
     pub affected_ops: Vec<String>,
-    /// Whether retirement ran for this proof.
+    /// Whether the authority changed or incomplete retirement resumed.
     pub changed: bool,
 }
 
@@ -102,18 +103,22 @@ pub struct OptimisticEffects {
 
 impl<S: Storage> Engine<S> {
     async fn stored_authority(&self) -> Result<Option<CacheAuthority>, EngineError<S::Error>> {
+        if let Some(authority) = self.authority.get() {
+            return Ok(authority.clone());
+        }
         let rows = self
             .storage
             .get_batch(&[EntityKey(AUTHORITY_KEY.into())])
             .await
             .map_err(EngineError::Storage)?;
-        let Some(record) = rows.into_iter().next().flatten() else {
-            return Ok(None);
-        };
-        let Some(CacheValue::Opaque(value)) = record.fields.get(AUTHORITY_FIELD) else {
-            return Ok(None);
-        };
-        Ok(serde_json::from_str(value).ok())
+        let authority = rows.into_iter().next().flatten().and_then(|record| {
+            match record.fields.get(AUTHORITY_FIELD) {
+                Some(CacheValue::Opaque(value)) => serde_json::from_str(value).ok(),
+                _ => None,
+            }
+        });
+        let _ = self.authority.set(authority.clone());
+        Ok(authority)
     }
 
     async fn store_authority(
@@ -133,7 +138,9 @@ impl<S: Storage> Engine<S> {
         self.storage
             .put_batch(vec![(EntityKey(AUTHORITY_KEY.into()), record)])
             .await
-            .map_err(EngineError::Storage)
+            .map_err(EngineError::Storage)?;
+        self.authority = std::sync::OnceLock::from(Some(authority.clone()));
+        Ok(())
     }
 
     /// Capture the shared generation before requesting permission or content.
@@ -168,10 +175,8 @@ impl<S: Storage> Engine<S> {
 
     /// Check immediately before reading or installing protected content, under
     /// the same owner lock as the operation. A missing token never admits data.
-    pub async fn check_authority(
-        &self,
-        generation: Option<Uuid>,
-    ) -> Result<(), EngineError<S::Error>> {
+    #[cfg(test)]
+    async fn check_authority(&self, generation: Option<Uuid>) -> Result<(), EngineError<S::Error>> {
         self.check_authority_generation(generation, true).await
     }
 
@@ -266,7 +271,8 @@ impl<S: Storage> Engine<S> {
 
     /// Retire copied optimistic responses without deleting authored commands,
     /// UUIDs, identity bindings, leases, retry state, or the local draft journal.
-    pub async fn retire_optimistic_snapshots(
+    #[cfg(test)]
+    async fn retire_optimistic_snapshots(
         &mut self,
         typenames: &[String],
     ) -> Result<WriteResult, EngineError<S::Error>> {
@@ -354,12 +360,14 @@ impl<S: Storage> Engine<S> {
 impl<S: PredicateIndexStorage> Engine<S> {
     /// Persist an incomplete permission transition before application-specific
     /// retirement. Hold the owner lock until `complete_authority_transition`.
-    /// An unchanged, ready policy requires no retirement.
+    /// The application decides which policy changes require retirement. Initial
+    /// non-denials can become ready without evicting legacy offline snapshots.
     pub async fn begin_authority_transition(
         &mut self,
         identity: &str,
         expected: Uuid,
         policy: String,
+        retire_snapshots: bool,
     ) -> Result<CacheAuthority, EngineError<S::Error>> {
         let current = self.current_authority(identity).await?;
         if current.generation != expected || policy.is_empty() {
@@ -368,13 +376,15 @@ impl<S: PredicateIndexStorage> Engine<S> {
         if current.ready && current.policy.as_ref() == Some(&policy) {
             return Ok(current);
         }
-        self.ensure_revision_can_advance()?;
+        if retire_snapshots {
+            self.ensure_revision_can_advance()?;
+        }
         let authority = CacheAuthority {
             identity: identity.to_owned(),
             account: current.account,
             generation: Uuid::now_v7(),
             policy: Some(policy),
-            ready: false,
+            ready: !retire_snapshots,
         };
         self.store_authority(&authority).await?;
         Ok(authority)
@@ -448,7 +458,8 @@ impl<S: PredicateIndexStorage> Engine<S> {
     /// The durable incomplete marker precedes every destructive step. If a
     /// process or storage failure interrupts retirement, reopening remains
     /// closed and a later fresh proof retries the idempotent retirement.
-    pub async fn transition_authority(
+    #[cfg(test)]
+    async fn transition_authority(
         &mut self,
         identity: &str,
         expected: Uuid,
@@ -456,7 +467,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
         typenames: &[String],
     ) -> Result<AuthorityTransition, EngineError<S::Error>> {
         let authority = self
-            .begin_authority_transition(identity, expected, policy)
+            .begin_authority_transition(identity, expected, policy, true)
             .await?;
         if authority.ready {
             return self.complete_authority_transition(authority).await;
