@@ -35,11 +35,13 @@ impl FoldedMessage {
     /// Flatten what the transcript shows without expanding anything, for the
     /// search index.
     ///
-    /// Thoughts and the work inside tool calls stay collapsed in the
-    /// transcript, so a match there would land on text the reader cannot see.
-    /// What remains is the conversation itself, plus the few tool-derived
-    /// texts shown by default: a subagent's title, a user tool's subject or
-    /// title, a presented view's text, and approval wording.
+    /// Thoughts, the work inside tool calls, answered questions' forms, and an
+    /// error's own text stay collapsed in the transcript, so a match there
+    /// would land on text the reader cannot see. What remains is the
+    /// conversation itself, plus the few tool-derived texts shown by default:
+    /// a subagent's title and type, a user tool's subject or title, a
+    /// presented view's own text, the server an approval names, and a failure
+    /// notice.
     #[must_use]
     pub fn searchable_text(&self) -> String {
         self.text(TextScope::Shown)
@@ -53,8 +55,18 @@ impl FoldedMessage {
         for part in self.parts.iter() {
             text.part(part);
         }
-        if let Some(StopReason::Failed { message, .. }) = &self.stop {
-            text.push(message);
+        if let Some(StopReason::Failed { message, notice }) = &self.stop {
+            match scope {
+                TextScope::Readable => text.push(message),
+                // An opaque failure shows its message only behind the failed
+                // line's disclosure; a classified one shows its notice card.
+                TextScope::Shown => {
+                    if let Some(notice) = notice {
+                        text.push(&notice.title);
+                        text.push(&notice.body);
+                    }
+                }
+            }
         }
         text.finish()
     }
@@ -131,7 +143,10 @@ impl SearchText {
                 ..
             } => {
                 self.push(server_name);
-                self.push(tool_name);
+                // The transcript words the tool for a person, never by name.
+                if self.scope == TextScope::Readable {
+                    self.push(tool_name);
+                }
             }
             MessagePart::Control { control, outcome } => {
                 match control {
@@ -142,7 +157,9 @@ impl SearchText {
                     }
                     Control::Compact | Control::Stop => {}
                 }
-                if let ControlOutcome::Rejected { message } = outcome {
+                if let ControlOutcome::Rejected { message } = outcome
+                    && self.scope == TextScope::Readable
+                {
                     self.push(message);
                 }
             }
@@ -156,6 +173,16 @@ impl SearchText {
                 if let Some(event) = event {
                     self.push(event);
                 }
+            }
+            // A reviewed user tool's card shows the draft's subject or title;
+            // any other question shows its message. Forms and answers sit
+            // behind the card's disclosure.
+            MessagePart::Elicitation {
+                request: ElicitationRequest::UserTool { draft, .. },
+                ..
+            } if self.scope == TextScope::Shown => self.draft_heading(draft),
+            MessagePart::Elicitation { message, .. } if self.scope == TextScope::Shown => {
+                self.push(message);
             }
             MessagePart::Elicitation {
                 message,
@@ -191,19 +218,11 @@ impl SearchText {
                     self.push(agent_type);
                 }
             }
-            ToolDetail::UserTool { input, .. } => {
-                for field in ["subject", "title"] {
-                    if let Some(text) = input.get(field).and_then(Value::as_str) {
-                        self.push(text);
-                    }
-                }
-            }
-            ToolDetail::View { view, error } => {
+            ToolDetail::UserTool { input, .. } => self.draft_heading(input),
+            // A failed view shows only that it failed.
+            ToolDetail::View { view, .. } => {
                 if let Some(view) = view {
                     self.view(view);
-                }
-                if let Some(error) = error {
-                    self.push(error);
                 }
             }
             ToolDetail::Terminal { .. }
@@ -219,8 +238,19 @@ impl SearchText {
         }
     }
 
-    /// A view's own text. Widgets that name entities by id show titles loaded
-    /// live with the reader's access, which the fold does not hold.
+    /// The one thing a user tool's card shows beside its name: an email's
+    /// subject or an event's title.
+    fn draft_heading(&mut self, draft: &Value) {
+        for field in ["subject", "title"] {
+            if let Some(text) = draft.get(field).and_then(Value::as_str) {
+                self.push(text);
+            }
+        }
+    }
+
+    /// A view's own text. Widgets that name entities by id, and agent-update
+    /// cards, show what they load live with the reader's access, which the
+    /// fold does not hold.
     fn view(&mut self, view: &View) {
         if let Some(title) = &view.title {
             self.push(title);
@@ -257,27 +287,18 @@ impl SearchText {
                 }
                 self.tags(tags);
             }
-            Widget::AgentUpdates { items } => {
-                for item in items {
-                    self.push(&item.session_name);
-                }
-            }
+            Widget::AgentUpdates { .. } | Widget::ChannelMessage { .. } => {}
             Widget::BotCredential { label, .. } => {
                 if let Some(label) = label {
                     self.push(label);
                 }
             }
-            Widget::Container {
-                title, children, ..
-            } => {
-                if let Some(title) = title {
-                    self.push(title);
-                }
+            // A container lays its children out and renders no title.
+            Widget::Container { children, .. } => {
                 for child in children {
                     self.widget(child);
                 }
             }
-            Widget::ChannelMessage { .. } => {}
         }
     }
 

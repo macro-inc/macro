@@ -249,3 +249,127 @@ fn searchable_text_keeps_only_what_the_collapsed_transcript_shows() {
         assert!(readable.contains(hidden), "{hidden} stays readable");
     }
 }
+
+#[test]
+fn searchable_text_leaves_out_what_cards_and_lines_keep_behind_a_disclosure() {
+    use crate::domain::model::{
+        Control, ControlOutcome, ElicitationOutcome, ElicitationRequest, ElicitationRequestId,
+        ElicitationSchema,
+    };
+    use agent_runtime_protocol::domain::{
+        tool_approval::ToolApprovalStatus,
+        turn::{FailureNotice, FailureNoticeKind},
+    };
+    use dynamic_ui::{View, Widget};
+
+    let schema = ElicitationSchema {
+        title: Some("Deploy window".to_owned()),
+        description: None,
+        properties: Vec::new(),
+        required: Vec::new(),
+    };
+    let mut message = message(vec![
+        MessagePart::Elicitation {
+            request_id: ElicitationRequestId::Number(1),
+            tool_call: None,
+            message: "Which window should I use?".to_owned(),
+            request: ElicitationRequest::Form {
+                schema: schema.clone(),
+            },
+            outcome: ElicitationOutcome::Accepted {
+                answers: Vec::new(),
+            },
+            reported: None,
+            tool_outcome: None,
+        },
+        MessagePart::Elicitation {
+            request_id: ElicitationRequestId::Number(2),
+            tool_call: None,
+            message: "Review the email".to_owned(),
+            request: ElicitationRequest::UserTool {
+                tool: "SendEmail".to_owned(),
+                draft: Box::new(json!({ "subject": "Launch notes", "body": "Private draft body" })),
+                schema: Box::new(schema),
+            },
+            outcome: ElicitationOutcome::Completed,
+            reported: None,
+            tool_outcome: Some(UserToolOutcome::Sent {
+                message_id: "message-1".to_owned(),
+                thread_id: "thread-1".to_owned(),
+            }),
+        },
+        MessagePart::ToolApproval {
+            approval_id: "approval-1".to_owned(),
+            server_slug: "github".to_owned(),
+            server_name: "GitHub".to_owned(),
+            tool_name: "create_issue".to_owned(),
+            arguments: json!({ "title": "Hidden argument" }),
+            requested_by: None,
+            status: ToolApprovalStatus::Approved,
+            resolved_by: None,
+            remembered: false,
+        },
+        MessagePart::Control {
+            control: Control::SetModel {
+                model: "test-model".to_owned(),
+            },
+            outcome: ControlOutcome::Rejected {
+                message: "model unavailable".to_owned(),
+            },
+        },
+        MessagePart::ToolUse {
+            id: ToolUseId("tool-1".to_owned()),
+            name: ToolName::native("DisplayResults"),
+            status: ToolStatus::Completed,
+            detail: ToolDetail::View {
+                view: Some(View {
+                    title: None,
+                    widgets: vec![Widget::Container {
+                        direction: None,
+                        gap: None,
+                        wrap: None,
+                        align: None,
+                        justify: None,
+                        title: Some("Unrendered container title".to_owned()),
+                        children: vec![Widget::Md {
+                            markdown: "Rollout is on track".to_owned(),
+                        }],
+                    }],
+                }),
+                error: Some("view failed to decode".to_owned()),
+            },
+        },
+    ]);
+    message.stop = Some(StopReason::Failed {
+        message: "upstream 529".to_owned(),
+        notice: None,
+    });
+
+    assert_eq!(
+        message.searchable_text(),
+        [
+            "Which window should I use?",
+            "Launch notes",
+            "GitHub",
+            "test-model",
+            "Rollout is on track",
+        ]
+        .join("\n")
+    );
+
+    message.stop = Some(StopReason::Failed {
+        message: "upstream 529".to_owned(),
+        notice: Some(FailureNotice {
+            kind: FailureNoticeKind::ProviderUsageLimit,
+            title: "Usage limit reached".to_owned(),
+            body: "Add credits to keep going".to_owned(),
+            link: None,
+        }),
+    });
+    assert!(
+        message
+            .searchable_text()
+            .ends_with("Usage limit reached\nAdd credits to keep going")
+    );
+    assert!(!message.searchable_text().contains("upstream 529"));
+}

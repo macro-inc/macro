@@ -68,9 +68,10 @@ to the browser via `inbound/wasm`.
 
 `FoldedMessage::readable_text` flattens everything a reader can open, for
 session reads (`ReadAgentSession`); `searchable_text` keeps only what the
-collapsed transcript shows, for the search index (no thoughts, no work inside
-tool calls). A new part or tool kind decides both in
-`domain/model/search.rs`.
+collapsed transcript shows, for the search index: no thoughts, no work inside
+tool calls, no question forms or answers, and no error text behind a
+disclosure. A new part, tool kind or widget decides both in
+`domain/model/search.rs`, by what its component shows before it is expanded.
 
 `FoldedMessage::last_text` supplies the same terminal prose to live lifecycle
 signals and harness recovery from a persisted log. Keep these interpretations
