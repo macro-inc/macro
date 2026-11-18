@@ -1,0 +1,31 @@
+apps/web/src/features/agent-updates/core/agent-update.test.ts
+  s_a79cb5c5d752a9::t_68bb78717c6761 66
+packages/sdk/generated/agent-fold/index.ts
+  s_a79cb5c5d752a9::t_f40a18fdea7c0e 1338,1488,1626,1628,1630,1632,1634,1639,1641,1656,1674,2037,2094
+apps/web/src/features/block-agent/state/section-steps.ts
+  s_a79cb5c5d752a9::t_de25369e53e2b9 61,63-67
+crates/folds/agent_fold/src/domain/test/interactions.rs
+  s_a79cb5c5d752a9::t_f40a18fdea7c0e 258,262-265
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.test.ts
+  s_a79cb5c5d752a9::t_68bb78717c6761 19
+apps/web/src/features/agent-activity/queries/code-activity.ts
+  s_a79cb5c5d752a9::t_20f2be4a6a1913 66-69
+apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts
+  s_a79cb5c5d752a9::t_21ecd360c69ede 1631,2064,2349-2350,2353-2354,2360-2361,2376,2394,2771,2828
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a0f8fe7fa2dbd493cb88ded90962cd13fcf7cbf8",
+  "prompts": {},
+  "sessions": {
+    "s_a79cb5c5d752a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8bf8f92a-181b-4d3a-aaa6-3d5c01f60534",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
