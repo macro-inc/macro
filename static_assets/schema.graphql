@@ -11007,6 +11007,39 @@ type GraphqlStringPropertyValue {
 }
 
 """
+Which owner a tag set belongs to.
+"""
+enum GraphqlTagScope {
+	"""
+	The viewer's personal tag set.
+	"""
+	USER
+	"""
+	The viewer's team tag set.
+	"""
+	TEAM
+}
+
+"""
+A tag set the viewer can use. The team set is listed whenever the viewer is
+on a team, so its presence says labels can be shared with the team.
+"""
+type GraphqlTagSet {
+	"""
+	Owner of the set.
+	"""
+	scope: GraphqlTagScope!
+	"""
+	The set's TAG-typed definition; null until its first label is created.
+	"""
+	definition: GraphqlPropertyDefinition
+	"""
+	Labels in the set, by display order then name.
+	"""
+	options: [GraphqlPropertyOption!]!
+}
+
+"""
 Metadata for a task assignment.
 """
 type GraphqlTaskAssignedMetadata {
@@ -11249,6 +11282,11 @@ type GraphqlUser {
 	Select options available to the viewer for one property definition.
 	"""
 	propertyOptions(propertyDefinitionId: ID!): [GraphqlPropertyOption!]!
+	"""
+	The viewer's tag sets: their personal set, plus their team's set
+	whenever they are on a team, with each set's labels.
+	"""
+	tagSets: [GraphqlTagSet!]!
 	"""
 	The authenticated user's favorites in manual order, optionally
 	restricted by entity type and entity id.

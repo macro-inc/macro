@@ -9,6 +9,7 @@ use models_properties::service::entity_property_with_definition::EntityPropertyW
 use models_properties::service::{
     property_definition::PropertyDefinition, property_option::PropertyOption,
 };
+use properties::domain::model::TagSet;
 use rootcause::markers::{Cloneable, Dynamic};
 use tracing::Instrument;
 use uuid::Uuid;
@@ -51,6 +52,13 @@ pub trait EntityPropertyReader: Send + Sync + 'static {
         property_definition_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, Vec<PropertyOption>>, rootcause::Report>> + Send;
 
+    /// List the caller's tag sets: their personal set, plus their team's set
+    /// when they are on a team, provisioned or not.
+    fn get_tag_sets(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<TagSet>, rootcause::Report>> + Send;
+
     /// Load properties for the requested entity keys on behalf of the given
     /// user. Entities the user cannot view yield an empty property list.
     fn get_properties(
@@ -84,6 +92,13 @@ impl EntityPropertyReader for NoOpEntityPropertyReader {
         _user_id: &MacroUserIdStr<'static>,
         _property_definition_ids: &[Uuid],
     ) -> Result<HashMap<Uuid, Vec<PropertyOption>>, rootcause::Report> {
+        Err(rootcause::report!("property reader is not configured"))
+    }
+
+    async fn get_tag_sets(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<TagSet>, rootcause::Report> {
         Err(rootcause::report!("property reader is not configured"))
     }
 
@@ -265,6 +280,18 @@ where
             .map_err(|err| rootcause::report!(err))?)
     }
 
+    async fn get_tag_sets(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<TagSet>, rootcause::Report> {
+        let team = self.caller_team_receipt(user_id).await?;
+        Ok(self
+            .properties_service
+            .list_tag_sets(user_id, team.as_ref())
+            .await
+            .map_err(|err| rootcause::report!(err))?)
+    }
+
     #[tracing::instrument(skip_all, fields(entity_count = keys.len()), err)]
     async fn get_properties(
         &self,
@@ -339,6 +366,11 @@ impl<R: EntityPropertyReader> EntityPropertiesLoader<R> {
         self.reader
             .get_definitions(&self.user_id, scope, for_entity_type)
             .await
+    }
+
+    /// Load tag sets using the same authenticated identity as property edges.
+    pub(crate) async fn tag_sets(&self) -> Result<Vec<TagSet>, rootcause::Report> {
+        self.reader.get_tag_sets(&self.user_id).await
     }
 }
 

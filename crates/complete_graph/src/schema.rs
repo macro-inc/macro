@@ -56,9 +56,9 @@ use graphql_notification_inbox::{
 use graphql_permission::{EntityPermissionEdgeReader, NoOpEntityPermissionEdgeReader};
 use graphql_properties::{
     EntityPropertyReader, EntityPropertyWriter, GraphqlPropertyDefinition,
-    GraphqlPropertyDefinitionScope, GraphqlPropertyOption, NoOpEntityPropertyReader,
+    GraphqlPropertyDefinitionScope, GraphqlPropertyOption, GraphqlTagSet, NoOpEntityPropertyReader,
     NoOpEntityPropertyWriter, PropertiesMutationRoot, load_property_definitions,
-    load_property_options,
+    load_property_options, load_tag_sets,
 };
 use graphql_registered_work::{
     GraphqlRegisteredWork, RegisteredWorkSubscriptionRoot, resolve_registered_work,
@@ -927,6 +927,12 @@ where
         property_definition_id: ID,
     ) -> async_graphql::Result<Vec<GraphqlPropertyOption>> {
         load_property_options::<PR>(ctx, property_definition_id).await
+    }
+
+    /// The viewer's tag sets: their personal set, plus their team's set
+    /// whenever they are on a team, with each set's labels.
+    async fn tag_sets(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlTagSet<PR>>> {
+        load_tag_sets::<PR>(ctx).await
     }
 
     /// The authenticated user's favorites in manual order, optionally
