@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use ::email::domain::events::{EmailMacroEvent, EmailTopicEvent};
+use ::email::domain::events::{EmailEventOrigin, EmailMacroEvent, EmailTopicEvent};
 use macro_event_broker::MacroEvent as _;
 use opensearch_client::OpensearchClient;
 use sqlx::PgPool;
@@ -14,6 +14,12 @@ use crate::process::email::{remove, upsert};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum EmailIndexAction {
     UpsertMessage {
+        message_id: Uuid,
+        owner: String,
+    },
+    /// Index a sent message under its thread and drop the copies it left
+    /// under threads the send moved it from.
+    UpsertSentMessage {
         message_id: Uuid,
         owner: String,
     },
@@ -122,9 +128,18 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             event_type: "email.message_draft_synced",
         },
         EmailTopicEvent::MessageSent(metadata) => EmailEventDescription {
-            action: EmailIndexAction::UpsertMessage {
-                message_id: metadata.message_id,
-                owner: metadata.owner.to_string(),
+            // Only a send made in Macro can move an existing message to
+            // another thread; a sent message synced from the provider is a
+            // new row with no older copy to clean up.
+            action: match metadata.origin {
+                EmailEventOrigin::UserAction => EmailIndexAction::UpsertSentMessage {
+                    message_id: metadata.message_id,
+                    owner: metadata.owner.to_string(),
+                },
+                EmailEventOrigin::ProviderSync => EmailIndexAction::UpsertMessage {
+                    message_id: metadata.message_id,
+                    owner: metadata.owner.to_string(),
+                },
             },
             link_id: metadata.link_id,
             event_type: "email.message_sent",
@@ -226,6 +241,9 @@ async fn process_email_index_action(
     match action {
         EmailIndexAction::UpsertMessage { message_id, owner } => {
             upsert::process_upsert_message(opensearch_client, db, message_id, &owner).await
+        }
+        EmailIndexAction::UpsertSentMessage { message_id, owner } => {
+            upsert::process_upsert_sent_message(opensearch_client, db, message_id, &owner).await
         }
         EmailIndexAction::RemoveMessage { message_id } => {
             remove::process_remove_message(opensearch_client, message_id, None).await

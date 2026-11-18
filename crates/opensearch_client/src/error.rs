@@ -52,6 +52,7 @@ pub enum OpensearchOperation {
     DeleteChatByUserId,
     DeleteEmailByLinkId,
     DeleteEmailMessages,
+    DeleteEmailMessageOutsideThread,
     RefreshEmailIndex,
     DeleteEmailByUserId,
     DeleteProjectById,
