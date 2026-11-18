@@ -406,7 +406,7 @@ answer carry `team_agent_user_id` on the computer's harness, and
 (bots create/update/patch) and session opens (`persona_for_owner`, and a
 runtime's external create) refuse such a harness with 409 "This computer
 belongs to an agent teammate. Message them instead." The harness stays in
-`GET /harnesses`, where Bring your AI finds it by `computer_id`; the web app's
+`GET /harnesses`, where Connect Claude plan finds it by `computer_id`; the web app's
 runtime lists read `useRunnableHarnessesQuery` /
 `useRunnableHarnessDirectoryQuery`, which drop it.
 

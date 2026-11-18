@@ -376,10 +376,17 @@ while selected tag sets are pending. Background refreshes retain the current lis
 
 While the search field has text the list shows only search states: no Watch
 tutorial row, a spinner while the search runs (from the first character), and
-`No results` when nothing matches. `Load More` appears only under
-result rows: a page whose hits the tab or a client-side filter drops (Archived
-keeps only archived hits) pages on by itself until a row shows or results run
-out. To check the tab switch,
+`No results` when nothing matches. `Load More` appears under result
+rows. A page that adds no row (an alias, saved view or client-side filter drops
+its hits, or the service's done check for Archived read its bound of index pages
+without keeping one) is read past by itself, after the first page and after each
+Load More, up to five pages per load (`MAX_PAGES_PER_LOAD`). A load stops at
+a new row, at the end of the results (Load More goes away), on an error, or at
+that cap; one that reaches the cap without a row leaves `No matches in the next
+pages. Search further`, which reads up to five more. Check with a term that
+matches many inbox threads and few archived ones: every Load More adds a row,
+ends the results, or ends on that label, never a click that adds nothing. To
+check the tab switch,
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
 
@@ -480,6 +487,8 @@ continuation pages. Once replay commits (even after a reload), only those querie
 refresh from the server; they should not refetch over the optimistic state merely
 because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
+Press # right after opening a thread, while its mark read is still on its way:
+the row must leave the list and stay out once the mark read lands.
 Archive-based
 Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
 updates optimistically in the normalized cache, and each reversal is a distinct
@@ -571,8 +580,13 @@ Spam and Trash order threads by their latest message in that folder. Reading a t
 
 Use **Not spam** on a Spam row or **Restore** on a Trash row. The same
 action appears in the selection toolbar for bulk restores, including on mobile.
-Outlook restores received mail to Inbox and provider drafts to Drafts. Gmail removes
-the Spam or Trash label and preserves the remaining labels; it does not add Inbox.
+Outlook restores received mail to Inbox and provider drafts to Drafts. Gmail Restore
+removes the Trash label and preserves the remaining labels; it does not add Inbox.
+Gmail Not spam moves the thread from Spam to the inbox, as Gmail's own button does:
+it adds Inbox when received mail in the thread is in Spam (the user's own sent
+mail, even addressed to themselves, only leaves Spam), then removes Spam. Report
+spam on Gmail files the thread under Spam, then takes it out of the inbox. The
+assistant adding or removing the SPAM label does the same.
 Gmail restores update the canonical preview and ordering immediately, before the
 queued provider write completes.
 Outlook uses pending mailbox operations, and the thread's operation notice shows
@@ -654,9 +668,14 @@ that match its supported view/filter but are missing inside its covered sort
 range (including timestamp/ID ties). An exhausted page covers the remaining
 matching range, including an empty result. This checks at most 500 local matches
 per write; larger stale sets converge over refreshes. It preserves normalized
-threads and pending optimistic edits, and does not use cursor pages or backfill
-gaps as negative evidence. An older open view's server snapshot cannot restore
-explicitly invalidated membership; pending local edits still take precedence.
+threads, and keeps a row with queued writes unless its stored facts and each
+prefix of those writes all still match the page (a queued mark read does not
+keep a thread the page left out; a queued Undo of an archive keeps its row). It
+does not use cursor pages or backfill gaps as negative evidence. An older open
+view's server snapshot cannot restore
+explicitly invalidated membership; pending local edits still take precedence,
+so an older view can list a thread its first page dropped (the trashed thread
+with a queued mark read) until that write settles.
 Invalidated facts stay unqueryable until a full canonical snapshot arrives,
 rather than guessing whether a thread was moved or
 deleted. Verification: seed stale Noise matches between returned rows, apply a
@@ -963,7 +982,8 @@ as `person+tag@example.com`, whether or not it is a saved contact. That holds
 when contacts or their names load after typing starts and reorder the list,
 including under a resting pointer, and when the address was typed or pasted
 before suggestions loaded. Name-word prefixes outrank substring matches;
-`jo sm` and `sm jo` both find John Smith. Within each name tier, and on empty
+`jo sm` and `sm jo` both find John Smith. A domain (`gmail.com`) or a local part
+unlike the name finds the contact, below name matches. Within each name tier, and on empty
 input, personal suggestions are recent-first rather than domain/brevity-weighted.
 A chip shows the name followed by the address in muted ink.
 Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal

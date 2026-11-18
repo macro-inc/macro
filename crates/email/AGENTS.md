@@ -279,9 +279,9 @@ tools — hexagonal, heavily feature-gated.
   page order from the record's address superset or from each contributing
   inbox's newest threads, and each gets the message match and the privacy rule
   until the page fills. Keep its `OFFSET 0` fences, or the planner checks the
-  whole stream before the LIMIT, and keep the superset stream's lookup by id
-  (`= ANY(ARRAY(…))`): as a semi-join the planner reads every thread of the
-  inboxes. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
+  whole stream before the LIMIT. Fetch each distinct superset or selection
+  match through the fenced lateral primary-key lookup: even `id = ANY(…)`
+  can become a mailbox-wide index filter under stale statistics. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
   scans every company. `push_allowed` restates `crm_email_thread_allowed`
   set-based, and the contributing inboxes in `dynamic/resolve.rs` restate its
   mailbox conditions (`allowed_restates_the_privacy_function` and
@@ -353,6 +353,12 @@ tools — hexagonal, heavily feature-gated.
   link, settlement, provider, and retry-queue ports. Provider admission remains
   inside the host's existing Gmail adapter.
 - Recompute thread metadata inside staged Gmail SPAM/TRASH writes so restored All Mail previews, ordering, and signal state do not wait for the provider worker.
+- Gmail Report spam and Not spam move the thread between the inbox and Spam
+  (`set_gmail_thread_junk`): a SPAM write and an INBOX write, each its own
+  thread label write, and the agent tool `UpdateThreadLabels` routes `SPAM`
+  there too. Never send the SPAM label alone for them; only the REST and
+  GraphQL label routes (`update_thread_labels_for_user`) write exactly the
+  label they are given.
 - `domain/recent_inbox.rs` merges a user's newest messages read live from
   each of their own inboxes (50 by default, at most 100); an inbox whose read
   fails is skipped. Subjects are cut to 200 characters and snippets to the
@@ -496,6 +502,10 @@ tools — hexagonal, heavily feature-gated.
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
   can suppress it without processing a self-custodian twice.
+- `email_links.fusionauth_user_id` is the holder of the credentials a link
+  syncs with, not the inbox's owner (`macro_id`): another participant's
+  connection or a custody transfer changes it. Never read it as ownership. A
+  deleted user gets an owner binding only for an inbox of their own account.
 - `email_mailbox_folders.total_item_count` is Graph's `totalItemCount` from the
   latest catalog discovery (every 5 minutes, from the listing discovery already
   makes), and the discover span sums it as `outlook.provider_item_count`. It

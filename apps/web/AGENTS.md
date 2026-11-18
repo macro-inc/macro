@@ -87,7 +87,7 @@ cursors and contact reconciliation use coordinator protocol 17; native menu poli
 lists people the viewer has a direct message with first among matches at a word
 start, however exactly a stranger's name matches; within each group, exact names
 (full, or the first name for a one-term query) come before all-word prefixes, then
-recency and identity. Literal contains matches come last. "Has a direct message" means a
+recency and identity. Literal contains matches follow, then address-only matches (domain or local part). "Has a direct message" means a
 positive interaction time, which context facts take from direct-message channels,
 including group and never-written DMs. Native (desktop, iOS, Android) binaries released
 before policy 6 still answer with policy 5; keep accepting it (`PEOPLE_MIN_POLICY_VERSION`).
@@ -455,8 +455,9 @@ Discussion link scrolling has a backend-free browser regression:
 Inviting an agent teammate from Team → Members (People | Agent in Invite to
 Team, behind `enable-agent-teammates`): the dialog closing with its notice, a
 refused invite's error in view, its row's Setting up step → Running and failed
-Retry, the ready and failed notifications (Message, Bring your AI for admins
-only, Retry), Bring your AI with Close, its row's Claude sign-in and switch
+Retry, the ready and failed notifications (Message, Connect Claude plan for
+admins only, Retry), Connect Claude plan's one-screen sign-in with its
+expired, rejected and unreachable states, its row's Claude sign-in and switch
 back to credits, the DM status banner, and its removal have a backend-free
 browser regression at desktop 1440 and phone 390 over a scripted auth
 service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It launches Chromium with
@@ -1251,7 +1252,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep call layout in desktop `CallMoreMenu`; mirror participant visibility on the shared-screen edge, omit that edge toggle in Grid, and reset visibility when sharing ends. Desktop tile pins take Speaker placement unless Sidebar is selected, without changing saved Layout; keep every participant and share track mounted when moving tiles and clear stale pins when their source disappears. Share the call-owned pin with the desktop mini-player regardless of Layout; unpinning or losing its source restores automatic selection immediately. Phones stay on Auto; reserve phone pinning for long-press, not taps.
 - Keep `CallWaveform` static except for the current call's desktop chat-sidebar row, channel-header duration pill and app-rail item; pass `live` and the matching room identity only there. Live marks follow speech and reduced motion; phones stay static. Preserve AvatarGroup separator rings with inset speaking outlines and keep phone icons for call actions.
 - Keep call full screen scoped to its call root; mount call menus locally and keep tooltips in their owning fullscreen element.
-- Diagnose the GraphQL mutation queue with `graphql.mutation_queue.*` spans and logs keyed by `mutation_queue.item_id`; route queue telemetry through `mutation-queue-telemetry.ts`, which dedupes per item and failure class and turns repeats into the periodic summary. Never add per-attempt `console.*` lines or record variables, draft content, or emails.
+- Diagnose the GraphQL mutation queue with `graphql.mutation_queue.*` spans and logs keyed by `mutation_queue.item_id`; route queue telemetry through `mutation-queue-telemetry.ts`, which dedupes per item and failure class and turns repeats into the periodic summary. Never add per-attempt `console.*` lines or record variables, draft content, or emails. A page that reloads or closes mid-attempt leaves its lease on the queue head; the runner releases it once the holder's Web Lock (`mutation-queue-owner.ts`) shows its page has been hidden or gone. Let the owner lock go on `pagehide` (a held lock can keep a page out of the back/forward cache), claim under a new owner after a restore, send a claim only while the page still holds the owner it was made under, and fence every release by the holder's owner and generation.
 - Keep desktop OAuth consent in the system browser with a `macro://` return:
   `macro:///inbox-link-callback` for Gmail and Outlook inboxes,
   `macro:///github-link-callback` for GitHub (consumed by the navigation
@@ -1270,10 +1271,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Include unsynced email working copies in Drafts and mobile name search even
   before a GraphQL save, and warm sending accounts alongside backfill. Preserve
   inbox, alias, and facet scope.
-- Draft autosaves preserve active email thread messages; evict inactive legacy
-  caches on save and the active cache on thread exit. Revalidate GraphQL thread
-  pages only when a save cannot patch the message list (missing snapshot or a
-  move between inboxes).
+- Draft autosaves patch GraphQL thread pages in place; revalidate them only
+  when a save cannot patch the message list (missing snapshot or a move
+  between inboxes).
 - Keep email card resize motion on its content wrapper so message and inline
   reply transitions preserve the card's focus target and return to natural height.
 - Task composer submissions retain an account/context-scoped local copy until
@@ -1764,9 +1764,12 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 Computer rows show the Claude mode (`Signed in with Claude` on the computer's
 own account, never its email) from `claude-mode` for managers, and the harness list's derived
 `claude_mode` for other members. Sign-in is a dialog
-(`claude-sign-in-flow.tsx`) that starts the sign-in on open, so its Open
-claude.ai control stays a plain `target="_blank"` link; never open it after an
-await. The backend also requires management rights for Claude account changes.
+(`claude-sign-in-flow.tsx`) that starts the sign-in on open. Once the link
+has arrived, Open claude.ai is a plain `target="_blank"` link; never open it
+after an await. Until then it is a button: a browser opens a blank tab within
+the click (`reserveOauthPopup`) and points it at claude.ai when the link
+arrives, while the desktop and phone apps, where that tab would land blank in
+the system browser, open the link once it arrives. The backend also requires management rights for Claude account changes.
 Focused tests: `bun run test src/features/settings/computers`.
 
 Guided purchase (the Buy computer → Configure agent → Bring your AI → Create

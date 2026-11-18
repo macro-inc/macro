@@ -126,7 +126,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   and evaluation errors return 403) and an attached fleet (503).
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
-  (a rejected code returns 422 with `code: "invalid_code"`),
+  (a failed sign-in carries a `code` saying how to recover:
+  `invalid_code` 422 and `sign_in_expired` 410 need a new sign-in,
+  `malformed_code` 400 a fresh paste, `computer_unreachable` 503 and
+  `computer_busy` 409 a retry; a timeout is a bare 504),
   `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
   `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
   The sign-in link must be `https://claude.com` or `claude.ai` at exactly

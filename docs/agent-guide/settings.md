@@ -282,19 +282,28 @@ When the agent's computer first connects, its inviter (the team agent's
 `created_by`) gets the `computer_setup` notification with the agent's
 `agent { userId, name }`: "<name> is ready", in-app as a one-minute notice
 with **Message <name>** (the DM, through the same open-DM path as any member)
-and, for owners and admins (who own the computer's runtime), **Bring your
-AI**. A failed first setup notifies "<name> couldn't be set up" with the
+and, for owners and admins (who own the computer's runtime), **Connect
+Claude plan**. A failed first setup notifies "<name> couldn't be set up" with the
 reason and **Retry**. Clicking the notification opens the DM (ready) or
 **Team → Members** (failed). The agent flow has no **Try it**; that stays in
-the computer purchase flow. With `enable-macro-computers` on, **Bring your AI
-to <name>** is the Claude sign-in for the agent's computer, opened from the
-notification or the row, never as a step of the invite: it shows the
-computer's setup progress above **Open claude.ai** and the pasted code, and
-**Close** or **Use Macro credits instead** leaves it. Owners and admins see
-the agent's Claude under its job description: **Claude: Macro credits · Sign
-in to Claude** (offered only while the computer is connected), **Claude: your
-plan · Use Macro credits** (a confirmation, then sign-out), or **Claude
-sign-in expired · Sign in to Claude**. The sign-in spans carry
+the computer purchase flow. With `enable-macro-computers` on, **Connect
+<name> to your Claude plan** is the Claude sign-in for the agent's computer,
+opened from the notification or the row, never as a step of the invite. One
+screen, two steps: **Open claude.ai** (a button with "Preparing the sign-in
+link…" until the computer has made the link, then the link; **Open again**
+once used), then the code field with **Complete sign-in**, which is primary
+only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
+A failure shows one inline alert with its way out: **Get a new link** (link
+expired, code rejected, timed out), **Try again** (couldn't get a link), or
+paste again (malformed code, computer busy). The footer's one action is
+**Keep using Macro credits** (closes), or **Switch to Macro credits** (a
+confirmation, then sign-out) when the agent is on its plan; closing while a
+code is checked lets it finish, with a toast either way. Owners and admins
+see the agent's Claude under its job description: **Claude: Macro credits ·
+Connect Claude plan** (offered only while the computer is connected),
+**Claude: your plan · Switch to Macro credits** (a confirmation, then
+sign-out), or
+**Claude sign-in expired · Reconnect Claude plan**. The sign-in spans carry
 `claude.sign_in.entry` (`team_agent_row`, `notification`).
 
 A DM with an agent teammate that isn't running says so in its header (a
@@ -317,10 +326,11 @@ computer's runtime (`team_agent_user_id` on `/harnesses`) never appears in
 **Where it runs**, the Agents page or composer roster, the machine strips,
 Settings → Runtimes, or teammates' machines; its computer setup offers no
 **Try it** or **Create agent here**; and the API refuses saving an agent or
-opening a session on it (409). Bring your AI and the DM banner still read it
+opening a session on it (409). Connect Claude plan and the DM banner still read it
 from the full `/harnesses` list. On phones the dialog and
 confirmation are sheets and rows stay touch rows. Backend-free check (invite,
-Members row, notifications, Bring your AI and the DM banner):
+Members row, notifications, Connect Claude plan and its failure states, and
+the DM banner):
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`
 from `apps/web` (desktop 1440 and phone 390).
 
@@ -1063,8 +1073,9 @@ Claude, then setup-complete.
   explains that, shows a live status line ("Preparing sign-in… Starting up ·
   0:42") instead of a greyed button, lists the sign-in as a later stage that
   unlocks by itself, and offers only **Close** and **Use Macro credits
-  instead**. Once connected, **Open claude.ai** appears and the tab title
-  becomes "● Sign in to Claude — Macro". Closed meanwhile, the setup notice
+  instead**. Once connected, the same two-step sign-in as an agent's
+  **Connect Claude plan** appears (see Agent teammates above); after **Open
+  claude.ai** the tab title becomes "● Paste your Claude code — Macro". Closed meanwhile, the setup notice
   (below) reopens the modal on that step. The code is pasted in the same modal.
 - **Macro credits** skips **Bring your AI**, shown muted with a dash as
   "Bring your AI · skipped" (phones keep "Your AI" with the dash), never struck
@@ -1118,15 +1129,11 @@ the same, also on a cold start; the link is
 shown when it was closed while waiting for the sign-in link, is the same
 notice, so the two never stack.
 
-**Sign in with Claude** is a dialog. It starts the sign-in when it opens, so
-**Open claude.ai** is a plain new-tab link (the desktop app hands it to the
-system browser). Sign in there, copy the code, come back, paste it into the
-focused field (under the note that the code goes straight into the harness
-running the real Claude Code on the computer), and press **Complete
-sign-in**; **Use Macro credits instead**
-switches to credits. A rejected code shows "That code didn't work. Try again to
-get a new one." with **Try again**; an expired sign-in shows **Start over**.
-Success closes the dialog with "Signed in with Claude", and the row reads
+**Sign in with Claude** is a dialog with the same two steps, failure states
+and footer as an agent's **Connect Claude plan** (see Agent teammates above),
+titled **Sign in with Claude** and with the computer's own small print
+("Everyone using this computer can use this sign-in…"). Success closes the
+dialog with "Signed in with Claude", and the row reads
 **Signed in with Claude**: the computer holds a one-year Claude credential
 (no email or plan to show). Everyone on the team uses it on the computer.
 

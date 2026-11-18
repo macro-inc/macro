@@ -30,8 +30,6 @@ import type {
   AddDraftAttachmentResponse,
   ApiMessageOperation,
   ApiPaginatedThreadCursor,
-  ArchiveThreadsRequest,
-  ArchiveThreadsResponse,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentDocumentIDResponse,
@@ -394,36 +392,6 @@ export const emailClient = {
       )
     ).map((result) => result);
   },
-  async updateThreadProject(args: {
-    thread_id: string;
-    projectId: string | null;
-  }) {
-    const { thread_id, projectId } = args;
-    return emailFetch<{ oldProjectId: string | null }>(
-      `/email/threads/${thread_id}/project`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ projectId }),
-      }
-    );
-  },
-  async flagArchived(args: { value: boolean; id: string }, linkId?: string) {
-    const { value, id } = args;
-    return (
-      await emailFetch<EmptyResponse>(`/email/threads/${id}/archived`, {
-        method: 'PATCH',
-        body: JSON.stringify({ value }),
-        headers: emailLinkHeaders(linkId),
-      })
-    ).map((result) => result);
-  },
-  /** One request for up to 100 threads; the server reports threads it could not change. */
-  async flagArchivedBatch(args: ArchiveThreadsRequest) {
-    return await emailFetch<ArchiveThreadsResponse>('/email/threads/archived', {
-      method: 'PATCH',
-      body: JSON.stringify(args),
-    });
-  },
   async startSync() {
     return (
       await emailFetch<EmptyResponse>('/email/sync', {
@@ -749,15 +717,6 @@ export const emailClient = {
           headers: emailLinkHeaders(linkId),
         }
       )
-    ).map((result) => result);
-  },
-  async markThreadAsSeen(args: { thread_id: string }, linkId?: string) {
-    const { thread_id } = args;
-    return (
-      await emailFetch<EmptyResponse>(`/email/threads/${thread_id}/seen`, {
-        method: 'POST',
-        headers: emailLinkHeaders(linkId),
-      })
     ).map((result) => result);
   },
   async blockSender(args: { email_address: string }, linkId?: string) {

@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   queueActive: vi.fn(() => true),
   deleteQueued: vi.fn(),
   deleteRest: vi.fn(),
-  markSaved: vi.fn(),
   publish: vi.fn(),
 }));
 
@@ -38,9 +37,6 @@ vi.mock('@queries/email/draft-queue', () => ({
 }));
 vi.mock('@queries/email/draft', () => ({
   useDeleteDraftMutation: () => ({ mutateAsync: mocks.deleteRest }),
-}));
-vi.mock('@queries/email/draft-cache', () => ({
-  markThreadDraftSaved: mocks.markSaved,
 }));
 vi.mock('@queries/email/draft-lifecycle-events', () => ({
   publishDraftLifecycleChange: mocks.publish,
@@ -130,7 +126,6 @@ describe('makeDiscardDraftAction', () => {
       threadId: 'thread-1',
       linkId: 'work-inbox',
     });
-    expect(mocks.markSaved).toHaveBeenCalledWith('thread-1');
     expect(mocks.deleteQueued).not.toHaveBeenCalled();
     dispose();
   });
