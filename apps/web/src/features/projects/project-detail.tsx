@@ -1,4 +1,5 @@
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
+import { useTouchTopBarsFloat } from '@app/components/view-shell';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
@@ -78,8 +79,8 @@ function ProjectTitleMenu(props: {
 }) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
   const layout = useSplitLayout();
-  const copyLink = makeCopyLinkAction();
-  const copyId = makeCopyEntityIdAction();
+  const copyLink = makeCopyLinkAction({ silent: true });
+  const copyId = makeCopyEntityIdAction({ silent: true });
   const changeIcon = useChangeEntityIcon();
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [renaming, setRenaming] = createSignal(false);
@@ -150,14 +151,9 @@ function ProjectTitleMenu(props: {
           fireAndForget(setOption(property, optionId), 'projects')
         }
         onCopyLink={(row) =>
-          fireAndForget(
-            copyLink.executeByBlock(row.project.id, 'initiative'),
-            'projects'
-          )
+          copyLink.executeByBlock(row.project.id, 'initiative')
         }
-        onCopyId={(row) =>
-          fireAndForget(copyId.executeById(row.project.id), 'projects')
-        }
+        onCopyId={(row) => copyId.executeById(row.project.id)}
         onShare={props.onShare}
         onDelete={() => {
           setError(undefined);
@@ -193,6 +189,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   );
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
+  const barFloats = useTouchTopBarsFloat();
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
@@ -279,7 +276,10 @@ function ProjectDetailHost(props: ProjectDetailProps) {
           )}
         </Show>
       </EntityDetailTopBar>
-      <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
+      <div
+        class="relative min-h-0 min-w-0 flex-1"
+        classList={{ 'touch:[--mobile-content-inset-top:0px]': !barFloats() }}
+      >
         <Suspense
           fallback={<ProjectContentSkeleton section={props.route.section} />}
         >

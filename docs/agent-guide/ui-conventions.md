@@ -12,7 +12,9 @@ keeps loaded items visible. Wait for real rows before navigating or selecting.
 On touch devices, check top bars with a nonzero safe area as well as at phone
 and tablet widths. Collection headers clear the pane's full top content inset:
 safe area only in composable CRM/Tasks/Drive, plus the floating split header in
-Reviews. Native project detail navigation also clears the safe area, with its
+Reviews. Floating entity split headers add the same 0.5rem top gutter as
+collection controls, with that gutter included in the measured content inset.
+Native project detail navigation also clears the safe area, with its
 content directly below it. Content nested below an in-flow header must not add
 the same inset again. See the [mobile layout rule](../../.agents/rules/web/mobile.md#layout-and-chrome).
 
@@ -26,8 +28,11 @@ in a detail header), never inside a group. Action groups use
 `variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
 the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
 (28px controls); collection headers, beside New and Search, use `md`/`icon-md`
-(32px). New and Search retain `md` sizing. A block whose split header is 32px
-passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
+(32px). New and Search retain `md` sizing. The open Search field narrows, down
+to its 96px minimum, before the header's actions would push its end and its
+close button out of view; check a narrowed pane (Customers or Tasks at 760px,
+or beside a docked sidebar) with the field open. A block whose split header is
+32px passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
 island matches.
 Compose their actions with `ButtonGroup.Button`; the group shares Button's frame
 materials while each segment keeps its own interaction states. Standalone Buttons
@@ -39,7 +44,10 @@ belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions
 in the title menu, as the email thread's does. A header split from a shared one
 keeps what it had: a document's or task's also shows the access badge, the sync
-indicator, Ask Macro and, on tablets, Dispatch Agent. Other touch headers keep
+indicator, and Ask Macro; a task's dispatch actions are under Code Actions in
+its title menu at every touch width. A touch view that shows an item beside its list hosts that
+same header in the pane, so it does not change between a split of its own and
+a preview. Other touch headers keep
 their current controls until their views are split. Recent, Folders, and Agents lists use the same islands (filters,
 view options, New, expandable Search) with active filter chips below; Search
 keeps its full-width field with facet chips under it. Inputs, search fields,
@@ -58,24 +66,40 @@ Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
+## More menus
+
+Top-level action rows use one appropriate shared interface icon, including Mute
+and Change icon. Match each action across header, context, preview, and mobile
+menus using the [canonical action icons](../../apps/web/src/components/icon/system/README.md#menu-action-icons);
+simple choices such as mute durations stay text-only. Copy actions
+retain the open menu and focused row; the explicit icon blurs and fades to a plain
+green check after the clipboard write succeeds, then resets after the last copy.
+Labels remain unchanged and success toasts do not appear. A failed copy keeps the
+original icon and reports the error. The same behavior applies to mobile action
+sheets. Ordinary actions close immediately without waiting; desktop Change icon
+and Add tag open the existing pickers inside submenus instead.
+
 ## Entity icons and colors
 
 Ordinary Markdown, snippets, routines, task projects, forms, and databases support
 shared entity appearance. Users with edit access click the header icon or choose
-**Change icon** after Rename in an entity menu, without a leading menu icon.
-Document header icons open the picker separately from their breadcrumb name's
-navigation button. Header buttons are 24px with unchanged 16px glyphs and the
-shared larger touch targets. Row icons still navigate. Sidebar category icons do
+**Change icon** after Rename in an entity menu, with its appearance icon.
+Editable document and task-project header icons open the picker separately from
+their breadcrumb name's navigation button. Read-only and flag-disabled icons stay
+inside that navigation button. Header buttons are 24px with unchanged 16px glyphs
+and the shared larger touch targets. Row icons still navigate. Sidebar category icons do
 not change. Drive folders, tasks, skills, and internal descriptions do not have
 appearance editing.
-Document content titles have no leading icon. Without a custom icon, **Add icon**
-appears before the other title pills for editors.
+Document content titles have no leading icon or Add icon pill; use the header
+icon or More menu to edit appearance.
 Editing requires `enable-entity-appearance`; disabled or loading flags hide all
 entry points, and disabling closes an open picker. Saved appearance remains
 visible, including public/read-only views; API/SDK access and permissions do not
 change. Development defaults on; `VITE_ENABLE_ENTITY_APPEARANCE` overrides it.
 
-Desktop uses a compact 344px anchored popover; phones use a bottom sheet with
+Desktop header icons use a compact 344px anchored popover; desktop menu entries
+use the same picker inside a submenu, with a matching skeleton while its code
+loads instead of the branded logo loader. Phones retain a bottom sheet with
 **Remove**, Icons/Emoji tabs, and **Done**. Picks save immediately and the picker
 stays open. Escape, outside clicks, and Done close without undoing saved choices.
 There is no draft, preview header, or Apply/Cancel footer. Failed saves roll back
@@ -164,6 +188,10 @@ the Chat/Code switch; the open tray gives the input its multiline layout.
 
 ## Scrolling content
 
+On wide touch layouts, floating composers and page actions stay within the
+preview or detail pane that owns them. Their width follows sidebar collapse and
+resizing, while app navigation retains its global placement.
+
 Desktop Email, Drive, and Tasks lists, email threads, and the Channels thread feed
 and navigation lists use a linear 32px top fade as content scrolls
 beneath the header. The fade grows with the scroll
@@ -191,18 +219,20 @@ unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-p
 ## Recipient suggestions
 
 New message/channel, main email, call, routine-template and sharing pickers search personal
-contacts through one bounded window. Type to find later contacts; **Next options**
-or PageDown replaces the window, and ArrowDown at its end advances it. An empty
-window can still have a next page. Touch Next preserves input focus. Closing and
-reopening starts at the first window, without clearing selected/custom chips.
+contacts through one bounded list. Type to find later contacts; scrolling to the
+end lists the next page below the earlier ones, up to 500 rows, and PageDown or
+ArrowDown at the end does the same from the keyboard. A page with no matching
+rows reads on until one matches or the directory ends; only a failed page shows a
+**Retry options** button. Closing and reopening starts at the first page, without
+clearing selected/custom chips.
 Explicit participant/agent/thread choices remain scoped extras. Matching addresses
 are deduplicated while keeping the caller's selected representation. Other recipient surfaces
 are migrating separately; these controls do not change the AI planner's people pool.
 
 ## Property people pickers
 
-Personal user rows and calendar guest pickers use replaceable windows with Next
-options/PageDown. Selections and scoped extras stay independent of the page; names
+Personal user rows and calendar guest pickers list each further page below the
+earlier ones as the list scrolls (PageDown on desktop). Selections and scoped extras stay independent of the page; names
 from a chosen row survive later searches. A returned person page is not capped a
 second time, and broader native/server matches are kept. Search changes immediately
 remove stale person results from keyboard selection while the source debounces its
@@ -236,10 +266,11 @@ Inbox selectors retain their explicit **Only**/**All** reset action.
 Query-driven filter groups keep the existing menu/drawer controls but load only
 while open. Their source keeps all selected IDs in the collection (including
 unavailable values), separately from the current visible window. Do not apply a
-second substring filter to already matched source rows. Next options replaces
-the window; scroll and virtual focus reset only when a replacement is committed,
-not when selection labels or highlights change. Checkbox toggles keep row order
-stable within a window. A zero-result page can still offer Next options.
+second substring filter to already matched source rows. Scrolling to the end
+lists the next page below; scroll and virtual focus reset only for a new search,
+not when a page is added or selection labels or highlights change. Checkbox
+toggles and added pages keep row order stable. A zero-result page reads on by
+itself; only a failed page offers Retry options.
 `ListFilterGroup.createSource` requires explicit `selectedIds` and multiselect;
 static groups keep their existing behavior.
 

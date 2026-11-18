@@ -5,8 +5,8 @@
 The single deployed agent backend: sessions, chat/completions, public workspace
 MCP, routine scheduling, and SSH/HTTP previews all run in this process. The
 app-wide connection gateway remains a separate realtime service. Preview DNS,
-HTTPS/SSH load balancers, and the projection queue have network/resource-only
-Pulumi stacks; they do not host extra agent processes.
+HTTPS/SSH load balancers, and the retired projection queue have
+network/resource-only Pulumi stacks; they do not host extra agent processes.
 
 ## Start here
 
@@ -35,6 +35,10 @@ Pulumi stacks; they do not host extra agent processes.
   ends their work registrations first
   (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
+  Each call runs in an `internal_mcp.call_tool` span parented from the
+  request's `_meta` trace context, which the in-process agent sends
+  (`mcp_toolset::TraceContext::Propagate`), so `code_mode.execution` and the
+  sandbox's SDK calls join the session's trace.
 - `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
   and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
   on Macro credits (Claude Code on a Macro computer). Both values come from
@@ -50,7 +54,7 @@ Pulumi stacks; they do not host extra agent processes.
   `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
   forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
   its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6
-  defaults). `messages` is admitted as `AiFeature::AgentSession`
+  defaults and agent teammates’ Sonnet 5.5 calls). `messages` is admitted as `AiFeature::AgentSession`
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
   only under `ENABLE_AI_USAGE_BILLING`. A caller that hangs up mid-stream does
@@ -169,10 +173,15 @@ Pulumi stacks; they do not host extra agent processes.
   is refused. ChatGPT gets the
   direct tools: its plugin directory refuses generic executors.
   `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
-  the session repo, the `enable-agent-navigation` flag, Redis budgets and
+  the session repo, Redis budgets and
   the gateway `ui_command` send.
   `src/code_mode/connected_apps.rs` serves a running execution's
-  `macro.connectedApps` through the in-process egress service.
+  `macro.connectedApps` through the in-process egress service; a scoped
+  session's code is refused it, and its turn calls no remote MCP tool
+  directly either (`ScopedToolGate::refuse_remote_mcp`). The actor MCP
+  transport is wrapped in `agent_egress::outbound::budgeted_mcp`, so each
+  account's calls to an app are paced; a call still rate limited answers
+  HTTP 429 to the SDK, which throws.
   Code execution's destination list in `src/code_mode.rs` (`SdkHost`) also
   includes the configured editing worker, whose comment-mark endpoint requires
   a scoped document token; this does not grant permission to edit document
@@ -185,8 +194,8 @@ Pulumi stacks; they do not host extra agent processes.
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
   with the user's team as the `team` group. At most 64 sends run at once
   (more are dropped) and each user's team is cached for 10 minutes.
-- `src/cognition/`: existing chat, completions, integrations, and projection
-  workers; the library also exports their OpenAPI document.
+- `src/cognition/`: existing chat, completions, and integrations; the library
+  also exports their OpenAPI document.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
@@ -241,13 +250,22 @@ Pulumi stacks; they do not host extra agent processes.
   the ones still drafting as interrupted within `SHUTDOWN_TIMEOUT`; they
   share the draft store, push `routine_draft_update` through the connection
   gateway, and the same minute's sweep fails drafts whose replica died.
+  Code runs (session, public MCP and routine steps) reach the SDK hosts
+  through the runner's loopback forwarder for users with the PostHog flag
+  `enable-code-execution-egress-proxy` (`code_mode::EgressRollout`); with no
+  flag client, the flag off or the flags unreadable, they go directly. The
+  answer is cached per user for 60 s (10 s after a failed read), so a run
+  doesn't wait on PostHog (span `code_execution.egress_flag`, `cache`).
   Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access (`mint_for_routine`):
   attributed to Macro acting for them, or, when the routine sets
   `dangerously_operate_as_user`, to the owner with no agent badge. Every such
   token carries the routine id, which the events its writes produce keep, so
-  they never start routines.
+  they never start routines. A dry run's token (a code upgrade's check of a
+  rewritten step, at run time or in the startup sweep) also signs the
+  `dry_run` scope (`routine_claims`), so every SDK host refuses its writes
+  even when code gets past the dry run inside its process.
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route and the person's connected
@@ -419,7 +437,7 @@ mark its replacement offline. Keep this lock pool separate from repository pools
 to avoid exhausting the connections needed inside the guarded operation.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
-projection workers before draining sessions and pending publishes. Preview
+cognition workers before draining sessions and pending publishes. Preview
 listener failure shuts down the process so ECS can replace the task.
 
 ## Gotchas

@@ -1,5 +1,8 @@
 import type { CacheHost } from '@graphql-cache/host/types';
-import { PEOPLE_POLICY_VERSION } from '@graphql-cache/people/generated';
+import {
+  PEOPLE_MIN_POLICY_VERSION,
+  PEOPLE_POLICY_VERSION,
+} from '@graphql-cache/people/generated';
 import type { PeopleCache } from '@graphql-cache/people/host';
 import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -12,8 +15,10 @@ import {
 
 const checkpoint = vi.hoisted(() => vi.fn());
 const remote = vi.hoisted(() =>
-  vi.fn(() => {
-    throw new Error('Interactive search must stay local');
+  vi.fn<
+    typeof import('@service-storage/graphql-contacts')['fetchContactDirectoryPage']
+  >(() => {
+    throw new Error('A usable local cache must answer without the server');
   })
 );
 vi.mock('./backfill', () => ({ loadContactCheckpoint: checkpoint }));
@@ -61,7 +66,10 @@ function host() {
 const signal = () => new AbortController().signal;
 beforeEach(() => {
   checkpoint.mockReturnValue({ pages: 200, completedAt: 1 });
-  remote.mockClear();
+  remote.mockReset();
+  remote.mockImplementation(() => {
+    throw new Error('A usable local cache must answer without the server');
+  });
 });
 
 it.each([true, false])(
@@ -108,6 +116,34 @@ it.each([true, false])(
     expect(remote).not.toHaveBeenCalled();
   }
 );
+it('keeps an older native host on its local window down to the policy floor', async () => {
+  const cache = host();
+  cache.people.search.mockResolvedValue({
+    kind: 'page',
+    policyVersion: PEOPLE_MIN_POLICY_VERSION,
+    people: [person],
+    truncated: true,
+    nextCursor: 'position',
+  });
+  const page = await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: 'jo' },
+    signal()
+  );
+  expect(page.source).toBe('cache');
+  expect(page.users.map((user) => user.id)).toEqual([person.userId]);
+  await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: 'jo', cursor: page.nextCursor ?? undefined },
+    signal()
+  );
+  expect(cache.people.search).toHaveBeenLastCalledWith(
+    expect.objectContaining({ cursor: 'position' })
+  );
+  expect(remote).not.toHaveBeenCalled();
+});
 it.each([
   { pages: 0, completedAt: null },
   { pages: 4, completedAt: null },
@@ -134,29 +170,158 @@ it.each([
     (await readContactDirectory(VIEWER, cache, { query: '' }, signal())).sync
   ).toBe(state.pages ? 'partial' : 'cold');
 });
-it('rejects unsupported/old hosts and pending context instead of a semantic downgrade', async () => {
+it('reads server pages when this tab has no usable local cache', async () => {
+  const serverPage = (nextCursor: string | null) => ({
+    user: {
+      id: VIEWER,
+      contacts: {
+        nodes: [
+          {
+            __typename: 'GraphqlContact' as const,
+            id: 'contact-1',
+            userId: 'macro|person@example.com',
+            email: 'person@example.com',
+            name: 'John Smith',
+          },
+          {
+            __typename: 'GraphqlContact' as const,
+            id: 'contact-2',
+            userId: 'macro|excluded@example.com',
+            email: 'excluded@example.com',
+            name: 'Excluded Person',
+          },
+        ],
+        nextCursor,
+      },
+    },
+  });
   const cache = host();
+  const hosts: (ContactDirectoryHost | undefined)[] = [
+    undefined,
+    { ...cache, disabled: true },
+    {
+      ...cache,
+      readQuery: vi
+        .fn<CacheHost['readQuery']>()
+        .mockResolvedValue({ kind: 'miss' }),
+    },
+  ];
   const replies: Awaited<ReturnType<PeopleCache['search']>>[] = [
     { kind: 'unsupported' },
     { kind: 'contextPending' },
     {
       kind: 'page',
-      policyVersion: 4,
+      policyVersion: PEOPLE_MIN_POLICY_VERSION - 1,
+      people: [],
+      truncated: false,
+      nextCursor: null,
+    },
+    {
+      kind: 'page',
+      policyVersion: PEOPLE_POLICY_VERSION + 1,
       people: [],
       truncated: false,
       nextCursor: null,
     },
   ];
   for (const reply of replies) {
-    cache.people.search.mockResolvedValue(reply);
-    await expect(
-      readContactDirectory(VIEWER, cache, { query: '' }, signal())
-    ).rejects.toBeInstanceOf(ContactDirectoryUnavailableError);
+    const unsupported = host();
+    unsupported.people.search.mockResolvedValue(reply);
+    hosts.push(unsupported);
   }
+  const request = {
+    query: 'jo',
+    limit: 7,
+    policy: {
+      mode: 'property' as const,
+      excluded: ['macro|excluded@example.com'],
+    },
+  };
+  for (const unusable of hosts) {
+    remote.mockReset();
+    remote.mockResolvedValue(serverPage('next'));
+    const page = await readContactDirectory(
+      VIEWER,
+      unusable,
+      request,
+      signal()
+    );
+    expect(page.source).toBe('server');
+    expect(page.users).toEqual([
+      {
+        id: 'macro|person@example.com',
+        email: 'person@example.com',
+        name: 'John Smith',
+      },
+    ]);
+    expect(remote).toHaveBeenCalledWith(
+      { limit: 7, after: null, search: 'jo' },
+      expect.anything()
+    );
+
+    // A server continuation keeps paging the server while the cache is unusable.
+    await readContactDirectory(
+      VIEWER,
+      unusable,
+      { ...request, cursor: page.nextCursor ?? undefined },
+      signal()
+    );
+    expect(remote).toHaveBeenLastCalledWith(
+      { limit: 7, after: 'next', search: 'jo' },
+      expect.anything()
+    );
+  }
+
+  // A server continuation stays on the server even once the cache is usable;
+  // the window restarts on the cache's change notification instead.
+  remote.mockResolvedValue(serverPage('next'));
+  const serverWindow = await readContactDirectory(
+    VIEWER,
+    undefined,
+    request,
+    signal()
+  );
+  await readContactDirectory(
+    VIEWER,
+    cache,
+    { ...request, cursor: serverWindow.nextCursor ?? undefined },
+    signal()
+  );
+  expect(cache.people.search).not.toHaveBeenCalled();
+
+  // A local continuation cannot resume on the server's differently ordered pages.
+  const localWindow = await readContactDirectory(
+    VIEWER,
+    cache,
+    request,
+    signal()
+  );
   await expect(
-    readContactDirectory(VIEWER, undefined, { query: '' }, signal())
+    readContactDirectory(
+      VIEWER,
+      undefined,
+      { ...request, cursor: localWindow.nextCursor ?? undefined },
+      signal()
+    )
+  ).rejects.toBeInstanceOf(ContactDirectoryScopeError);
+
+  // Offline, an unusable cache waits for the local cache instead of the server.
+  remote.mockClear();
+  await expect(
+    readContactDirectory(VIEWER, undefined, request, signal(), false)
   ).rejects.toBeInstanceOf(ContactDirectoryUnavailableError);
   expect(remote).not.toHaveBeenCalled();
+
+  // A server page for another account is never shown.
+  remote.mockResolvedValue({
+    user: {
+      id: 'macro|other@example.com',
+      contacts: serverPage(null).user.contacts,
+    },
+  });
+  await expect(
+    readContactDirectory(VIEWER, undefined, request, signal())
+  ).rejects.toBeInstanceOf(ContactDirectoryScopeError);
 });
 it('binds continuations to query, policy, account and storage; rejects changed core versions', async () => {
   const cache = host();

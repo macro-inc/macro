@@ -31,6 +31,35 @@ impl StaticFileServiceClient {
         Ok(file_bytes)
     }
 
+    /// Read file content, refusing one larger than `max_bytes` before
+    /// buffering more than that.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn read_file_bounded(&self, file_id: &str, max_bytes: usize) -> Result<bytes::Bytes> {
+        let full_url = format!("{}/file/{}", self.url, file_id);
+        let mut response = self.client.get(&full_url).send().await?;
+        let status_code = response.status();
+        if status_code == reqwest::StatusCode::NOT_FOUND {
+            anyhow::bail!("File not found: {}", file_id);
+        }
+        if !status_code.is_success() {
+            anyhow::bail!("HTTP {}", status_code);
+        }
+        if response
+            .content_length()
+            .is_some_and(|length| length > max_bytes as u64)
+        {
+            anyhow::bail!("file is larger than {max_bytes} bytes");
+        }
+        let mut body = bytes::BytesMut::new();
+        while let Some(chunk) = response.chunk().await? {
+            if body.len() + chunk.len() > max_bytes {
+                anyhow::bail!("file is larger than {max_bytes} bytes");
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok(body.freeze())
+    }
+
     #[tracing::instrument(skip(self), err)]
     /// Get file metadata from static file service
     pub async fn get_file_metadata(&self, file_id: &str) -> Result<Option<FileMetadata>> {

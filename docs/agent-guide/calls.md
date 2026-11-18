@@ -4,7 +4,7 @@
 
 The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows.
 
-On desktop a collapsible sidebar starts with the shared outlined `New` button;
+Above 720px on desktop, a collapsible sidebar starts with the shared outlined `New` button;
 `Search calls` is in the list header. The sidebar also holds
 the views `All` / `Missed` / `Unattended`, a `Type` section (`Internal` /
 `External`; External means at least one guest without a Macro account joined),
@@ -13,10 +13,11 @@ a type, channel, or tag shows only that one; choosing it again clears it. These
 refinements carry across the three views. The desktop header uses one row:
 title, an outlined filter group, a view-options group, `New`, and an expandable
 Search icon. Command-F expands and focuses search; Close or Escape clears it
-and restores the icon. Phones keep pill tabs and the header search.
-With `enable-quick-calls` enabled, `New call` opens a menu with `Start an instant
-call`, `Call a channel or contact`, and `Manage call links`; without the flag it
-opens the recipient picker directly. `Start an instant call` opens `/app/meet/new`
+and restores the icon. Touch keeps pill tabs and the header search. Above 720px on touch, the Calls
+list stays left of an empty or selected call preview, and Show sidebar opens
+view/filter navigation in a sheet. Ordinary selections remain in the preview.
+`New call` opens a menu with `Start an instant
+call`, `Call a channel or contact`, and `Manage call links`. `Start an instant call` opens `/app/meet/new`
 without creating a meeting, the same setup reached from `New Call` beside
 Calendar's `New event` or `Create` → `Call` (`C C`). Scheduled calls are created
 through Calendar and can be shared with people who do not have a Macro account.
@@ -798,8 +799,9 @@ While a call is live, the controls bar instead has a **Call sharing** dropdown w
 **Team sharing** and **Private** options. Each option explains the resulting team
 access under its name; choosing the current option does not save again. Controls
 are disabled while connecting or saving. Team sharing is canonical **view** access
-(the same `Team access` model documents and AI chats use), enabled by default for
-channel calls. Any participant with edit access can change it, and other
+(the same `Team access` model documents and AI chats use). Calls in DMs and private
+channels start **Private**; calls in team and public channels start with team
+sharing. Any participant with edit access can change it, and other
 participants see it update live. When the call ends, **Team sharing** lets the
 creator's team open the recorded call, read the transcript and AI summary, and find
 it under Calls and in search; **Private** grants no automatic team access.

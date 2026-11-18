@@ -31,7 +31,7 @@ vi.mock('@components/app/mobile-header/mobile-header', () => {
   return { MobileHeader };
 });
 vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
-  BlockSplitFileMenu: (props: { tools: BlockTool[] }) => (
+  SplitFileMenu: (props: { tools: BlockTool[] }) => (
     <menu aria-label="Email actions">
       <For each={props.tools}>
         {(tool) => (
@@ -80,6 +80,7 @@ vi.mock('../../component/useEmailThreadTools', () => ({
         share: action('Share'),
         moveToFolder: action('Move to folder'),
         downloadEml: action('Download'),
+        excludeFromCrm: action('Exclude thread from CRM'),
         trash: action('Delete'),
         senderToSignal: action('Sender → Signal'),
         senderToNoise: action('Sender → Noise'),
@@ -98,7 +99,6 @@ it('keeps the header to the subject and details, with thread actions in the titl
     title: 'A shared email',
     threadId: () => 'thread-1',
     source: {},
-    threadTransport: {},
     host: {},
   } as ComponentProps<typeof MobileEmailThread>;
   render(() => <MobileEmailThread {...props} />);

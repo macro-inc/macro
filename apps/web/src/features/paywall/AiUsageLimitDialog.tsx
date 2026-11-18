@@ -1,11 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import {
-  enableAiUsageBilling,
-  LOCAL_ONLY,
-  PROD_MODE_ENV,
-} from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
@@ -23,7 +17,6 @@ import { queryReadyGate } from '@queries/gate';
 import { createSignal, Suspense } from 'solid-js';
 import {
   formatCreditBalance,
-  isUsageAvailable,
   parseDollarInput,
   validateAutoReload,
 } from '../usage/core/usage';
@@ -56,7 +49,6 @@ export function AiUsageLimitDialog() {
   const { openSettings } = useSettingsState();
   const summary = useAiBillingSummaryQuery({ enabled: usageLimitOpen });
   const plans = useAiBillingPlansQuery();
-  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const usagePreview = useAiUsagePreview();
   const autoReload = useUpdateAiAutoReloadMutation();
   const portal = useCreateBillingPortalMutation();
@@ -70,9 +62,7 @@ export function AiUsageLimitDialog() {
   const [offerError, setOfferError] = createSignal<string>();
   /** The payer's edit to the monthly limit; unset shows the plan default. */
   const [monthlyLimitInput, setMonthlyLimitInput] = createSignal<string>();
-  const available = () =>
-    !usagePreview.beforeLaunch() &&
-    isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
+  const available = () => !usagePreview.beforeLaunch();
   const usageSnapshot = () =>
     usagePreview.withPreview(
       queryReadyGate(summary) ? summary.data : undefined

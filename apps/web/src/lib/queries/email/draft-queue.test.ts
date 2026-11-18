@@ -40,10 +40,6 @@ const mocks = vi.hoisted(() => ({
   assertQueueAvailable: vi.fn(),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: 'graphql-soup',
-  isFeatureEnabled: () => true,
-}));
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: { error: vi.fn(), info: vi.fn() },
 }));
@@ -216,13 +212,12 @@ it.each(['save', 'delete'] as const)(
   }
 );
 
-it('keeps local persistence enabled for GraphQL drafts while the queue is unavailable', () => {
+it('keeps local persistence enabled for drafts while the queue is unavailable', () => {
   mocks.cacheEnabled = false;
   mocks.queueBlocked = true;
-  expect(draftQueueActive('graphql')).toBe(true);
-  expect(draftQueueActive('rest')).toBe(false);
+  expect(draftQueueActive()).toBe(true);
   mocks.queueBlocked = false;
-  expect(draftQueueActive('graphql')).toBe(false);
+  expect(draftQueueActive()).toBe(false);
 });
 
 it('uses resolved IDs for an old-handle save without duplicating the cached draft', async () => {

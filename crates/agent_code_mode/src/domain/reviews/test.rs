@@ -971,6 +971,42 @@ fn questions_use_acp_instead_of_the_saved_review_contract() {
     );
 }
 
+/// A program prompting for the owner (a code-mode run, a routine step)
+/// carries their identity but not their word: its turn cannot decide, and
+/// the owner's own turn in the app still can.
+#[tokio::test]
+async fn a_program_prompted_turn_cannot_decide_but_the_owners_can() {
+    let f = Fixture::new();
+    let row = f
+        .create(vec![
+            json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+        ])
+        .await;
+    *f.actions.prompter.lock().unwrap() = Some(TurnPrompter {
+        action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
+        user: Some(f.actions.owner.clone()),
+        kind: agent_session::domain::model::PrompterKind::Program,
+        client: None,
+    });
+    let decision = ReviewDecision::Submit {
+        revision: row.revision,
+        items: vec![],
+    };
+    assert!(matches!(
+        f.service
+            .decide_for_session(f.session, &f.actions.owner, row.id, decision.clone())
+            .await,
+        Err(CodeModeError::Forbidden)
+    ));
+    assert!(f.actions.calls.lock().unwrap().is_empty());
+    f.actions.prompter.lock().unwrap().as_mut().unwrap().kind =
+        agent_session::domain::model::PrompterKind::User;
+    f.service
+        .decide_for_session(f.session, &f.actions.owner, row.id, decision)
+        .await
+        .unwrap();
+}
+
 #[tokio::test]
 async fn a_system_turn_cannot_approve_even_with_owner_credentials() {
     let f = Fixture::new();
@@ -1262,7 +1298,7 @@ async fn a_view_the_renderer_would_not_draw_is_turned_back_with_what_to_fix() {
     };
     assert_eq!(
         message,
-        "The view was not presented: it does not match the PresentView schema. view.widgets[0].type should be one of `md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `agentUpdates`, `container`. Fix it and present the whole view again."
+        "The view was not presented: it does not match the PresentView schema. view.widgets[0].type should be one of `md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `agentUpdates`, `botCredential`, `container`. Fix it and present the whole view again."
     );
     assert!(f.actions.views.lock().unwrap().is_empty());
 }

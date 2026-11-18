@@ -150,8 +150,8 @@ entire cache in browser memory. With 10s of thousands of cached objects
 - urql usage is imperative-only: `@urql/core` + `fetchExchange`, called via
   `fetchGraphqlSoup()` (`src/lib/service-clients/service-storage/graphql-soup.ts`),
   results mapped to REST `SoupApiItem` shapes and fed into TanStack
-  solid-query infinite queries (`src/lib/queries/soup/items.ts`), gated by
-  `ENABLE_GRAPHQL_SOUP` with REST fallback.
+  solid-query infinite queries (`src/lib/queries/soup/items.ts`), then gated
+  by a feature flag (since removed) with REST fallback.
 - A separate normalization layer exists at the tanstack level:
   `@normy/query-core` (`src/lib/queries/soup/normalized-cache/`).
 - WASM precedent: loro-crdt via `vite-plugin-wasm`; note the documented
@@ -424,7 +424,19 @@ between owners (`owner-handoff-blocked`) leaves the host running, so recovery
 proves that same host readable on its next attempt instead of registering
 another. Unknown storage failures still require explicit recovery or an update
 (the compose banner offers Reload then); retry never rotates the scope or clears
-persisted data.
+persisted data. A page whose build was superseded (`cache-superseded`) never
+retries: that coordinator never hands the database back, so the page waits for
+the reload prompt. A page also stops after ten relapses in a row
+(`MAX_RECOVERY_RELAPSES`): restarts that succeeded but whose cache failed again
+before staying up for a minute. A successful restart no longer resets the
+backoff on its own; the count and backoff reset only once the restarted cache
+stays up. A restart that fails outright, such as a lock another context still
+holds, keeps retrying at the capped backoff. `graphql.cache_recovery` records
+each attempt and its failure, `graphql.cache_recovery_relapse` a restarted host
+that failed before staying up, and `graphql.cache_recovery_stopped` why the page
+stopped.
+Cache failure telemetry adds `cache.error_name` and `cache.error_detail`, each
+from a fixed list (`describeCacheError`), so the message itself never leaves.
 
 A build's coordinator has its build time in the SharedWorker name, so builds
 use separate coordinators even when their coordinator script URL is identical.
@@ -441,7 +453,8 @@ and only the coordinator whose engine holds the database, or is opening or
 draining it, answers:
 
 - **Yield**, if the requester is strictly newer. Every tab registered there gets
-  `cache-superseded`. Each page retires its host to the network. The owner's
+  `cache-superseded`, and later requests are refused with the
+  `cache-superseded` error code rather than `owner-lock-unavailable`. Each page retires its host to the network. The owner's
   page leaves the way a navigating page does: it terminates its engine, which
   releases the owner lock without counting as a lost owner. An enqueue that was
   already sent is reported as uncertain rather than sent again, because it may
@@ -462,7 +475,8 @@ while hidden, online, not holding work (a call or an upload, via
 Otherwise it retries the next time it is hidden or comes back online. A page
 that registers with a superseded coordinator later, for example after a
 rollback or from stale HTML, only runs uncached, because a reload could land on
-the same build again.
+the same build again. Its `cache-unavailable` notice carries `superseded: true`,
+so its host retires with `cache-superseded` and recovery does not retry it.
 
 A coordinator that holds nothing but gets a request from a newer build sends
 its tabs there too, without answering. An unanswered request is posted again
@@ -670,7 +684,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
   reads), all four request policies, push-driven re-execution downgraded to
   `cache-first`, write-through of network results, cache errors degrade to
   network. 8 vitest cases against a scripted fake host.
-- Wired into `graphql-soup.ts` behind `ENABLE_GRAPHQL_SOUP` override
+- Wired into `graphql-soup.ts` (then behind a since-removed override)
   (browser: worker host; Tauri: native host): lazily builds the cached
   client; `fetchGraphqlSoup` uses
   `cache-and-network` (`.toPromise()` skips stale emissions → identical
@@ -690,8 +704,8 @@ apps/web/src/lib/graphql-cache/ # JS glue
   `satisfies EntityResolverConfig`; TypeScript `any`/assertions can bypass
   static checks, but malformed values are rejected during exchange
   construction and validated again by the Rust engine.
-- **Manual smoke test pending**: dev-server run with the override enabled
-  (localStorage `ENABLE_GRAPHQL_SOUP=true`), verify hit/miss + offline
+- **Manual smoke test pending**: dev-server run with the cache enabled,
+  verify hit/miss + offline
   behavior in the browser.
 
 **Phase 5 — write path & coexistence**
@@ -776,7 +790,7 @@ Use one default per data shape:
 | Data shape | Default | Notes |
 | --- | --- | --- |
 | GraphQL document | `createLiveQuery` from `@graphql-cache/solid/create-live-query` | Cursor-paginated documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`. |
-| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the GraphQL Soup flag, REST fallback, grouping, and entity mapping. |
+| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the REST fallback for unsupported queries, grouping, and entity mapping. |
 
 `createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
 document and variables are arguments, other options pass through, and the result
@@ -859,11 +873,14 @@ unrelated fields.
 
 Mounted project details, project identity chips, and agent-session mentions use
 this live path as well. Project identity reads are cache-first; the shared
-`GraphqlUser.initiative` entity resolver lets them reuse complete authorized
+`GraphqlUser.visibleInitiative` entity resolver lets them reuse complete authorized
 project records loaded by Soup or detail queries, without fetching on row remount.
 Missing fields still require an authorized network read. Detail reads retain
 cache-and-network behavior, and identity reads retain explicit permission
-revalidation. Mention lookups share stable batches: adding another visible item
+revalidation. A missing or hidden project reads as `null`, and a stored null
+outranks the project's record when it arrives later (a project shared with
+the viewer again), so project reads show a cached null only after the server
+has confirmed it during that read. Mention lookups share stable batches: adding another visible item
 does not clear an existing item's data or restart its request.
 Project creation links the complete server-normalized record to its detail query,
 including when the user root is not cached yet. Async creation stops publishing
@@ -1364,7 +1381,7 @@ with existing DM peers/inboxes; full channel sources are still in memory.
 The web full-list query/hooks, shared recipient pool and manual contacts GET
 wrapper are removed. Message/native-share/websocket invalidations now issue only
 coalesced `requestContactRefresh()` hints; deployed backend and SDK APIs remain
-compatible. Quick Access reads a replaceable person window rather than a global
+compatible. Quick Access reads a bounded, growing person list rather than a global
 contact item index. Commands/mentions forward typed queries; CRM alias matching
 uses exact lookup for only the current 50-row CRM window. Soup facets and property
 pickers preserve selections separately. General Soup creator menus and chips use
@@ -1447,14 +1464,10 @@ subjects take precedence over stale cached copies; sync retires the recovery row
 The backfill leader also warms `MailAccounts` concurrently with paged hydration
 so first-use offline composition can resolve sender ownership and aliases.
 
-Normalized email Quick Access results require the existing `enable-graphql-soup`
-rollout and a healthy normalized cache; local recovery rows remain available while
-that rollout is enabled even if the cache host is unavailable. The legacy REST
-sources do not supply email Quick Access rows.
-Quick Access observes flag loading reactively so a cold launch can attach the cache
-after PostHog responds. For a local native preview without PostHog configuration,
-build with `VITE_ENABLE_GRAPHQL_SOUP=true` to exercise this path; do not change the
-remote rollout or backfill to make a test pass.
+Normalized email Quick Access results require a healthy normalized cache; local
+recovery rows remain available even if the cache host is unavailable. The legacy
+REST sources do not supply email Quick Access rows. Do not change the backfill
+to make a test pass.
 
 Opening an older cache rebuilds search documents through the existing projection
 version mechanism, preserving normalized records, pending mutations, and storage

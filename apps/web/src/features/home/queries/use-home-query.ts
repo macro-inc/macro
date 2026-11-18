@@ -15,20 +15,12 @@ import {
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
-  enableCalendarUi,
-  enableGraphqlSoup,
   enableInboxNotifiedSort,
-  enableSnippets,
   enableSupportedSoupForeignEntities,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import {
-  type EntityData,
-  isSnippetEntity,
-  type WithNotification,
-} from '@entity';
+import type { EntityData, WithNotification } from '@entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import type { UnifiedNotification } from '@notifications/types';
 import {
@@ -58,6 +50,7 @@ import {
 } from './home-admission';
 import { homeClock, homeTimestamp } from './home-date-buckets';
 import { soupItemMatchesHomeTab } from './home-item-filter';
+import { searchListedHomeEntities } from './home-listed-search';
 import { getHomePagination } from './home-pagination';
 import {
   buildHomeQuery,
@@ -87,9 +80,7 @@ function matchesCapabilities(
   entity: EntityData,
   capabilities: HomeQueryCapabilities
 ): boolean {
-  if (entity.type === 'calendar_event') return capabilities.calendar;
   if (entity.type === 'foreign') return capabilities.foreignEntities;
-  if (isSnippetEntity(entity)) return capabilities.snippets;
 
   return true;
 }
@@ -145,10 +136,8 @@ export function useHomeEntitiesQuery(
   const facetContext = (): HomeFacetContext => ({ notificationSource });
 
   const capabilities = (): HomeQueryCapabilities => ({
-    calendar: isFeatureEnabled(enableCalendarUi),
     foreignEntities: foreignEntities().enabled,
     notifiedSort: notifiedSort().enabled,
-    snippets: isFeatureEnabled(enableSnippets),
   });
 
   const viewContext = createMemo(
@@ -234,25 +223,25 @@ export type HomeListDataSource = HomeDataSource & {
 };
 
 /**
- * Home's list. Desktop Signal reads the server work feed wherever GraphQL
- * Soup is on, since the feed's live changes ride its websocket and cache;
- * every other view (Noise, touch devices, search) merges Soup, notification
- * and recent-activity sources on the client.
+ * Home's list. Desktop Signal reads the server work feed, since the feed's
+ * live changes ride the GraphQL Soup websocket and cache; every other view
+ * (Noise, touch devices) merges Soup, notification and recent-activity
+ * sources on the client. Searching a feed-backed Home lists the feed's rows
+ * whose name matches, then the search service's hits.
  */
 export function useHomeDataSource(
   state: HomeDataSourceInput
 ): HomeListDataSource {
-  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
-  const usesWorkFeed = () =>
-    graphqlSoup().enabled &&
-    state.tab === 'signal' &&
-    !isTouchDevice() &&
-    !state.search.trim();
+  const listsWorkFeed = () => state.tab === 'signal' && !isTouchDevice();
+  const usesWorkFeed = () => listsWorkFeed() && !state.search.trim();
 
+  // The feed stays live while searching: its rows are what the search finds.
+  const workFeed = useWorkFeedHomeDataSource(state, { enabled: listsWorkFeed });
   const soup = useSoupHomeDataSource(state, {
     enabled: () => !usesWorkFeed(),
+    listed: () => (listsWorkFeed() ? workFeed.entities() : undefined),
+    listedLoading: () => listsWorkFeed() && workFeed.isLoading(),
   });
-  const workFeed = useWorkFeedHomeDataSource(state, { enabled: usesWorkFeed });
   const active = (): HomeDataSource => (usesWorkFeed() ? workFeed : soup);
 
   return {
@@ -265,14 +254,21 @@ export function useHomeDataSource(
     isLoadingMore: () => active().isLoadingMore(),
     loadMore: () => active().loadMore(),
     refresh: () => active().refresh(),
+    // Feed rows found by a search complete as feed items too; the delegate
+    // passes on rows the feed does not hold.
     markDoneDelegate: () =>
-      usesWorkFeed() ? workFeed.markDoneDelegate() : undefined,
+      listsWorkFeed() ? workFeed.markDoneDelegate() : undefined,
   };
 }
 
 function useSoupHomeDataSource(
   state: HomeDataSourceInput,
-  options: { enabled: () => boolean }
+  options: {
+    enabled: () => boolean;
+    /** The rows a server-listed Home shows, which search must find. */
+    listed?: () => WithNotification<EntityData>[] | undefined;
+    listedLoading?: () => boolean;
+  }
 ): HomeDataSource {
   const {
     query,
@@ -329,7 +325,9 @@ function useSoupHomeDataSource(
         }))
       : transformEntities(entities);
 
-  const { entityPool } = useSearchContext();
+  const entityPool = useSearchContext().entityPool(() =>
+    Boolean(state.search.trim())
+  );
   const localPool = createMemo(() => {
     if (!state.search.trim()) return [];
     const pool = entityPool();
@@ -405,6 +403,14 @@ function useSoupHomeDataSource(
     });
   }, emptyHomeAdmission());
 
+  const shownEntities = createMemo(() => {
+    const listed = options.listed?.();
+    const query = state.search.trim();
+    if (!listed || !query) return entities().items;
+
+    return searchListedHomeEntities(listed, entities().items, query);
+  });
+
   const usesServiceSearch = search.usesServiceSearch;
   const hasNoTypes = () =>
     state.facets.type?.length === 1 && state.facets.type[0] === 'none';
@@ -431,11 +437,11 @@ function useSoupHomeDataSource(
     if (state.groupBy === 'date' && !search.isSearching()) {
       result = buildGroupedSoupRows(
         mergeRecents()
-          ? groupHomeEntitiesByDate(entities().items, new Date(now()))
-          : groupHomeEntitiesByTabDate(entities().items, viewContext())
+          ? groupHomeEntitiesByDate(shownEntities(), new Date(now()))
+          : groupHomeEntitiesByTabDate(shownEntities(), viewContext())
       );
     } else {
-      result = buildFlatSoupRows(entities().items);
+      result = buildFlatSoupRows(shownEntities());
     }
 
     return result;
@@ -447,10 +453,11 @@ function useSoupHomeDataSource(
     if (!search.isSearching()) {
       return (
         (notificationsLoading() || (mergeRecents() && recentQuery.isLoading)) &&
-        entities().items.length === 0
+        shownEntities().length === 0
       );
     }
-    if (entities().items.length > 0) return false;
+    if (shownEntities().length > 0) return false;
+    if (options.listedLoading?.()) return true;
     if (usesServiceSearch()) return search.isLoading();
     return notificationsLoading();
   };
@@ -467,15 +474,16 @@ function useSoupHomeDataSource(
     error: () => {
       if (hasNoTypes()) return undefined;
       if (!usesServiceSearch())
-        return entities().items.length === 0 && !hasMore()
+        return shownEntities().length === 0 && !hasMore()
           ? (query.error ??
               (mergeRecents() ? recentQuery.error : undefined) ??
               undefined)
           : undefined;
-      return search.error();
+      // The feed's matching rows need no request, so they outlast a failed one.
+      return shownEntities().length === 0 ? search.error() : undefined;
     },
     warning: () => {
-      if (usesServiceSearch() || (entities().items.length === 0 && !hasMore()))
+      if (usesServiceSearch() || (shownEntities().length === 0 && !hasMore()))
         return undefined;
       if (query.error) return 'Notifications could not be refreshed.';
       if (mergeRecents() && recentQuery.error)

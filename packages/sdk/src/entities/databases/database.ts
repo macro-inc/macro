@@ -192,6 +192,7 @@ function typeLabel(type: ColumnType): string {
   return match(type)
     .with({ type: 'text' }, () => 'Text')
     .with({ type: 'number' }, () => 'Number')
+    .with({ type: 'percentage' }, () => 'Percentage')
     .with({ type: 'boolean' }, () => 'Checkbox')
     .with({ type: 'date' }, () => 'Date')
     .with({ type: 'date_range' }, () => 'Time range')
@@ -653,7 +654,8 @@ export class Database extends MacroEntity<DatabaseDetail> {
 
   /**
    * Create a webhook that inserts rows into `table`, writing with the
-   * caller's access. POST a JSON object (one row) or an array of objects to
+   * caller's access; refused to an agent's program (ExecuteCode, a routine),
+   * so there ask the user to create one in Macro. POST a JSON object (one row) or an array of objects to
    * `/databases/webhooks/{token}` on the storage service; keys name columns.
    * The token is the whole credential and is answered only here.
    *

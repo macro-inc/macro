@@ -10,13 +10,17 @@
 
 use std::fmt;
 
+/// The in-VPC self-hosted runner with network access to the databases. Stays
+/// off Namespace deliberately — migrations need to reach RDS.
+pub const DB_MIGRATOR: &str = "db-migrator";
+
 /// A Namespace runner profile. The set of profiles we're allowed to target is
 /// closed; `Display` renders the `runs-on` label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Runner {
     /// Tiny profile for lightweight automation that does not need cache volume.
     TinyNoCache,
-    /// Small profile for light jobs (path filtering, status aggregation).
+    /// Small profile for light jobs (path filtering).
     Small,
     /// Mid-size profile, shared with the deploy workflows. Its *default* cache
     /// volume is churned by deploys, so always pair it with

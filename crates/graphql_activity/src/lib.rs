@@ -50,5 +50,7 @@ pub use overview::{
     ActivityOverviewInput, GraphqlActivityDay, GraphqlActivityEntityRank, GraphqlActivityOverview,
     resolve_activity_overview,
 };
-pub use subscriptions::{ActivitySubscriptionRoot, GraphqlActivityPatch, subscribe_to_activity};
+pub use subscriptions::{
+    ActivitySubscriptionRoot, GraphqlActivityPatch, record_visible, subscribe_to_activity,
+};
 pub use timeline::{resolve_database_activity, resolve_form_activity};

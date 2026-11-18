@@ -1,4 +1,5 @@
 import type {
+  ElementTransformer,
   MultilineElementTransformer,
   TextMatchTransformer,
 } from '@lexical/markdown';
@@ -14,6 +15,7 @@ import {
   EquationNode,
 } from '../nodes/EquationNode';
 import {
+  replaceElementWithUnknownMention,
   replaceTextWithUnknownMention,
   UnknownMentionNode,
 } from './unknownFallback';
@@ -51,6 +53,43 @@ export const I_EQUATION_NODE: TextMatchTransformer = {
     } catch (e) {
       console.error('Error in I_EQUATION_NODE replace:', e);
       replaceTextWithUnknownMention(node, 'Unknown Equation');
+    }
+  },
+};
+
+/**
+ * A display equation at the top level of the document, where the editor and
+ * `$$` blocks put it. Text-match transformers see only an element's children,
+ * so without this it exports as its bare LaTeX. A line holding only a display
+ * equation's tag imports back to the top level. Lexical removes the matched
+ * line before `replace` runs, so the pattern matches display equations alone
+ * and inline ones are left to `I_EQUATION_NODE`.
+ */
+export const I_BLOCK_EQUATION_NODE: ElementTransformer = {
+  dependencies: [EquationNode, UnknownMentionNode],
+  type: 'element',
+  // One tag alone on its line: the body cannot run past a closing tag, and it
+  // must say `"inline": false`.
+  regExp: new RegExp(
+    `^<${TAG_KATEX_EQUATION}>(\\{(?:(?!<\\/${TAG_KATEX_EQUATION}>).)*?"inline"\\s*:\\s*false(?:(?!<\\/${TAG_KATEX_EQUATION}>).)*\\})<\\/${TAG_KATEX_EQUATION}>\\s*$`
+  ),
+  export: (node) => {
+    if (!$isEquationNode(node)) return null;
+    const data = JSON.stringify({
+      equation: node.getEquation(),
+      inline: node.getInline(),
+    });
+    return `<${TAG_KATEX_EQUATION}>${data}</${TAG_KATEX_EQUATION}>`;
+  },
+  replace: (parent, _, match) => {
+    try {
+      const data = JSON.parse(match[1] ?? '');
+      if (typeof data.equation !== 'string')
+        throw new Error('Missing field equation');
+      parent.replace($createEquationNode(data.equation, false));
+    } catch (e) {
+      console.error('Error in I_BLOCK_EQUATION_NODE replace:', e);
+      replaceElementWithUnknownMention(parent, 'Unknown Equation');
     }
   },
 };

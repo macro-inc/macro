@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id,\n                (\n                    GREATEST(s.modified_at, latest.created_at) < $3\n                    AND s.turn_state IS DISTINCT FROM 'starting'\n                    AND s.turn_state IS DISTINCT FROM 'running'\n                    AND s.turn_state IS DISTINCT FROM 'blocked'\n                    AND s.turn_state IS DISTINCT FROM 'stopping'\n                    AND NOT s.turn_interrupted\n                    AND NOT EXISTS (\n                        SELECT 1 FROM agent_session_queue queue\n                        WHERE queue.agent_session_id = s.id\n                          AND jsonb_array_length(queue.entries) > 0\n                    )\n                    AND NOT EXISTS (\n                        SELECT 1 FROM agent_session_tool_approval approval\n                        WHERE approval.agent_session_id = s.id AND approval.status = 'pending'\n                    )\n                    AND NOT EXISTS (\n                        SELECT 1 FROM agent_session_notification notification\n                        WHERE notification.session_id = s.id AND notification.delivered_at IS NULL\n                    )\n                    AND NOT EXISTS (\n                        SELECT 1 FROM agent_conversation_sessions conversation\n                        WHERE conversation.session_id = s.id AND conversation.is_current\n                    )\n                ) AS \"dormant!\"\n            FROM agent_session s\n            LEFT JOIN LATERAL (\n                SELECT created_at FROM agent_session_log\n                WHERE agent_session_id = s.id ORDER BY created_at DESC LIMIT 1\n            ) latest ON true\n            WHERE s.bot_id = ANY($1)\n              AND s.acp_session_id = ANY($2)\n              AND s.archived_by IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "dormant!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "f6a7b6b9697751fa8840e9e14d6288691d4f7925111d111a2d48f68549ebe5d1"
+}

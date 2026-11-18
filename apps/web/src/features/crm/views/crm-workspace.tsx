@@ -1,5 +1,6 @@
 import {
   asideCollapsedPreferenceKey,
+  CollectionPanes,
   SearchBar,
   useViewControlHotkeys,
   ViewNavigationControls,
@@ -10,6 +11,8 @@ import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
@@ -20,9 +23,7 @@ import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
-import { enableCrmActivity } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -40,7 +41,6 @@ import {
   createEffect,
   createSignal,
   type JSX,
-  on,
   onCleanup,
   onMount,
   Show,
@@ -98,10 +98,16 @@ const adoptLegacyCollapsedPreference = Result.fromThrowable(() => {
   localStorage.removeItem(LEGACY_COLLAPSED_PREFERENCE);
 });
 
-/** Split close and Show navigation for CRM headers outside a top bar. */
+/**
+ * Split close and Show navigation for CRM headers outside a top bar. Touch
+ * opens navigation as a sheet from the same pill the list's filter row has.
+ */
 function CrmNavigationControls() {
   return (
-    <Show when={!isTouchDevice()}>
+    <Show
+      when={!isTouchDevice()}
+      fallback={<ViewSidebar.Toggle action="expand" presentation="pill" />}
+    >
       <ViewNavigationControls />
     </Show>
   );
@@ -163,7 +169,7 @@ function CrmHeaderSearch(props: {
       label={props.label}
       value={props.value}
       onValueChange={props.onValueChange}
-      onEscape={view.host.focus}
+      focusResults={view.host.focus}
       registerFocus={(focus) => (focusSearch = focus)}
     />
   );
@@ -188,7 +194,6 @@ export function CrmWorkspaceView(props: {
 }) {
   // Before the shell below reads the preference.
   adoptLegacyCollapsedPreference();
-  const activityFlag = useFeatureFlag(enableCrmActivity);
   const {
     openCreateCompany: openCreateCompanyModal,
     openCreateContact: openCreateContactModal,
@@ -232,6 +237,7 @@ export function CrmWorkspaceView(props: {
     view.host.captureEntryState();
     view.host.record.open([record]);
   };
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const openRecord = (entity: EntityData) => {
     const type = isCrmCompanyEntity(entity)
       ? 'company'
@@ -248,22 +254,17 @@ export function CrmWorkspaceView(props: {
     type: 'company' | 'contact';
     id: string;
   }) =>
-    isTouchDevice()
-      ? openWithSplit(record, { activate: true })
-      : showRecord({ ...record, name: '' });
+    inlinePreviewLayout()
+      ? showRecord({ ...record, name: '' })
+      : openWithSplit(record, { activate: true });
   const apply = useApplyCrmView();
   const teamQuery = useCurrentTeamQuery();
   const teamId = () =>
     teamQuery.isSuccess ? teamQuery.data?.team.id : undefined;
-  const pipelinesEnabled = useCrmContext().pipelinesEnabled();
-  const canCreatePipeline = () =>
-    pipelinesEnabled() && teamQuery.isSuccess && !!teamQuery.data;
-  const pipelines = useCrmContext().createPipelines(() =>
-    pipelinesEnabled() ? teamId() : undefined
-  );
+  const canCreatePipeline = () => teamQuery.isSuccess && !!teamQuery.data;
+  const pipelines = useCrmContext().createPipelines(teamId);
   const [creatingPipeline, setCreatingPipeline] = createSignal(false);
-  const pipelineId = () =>
-    pipelinesEnabled() ? pipelineIdOfTab(view.activeTab()) : undefined;
+  const pipelineId = () => pipelineIdOfTab(view.activeTab());
   const activePipeline = () =>
     pipelines.pipelines().find((pipeline) => pipeline.id === pipelineId());
   // Another tab's list replaces an open record; the same tab returns to its list.
@@ -284,10 +285,8 @@ export function CrmWorkspaceView(props: {
   const peopleActive = () => active() === 'people';
   const activityTab = () => {
     const tab = active();
-    return activityFlag().enabled && isCrmActivityTab(tab) ? tab : undefined;
+    return isCrmActivityTab(tab) ? tab : undefined;
   };
-  const activityPending = () =>
-    isCrmActivityTab(active()) && activityFlag().loading;
   const [exporting, setExporting] = createSignal(false);
   const activeList = () =>
     lists.lists().find((list) => `list:${list.id}` === active());
@@ -338,7 +337,6 @@ export function CrmWorkspaceView(props: {
   const navigate = (id: string) => {
     settings.close();
     if (!listsEnabled() && id.startsWith('list:')) id = 'active';
-    if (!activityFlag().enabled && isCrmActivityTab(id)) id = 'active';
     if (id !== 'people' && !id.startsWith('list:') && !isCrmActivityTab(id))
       id = 'active';
     if (id === active()) view.host.record.close();
@@ -386,30 +384,70 @@ export function CrmWorkspaceView(props: {
       presentation="toolbar"
       onCreateCompany={openCreateCompanyModal}
       onCreateContact={() => openCreateContactModal()}
-      pipeline={
-        pipelinesEnabled()
-          ? {
-              disabled: !canCreatePipeline(),
-              onCreate: () => setCreatingPipeline(true),
-            }
-          : undefined
-      }
+      pipeline={{
+        disabled: !canCreatePipeline(),
+        onCreate: () => setCreatingPipeline(true),
+      }}
     />
   );
-  // Keep cold activity links intact until PostHog resolves; off falls back to Companies.
-  createEffect(
-    on(
-      () => [activityPending(), activityFlag().enabled, active()] as const,
-      ([loading, activityEnabled, tab]) => {
-        if (!loading && isCrmActivityTab(tab) && !activityEnabled)
-          navigate('active');
-      }
-    )
+  const mobileHeader = () => (
+    <div class="flex min-w-0 flex-col gap-2">
+      <CrmMobileTabs
+        active={activeRecord()}
+        pipelines={pipelines.pipelines()}
+        lists={listsEnabled() ? lists.lists() : []}
+        onNavigate={(id) => {
+          const pipeline = pipelineIdOfTab(id);
+          if (pipeline) selectPipeline(pipeline);
+          else navigate(id);
+        }}
+        leading={
+          <>
+            <ViewSidebar.Toggle action="expand" presentation="pill" />
+            <Show when={!peopleActive() && !pipelineId() && !activityTab()}>
+              <Suspense>
+                <MobileFilterDrawer />
+              </Suspense>
+            </Show>
+          </>
+        }
+      />
+
+      <Show when={!peopleActive() && !pipelineId() && !activityTab()}>
+        <Suspense>
+          <SoupFiltersBar />
+        </Suspense>
+      </Show>
+      <Show when={!pipelineId() && !activityTab()}>
+        <div class="flex min-w-0 items-center justify-between gap-3">
+          <Show when={peopleActive()}>
+            <PeopleSearchBar
+              value={peopleSearch()}
+              onValueChange={searchPeople}
+            />
+          </Show>
+          <PeopleDisplayMenu visibility={view.peopleVisibility} />
+          <Show when={peopleActive()}>
+            <Button
+              variant="secondary"
+              class="ml-auto shrink-0"
+              onClick={() => openCreateContactModal()}
+            >
+              <PlusIcon class="size-4" />
+              New contact
+            </Button>
+          </Show>
+        </div>
+      </Show>
+    </div>
   );
   return (
     <ViewShell.Root
+      contentLayout="collection"
       asidePreferenceKey={CRM_ASIDE_PREFERENCE}
+      aside={{ preserveDuringResize: false }}
       main={{ min: 320 }}
+      resizable
     >
       <ViewShell.Aside>
         <Suspense fallback={<CrmListSkeleton label="Loading CRM" />}>
@@ -430,18 +468,16 @@ export function CrmWorkspaceView(props: {
               />
             }
             pipelines={
-              <Show when={pipelinesEnabled()}>
-                <PipelineSidebar
-                  pipelines={pipelines.pipelines()}
-                  activeId={settings.isOpen() ? undefined : pipelineId()}
-                  loading={pipelines.loading()}
-                  error={pipelines.error()}
-                  canCreate={canCreatePipeline()}
-                  onCreate={() => setCreatingPipeline(true)}
-                  onSelect={selectPipeline}
-                  onRetry={() => fireAndForget(pipelines.refresh(), 'crm')}
-                />
-              </Show>
+              <PipelineSidebar
+                pipelines={pipelines.pipelines()}
+                activeId={settings.isOpen() ? undefined : pipelineId()}
+                loading={pipelines.loading()}
+                error={pipelines.error()}
+                canCreate={canCreatePipeline()}
+                onCreate={() => setCreatingPipeline(true)}
+                onSelect={selectPipeline}
+                onRetry={() => fireAndForget(pipelines.refresh(), 'crm')}
+              />
             }
             active={settings.isOpen() ? 'settings' : activeRecord()}
             lists={lists.lists().map((list) => ({
@@ -456,14 +492,10 @@ export function CrmWorkspaceView(props: {
             onNavigate={navigate}
             onCreateCompany={openCreateCompanyModal}
             onCreateContact={() => openCreateContactModal()}
-            pipeline={
-              pipelinesEnabled()
-                ? {
-                    disabled: !canCreatePipeline(),
-                    onCreate: () => setCreatingPipeline(true),
-                  }
-                : undefined
-            }
+            pipeline={{
+              disabled: !canCreatePipeline(),
+              onCreate: () => setCreatingPipeline(true),
+            }}
             onNewList={() => setEditing({ name: '', companyIds: [] })}
             onImport={() => setImporting(true)}
             onExport={() => setExporting(true)}
@@ -471,10 +503,151 @@ export function CrmWorkspaceView(props: {
           />
         </Suspense>
       </ViewShell.Aside>
-      <ViewShell.Main>
-        <Suspense>
-          <CrmEmailOptInBanner />
-        </Suspense>
+      <CollectionPanes
+        hasDetail={settings.isOpen() || recordOpen() || itemOpen()}
+        list={
+          <>
+            <Suspense>
+              <CrmEmailOptInBanner />
+            </Suspense>
+            <MobileListLayout header={mobileHeader()}>
+              <Show when={pipelineId()} keyed>
+                {(id) => (
+                  <Show when={activePipeline()}>
+                    {(pipeline) => (
+                      <PipelineView
+                        pipeline={pipeline()}
+                        source={pipelines}
+                        transfer={{
+                          source: useCrmContext().createPipelineTransfer(
+                            pipeline()
+                          ),
+                          downloadCsv: useCrmContext().downloadCsv,
+                        }}
+                        Sharing={useCrmContext().PipelineSharing}
+                        Editor={PipelineEditor}
+                        onCopyLink={() => copyPipelineLink(id)}
+                        onTrashed={() => navigate('active')}
+                        onOpenRecord={openPipelineRecord}
+                        navigation={<CrmNavigationControls />}
+                      />
+                    )}
+                  </Show>
+                )}
+              </Show>
+              <Show when={pipelineId() && !activePipeline()}>
+                <Show
+                  when={!pipelines.loading()}
+                  fallback={<CrmListSkeleton label="Loading pipeline" />}
+                >
+                  <CrmListError
+                    title={
+                      pipelines.error()
+                        ? 'Could not load this pipeline.'
+                        : 'This pipeline is unavailable or you no longer have access.'
+                    }
+                    onRetry={() => pipelines.refresh()}
+                  />
+                  <Button variant="ghost" onClick={() => navigate('active')}>
+                    Back to companies
+                  </Button>
+                </Show>
+              </Show>
+              <Show when={!pipelineId() && activityTab()} keyed>
+                {(tab) => (
+                  <Suspense
+                    fallback={<CrmListSkeleton label="Loading CRM activity" />}
+                  >
+                    <CrmActivityView
+                      tab={tab}
+                      title={
+                        <ViewSidebar.Title caret={false} title={title()}>
+                          {title()}
+                        </ViewSidebar.Title>
+                      }
+                    />
+                  </Suspense>
+                )}
+              </Show>
+              <Show when={!pipelineId() && !activityTab()}>
+                <Show when={!isTouchDevice()}>
+                  <ListHeader
+                    title={
+                      <ViewSidebar.Title caret={false} title={title()}>
+                        {title()}
+                      </ViewSidebar.Title>
+                    }
+                  >
+                    <Show when={!peopleActive()}>
+                      <HeaderActionGroup label="Company filters" size="md">
+                        <UnifiedFilterDropdown
+                          grouped
+                          hideLabel
+                          variant="ghost"
+                        />
+                      </HeaderActionGroup>
+                      <HeaderActionGroup label="Company view options" size="md">
+                        <SoupViewContextSort grouped />
+                        <SoupViewContextGroup
+                          grouped
+                          hideLabel
+                          variant="ghost"
+                        />
+                        <CompanyDisplayMenu grouped />
+                        <Suspense>
+                          <CompanyViewsMenu grouped hideLabel />
+                        </Suspense>
+                        <Show when={listsEnabled() && activeList()}>
+                          <ButtonGroup.Button
+                            variant="ghost"
+                            onClick={editActiveList}
+                          >
+                            Edit list
+                          </ButtonGroup.Button>
+                        </Show>
+                      </HeaderActionGroup>
+                    </Show>
+                    <PeopleDisplayMenu visibility={view.peopleVisibility} />
+                    {toolbarCreateMenu()}
+                    <CrmHeaderSearch
+                      label={
+                        peopleActive() ? 'Search people' : 'Search companies'
+                      }
+                      value={
+                        peopleActive() ? peopleSearch() : view.searchText()
+                      }
+                      onValueChange={(value) =>
+                        peopleActive()
+                          ? searchPeople(value)
+                          : view.setSearchText(value)
+                      }
+                    />
+                  </ListHeader>
+                  <Show when={!peopleActive()}>
+                    <Suspense>
+                      <CrmFilterChips onReset={() => navigate(active())} />
+                    </Suspense>
+                  </Show>
+                </Show>
+                <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+                  {props.children({
+                    onOpenEntity: inlinePreviewLayout()
+                      ? openRecord
+                      : undefined,
+                    clearPeopleSearch,
+                    editList: activeList() ? editActiveList : undefined,
+                  })}
+                </div>
+              </Show>
+            </MobileListLayout>
+          </>
+        }
+      >
+        <Show when={!isTouchDevice() || !inlinePreviewLayout()}>
+          <Suspense>
+            <CrmEmailOptInBanner />
+          </Suspense>
+        </Show>
         <Show
           when={!settings.isOpen()}
           fallback={
@@ -503,34 +676,6 @@ export function CrmWorkspaceView(props: {
             </>
           }
         >
-          <Show when={isTouchDevice() && !recordOpen() && !itemOpen()}>
-            <ViewShell.Header>
-              <CrmMobileTabs
-                active={activeRecord()}
-                pipelines={pipelinesEnabled() ? pipelines.pipelines() : []}
-                lists={listsEnabled() ? lists.lists() : []}
-                onNavigate={(id) => {
-                  const pipeline = pipelineIdOfTab(id);
-                  if (pipeline) selectPipeline(pipeline);
-                  else navigate(id);
-                }}
-                leading={
-                  <Show
-                    when={!peopleActive() && !pipelineId() && !activityTab()}
-                  >
-                    <Suspense>
-                      <MobileFilterDrawer />
-                    </Suspense>
-                  </Show>
-                }
-              />
-            </ViewShell.Header>
-            <Show when={!peopleActive() && !pipelineId() && !activityTab()}>
-              <Suspense>
-                <SoupFiltersBar />
-              </Suspense>
-            </Show>
-          </Show>
           <Show when={itemKey()} keyed>
             <CrmItemDetail sourceName={activePipeline()?.name ?? title()} />
           </Show>
@@ -547,172 +692,8 @@ export function CrmWorkspaceView(props: {
               navigation={<CrmNavigationControls />}
             />
           </Show>
-          <Show when={!recordOpen() && !itemOpen() && pipelineId()} keyed>
-            {(id) => (
-              <Show when={activePipeline()}>
-                {(pipeline) => (
-                  <PipelineView
-                    pipeline={pipeline()}
-                    source={pipelines}
-                    transfer={{
-                      source: useCrmContext().createPipelineTransfer(
-                        pipeline()
-                      ),
-                      downloadCsv: useCrmContext().downloadCsv,
-                    }}
-                    Sharing={useCrmContext().PipelineSharing}
-                    Editor={PipelineEditor}
-                    onCopyLink={() => copyPipelineLink(id)}
-                    onTrashed={() => navigate('active')}
-                    onOpenRecord={openPipelineRecord}
-                    navigation={<CrmNavigationControls />}
-                  />
-                )}
-              </Show>
-            )}
-          </Show>
-          <Show
-            when={
-              !recordOpen() && !itemOpen() && pipelineId() && !activePipeline()
-            }
-          >
-            <Show
-              when={!pipelines.loading()}
-              fallback={<CrmListSkeleton label="Loading pipeline" />}
-            >
-              <CrmListError
-                title={
-                  pipelines.error()
-                    ? 'Could not load this pipeline.'
-                    : 'This pipeline is unavailable or you no longer have access.'
-                }
-                onRetry={() => pipelines.refresh()}
-              />
-              <Button variant="ghost" onClick={() => navigate('active')}>
-                Back to companies
-              </Button>
-            </Show>
-          </Show>
-          <Show
-            when={
-              !recordOpen() && !itemOpen() && !pipelineId() && activityPending()
-            }
-          >
-            <CrmListSkeleton label="Loading CRM activity" />
-          </Show>
-          <Show
-            when={
-              !recordOpen() && !itemOpen() && !pipelineId() && activityTab()
-            }
-            keyed
-          >
-            {(tab) => (
-              <Suspense
-                fallback={<CrmListSkeleton label="Loading CRM activity" />}
-              >
-                <CrmActivityView
-                  tab={tab}
-                  title={
-                    <ViewSidebar.Title caret={false} title={title()}>
-                      {title()}
-                    </ViewSidebar.Title>
-                  }
-                />
-              </Suspense>
-            )}
-          </Show>
-          <Show
-            when={
-              !recordOpen() &&
-              !itemOpen() &&
-              !pipelineId() &&
-              !activityTab() &&
-              !activityPending()
-            }
-          >
-            <Show
-              when={!isTouchDevice()}
-              fallback={
-                <ViewShell.Header class="touch:pt-0">
-                  <div class="flex min-w-0 items-center justify-between gap-3">
-                    <Show when={peopleActive()}>
-                      <PeopleSearchBar
-                        value={peopleSearch()}
-                        onValueChange={searchPeople}
-                      />
-                    </Show>
-                    <PeopleDisplayMenu visibility={view.peopleVisibility} />
-                    <Show when={peopleActive()}>
-                      <Button
-                        variant="secondary"
-                        class="ml-auto shrink-0"
-                        onClick={() => openCreateContactModal()}
-                      >
-                        <PlusIcon class="size-4" />
-                        New contact
-                      </Button>
-                    </Show>
-                  </div>
-                </ViewShell.Header>
-              }
-            >
-              <ListHeader
-                title={
-                  <ViewSidebar.Title caret={false} title={title()}>
-                    {title()}
-                  </ViewSidebar.Title>
-                }
-              >
-                <Show when={!peopleActive()}>
-                  <HeaderActionGroup label="Company filters" size="md">
-                    <UnifiedFilterDropdown grouped hideLabel variant="ghost" />
-                  </HeaderActionGroup>
-                  <HeaderActionGroup label="Company view options" size="md">
-                    <SoupViewContextSort grouped />
-                    <SoupViewContextGroup grouped hideLabel variant="ghost" />
-                    <CompanyDisplayMenu grouped />
-                    <Suspense>
-                      <CompanyViewsMenu grouped hideLabel />
-                    </Suspense>
-                    <Show when={listsEnabled() && activeList()}>
-                      <ButtonGroup.Button
-                        variant="ghost"
-                        onClick={editActiveList}
-                      >
-                        Edit list
-                      </ButtonGroup.Button>
-                    </Show>
-                  </HeaderActionGroup>
-                </Show>
-                <PeopleDisplayMenu visibility={view.peopleVisibility} />
-                {toolbarCreateMenu()}
-                <CrmHeaderSearch
-                  label={peopleActive() ? 'Search people' : 'Search companies'}
-                  value={peopleActive() ? peopleSearch() : view.searchText()}
-                  onValueChange={(value) =>
-                    peopleActive()
-                      ? searchPeople(value)
-                      : view.setSearchText(value)
-                  }
-                />
-              </ListHeader>
-              <Show when={!peopleActive()}>
-                <Suspense>
-                  <CrmFilterChips onReset={() => navigate(active())} />
-                </Suspense>
-              </Show>
-            </Show>
-            {/* The header above already clears the status bar on touch. */}
-            <div class="flex min-h-0 min-w-0 flex-1 flex-col [--mobile-content-inset-top:0px]">
-              {props.children({
-                onOpenEntity: isTouchDevice() ? undefined : openRecord,
-                clearPeopleSearch,
-                editList: activeList() ? editActiveList : undefined,
-              })}
-            </div>
-          </Show>
         </Show>
-      </ViewShell.Main>
+      </CollectionPanes>
       <Show when={creatingPipeline() && canCreatePipeline()}>
         <PipelineDialog
           onClose={() => setCreatingPipeline(false)}

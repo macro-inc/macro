@@ -250,6 +250,8 @@ interface SoupViewProps {
   header?: JSX.Element;
   /** Compose a detail outlet while keeping the list's state initialized. */
   renderContent?: (list: () => JSX.Element) => JSX.Element;
+  /** Optional composed destination for ordinary row and keyboard activation. */
+  onOpenEntity?: SoupViewListProps['onOpenEntity'];
   /** Pinned above the list's rows, such as a block's tutorial row. */
   listStart?: JSX.Element;
 }
@@ -395,69 +397,88 @@ export const SoupView = (props: SoupViewProps) => {
 
   const content = () => (
     <div
-      class="size-full flex flex-col @container"
+      class="relative size-full flex flex-col @container"
+      style={
+        isTouchDevice() && props.header === undefined
+          ? {
+              '--mobile-content-inset-top':
+                'calc(var(--safe-top, 0px) + 3.75rem)',
+            }
+          : undefined
+      }
       data-list-view={activeListView()}
     >
       <Show when={props.header === undefined} fallback={props.header}>
         <div class="flex flex-col w-full">
-          <SplitHeaderLeft>
-            <div
-              class={cn(
-                'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
-                {
-                  'shrink-0': !isTouchDevice(),
-                  'w-full flex-1 min-w-0': isTouchDevice(),
-                }
-              )}
-            >
-              {/* On mobile/tablet the header strip hosts the filter pills instead of
+          <Show
+            when={!isTouchDevice()}
+            fallback={
+              <header class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex min-w-0 pt-[calc(var(--safe-top,0px)+0.5rem)]">
+                <MobileSoupViewTabs />
+              </header>
+            }
+          >
+            <SplitHeaderLeft>
+              <div
+                class={cn(
+                  'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
+                  {
+                    'shrink-0': !isTouchDevice(),
+                    'w-full flex-1 min-w-0': isTouchDevice(),
+                  }
+                )}
+              >
+                {/* On mobile/tablet the header strip hosts the filter pills instead of
                 the view title (the bottom accessory region now belongs to the
                 global views row). */}
-              <Show when={isTouchDevice()}>
-                <MobileSoupViewTabs />
-              </Show>
-              <Show when={!isTouchDevice()}>
-                <div class="flex items-center gap-1">
-                  <span class="text-sm font-semibold">{props.viewName}</span>
-                  <Show when={docsUrl()}>
-                    {(url) => (
-                      <Button
-                        aria-label="View documentation"
-                        tooltip="View documentation"
-                        size="icon-sm"
-                        variant="ghost"
-                        class="@max-[380px]/split-header:hidden"
-                        onClick={() => openExternalUrl(url())}
-                      >
-                        <InfoIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-                      </Button>
-                    )}
-                  </Show>
-                </div>
-              </Show>
-              <Show when={!isComponentListView('search')}>
-                <Show when={!isTouchDevice()}>
-                  <CollapsibleHeaderItem
-                    id="tabs"
-                    priority={1}
-                    containerClass="h-full"
-                  >
-                    {(isCollapsed) => (
-                      <Show
-                        when={!isCollapsed()}
-                        fallback={props.customTabs ?? <CollapsedSoupViewTabs />}
-                      >
-                        {props.customTabs ?? <SoupViewTabs />}
-                      </Show>
-                    )}
-                  </CollapsibleHeaderItem>
+                <Show when={isTouchDevice()}>
+                  <MobileSoupViewTabs />
                 </Show>
-              </Show>
-              <Show when={!isTouchDevice() && isComponentListView('mail')}>
-                <InboxSelector />
-              </Show>
-            </div>
-          </SplitHeaderLeft>
+                <Show when={!isTouchDevice()}>
+                  <div class="flex items-center gap-1">
+                    <span class="text-sm font-semibold">{props.viewName}</span>
+                    <Show when={docsUrl()}>
+                      {(url) => (
+                        <Button
+                          aria-label="View documentation"
+                          tooltip="View documentation"
+                          size="icon-sm"
+                          variant="ghost"
+                          class="@max-[380px]/split-header:hidden"
+                          onClick={() => openExternalUrl(url())}
+                        >
+                          <InfoIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                        </Button>
+                      )}
+                    </Show>
+                  </div>
+                </Show>
+                <Show when={!isComponentListView('search')}>
+                  <Show when={!isTouchDevice()}>
+                    <CollapsibleHeaderItem
+                      id="tabs"
+                      priority={1}
+                      containerClass="h-full"
+                    >
+                      {(isCollapsed) => (
+                        <Show
+                          when={!isCollapsed()}
+                          fallback={
+                            props.customTabs ?? <CollapsedSoupViewTabs />
+                          }
+                        >
+                          {props.customTabs ?? <SoupViewTabs />}
+                        </Show>
+                      )}
+                    </CollapsibleHeaderItem>
+                  </Show>
+                </Show>
+                <Show when={!isTouchDevice() && isComponentListView('mail')}>
+                  <InboxSelector />
+                </Show>
+              </div>
+            </SplitHeaderLeft>
+          </Show>
           <Show when={!isTouchDevice()}>
             <SplitHeaderRight>
               <Show
@@ -501,7 +522,7 @@ export const SoupView = (props: SoupViewProps) => {
                   label={`Search ${props.viewName}`}
                   value={soupView.searchText()}
                   onValueChange={soupView.setSearchText}
-                  onEscape={() => panel.panelRef()?.focus()}
+                  focusResults={() => panel.panelRef()?.focus()}
                   registerFocus={(focus) => (focusSearch = focus)}
                 />
               </Show>
@@ -518,7 +539,10 @@ export const SoupView = (props: SoupViewProps) => {
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
-          <SoupViewList listStart={props.listStart} />
+          <SoupViewList
+            listStart={props.listStart}
+            onOpenEntity={props.onOpenEntity}
+          />
         </Suspense>
       </div>
       <Suspense>

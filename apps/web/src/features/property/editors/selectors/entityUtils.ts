@@ -1,3 +1,4 @@
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import {
   type Bucket,
   type EntityItem,
@@ -7,7 +8,12 @@ import {
 } from '@core/context/quickAccess';
 import { BUCKET_COMBINATIONS } from '@core/context/quickAccess/types';
 import type { IUser } from '@core/user';
-import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
+import {
+  createFreshSearch,
+  type FreshSortConfig,
+  NAME_MATCH_RANKING,
+  type TimestampedItem,
+} from '@core/util/freshSort';
 import type {
   ChannelEntity,
   ChatEntity,
@@ -72,7 +78,8 @@ export function useQuickAccessEntities<T extends EntityType>(
   entityType: Accessor<T | T[] | null | undefined>,
   searchTerm: Accessor<string> = () => '',
   enabled: Accessor<boolean> = () => true,
-  excludedPeople?: Accessor<ReadonlySet<string>>
+  excludedPeople?: Accessor<ReadonlySet<string>>,
+  readsCache?: Accessor<boolean>
 ) {
   const quickAccess = useQuickAccess();
 
@@ -106,6 +113,7 @@ export function useQuickAccessEntities<T extends EntityType>(
         enabled,
         peopleMode: 'property',
         excludedPeople,
+        readsCache,
       })
     );
   });
@@ -120,6 +128,12 @@ export function useQuickAccessEntities<T extends EntityType>(
     windowKey: () => (enabled() ? list()?.windowKey?.() : undefined),
     loadMore: async () => {
       if (enabled()) await list()?.loadMore();
+    },
+    // A list without its own retry reads its next page again.
+    retry: async () => {
+      const current = list();
+      if (!enabled() || !current) return;
+      await (current.retry ? current.retry() : current.loadMore());
     },
   };
 }
@@ -212,6 +226,7 @@ export function getEntityType(entity: CombinedEntity): EntityType | undefined {
           'database',
           'form',
           'harness',
+          'team',
           'routine',
           'foreign'
         ),
@@ -280,6 +295,27 @@ export function createEntitySearchConfig<T extends CombinedEntity>(
     brevityWeight: 0.1,
     boostFn,
   };
+}
+
+/**
+ * Searches an explicit people-and-agents roster (assignees) by name match, as
+ * the @ menu does, so `rankAgentsAfterPeople` can tell how well each row matches.
+ */
+export function createRosterSearch(
+  currentUserDomain: Accessor<string | undefined>,
+  currentUserId: Accessor<string | undefined>
+) {
+  return createFreshSearch<CombinedEntity>({
+    config: {
+      ...createEntitySearchConfig(currentUserDomain, currentUserId),
+      ...NAME_MATCH_RANKING,
+    },
+    getName: getEntitySearchText,
+    getDisplayName: getEntityName,
+    isPersonItem: (entity) =>
+      entity.kind === 'user' && !isBotPrincipalId(entity.id),
+    getTimestamp: getEntityTimestampedItem,
+  });
 }
 
 /**

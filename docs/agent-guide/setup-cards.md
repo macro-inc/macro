@@ -2,8 +2,7 @@
 
 ## Import from connected apps
 
-With `enable-sidebar-promotions` on (on in dev) and the Pipedream connector stack
-enabled, the Drive, Tasks, and Customers sidebars end with an import card (the
+The Drive, Tasks, and Customers sidebars end with an import card (the
 Chat sidebar's Slack card is the same component under the Slack import gates;
 see [channels](channels.md#imported-slack-history)):
 overlapping provider logos, a two-line pitch, and **Import files**, **Import
@@ -38,6 +37,25 @@ Every other app opens Pipedream's Connect UI inside the dialog. A connected row
 `src/features/connector-import/browser-test/` exercises the connect and
 handoff paths without a backend.
 
+### Import tray
+
+On desktop, signed in, every Notion, Linear, Jira and Slack import run also
+shows in the bottom-right corner, above upload progress (`src/features/import-jobs`,
+mounted in `ToastRegion`). A pill (`2 imports`, with an overall progress ring)
+toggles the list (**Hide imports** / **Show imports**); each row names the
+source and its phase: `Scanning 120 pages` (Linear and Jira: `Reading N
+issues`, Slack: `Finding channels`), `Deciding on N items`, `Waiting for your
+approval`, `Importing 31 of 124` with a percentage, then `Imported`, `Import
+failed` or `Import cancelled`. **Open the <Source> import** opens the agent
+session presenting the review, once one does; Slack rows have no session.
+Runs that stopped moving stay for an hour after their last change, and
+**Dismiss the <Source> import** hides them until they change again. Phones
+never show the tray. It reads `/import/state` (polling only while something
+is running, otherwise on `import_updated` pushes) and each listed workspace
+run's `/import/workspaces/{source}` report. `src/features/import-jobs/browser-test/`
+covers scanning, writing, done, failure, collapse and dismissal without a
+backend.
+
 The connector browser fixture uses in-memory connection responses. Desktop
 and 390-pixel viewport captures show the connected Linear/Jira actions:
 
@@ -60,9 +78,12 @@ card sits above **Settings**, outside the scrolling list.
   If a connected account lacks calendar access the button is **Turn on
   calendar**, and if its grant expired, **Reconnect calendar**; both rerun that
   account's consent like the calendar settings menu. Otherwise **Connect a
-  calendar** adds another Google account (mail and calendar, like **Connect
-  another account**; plans without multi-inbox see the paywall). The card
-  hides once two accounts have working calendar access.
+  calendar** adds another account (mail and calendar, like **Connect another
+  account**; plans without multi-inbox see the paywall) through the provider
+  chooser, which offers Google, and Microsoft when the server offers this user
+  Outlook. The pitch names no provider; the card shows the Google Calendar
+  logo, joined by Outlook's while Outlook is offered. The card hides once two
+  accounts have working calendar access.
 - **Pull requests**: "Bring in more repositories". Without a linked GitHub
   account the button is **Connect GitHub**; with an expired link it is
   **Reconnect GitHub** (the same reauthentication as Settings → GitHub). Once
@@ -74,7 +95,7 @@ card sits above **Settings**, outside the scrolling list.
 
 ## Suggested routines
 
-With `enable-routine-suggestions` and `enable-routine-code-steps` on, the
+With `enable-routine-suggestions` on, the
 Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews and Agents
 sidebars start with a suggestions card while the scheduler has suggestions for
 that area; it never shows on touch devices. The card shows up to three

@@ -1,5 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableCalendarScheduling } from '@core/constant/featureFlags';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Show, Suspense } from 'solid-js';
 import {
@@ -68,26 +66,10 @@ function BookingPageContent(params: BookingPageParams) {
   );
 }
 export function PublicBookingPage(props: BookingPageParams) {
-  // A guest whose browser blocks the flag request must still be able to book;
-  // only an answer that the rollout is off hides the page.
-  const scheduling = useFeatureFlag(enableCalendarScheduling, {
-    enabledWhenUnreachable: true,
-  });
   return (
-    <Show
-      when={scheduling().enabled}
-      fallback={
-        <p class="p-12 text-center text-ink-muted">
-          {scheduling().loading
-            ? 'Loading…'
-            : 'This booking page is unavailable.'}
-        </p>
-      }
-    >
-      <Suspense fallback={<p class="p-12">Loading…</p>}>
-        <BookingPageContent profile={props.profile} slug={props.slug} />
-      </Suspense>
-    </Show>
+    <Suspense fallback={<p class="p-12">Loading…</p>}>
+      <BookingPageContent profile={props.profile} slug={props.slug} />
+    </Suspense>
   );
 }
 

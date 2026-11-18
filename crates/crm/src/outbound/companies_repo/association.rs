@@ -82,7 +82,7 @@ impl CompaniesRepositoryImpl {
         let rows = sqlx::query!(
             r#"
             WITH scope AS (
-                SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1
+                SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
                 UNION ALL
                 SELECT $2::uuid
             )
@@ -98,13 +98,19 @@ impl CompaniesRepositoryImpl {
             -- Contacts under a visible company.
             SELECT NULL, ct.id, NULL, address.email
             FROM crm_companies co
-            JOIN crm_contacts ct
-                ON ct.company_id = co.id AND ct.team_id = co.team_id AND NOT ct.hidden
+            -- Fence contacts by company before applying team and visibility filters.
+            CROSS JOIN LATERAL (
+                SELECT ct.id, ct.team_id, ct.hidden
+                FROM crm_contacts ct
+                WHERE ct.company_id = co.id
+                OFFSET 0
+            ) ct
             LEFT JOIN LATERAL (
                 SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0
             ) address ON TRUE
             WHERE NOT co.hidden
               AND co.team_id = ANY(ARRAY(SELECT team_id FROM scope))
+              AND ct.team_id = co.team_id AND NOT ct.hidden
             UNION ALL
             -- Contacts without a company.
             SELECT NULL, ct.id, NULL, address.email
@@ -164,18 +170,30 @@ impl CompaniesRepositoryImpl {
         if entity_types.is_empty() {
             return Ok(Vec::new());
         }
-        let (viewer, team_id) = match scope {
-            CrmContactListScope::Viewer(user_id) => (Some(user_id), None),
-            CrmContactListScope::Team { team_id, .. } => (None, Some(team_id)),
+        // Authority comes from the primary even when the edge data is read
+        // from a replica. Passing only current permitted team ids also fences
+        // a stale replica membership after the viewer changes teams.
+        let team_ids = match scope {
+            CrmContactListScope::Viewer(user_id) => sqlx::query_scalar!(
+                r#"SELECT team_id FROM team_user
+                   WHERE user_id = $1 AND (crm_access OR team_role <> 'member')"#,
+                user_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?,
+            CrmContactListScope::Team { team_id, .. } => vec![team_id],
         };
+        if team_ids.is_empty() {
+            return Ok(Vec::new());
+        }
         // Bounded like the scope read it stands beside: both grow with the
         // scope's records. On the replica when one is set
         // ([`Self::with_activity_edges_replica`]).
         let mut transaction = Self::bounded_read(&self.activity_edges_pool).await?;
         let rows = sqlx::query_file!(
             "src/outbound/companies_repo/activity_property_edges.sql",
-            viewer,
-            team_id,
+            &team_ids,
             entity_types as &[EntityType],
         )
         .fetch_all(&mut *transaction)
@@ -206,7 +224,7 @@ impl CompaniesRepositoryImpl {
                     r#"
                     SELECT ct.id AS "contact_id?"
                     FROM crm_companies co
-                    JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1
+                    JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
                     LEFT JOIN crm_contacts ct
                         ON ct.company_id = co.id
                        AND (NOT ct.hidden OR tu.team_role <> 'member')
@@ -259,7 +277,7 @@ impl CompaniesRepositoryImpl {
                         SELECT 1
                         FROM crm_contacts ct
                         LEFT JOIN crm_companies co ON co.id = ct.company_id
-                        JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1
+                        JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
                         WHERE ct.id = $2
                           AND (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')
                     ) AS "visible!"

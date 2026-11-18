@@ -1,4 +1,27 @@
 export default {
+  privacyExcludeThread: 'Exclude thread from CRM',
+  privacyThreadExcluded:
+    'Your thread is excluded from CRM. Manage it in Email settings; a teammate’s copy may still be shared.',
+  privacyThreadsTitle: 'Excluded threads',
+  privacyThreadsDescription:
+    'Excluded threads stop sharing your copy through CRM, including mail already shared. A teammate’s contributed copy can still be visible. Company and contact records stay. To exclude a thread, choose “Exclude thread from CRM” in its header or menu.',
+  privacyNoThreads: 'No excluded threads.',
+  privacyThreadNoSubject: '(No subject)',
+  privacyRestoreThread: 'Remove',
+  privacyRestoreThreadLabel: 'Remove {{subject}} from excluded threads',
+  privacyThreadIncluded: 'Thread removed from excluded threads.',
+  privacyIncludeThread: 'Remove from excluded threads',
+  privacyExcludedThread: 'Excluded from CRM. Remove from excluded threads',
+  privacyThreadNotOwned: 'This thread is not in your mailbox.',
+  privacyThreadNotShared: 'Your email isn’t shared with CRM.',
+  privacyThreadOtherMailbox: 'This mailbox isn’t shared with CRM.',
+  privacyThreadNoTeam: 'Join a team to share email with CRM.',
+  privacyThreadLoading: 'Checking CRM email sharing…',
+  privacyThreadLoadFailed: 'Could not check CRM email sharing. Try again.',
+  privacyThreadSaving: 'Saving CRM email sharing…',
+  privacyThreadsFirst: 'Back to first page',
+  privacyThreadsNext: 'Next page',
+
   email: 'Email',
   addEmail: 'Add email',
   manageContactEmail: 'Email options for {{email}}',
@@ -75,6 +98,22 @@ export default {
   pipelinePrivate: 'Private',
   loadingPipelines: 'Loading pipelines…',
   pipelinesLoadFailed: 'Could not load pipelines. Retry',
+  addToPipeline: 'Add to pipeline',
+  addToPipelineNoCompanyPipelines: 'No company pipelines yet',
+  addToPipelineNoContactPipelines: 'No contact pipelines yet',
+  addToPipelineReadOnly: "You can't add records to this pipeline",
+  addToPipelineBack: 'Back to pipelines',
+  addToPipelineContactAlreadyIn: 'This contact is already in this pipeline',
+  addToPipelineInStages: 'In {{stages}}',
+  addToPipelineIn: 'Already in this pipeline',
+  addToPipelineLoadingStages: 'Loading stages…',
+  addToPipelineStagesFailed: 'Could not load stages',
+  addToPipelineFormFailed: 'Could not open {{pipeline}}. Try again.',
+  addToPipelineNoStages: 'Add to {{pipeline}}',
+  addToPipelineUncertain:
+    'Could not confirm the add to {{pipeline}}. Check its Pipelines card before trying again.',
+  addedToPipeline: 'Added to {{pipeline}}',
+  addedToPipelineStage: 'Added to {{pipeline}} at {{stage}}',
   lists: 'Lists',
   listsNavigation: 'Company lists',
   newList: 'New list',
@@ -125,6 +164,10 @@ export default {
   privacyTeamDomainLabel: 'Domain to block for the team',
   privacyPersonalDomainLabel: 'Domain to block for my emails',
   privacyDomainPlaceholder: 'example.com',
+  privacyCompanyMailboxDomain:
+    "Colleagues on a mailbox's own company domain are already kept out of the CRM. Blocking this domain would hide all of that mailbox's email.",
+  privacyPersonalMailboxDomain:
+    "Blocking this domain would hide all of a connected mailbox's email from the CRM.",
   privacyAddDomain: 'Add domain',
   privacyLoadFailed: 'Email settings could not be loaded.',
   privacyLoading: 'Loading email settings…',
@@ -149,4 +192,6 @@ export default {
   privacyCompanyDescription:
     'Manage your mailbox contribution and excluded domains. Email exclusions preserve company and contact records.',
   privacyUpdateFailed: 'Could not update CRM email settings',
+  privacyRefreshFailed:
+    'Your email settings were saved, but some views could not refresh. Reload to see the latest state.',
 };

@@ -1,13 +1,15 @@
 import type { IUser } from '@core/user/types';
 import type { CacheHost } from '@graphql-cache/host/types';
 import {
+  PEOPLE_MIN_POLICY_VERSION,
   PEOPLE_POLICY_VERSION,
   type PeopleSearch,
   type PeopleSearchResult,
 } from '@graphql-cache/people/generated';
 import { isStaleHydrationScopeError } from '@graphql-cache/protocol';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { ContactDirectoryFieldsFragment } from '@service-storage/graphql/generated/graphql';
+import { fetchContactDirectoryPage } from '@service-storage/graphql-contacts';
 import { hashKey } from '@tanstack/solid-query';
 import { loadContactCheckpoint } from './backfill';
 import {
@@ -19,7 +21,8 @@ import {
 export { ContactDirectoryScopeError } from './cache-scope';
 export const CONTACT_WINDOW_SIZE = 50;
 
-/** Hydration or context publication can make a later local read available. */
+/** Offline without a usable local cache; hydration or context publication can
+ * make a later local read available. */
 export class ContactDirectoryUnavailableError extends Error {
   constructor() {
     super(
@@ -28,14 +31,22 @@ export class ContactDirectoryUnavailableError extends Error {
   }
 }
 
-export type ContactDirectoryCursor = {
-  source: 'people';
-  userId: string;
-  query: string;
-  generation: string;
-  after: string;
-  policyKey: string;
-};
+export type ContactDirectoryCursor =
+  | {
+      source: 'people';
+      userId: string;
+      query: string;
+      generation: string;
+      after: string;
+      policyKey: string;
+    }
+  | {
+      source: 'server';
+      userId: string;
+      query: string;
+      after: string;
+      policyKey: string;
+    };
 export type ContactPeoplePolicy = Pick<
   PeopleSearch,
   'mode' | 'excluded' | 'senderDomain'
@@ -54,7 +65,7 @@ export type ContactDirectoryPage = {
   users: IUser[];
   people?: RankedPerson[];
   query: string;
-  source: 'cache';
+  source: 'cache' | 'server';
   sync: 'cold' | 'partial' | 'snapshot' | 'unavailable';
   offline: boolean;
   nextCursor: ContactDirectoryCursor | null;
@@ -78,8 +89,9 @@ export function contactToUser(contact: ContactDirectoryFieldsFragment): IUser {
   };
 }
 
-/** Interactive suggestions read only the existing local indexed projection.
- * Incomplete hydration is an explicit partial window, never a remote search. */
+/** Interactive suggestions read the local indexed projection; incomplete
+ * hydration is an explicit partial window. Only when this tab has no usable
+ * local cache, and is online, do they read bounded server pages instead. */
 export async function readContactDirectory(
   viewer: string,
   host: ContactDirectoryHost | undefined,
@@ -94,19 +106,7 @@ export async function readContactDirectory(
       mode: 'property',
       excluded: [],
     };
-    if (
-      !viewer ||
-      !Number.isInteger(limit) ||
-      limit < 1 ||
-      limit > 500 ||
-      new TextEncoder().encode(request.query).length > 512 ||
-      policy.excluded.length > 500 ||
-      policy.excluded.some(
-        (id) => new TextEncoder().encode(id).length > 1024
-      ) ||
-      (policy.senderDomain != null &&
-        new TextEncoder().encode(policy.senderDomain).length > 255)
-    )
+    if (!viewer || !isBoundedWindow(request.query, limit, policy))
       throw new Error('Invalid contact window');
     const policyKey = hashKey([policy]);
     if (
@@ -116,80 +116,223 @@ export async function readContactDirectory(
         request.cursor.policyKey !== policyKey)
     )
       throw new ContactDirectoryScopeError();
-    const people = host?.people;
-    if (!host || host.disabled || !people)
-      throw new ContactDirectoryUnavailableError();
-    const generation = await readContactCacheScope(host, viewer, signal);
-    if (!generation) throw new ContactDirectoryUnavailableError();
-    if (request.cursor && request.cursor.generation !== generation)
-      throw new ContactDirectoryScopeError();
     span.setAttr('contacts.query_length', request.query.length);
     span.setAttr('contacts.limit', limit);
-    let result: Awaited<ReturnType<typeof people.search>>;
-    try {
-      result = await span.span('contacts.read_cached_window', () =>
-        people.search({
-          ...policy,
-          scope: { identity: viewer, storageGeneration: generation },
-          query: request.query,
-          limit,
-          nowMs: Date.now(),
-          cursor: request.cursor?.after,
-        })
-      );
-    } catch (error) {
-      if (
-        isStaleHydrationScopeError(error) ||
-        (error instanceof Error &&
-          error.message === 'contact search cursor changed')
-      )
-        throw new ContactDirectoryScopeError();
-      throw error;
-    }
-    signal.throwIfAborted();
-    await assertContactCacheScope(host, viewer, generation, signal);
-    if (
-      result.kind !== 'page' ||
-      result.policyVersion !== PEOPLE_POLICY_VERSION
-    )
-      throw new ContactDirectoryUnavailableError();
-    if (result.people.length > limit)
-      throw new Error('Contact response exceeds its window');
-    const checkpoint = loadContactCheckpoint(viewer, generation);
-    const sync =
-      checkpoint.completedAt !== null
-        ? 'snapshot'
-        : checkpoint.pages || result.people.length
-          ? 'partial'
-          : 'cold';
-    span.setAttr('contacts.source', 'cache');
-    span.setAttr('contacts.sync', sync);
-    span.setAttr('contacts.result_count', result.people.length);
-    return {
-      users: result.people.map((person) => ({
-        id: person.userId,
-        name: person.name,
-        email: person.email,
-        lastInteraction:
-          person.lastInteractionMs == null
-            ? undefined
-            : new Date(person.lastInteractionMs),
-      })),
-      people: result.people,
-      query: request.query,
-      source: 'cache',
-      sync,
-      offline: !online,
-      nextCursor: result.nextCursor
-        ? {
-            source: 'people',
-            userId: viewer,
-            query: request.query,
-            generation,
-            after: result.nextCursor,
-            policyKey,
-          }
-        : null,
+    span.setAttr('contacts.mode', policy.mode);
+    // Pickers read further pages by themselves as their lists scroll.
+    span.setAttr('contacts.continuation', !!request.cursor);
+    const input = {
+      viewer,
+      request,
+      policy,
+      policyKey,
+      limit,
+      signal,
+      online,
+      span,
     };
+    // A server continuation keeps paging the server; a cache change or a new
+    // query restarts the window, which then tries the local cache first.
+    const local =
+      request.cursor?.source === 'server'
+        ? undefined
+        : await readLocalWindow(host, input);
+    if (!local && !online) throw new ContactDirectoryUnavailableError();
+    const page = local ?? (await readServerWindow(input));
+    span.setAttr('contacts.source', page.source);
+    span.setAttr('contacts.sync', page.sync);
+    span.setAttr('contacts.result_count', page.users.length);
+    return page;
   });
+}
+
+/** Whether a request fits the transport's input bounds. */
+function isBoundedWindow(
+  query: string,
+  limit: number,
+  policy: ContactPeoplePolicy
+): boolean {
+  const bytes = (value: string) => new TextEncoder().encode(value).length;
+  return (
+    Number.isInteger(limit) &&
+    limit >= 1 &&
+    limit <= 500 &&
+    bytes(query) <= 512 &&
+    policy.excluded.length <= 500 &&
+    policy.excluded.every((id) => bytes(id) <= 1024) &&
+    (policy.senderDomain == null || bytes(policy.senderDomain) <= 255)
+  );
+}
+
+/** How far contact hydration has progressed for this storage generation. */
+function localSync(
+  viewer: string,
+  generation: string,
+  resultCount: number
+): ContactDirectoryPage['sync'] {
+  const checkpoint = loadContactCheckpoint(viewer, generation);
+  if (checkpoint.completedAt !== null) return 'snapshot';
+  return checkpoint.pages || resultCount ? 'partial' : 'cold';
+}
+
+type WindowInput = {
+  viewer: string;
+  request: ContactDirectoryRequest;
+  policy: ContactPeoplePolicy;
+  policyKey: string;
+  limit: number;
+  signal: AbortSignal;
+  online: boolean;
+  span: Span;
+};
+
+/** Reads the local ranked projection. Returns undefined when this tab has no
+ * usable cache for the viewer: no host, a retired or unsupported host, an
+ * unbound viewer, a pending context, or an older people policy. */
+async function readLocalWindow(
+  host: ContactDirectoryHost | undefined,
+  {
+    viewer,
+    request,
+    policy,
+    policyKey,
+    limit,
+    signal,
+    online,
+    span,
+  }: WindowInput
+): Promise<ContactDirectoryPage | undefined> {
+  const people = host?.people;
+  if (!host || host.disabled || !people) return undefined;
+
+  const generation = await readContactCacheScope(host, viewer, signal);
+  if (!generation) return undefined;
+
+  // A continuation only resumes the storage generation that issued it.
+  if (
+    request.cursor?.source === 'people' &&
+    request.cursor.generation !== generation
+  )
+    throw new ContactDirectoryScopeError();
+
+  let result: Awaited<ReturnType<typeof people.search>>;
+  try {
+    result = await span.span('contacts.read_cached_window', () =>
+      people.search({
+        ...policy,
+        scope: { identity: viewer, storageGeneration: generation },
+        query: request.query,
+        limit,
+        nowMs: Date.now(),
+        cursor: request.cursor?.after,
+      })
+    );
+  } catch (error) {
+    if (
+      isStaleHydrationScopeError(error) ||
+      (error instanceof Error &&
+        error.message === 'contact search cursor changed')
+    )
+      throw new ContactDirectoryScopeError();
+    throw error;
+  }
+  signal.throwIfAborted();
+  await assertContactCacheScope(host, viewer, generation, signal);
+
+  // Native hosts (desktop, iOS, Android) keep an older policy until their next
+  // app release; its windows differ only in order, so they stay local.
+  if (
+    result.kind !== 'page' ||
+    result.policyVersion < PEOPLE_MIN_POLICY_VERSION ||
+    result.policyVersion > PEOPLE_POLICY_VERSION
+  ) {
+    // A local continuation cannot move to the server's ID-ordered pages.
+    if (request.cursor) throw new ContactDirectoryScopeError();
+    return undefined;
+  }
+  if (result.people.length > limit)
+    throw new Error('Contact response exceeds its window');
+
+  const sync = localSync(viewer, generation, result.people.length);
+  return {
+    users: result.people.map((person) => ({
+      id: person.userId,
+      name: person.name,
+      email: person.email,
+      lastInteraction:
+        person.lastInteractionMs == null
+          ? undefined
+          : new Date(person.lastInteractionMs),
+    })),
+    people: result.people,
+    query: request.query,
+    source: 'cache',
+    sync,
+    offline: !online,
+    nextCursor: result.nextCursor
+      ? {
+          source: 'people',
+          userId: viewer,
+          query: request.query,
+          generation,
+          after: result.nextCursor,
+          policyKey,
+        }
+      : null,
+  };
+}
+
+/** Without a usable local cache, reads one bounded server page. The server
+ * filters by name/email subsequence in contact-ID order, without the local
+ * recency ranking; explicit exclusions are applied here. A page may be empty
+ * and still continue. */
+async function readServerWindow({
+  viewer,
+  request,
+  policy,
+  policyKey,
+  limit,
+  signal,
+  online,
+  span,
+}: WindowInput): Promise<ContactDirectoryPage> {
+  // A server continuation cannot resume a local page.
+  if (request.cursor && request.cursor.source !== 'server')
+    throw new ContactDirectoryScopeError();
+
+  const result = await span.span('contacts.read_server_window', () =>
+    fetchContactDirectoryPage(
+      {
+        limit,
+        after: request.cursor?.after ?? null,
+        search: request.query || null,
+      },
+      signal
+    )
+  );
+  if (result.user.id !== viewer) throw new ContactDirectoryScopeError();
+
+  const page = result.user.contacts;
+  if (page.nodes.length > limit)
+    throw new Error('Contact response exceeds its window');
+
+  const excluded = new Set(policy.excluded.map((id) => id.toLowerCase()));
+  return {
+    users: page.nodes
+      .map(contactToUser)
+      .filter((user) => !excluded.has(user.id.toLowerCase())),
+    query: request.query,
+    source: 'server',
+    sync: 'unavailable',
+    offline: !online,
+    nextCursor: page.nextCursor
+      ? {
+          source: 'server',
+          userId: viewer,
+          query: request.query,
+          after: page.nextCursor,
+          policyKey,
+        }
+      : null,
+  };
 }

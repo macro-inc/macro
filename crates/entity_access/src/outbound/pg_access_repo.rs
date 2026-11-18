@@ -3,6 +3,9 @@
 pub(crate) mod queries;
 
 pub use queries::agent_session_access::accessible_session_ids;
+pub use queries::email_thread_shares::{
+    SharedEmailThread, project_email_threads, project_shared_email_threads, shared_email_threads,
+};
 pub use queries::{SourceIds, get_team_scope_source_ids, get_user_source_ids};
 
 #[cfg(test)]
@@ -405,7 +408,10 @@ impl AccessRepository for PgAccessRepository {
         let id = id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid pipeline ID"))?;
-        let sources = user_source_ids(&self.pool, user_id).await?;
+        let sources =
+            queries::pipeline_access::user_sources(&self.pool, user_id.map(|user| user.as_ref()))
+                .await?;
+        record_source_ids(sources.0.len());
         Ok(queries::pipeline_access::get_pipeline_access(&self.pool, id, &sources).await?)
     }
 
@@ -414,7 +420,9 @@ impl AccessRepository for PgAccessRepository {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
-        let sources = user_source_ids(&self.pool, Some(user_id)).await?;
+        let sources =
+            queries::pipeline_access::user_sources(&self.pool, Some(user_id.as_ref())).await?;
+        record_source_ids(sources.0.len());
         Ok(queries::pipeline_access::list_pipeline_access(&self.pool, &sources).await?)
     }
 
@@ -427,7 +435,9 @@ impl AccessRepository for PgAccessRepository {
         if ids.is_empty() {
             return Ok(HashMap::new());
         }
-        let sources = user_source_ids(&self.pool, Some(user_id)).await?;
+        let sources =
+            queries::pipeline_access::user_sources(&self.pool, Some(user_id.as_ref())).await?;
+        record_source_ids(sources.0.len());
         Ok(queries::pipeline_access::get_pipelines_access(&self.pool, ids, &sources).await?)
     }
 
@@ -840,6 +850,18 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(skip_all, err)]
+    async fn visible_crm_entities(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        entities: &[(EntityType, String)],
+    ) -> Result<std::collections::HashSet<(EntityType, String)>, AccessError> {
+        Ok(
+            queries::crm_batch_access::visible_entities(&self.pool, user.as_ref(), entities)
+                .await?,
+        )
+    }
+
     #[tracing::instrument(err, skip(self, user_id))]
     async fn get_crm_company_access(
         &self,
@@ -912,6 +934,17 @@ impl AccessRepository for PgAccessRepository {
         entity_id: &uuid::Uuid,
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        if entity_type == EntityType::CrmPipeline {
+            return Ok(queries::entity_audiences::get_entity_audiences(
+                &self.pool,
+                &[*entity_id],
+                entity_type,
+            )
+            .await?
+            .into_iter()
+            .flat_map(|audience| audience.users)
+            .collect());
+        }
         if matches!(entity_type, EntityType::CrmCompany | EntityType::CrmContact) {
             return queries::crm_entity_users::get_crm_entity_users(
                 &self.pool,

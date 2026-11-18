@@ -54,12 +54,12 @@ import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import MessageIcon from '@icon/system/regular/chat-circle.svg';
 import ThreadIcon from '@icon/system/regular/chats-circle.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
+import SplitIcon from '@icon/system/regular/columns.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import GitBranchIcon from '@icon/system/regular/git-branch.svg';
 import HighlightIcon from '@icon/system/regular/highlighter-circle.svg';
-import Link from '@icon/system/regular/link.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import MapPinIcon from '@icon/system/regular/map-pin-simple.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
@@ -766,24 +766,20 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     try {
       const mentionTarget = calendarMentionTarget();
       if (mentionTarget) {
-        await copyCalendarEventMentionTarget(mentionTarget);
-        return;
+        return copyCalendarEventMentionTarget(mentionTarget, { silent: true });
       }
 
       await navigator.clipboard.writeText(documentLink());
-      toast.success('Copied document link to clipboard');
+      return true;
     } catch (e) {
       console.error(e);
       toast.failure('Could not copy link');
+      return false;
     }
   };
 
-  const handleCopyBranchName = () => {
-    fireAndForget(
-      copyBranchNameToClipboard(props.documentInfo.id),
-      'document-preview'
-    );
-  };
+  const handleCopyBranchName = () =>
+    copyBranchNameToClipboard(props.documentInfo.id, { silent: true });
 
   const isSplitAlreadyOpen = () => {
     const splitManager = globalSplitManager();
@@ -917,15 +913,19 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                 Ask Macro
               </Dropdown.Item>
             </Show>
-            <Dropdown.Item onSelect={handleCopy}>
-              <Link class="size-4" />
+            <Dropdown.CopyItem
+              icon={<LinkIcon class="size-4" />}
+              onCopy={handleCopy}
+            >
               Copy Link
-            </Dropdown.Item>
+            </Dropdown.CopyItem>
             <Show when={props.documentInfo.type === 'task'}>
-              <Dropdown.Item onSelect={handleCopyBranchName}>
-                <GitBranchIcon class="size-4" />
+              <Dropdown.CopyItem
+                icon={<GitBranchIcon class="size-4" />}
+                onCopy={handleCopyBranchName}
+              >
                 Copy Branch Name
-              </Dropdown.Item>
+              </Dropdown.CopyItem>
             </Show>
             <Show when={isOpenable() && !isSplitAlreadyOpen()}>
               <Dropdown.Item
@@ -933,7 +933,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                   fireAndForget(openInNewSplit(), 'document-preview')
                 }
               >
-                <ColumnsPlusRight class="size-4" />
+                <SplitIcon class="size-4" />
                 Open in New Split
               </Dropdown.Item>
             </Show>
@@ -1232,6 +1232,7 @@ export function PopupPreview(
             previewInfo={props.previewInfo}
             snapshotInfo={props.snapshotInfo}
             useFallbackData={props.useFallbackData}
+            onOpened={props.onOpened}
           />
         </Suspense>
       </Card>

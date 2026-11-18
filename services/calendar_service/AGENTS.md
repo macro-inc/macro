@@ -57,10 +57,11 @@ gateway `/calendar` prefix.
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
 - The HTTP API and every background worker share one tokio runtime, on a
-  Fargate task of 0.5 vCPU (prod) or 0.25 vCPU (dev) that the Datadog agent
-  and log router sidecars share. Each worker round that does work runs in its
-  own root span (`calendar.sync_scheduler`, `google_backfill`,
-  `calendar.outlook_sync`, `calendar.projection_relay`,
+  Fargate task of 1 vCPU (prod) or 0.5 vCPU (dev) that the Datadog agent and
+  log router sidecars share (and Grafana Alloy in dev). Each worker round that
+  does work runs in its own root span (`calendar.sync_scheduler`,
+  `google_backfill`, `calendar.outlook_sync`, `calendar.outlook_queue_depth`,
+  `calendar.projection_relay`,
   `calendar.replacement_recovery`, `recover_once`), so a
   `tokio runtime starvation detected` warning can be matched to the rounds
   running at that moment. Read its `cpu_wait_ms` first: near `delay_ms`, the
@@ -68,6 +69,17 @@ gateway `/calendar` prefix.
   per task points at its quota running out, which work anywhere in the task
   (these rounds included) can cause; moving code to `spawn_blocking` would not
   help there.
+- The Outlook sync runs `OUTLOOK_SYNC_LOOPS` (eight) claim loops per task,
+  plus a one-minute queue-depth tick (`calendar.outlook_queue_depth`). The
+  loop count is a code constant, not configuration: one item per account at a
+  time keeps it safe at any count, and autoscaling to three tasks runs 24.
+  Google's calendar sync runs its 25 backfill workers in the same process.
+- The Outlook projection relay (`calendar.projection_relay`) claims up to
+  `PROJECTION_BATCH` due revisions a round, publishes each to Kafka
+  (`calendar.projection_publish`), and refreshes each inbox the batch changed
+  once. A round that claims fewer waits for the next two-second poll, so a
+  first import or a bulk change refreshes open clients about every two
+  seconds instead of once per event.
 - Reauth-required notifications ride the shared `LinkManagerQueue`, consumed by
   `email_service`; don't add a second calendar-specific reconnect notification.
 - Forward `team_ooo_changed` to both inbox and teammate refresh notifications;

@@ -1,4 +1,9 @@
-import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import {
+  CollectionPanes,
+  ViewBreadcrumbs,
+  ViewShell,
+} from '@app/components/view-shell';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { openProject } from '@app/features/projects/open-project';
 import { ProjectsTab } from '@app/features/projects/projects';
 import {
@@ -25,7 +30,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { TasksHeader, TaskViewBreadcrumbItem } from './components/TasksHeader';
-import { TasksMobileTabs } from './components/TasksMobileTabs';
+import { TasksMobileControls } from './components/TasksMobileControls';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TASK_TABS } from './constants';
 import { isProjectTab } from './core/task-navigation';
@@ -97,7 +102,8 @@ function ImportLinearAction() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, projectsEnabled, savedViews } = useTasksView();
+  const { state, setState, savedViews, selectedTask } = useTasksView();
+  const params = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
   const layout = useSplitLayout();
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
@@ -113,8 +119,8 @@ function TasksViewRoot() {
   onMount(() => panel.handle.setDisplayName('Tasks'));
 
   const taskList = () => (
-    <>
-      <TasksHeader onSearchEscape={() => listElement()?.focus()} />
+    <MobileListLayout header={<TasksMobileControls />}>
+      <TasksHeader focusSearchResults={() => listElement()?.focus()} />
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content class="flex flex-col">
         <Show
@@ -125,7 +131,6 @@ function TasksViewRoot() {
             </Show>
           }
         >
-          <TaskSavedViewWarning />
           <div class="min-h-0 flex-1">
             <TasksContent
               ref={setListElement}
@@ -134,21 +139,25 @@ function TasksViewRoot() {
                 // puts the play icon over the status icon and the label
                 // over the task titles, while the row's hover still spans
                 // the list like the task rows'.
-                <div class="[--tutorial-row-inset:2.25rem]">
-                  <TutorialRow tutorial="tasks" />
-                </div>
+                <>
+                  <TaskSavedViewWarning />
+                  <div class="[--tutorial-row-inset:2.25rem]">
+                    <TutorialRow tutorial="tasks" />
+                  </div>
+                </>
               }
             />
           </div>
         </Show>
       </ViewShell.Content>
-    </>
+    </MobileListLayout>
   );
 
   return (
     <SplitPanel.Root>
       <SplitPanel.Body>
         <ViewShell.Root
+          contentLayout="collection"
           asidePreferenceKey="tasks"
           resizable
           aside={{ preserveDuringResize: false }}
@@ -157,61 +166,56 @@ function TasksViewRoot() {
           <ViewShell.Aside>
             <TasksSidebar />
           </ViewShell.Aside>
-          <ViewShell.Main>
-            <Suspense fallback={<TasksLoading />}>
-              <SplitRouter.Outlet
-                fallback={() => (
-                  <Show
-                    when={
-                      isProjectTab(state.tab) &&
-                      projectsEnabled() &&
-                      !state.savedViewActive
+          <CollectionPanes
+            hasDetail={!!selectedTask() || !!params.projectId}
+            list={
+              <Show
+                when={isProjectTab(state.tab) && !state.savedViewActive}
+                fallback={taskList()}
+              >
+                <ProjectsTab
+                  scope={() =>
+                    state.tab === 'my-projects'
+                      ? 'assigned-to-me'
+                      : state.tab === 'created-projects'
+                        ? 'created-by-me'
+                        : 'all'
+                  }
+                  title={TASK_TABS.find((tab) => tab.id === state.tab)?.label}
+                  mobileNavigation={<TasksMobileControls />}
+                  search={{
+                    value: () => state.search,
+                    onChange: (search) => setState('search', search),
+                  }}
+                  onOpen={(id, event, newSplit) => {
+                    if (
+                      newSplit ||
+                      event?.shiftKey ||
+                      event?.metaKey ||
+                      event?.ctrlKey ||
+                      event?.altKey
+                    ) {
+                      openProject(layout, id, {
+                        newSplit: newSplit || event?.shiftKey,
+                      });
+                      return;
                     }
-                    fallback={taskList()}
-                  >
-                    <ProjectsTab
-                      scope={() =>
-                        state.tab === 'my-projects'
-                          ? 'assigned-to-me'
-                          : state.tab === 'created-projects'
-                            ? 'created-by-me'
-                            : 'all'
-                      }
-                      title={
-                        TASK_TABS.find((tab) => tab.id === state.tab)?.label
-                      }
-                      mobileNavigation={<TasksMobileTabs />}
-                      search={{
-                        value: () => state.search,
-                        onChange: (search) => setState('search', search),
-                      }}
-                      onOpen={(id, event, newSplit) => {
-                        if (
-                          newSplit ||
-                          event?.shiftKey ||
-                          event?.metaKey ||
-                          event?.ctrlKey ||
-                          event?.altKey
-                        ) {
-                          openProject(layout, id, {
-                            newSplit: newSplit || event?.shiftKey,
-                          });
-                          return;
-                        }
-                        fireAndForget(
-                          navigate({
-                            route: projectDetailRoute,
-                            params: { projectId: id, section: 'overview' },
-                          }),
-                          'tasks-view'
-                        );
-                      }}
-                    />
-                  </Show>
-                )}
-              />
+                    fireAndForget(
+                      navigate({
+                        route: projectDetailRoute,
+                        params: { projectId: id, section: 'overview' },
+                      }),
+                      'tasks-view'
+                    );
+                  }}
+                />
+              </Show>
+            }
+          >
+            <Suspense fallback={<TasksLoading />}>
+              <SplitRouter.Outlet />
             </Suspense>
-          </ViewShell.Main>
+          </CollectionPanes>
         </ViewShell.Root>
       </SplitPanel.Body>
     </SplitPanel.Root>

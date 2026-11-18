@@ -39,6 +39,10 @@ agent loop.
   (`anthropic`, `dictation`, `embedding`, `image_generation`, `task_dedup`,
   `agent_harness_service`).
 
+`propagation::inject_mcp` / `set_parent_from_mcp` carry W3C context in an
+MCP request's `_meta` under SEP-414's `traceparent` / `tracestate` keys (the
+in-process agent's calls to the harness's internal MCP).
+
 `propagation::link` connects delayed outbox delivery to each producer's span
 without replacing the delivery worker's own parent.
 

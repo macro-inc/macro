@@ -166,7 +166,7 @@ The compose controllers now assemble these smaller responsibilities:
 | `attachment-persistence.ts` | Upload/remove operations and completion tracking. Receives attachment state and three transport capabilities. A saved attachment ID does not mean its content upload has finished; every save waits for outstanding uploads. |
 | `email-send-schedule.ts` | Confirmed send time, pending changes, unscheduling and archive feedback. Send Later and schedule updates save the draft first, then schedule it through the REST endpoint. Cancellation only unlocks editing after confirmation. |
 | `draft-session.ts` / `draft-persistence.ts` | Shared draft identity, queued-write status, rejection policy, and save/delete ordering. Server identity and a committed latest save are separate facts; uploads and updates to existing legacy schedules wait for a committed save. |
-| `send-readiness.ts` | Outbox admission allows offline delivery with complete attachment references and rejects unfinished uploads. A failed, unconfirmed or pending draft sync never blocks an outbox send: the send carries the saved local copy under the draft's handles and the server validates it. Only legacy REST delivery waits for a committed save. Each refusal logs `email_send.refused` with its reason. |
+| `send-readiness.ts` | Outbox admission allows offline delivery with complete attachment references and rejects unfinished uploads. A failed, unconfirmed or pending draft sync never blocks an outbox send: the send carries the saved local copy under the draft's handles and the server validates it. Only legacy REST delivery waits for a committed save. A reply with nothing written outside the quoted thread (no text or media in any block, no attachments, no typed subject, and for a forward no recipients) is refused before its pre-send save, even if an earlier save gave it draft ids; any send whose draft still has no ids after the save is refused too. Each refusal logs `email_send.refused` with its reason. |
 | `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits when visibility changes and on disposal, retries a failed local write on visibility changes and disposal unless cancelled, and exposes cancellation and completion for send/discard. |
 | `reply-recipient-fields.ts` | Recipient field expansion, drag/drop and outside interaction. Receives values, a setter and a change callback; it knows nothing about saving or sending. |
 | `reply-composer-focus.ts` | Deferred editor/recipient focus and the forward focus guard. Receives DOM accessors and an editor `focus()` capability. Its timers, animation frames and event listeners end with its owner. |
@@ -252,7 +252,7 @@ state cannot disagree because they retained separate snapshots.
 
 Production compose and thread composition no longer fetch the complete personal
 contact list. `EmailComposeContext.createRecipientSource` supplies a factory to each
-To/Cc/Bcc input; the input owns its open/query lifetime and one replaceable page.
+To/Cc/Bcc input; the input owns its open/query lifetime and one growing, bounded list of pages.
 The field is required at composition boundaries, with explicit `undefined` for
 hosts that offer only a scoped pool (such as a generated draft's supplied recipients).
 `recipients` and reply-session options contain scoped extras and thread addresses,
@@ -550,7 +550,6 @@ provider MIME or parses ICS.
 When an already-loaded thread's saved invitations change, that thread's calendar
 resolution is revalidated in the background; its first load or a switch between threads
 does not trigger it. Cards are keyed by component, so thread refreshes keep their state.
-Without the calendar UI flag, cards render the saved invitation with no calendar lookup.
 
 Scheduling revisions come only from the thread's own saved components, and are
 reconciled separately for each original occurrence and its series master. A lower-sequence master cancellation still cancels an instance
@@ -742,12 +741,25 @@ general mutation queues are retained but are not imported into it; verify their
 recovery separately during the cache rollout. The email journal is independent
 of these cache files and retains its draft working copies and send attempts.
 
+## Agent program reads of sign-in mail
+
+A program (`macro_authorization::is_program_run`) never reads one of Macro's
+own sign-in emails: a sign-in code or verification link would let it sign in
+as the user. Every email-service response, and the storage service's REST
+`/items` and `/search` responses, pass `rewrite_program_json` with
+`models_email::sign_in_email::hide_sign_in_emails`, which replaces the
+subject, snippet, body, headers and search highlights of any message or
+thread from a sign-in sender. `GET /email/messages/{id}/eml` refuses such a
+message, and GraphQL refuses programs. A person reads the email whole.
+
 ## Agent program sends
 
-An agent's program (a code-mode run, marked by `x-macro-code-execution`, or a
-token with agent attribution; `macro_authorization::is_agent_run`) never sends
-an email the user has not seen. The REST send (`POST /email/messages`) answers
-it 403. It sends through a session review (`execution.reviews.create({kind:
+An agent's program (a token with agent attribution, or a code-mode request
+marked by `x-macro-code-execution` whose token signs no program;
+`macro_authorization::is_agent_run`) never sends
+an email the user has not seen. The REST send (`POST /email/messages`) and the
+calendar invite forward (`POST /email/calendar-events/{event_id}/forward`)
+answer it 403. It sends through a session review (`execution.reviews.create({kind:
 'email'})`), whose card the user submits, or, for a prompt from a channel or
 document thread, on the user's quoted approval:
 

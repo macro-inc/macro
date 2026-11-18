@@ -195,12 +195,9 @@ const loadedDatabaseId = '01a16d55-0000-7000-8000-00000000000e';
 }
 queryClient.setQueryData(systemSkillsQueryOptions().queryKey, []);
 for (const session of sessions) {
-  for (const graphql of [false, true]) {
-    queryClient.setQueryData(
-      agentSessionKeys.preview(session.id, graphql).queryKey,
-      { access: session.access }
-    );
-  }
+  queryClient.setQueryData(agentSessionKeys.preview(session.id).queryKey, {
+    access: session.access,
+  });
   queryClient.setQueryData(previewKeys.item(session.id).queryKey, {
     id: session.id,
     type: 'agent_session',

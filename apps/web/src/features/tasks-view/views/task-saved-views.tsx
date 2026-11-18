@@ -27,7 +27,6 @@ import {
   SavedViewListRow,
 } from '../../saved-views/components/saved-view-list';
 import { SavedViewMenuItems } from '../../saved-views/components/saved-view-menu';
-import { SavedViewPicker } from '../../saved-views/components/saved-view-picker';
 import type { SavedView } from '../../saved-views/core/saved-view';
 import {
   savedViewErrorMessage,
@@ -50,7 +49,6 @@ import {
   withTaskTabFilters,
 } from '../filters/task-saved-view';
 import { useTaskFilters } from '../filters/use-task-filters';
-import { taskSavedViewTitle } from '../primitives/create-task-saved-view-draft';
 import { tasksTabSearch, tasksTabSearchCodec } from '../tasks-tab-search';
 import { useTasksView } from '../tasks-view-context';
 
@@ -324,9 +322,7 @@ function TaskSavedViewMenuItems(props: {
         const record = props.record;
         props.defer(() => create(record));
       }}
-      onCopyLink={() =>
-        fireAndForget(copySavedViewLink(props.record.id), 'saved-views')
-      }
+      onCopyLink={() => copySavedViewLink(props.record.id)}
     />
   );
 }
@@ -484,32 +480,6 @@ function TaskSavedViewRows(props: {
   );
 }
 
-export function TaskSavedViewsPicker() {
-  const { savedViews, state } = useTasksView();
-  const viewerId = useUserId();
-  // The drawer closes before its action opens a dialog; retain the outer owner.
-  const owner = getOwner();
-  return (
-    <Show when={savedViews}>
-      {(views) => (
-        <SavedViewPicker
-          active={state.savedViewActive ?? false}
-          scopeKey={viewerId()}
-          label={
-            views().view().kind === 'default'
-              ? t('viewMenus.savedViews')
-              : taskSavedViewTitle(views().view())
-          }
-        >
-          {(onAction) => (
-            <TaskSavedViewRows onAction={onAction} dialogOwner={owner} />
-          )}
-        </SavedViewPicker>
-      )}
-    </Show>
-  );
-}
-
 async function copySavedViewLink(id: string) {
   const params = tasksTabSearchCodec.serialize({
     ...tasksTabSearch.defaults,
@@ -520,9 +490,9 @@ async function copySavedViewLink(id: string) {
   replacePaneSearchParams(url.searchParams, [
     { [tasksTabSearch.namespace]: params },
   ]);
-  if (await writeClipboardData({ 'text/plain': url.toString() }))
-    toast.success('Link copied');
-  else toast.failure('Could not copy link');
+  const copied = await writeClipboardData({ 'text/plain': url.toString() });
+  if (!copied) toast.failure('Could not copy link');
+  return copied;
 }
 
 export function TaskSaveViewButton() {

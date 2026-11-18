@@ -1,24 +1,42 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { enableCrmThreadExclusions } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, Dialog, Panel } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, createUniqueId, For, Show } from 'solid-js';
+import { createStore } from 'solid-js/store';
+import { match } from 'ts-pattern';
 import {
   SettingsCard,
   SettingsRow,
   SettingsSection,
 } from '../../settings/primitives';
 import { useCrmContext } from '../context/crm-context';
-import type { EmailBlockScope } from '../core/email-privacy';
+import type {
+  EmailBlockScope,
+  MailboxDomainConflict,
+} from '../core/email-privacy';
 
 type PrivacySource = ReturnType<
   ReturnType<typeof useCrmContext>['createEmailPrivacy']
 >;
 
+function domainWarningText(reason: MailboxDomainConflict | undefined) {
+  if (!reason) return undefined;
+  return match(reason)
+    .with('company', () => t('crm.privacyCompanyMailboxDomain'))
+    .with('personal_provider', () => t('crm.privacyPersonalMailboxDomain'))
+    .exhaustive(() => undefined);
+}
+
 function DomainBlocklist(props: {
   source: PrivacySource;
   scope: EmailBlockScope;
 }) {
-  const [domain, setDomain] = createSignal('');
+  const [input, setInput] = createStore<{ domain: string; error?: string }>({
+    domain: '',
+  });
+  const errorId = createUniqueId();
   const settings = () =>
     props.source.query.isSuccess ? props.source.query.data : undefined;
   const domains = () =>
@@ -27,14 +45,27 @@ function DomainBlocklist(props: {
       : settings()?.personalDomains;
   const canRemove = () =>
     props.scope === 'personal' || settings()?.canRemoveTeamDomains;
+  const warnings = () =>
+    props.scope === 'team'
+      ? settings()?.teamDomainWarnings
+      : settings()?.personalDomainWarnings;
   const busy = () => props.source.update.isPending;
   const add = (event: SubmitEvent) => {
     event.preventDefault();
-    if (!domain().trim() || busy()) return;
+    const domain = input.domain.trim();
+    if (!domain || busy()) return;
+    setInput('error', undefined);
     props.source.update.mutate(
-      { action: 'add_domain', scope: props.scope, domain: domain().trim() },
+      { action: 'add_domain', scope: props.scope, domain },
       {
-        onSuccess: () => setDomain(''),
+        onSuccess: () => {
+          if (input.domain.trim() === domain)
+            setInput({ domain: '', error: undefined });
+        },
+        onError: (error) => {
+          if (input.domain.trim() === domain)
+            setInput('error', error.message || t('crm.privacyUpdateFailed'));
+        },
       }
     );
   };
@@ -62,7 +93,10 @@ function DomainBlocklist(props: {
           }
         >
           {(item) => (
-            <SettingsRow label={item}>
+            <SettingsRow
+              label={item}
+              description={domainWarningText(warnings()?.[item])}
+            >
               <Button
                 variant="ghost"
                 size="sm"
@@ -81,33 +115,154 @@ function DomainBlocklist(props: {
             </SettingsRow>
           )}
         </For>
-        <form onSubmit={add} class="flex gap-2 px-6 py-3">
-          <input
-            aria-label={
-              props.scope === 'team'
-                ? t('crm.privacyTeamDomainLabel')
-                : t('crm.privacyPersonalDomainLabel')
-            }
-            class="settings-input min-w-0 flex-1"
-            placeholder={t('crm.privacyDomainPlaceholder')}
-            value={domain()}
-            onInput={(e) => setDomain(e.currentTarget.value)}
-          />
-          <Button
-            type="submit"
-            variant="secondary"
-            size="sm"
-            disabled={busy() || !domain().trim()}
-          >
-            {t('crm.privacyAddDomain')}
-          </Button>
+        <form onSubmit={add} class="flex flex-col gap-2 px-6 py-3">
+          <div class="flex gap-2">
+            <input
+              aria-label={
+                props.scope === 'team'
+                  ? t('crm.privacyTeamDomainLabel')
+                  : t('crm.privacyPersonalDomainLabel')
+              }
+              class="settings-input min-w-0 flex-1"
+              aria-invalid={!!input.error}
+              aria-describedby={input.error ? errorId : undefined}
+              placeholder={t('crm.privacyDomainPlaceholder')}
+              value={input.domain}
+              onInput={(e) =>
+                setInput({ domain: e.currentTarget.value, error: undefined })
+              }
+            />
+            <Button
+              type="submit"
+              variant="secondary"
+              size="sm"
+              disabled={busy() || !input.domain.trim()}
+            >
+              {t('crm.privacyAddDomain')}
+            </Button>
+          </div>
+          <Show when={input.error}>
+            <p id={errorId} class="text-sm text-failure" role="alert">
+              {input.error}
+            </p>
+          </Show>
         </form>
       </SettingsCard>
     </SettingsSection>
   );
 }
 
-export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
+function ThreadExclusions(props: {
+  source: PrivacySource;
+  onOpenThread?: () => void;
+}) {
+  const { EmailThreadMention } = useCrmContext();
+  const [after, setAfter] = createSignal<string>();
+  const query = props.source.createExcludedThreads(after);
+  return (
+    <SettingsSection title={t('crm.privacyThreadsTitle')}>
+      <p class="text-sm text-ink-muted">{t('crm.privacyThreadsDescription')}</p>
+      <Show
+        when={!query.isPending && query.data}
+        fallback={
+          <p class="text-sm text-ink-muted" role="status">
+            {query.isError
+              ? t('crm.privacyLoadFailed')
+              : t('crm.privacyLoading')}
+            <Show when={query.isError}>
+              <Button
+                variant="ghost"
+                onClick={() => fireAndForget(query.refetch(), 'crm')}
+              >
+                {t('crm.privacyRetry')}
+              </Button>
+            </Show>
+          </p>
+        }
+      >
+        <Show when={query.isError}>
+          <p class="text-sm text-ink-muted" role="status">
+            {t('crm.privacyLoadFailed')}
+            <Button
+              variant="ghost"
+              onClick={() => fireAndForget(query.refetch(), 'crm')}
+            >
+              {t('crm.privacyRetry')}
+            </Button>
+          </p>
+        </Show>
+        <SettingsCard>
+          <For
+            each={query.data?.threads}
+            fallback={
+              <p class="px-6 py-3 text-sm text-ink-muted">
+                {t('crm.privacyNoThreads')}
+              </p>
+            }
+          >
+            {(thread) => (
+              <SettingsRow
+                label={
+                  <EmailThreadMention
+                    threadId={thread.threadId}
+                    subject={thread.subject || t('crm.privacyThreadNoSubject')}
+                    onOpened={props.onOpenThread}
+                  />
+                }
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={props.source.update.isPending}
+                  aria-label={t('crm.privacyRestoreThreadLabel', {
+                    subject: thread.subject || t('crm.privacyThreadNoSubject'),
+                  })}
+                  onClick={() =>
+                    props.source.update.mutate({
+                      action: 'set_thread_exclusion',
+                      thread_id: thread.threadId,
+                      excluded: false,
+                    })
+                  }
+                >
+                  {t('crm.privacyRestoreThread')}
+                </Button>
+              </SettingsRow>
+            )}
+          </For>
+        </SettingsCard>
+        <div class="flex justify-end gap-2">
+          <Show when={after()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAfter(undefined)}
+            >
+              {t('crm.privacyThreadsFirst')}
+            </Button>
+          </Show>
+          <Show when={query.data?.nextCursor}>
+            {(cursor) => (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setAfter(cursor())}
+              >
+                {t('crm.privacyThreadsNext')}
+              </Button>
+            )}
+          </Show>
+        </div>
+      </Show>
+    </SettingsSection>
+  );
+}
+
+export function CrmEmailPrivacySettings(props: {
+  onOptIn?: () => void;
+  onOpenThread?: () => void;
+}) {
+  const threadExclusions = useFeatureFlag(enableCrmThreadExclusions);
   const source = useCrmContext().createEmailPrivacy();
   const settings = () =>
     source.query.isSuccess ? source.query.data : undefined;
@@ -152,6 +307,9 @@ export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
       </SettingsSection>
       <DomainBlocklist source={source} scope="team" />
       <DomainBlocklist source={source} scope="personal" />
+      <Show when={threadExclusions().enabled}>
+        <ThreadExclusions source={source} onOpenThread={props.onOpenThread} />
+      </Show>
       <div class="flex justify-end">
         <Button
           variant={settings()?.enabled ? 'secondary' : 'primary'}
@@ -228,7 +386,10 @@ export function CrmEmailPrivacyDialog(props: {
           </Dialog.CloseButton>
         </Panel.Header>
         <Panel.Body scroll class="p-4 flex flex-col gap-4">
-          <CrmEmailPrivacySettings onOptIn={() => props.onOpenChange(false)} />
+          <CrmEmailPrivacySettings
+            onOptIn={() => props.onOpenChange(false)}
+            onOpenThread={() => props.onOpenChange(false)}
+          />
         </Panel.Body>
       </Panel>
     </Dialog>

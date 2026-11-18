@@ -1,5 +1,5 @@
 use super::super::{
-    DocumentArmAccess, DocumentIdArrays, EACH_CANDIDATE_LIMIT, begin_dynamic_query, build_query,
+    DocumentArmAccess, DocumentGrants, DocumentIdArrays, EACH_CANDIDATE_LIMIT, begin_dynamic_query, build_query,
     document_candidate_arm, fetch_user_source_ids, first_document_id_slot, push_not_inward,
 };
 use super::{CandidateArm, DocumentCandidates};
@@ -162,7 +162,7 @@ fn candidates_never_meet_access_after_filters() {
         );
         assert_eq!(
             matches!(
-                DocumentArmAccess::new(Some(&expr)),
+                DocumentArmAccess::new(Some(&expr), DocumentGrants::Estimated),
                 DocumentArmAccess::AfterFilters
             ),
             after_filters,
@@ -189,7 +189,14 @@ async fn first_page(
     let mut transaction = begin_dynamic_query(pool).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, &viewer).await?;
     let mut document_ids = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
-    let builder = build_query(filter, false, sort, &mut document_ids, arm);
+    let builder = build_query(
+        filter,
+        false,
+        sort,
+        DocumentGrants::Estimated,
+        &mut document_ids,
+        arm,
+    );
 
     #[expect(clippy::disallowed_methods, reason = "runs SQL generated from the AST")]
     let mut query = sqlx::query(builder.sql())

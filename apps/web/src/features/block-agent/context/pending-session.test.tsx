@@ -8,7 +8,7 @@ import type {
   ControlRequest,
 } from '@service-agent-harness/generated/schemas';
 import { err, ok } from 'neverthrow';
-import { Suspense } from 'solid-js';
+import { type JSX, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fold = vi.hoisted(() => ({
@@ -18,7 +18,6 @@ const fold = vi.hoisted(() => ({
 }));
 const flags = vi.hoisted(() => ({
   firstPromptOnCreate: true,
-  agentNavigation: false,
 }));
 const harness = vi.hoisted(() => ({
   create: vi.fn(),
@@ -36,7 +35,6 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
       if (flag === actual.enableFirstPromptOnCreate) {
         return flags.firstPromptOnCreate;
       }
-      if (flag === actual.enableAgentNavigation) return flags.agentNavigation;
       return actual.isFeatureEnabled(flag);
     },
   };
@@ -63,17 +61,29 @@ vi.mock('@queries/soup/normalized-cache', () => ({
 vi.mock('@queries/agent-session/queue-sync', () => ({
   subscribeSocketSessionStarted: () => () => {},
 }));
+type LogFollow = { rows: (rows: AgentSessionLogEntryDto[]) => void };
+/** Each session's latest load subscription, which delivers its live rows. */
+const follows = vi.hoisted(() => new Map<string, LogFollow>());
 vi.mock('@queries/agent-session/log', () => ({
   AgentSessionLogUnavailable: class extends Error {},
-  watchAgentSessionLog: () => ({
-    cached: Promise.resolve(undefined),
-    cacheMiss: () => undefined,
-    fetched: Promise.resolve({ bot: { id: 'bot' }, rows: [] }),
-    stop: () => {},
-  }),
-  canFollowAgentSessionLog: () => false,
+  watchAgentSessionLog: (id: string, _policy?: string, follow?: LogFollow) => {
+    if (follow) follows.set(id, follow);
+    return {
+      cached: Promise.resolve(undefined),
+      cacheMiss: () => undefined,
+      fetched: Promise.resolve({ bot: { id: 'bot' }, rows: [] }),
+      stop: () => {},
+    };
+  },
   forgetAgentSessionLog: vi.fn(async () => {}),
 }));
+
+/** A row the log subscription delivers to an open session. */
+function deliver(id: string, row: AgentSessionLogEntryDto) {
+  const follow = follows.get(id);
+  if (!follow) throw new Error(`session ${id} is not followed`);
+  follow.rows([row]);
+}
 vi.mock('@queries/agent-session/session-metadata-sync', () => ({
   subscribeAgentSessionRenamed: () => () => {},
   subscribeAgentSessionUpdated: () => () => {},
@@ -82,6 +92,9 @@ vi.mock('@service-storage/graphql-soup', () => ({
   subscribeGraphqlSoupReconnected: () => () => {},
 }));
 
+const { QueryClient, QueryClientProvider } = await import(
+  '@tanstack/solid-query'
+);
 const { cleanup, render } = await import('@solidjs/testing-library');
 const { AgentSession } = await import('@core/agent-session/AgentSession');
 const { PromptTrace } = await import('@core/agent-session/prompt-telemetry');
@@ -105,11 +118,14 @@ function Destination(props: { id: string }) {
 }
 
 const mount = (id: string) =>
-  render(() => (
-    <Suspense>
-      <Destination id={id} />
-    </Suspense>
-  ));
+  render(
+    () => (
+      <Suspense>
+        <Destination id={id} />
+      </Suspense>
+    ),
+    { wrapper: TestQueryClientProvider }
+  );
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -129,11 +145,16 @@ const snapshots = () =>
     .flatMap((call) => call[1] as FoldInput[])
     .filter((input) => input.kind === 'snapshot');
 
+const TestQueryClientProvider = (props: { children: JSX.Element }) => (
+  <QueryClientProvider client={new QueryClient()}>
+    {props.children}
+  </QueryClientProvider>
+);
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   flags.firstPromptOnCreate = true;
-  flags.agentNavigation = false;
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({
     messages: [],
@@ -215,16 +236,11 @@ describe('pending navigation ownership', () => {
         },
       },
     ] satisfies FoldedStreamEvent[]);
-    AgentSession.ingest({
-      agentSessionId: id,
-      entries: [
-        {
-          id: 'confirmed-row',
-          createdAt: new Date().toISOString(),
-          direction: 'to_server',
-          content: { type: 'acp', jsonrpc: '2.0' },
-        } satisfies AgentSessionLogEntryDto,
-      ],
+    deliver(id, {
+      id: 'confirmed-row',
+      createdAt: new Date().toISOString(),
+      direction: 'to_server',
+      content: { type: 'acp', jsonrpc: '2.0' },
     });
     await settle();
     const firstText = stage.mock.calls.findIndex(
@@ -413,6 +429,7 @@ describe('first prompt on the create', () => {
       id,
       prompt: 'Hello',
       promptActionId: expect.any(String),
+      promptClientId: expect.any(String),
     });
     const actionId: string = request.promptActionId;
     expect(harness.control).not.toHaveBeenCalled();
@@ -473,16 +490,11 @@ describe('first prompt on the create', () => {
         },
       },
     ] satisfies FoldedStreamEvent[]);
-    AgentSession.ingest({
-      agentSessionId: id,
-      entries: [
-        {
-          id: 'confirmed-row',
-          createdAt: new Date().toISOString(),
-          direction: 'to_server',
-          content: { type: 'acp', jsonrpc: '2.0' },
-        } satisfies AgentSessionLogEntryDto,
-      ],
+    deliver(id, {
+      id: 'confirmed-row',
+      createdAt: new Date().toISOString(),
+      direction: 'to_server',
+      content: { type: 'acp', jsonrpc: '2.0' },
     });
     await settle();
     const firstText = stage.mock.calls.findIndex(
@@ -496,8 +508,7 @@ describe('first prompt on the create', () => {
     expect(fold.closeSession).toHaveBeenCalledExactlyOnceWith(id);
   });
 
-  it('names the tab the first prompt was typed in while agent navigation is on', async () => {
-    flags.agentNavigation = true;
+  it('names the tab the first prompt was typed in', async () => {
     startPendingSession({ prompt: 'Open the plan', userId: 'me' });
     await settle();
 
@@ -510,7 +521,6 @@ describe('first prompt on the create', () => {
   it.each(MOBILE_DEVICES)(
     'names no tab for a first prompt typed on $on',
     async (mobile) => {
-      flags.agentNavigation = true;
       holdMobile(device, mobile);
       startPendingSession({ prompt: 'Open the plan', userId: 'me' });
       await settle();

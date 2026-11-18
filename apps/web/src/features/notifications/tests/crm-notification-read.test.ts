@@ -5,44 +5,26 @@ import type { CrmCompanyEntity, CrmContactEntity } from '@entity/types/entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { Telemetry } from '@macro-inc/observability';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
-import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
-import { createRoot, createSignal } from 'solid-js';
+import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNotificationSource } from '../notification-source';
 import type { UnifiedNotification } from '../types';
 
 const mocks = vi.hoisted(() => ({
-  graphql: true,
-  loading: vi.fn(() => false),
   seen: vi.fn(),
   entitySeen: vi.fn(),
-  refetch: vi.fn(),
   feed: vi.fn<() => UnifiedNotification[] | undefined>(() => []),
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_DOCUMENT_MENTION_NOTIFICATIONS: true,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => mocks.graphql,
-}));
-vi.mock('@macro-inc/collaboration/websocket', () => ({
-  createSocketEffect: vi.fn(),
 }));
 vi.mock('@queries/notification/user-notifications', () => ({
-  optimisticInsertNotification: vi.fn(),
   useMarkNotificationsAsSeenMutation: () => ({ mutateAsync: mocks.seen }),
   useMarkNotificationsAsDoneMutation: () => ({ mutateAsync: vi.fn() }),
   useUserNotificationsQuery: () => ({
-    get transport() {
-      return mocks.graphql ? 'graphql' : 'rest';
-    },
-    get isStarted() {
-      return !mocks.graphql;
-    },
-    get isLoading() {
-      return mocks.loading();
-    },
-    refetch: mocks.refetch,
+    isStarted: false,
+    isLoading: false,
     get data() {
       return mocks.feed();
     },
@@ -60,6 +42,11 @@ vi.mock('@queries/soup/graphql/active-queries', () => ({
 }));
 vi.mock('@service-storage/graphql-notifications', () => ({
   updateNotificationsForEntities: mocks.entitySeen,
+}));
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => undefined,
+  isCurrentQueryAccount: () => false,
+  queryAccountSessionPending: () => false,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   graphqlCacheEnabled: () => true,
@@ -93,8 +80,6 @@ const CONTACT: CrmContactEntity = {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.graphql = true;
-  mocks.loading.mockReturnValue(false);
   mocks.feed.mockImplementation(() => []);
 });
 afterEach(() => vi.restoreAllMocks());
@@ -121,40 +106,6 @@ describe.each([COMPANY, CONTACT])('opening $type notifications', (record) => {
     viewed_at: null,
     sent: true,
   };
-  it('waits for a loading REST feed before marking a row without attached notifications', async () => {
-    mocks.graphql = false;
-    const [loading, setLoading] = createSignal(true);
-    mocks.loading.mockImplementation(loading);
-    const loaded = Promise.withResolvers<void>();
-    const marked = Promise.withResolvers<void>();
-    const [feed, setFeed] = createSignal<UnifiedNotification[]>();
-    mocks.feed.mockImplementation(feed);
-    mocks.refetch.mockImplementationOnce(async () => {
-      await loaded.promise;
-      setFeed([{ ...discussion, id: `${record.id}-loading` }]);
-      setLoading(false);
-    });
-    mocks.seen.mockImplementationOnce(async () => marked.resolve());
-    const { source, dispose } = createRoot((dispose) => ({
-      source: createNotificationSource({} as ConnectionGatewayWebsocket),
-      dispose,
-    }));
-    try {
-      markRowNotificationsSeenOnOpen(record, source);
-      expect(mocks.refetch).toHaveBeenCalledOnce();
-      expect(mocks.seen).not.toHaveBeenCalled();
-      loaded.resolve();
-      await marked.promise;
-      expect(mocks.seen).toHaveBeenCalledWith({
-        notificationIds: [`${record.id}-loading`],
-      });
-      expect(mocks.entitySeen).not.toHaveBeenCalled();
-    } finally {
-      loaded.resolve();
-      dispose();
-    }
-  });
-
   it('reports a failed entity read when the row has no loaded notifications', async () => {
     const error = new Error('offline');
     const reported = Promise.withResolvers<void>();
@@ -163,7 +114,7 @@ describe.each([COMPANY, CONTACT])('opening $type notifications', (record) => {
       .mockImplementation(() => reported.resolve());
     mocks.entitySeen.mockRejectedValueOnce(error);
     const { source, dispose } = createRoot((dispose) => ({
-      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      source: createNotificationSource(),
       dispose,
     }));
     try {
@@ -184,7 +135,7 @@ describe.each([COMPANY, CONTACT])('opening $type notifications', (record) => {
       const pending = Promise.withResolvers<void>();
       mocks.seen.mockReturnValueOnce(pending.promise);
       const { source, dispose } = createRoot((dispose) => ({
-        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        source: createNotificationSource(),
         dispose,
       }));
       const attached = [
@@ -232,7 +183,7 @@ describe.each([COMPANY, CONTACT])('opening $type notifications', (record) => {
     vi.spyOn(Telemetry, 'error').mockImplementation(() => reported.resolve());
     mocks.seen.mockReturnValueOnce(pending.promise);
     const { source, dispose } = createRoot((dispose) => ({
-      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      source: createNotificationSource(),
       dispose,
     }));
     const row = withEntityNotifications(
@@ -262,7 +213,7 @@ describe.each([COMPANY, CONTACT])('opening $type notifications', (record) => {
       mocks.entitySeen.mockResolvedValueOnce([]);
       mocks.feed.mockClear();
       const { source, dispose } = createRoot((dispose) => ({
-        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        source: createNotificationSource(),
         dispose,
       }));
       try {

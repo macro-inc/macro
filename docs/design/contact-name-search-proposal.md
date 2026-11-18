@@ -56,7 +56,11 @@ Use **name-prefix-first search with an indexable recent-first order**, not simpl
 replace the wildcard pattern or add a standalone text index.
 
 - Prefer exact normalized full-name matches, then contacts whose name words start
-  with every query word. `jo sm` finds a name with John and Smith; query-word order
+  with every query word. Policy 6 puts people the viewer has a direct message with
+  above everyone else among those matches, however exactly a stranger's name
+  matches, keeping these tiers inside each group; it also counts a one-term query
+  equal to the first name (the first space-separated term of a name without a
+  comma) as exact, as the browser menus already ranked people. `jo sm` finds a name with John and Smith; query-word order
   need not match display order.
 - Within a matching tier, order primarily by the existing published interaction
   recency, with a deterministic identity tie-break. This deliberately replaces the
@@ -168,8 +172,10 @@ array. A naive longest-token seed was inferior to a more selective posting range
 - Bound per-name index derivation and input work. Long/malformed names and short or
   punctuation-only input need explicit behavior, not dropped membership or a
   directory-sized fallback buffer.
-- Keep interactive suggestions local-only. Server access supplies authorized
-  synchronization/removal evidence, not a fallback search request. Preserve deployed
+- Keep interactive suggestions local whenever the tab has a usable cache. Server
+  access otherwise supplies authorized synchronization/removal evidence; only a tab
+  with no usable cache (unsupported browser, or a cache taken over by a newer build)
+  reads bounded server pages while online. Preserve deployed
   SDK/backend search compatibility independently.
 - Benchmark the complete browser/OPFS path, realistic activity distributions and
   adversarial name/rank correlation before claiming the prototype gain. Measure

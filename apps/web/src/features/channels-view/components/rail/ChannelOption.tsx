@@ -184,7 +184,7 @@ export function ChannelOption(props: {
               item().focused &&
               'bg-hover text-ink'
           )}
-          active={item().selected && !isTouchDevice()}
+          active={item().selected}
           aria-current={item().selected ? 'page' : undefined}
           onClick={(event) => {
             if (!isPrimaryMouseDown(event) || didDrag) return;
@@ -251,7 +251,10 @@ export function ChannelOption(props: {
                 </span>
               )}
             </Show>
-            <ChannelMutedIndicator muted={item().muted} />
+            <ChannelMutedIndicator
+              muted={item().muted}
+              mentionsOnly={item().mentionsOnly}
+            />
             <Show
               when={!item().incomingCallId && item().callStatus === 'active'}
             >
@@ -263,9 +266,10 @@ export function ChannelOption(props: {
                   <ChannelMentionCount count={item().mentions} />
                 </Match>
                 <Match when={item().unread}>
+                  {/* `mx-1` centers the dot where a one-digit count sits. */}
                   <span
                     aria-label="Unread"
-                    class="size-2 shrink-0 rounded-full bg-accent"
+                    class="mx-1 size-2 shrink-0 rounded-full bg-accent"
                   />
                 </Match>
               </Switch>

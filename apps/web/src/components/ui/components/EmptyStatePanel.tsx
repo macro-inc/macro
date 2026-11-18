@@ -20,6 +20,8 @@ export interface EmptyStatePanelProps {
   descriptionClass?: string;
   topSpacerClass?: string;
   primaryAction?: EmptyStateAction;
+  /** A quieter alternative shown beside the primary action. */
+  secondaryAction?: EmptyStateAction;
   actionsClass?: string;
   /**
    * When set, renders a secondary "Documentation" button that opens the given
@@ -103,7 +105,13 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
             {props.description}
           </p>
         </Show>
-        <Show when={props.primaryAction || props.documentationUrl}>
+        <Show
+          when={
+            props.primaryAction ||
+            props.secondaryAction ||
+            props.documentationUrl
+          }
+        >
           <div
             class={cn(
               'mt-3 flex flex-wrap gap-2 @max-sm:w-full @max-sm:flex-col',
@@ -115,6 +123,17 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
               {(action) => (
                 <PillButton
                   tone="cta"
+                  icon={action().icon}
+                  onClick={action().onClick}
+                >
+                  {action().label}
+                </PillButton>
+              )}
+            </Show>
+            <Show when={props.secondaryAction}>
+              {(action) => (
+                <PillButton
+                  tone="subtle"
                   icon={action().icon}
                   onClick={action().onClick}
                 >
