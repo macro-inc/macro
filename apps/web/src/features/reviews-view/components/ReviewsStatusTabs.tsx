@@ -9,13 +9,18 @@ import type { ReviewsStatusTabId } from '../reviews-types';
 export function ReviewsStatusTabs(props: {
   value: ReviewsStatusTabId | undefined;
   onChange: (value: ReviewsStatusTabId) => void;
+  /** Icons alone, each named by its tooltip, when the header runs short. */
+  iconOnly?: boolean;
   class?: string;
+  ref?: (element: HTMLElement) => void;
 }) {
   return (
     <Tabs
+      ref={props.ref}
       aria-label="Pull request status"
       touch="inset"
       fullWidth={isTouchDevice()}
+      iconOnly={props.iconOnly}
       class={props.class}
       options={[
         { value: 'open', label: 'Open', icon: GitPullRequestIcon },
