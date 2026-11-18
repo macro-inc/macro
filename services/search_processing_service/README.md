@@ -50,14 +50,18 @@ longer has by id. Before touching any, it rewrites the parent to name them in
 `pending_messages` and drop them from the record; once they succeed it writes
 the final record. So a reconcile whose request fails part way leaves the next
 one to rewrite or delete exactly those children, whatever their hashes say.
-Every write and delete by id carries an `external_gte` version: the time
-Postgres granted the reconcile's session lease, in microseconds. One clock
-serves every worker and a session's leases never overlap, so a request that
-times out and applies after a later reconcile is refused instead of rolling a
-child back. (A delete's tombstone keeps its version for the index's
-`gc_deletes`, 60 s by default; a delayed write of a deleted child arriving
-later than that is left to the sweep.) Last, a delete-by-query sweeps any child
-no record or pending list names. A reconcile
+Every write and delete carries an `external_gte` version: the time Postgres
+granted the reconcile's session lease, in microseconds. One clock serves every
+worker and a session's leases never overlap, so a request that times out and
+applies after a later reconcile is refused instead of rolling a child back; the
+refused reconcile fails, and its retry takes a new lease. (A delete's tombstone
+keeps its version for the index's `gc_deletes`, 60 s by default. A delayed
+write of a deleted child arriving later than that is left to the sweep, and a
+delayed parent write of a deleted session can recreate its parent; search never
+shows it, because results hydrate from the database, which omits deleted
+sessions, and a backfill of that id removes it.) Last, a sweep searches for any
+child no record or pending list names and deletes it by id under the same
+version. A reconcile
 that changes no child writes the parent only when it changed; one that does
 writes it twice. Nothing waits for a refresh; writes are
 searchable after the index's next scheduled refresh. Missing sessions delete
@@ -70,7 +74,10 @@ maps `indexed_messages` with `enabled: false`, so its child-id keys never become
 fields. The real-time parent read needs the `agent_sessions` alias to point at
 exactly one index. A backfill to the alias trusts the record and rewrites only
 what it says changed; to rebuild every child, backfill into a fresh index with
-`index_override` and move the alias.
+`index_override` and move the alias. Live deletes during that backfill reach
+only the index behind the alias, so after the move, backfill the ids of the
+sessions deleted since it started; until then their documents sit in the new
+index, hidden from results as above.
 
 Provision and verify the `agent_sessions` index and alias manually before
 deploying this consumer; deployment does not create indices. Normal parent and

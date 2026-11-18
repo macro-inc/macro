@@ -153,15 +153,25 @@ where
     Fut: std::future::Future<Output = T>,
 {
     use std::io::{BufRead, Read, Write};
-    use std::net::TcpListener;
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
     use std::time::Duration;
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
+    let finished = Arc::new(AtomicBool::new(false));
+    let server_finished = Arc::clone(&finished);
     let server = std::thread::spawn(move || {
         let mut requests = Vec::new();
         for (status, body) in responses {
             let (mut stream, _) = listener.accept().unwrap();
+            // The client stopped before using every response.
+            if server_finished.load(Ordering::SeqCst) {
+                break;
+            }
             stream
                 .set_read_timeout(Some(Duration::from_secs(5)))
                 .unwrap();
@@ -192,6 +202,9 @@ where
     let client =
         crate::OpensearchClient::new(format!("http://{address}"), "".into(), "".into()).unwrap();
     let result = action(client).await;
+    finished.store(true, Ordering::SeqCst);
+    // Wakes a server still waiting for a request the client never sent.
+    let _ = TcpStream::connect(address);
     (server.join().unwrap(), result)
 }
 
@@ -219,12 +232,18 @@ fn found(source: serde_json::Value) -> (&'static str, String) {
 }
 
 const BULK_OK: &str = r#"{"errors":false}"#;
-const PRUNE_OK: &str = r#"{"deleted":0,"failures":[],"timed_out":false}"#;
+const SWEEP_EMPTY: &str = r#"{"hits":{"hits":[]}}"#;
 
 #[tokio::test]
 async fn a_session_without_a_record_writes_every_child_then_records_them() {
     let (requests, result) = serve_reconcile(
-        vec![not_found(), ok("{}"), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
+        vec![
+            not_found(),
+            ok("{}"),
+            ok(BULK_OK),
+            ok("{}"),
+            ok(SWEEP_EMPTY),
+        ],
         args(),
         None,
     )
@@ -264,11 +283,7 @@ async fn a_session_without_a_record_writes_every_child_then_records_them() {
     assert!(
         requests[3]
             .line
-            .starts_with("POST /agent_sessions/_delete_by_query?")
-    );
-    assert!(
-        requests[3].line.contains("conflicts=proceed"),
-        "{requests:?}"
+            .starts_with("POST /agent_sessions/_search?")
     );
     for request in [requests[1], requests[2]] {
         assert!(request.line.contains("require_alias=true"), "{request:?}");
@@ -291,7 +306,13 @@ async fn a_session_without_a_record_writes_every_child_then_records_them() {
 #[tokio::test]
 async fn explicit_backfill_overrides_allow_a_physical_index() {
     let (requests, result) = serve_reconcile(
-        vec![not_found(), ok("{}"), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
+        vec![
+            not_found(),
+            ok("{}"),
+            ok(BULK_OK),
+            ok("{}"),
+            ok(SWEEP_EMPTY),
+        ],
         args(),
         Some("scratch-index"),
     )
@@ -318,7 +339,7 @@ async fn explicit_backfill_overrides_allow_a_physical_index() {
 #[tokio::test]
 async fn an_unchanged_session_writes_nothing() {
     let (requests, result) = serve_reconcile(
-        vec![found(stored_parent_source(&args())), ok(PRUNE_OK)],
+        vec![found(stored_parent_source(&args())), ok(SWEEP_EMPTY)],
         args(),
         None,
     )
@@ -334,7 +355,7 @@ async fn an_unchanged_session_writes_nothing() {
         }
     );
     assert_eq!(requests.len(), 2, "{requests:?}");
-    assert!(requests[1].line.contains("_delete_by_query"));
+    assert!(requests[1].line.contains("_search"));
 }
 
 #[tokio::test]
@@ -346,7 +367,13 @@ async fn a_changed_message_is_rewritten_and_a_removed_one_deleted_by_id() {
     });
 
     let (requests, result) = serve_reconcile(
-        vec![found(stored), ok("{}"), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
+        vec![
+            found(stored),
+            ok("{}"),
+            ok(BULK_OK),
+            ok("{}"),
+            ok(SWEEP_EMPTY),
+        ],
         args(),
         None,
     )
@@ -377,7 +404,7 @@ async fn a_changed_message_is_rewritten_and_a_removed_one_deleted_by_id() {
     );
     let parent: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
     assert_eq!(parent, stored_parent_source(&args()));
-    // Delete-by-query may still see the child just deleted, so it skips it.
+    // The sweep's search may still see the child just deleted, so it skips it.
     let prune: serde_json::Value = serde_json::from_str(&requests[3].body).unwrap();
     let kept = &prune["query"]["bool"]["must_not"][0]["ids"]["values"];
     assert!(
@@ -389,18 +416,42 @@ async fn a_changed_message_is_rewritten_and_a_removed_one_deleted_by_id() {
 }
 
 #[tokio::test]
-async fn a_sweep_conflicting_with_an_earlier_delete_still_succeeds() {
-    let (_, result) = serve_reconcile(
+async fn an_unrecorded_child_is_swept_by_id_under_the_version() {
+    let (requests, result) = serve_reconcile(
         vec![
             found(stored_parent_source(&args())),
-            ok(r#"{"deleted":0,"version_conflicts":1,"failures":[],"timed_out":false}"#),
+            ok(r#"{"hits":{"hits":[{"_id":"session-1:9:agent"}]}}"#),
+            ok(BULK_OK),
         ],
         args(),
         None,
     )
     .await;
 
-    result.unwrap();
+    assert_eq!(result.unwrap().messages_deleted, 1);
+    assert_eq!(
+        requests[2].body.trim(),
+        r#"{"delete":{"_id":"session-1:9:agent","routing":"session-1","version":1000,"version_type":"external_gte"}}"#
+    );
+}
+
+#[tokio::test]
+async fn a_missing_alias_stops_a_reconcile_before_any_write() {
+    let (requests, result) = serve_reconcile(
+        vec![(
+            "404 Not Found",
+            r#"{"error":{"type":"index_not_found_exception"},"status":404}"#.to_owned(),
+        )],
+        args(),
+        None,
+    )
+    .await;
+
+    let Err(OpensearchClientError::Unknown { operation, .. }) = result else {
+        panic!("expected the missing index to be reported, got {result:?}");
+    };
+    assert_eq!(operation, OpensearchOperation::ReadAgentSessionParent);
+    assert_eq!(requests.len(), 1, "{requests:?}");
 }
 
 #[tokio::test]
@@ -413,7 +464,7 @@ async fn deleting_a_session_removes_recorded_children_by_id_first() {
     stored["pending_messages"] = json!(["session-1:5:agent"]);
 
     let (requests, result) = serve(
-        vec![found(stored), ok(BULK_OK), ok(PRUNE_OK), ok(BULK_OK)],
+        vec![found(stored), ok(BULK_OK), ok(SWEEP_EMPTY), ok(BULK_OK)],
         |client| async move { client.delete_agent_session("session-1", None, 1_000).await },
     )
     .await;
@@ -443,12 +494,13 @@ async fn deleting_a_session_removes_recorded_children_by_id_first() {
             "session-1"
         ])
     );
+    assert!(
+        requests[2]
+            .line
+            .starts_with("POST /agent_sessions/_search?")
+    );
     // The parent and its record go last.
     assert_eq!(deleted_ids(&requests[3].body), ["session-1"]);
-    assert!(
-        requests[2].line.contains("conflicts=proceed"),
-        "{requests:?}"
-    );
     for request in &requests {
         assert!(!request.line.contains("refresh"), "{request:?}");
     }
@@ -506,7 +558,13 @@ async fn a_recorded_child_left_pending_is_rewritten_though_its_hash_matches() {
     stored["pending_messages"] = json!(["session-1:3:agent"]);
 
     let (requests, result) = serve_reconcile(
-        vec![found(stored), ok("{}"), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
+        vec![
+            found(stored),
+            ok("{}"),
+            ok(BULK_OK),
+            ok("{}"),
+            ok(SWEEP_EMPTY),
+        ],
         args(),
         None,
     )
@@ -526,7 +584,13 @@ async fn a_pending_child_the_snapshot_no_longer_has_is_deleted_by_id() {
     stored["pending_messages"] = json!(["session-1:5:agent"]);
 
     let (requests, result) = serve_reconcile(
-        vec![found(stored), ok("{}"), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
+        vec![
+            found(stored),
+            ok("{}"),
+            ok(BULK_OK),
+            ok("{}"),
+            ok(SWEEP_EMPTY),
+        ],
         args(),
         None,
     )

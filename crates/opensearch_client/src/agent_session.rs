@@ -39,8 +39,9 @@ impl StoredParent {
 }
 
 /// Read a session's parent in real time, so it reflects the last write even
-/// before a refresh. A missing parent, or a missing index, reads as `None`;
-/// the writes that follow report a missing alias.
+/// before a refresh. A missing parent reads as `None`. A missing index or
+/// alias is an error: every delete that follows would create an index under
+/// that name, which `require_alias` does not prevent for deletes.
 #[tracing::instrument(skip_all)]
 pub(crate) async fn stored_parent(
     client: &opensearch::OpenSearch,
@@ -54,19 +55,119 @@ pub(crate) async fn stored_parent(
         .send()
         .await
         .map_err(|error| OpensearchClientError::request_failed(operation, &error))?;
-    if response.status_code() == opensearch::http::StatusCode::NOT_FOUND {
-        return Ok(None);
-    }
-    if !response.status_code().is_success() {
+    let status_code = response.status_code();
+    if status_code != opensearch::http::StatusCode::NOT_FOUND && !status_code.is_success() {
         return response_error(response, operation).await.map(|()| None);
     }
     let mut body: serde_json::Value = response
         .json()
         .await
         .map_err(|error| OpensearchClientError::deserialization_failed(operation, &error))?;
+    if index_missing(&body) {
+        return Err(OpensearchClientError::Unknown {
+            details: body.to_string(),
+            operation,
+        });
+    }
     Ok(body
         .get_mut("_source")
         .map(|source| StoredParent(source.take())))
+}
+
+fn index_missing(body: &serde_json::Value) -> bool {
+    body["error"]["type"].as_str() == Some("index_not_found_exception")
+}
+
+/// Most children one sweep can find, OpenSearch's default result window. A
+/// session holds far fewer; any beyond it go on a later sweep.
+const SWEEP_LIMIT: u32 = 10_000;
+
+/// Ids of a session's children other than `keep`, as of the last refresh.
+#[tracing::instrument(skip_all)]
+pub(crate) async fn unrecorded_children(
+    client: &opensearch::OpenSearch,
+    index: &str,
+    agent_session_id: &str,
+    keep: &[&str],
+    operation: OpensearchOperation,
+) -> Result<Vec<String>> {
+    let routing = [agent_session_id];
+    let response = client
+        .search(opensearch::SearchParts::Index(&[index]))
+        .routing(&routing)
+        .body(serde_json::json!({
+            "size": SWEEP_LIMIT,
+            "_source": false,
+            "query": { "bool": {
+                "filter": [{ "term": { "agent_session_id": agent_session_id } }],
+                "must_not": [{ "ids": { "values": keep } }]
+            } }
+        }))
+        .send()
+        .await
+        .map_err(|error| OpensearchClientError::request_failed(operation, &error))?;
+    if !response.status_code().is_success() {
+        return response_error(response, operation)
+            .await
+            .map(|()| Vec::new());
+    }
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|error| OpensearchClientError::deserialization_failed(operation, &error))?;
+    Ok(body["hits"]["hits"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|hit| hit["_id"].as_str().map(str::to_owned))
+        .collect())
+}
+
+/// Delete a session's documents by id under `version`, failing unless every
+/// delete applied or found nothing to delete. An older version than a
+/// document holds is refused, so a delayed delete cannot remove what a later
+/// reconcile wrote.
+#[tracing::instrument(skip_all, fields(deleted = ids.len()))]
+pub(crate) async fn delete_by_id(
+    client: &opensearch::OpenSearch,
+    index: &str,
+    agent_session_id: &str,
+    ids: &[String],
+    version: i64,
+    operation: OpensearchOperation,
+) -> Result<()> {
+    let body: Vec<String> = ids
+        .iter()
+        .map(|id| {
+            serde_json::json!({ "delete": {
+                "_id": id,
+                "routing": agent_session_id,
+                "version": version,
+                "version_type": "external_gte",
+            } })
+            .to_string()
+        })
+        .collect();
+    let response = client
+        .bulk(opensearch::BulkParts::Index(index))
+        .body(body)
+        .send()
+        .await
+        .map_err(|error| OpensearchClientError::request_failed(operation, &error))?;
+    if !response.status_code().is_success() {
+        return response_error(response, operation).await;
+    }
+    let response_body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|error| OpensearchClientError::deserialization_failed(operation, &error))?;
+    if response_body["errors"].as_bool() == Some(true) {
+        return Err(OpensearchClientError::Unknown {
+            details: response_body.to_string(),
+            operation,
+        });
+    }
+    Ok(())
 }
 
 /// Report a failed status with its body as sent; a gateway error page is not JSON.
@@ -87,37 +188,6 @@ pub(crate) async fn response_error(
         details: body,
         operation,
     })
-}
-
-/// Delete-by-query may report partial failure in an otherwise successful HTTP
-/// response. Agent-session queries proceed past version conflicts: a
-/// conflicting document was changed or deleted since the query's view, so
-/// leaving it is the intended outcome, and conflicts are not failures.
-pub(crate) async fn check_delete_response(
-    response: opensearch::http::response::Response,
-    operation: OpensearchOperation,
-) -> Result<()> {
-    if !response.status_code().is_success() {
-        return response_error(response, operation).await;
-    }
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|error| OpensearchClientError::deserialization_failed(operation, &error))?;
-    if delete_failed(&body) {
-        return Err(OpensearchClientError::Unknown {
-            details: body.to_string(),
-            operation,
-        });
-    }
-    Ok(())
-}
-
-fn delete_failed(body: &serde_json::Value) -> bool {
-    body["timed_out"].as_bool() == Some(true)
-        || body["failures"]
-            .as_array()
-            .is_some_and(|items| !items.is_empty())
 }
 
 #[cfg(test)]

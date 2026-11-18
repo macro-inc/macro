@@ -1,23 +1,20 @@
 use models_opensearch::SearchIndex;
-use opensearch::BulkParts;
 
 use crate::{
     Result,
-    agent_session::{response_error, stored_parent},
-    error::{OpensearchClientError, OpensearchOperation},
+    agent_session::{delete_by_id, stored_parent, unrecorded_children},
+    error::OpensearchOperation,
     upsert::agent_session::external_version,
 };
 
 /// Remove a session parent and all of its message children.
 ///
 /// The children the parent's record names or holds pending go first, by id,
-/// which applies before any refresh. Delete-by-query then removes the rest,
-/// such as children written before parents kept records; it skips the ids
-/// just deleted, which it may still see, proceeds past conflicts with
-/// children an earlier reconcile deleted, and forces no refresh. The parent
-/// goes last, so a retry after any failure still finds the survivors through
-/// its record. Every delete by id carries `version`, so a delayed delete from
-/// an earlier reconcile cannot remove what a later one wrote.
+/// which applies before any refresh. A search then finds the rest, such as
+/// children written before parents kept records, and deletes them by id too.
+/// The parent goes last, so a retry after any failure still finds the
+/// survivors through its record. Every delete carries `version`, so a delayed
+/// delete from an earlier reconcile cannot remove what a later one wrote.
 pub(crate) async fn delete_agent_session(
     client: &opensearch::OpenSearch,
     agent_session_id: &str,
@@ -43,28 +40,32 @@ pub(crate) async fn delete_agent_session(
             children.push(id);
         }
     }
-
     if !children.is_empty() {
-        delete_by_id(client, index, agent_session_id, &children, version).await?;
+        delete_by_id(
+            client,
+            index,
+            agent_session_id,
+            &children,
+            version,
+            operation,
+        )
+        .await?;
     }
 
-    let mut kept: Vec<&str> = children.iter().map(String::as_str).collect();
-    kept.push(agent_session_id);
-    let routing = [agent_session_id];
-    let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
-        .routing(&routing)
-        .conflicts(opensearch::params::Conflicts::Proceed)
-        .body(serde_json::json!({
-            "query": { "bool": {
-                "filter": [{ "term": { "agent_session_id": agent_session_id } }],
-                "must_not": [{ "ids": { "values": kept } }]
-            } }
-        }))
-        .send()
-        .await
-        .map_err(|error| OpensearchClientError::request_failed(operation, &error))?;
-    crate::agent_session::check_delete_response(response, operation).await?;
+    let mut keep: Vec<&str> = children.iter().map(String::as_str).collect();
+    keep.push(agent_session_id);
+    let leftovers = unrecorded_children(client, index, agent_session_id, &keep, operation).await?;
+    if !leftovers.is_empty() {
+        delete_by_id(
+            client,
+            index,
+            agent_session_id,
+            &leftovers,
+            version,
+            operation,
+        )
+        .await?;
+    }
 
     delete_by_id(
         client,
@@ -72,50 +73,7 @@ pub(crate) async fn delete_agent_session(
         agent_session_id,
         &[agent_session_id.to_owned()],
         version,
+        operation,
     )
     .await
-}
-
-/// Delete documents of one session by id, failing unless every delete
-/// applied or found nothing to delete.
-async fn delete_by_id(
-    client: &opensearch::OpenSearch,
-    index: &str,
-    agent_session_id: &str,
-    ids: &[String],
-    version: i64,
-) -> Result<()> {
-    let operation = OpensearchOperation::DeleteAgentSession;
-    let body: Vec<String> = ids
-        .iter()
-        .map(|id| {
-            serde_json::json!({ "delete": {
-                "_id": id,
-                "routing": agent_session_id,
-                "version": version,
-                "version_type": "external_gte",
-            } })
-            .to_string()
-        })
-        .collect();
-    let response = client
-        .bulk(BulkParts::Index(index))
-        .body(body)
-        .send()
-        .await
-        .map_err(|error| OpensearchClientError::request_failed(operation, &error))?;
-    if !response.status_code().is_success() {
-        return response_error(response, operation).await;
-    }
-    let response_body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|error| OpensearchClientError::deserialization_failed(operation, &error))?;
-    if response_body["errors"].as_bool() == Some(true) {
-        return Err(OpensearchClientError::Unknown {
-            details: response_body.to_string(),
-            operation,
-        });
-    }
-    Ok(())
 }

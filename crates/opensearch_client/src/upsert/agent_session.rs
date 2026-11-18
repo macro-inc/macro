@@ -7,7 +7,9 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     Result,
-    agent_session::{IndexedMessages, response_error, stored_parent},
+    agent_session::{
+        IndexedMessages, delete_by_id, response_error, stored_parent, unrecorded_children,
+    },
     date_format::EpochMillis,
     error::{OpensearchClientError, OpensearchOperation},
 };
@@ -346,49 +348,35 @@ async fn write_children(
 /// Removes children neither the record nor this reconcile accounts for:
 /// children written before parents kept records (older projections of
 /// renumbered turns among them), and any a failed reconcile wrote without
-/// recording. Delete-by-query only sees refreshed documents, so this skips the
-/// ids this reconcile just wrote or deleted, and a child an earlier reconcile
-/// deleted can still appear and conflict; conflicts proceed, since such a
-/// child is already gone. A leftover younger than a refresh goes on the next
-/// reconcile. When nothing matches, which is the normal case, it neither
-/// writes nor refreshes.
-#[tracing::instrument(skip_all)]
+/// recording. The search behind it sees only refreshed documents, so it skips
+/// the ids this reconcile just wrote or deleted; a leftover younger than a
+/// refresh goes on the next reconcile. The deletes carry this reconcile's
+/// version, so a delayed sweep cannot remove a child a later reconcile wrote.
+/// When nothing is left over, which is the normal case, it only searches.
 async fn prune_unrecorded_children(
     client: &opensearch::OpenSearch,
     index: &str,
     args: &ReconcileAgentSessionArgs,
     plan: &ReconcilePlan,
-) -> Result<()> {
+) -> Result<usize> {
+    let operation = OpensearchOperation::ReconcileAgentSessionPrune;
     let mut keep: Vec<&str> = plan.record.keys().map(String::as_str).collect();
     keep.extend(plan.delete.iter().map(String::as_str));
     keep.push(&args.agent_session_id);
-    let prune_query = serde_json::json!({
-        "query": {
-            "bool": {
-                "filter": [{ "term": { "agent_session_id": &args.agent_session_id } }],
-                "must_not": [{ "ids": { "values": keep } }]
-            }
-        }
-    });
-    let routing_values = [args.agent_session_id.as_str()];
-    let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
-        .routing(&routing_values)
-        .conflicts(opensearch::params::Conflicts::Proceed)
-        .body(prune_query)
-        .send()
-        .await
-        .map_err(|error| {
-            OpensearchClientError::request_failed(
-                OpensearchOperation::ReconcileAgentSessionPrune,
-                &error,
-            )
-        })?;
-    crate::agent_session::check_delete_response(
-        response,
-        OpensearchOperation::ReconcileAgentSessionPrune,
-    )
-    .await
+    let leftovers =
+        unrecorded_children(client, index, &args.agent_session_id, &keep, operation).await?;
+    if !leftovers.is_empty() {
+        delete_by_id(
+            client,
+            index,
+            &args.agent_session_id,
+            &leftovers,
+            external_version(args.version, operation)?,
+            operation,
+        )
+        .await?;
+    }
+    Ok(leftovers.len())
 }
 
 fn to_parent_value(parent: ParentDocument<'_>) -> Result<serde_json::Value> {
@@ -429,7 +417,9 @@ async fn write_parent(
 
 /// Write the messages that changed since the parent's record, remove the ones
 /// the session no longer has, record the result on the parent, then sweep
-/// children no record names. Callers serialize reconciles by session id.
+/// children no record names. Callers serialize reconciles by session id. A
+/// missing index or alias fails the first read, before any write or delete
+/// could create one.
 ///
 /// Nothing waits for a refresh: no caller reads the index back, and every
 /// write and delete names its document by id, which needs no refresh to apply.
@@ -482,12 +472,12 @@ pub(crate) async fn reconcile_agent_session(
     if parent_written {
         write_parent(client, index, args, parent, require_alias).await?;
     }
-    prune_unrecorded_children(client, index, args, &plan).await?;
+    let swept = prune_unrecorded_children(client, index, args, &plan).await?;
 
     Ok(AgentSessionReconcileWrites {
         parent_written,
         messages_written: plan.write.len(),
         messages_unchanged: plan.unchanged,
-        messages_deleted: plan.delete.len(),
+        messages_deleted: plan.delete.len() + swept,
     })
 }
