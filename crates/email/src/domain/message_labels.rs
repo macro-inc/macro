@@ -386,7 +386,12 @@ where
                 .enqueue_mailbox_action(link_id, actor, &action, &targets)
                 .await
                 .inspect_err(|e| {
-                    tracing::error!(error=?e, "Failed to queue the Outlook category change");
+                    tracing::error!(
+                        error=?e,
+                        %link_id,
+                        targets = targets.len(),
+                        "Failed to queue the Outlook category change"
+                    );
                 })
                 .is_ok();
         let (successful_ids, failed_ids) = messages

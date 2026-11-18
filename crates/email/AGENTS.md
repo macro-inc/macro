@@ -347,9 +347,10 @@ tools — hexagonal, heavily feature-gated.
   (`stage_thread_labels` / `commit_thread_label_write` in
   `domain/service/thread_labels.rs`); route new thread label actions through them.
   Message-label batches go through `domain/message_labels.rs`, with their atomic
-  staging and unqueued-write undo behind `MessageLabelRepository`. On Outlook,
-  thread and message labels alike are one category mailbox command
-  (`enqueue_mailbox_action`), never a Gmail label write. The queued
+  staging and unqueued-write undo behind `MessageLabelRepository`. A thread on
+  an Outlook inbox, or a message batch whose first message resolves to one,
+  takes its label as one category mailbox command (`enqueue_mailbox_action`)
+  instead of a Gmail label write. The queued
   half lives in `domain/message_labels/gmail_ops.rs`: it owns turn ordering,
   partial acceptance/reversion, retry routing, and delivery dispositions through
   link, settlement, provider, and retry-queue ports. Provider admission remains

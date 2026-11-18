@@ -10,7 +10,6 @@ use email::domain::models::mailbox_action::{
     MailboxAction, MailboxActionMessage, MailboxActionTarget,
 };
 use email::domain::ports::EmailRepo;
-use email::outbound::EmailPgRepo;
 use email::outbound::label_state_pg::PgLabelState;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service;
@@ -21,7 +20,9 @@ pub mod gmail_ops;
 #[cfg(test)]
 mod test;
 
-pub struct PgMessageLabels(pub sqlx::PgPool);
+/// Message-label persistence on the pool, with the inbox's mailbox commands
+/// written through the email repository composed at startup.
+pub struct PgMessageLabels<M>(pub sqlx::PgPool, pub M);
 
 #[derive(Debug, thiserror::Error)]
 pub enum MessageLabelPersistenceError {
@@ -29,7 +30,10 @@ pub enum MessageLabelPersistenceError {
     Database(#[from] anyhow::Error),
 }
 
-impl MessageLabelRepository for PgMessageLabels {
+impl<M> MessageLabelRepository for PgMessageLabels<M>
+where
+    M: EmailRepo<Err = sqlx::Error>,
+{
     type Err = MessageLabelPersistenceError;
 
     async fn inbox_for_message(
@@ -243,7 +247,7 @@ impl MessageLabelRepository for PgMessageLabels {
         link_id: Uuid,
         thread_id: Uuid,
     ) -> Result<Vec<MailboxActionMessage>, Self::Err> {
-        EmailPgRepo::new(self.0.clone())
+        self.1
             .mailbox_action_messages(link_id, thread_id)
             .await
             .map_err(|e| anyhow::Error::from(e).into())
@@ -256,14 +260,14 @@ impl MessageLabelRepository for PgMessageLabels {
         action: &MailboxAction,
         targets: &[MailboxActionTarget],
     ) -> Result<Uuid, Self::Err> {
-        EmailPgRepo::new(self.0.clone())
+        self.1
             .enqueue_mailbox_action(link_id, actor, action, targets)
             .await
             .map_err(|e| anyhow::Error::from(e).into())
     }
 }
 
-impl PgMessageLabels {
+impl<M> PgMessageLabels<M> {
     /// Restore an unqueued write while holding the same thread label-write locks.
     async fn revert_unsent_write(
         &self,
