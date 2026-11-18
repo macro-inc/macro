@@ -283,8 +283,9 @@ const SHARED_NATIVE_EDITOR_MODULES = [
 /**
  * An import chain by which code that flag-off users may load statically
  * imports native editor code, or undefined. The walk starts at the entry
- * modules and follows static and dynamic imports, but never enters a native
- * boundary or follows a dynamic import into native code: that is lazy.
+ * modules and follows static and dynamic imports. Only a dynamic import of a
+ * native boundary or of native code is lazy and not followed; a static import
+ * of a boundary loads it eagerly, so the walk goes through it.
  */
 export function nativeEditorLeak(
   entries: Iterable<string>,
@@ -301,7 +302,7 @@ export function nativeEditorLeak(
   const parent = new Map<string, string | undefined>();
   const queue: string[] = [];
   const visit = (id: string, from: string | undefined) => {
-    if (parent.has(id) || boundary(id)) return;
+    if (parent.has(id)) return;
     parent.set(id, from);
     queue.push(id);
   };
@@ -316,7 +317,8 @@ export function nativeEditorLeak(
     }
     const next = imports(id);
     for (const imported of next.static) visit(imported, id);
-    for (const lazy of next.dynamic) if (!native(lazy)) visit(lazy, id);
+    for (const lazy of next.dynamic)
+      if (!native(lazy) && !boundary(lazy)) visit(lazy, id);
   }
   return undefined;
 }

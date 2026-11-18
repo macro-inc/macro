@@ -67,4 +67,36 @@ describe('nativeEditorLeak', () => {
       nativeEditorLeak(['/repo/index.html'], graph({ '/repo/index.html': { static: [VIEW] } }))
     ).toEqual(['/repo/index.html', VIEW]);
   });
+
+  it('goes through a boundary that is imported statically', () => {
+    expect(
+      nativeEditorLeak(
+        ['/repo/index.html'],
+        graph({
+          '/repo/index.html': { static: [BOUNDARY] },
+          [BOUNDARY]: { static: [VIEW] },
+        })
+      )
+    ).toEqual(['/repo/index.html', BOUNDARY, VIEW]);
+  });
+
+  it('goes through a boundary that is itself an entry', () => {
+    expect(
+      nativeEditorLeak([BOUNDARY], graph({ [BOUNDARY]: { static: [VIEW] } }))
+    ).toEqual([BOUNDARY, VIEW]);
+  });
+
+  it('reports a leak from a second entry', () => {
+    expect(
+      nativeEditorLeak(
+        ['/repo/index.html', '/repo/canvas-render.html'],
+        graph({
+          '/repo/index.html': { dynamic: [BOUNDARY] },
+          [BOUNDARY]: { static: [VIEW] },
+          '/repo/canvas-render.html': { static: ['/repo/canvas.ts'] },
+          '/repo/canvas.ts': { static: [ABI] },
+        })
+      )
+    ).toEqual(['/repo/canvas-render.html', '/repo/canvas.ts', ABI]);
+  });
 });
