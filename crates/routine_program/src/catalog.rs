@@ -573,7 +573,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
                 "Asks AI whether each new email is noise, and archives its thread when it is sure enough. It leaves threads you have written in.",
                 include_str!("catalog/archive_noise.ts"),
                 json!([
-                    { "type": "question", "name": "isNoise", "label": "it's a newsletter, promotion or notification", "value": "Is this email a newsletter, a promotion or an automated notification, with nothing for me to do and not a receipt, a security alert or a message a person wrote to me?" },
+                    { "type": "question", "name": "isNoise", "label": "it's a newsletter, promotion or notification", "value": "Is this email a newsletter, a promotion or an automated notification that nobody wrote to me personally, and not a receipt, a bill, a security alert or a request for my review or approval?" },
                     { "type": "number", "name": "certainty", "label": "How sure AI must be (percent)", "value": 85, "min": 50, "max": 99 },
                 ]),
                 "Archive the thread of each new email when {?isNoise}, if AI is at least {certainty}% sure.",
