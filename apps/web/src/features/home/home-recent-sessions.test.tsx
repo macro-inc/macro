@@ -1,15 +1,16 @@
+import { soupRestFallback } from '@queries/soup/graphql/rest-fallback';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
-import { RecentSessionsSection } from './home-recent-sessions';
+import {
+  RECENT_CHATS_ARGS,
+  RecentSessionsSection,
+} from './home-recent-sessions';
 
 const navigation = vi.hoisted(() => ({
   replace: vi.fn(),
   openWithSplit: vi.fn(),
 }));
 
-vi.mock('@app/features/next-soup/filters/query-filters', () => ({
-  QUERY_FILTERS_BASE: {},
-}));
 vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => ({ openWithSplit: navigation.openWithSplit }),
 }));
@@ -23,22 +24,24 @@ vi.mock('@core/component/EntityIcon', () => ({
   EntityIcon: () => <svg data-entity-type="chat" />,
 }));
 vi.mock('@queries/soup/items', () => ({
-  useSoupItemsQuery: () => ({
-    data: [
-      {
-        type: 'chat',
-        id: 'gpt-chat',
-        name: 'GPT conversation',
-        model: 'openai/gpt-5.5',
-      },
-      {
-        type: 'chat',
-        id: 'claude-chat',
-        name: 'Claude conversation',
-        model: 'anthropic/claude-sonnet-5',
-      },
-      { type: 'chat', id: 'unknown-chat', name: 'Unknown conversation' },
-    ],
+  useSoupAstItemsQuery: () => ({
+    data: {
+      entities: [
+        {
+          type: 'chat',
+          id: 'gpt-chat',
+          name: 'GPT conversation',
+          model: 'openai/gpt-5.5',
+        },
+        {
+          type: 'chat',
+          id: 'claude-chat',
+          name: 'Claude conversation',
+          model: 'anthropic/claude-sonnet-5',
+        },
+        { type: 'chat', id: 'unknown-chat', name: 'Unknown conversation' },
+      ],
+    },
   }),
 }));
 
@@ -82,4 +85,8 @@ it('keeps normal clicks in the source split and opens Shift-clicks in a new spli
     { type: 'chat', id: 'gpt-chat' },
     { activate: true, preferNewSplit: true }
   );
+});
+
+it('reads recent chats over GraphQL, not the REST soup list', () => {
+  expect(soupRestFallback(RECENT_CHATS_ARGS)).toBeUndefined();
 });

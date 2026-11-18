@@ -1,10 +1,23 @@
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import {
+  compileToAst,
+  defineQueryFilters,
+  queryStateFrom,
+} from '@app/features/next-soup/filters/filter-store';
 import { type CrmCompanyEntity, isCrmCompanyEntity } from '@entity';
-import type { useSoupItemsQuery } from '@queries/soup/items';
+import { queryReadyGate } from '@queries/gate';
+import type {
+  SoupAstItemsQueryArgs,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { type Accessor, createMemo } from 'solid-js';
 
-const QUICK_ACCESS_COMPANIES_LIMIT = 500;
-const STALE_TIME = 5 * 60 * 1000;
+/** Every visible CRM company, recently opened first. */
+export const QUICK_ACCESS_CRM_COMPANIES_ARGS: SoupAstItemsQueryArgs = {
+  params: { limit: 500, sort_method: 'viewed_updated' },
+  body: compileToAst(
+    queryStateFrom(defineQueryFilters({}, { skipTargets: ['ccf'] }))
+  ),
+};
 
 /**
  * Quick Access feed of the team's CRM companies, sorted so the user's
@@ -15,34 +28,22 @@ const STALE_TIME = 5 * 60 * 1000;
  * — the recently-viewed soup query covers viewed companies with their
  * `viewedAt`, this one widens the pool to all team companies up to a
  * cap so users can `@`-mention companies they've never opened.
- *
- * Every other entity type is filtered out by extending `QUERY_FILTERS_BASE`.
  */
 export function useQuickAccessCrmCompaniesQuery(
-  useSource: typeof useSoupItemsQuery,
+  useSource: typeof useSoupAstItemsQuery,
   enabled: Accessor<boolean>
 ) {
   const query = useSource(
-    () => ({
-      params: {
-        limit: QUICK_ACCESS_COMPANIES_LIMIT,
-        sort_method: 'viewed_updated',
-      },
-      body: {
-        ...QUERY_FILTERS_BASE,
-        // crm_company_filters intentionally unset = all visible companies
-        crm_company_filters: undefined,
-      },
-    }),
-    () => ({ staleTime: STALE_TIME, enabled: enabled() })
+    () => QUICK_ACCESS_CRM_COMPANIES_ARGS,
+    () => ({ enabled: enabled() })
   );
 
   const companies = createMemo<CrmCompanyEntity[]>(() =>
-    enabled() && query.isSuccess
-      ? (query.data?.filter(
+    enabled() && queryReadyGate(query)
+      ? query.data.entities.filter(
           (entity): entity is CrmCompanyEntity =>
             isCrmCompanyEntity(entity) && !entity.hidden
-        ) ?? [])
+        )
       : []
   );
 

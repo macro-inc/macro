@@ -1,12 +1,16 @@
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import {
+  compileToAst,
+  defineQueryFilters,
+  queryStateFrom,
+} from '@app/features/next-soup/filters/filter-store';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ChatProviderIcon } from '@entity/components/ChatProviderIcon';
 import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
 import {
-  type SoupItemsQueryArgs,
-  useSoupItemsQuery,
+  type SoupAstItemsQueryArgs,
+  useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { ErrorBoundary, For, Show } from 'solid-js';
@@ -46,16 +50,18 @@ const SESSION_ROW_ARROW_CLASSES =
 const DEFAULT_LIMIT = 3;
 
 /** Chats only, most recently updated first. */
-const RECENT_CHATS_ARGS: SoupItemsQueryArgs = {
+export const RECENT_CHATS_ARGS: SoupAstItemsQueryArgs = {
   params: { sort_method: 'updated_at', limit: 10 },
-  body: { ...QUERY_FILTERS_BASE, chat_filters: undefined },
+  body: compileToAst(
+    queryStateFrom(defineQueryFilters({}, { skipTargets: ['cf'] }))
+  ),
 };
 
 /** The user's most recently updated AI chats, newest first. */
 export function useRecentChatSessions(limit = DEFAULT_LIMIT) {
-  const query = useSoupItemsQuery(() => RECENT_CHATS_ARGS);
+  const query = useSoupAstItemsQuery(() => RECENT_CHATS_ARGS);
   return () =>
-    (query.data ?? [])
+    (query.data?.entities ?? [])
       .filter((entity) => entity.type === 'chat')
       .filter((chat) => chat.name)
       .slice(0, limit);
