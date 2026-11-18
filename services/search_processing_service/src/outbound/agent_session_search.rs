@@ -7,7 +7,7 @@ use nom::{
     IResult, Parser,
     branch::alt,
     bytes::complete::{tag, take_until},
-    combinator::{consumed, opt, recognize, rest, verify},
+    combinator::{consumed, recognize, rest, verify},
     multi::many0,
     sequence::delimited,
 };
@@ -96,10 +96,10 @@ const PASTE_CLOSE: &str = "</m-paste>";
 /// A message's text with its `<m-*>` chips written as text. Links and
 /// mentions read as `PlainTextFormatter` writes them, as in agent
 /// notifications; prompts and replies are prose, not valid markup
-/// (`Vec<String>`, `a < b`), so they parse leniently, and from the first tag
-/// that does not parse the rest stays as written. A paste (a long pasted text
-/// or a quoted reply) reads as its content, which that formatter would drop
-/// with the tags it does not know.
+/// (`Vec<String>`, `a < b`), so they parse leniently, and from a tag that does
+/// not parse the text up to the next paste stays as written. A paste (a long
+/// pasted text or a quoted reply) reads as its content, which that formatter
+/// would drop with the tags it does not know.
 fn shown_text(text: &str) -> String {
     let Ok((_, pieces)) = many0(piece).parse(text) else {
         return flattened(text);
@@ -109,7 +109,7 @@ fn shown_text(text: &str) -> String {
         .map(|piece| match piece {
             Piece::Markup(markup) => flattened(markup),
             Piece::Paste(content) => content,
-            Piece::Malformed(block) => block.to_owned(),
+            Piece::AsWritten(text) => text.to_owned(),
         })
         .collect()
 }
@@ -121,18 +121,21 @@ fn flattened(markup: &str) -> String {
 enum Piece<'a> {
     Markup(&'a str),
     Paste(String),
-    /// A paste whose JSON does not parse, kept as written.
-    Malformed(&'a str),
+    /// A paste whose JSON does not parse, or an opener with no closer and
+    /// everything after it.
+    AsWritten(&'a str),
 }
 
-/// A paste, or the markup up to the next one.
+/// A paste, or the markup up to the next one. Once an opener has no closer,
+/// no later paste is complete either, so the rest is kept as written instead
+/// of searching for a closer again from every later opener.
 fn piece(input: &str) -> IResult<&str, Piece<'_>> {
     alt((
         paste,
-        verify(
-            recognize((opt(tag(PASTE_OPEN)), alt((take_until(PASTE_OPEN), rest)))),
-            |markup: &str| !markup.is_empty(),
-        )
+        recognize((tag(PASTE_OPEN), rest)).map(Piece::AsWritten),
+        verify(alt((take_until(PASTE_OPEN), rest)), |markup: &str| {
+            !markup.is_empty()
+        })
         .map(Piece::Markup),
     ))
     .parse(input)
@@ -154,7 +157,7 @@ fn paste(input: &str) -> IResult<&str, Piece<'_>> {
     .map(
         |(block, json): (&str, &str)| match serde_json::from_str::<Paste>(json) {
             Ok(paste) => Piece::Paste(paste.content),
-            Err(_) => Piece::Malformed(block),
+            Err(_) => Piece::AsWritten(block),
         },
     )
     .parse(input)

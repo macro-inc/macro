@@ -59,3 +59,23 @@ fn markup_from_the_first_tag_that_does_not_parse_stays_as_written() {
     let text = r#"The parser reads `<m-link>` tags. See <m-link>{"url":"https://example.com","text":"docs"}</m-link>."#;
     assert_eq!(shown_text(text), text);
 }
+
+#[test]
+fn an_opener_without_a_closer_keeps_the_rest_as_written() {
+    let text = "Earlier <m-paste> stray <m-paste> openers and no closer";
+    assert_eq!(shown_text(text), text);
+    let many = "<m-paste>x ".repeat(20_000);
+    assert_eq!(shown_text(&many), many);
+}
+
+/// A tag that does not parse keeps its stretch as written; a paste after it
+/// still reads as its content.
+#[test]
+fn a_paste_after_markup_that_does_not_parse_still_reads_as_its_content() {
+    assert_eq!(
+        shown_text(
+            r#"See <m-link>not json</m-link> then <m-paste>{"content":"invoice total"}</m-paste>"#
+        ),
+        "See <m-link>not json</m-link> then invoice total"
+    );
+}
