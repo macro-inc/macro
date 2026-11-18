@@ -453,6 +453,50 @@ fn turso_pending_mark_read_does_not_keep_a_thread_the_server_dropped() {
     ));
 }
 
+async fn queued_archive_and_undo<S: PredicateIndexStorage>(storage: S) {
+    let mut engine = Engine::new(storage);
+    let vars = variables("DESC");
+    persist(
+        &mut engine,
+        "SoupMailBackfill",
+        &vars,
+        &response(&[20, 18, 16, 14, 8], Value::Null),
+    )
+    .await;
+    // The server has applied the archive of 18 but not yet its Undo, which
+    // the user already sees: the page leaves 18 out, and the queue explains it.
+    let archive = edit(json!({"__typename":TYPE,"id":id(18),"inboxVisible":false}));
+    begin_pending(
+        &mut engine,
+        "00000000-0000-0000-0000-000000009000",
+        &archive,
+    )
+    .await;
+    let undo = edit(json!({"__typename":TYPE,"id":id(18),"inboxVisible":true}));
+    begin_pending(&mut engine, "00000000-0000-0000-0000-000000009001", &undo).await;
+    persist(
+        &mut engine,
+        "Soup",
+        &vars,
+        &response(&[20, 16, 8], json!("next")),
+    )
+    .await;
+    assert_eq!(
+        current_keys(&mut engine, noise(), "DESC").await,
+        keys(&[20, 18, 16, 8])
+    );
+}
+#[test]
+fn a_queued_undo_keeps_a_thread_the_server_has_only_archived() {
+    pollster::block_on(queued_archive_and_undo(InMemoryStorage::new()));
+}
+#[test]
+fn turso_queued_undo_keeps_a_thread_the_server_has_only_archived() {
+    pollster::block_on(queued_archive_and_undo(
+        cache_turso::TursoStorage::open_in_memory("mail-queued-undo").unwrap(),
+    ));
+}
+
 #[test]
 fn a_rolled_back_mark_read_does_not_restore_a_thread_the_server_dropped() {
     pollster::block_on(async {
