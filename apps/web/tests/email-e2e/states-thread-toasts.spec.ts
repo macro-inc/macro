@@ -82,13 +82,19 @@ test.describe("the notices of an open thread's header", () => {
     for (const catchUp of catchUps) await catchUp.release();
   });
 
-  // Hold each write open until the action has closed the thread. The notice
-  // must reach the list even when the original thread is gone.
-  for (const refused of [false, true]) {
+  // Hold each write until the action has closed the thread. Also hold the
+  // opening read in the queued cases, so the unread starts behind it.
+  for (const { refused, queued } of [
+    { refused: false, queued: false },
+    { refused: true, queued: false },
+    { refused: false, queued: true },
+    { refused: true, queued: true },
+  ]) {
     const result = refused
       ? 'refusal from the title menu'
       : 'success from the envelope';
-    test(`marking unread shows ${result} after the inline thread closes`, async ({
+    const delay = queued ? ' when queued behind its opening read' : '';
+    test(`marking unread shows ${result} after the inline thread closes${delay}`, async ({
       page,
       mailbox,
     }) => {
@@ -96,10 +102,17 @@ test.describe("the notices of an open thread's header", () => {
       const seenInFlight = seenRequestsInFlight(page);
       const read = readAt(mailbox, 'Question');
       const actions = page.getByRole('group', { name: 'Email actions' });
+      const openingRead = queued
+        ? await holdOperation(page, 'MarkEmailThreadSeen')
+        : undefined;
       await mailbox.open();
       await openFromList(page, ids.Question, 'About Question.');
-      await expect.poll(read).toBe(true);
-      await expect.poll(seenInFlight).toBe(0);
+      if (openingRead) {
+        await expect.poll(openingRead.held).toBeGreaterThan(0);
+      } else {
+        await expect.poll(read).toBe(true);
+        await expect.poll(seenInFlight).toBe(0);
+      }
 
       if (refused) await refuseOperation(page, 'MarkEmailThreadUnread');
       const unread = await holdOperation(page, 'MarkEmailThreadUnread');
@@ -112,13 +125,22 @@ test.describe("the notices of an open thread's header", () => {
       await expect(
         page.getByRole('heading', { name: 'Question', level: 1 })
       ).toHaveCount(0);
+      const success = notice(page, 'Marked as unread');
+      let prematureSuccess = false;
+      if (openingRead) {
+        expect(unread.held()).toBe(0);
+        prematureSuccess = await success.isVisible();
+        await openingRead.release();
+      }
       await expect.poll(unread.held).toBeGreaterThan(0);
-      await unread.release();
+      if (openingRead) prematureSuccess ||= await success.isVisible();
 
+      const outcome = refused
+        ? notice(page, 'Failed to mark as unread')
+        : success;
+      await Promise.all([expect(outcome).toBeVisible(), unread.release()]);
       await expect.poll(read).toBe(refused);
-      await expect(
-        notice(page, refused ? 'Failed to mark as unread' : 'Marked as unread')
-      ).toBeVisible();
+      expect(prematureSuccess).toBe(false);
       saw('STL-076');
     });
   }
