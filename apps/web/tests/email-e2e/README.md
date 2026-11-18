@@ -262,6 +262,11 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 - `list.spec.ts`'s new-mail test runs only with `EMAIL_E2E_LIVE_UPDATES=1`
   and alone: every stack's services read live updates in one Kafka consumer
   group, so another running stack can take the event.
+  The per-test stack's recording proxy currently buffers HTTP responses and
+  removes `Connection`; it does not relay WebSocket upgrades. Its Soup socket
+  therefore fails the handshake even with a private broker, and the readiness
+  probe fails before the test exercises list updates. Live subscription delivery
+  remains unverified by this test until the proxy supports upgraded connections.
 
 ## Fixture tests
 
