@@ -173,7 +173,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   is refused. ChatGPT gets the
   direct tools: its plugin directory refuses generic executors.
   `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
-  the session repo, the `enable-agent-navigation` flag, Redis budgets and
+  the session repo, Redis budgets and
   the gateway `ui_command` send.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service; a scoped
@@ -247,6 +247,12 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   the ones still drafting as interrupted within `SHUTDOWN_TIMEOUT`; they
   share the draft store, push `routine_draft_update` through the connection
   gateway, and the same minute's sweep fails drafts whose replica died.
+  Code runs (session, public MCP and routine steps) reach the SDK hosts
+  through the runner's loopback forwarder for users with the PostHog flag
+  `enable-code-execution-egress-proxy` (`code_mode::EgressRollout`); with no
+  flag client, the flag off or the flags unreadable, they go directly. The
+  answer is cached per user for 60 s (10 s after a failed read), so a run
+  doesn't wait on PostHog (span `code_execution.egress_flag`, `cache`).
   Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access (`mint_for_routine`):

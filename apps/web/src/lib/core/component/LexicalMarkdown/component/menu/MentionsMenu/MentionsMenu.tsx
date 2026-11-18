@@ -11,7 +11,6 @@ import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fi
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import {
   disableCrmContactSearch,
-  enableCrm,
   enableWhatsappLinked,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
@@ -211,14 +210,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       })
     : undefined;
 
-  const customCompanies =
-    isFeatureEnabled(enableCrm) && props.entities
-      ? useEntityMentionFromList({
-          items: props.entities,
-          buckets: ['crm_company'],
-          searchTerm,
-        })
-      : undefined;
+  const customCompanies = props.entities
+    ? useEntityMentionFromList({
+        items: props.entities,
+        buckets: ['crm_company'],
+        searchTerm,
+      })
+    : undefined;
 
   const docsMention =
     customDocs ??
@@ -238,16 +236,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     });
   const channels = channelsMention.entities;
 
-  // CRM companies only surface in mentions when the feature is enabled —
-  // the mention hook isn't even wired up otherwise.
-  const companyMention = isFeatureEnabled(enableCrm)
-    ? (customCompanies ??
-      useEntityMention({
-        buckets: ['crm_company'],
-        searchTerm: activeSearchTerm,
-        enabled: props.menu.isOpen,
-      }))
-    : undefined;
+  const companyMention =
+    customCompanies ??
+    useEntityMention({
+      buckets: ['crm_company'],
+      searchTerm: activeSearchTerm,
+      enabled: props.menu.isOpen,
+    });
   const sourceEnabled = (source: MentionBucketId) =>
     !props.sources || props.sources.includes(source);
   const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
@@ -255,29 +250,27 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     props.includeContacts !== false &&
     sourceEnabled('crm') &&
     !contactSearchDisabled().enabled;
-  const contactMention = isFeatureEnabled(enableCrm)
-    ? props.entities
-      ? {
-          ...useEntityMentionFromList({
-            items: props.entities,
-            buckets: ['crm_contact'],
-            searchTerm,
-          }),
-          users: () => [],
-          windowKey: () => undefined,
-        }
-      : useCrmContactMentionSource(
-          activeSearchTerm,
-          () => props.menu.isOpen() && contactsEnabled(),
-          () => false
-        )
-    : undefined;
+  const contactMention = props.entities
+    ? {
+        ...useEntityMentionFromList({
+          items: props.entities,
+          buckets: ['crm_contact'],
+          searchTerm,
+        }),
+        users: () => [],
+        windowKey: () => undefined,
+      }
+    : useCrmContactMentionSource(
+        activeSearchTerm,
+        () => props.menu.isOpen() && contactsEnabled(),
+        () => false
+      );
 
   const crmItems = createLazyMemo(() =>
     rankMentions(
       deduplicateContactItems([
-        ...(companyMention?.entities() ?? []),
-        ...(contactsEnabled() ? (contactMention?.entities() ?? []) : []),
+        ...(companyMention.entities() ?? []),
+        ...(contactsEnabled() ? (contactMention.entities() ?? []) : []),
       ]),
       searchTerm(),
       true
@@ -287,15 +280,15 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     entities: crmItems,
     totalCount: () => crmItems().length,
     hasMore: () =>
-      (companyMention?.hasMore() ?? false) ||
-      (contactsEnabled() && (contactMention?.hasMore() ?? false)),
+      (companyMention.hasMore() ?? false) ||
+      (contactsEnabled() && (contactMention.hasMore() ?? false)),
     isLoadingMore: () =>
-      (companyMention?.isLoadingMore() ?? false) ||
-      (contactsEnabled() && (contactMention?.isLoadingMore() ?? false)),
+      (companyMention.isLoadingMore() ?? false) ||
+      (contactsEnabled() && (contactMention.isLoadingMore() ?? false)),
     loadMore: async () => {
       await Promise.all([
-        companyMention?.loadMore(),
-        contactsEnabled() && contactMention?.loadMore(),
+        companyMention.loadMore(),
+        contactsEnabled() && contactMention.loadMore(),
       ]);
     },
   };
@@ -447,7 +440,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     (sourceEnabled('users') && userMention.isLoading()) ||
     (sourceEnabled('emails') && isLoadingMoreEmails()) ||
     (contactsEnabled() &&
-      !!contactMention &&
       'isLoading' in contactMention &&
       contactMention.isLoading());
   const mobileAllItems = createLazyMemo((): MentionItem[] => {

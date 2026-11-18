@@ -550,7 +550,6 @@ provider MIME or parses ICS.
 When an already-loaded thread's saved invitations change, that thread's calendar
 resolution is revalidated in the background; its first load or a switch between threads
 does not trigger it. Cards are keyed by component, so thread refreshes keep their state.
-Without the calendar UI flag, cards render the saved invitation with no calendar lookup.
 
 Scheduling revisions come only from the thread's own saved components, and are
 reconciled separately for each original occurrence and its series master. A lower-sequence master cancellation still cancels an instance
@@ -758,8 +757,9 @@ message, and GraphQL refuses programs. A person reads the email whole.
 An agent's program (a token with agent attribution, or a code-mode request
 marked by `x-macro-code-execution` whose token signs no program;
 `macro_authorization::is_agent_run`) never sends
-an email the user has not seen. The REST send (`POST /email/messages`) answers
-it 403. It sends through a session review (`execution.reviews.create({kind:
+an email the user has not seen. The REST send (`POST /email/messages`) and the
+calendar invite forward (`POST /email/calendar-events/{event_id}/forward`)
+answer it 403. It sends through a session review (`execution.reviews.create({kind:
 'email'})`), whose card the user submits, or, for a prompt from a channel or
 document thread, on the user's quoted approval:
 

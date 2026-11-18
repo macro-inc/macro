@@ -1,4 +1,4 @@
-// What the list shows on a phone alone: the Calendar pill's empty state, and
+// What the list shows on a phone alone: the Calendar tab's empty state, and
 // the filter drawer with its trigger, its sheet, its section label (Filters,
 // or Inboxes on Scheduled) and the count of active filters on the trigger.
 
@@ -6,16 +6,22 @@ import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { createTag, tagThread } from './harness/organise';
 import { emptyTitle } from './harness/states-list';
-import { expectRows, GRACE, PHONE } from './harness/ways-list1';
+import {
+  expectRows,
+  GRACE,
+  openTouchTab,
+  PHONE,
+  touchHeaderName,
+} from './harness/ways-list1';
 import { did, saw } from './ledger/record';
 
-// Gmail only: the pills and the drawer are drawn by the same code whatever
+// Gmail only: the tabs and the drawer are drawn by the same code whatever
 // the mailbox, and the tag filtered on is Macro's own.
 test.describe('the phone list of a Gmail inbox', () => {
   test.use({ ...PHONE, provider: 'GMAIL' });
   test.beforeEach(({ page }) => loadAppSteadily(page));
 
-  // When this fails, an empty Calendar pill shows no title of its own, the
+  // When this fails, an empty Calendar tab shows no title of its own, the
   // filter drawer's trigger or sheet lost its name, the sheet's section
   // label does not say Filters (or Inboxes on Scheduled), or the trigger
   // shows no count while a filter is set, or keeps it once cleared.
@@ -26,11 +32,6 @@ test.describe('the phone list of a Gmail inbox', () => {
     await mailbox.deliver({ from: GRACE, subject: 'Tagged', text: 'Now.' });
     const tagged = (await mailbox.synced('Tagged')).id;
     await tagThread(mailbox, tagged, await createTag(mailbox, 'Urgent'));
-    // The dock has a Calendar button too: a pill is pressed or not.
-    const pill = (name: string) =>
-      page
-        .getByRole('button', { name, exact: true })
-        .and(page.locator('[aria-pressed]'));
     const trigger = page.getByRole('button', { name: 'Open email filters' });
     const drawer = page.getByRole('dialog', { name: 'Email filters' });
 
@@ -40,12 +41,12 @@ test.describe('the phone list of a Gmail inbox', () => {
     );
     await expectRows(page, [tagged]);
 
-    await pill('Calendar').tap();
-    await expect(pill('Calendar')).toHaveAttribute('aria-pressed', 'true');
+    await openTouchTab(page, 'Calendar');
+    await expect(touchHeaderName(page, 'Calendar')).toBeVisible();
     await expect(emptyTitle(page, 'No calendar email')).toBeVisible();
     saw('STL-015');
 
-    await pill('Signal').tap();
+    await openTouchTab(page, 'Signal');
     await expectRows(page, [tagged]);
     await expect(trigger).toHaveText('');
     await trigger.tap();
@@ -74,8 +75,8 @@ test.describe('the phone list of a Gmail inbox', () => {
     await expect(drawer).toHaveCount(0);
     await expect(trigger).toHaveText('');
 
-    await pill('Scheduled').tap();
-    await expect(pill('Scheduled')).toHaveAttribute('aria-pressed', 'true');
+    await openTouchTab(page, 'Scheduled');
+    await expect(touchHeaderName(page, 'Scheduled')).toBeVisible();
     await trigger.tap();
     await expect(drawer.getByText('Inboxes', { exact: true })).toBeVisible();
     await expect(drawer.getByText('Filters', { exact: true })).toHaveCount(0);

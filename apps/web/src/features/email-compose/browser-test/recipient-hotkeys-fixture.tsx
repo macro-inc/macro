@@ -192,7 +192,6 @@ const context: EmailComposeContext = {
     isTouch: () => mobile,
     isMobile: () => mobile,
     scheduleEnabled: false,
-    signaturesEnabled: () => false,
   },
   editorFiles: {
     readDroppedFiles: () => {},

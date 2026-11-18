@@ -63,8 +63,6 @@ mod test;
 
 /// The PostHog flag that turns routine suggestions on for a person.
 pub const ROUTINE_SUGGESTIONS_FLAG: &str = "enable-routine-suggestions";
-/// The PostHog flag that lets a person save code steps.
-pub const ROUTINE_CODE_STEPS_FLAG: &str = "enable-routine-code-steps";
 /// Inbox messages a brief holds.
 pub const INBOX_MESSAGES: u16 = 100;
 /// Suggestions shown per surface: AI's, then Macro's templates.
@@ -418,8 +416,8 @@ where
         trigger: GenerationTrigger,
         timezone: Tz,
     ) -> Result<String> {
-        let flags = self.require_flag(user).await?;
-        let code = self.code.sdk().is_some() && flags.is_enabled(ROUTINE_CODE_STEPS_FLAG);
+        self.require_flag(user).await?;
+        let code = self.code.sdk().is_some();
         let (inbox, apps, dismissed) = tokio::join!(
             self.sources.inbox(user, INBOX_MESSAGES),
             self.sources.apps(user),

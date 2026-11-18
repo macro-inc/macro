@@ -1138,7 +1138,7 @@ open shadow root: Playwright text locators can reach them, but a card's ordinary
 
 ### Read receipts
 
-With `enable-email-read-receipts` on and read receipts on for an inbox, which
+With read receipts on for an inbox, which
 is the default (see [Settings](settings.md#email-read-receipts)), messages sent from that
 inbox show **Opened** or **Not opened** beside the date in the expanded
 message header. The desktop tooltip and the expanded header details (tap the
@@ -1559,7 +1559,15 @@ gives the full send time, with secondary **View message** on the left and primar
 **Email rescheduled** with **View message**. Undo cancels the captured draft in
 the captured inbox and restores its editable body, envelope, and attachments; it must
 not overwrite a newer reply. View message opens the scheduled thread, or scrolls an
-inline reply back into view.
+inline reply back into view. The notice and its Undo stay while the thread opens
+after the schedule, on a phone too: the composer there starts from the schedule
+just made, even when its first read of the draft predates it, and raises no
+**Email scheduled for … Cancel the schedule to edit.** alert, which is for a
+schedule made in another tab or device. A schedule cancelled or moved from
+another composer before its notice shows (while the thread is being marked done)
+gets no notice; once cancelled, the composer that scheduled it, reply or not,
+stays open and editable. A schedule moved on another device while its notice
+shows keeps the notice and its Undo.
 The Email view's **Scheduled** tab lists only server-confirmed scheduled drafts,
 soonest first across the selected inboxes, as ordinary email rows: the recipients,
 subject, and snippet, with a clock-and-time badge (for example **Tomorrow, 2:12
@@ -1691,7 +1699,7 @@ Date-grouped email lists start directly with today's messages; Today is not show
 
 ## Saved email views
 
-Behind `enable-email-saved-views` (on in dev). A saved view is a named
+A saved view is a named
 `kind: "email"` definition in the shared saved-view store; opening it queries
 live mail with the viewer's access. See `docs/design/saved-views.md`.
 

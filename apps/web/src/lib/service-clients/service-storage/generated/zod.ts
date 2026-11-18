@@ -7066,6 +7066,12 @@ export const postChannelBotWebhookHeader = zod.object({
 export const postChannelBotWebhookBody = zod
   .object({
     content: zod.string().describe('Message body.'),
+    notification_policy: zod
+      .enum(['Default', 'MentionsOnly', 'Silent'])
+      .optional()
+      .describe(
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
+      ),
   })
   .describe('Request to post a channel webhook message.');
 
@@ -74857,6 +74863,12 @@ export const entityMessageCreateBody = zod
       .string()
       .nullish()
       .describe('Client nonce for optimistic reconciliation.'),
+    notification_policy: zod
+      .enum(['Default', 'MentionsOnly', 'Silent'])
+      .optional()
+      .describe(
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
+      ),
     thread_id: zod
       .uuid()
       .nullish()

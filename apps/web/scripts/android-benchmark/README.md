@@ -49,7 +49,9 @@ or from the network (`soup.network`), which phases were already loaded
 (`<phase>.waited=false`), and requests the WebView itself sent while the step
 ran (analytics excluded; Tauri IPC on Android is not an HTTP request, so native
 HTTP shows up only as `http …` spans). `spans` lists the flow's spans relative to the touch (frequent tiny
-cache and reconcile spans are counted, not listed), for finding where the time went, and
+cache and reconcile spans are counted, not listed), for finding where the time went;
+an HTTP or GraphQL client span ends at its response headers, and its `bodyMs` is the
+time from there until its body was read (`http.body_ms`, `graphql.body_ms`).
 `hostLoad` is the host's load average at the time.
 
 ## Build the benchmark APK
