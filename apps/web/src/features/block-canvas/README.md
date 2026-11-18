@@ -148,7 +148,10 @@ so the graphics input swallows that lift's click: letting go presses no row.
 
 On a phone Style opens the inspector in a sheet over the lower half of the
 screen. Its scrim is clear, so the shape stays visible and a change shows as it
-is made, and a tap on the canvas closes it with the selection kept. Wider touch
+is made, and a tap on the canvas closes it with the selection kept. The colour
+picker is a popover that would cover the shape, so in the sheet each colour
+field also lists its swatches in a row (`swatchRow` on `InspectorColorField`),
+the palette and then the canvas's own colours. Wider touch
 screens keep the inspector as a floating panel on the right, between the split
 header and the bottom chrome; Style collapses it, remembered for the browser
 session.
