@@ -394,7 +394,10 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   through its `calendar_projection_outbox` row, whatever wrote them: the row's
   trigger raises the hint only when the event's typed `event_type` was or is
   out of office, a revision still waiting keeps the hint of every change it
-  carries, and `CalendarProjectionRelay` sends it. Outlook discovery refreshes
+  carries, and `CalendarProjectionRelay` sends it. A mutation of an Outlook copy
+  therefore sends no refresh of its own (`persist_echo_as`,
+  `announce_retirements`); the Google guest copies it aligns still hear it
+  from the mutation, since no relay announces them. Outlook discovery refreshes
   viewers only when a calendar was added, removed or changed, and raises the
   hint for the calendar changes Google's calendar list raises it for
   (`upsert_calendar_tx`).
