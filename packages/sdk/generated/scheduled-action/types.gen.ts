@@ -3282,7 +3282,7 @@ export type AcceptSuggestionError = AcceptSuggestionErrors[keyof AcceptSuggestio
 
 export type AcceptSuggestionResponses = {
     /**
-     * Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing
+     * Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), a reply suggestion is taken on and stays open until the person replies on its item, any other suggestion is done; accepting a done suggestion again changes nothing
      */
     204: void;
 };
