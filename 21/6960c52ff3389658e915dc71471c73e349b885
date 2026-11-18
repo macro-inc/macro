@@ -1,0 +1,35 @@
+.sqlx/query-35ad8c76578312391c49b1d5afa74f8d9ad20780de12e5eea561204bf9803e22.json
+  s_6966afebcdde0a::t_57a54af59ea396 3,15
+.sqlx/query-448d1a581faae48a83e7c897263b2574739e4ae9c3e2a3c3a49fc688d737117e.json
+  s_6966afebcdde0a::t_c1d18cb537b892 3,18
+.sqlx/query-551739bf4326e610a344884239ad020ccf46aeccfbf8fd8ad9bfdcb9f9321f51.json
+  s_6966afebcdde0a::t_b17fefd4f99266 3,15
+.sqlx/query-63fecf5720079a9eb0ef3c0493b410f5a3660abf907b52475804eeff9da142e0.json
+  s_6966afebcdde0a::t_330301ee2404c9 3,46
+.sqlx/query-816e87bbb5c4693cd20456f1a32c3ca06da29c573045e810ad8b5aa485b5d6d6.json
+  s_6966afebcdde0a::t_36d17d6d9d86d1 3,45
+.sqlx/query-aab41e689f69a5afb18863aad8a1ec6c2d18bc7092e78dfc1a27c9b80088c490.json
+  s_6966afebcdde0a::t_0dabb055fa3e7a 3,18
+.sqlx/query-c50fc0191728afca30adc7095234550c9f28c29134fca1db62c354f0c2758435.json
+  s_6966afebcdde0a::t_b4eb4e5a6bccca 3,17
+.sqlx/query-e62baf832a861e8737a777680cc386bbbb1547b94a25602d51ca21cecb2b3138.json
+  s_6966afebcdde0a::t_91609a82de8b71 3,16
+.sqlx/query-ff090fde68a39849c07cfaad092aee8d4a7258a3f26e1a3a9d7003d74f36dec0.json
+  s_6966afebcdde0a::t_09fdda3de4ac72 3,39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "216960c52ff3389658e915dc71471c73e349b885",
+  "prompts": {},
+  "sessions": {
+    "s_6966afebcdde0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13694447-aca1-404a-8fbf-c900186fe6c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
