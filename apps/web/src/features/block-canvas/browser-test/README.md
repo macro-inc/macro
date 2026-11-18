@@ -50,8 +50,9 @@ in-canvas placement without the app's chrome; a corner taken from 12px outside
 it and the shape moved from its middle; an outlined shape selected by a tap
 near its stroke; the Attach sheet, whose Upload media row reaches the file
 picker and hands over the chosen file after the sheet has closed; Zoom to fit
-keeping the scene clear of the bottom chrome; and a turn of the device keeping
-the middle of the view. The long-press cases advance Playwright's clock rather than
+keeping the scene clear of the bottom chrome; a turn of the device keeping
+the middle of the view; and a fill picked from the sheet's swatches with the
+shape still in view. The long-press cases advance Playwright's clock rather than
 waiting.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an installed Chromium.
 

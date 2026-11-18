@@ -242,6 +242,13 @@ tools — hexagonal, heavily feature-gated.
   `NEW_INVITES_STAY_OUT` in `domain/focus/rule.rs` is the switch for new invites.
   `stale_threads` restates `domain/focus/calendar.rs`'s test for a change in SQL;
   change both.
+- Focus classifies an inbox only while its owner is in the rollout
+  (`FocusEnrollment`, the worker's cached `enable-email-focus` read). Check it
+  after `thread_inbox` and before any mail is read. The sweep goes inbox by inbox
+  (`inboxes_with_focus` plus those seen enrolled), and `stale_threads` reads one
+  inbox through its latest-inbound and latest-outbound indexes; keep its
+  `OFFSET 0` fence, or the per-thread calendar and contact checks run on every
+  thread in the window.
 - A Focus thread's `due_on` is read when new mail is classified, only for a thread
   with `is_focus` or `awaiting_reply`, and never on the re-decide path: that path
   keeps the stored date and calls no model, so `save` writes back what

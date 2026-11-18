@@ -796,6 +796,9 @@ impl CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Self::lock_email_privacy(&mut tx, *team_id, true).await?;
+        if blocked {
+            Self::guard_team_domain_exclusion(&mut tx, *team_id, domain).await?;
+        }
         Self::lock_team_domain(&mut tx, team_id, domain).await?;
 
         if blocked {
@@ -2042,6 +2045,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         Self::lock_email_privacy(&mut tx, *team_id, true).await?;
 
+        if !email_sync {
+            Self::guard_company_domain_exclusion(&mut tx, *team_id, *company_id).await?;
+        }
+
         if email_sync {
             // A hidden company must be unhidden before removing its block.
             // FOR UPDATE blocks a concurrent hide flipping `hidden`
@@ -2120,6 +2127,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         Self::lock_email_privacy(&mut tx, *team_id, true).await?;
+        if hidden {
+            Self::guard_company_domain_exclusion(&mut tx, *team_id, *company_id).await?;
+        }
         // Domain locks block in-flight populates past their eligibility
         // check on both branches (a populate racing with un-hide must
         // not see a half-applied cascade either).
