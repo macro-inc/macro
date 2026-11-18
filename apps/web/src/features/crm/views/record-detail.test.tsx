@@ -13,7 +13,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmCommentTarget } from '../context/workspace-context';
 import type { CrmContact } from '../core/contact';
@@ -210,6 +210,12 @@ vi.mock('./record-associations', () => ({
   RecordReferencesSection: () => null,
 }));
 
+// Import the real composition once outside the individual behavior-test budget.
+// Its cold dependency graph can exceed five seconds on a busy CI worker.
+beforeAll(async () => {
+  await vi.importActual('./company-detail');
+  await vi.importActual('./contact-detail');
+}, 30_000);
 beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',

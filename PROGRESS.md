@@ -12,6 +12,8 @@ The affected unit suite passes. Web checks and `just check` pass. Review fixes
 retain edits made during initial saving and keep Email draft initialization reactive.
 CI identified paragraph descriptions included in the single-line menu-label
 fixture; the fixture now excludes those descriptions without changing app text.
+A cold CRM component import also exceeded a behavior test's time budget; it now
+runs once in suite setup while the behavior assertions retain their normal limit.
 
 Browser checks, signed-in checks, fixture browser suites, and screenshots are left
 for the user. No further browser automation will run for this change.
