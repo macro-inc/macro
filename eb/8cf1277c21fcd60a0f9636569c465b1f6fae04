@@ -1,0 +1,24 @@
+apps/web/src/features/agent-permissions/core/registry.ts
+  s_0d20781b0961ab::t_69a4e520759dca 1-79
+apps/web/tsconfig.json
+  s_0d20781b0961ab::t_69a4e520759dca 5-6,51-52
+  s_0d20781b0961ab::t_4aa38c223a8c5a 53
+crates/agent_permission_registry/AGENTS.md
+  s_0d20781b0961ab::t_6644d22fd0c6f3 9-10,16-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "eb8cf1277c21fcd60a0f9636569c465b1f6fae04",
+  "prompts": {},
+  "sessions": {
+    "s_0d20781b0961ab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4872cb4-4667-43b0-b58e-3a155924d613",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
