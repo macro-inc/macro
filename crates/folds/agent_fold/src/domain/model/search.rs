@@ -7,10 +7,17 @@
 //! representation.
 
 use dynamic_ui::{TagNode, View, Widget};
+use nom::{
+    IResult, Parser,
+    branch::alt,
+    bytes::complete::{tag, take_until},
+    combinator::opt,
+    sequence::{delimited, pair},
+};
 use serde_json::Value;
 
 use super::{
-    AnsweredField, AnsweredValue, Control, ControlOutcome, ElicitationOutcome,
+    AnsweredField, AnsweredValue, Author, Control, ControlOutcome, ElicitationOutcome,
     ElicitationPropertySchema, ElicitationRequest, ElicitationSchema, FoldedMessage, MessagePart,
     PermissionOutcome, StopReason, SubagentResult, ToolDetail, ToolStatus, UserToolOutcome,
 };
@@ -51,6 +58,8 @@ impl FoldedMessage {
         let mut text = SearchText {
             value: String::new(),
             scope,
+            hides_agent_context: scope == TextScope::Shown
+                && matches!(self.author, Author::User { .. }),
         };
         for part in self.parts.iter() {
             text.part(part);
@@ -84,6 +93,49 @@ enum TextScope {
 struct SearchText {
     value: String,
     scope: TextScope,
+    /// A prompt's text parts drop the agent-context block the transcript hides.
+    hides_agent_context: bool,
+}
+
+const AGENT_CONTEXT_OPEN: &str = "<m-agent-context>";
+const AGENT_CONTEXT_CLOSE: &str = "</m-agent-context>";
+
+/// A prompt's text without the leading `<m-agent-context>` block: the context
+/// the harness composes into every prompt it delivers (the time, the agent's
+/// identity, who is asking, a thread's private context). The transcript hides
+/// exactly such a block (`stripAgentContext` in `@macro-inc/lexical-core`): one
+/// at the start, holding a version 1 payload and nothing else, with the blank
+/// line after it. Any other text is returned whole.
+fn without_agent_context(text: &str) -> &str {
+    fn line_break(input: &str) -> IResult<&str, &str> {
+        alt((tag("\r\n"), tag("\n"))).parse(input)
+    }
+
+    fn block(input: &str) -> IResult<&str, &str> {
+        let (rest, payload) = delimited(
+            tag(AGENT_CONTEXT_OPEN),
+            take_until(AGENT_CONTEXT_CLOSE),
+            tag(AGENT_CONTEXT_CLOSE),
+        )
+        .parse(input)?;
+        let (rest, _) = opt(pair(line_break, line_break)).parse(rest)?;
+        Ok((rest, payload))
+    }
+
+    match block(text) {
+        Ok((rest, payload)) if is_agent_context(payload) => rest,
+        _ => text,
+    }
+}
+
+fn is_agent_context(payload: &str) -> bool {
+    let Ok(Value::Object(fields)) = serde_json::from_str::<Value>(payload) else {
+        return false;
+    };
+    // JavaScript's `version === 1` also takes `1.0`.
+    fields.len() == 2
+        && fields.get("version").and_then(Value::as_f64) == Some(1.0)
+        && fields.get("text").is_some_and(Value::is_string)
 }
 
 impl SearchText {
@@ -109,7 +161,13 @@ impl SearchText {
 
     fn part(&mut self, part: &MessagePart) {
         match part {
-            MessagePart::Text { text } => self.push(text),
+            MessagePart::Text { text } => {
+                if self.hides_agent_context {
+                    self.push(without_agent_context(text));
+                } else {
+                    self.push(text);
+                }
+            }
             MessagePart::Thought { text } => {
                 if self.scope == TextScope::Readable {
                     self.push(text);

@@ -29,12 +29,14 @@ pub(crate) fn inject_fragment_size(query: &mut serde_json::Value, fragment_size:
 
 /// Excludes `content` from `_source` in the query JSON. The content field is
 /// only needed in highlights, not in the raw source — excluding it cuts ~40%
-/// of the OpenSearch response payload.
+/// of the OpenSearch response payload. Agent-session parents' record of their
+/// children (`indexed_messages`, `pending_messages`) is excluded too: it grows
+/// with the session and only the indexer reads it.
 pub(crate) fn exclude_source_content(query: &mut serde_json::Value) {
     if let Some(obj) = query.as_object_mut() {
         obj.insert(
             "_source".to_string(),
-            serde_json::json!({"excludes": ["content"]}),
+            serde_json::json!({"excludes": ["content", "indexed_messages", "pending_messages"]}),
         );
     }
 }

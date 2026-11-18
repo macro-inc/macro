@@ -113,7 +113,9 @@ A window key names the page or growing list on screen, never a refresh of it. Re
 virtual focus/scroll only on window replacement, not label updates or refreshes.
 Menus hold the row the user moved to by identity (`createSelectionAnchor`) while
 results arrive; the highlight resets only when the query or category changes.
-The person list keeps its still-matching rows while the next read is pending. Keep explicit participant/team pools scoped and
+The person list keeps its still-matching rows while the next read is pending, so the contact
+window's `loading()` must have no gap between its text settling and its query fetching (a memo
+can still see the disabled query of the unsettled text then). Keep explicit participant/team pools scoped and
 selected IDs/self independent of suggestion pages. Discussion mentions on documents,
 projects and calls delegate to the same bounded directory. In mention configuration,
 `users()` returning undefined selects that directory; [] remains an explicit empty
@@ -258,7 +260,10 @@ list controller: ArrowDown and Enter move to the first result, and Escape keeps
 the search in the field and clears it from the list after a selection. In a real
 `ListHeader` (`?surface=header&width=<px>`) the open field narrows, down to its
 96px minimum, before the header's other actions would push its end out of view,
-and keeps its full width when there is room.
+and keeps its full width when there is room. Inside an `@container/split-header`
+600px or narrower, the toolbar New (`ViewCreateButton`) drops its label, keeping
+its icon, its caret when it opens a menu, its name and its tooltip, as header
+actions do.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
@@ -601,9 +606,10 @@ read only while a caller passes a `searching` accessor that is true
 (`readsCache` on the list), because a pool reading the cache rereads it on every
 change and queues behind every other read; its in-memory rows stay listed, so
 the first keystroke does not rebuild them. Quick Access's history and recent
-channel sources follow cache changes the same way: only while one of its lists
-reads the cache (`subscribeToVisibleCacheChanges`'s `live`), catching up once
-when one starts. Measure Quick Access ranking at scale with the
+channel sources follow cache changes promptly only while one of its lists reads
+the cache, and at most once a minute otherwise (`intervalWhileRead`). Never
+read them as a list opens: the read lands after the first paint and reorders
+rows already on screen. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
 Ordinary DM entity matching in Cmd+K and mobile name search treats the first
 name as exact, so it reaches a full-name DM; personal contact windows count an
@@ -636,7 +642,8 @@ ranking and insertion on desktop and phone.
 
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
-It checks draft blank lines across remounts, that a sent message renders its
+It checks draft blank lines across remounts, one shared draft for a channel
+mounted twice (two desktop tabs), that a sent message renders its
 lines with the spacing the draft showed, that the one-line composer centers its
 buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
@@ -1163,13 +1170,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   header (`onSearchOpenChange(false)` when the sidebar keeps it open itself).
   A sidebar that leaves the open state to the header would hide a live query,
   so pass `searchOpen` (open while a query is set) and clear the query in
-  `onSearchOpenChange(false)`, as Home and Chat do. Pass `hasResults` when
+  `onSearchOpenChange(false)`, as Home, Chat and Agents do. Pass `hasResults` when
   another list shares the split (Chat's rail beside a conversation's calls):
   the "go to first item" lookup answers for whichever list registered last.
   Its search clears only on an Escape pressed inside the sidebar
   (`[data-view-shell-aside]`, through `ownsEscape`), so the preview or
-  conversation beside it keeps its own Escape. Home and Chat use it; Agents keeps a plain `SearchBar` until its sidebar has
-  a keyboard list. Covered by `ViewSidebar.test.tsx`.
+  conversation beside it keeps its own Escape. Home, Chat and Agents use it;
+  Agents' list keys answer only while focus is in its sidebar, because its
+  session pane shares the split's hotkey scope. Covered by
+  `ViewSidebar.test.tsx` and `AgentsSidebar.test.tsx`.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model, effort and priority tier controls separate: the model selector opens the catalog, and Effort and Priority tier (`ComposerSettingMenu`) show their current value beside the icon and list the runtime's advertised choices; on touch they are icon buttons that open a bottom sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
