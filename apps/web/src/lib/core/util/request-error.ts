@@ -51,7 +51,7 @@ export function isTransientRequestError(
   return true;
 }
 
-const ACCESS_ERROR_CODES = ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'];
+const ACCESS_ERROR_CODES = ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND', 'GONE'];
 
 /**
  * The server refused the caller: HTTP 401 or 403, or an error coded as an
@@ -76,17 +76,18 @@ export function isAccessRequestError(error: Error): boolean {
 }
 
 /**
- * A GraphQL response whose errors are all uncoded or `INTERNAL`: a resolver
- * failed (a storage outage, a dropped connection), so the same read can
- * succeed later. The server marks refusals and invalid input with a code.
+ * A GraphQL response whose errors are all uncoded or `INTERNAL*`: usually a
+ * resolver failure (a storage outage, a dropped connection) that a later read
+ * can get past. The server codes refusals; some input errors are uncoded too,
+ * so a caller that retries on this must back off.
  */
 export function isGraphqlServerFault(error: Error): boolean {
   return (
     error instanceof CombinedError &&
     error.graphQLErrors.length > 0 &&
-    error.graphQLErrors.every(
-      ({ extensions }) =>
-        extensions.code == null || extensions.code === 'INTERNAL'
-    )
+    error.graphQLErrors.every(({ extensions }) => {
+      const code = extensions.code;
+      return code == null || String(code).startsWith('INTERNAL');
+    })
   );
 }

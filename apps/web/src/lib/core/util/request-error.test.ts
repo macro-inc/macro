@@ -178,6 +178,10 @@ describe('isAccessRequestError', () => {
       expected: true,
     },
     {
+      error: new ThrownResultError([{ code: 'GONE', message: 'Deleted' }]),
+      expected: true,
+    },
+    {
       error: new ThrownResultError([
         { code: 'SERVER_ERROR', message: 'Server failed' },
       ]),
@@ -194,6 +198,12 @@ describe('isGraphqlServerFault', () => {
     { errors: [{ message: 'A comms error has occured' }], expected: true },
     {
       errors: [{ message: 'Internal', extensions: { code: 'INTERNAL' } }],
+      expected: true,
+    },
+    {
+      errors: [
+        { message: 'Failed', extensions: { code: 'INTERNAL_SERVER_ERROR' } },
+      ],
       expected: true,
     },
     {
