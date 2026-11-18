@@ -1,6 +1,6 @@
-//! GraphQL runs calendar, email and chat mutations through internal service
-//! calls, which carry no program attribution downstream; the mount itself
-//! must refuse every program before any mutation runs.
+//! The GraphQL mount refuses every program before any mutation runs. The
+//! writes behind it carry the caller's program too (`ForwardedProgram`), so
+//! this refusal is the first check, not the only one.
 
 use super::graphql_soup::{GRAPHQL_PATH, GRAPHQL_SUBSCRIPTION_PATH};
 use super::refuse_programs;
