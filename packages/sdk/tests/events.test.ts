@@ -214,7 +214,7 @@ describe('MacroEvents', () => {
       // Told once, so a caller can resync what the gap may have missed.
       expect(drops).toHaveLength(1);
     } finally {
-      server.stop(true);
+      await server.stop(true);
     }
   }, 15_000);
 
