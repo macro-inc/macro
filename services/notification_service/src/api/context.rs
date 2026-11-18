@@ -12,12 +12,17 @@ pub(crate) type ItemPreferences =
     notification::domain::item_preferences::ItemNotificationPreferenceService<
         notification::outbound::item_preferences::PgItemNotificationPreferenceRepository,
     >;
+pub(crate) type ChannelSettings =
+    notification::domain::channel_settings::ChannelNotificationSettingsService<
+        notification::outbound::channel_settings::PgChannelNotificationSettingsRepository,
+    >;
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
     /// Signed invocation validation and propagation.
     pub correlation: agent_correlation::inbound::CorrelationState,
     pub item_preferences: ItemPreferences,
+    pub channel_settings: ChannelSettings,
     pub db: PgPool,
     pub sns_client: Arc<sns_client::SNS>,
     pub config: Arc<Config>,

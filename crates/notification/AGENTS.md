@@ -29,6 +29,12 @@ through the same service.
   (owned Postgres queries), `withdrawal.rs` (durable suppression),
   `item_preferences.rs` (owner-scoped single and atomic bulk snooze/mute, and
   a channel's mentions-only level).
+- `domain/channel_settings.rs` + `outbound/channel_settings.rs`: a user's own
+  per-channel choice of which channel notification types they receive
+  (`ChannelNotificationKind`, one per event type), stored in
+  `user_channel_notification_setting`. Each type is turned off, turned on over
+  the channel's sections, or follows them; `section_mute_override` keeps a
+  channel notifying inside muted sections. Independent of mute and snooze.
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.
@@ -95,6 +101,17 @@ through the same service.
   so web, push and unread state agree. A new event type that names its
   recipient directly must be added to `is_direct_mention`, or mentions-only
   channels stay silent for it. Mute and snooze writes clear the flag.
+
+- Ingress drops a channel notification's recipient whose
+  `user_channel_notification_setting` turns that event type off
+  (`ExclusionReason::DisabledForChannel`), alongside mute and the global type
+  preferences. A new channel event type users should control needs a
+  `ChannelNotificationKind` variant; channel invites are deliberately not one.
+- A channel message or reply leaves the users it @mentions out of its own
+  recipients; the producer names them with `with_mention_fallback`, and
+  ingress adds back each one whose channel settings turn mentions off, so
+  they still hear about the message. The `notification.filter_recipients` span
+  records the fallback and exclusion counts.
 
 - `user_notification` carries copies of its notification's `event_item_type`,
   `event_item_id` and `notification_event_type`. Entity reads find a viewer's

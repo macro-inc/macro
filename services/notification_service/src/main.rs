@@ -362,6 +362,9 @@ pub async fn main() -> anyhow::Result<()> {
             item_preferences: ::notification::domain::item_preferences::ItemNotificationPreferenceService::new(
                 ::notification::outbound::item_preferences::PgItemNotificationPreferenceRepository(db.clone()),
             ),
+            channel_settings: ::notification::domain::channel_settings::ChannelNotificationSettingsService::new(
+                ::notification::outbound::channel_settings::PgChannelNotificationSettingsRepository(db.clone()),
+            ),
             internal_api_key: config.internal_api_key.clone(),
             db,
             sns_client: Arc::new(sns_client),
