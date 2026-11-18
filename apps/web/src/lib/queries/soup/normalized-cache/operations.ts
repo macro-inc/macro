@@ -753,7 +753,8 @@ export async function refetchSoupEntity(
 
   // GraphQL lists never read this cache, so a miss means no REST list shows
   // the entity. Own-touch inserts still land because Home's touched_by_me
-  // feed stays on REST, and notified ones because notified_at lists do.
+  // feed stays on REST, and notified ones because REST notified_at lists do
+  // (GraphQL ones read again instead; see `notification-soup.ts`).
   if (
     !options?.ownTouch &&
     !options?.created &&
@@ -808,7 +809,7 @@ export async function refetchSoupEntity(
   }
 }
 
-/** Lists on screen ordered by `notified_at`, which only REST serves. */
+/** REST lists on screen ordered by `notified_at`. */
 function mountedNotifiedLists() {
   return queryClient
     .getQueryCache()
