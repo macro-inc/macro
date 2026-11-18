@@ -253,7 +253,7 @@ pub async fn list_team_calendar<S: CalendarTeamService, A: MacroAuthorizationSer
 }
 
 /// Merge the requester's and selected teammates' busy time in a bounded window.
-#[utoipa::path(post, path="/calendar-events/team/availability", request_body=TeamAvailabilityRequest, responses((status=200, body=TeamAvailability), (status=400, description="Invalid window or more than 100 teammates"), (status=404, body=TeamCalendarApiError, description="Team calendar sharing is disabled (code team_sharing_disabled)")), tag="calendar_events")]
+#[utoipa::path(post, path="/calendar-events/team/availability", request_body=TeamAvailabilityRequest, responses((status=200, body=TeamAvailability), (status=400, body=TeamCalendarApiError, description="Invalid window or more than 100 teammates (code invalid_request)"), (status=404, body=TeamCalendarApiError, description="Team calendar sharing is disabled (code team_sharing_disabled)")), tag="calendar_events")]
 #[tracing::instrument(skip_all, fields(selected = body.user_ids.as_ref().map(Vec::len)), err(Debug))]
 pub async fn get_team_availability<S: CalendarTeamService, A: MacroAuthorizationService>(
     State(state): State<CalendarTeamRouterState<S, A>>,
