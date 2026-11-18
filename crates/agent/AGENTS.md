@@ -12,7 +12,9 @@ and usage metering.
 - `src/agent_loop.rs`: `AgentLoop`/`Session` — runs a turn, dispatches tool
   calls, loops until a final response.
 - `src/model/`: provider adapters (`anthropic.rs`, `openai.rs`, `gemini.rs`)
-  behind `model/router.rs`, plus `predefined_model.rs`/`speed.rs` (the
+  behind `model/router.rs` (the Gemini client's host is
+  `macro_service_urls`' `GoogleGenerativeAiApiUrl`, so a local stack can
+  point it at `crates/model_emulator`), plus `predefined_model.rs`/`speed.rs` (the
   product-facing model/speed vocabulary) and `metering.rs` (usage recording
   hook into `ai_usage`).
 - `AgentLoop::with_streamed_tool_calls` opts hosts into early tool-call
@@ -74,6 +76,11 @@ and usage metering.
 - `AgentLoop::with_provider_api_key` rekeys only the loop's own model calls
   (native Anthropic/OpenAI); call it after `with_model`. Tools and
   `complete*` still use the deployment's keys.
+- Rig records a streamed call's usage onto the `chat` span once per chunk,
+  and the first write is the one Datadog shows. Gemini's interim chunks lack
+  cache reads, so `MeteredHttpClient` strips their usage
+  (`src/model/metering_http/interim_usage.rs`). Read billed Gemini usage
+  from `ai_usage` if spans and billing disagree.
 - `MeteredHttpClient` logs every provider response that means Macro's
   account is suspended or out of credit (`genai_telemetry::provider_account`),
   which pages on-call. A client rekeyed for an agent's own key is built

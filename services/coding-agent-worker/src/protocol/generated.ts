@@ -42,7 +42,16 @@ export type ToRuntimeMessage =
  *  configured harness what it advertises. Answers are therefore
  *  interchangeable, so nothing correlates a response to a request.
  */
-{ type: "modelProbeRequest" };
+{ type: "modelProbeRequest" } |
+/**
+ *  The agents bound to this runtime may have changed: re-read them.
+ *
+ *  A hint with no payload, sent when the service may have just bound an
+ *  agent to the runtime, so it starts serving that agent's triggers at
+ *  once rather than at its next poll. Runtimes that do not serve
+ *  triggers ignore it.
+ */
+{ type: "agentsChanged" };
 
 /**  Agent Runtime to Agent Service traffic on the logical protocol stream. */
 export type ToServerMessage =

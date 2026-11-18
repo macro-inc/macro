@@ -157,7 +157,9 @@ finding left open.
 No test plan or testing section in PR descriptions or commit messages: CI shows
 the checks, and what you ran goes in your report to the user. Attach screenshots
 or recordings to the PR for user-visible changes (see the `record-proof` skill
-when available). Do not commit verification captures unless explicitly requested.
+when available). Keep private addresses and tailnet-only links out of public PRs;
+when captures stay local, describe the verification in words. Do not commit
+verification captures unless explicitly requested.
 
 ## Handing off a PR
 

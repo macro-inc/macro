@@ -31,6 +31,16 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   on each connect. `[macro]` is a dev override that defaults to production.
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.
+  The agent-trigger stream covers the bound agents and reopens when they
+  change: at once on the service's `AgentsChanged` runtime message, else at
+  the 10 s poll. Every open sends `Last-Event-ID` (the last event seen, or a
+  floor minted before the runtime first dials), so the storage service
+  replays what was published while the stream did not cover an agent; a
+  session requested the instant a computer is ready is not lost. The opens ask
+  `resume=true`; the service repeats a few seconds before the cursor, and
+  `src/daemon/position.rs` drops repeats by event id, and events minted
+  before their agent was bound here (before the last agents read that did not
+  list it), which belonged to another runtime.
 - Pass `macrod service --ignore-stdin-eof` under system service managers;
   embedded services keep the default shutdown when their parent's stdin closes.
 - `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge

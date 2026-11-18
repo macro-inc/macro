@@ -1104,3 +1104,80 @@ async fn native_draft_first_edit_adopts_proven_organization_versions_before_proj
         Some(0)
     );
 }
+
+/// A reply waiting on delivery is still a draft at Outlook: restoring its
+/// conversation to the inbox leaves it where it is, whether the send is queued
+/// or has lost its schedule but not its attempt, and moves it once it is sent.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn restoring_a_conversation_leaves_a_reply_waiting_to_send_in_drafts(db: PgPool) {
+    use crate::domain::models::mailbox_action::MailboxAction;
+    let (sync, repo, input, link) = setup(&db, false).await;
+    let received = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO email_messages (id,link_id,thread_id,provider_id,provider_thread_id,internal_date_ts,mailbox_state)
+        VALUES ($1,$2,$3,'received','conversation','2026-09-30T12:00:00Z','{"in_inbox":false}')"#,
+        received,
+        link,
+        input.thread_db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sync_draft(&sync, link).await;
+    let restored = async || {
+        let messages = repo
+            .mailbox_action_messages(link, input.thread_db_id)
+            .await
+            .unwrap();
+        let mut ids: Vec<_> = MailboxAction::Archived(false)
+            .targets(&messages)
+            .into_iter()
+            .map(|target| target.message_id)
+            .collect();
+        ids.sort();
+        ids
+    };
+    assert_eq!(restored().await, vec![received]);
+
+    sqlx::query!(
+        "UPDATE email_messages SET is_draft=false WHERE id=$1",
+        input.db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id) VALUES ($1,$2,now(),$3)",link,input.db_id,ACTOR).execute(&db).await.unwrap();
+    assert_eq!(restored().await, vec![received], "a queued send");
+
+    sqlx::query!(
+        "DELETE FROM email_scheduled_messages WHERE message_id=$1",
+        input.db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO email_send_attempts (user_id,link_id,attempt_id,message_id,thread_id,send_time) VALUES ($1,$2,$3,$4,$5,now())",ACTOR,link,Uuid::now_v7(),input.db_id,input.thread_db_id).execute(&db).await.unwrap();
+    assert_eq!(
+        restored().await,
+        vec![received],
+        "a send attempt still open"
+    );
+
+    sqlx::query!(
+        "UPDATE email_send_attempts SET sent=true WHERE message_id=$1",
+        input.db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_messages SET is_sent=true WHERE id=$1",
+        input.db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let mut both = vec![received, input.db_id];
+    both.sort();
+    assert_eq!(restored().await, both, "sent correspondence is restored");
+}

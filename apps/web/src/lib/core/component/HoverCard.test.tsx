@@ -43,6 +43,34 @@ async function renderOpenCard(
 }
 
 describe('HoverCard', () => {
+  it.each([false, true])(
+    'keeps a standalone keyboard action enabled (touch: %s)',
+    async (touch) => {
+      vi.mocked(isTouchDevice).mockReturnValue(touch);
+      const activate = vi.fn();
+      render(() => (
+        <HoverCard
+          open
+          openDelay={0}
+          trigger={<span>Thread subject</span>}
+          triggerOnKeyDown={(event) => {
+            if (event.key === 'Enter') activate(event.shiftKey);
+          }}
+          content={<div>Thread preview</div>}
+        />
+      ));
+
+      const trigger = screen.getByRole('link', { name: 'Thread subject' });
+      expect(trigger.tabIndex).toBe(0);
+      expect(trigger.getAttribute('aria-disabled')).not.toBe('true');
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'Enter', shiftKey: true });
+      expect(activate).toHaveBeenCalledExactlyOnceWith(true);
+      if (touch) expect(screen.queryByText('Thread preview')).toBeNull();
+      else expect(await screen.findByText('Thread preview')).toBeTruthy();
+    }
+  );
+
   it('keeps the same button action without a hover preview on touch', () => {
     vi.mocked(isTouchDevice).mockReturnValue(true);
     const activate = vi.fn();

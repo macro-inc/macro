@@ -20,11 +20,8 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import ListIcon from '@icon/system/regular/list.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, ButtonGroup, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -34,6 +31,7 @@ import {
   type JSX,
   Match,
   onCleanup,
+  type ParentProps,
   Show,
   Switch,
 } from 'solid-js';
@@ -102,7 +100,6 @@ export function Header(props: {
     () => ({
       fullHeader: { min: hasDockedSidebar() ? 580 : 600 },
       inlineSearch: { min: 1040 },
-      labeledNew: { min: 360 },
       labeledToday: { min: 304 },
     })
   );
@@ -160,7 +157,37 @@ export function Header(props: {
   );
   const isNarrow = () => shell?.aside.isCollapsed() ?? true;
   const showBookingLinks = () => isMobile() || !shell?.breakpoints.narrow?.();
-  const usesSplitHeader = () => isTouchDevice();
+  const usesTouchHeader = () => isTouchDevice();
+  function TouchHeader(props: ParentProps) {
+    return (
+      <Show when={shell} fallback={props.children}>
+        {/* Floats over the pane, which reserves its measured height. */}
+        <ViewShell.TopBar class="touch:flex">{props.children}</ViewShell.TopBar>
+      </Show>
+    );
+  }
+  function TouchHeaderLeft(props: ParentProps) {
+    return (
+      <Show
+        when={shell}
+        fallback={<SplitHeaderLeft>{props.children}</SplitHeaderLeft>}
+      >
+        <div class="flex min-w-0 shrink items-center">{props.children}</div>
+      </Show>
+    );
+  }
+  function TouchHeaderRight(props: ParentProps) {
+    return (
+      <Show
+        when={shell}
+        fallback={<SplitHeaderRight>{props.children}</SplitHeaderRight>}
+      >
+        <div class="ml-auto flex min-w-0 shrink-0 items-center">
+          {props.children}
+        </div>
+      </Show>
+    );
+  }
   const createItems = () => (
     <>
       <CalendarCreateEventItem />
@@ -169,25 +196,7 @@ export function Header(props: {
     </>
   );
   const headerCreateMenu = () => (
-    <CalendarCreateMenu
-      presentation={!isTouchDevice() ? 'toolbar' : undefined}
-      size={breakpoints.labeledNew() ? 'md' : 'icon-md'}
-      label="New"
-      class={cn(
-        'shrink-0 rounded-full touch:h-11',
-        breakpoints.labeledNew() &&
-          'h-(--sidebar-row-height) gap-(--sidebar-label-gap) px-(--sidebar-item-inset)'
-      )}
-      trigger={
-        <>
-          <PlusIcon class="size-3.5" />
-          <Show when={breakpoints.labeledNew()}>
-            <span>New</span>
-            <CaretDownIcon class="size-3.5 shrink-0" />
-          </Show>
-        </>
-      }
-    >
+    <CalendarCreateMenu presentation="toolbar">
       {createItems()}
     </CalendarCreateMenu>
   );
@@ -268,58 +277,46 @@ export function Header(props: {
   };
   return (
     <Switch>
-      <Match when={usesSplitHeader()}>
-        <SplitHeaderLeft>
-          <HeaderIsland class="min-w-0 shrink px-1">
-            <Show when={!isMobile() && shell?.aside.isCollapsed()}>
-              <Button
-                aria-label="Show calendar navigation"
-                tooltip="Show calendar navigation"
-                variant="ghost"
-                size="icon-sm"
-                class="shrink-0"
-                ref={tourTarget(CALENDAR_TOUR.sidebarToggle)}
-                aria-expanded={shell?.aside.isOverlay() ?? false}
-                onClick={() => shell?.aside.expand()}
-              >
-                <ListIcon class="size-5" />
-              </Button>
-            </Show>
-            <MonthDrawer month={currentDate()} />
-            {todayButton(isTouchDevice())}
-          </HeaderIsland>
-        </SplitHeaderLeft>
+      <Match when={usesTouchHeader()}>
+        <TouchHeader>
+          <TouchHeaderLeft>
+            <HeaderIsland class="min-w-0 shrink px-1">
+              <MonthDrawer month={currentDate()} />
+              {todayButton(isTouchDevice())}
+            </HeaderIsland>
+          </TouchHeaderLeft>
 
-        <SplitHeaderRight>
-          <HeaderIsland class="px-1">
-            <div
-              ref={tourTarget(CALENDAR_TOUR.period)}
-              class="flex items-center gap-1"
-            >
-              <Show when={!isMobile()}>
-                <PeriodSelector isNarrow={isNarrow()} />
-                <div class="flex shrink-0 items-center gap-1">
-                  {previous()}
-                  {next()}
-                </div>
-              </Show>
-              <Show when={isMobile()}>
-                <CopyAvailabilityButton size="icon-lg" />
-              </Show>
-              <Show when={!isMobile()}>
-                <CalendarSearch />
-              </Show>
-              <Show when={showBookingLinks()}>
-                <CalendarSchedulingActions />
-              </Show>
-              <Show when={isMobile()}>
-                <CalendarSettingsDropdown />
-              </Show>
-            </div>
-          </HeaderIsland>
-        </SplitHeaderRight>
+          <TouchHeaderRight>
+            <HeaderIsland class="px-1">
+              <div
+                ref={tourTarget(CALENDAR_TOUR.period)}
+                class="flex items-center gap-1"
+              >
+                <Show when={!isMobile()}>
+                  <PeriodSelector isNarrow={isNarrow()} />
+                  <div class="flex shrink-0 items-center gap-1">
+                    {previous()}
+                    {next()}
+                  </div>
+                </Show>
+                <Show when={isMobile()}>
+                  <CopyAvailabilityButton size="icon-lg" />
+                </Show>
+                <Show when={!isMobile()}>
+                  <CalendarSearch />
+                </Show>
+                <Show when={showBookingLinks()}>
+                  <CalendarSchedulingActions />
+                </Show>
+                <Show when={isMobile()}>
+                  <CalendarSettingsDropdown />
+                </Show>
+              </div>
+            </HeaderIsland>
+          </TouchHeaderRight>
+        </TouchHeader>
       </Match>
-      <Match when={!usesSplitHeader()}>
+      <Match when={!usesTouchHeader()}>
         <ViewShell.TopBar
           ref={setHeaderElement}
           class="@container/calendar-toolbar h-auto min-h-12 flex-wrap gap-x-2 gap-y-2 py-2 [--view-search-height:2rem]"

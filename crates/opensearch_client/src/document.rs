@@ -1,7 +1,11 @@
 use crate::{
     OpensearchClient, Result, delete,
     retry::resend_on_lost_connection,
-    upsert::{self, document::UpsertDocumentArgs, properties::IndexedProperty},
+    upsert::{
+        self,
+        document::{EmailAttachmentUpdateResult, UpsertDocumentArgs},
+        properties::IndexedProperty,
+    },
 };
 
 impl OpensearchClient {
@@ -78,6 +82,31 @@ impl OpensearchClient {
     ) -> Result<()> {
         resend_on_lost_connection(|| {
             upsert::document::update_document_properties(&self.inner, document_id, properties, None)
+        })
+        .await
+    }
+
+    /// Set `is_email_attachment` on each document's parent with one partial
+    /// update apiece. A document that is not indexed counts as missing. When
+    /// OpenSearch refuses writes (a 429 or a cluster block) this returns
+    /// [`crate::error::OpensearchClientError::WritesRefused`]; stop instead of
+    /// retrying.
+    #[tracing::instrument(
+        skip(self, document_ids),
+        fields(document_count = document_ids.len()),
+        err
+    )]
+    pub async fn bulk_update_email_attachment(
+        &self,
+        document_ids: &[String],
+        is_email_attachment: bool,
+    ) -> Result<EmailAttachmentUpdateResult> {
+        resend_on_lost_connection(|| {
+            upsert::document::bulk_update_email_attachment(
+                &self.inner,
+                document_ids,
+                is_email_attachment,
+            )
         })
         .await
     }

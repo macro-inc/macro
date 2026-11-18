@@ -191,6 +191,7 @@ function Fixture() {
               groups={groups}
               results={results()}
               selectedResultId={selected()?.id}
+              searchable
               searchQuery={query()}
               onSearchQueryChange={setQuery}
               isItemActive={(item) => item === tab()}

@@ -29,16 +29,12 @@ import { useHasPermission } from '../context/user';
 import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
-import { isDesktopPlatform, isPlatform } from '../util/platform';
+import { isPlatform } from '../util/platform';
 import {
-  botManagement,
   DEV_MODE_ENV,
   desktopApp,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_EMAIL,
-  enableCalendarScheduling,
-  enableChatV3Agents,
-  enableCrm,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -358,10 +354,6 @@ export const settingsSlugToTab = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
-  const calendarSchedulingFlag = useFeatureFlag(enableCalendarScheduling);
-  const botManagementFlag = useFeatureFlag(botManagement);
-  const chatV3AgentsFlag = useFeatureFlag(enableChatV3Agents);
-  const crmFlag = useFeatureFlag(enableCrm);
   const desktopAppFlag = useFeatureFlag(desktopApp);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
@@ -376,7 +368,7 @@ export const useSettingsTabAvailable = () => {
       case 'Email':
         return ENABLE_EMAIL;
       case 'Calendar':
-        return calendarSchedulingFlag().enabled;
+        return true;
       // Issuing and copying a key is desk work, and the mobile sheet has no
       // good place for a one-time secret.
       case 'API Keys':
@@ -387,12 +379,8 @@ export const useSettingsTabAvailable = () => {
       case 'Team':
       case 'Team Members':
       case 'Tags':
-        return true;
-      // CRM is still rolling out (Macro-internal only); keep the settings tab
-      // behind the same enable-crm gate as every other CRM surface so it never
-      // leaks into teams that can't actually use the CRM.
       case 'CRM':
-        return crmFlag().enabled;
+        return true;
       case 'Connected':
         return true;
       case 'Shortcuts':
@@ -406,18 +394,15 @@ export const useSettingsTabAvailable = () => {
         );
       case 'Agent':
         return !isNativeMobilePlatform();
-      // The bundled desktop runtime can be set up from Home even while the
-      // configurable Agents view is still rolling out.
       case 'Harness':
-        return isDesktopPlatform() || chatV3AgentsFlag().enabled;
       case 'Agents':
-        return chatV3AgentsFlag().enabled;
+        return true;
       // Touch hides the Agents sidebar that lists Routines on desktop, so
       // phones and tablets reach the list here, beside Agents.
       case 'Routines':
-        return chatV3AgentsFlag().enabled && isTouchDevice();
+        return isTouchDevice();
       case 'Bots':
-        return botManagementFlag().enabled;
+        return true;
       case 'Mobile':
         return isNativeMobilePlatform() && DEV_MODE_ENV;
       case 'Admin':

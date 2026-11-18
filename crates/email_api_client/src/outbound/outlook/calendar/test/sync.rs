@@ -14,11 +14,15 @@ type Sync = OutlookCalendarSync<
 
 /// A meeting tomorrow that Macro can read.
 fn upcoming(id: &str) -> Value {
-    let now = Utc::now();
+    meeting_in(id, chrono::Duration::days(1))
+}
+
+/// A meeting an hour long, `offset` from now, that Macro can read.
+fn meeting_in(id: &str, offset: chrono::Duration) -> Value {
+    let starts_at = Utc::now() + offset;
     let mut value = event(id);
-    value["start"]["dateTime"] = json!((now + chrono::Duration::days(1)).to_rfc3339());
-    value["end"]["dateTime"] =
-        json!((now + chrono::Duration::days(1) + chrono::Duration::hours(1)).to_rfc3339());
+    value["start"]["dateTime"] = json!(starts_at.to_rfc3339());
+    value["end"]["dateTime"] = json!((starts_at + chrono::Duration::hours(1)).to_rfc3339());
     value
 }
 
@@ -66,6 +70,16 @@ async fn serve_delta(server: &MockServer, cursor: Option<&str>, entries: &[Value
     .await;
 }
 
+/// The listing a first import reads before anything else: every event this
+/// month and next.
+async fn serve_near_window(server: &MockServer, entries: &[Value]) {
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/AAMkCalendar/calendarView"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":entries})))
+        .mount(server)
+        .await;
+}
+
 async fn serve_event(server: &MockServer, body: Value) {
     let id = body["id"].as_str().unwrap().to_owned();
     Mock::given(method("GET"))
@@ -81,8 +95,9 @@ async fn serve_event(server: &MockServer, body: Value) {
 }
 
 async fn sync_until_idle(sync: &Sync) {
-    // A page, each event, then the finish; a blocked round stops early.
-    for _ in 0..6 {
+    // A first import's near window, then a page, each event and the finish;
+    // a blocked round stops early.
+    for _ in 0..12 {
         if !matches!(sync.run_once().await, Ok(true)) {
             break;
         }
@@ -156,6 +171,7 @@ fn the_unreadable_series_is_rejected_at_its_decline_policy() {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_event_macro_cannot_read_is_skipped_and_the_rest_of_the_calendar_syncs(pool: PgPool) {
     let (server, sync) = connected(&pool).await;
+    serve_near_window(&server, &[]).await;
     // The unreadable series sorts first, so it is refreshed first.
     serve_delta(
         &server,
@@ -183,6 +199,7 @@ async fn an_event_macro_cannot_read_is_skipped_and_the_rest_of_the_calendar_sync
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_stored_event_that_turns_unreadable_leaves_the_calendar(pool: PgPool) {
     let (server, sync) = connected(&pool).await;
+    serve_near_window(&server, &[]).await;
     serve_delta(
         &server,
         None,
@@ -233,6 +250,7 @@ async fn a_mailbox_in_a_time_zone_macro_cannot_map_still_discovers_and_syncs(poo
     )
     .await;
     let sync = OutlookCalendarSync::new(repo, api, IssuedToken, NoOpenClients);
+    serve_near_window(&server, &[]).await;
     serve_delta(&server, None, &[single("AAMkReadable")], "complete").await;
     serve_event(&server, upcoming("AAMkReadable")).await;
     // Discovery, then the calendar's page, its event and the finish.
@@ -298,6 +316,7 @@ fn unreadable(mut master: Value) -> Value {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_series_with_a_moved_meeting_is_imported_with_it(pool: PgPool) {
     let (server, sync) = connected(&pool).await;
+    serve_near_window(&server, &[]).await;
     serve_delta(&server, None, &[occurrence("AAMkDaily")], "complete").await;
     let (master, instances) = upcoming_series("AAMkDaily", "ada@example.com", false);
     let moved = instances[2]["originalStart"].as_str().unwrap().to_owned();
@@ -331,6 +350,7 @@ async fn a_series_with_a_moved_meeting_is_imported_with_it(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_series_an_older_build_skipped_is_read_again_once_on_the_next_delta_round(pool: PgPool) {
     let (server, sync) = connected(&pool).await;
+    serve_near_window(&server, &[]).await;
     let (master, instances) = upcoming_series("AAMkDaily", "ada@example.com", false);
     serve_delta(&server, None, &[occurrence("AAMkDaily")], "first").await;
     serve_series(&server, unreadable(master.clone()), instances.clone()).await;
@@ -369,4 +389,211 @@ async fn a_series_an_older_build_skipped_is_read_again_once_on_the_next_delta_ro
     next_round(&pool).await;
     sync_until_idle(&sync).await;
     assert_eq!(reads_of(&server, "AAMkDaily").await, 0, "it is read once");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_first_import_brings_this_month_and_next_in_before_last_year(pool: PgPool) {
+    let (server, sync) = connected(&pool).await;
+    // Last year's meeting sorts first, so a single listing reads it first.
+    serve_near_window(&server, &[single("AAMkNextWeek")]).await;
+    serve_delta(
+        &server,
+        None,
+        &[single("AAMkLastYear"), single("AAMkNextWeek")],
+        "complete",
+    )
+    .await;
+    serve_event(
+        &server,
+        meeting_in("AAMkLastYear", -chrono::Duration::days(330)),
+    )
+    .await;
+    serve_event(
+        &server,
+        meeting_in("AAMkNextWeek", chrono::Duration::days(7)),
+    )
+    .await;
+
+    let mut arrivals: Vec<(String, bool)> = vec![];
+    for _ in 0..12 {
+        if !matches!(sync.run_once().await, Ok(true)) {
+            break;
+        }
+        let synced = sqlx::query_scalar!(
+            "SELECT synced_at IS NOT NULL FROM calendars WHERE provider_calendar_id = 'AAMkCalendar'"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .unwrap_or_default();
+        for id in imported(&pool).await {
+            if !arrivals.iter().any(|(seen, _)| *seen == id) {
+                arrivals.push((id, synced));
+            }
+        }
+    }
+
+    assert_eq!(
+        arrivals,
+        vec![
+            ("AAMkNextWeek".to_owned(), false),
+            ("AAMkLastYear".to_owned(), false),
+        ],
+        "next week arrives first, and neither counts as synced before the whole window"
+    );
+    assert_synced(&pool).await;
+    let near = OccurrenceRange::near_window(Utc::now());
+    let listed = server
+        .received_requests()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|request| request.url.path() == "/v1.0/me/calendars/AAMkCalendar/calendarView")
+        .unwrap();
+    let bound = |name: &str| {
+        listed
+            .url
+            .query_pairs()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.parse::<chrono::DateTime<Utc>>().unwrap())
+    };
+    assert_eq!(
+        (bound("startDateTime"), bound("endDateTime")),
+        (Some(near.starts_at), Some(near.ends_at)),
+        "the first listing is this month and next"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_first_import_reads_the_events_closest_to_today_first(pool: PgPool) {
+    let (server, sync) = connected(&pool).await;
+    // In ID order the near window would read next month's meeting first and
+    // tomorrow's last.
+    let near = [
+        meeting_in("AAMkEndOfNextMonth", chrono::Duration::days(25)),
+        meeting_in("AAMkLastWeek", -chrono::Duration::days(6)),
+        meeting_in("AAMkTomorrow", chrono::Duration::days(1)),
+    ];
+    serve_near_window(&server, &near).await;
+    serve_delta(
+        &server,
+        None,
+        &[
+            single("AAMkEndOfNextMonth"),
+            single("AAMkLastWeek"),
+            single("AAMkTomorrow"),
+        ],
+        "complete",
+    )
+    .await;
+    for event in near {
+        serve_event(&server, event).await;
+    }
+
+    let mut arrivals: Vec<String> = vec![];
+    for _ in 0..16 {
+        if !matches!(sync.run_once().await, Ok(true)) {
+            break;
+        }
+        for id in imported(&pool).await {
+            if !arrivals.contains(&id) {
+                arrivals.push(id);
+            }
+        }
+    }
+
+    assert_eq!(
+        arrivals,
+        ["AAMkTomorrow", "AAMkLastWeek", "AAMkEndOfNextMonth"],
+        "the near window reads tomorrow, then last week, then next month"
+    );
+    assert_synced(&pool).await;
+}
+
+/// Macro's per-mailbox admission, refusing every request as a mailbox whose
+/// in-flight slots mail sync holds.
+struct BusyMailbox;
+
+impl crate::domain::ports::MailboxRequestGate for BusyMailbox {
+    fn acquire(
+        &self,
+        _: crate::domain::models::MailboxAccess,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Uuid, EmailApiError>> + Send + '_>> {
+        Box::pin(async {
+            Err(EmailApiError::RateLimited {
+                retry_after: Some(std::time::Duration::from_millis(2_500)),
+                origin: RateLimitOrigin::Gate(crate::domain::models::GateLimit::Concurrency),
+            })
+        })
+    }
+    fn finish(
+        &self,
+        _: crate::domain::models::MailboxAccess,
+        _: Uuid,
+        _: Option<std::time::Duration>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async {})
+    }
+    fn admitted(
+        &self,
+        _: crate::domain::models::MailboxAccess,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<u64>> + Send + '_>> {
+        Box::pin(async { None })
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_step_the_request_gate_refuses_waits_without_counting_a_failure(pool: PgPool) {
+    // Discovered already, so the first step is the near window's listing.
+    let (server, _) = connected(&pool).await;
+    serve_near_window(&server, &[]).await;
+    let mut busy = OutlookApiClientRepository::for_test(&format!("{}/v1.0/", server.uri()));
+    busy.gate = Some(std::sync::Arc::new(BusyMailbox));
+    let busy = OutlookCalendarSync::new(
+        PgCalendarRepository::new(pool.clone()),
+        busy,
+        IssuedToken,
+        NoOpenClients,
+    );
+
+    assert!(
+        matches!(busy.run_once().await, Ok(true)),
+        "a deferred step is not an error, and the loop moves on"
+    );
+
+    let work = sqlx::query!(
+        r#"SELECT w.attempts,w.last_error,w.lease_until,c.consecutive_sync_failures,c.last_sync_error,a.sync_status,
+            extract(epoch FROM w.next_run_at-now())::float8 AS "wait!"
+        FROM calendar_outlook_work w JOIN calendars c ON c.id=w.calendar_id JOIN calendar_accounts a ON a.id=w.account_id
+        WHERE c.provider_calendar_id='AAMkCalendar'"#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(work.lease_until.is_none());
+    assert!(
+        (1.0..=2.5).contains(&work.wait),
+        "retries after the gate's delay, not {}",
+        work.wait
+    );
+    assert_eq!(
+        (
+            work.attempts,
+            work.last_error,
+            work.consecutive_sync_failures,
+            work.last_sync_error
+        ),
+        (0, None, 0, None),
+        "nothing reached Microsoft, so nothing failed"
+    );
+    assert_eq!(work.sync_status, "syncing");
+    assert!(
+        server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|request| request.url.path() != "/v1.0/me/calendars/AAMkCalendar/calendarView"),
+        "the gate sent nothing"
+    );
 }

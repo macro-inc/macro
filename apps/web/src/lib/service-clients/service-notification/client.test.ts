@@ -100,3 +100,30 @@ describe('bulk notification preferences', () => {
     }
   );
 });
+
+describe('item notification preferences', () => {
+  const item = { item_id: 'channel-one', item_type: 'channel' };
+
+  it('asks for mentions only instead of a mute', async () => {
+    await notificationServiceClient.unsubscribeItem({
+      ...item,
+      mentions_only: true,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost/notifications/unsubscribe/item/channel/channel-one?mentions_only=true',
+      { method: 'POST' }
+    );
+  });
+
+  it('keeps plain mutes and snoozes unchanged', async () => {
+    await notificationServiceClient.unsubscribeItem(item);
+    await notificationServiceClient.unsubscribeItem({
+      ...item,
+      snoozed_until: '2030-01-01T00:00:00Z',
+    });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'http://localhost/notifications/unsubscribe/item/channel/channel-one',
+      'http://localhost/notifications/unsubscribe/item/channel/channel-one?snoozed_until=2030-01-01T00%3A00%3A00Z',
+    ]);
+  });
+});

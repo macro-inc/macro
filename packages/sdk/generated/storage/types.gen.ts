@@ -1468,6 +1468,11 @@ export type AttachmentChange = {
 };
 
 /**
+ * A kind of attachment a thread's messages carry, by MIME type.
+ */
+export type AttachmentKind = 'pdf' | 'image' | 'document';
+
+/**
  * RSVP state for an attendee.
  */
 export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
@@ -4039,6 +4044,10 @@ export type ChannelWebhookRequest = {
      * Message body.
      */
     content: string;
+    /**
+     * Who hears about the message; `Silent` notifies no one.
+     */
+    notification_policy?: PostMessageNotificationPolicy;
 };
 
 /**
@@ -9280,9 +9289,32 @@ export type EmailAttachmentsReleasedMetadata = {
 export type EmailBlockScope = 'team' | 'personal';
 
 /**
+ * Current mailbox consent without loading domain exclusion lists.
+ */
+export type EmailContributionConsent = {
+    /**
+     * Whether this exact mailbox has explicit contribution consent.
+     */
+    enabled: boolean;
+    /**
+     * The primary mailbox that would contribute, if connected.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Exact current primary mailbox connection.
+     */
+    mailbox_link_id?: string | null;
+};
+
+/**
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
+    /**
+     * Only threads with at least one attachment of one of these kinds, by
+     * MIME type, on any of their messages. Empty applies no constraint.
+     */
+    attachments?: Array<AttachmentKind>;
     /**
      * Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC.
      */
@@ -9303,7 +9335,8 @@ export type EmailFilters = {
      * fully-qualified addresses. Each address is authorized against
      * `crm_contacts` + `crm_companies` (contact must not be hidden, company
      * must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_domains`.
+     * Mutually exclusive with `crm_domains`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_addresses?: Array<string>;
     /**
@@ -9312,9 +9345,16 @@ export type EmailFilters = {
      * domains (in any of sender/cc/bcc/recipient). Each domain is authorized
      * against `crm_domains` + `crm_companies` (must exist for the caller's
      * team, company must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_addresses`.
+     * Mutually exclusive with `crm_addresses`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_domains?: Array<string>;
+    /**
+     * Filter by whether the thread is done: true for threads out of the
+     * inbox (archived), false for threads still in it. This is the mailbox
+     * state the Email view's Done filter uses, independent of notifications.
+     */
+    done?: boolean | null;
     /**
      * Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads.
      */
@@ -9349,7 +9389,14 @@ export type EmailFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * A list of project ids to search within. Empty to ignore project filtering.
+     * Drive folder (project) ids to search within: threads filed in any of
+     * these folders. Besides the caller's own threads, it reaches every
+     * thread in a folder shared with the caller, whoever's inbox holds it,
+     * as the folder's list does. Search takes at most 50 folders and
+     * rejects more with a 400, and matches the query against at most 10,000
+     * of their threads in all; threads past that are not searched, unless
+     * `email_thread_ids` names them, and at most 10,000 named threads are
+     * searched in all. Empty to ignore project filtering.
      */
     project_ids?: Array<string>;
     /**
@@ -9365,6 +9412,7 @@ export type EmailFilters = {
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    view?: null | EmailSearchView;
 };
 
 /**
@@ -9491,6 +9539,11 @@ export type EmailPrivacyChange = {
 };
 
 /**
+ * Full settings by default, or mailbox consent when explicitly requested.
+ */
+export type EmailPrivacyResponse = EmailPrivacySettings | EmailContributionConsent;
+
+/**
  * Current consent and exclusions, readable by any team member.
  */
 export type EmailPrivacySettings = {
@@ -9511,9 +9564,21 @@ export type EmailPrivacySettings = {
      */
     mailbox_link_id?: string | null;
     /**
+     * Existing personal exclusions that cover the caller's whole mailbox.
+     */
+    personal_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
+    /**
      * Domains excluded only for the caller's contributions.
      */
     personal_domains: Array<string>;
+    /**
+     * Existing team exclusions that cover a connected member's whole mailbox.
+     */
+    team_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
     /**
      * Domains excluded across the team, including legacy company exclusions.
      */
@@ -9552,6 +9617,11 @@ export type EmailReminderSummary = {
      */
     threadId: string;
 };
+
+/**
+ * A mailbox view the Email list scopes a search to, as its tabs do.
+ */
+export type EmailSearchView = 'sent' | 'drafts';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -10692,6 +10762,13 @@ export type ExternalChatSendReply = {
      * Message being quoted, within this chat.
      */
     replyTo?: string | null;
+    /**
+     * The user's own reply approving this send, quoted verbatim. Required
+     * from an agent's program; never the request that asked for the message.
+     * Not part of the send's intent: it is neither stored nor compared on a
+     * retry.
+     */
+    userConfirmation?: string | null;
 };
 
 /**
@@ -14016,6 +14093,11 @@ export type LocationResponseV3 = {
 export type MacroUserIdStr = string;
 
 /**
+ * Why a domain exclusion would hide an affected mailbox's entire history.
+ */
+export type MailboxDomainConflict = 'company' | 'personal_provider';
+
+/**
  * Mark messages through this message read.
  */
 export type MarkRead = {
@@ -17225,13 +17307,20 @@ export type PostMessage = {
      */
     nonce?: string | null;
     /**
+     * Who hears about this post. `Silent` still delivers and shows the
+     * message, but sends no notification of any kind, mentions included.
+     * Channel messages only; other parents accept only `Default`.
+     */
+    notification_policy?: PostMessageNotificationPolicy;
+    /**
      * Root to reply to, if this is a reply.
      */
     thread_id?: string | null;
 };
 
 /**
- * Internal notification behavior for a posted channel message.
+ * Who hears about a posted message. A caller may choose it for its own
+ * channel message, since every choice only narrows who is notified.
  */
 export type PostMessageNotificationPolicy = 'Default' | 'MentionsOnly' | 'Silent';
 
@@ -28495,12 +28584,17 @@ export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmC
 export type GetCrmEmailPrivacyData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Return only consent and mailbox fields, without querying domain lists.
+         */
+        consent_only?: boolean;
+    };
     url: '/crm/email-privacy';
 };
 
 export type GetCrmEmailPrivacyResponses = {
-    200: EmailPrivacySettings;
+    200: EmailPrivacyResponse;
 };
 
 export type GetCrmEmailPrivacyResponse = GetCrmEmailPrivacyResponses[keyof GetCrmEmailPrivacyResponses];
@@ -28526,6 +28620,10 @@ export type ListCrmExcludedEmailThreadsData = {
          * Read entries after this thread ID.
          */
         after?: string | null;
+        /**
+         * Look up one thread instead of paging. Cannot be combined with `after`.
+         */
+        thread_id?: string | null;
     };
     url: '/crm/email-privacy/threads';
 };
@@ -32669,6 +32767,10 @@ export type ExternalChatSendData = {
 };
 
 export type ExternalChatSendErrors = {
+    /**
+     * An agent's program sent without userConfirmation (code confirmation_required), or the caller may not send
+     */
+    403: unknown;
     /**
      * One send request per second per user; Retry-After: 1
      */

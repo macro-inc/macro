@@ -6,7 +6,8 @@
   "maxSqlColumns": 64,
   "maxSqlInputBytes": 262144,
   "maxSqlRows": 500,
-  "policyVersion": 5,
+  "minPolicyVersion": 5,
+  "policyVersion": 6,
   "referencePolicyVersion": 4,
   "schemas": {
     "ContactReconcile": {

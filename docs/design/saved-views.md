@@ -483,8 +483,7 @@ contents, or person identifiers.
 
 ## Email consumer
 
-Email is the second consumer (`kind: "email"`, `version: 1`), behind the
-`enable-email-saved-views` flag. Its definition is consumer-owned like Tasks':
+Email is the second consumer (`kind: "email"`, `version: 1`). Its definition is consumer-owned like Tasks':
 
 ```json
 {

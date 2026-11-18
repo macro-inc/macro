@@ -1,6 +1,10 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isMutedItem, muteItemForRef } from '@entity/utils/notification';
+import {
+  isMentionsOnlyItem,
+  isMutedItem,
+  muteItemForRef,
+} from '@entity/utils/notification';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
@@ -42,6 +46,10 @@ export function useChannelRailItemState(
         item_id: id,
         item_type: 'channel',
       }),
+      mentionsOnly: isMentionsOnlyItem(notificationSource.mutedEntities(), {
+        item_id: id,
+        item_type: 'channel',
+      }),
       unread: rail.channelActivity.unreadChannelIds().has(id),
       mentions: rail.channelActivity.mentionCount(id),
       callStatus: rail.channelActivity.callStatuses().get(id),
@@ -71,6 +79,9 @@ export function useChannelRailFavoriteItemState(favorite: Accessor<Favorite>) {
       muted:
         muteItem !== undefined &&
         isMutedItem(notificationSource.mutedEntities(), muteItem),
+      mentionsOnly:
+        muteItem !== undefined &&
+        isMentionsOnlyItem(notificationSource.mutedEntities(), muteItem),
       unread:
         current.entityType === 'channel' &&
         rail.channelActivity.unreadChannelIds().has(current.entityId),
