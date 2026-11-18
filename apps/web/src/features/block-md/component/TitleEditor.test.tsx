@@ -206,6 +206,63 @@ it('saves renames in the order typed across a close and reopen', async () => {
   ]);
 });
 
+it('saves the old name typed into a reopened title while the closed one renames it', async () => {
+  vi.useFakeTimers();
+  const renames = holdRenames();
+  const closed = renderTitle('Roadmap');
+  await vi.advanceTimersByTimeAsync(0);
+  closed.type('Weekly');
+  closed.unmount();
+
+  // Reopened before that rename settles, the title still shows the old name,
+  // and it is typed again.
+  const reopened = renderTitle('Roadmap');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reopened.text()).toBe('Roadmap');
+  reopened.type('Road');
+  reopened.type('Roadmap');
+  reopened.blur();
+  await vi.advanceTimersByTimeAsync(400);
+
+  renames[0]({ success: true });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(rename).toHaveBeenCalledTimes(2);
+  renames[1]({ success: true });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(rename.mock.calls.map(([variables]) => variables)).toEqual([
+    {
+      entity: { type: 'document', id: 'document-1', name: 'Roadmap' },
+      newName: 'Weekly',
+    },
+    {
+      entity: { type: 'document', id: 'document-1', name: 'Weekly' },
+      newName: 'Roadmap',
+    },
+  ]);
+});
+
+it('leaves the rename from a closed title alone when the reopened title only shows the old name', async () => {
+  vi.useFakeTimers();
+  const renames = holdRenames();
+  const closed = renderTitle('Roadmap');
+  await vi.advanceTimersByTimeAsync(0);
+  closed.type('Weekly');
+  closed.unmount();
+
+  const reopened = renderTitle('Roadmap');
+  await vi.advanceTimersByTimeAsync(400);
+  expect(reopened.text()).toBe('Roadmap');
+  renames[0]({ success: true });
+  await vi.advanceTimersByTimeAsync(400);
+  expect(rename).toHaveBeenCalledTimes(1);
+
+  // Once that rename's name is published, the title shows it.
+  reopened.publish('Weekly');
+  await vi.advanceTimersByTimeAsync(400);
+  expect(reopened.text()).toBe('Weekly');
+  expect(rename).toHaveBeenCalledTimes(1);
+});
+
 it('saves a title changed back to its saved name while a rename is in flight', async () => {
   vi.useFakeTimers();
   const renames = holdRenames();
