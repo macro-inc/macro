@@ -296,3 +296,83 @@ test('MacroApiError messages carry the message or error of a JSON body', () => {
     `Macro API error 502: ${'x'.repeat(500)}…`,
   );
 });
+
+test('routine apps become the task the routine requires them in, only when given', async () => {
+  const bodies: Record<string, unknown>[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json(record, { status: 201 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const steps = [{ type: 'agent', instructions: 'File it' }] as const;
+  const trigger = {
+    type: 'cron',
+    schedule: '0 0 9 * * *',
+    timezone: 'UTC',
+  } as const;
+  await macro.routines.create({
+    name: 'Bugs',
+    trigger,
+    steps,
+    apps: [{ slug: 'linear', name: 'Linear' }],
+  });
+  const routine = await macro.routines.create({ name: 'Bugs', trigger, steps });
+  await routine.update({ name: 'Bugs', trigger, steps, apps: [] });
+
+  expect(bodies[0].task).toMatchObject({
+    mcp_servers: [{ app_slug: 'linear', server_name: 'Linear' }],
+  });
+  expect(bodies[1].task).not.toHaveProperty('mcp_servers');
+  // An update removes them by naming none.
+  expect(bodies[2].task).toMatchObject({ mcp_servers: [] });
+});
+
+test('a check names the apps a routine needs that are not connected', async () => {
+  const bodies: Record<string, unknown>[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json({
+        ok: true,
+        problems: [],
+        steps: [],
+        routine: record,
+        missingApps: [{ app_slug: 'notion', server_name: 'Notion' }],
+      });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const routine = {
+    name: 'Bugs',
+    trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'UTC' },
+    steps: [{ type: 'agent', instructions: 'File it' }],
+  } as const;
+
+  const check = await macro.routines.check(routine, {
+    missingApps: [{ slug: 'notion', name: 'Notion' }],
+  });
+  await macro.routines.check(routine);
+
+  expect(bodies[0]).toMatchObject({
+    missingApps: [{ app_slug: 'notion', server_name: 'Notion' }],
+  });
+  expect(check.missingApps).toEqual([
+    { app_slug: 'notion', server_name: 'Notion' },
+  ]);
+  // A check naming none sends none, so it reaches a server without them.
+  expect(bodies[1]).not.toHaveProperty('missingApps');
+});
