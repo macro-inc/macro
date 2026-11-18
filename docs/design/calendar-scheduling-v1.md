@@ -110,7 +110,9 @@ booking stays failed, its due timestamp is cleared, and it is never claimed agai
 clear their due timestamp. An abandoned booking keeps its reservations; recovery never interprets
 lost permission as a successful deletion. Cancelling it, which a failed booking otherwise refuses
 while recovery owns it, releases them once the calendar accepts the cancellation. An abandoned move
-stays at the requested time with both intervals held, while the calendar keeps the original time.
+stays at the requested time with both intervals held. Its calendar event may be at either time: a
+refusal leaves the original, but a move that ran out of attempts may have landed before its response
+was lost, so reconcile it against the host's calendar.
 
 Use the calendar-service logs for `scheduling operation queued for recovery`, `scheduling operation
 recovered`, `scheduling operation abandoned; booking left failed`, and `scheduling completion
