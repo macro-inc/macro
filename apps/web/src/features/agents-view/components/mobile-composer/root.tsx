@@ -1,7 +1,8 @@
 import { Input } from '@channel/Input/Input';
 import { ComposerSurface } from '@ui';
-import type { ParentProps } from 'solid-js';
+import { createSignal, type ParentProps } from 'solid-js';
 import { MobileComposerContext } from './context';
+import './mobile-composer.css';
 
 type MobileComposerRootProps = ParentProps<{
   collapsed: boolean;
@@ -17,17 +18,23 @@ type MobileComposerRootProps = ParentProps<{
 
 /** Phone-only frame; the shared editor host keeps draft and input behavior. */
 export function MobileComposerRoot(props: MobileComposerRootProps) {
+  const [attachmentHeight, setAttachmentHeight] = createSignal(0);
   return (
     <MobileComposerContext.Provider
-      value={{ collapsed: () => props.collapsed }}
+      value={{ collapsed: () => props.collapsed, setAttachmentHeight }}
     >
       <ComposerSurface
         as="div"
         data-agent-composer="chat"
         data-composer-expanded={!props.collapsed || undefined}
-        class="island relative z-10 min-w-0 rounded-[24px] transition-[height] duration-200 motion-reduce:transition-none"
+        class="phone-composer-surface island relative z-10 min-w-0"
         style={{
-          height: props.height === undefined ? undefined : `${props.height}px`,
+          '--composer-attachment-offset': `${attachmentHeight() > 0 ? attachmentHeight() + 4 : 0}px`,
+          height: props.collapsed
+            ? '46px'
+            : props.height === undefined
+              ? undefined
+              : `${props.height}px`,
         }}
         onPointerDown={props.onPointerDown}
         onMouseDown={props.onMouseDown}
@@ -46,11 +53,7 @@ export function MobileComposerRoot(props: MobileComposerRootProps) {
               ref={props.onLayoutRef}
               data-composer-collapsed={props.collapsed || undefined}
               data-phone-composer="true"
-              class="group/composer flex min-w-0 gap-1"
-              classList={{
-                'h-[46px] items-center px-[18px]': props.collapsed,
-                'flex-col px-1.5 pt-2 pb-1.5': !props.collapsed,
-              }}
+              class="group/composer flex min-w-0 flex-col gap-1 px-1.5 pt-2 pb-1.5"
             >
               {props.children}
             </div>

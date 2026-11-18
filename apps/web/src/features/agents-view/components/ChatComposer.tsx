@@ -285,8 +285,9 @@ export function ChatComposer(props: {
     <div
       data-composer-scroll
       classList={{
-        'max-h-6 overflow-hidden': !!collapsed(),
-        'py-1.5': !!props.phoneLayout && !collapsed(),
+        'max-h-6 overflow-hidden': !!collapsed() && !props.phoneLayout,
+        'max-h-9 overflow-hidden': !!collapsed() && !!props.phoneLayout,
+        'py-1.5': !!props.phoneLayout,
         'max-h-[min(15rem,30dvh)]': !collapsed(),
       }}
       class="min-w-0 flex-1 self-center overflow-y-auto px-[9.375px] touch:group-data-[phone-composer=true]/composer:!px-2.5 touch:group-data-[phone-composer=true]/composer:!min-h-0 not-touch:group-data-[composer-compact=false]/composer:px-1.5 group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px] touch:group-data-[composer-compact=false]/composer:min-h-18 group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full"
@@ -587,17 +588,10 @@ export function ChatComposer(props: {
             <MobileComposerEditor>{editorRow()}</MobileComposerEditor>
             <MobileComposerControls>
               {/* File pickers and portaled menus must survive focus leaving the editor. */}
-              <div class={collapsed() ? 'hidden' : 'contents'}>
-                <Show when={props.onAttachFiles}>{attachControl()}</Show>
-              </div>
+              <Show when={props.onAttachFiles}>{attachControl()}</Show>
               <div class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
-                <div class={collapsed() ? 'hidden' : 'contents'}>
-                  <div class="min-w-0">{props.selector}</div>
-                  <DictationButton
-                    dictation={dictation}
-                    disabled={disabled()}
-                  />
-                </div>
+                <div class="min-w-0">{props.selector}</div>
+                <DictationButton dictation={dictation} disabled={disabled()} />
                 {sendControl()}
               </div>
             </MobileComposerControls>

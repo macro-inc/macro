@@ -45,6 +45,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep catalog option identities stable across capability updates; isolate optional speed-marker discovery with Suspense so it cannot detach the editor.
 - Keep phone file inputs and overlay owners mounted on blur; add-menu, model, and repository sheets hold the composer expanded.
 - Keep the phone list composer's unfocused 46px pill vertically centered with no Send control; hide controls without unmounting their file or overlay owners.
+- Keep phone composer layout measurable while collapsed; animate the clipped shape and editor insets together, reveal inert controls after expansion, and disable transitions for reduced motion.
 
 ## Checks
 

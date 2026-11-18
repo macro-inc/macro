@@ -291,8 +291,10 @@ The phone Agents composer is a chrome island above the dock. At rest it is a
 46px pill with the vertically centered “Message Macro AI” placeholder or a
 one-line draft, and no Send control. Tapping the editor expands it to show
 attachments above the text, then Add on the left and model/agent, dictation, and Send on the right. The microphone sits immediately before Send.
-The editor and model picker stay mounted when the composer collapses; attachment
-state survives hiding the chips. Home keeps a separate draft and attachment store.
+The 46px pill expands continuously with its corner radius and editor insets;
+controls fade and scale in after the shape settles. Empty blur reverses the
+transition without moving the list behind it. Reduced motion skips the transition.
+The editor, controls, and attachment owners stay mounted while clipped or inert. Home keeps a separate draft and attachment store.
 
 The expanded composer shows icon-only Chat and Code tabs above the island.
 Code shows a content-width repository-and-branch pill beside the tabs. The
