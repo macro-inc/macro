@@ -438,6 +438,50 @@ async fn discover(time_zone: Option<&str>) -> OutlookDiscovery {
 }
 
 #[tokio::test]
+async fn discovery_reads_who_owns_each_calendar_and_whether_it_was_shared() {
+    let (server, api) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailboxSettings"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mailbox_settings(None)))
+        .mount(&server)
+        .await;
+    let mut shared = default_calendar("AAMkShared");
+    shared["isDefaultCalendar"] = json!(false);
+    shared["canEdit"] = json!(false);
+    shared["isSharedWithMe"] = json!(true);
+    shared["owner"] = json!({"name":"Ada","address":"ada@example.com"});
+    let mut unowned = default_calendar("AAMkUnowned");
+    unowned["isDefaultCalendar"] = json!(false);
+    unowned["owner"] = json!({"name":"","address":""});
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value":[default_calendar("AAMkCalendar"), shared, unowned],
+        })))
+        .mount(&server)
+        .await;
+
+    let discovery = api
+        .calendars("token", target().binding.unwrap())
+        .await
+        .unwrap();
+
+    let read: Vec<_> = discovery
+        .calendars
+        .iter()
+        .map(|c| (c.owner_address.as_deref(), c.shared_with_me))
+        .collect();
+    assert_eq!(
+        read,
+        [
+            (Some("olivia@example.com"), false),
+            (Some("ada@example.com"), true),
+            (None, false),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn calendars_carry_the_iana_zone_of_the_mailbox() {
     for (named, iana) in [
         (Some("Pacific Standard Time"), "America/Los_Angeles"),

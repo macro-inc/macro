@@ -45,6 +45,10 @@ pub struct OutlookCalendarLease {
     /// [`OutlookCalendarReader::READER_REVISION`] of the worker holding the
     /// lease, which every event it reads is stamped with.
     pub reader_revision: i16,
+    /// Whether the calendar is a system calendar
+    /// ([`OutlookCalendar::is_system`]), whose next round is due a day after
+    /// one finishes rather than two minutes.
+    pub system_calendar: bool,
 }
 
 /// Complete discovery result for a provider calendar.
@@ -53,6 +57,27 @@ pub struct OutlookCalendar {
     pub calendar: ProviderCalendar,
     /// Meeting providers actually allowed by this calendar.
     pub online_meeting_providers: Vec<String>,
+    /// Who created or added the calendar, or shared it with the mailbox.
+    pub owner_address: Option<String>,
+    /// Whether someone shared the calendar with the mailbox.
+    pub shared_with_me: bool,
+}
+
+impl OutlookCalendar {
+    /// Whether this is one of the mailbox's own read-only system calendars,
+    /// such as its holidays or Birthdays calendar, which sync once a day
+    /// ([`SYSTEM_CALENDAR_SYNC_INTERVAL`]) as Google's system calendars do.
+    /// A read-only calendar someone shared with the mailbox is someone's
+    /// schedule and keeps the normal cadence.
+    pub fn is_system(&self, mailbox_address: &str) -> bool {
+        self.calendar.access_role.as_deref() == Some("reader")
+            && !self.calendar.is_primary
+            && !self.shared_with_me
+            && self
+                .owner_address
+                .as_deref()
+                .is_some_and(|owner| owner.eq_ignore_ascii_case(mailbox_address))
+    }
 }
 
 /// What committing a discovery changed, for the account's viewers.

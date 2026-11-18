@@ -1,9 +1,12 @@
 //! Outlook calendar leases are fenced by both mailbox custody and grant generation.
 mod automatic_decline;
 use super::*;
-use crate::domain::models::ProviderCalendarTarget;
+use crate::domain::models::{ProviderCalendarTarget, SYSTEM_CALENDAR_SYNC_INTERVAL};
 use crate::domain::outlook::*;
 use crate::domain::ports::CalendarProviderErrorKind;
+
+/// How soon a calendar's next round starts after one finishes.
+const OUTLOOK_ROUND_INTERVAL: chrono::Duration = chrono::Duration::seconds(120);
 
 pub(super) async fn fence_binding(
     tx: &mut Transaction<'_, Postgres>,
@@ -108,7 +111,8 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         let mut log = ChangeLogBatch::default();
         fence(&mut tx, lease).await?;
         let state=sqlx::query!("SELECT scan_id,full_scan,page_loaded,page_cursor,next_page,terminal_cursor,pending_ids,visited_pages FROM calendar_outlook_work WHERE id=$1",lease.id).fetch_one(&mut *tx).await.map_err(report)?;
-        let mut delay = false;
+        // Until the step's next claim: none inside a round.
+        let mut wait = chrono::Duration::zero();
         let mut checkpoint = OutlookCheckpoint::Step;
         match progress {
             OutlookCalendarProgress::Reset => reset_cursor(&mut tx, lease.id).await?,
@@ -274,12 +278,16 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                         target.calendar_id,target.range.starts_at,target.range.ends_at,target.range.start_date,target.range.end_date).execute(&mut *tx).await.map_err(report)?;
                     sqlx::query!(r#"UPDATE calendar_accounts a SET sync_status=CASE WHEN EXISTS(SELECT 1 FROM calendars c WHERE c.account_id=a.id AND NOT c.is_deleted AND c.synced_at IS NULL) THEN 'syncing' ELSE 'ready' END,
                         last_synced_at=now(),last_sync_error=NULL WHERE a.id=$1"#,lease.account_id).execute(&mut *tx).await.map_err(report)?;
-                    delay = true;
+                    wait = if lease.system_calendar {
+                        SYSTEM_CALENDAR_SYNC_INTERVAL
+                    } else {
+                        OUTLOOK_ROUND_INTERVAL
+                    };
                     checkpoint = OutlookCheckpoint::RoundFinished { first_sync };
                 }
             }
         }
-        sqlx::query!("UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,next_run_at=now()+make_interval(secs=>CASE WHEN $2 THEN 120 ELSE 0 END),last_error=NULL,attempts=0 WHERE id=$1",lease.id,delay).execute(&mut *tx).await.map_err(report)?;
+        sqlx::query!("UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,next_run_at=now()+make_interval(secs=>$2),last_error=NULL,attempts=0 WHERE id=$1",lease.id,wait.num_seconds() as f64).execute(&mut *tx).await.map_err(report)?;
         log.commit(tx).await?;
         Ok(checkpoint)
     }
@@ -375,9 +383,9 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             email_address: row.email_address,
             provider: CalendarProvider::Outlook,
         };
-        let (target, is_primary, near_window) = if let Some(id) = row.calendar_id {
+        let (target, is_primary, near_window, system_calendar) = if let Some(id) = row.calendar_id {
             let c = sqlx::query!(
-                r#"SELECT provider_calendar_id,access_role,is_primary,synced_at IS NULL AS "unsynced!" FROM calendars WHERE id=$1"#,
+                r#"SELECT provider_calendar_id,access_role,is_primary,system_calendar,synced_at IS NULL AS "unsynced!" FROM calendars WHERE id=$1"#,
                 id
             )
             .fetch_one(&mut *tx)
@@ -406,9 +414,10 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                 // window: a calendar never synced, in a scan from scratch
                 // that has not listed them yet.
                 c.unsynced && row.near_window_pending,
+                c.system_calendar,
             )
         } else {
-            (None, false, false)
+            (None, false, false, false)
         };
         // Writes only when the status changes: every claim runs it, and eight
         // loops claim several times a second.
@@ -429,6 +438,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             page_cursor: row.page_cursor,
             near_window,
             reader_revision,
+            system_calendar,
         }))
     }
     async fn renew_outlook_calendar(&self, lease: &OutlookCalendarLease) -> Result<(), Report> {
@@ -461,6 +471,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         let range = OccurrenceRange::maintenance_horizon(Utc::now());
         for calendar in calendars {
             observed.push(calendar.calendar.provider_calendar_id.clone());
+            let system_calendar = calendar.is_system(&lease.token_identity.email_address);
             let (c, calendar_changed) = upsert_calendar_tx(
                 &mut tx,
                 &mut log,
@@ -484,6 +495,15 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             .rows_affected()
                 > 0;
             change.changed |= calendar_changed || providers_changed;
+            // Only the sync's schedule reads it, so no viewer refreshes.
+            sqlx::query!(
+                "UPDATE calendars SET system_calendar=$2 WHERE id=$1 AND system_calendar<>$2",
+                c.id,
+                system_calendar
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(report)?;
             sqlx::query!(r#"INSERT INTO calendar_outlook_work(id,account_id,calendar_id,sync_generation,grant_generation,starts_at,ends_at)
                 VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(account_id,calendar_id) WHERE calendar_id IS NOT NULL DO NOTHING"#,
                 Uuid::now_v7(),lease.account_id,c.id,lease.binding.sync_generation,lease.binding.grant_generation,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
