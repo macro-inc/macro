@@ -176,7 +176,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   charged (brand and last four, `null` when the team pays another way). It
   comes from `Billing::purchase_terms`: one expanded subscription read and one
   `invoices/upcoming/lines` preview for every size, never on the purchase
-  path. `/offers` stays unchanged for clients that predate it. `allocation` reads the same holdings per host; see
+  path. `/offers` stays unchanged for clients that predate it. `allocation`
+  reads the same holdings per host; see
   Observability for its gauges.
 - **Overcommit** (`domain/overcommit.rs`, pure): each host row holds its
   settings (`cpu_allocation_percent`, `ram_allocation_percent`,
