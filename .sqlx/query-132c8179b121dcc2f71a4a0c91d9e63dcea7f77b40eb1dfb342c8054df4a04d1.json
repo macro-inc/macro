@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH invalidated AS (\n                   UPDATE crm_email_policy_previews SET status='stale' WHERE team_id=$2\n                     AND request_hash IS NOT NULL AND status IN ('pending','running','complete','partial')\n               )\n               INSERT INTO crm_email_policy_source_events(event_id,team_id,source_kind,source_id,traceparent)\n               SELECT $1,$2,'contact',$3,$4\n               WHERE EXISTS (SELECT 1 FROM crm_email_rule_contacts WHERE contact_id=$3 AND team_id=$2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "132c8179b121dcc2f71a4a0c91d9e63dcea7f77b40eb1dfb342c8054df4a04d1"
+}

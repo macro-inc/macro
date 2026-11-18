@@ -35,6 +35,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   ends their work registrations first
   (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
+  Each call runs in an `internal_mcp.call_tool` span parented from the
+  request's `_meta` trace context, which the in-process agent sends
+  (`mcp_toolset::TraceContext::Propagate`), so `code_mode.execution` and the
+  sandbox's SDK calls join the session's trace.
 - `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
   and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
   on Macro credits (Claude Code on a Macro computer). Both values come from
@@ -50,7 +54,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
   forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
   its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6
-  defaults). `messages` is admitted as `AiFeature::AgentSession`
+  defaults and agent teammates’ Sonnet 5.5 calls). `messages` is admitted as `AiFeature::AgentSession`
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
   only under `ENABLE_AI_USAGE_BILLING`. A caller that hangs up mid-stream does
@@ -174,7 +178,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service; a scoped
   session's code is refused it, and its turn calls no remote MCP tool
-  directly either (`ScopedToolGate::refuse_remote_mcp`).
+  directly either (`ScopedToolGate::refuse_remote_mcp`). The actor MCP
+  transport is wrapped in `agent_egress::outbound::budgeted_mcp`, so each
+  account's calls to an app are paced; a call still rate limited answers
+  HTTP 429 to the SDK, which throws.
   Code execution's destination list in `src/code_mode.rs` (`SdkHost`) also
   includes the configured editing worker, whose comment-mark endpoint requires
   a scoped document token; this does not grant permission to edit document

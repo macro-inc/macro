@@ -90,3 +90,29 @@ fn a_sync_service_conflict_is_a_surface_conflict() {
         }
     );
 }
+
+#[tokio::test]
+async fn surface_markdown_is_read_in_the_lossless_internal_format() {
+    use wiremock::matchers::{method, path, query_param};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/markdown/project-1"))
+        .and(query_param("target", "internal"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"data": "Owner: <m-user-mention>{}</m-user-mention>"}),
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let initializer = LexicalSyncSurfaceInitializer::new(
+        LexicalClient::new("local-test-key".to_string(), server.uri()),
+        SyncServiceClient::new("local-test-key".to_string(), server.uri()),
+    );
+
+    assert_eq!(
+        initializer.markdown("project-1").await.unwrap(),
+        "Owner: <m-user-mention>{}</m-user-mention>"
+    );
+}

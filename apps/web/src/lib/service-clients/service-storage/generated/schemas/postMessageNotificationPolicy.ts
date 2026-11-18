@@ -6,7 +6,8 @@
  */
 
 /**
- * Internal notification behavior for a posted channel message.
+ * Who hears about a posted message. A caller may choose it for its own
+channel message, since every choice only narrows who is notified.
  */
 export type PostMessageNotificationPolicy =
   (typeof PostMessageNotificationPolicy)[keyof typeof PostMessageNotificationPolicy];

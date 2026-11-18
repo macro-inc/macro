@@ -101,8 +101,8 @@ proved and waived by kind beside the same numbers for functions.
 
 ## What fails the job
 
-Both CI jobs run the report with `--enforce`: the browser suite's on every
-push to `main` and in the daily sweep, the full-stack tier's in the sweep
+Both CI jobs run the report with `--enforce`: the browser suite's in each run on
+`main`, pushed or the daily sweep, the full-stack tier's in the sweep
 (`../README.md`, CI). It fails when
 
 - a function on a provider, or a row, has no passing test on its stack and

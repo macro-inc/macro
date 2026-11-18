@@ -216,6 +216,7 @@ where
                             details: serde_json::json!({"source_kind": match source.source_kind {
                                 EmailPolicySourceKind::Contact => "contact",
                                 EmailPolicySourceKind::Company => "company",
+                                EmailPolicySourceKind::Team => "team",
                             }}),
                         })
                         .await?;

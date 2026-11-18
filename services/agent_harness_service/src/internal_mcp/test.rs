@@ -409,6 +409,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
 }
 
 mod code_mode;
+mod trace;
 
 #[test]
 fn code_results_send_pixels_as_images_and_keep_the_receipt_structured() {

@@ -7,7 +7,7 @@ use entity_access::domain::{
     models::{EntityAccessReceipt, EntityType, ViewAccessLevel},
     ports::EntityAccessService,
 };
-use lexical_client::{LexicalClient, parse_markdown::MarkdownTarget};
+use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -91,7 +91,7 @@ impl<D: DocumentService, A: EntityAccessService> SkillReader for DocumentSkillRe
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, SkillError> {
         self.lexical
-            .get_markdown(&receipt.entity().entity_id, MarkdownTarget::Internal)
+            .get_agent_markdown(&receipt.entity().entity_id)
             .await
             .map_err(SkillError::ReadFailed)
     }

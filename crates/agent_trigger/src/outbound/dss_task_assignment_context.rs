@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use document_storage_service_client::DocumentStorageServiceClient;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
-use lexical_client::{LexicalClient, parse_markdown::MarkdownTarget};
+use lexical_client::LexicalClient;
 use messages::domain::service::MessageWrite;
 use models_properties::{
     EntityType as PropertyEntityType,
@@ -93,7 +93,7 @@ impl<Properties: TaskProperties> TaskAssignmentContext for DssTaskAssignmentCont
         // renderer reads the live content and includes it in the opening brief.
         let markdown = self
             .lexical
-            .get_markdown(document_id, MarkdownTarget::External)
+            .get_agent_markdown(document_id)
             .await
             .map_err(AgentSessionError::Unknown)?;
         let properties = self

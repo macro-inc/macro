@@ -350,6 +350,11 @@ where
         self.closed.cancelled().await;
     }
 
+    /// Tell the runtime the agents bound to it may have changed.
+    pub async fn agents_changed(&self) -> std::result::Result<(), TransportError> {
+        self.outbound.send(ToRuntimeMessage::AgentsChanged).await
+    }
+
     /// Ask the runtime to inspect a separate fresh ACP process and await the
     /// next answer this connection produces.
     ///
