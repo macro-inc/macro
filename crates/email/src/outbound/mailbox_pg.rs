@@ -289,12 +289,15 @@ impl MailboxSyncRepository for PgMailboxSync {
         delay: u32,
     ) -> Result<bool, MailboxError> {
         // The count reads `email_message_reconciliation_import_queued`, whose
-        // predicate it repeats, and stops at `queued` rows.
+        // predicate it repeats, and stops at `queued` rows. Rows backed off
+        // after failures of their own don't count: they would hold the walk
+        // while nothing could be claimed.
         let paced = sqlx::query!(r#"
             WITH queued AS (
                 SELECT count(*) AS rows FROM (
                     SELECT 1 FROM email_message_reconciliation
                     WHERE link_id = $1 AND generation = $2 AND is_import AND available_at <> 'infinity'
+                        AND available_at <= now()
                     LIMIT $3
                 ) q
             )

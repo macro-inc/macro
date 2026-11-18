@@ -461,16 +461,17 @@ tools — hexagonal, heavily feature-gated.
   gives them the Microsoft gate's `Import` and `Live` budgets, so an import
   cannot take the slot live mail and calendar need.
 - An import round's folder stream reads its next page only while its mailbox
-  has fewer than 200 import rows queued (`IMPORT_QUEUED_AHEAD`, checked by
+  has fewer than 200 import rows due (`IMPORT_QUEUED_AHEAD`, checked by
   `pace_import` with a count capped there); otherwise it is put back for 10 s
-  unread and its enumerate span reads `outlook.outcome=paced`. The count reads
-  the partial index `email_message_reconciliation_import_queued`; keep its
-  predicate and the query's identical, or a mailbox with fewer queued rows than
-  the cap reads the whole table. Message claims
-  are first in, first out across mailboxes, so a walk that ran ahead would put
-  every other mailbox's import, and any message that waited for room, behind
-  its whole backlog. Gmail's backfill lists its next page behind the threads
-  it queued for the same reason. Live folder streams are never paced.
+  unread and its enumerate span reads `outlook.outcome=paced`. Rows backed off
+  after their own failures don't count, so they never hold the walk. The count
+  reads the partial index `email_message_reconciliation_import_queued`; keep
+  its predicate and the query's identical, or a mailbox with fewer due rows
+  than the cap reads the whole table. Message claims are first in, first out
+  across mailboxes, so a walk that ran ahead would put every other mailbox's
+  import, and any message that waited for room, behind its whole backlog.
+  Gmail's backfill lists its next page behind the threads it queued for the
+  same reason. Live folder streams are never paced.
   A message released after a failed read is due at once when a newer
   revision arrived during the lease.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)

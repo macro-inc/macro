@@ -30,8 +30,9 @@ Re-importing folders whose first import was cut short has its own runbook:
 Sync work defers itself: a refused or failed unit is parked and retried
 later, so most of these alerts clear without action. Don't edit queue rows in
 production. An importing folder reads its next page only while its mailbox has
-fewer than 200 messages waiting to import; until then its enumerate spans read
+fewer than 200 messages ready to import; until then its enumerate spans read
 `@outlook.outcome:paced`, which is the import keeping pace, not a stall.
+Messages backed off after their own failures don't count.
 
 A message whose own reads keep failing stops retrying: after 3 refusals Graph
 won't change (`permanent`, such as an undecodable response, or `forbidden`, a

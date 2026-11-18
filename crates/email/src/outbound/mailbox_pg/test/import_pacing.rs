@@ -105,20 +105,18 @@ async fn an_import_round_reads_no_further_while_two_pages_wait_for_import(db: Pg
     .unwrap();
     assert!(waits);
 
-    // Messages the import finished, gave up on, or that arrived as new mail
-    // are not waiting for the import.
+    // One message the import gave up on and one backed off after a failure
+    // of its own leave 198 due; one more makes 199. New mail is live work.
+    // Counting any of those three would make 200 and hold the walk.
     sqlx::query!(
         r#"
         WITH taken AS (
             SELECT provider_id, row_number() OVER (ORDER BY provider_id) AS n
             FROM email_message_reconciliation WHERE link_id = $1
-        ),
-        abandoned AS (
-            UPDATE email_message_reconciliation q SET available_at = 'infinity'
-            FROM taken WHERE q.link_id = $1 AND q.provider_id = taken.provider_id AND taken.n <= 1
         )
-        DELETE FROM email_message_reconciliation q USING taken
-        WHERE q.link_id = $1 AND q.provider_id = taken.provider_id AND taken.n BETWEEN 2 AND 100
+        UPDATE email_message_reconciliation q SET available_at = CASE taken.n
+            WHEN 1 THEN 'infinity'::timestamptz ELSE now() + interval '30 minutes' END
+        FROM taken WHERE q.link_id = $1 AND q.provider_id = taken.provider_id AND taken.n <= 2
     "#,
         link
     )
@@ -126,7 +124,11 @@ async fn an_import_round_reads_no_further_while_two_pages_wait_for_import(db: Pg
     .await
     .unwrap();
     sqlx::query!(
-        "INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import) VALUES ($1,1,'arrived',false)",
+        r#"
+        INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import) VALUES
+            ($1,1,'one-more',true),
+            ($1,1,'arrived',false)
+    "#,
         link
     )
     .execute(&db)

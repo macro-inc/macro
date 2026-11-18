@@ -249,8 +249,8 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         retry_after_seconds: u32,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     /// Puts the stream back for `retry_after_seconds`, unread, while its
-    /// mailbox has at least `queued` import messages waiting. Returns whether
-    /// it did.
+    /// mailbox has at least `queued` import messages due. Returns whether it
+    /// did.
     fn pace_import(
         &self,
         lease: &StreamLease,
@@ -703,8 +703,8 @@ where
     }
 }
 
-/// Import messages a mailbox may have waiting before its folders' import
-/// rounds stop reading pages: two pages. Gmail's backfill lists its next page
+/// Due import messages a mailbox may have before its folders' import rounds
+/// stop reading pages: two pages. Gmail's backfill lists its next page
 /// behind the threads it queued; this keeps an Outlook walk about as far
 /// ahead of its import, so another mailbox's import, and a message that waited
 /// for room, queue behind a couple of pages rather than the whole import.
