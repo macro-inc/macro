@@ -18,13 +18,7 @@ import {
   resizeCursor,
 } from '../browser';
 import { selectionTarget } from '../browser/selection-target';
-import {
-  corners,
-  cssMatrix,
-  enclosing,
-  IDENTITY,
-  transformPoint,
-} from '../core/affine';
+import { corners, cssMatrix, IDENTITY, transformPoint } from '../core/affine';
 import { screenToWorld, worldToScreen } from '../core/camera';
 import { connectorWorldView } from '../core/connectors';
 import type { GraphicsEditor } from '../core/editor';
@@ -32,6 +26,10 @@ import type { GraphicsDocument, Point, ShapeItem } from '../core/model';
 import { isRadiusHandle } from '../core/radius';
 import { isResizeEdge, resizeHandles } from '../core/resize';
 import { selectionFrame } from '../core/selection-frame';
+import {
+  rotationKnobOffset,
+  rotationKnobPoint,
+} from '../core/selection-handles';
 import { isShape, isShapeKind, shapeDefinition } from '../core/shapes/registry';
 import { selectedShapeIds } from '../core/style-selection';
 import { createShapeView } from './create-shape-view';
@@ -63,6 +61,51 @@ import {
   shapeProjection,
   worldMatrix,
 } from '../core/scene';
+
+/** How far from a connector's endpoint a finger still takes it, on screen. */
+const TOUCH_ENDPOINT_REACH = 16;
+
+const CONNECTOR_ENDS = ['start', 'end'] as const;
+
+type ConnectorEndProps = {
+  end: 'start' | 'end';
+  connectorId: string;
+  point: Point;
+};
+
+/** One end of the selected connector, to drag onto another shape. */
+function ConnectorEndHandle(props: ConnectorEndProps) {
+  return (
+    <circle
+      data-graphics-connector-end={props.end}
+      data-graphics-connector-id={props.connectorId}
+      aria-label={`Connector ${props.end}`}
+      role="img"
+      cx={props.point.x}
+      cy={props.point.y}
+      r="6"
+      fill="white"
+      stroke={SELECTION_COLOR}
+      style={{ 'pointer-events': 'all', cursor: 'grab' }}
+    />
+  );
+}
+
+/** The wider, unseen target a finger takes a connector's end by. */
+function ConnectorEndTarget(props: ConnectorEndProps) {
+  return (
+    <circle
+      data-graphics-connector-end={props.end}
+      data-graphics-connector-id={props.connectorId}
+      data-graphics-connector-reach=""
+      cx={props.point.x}
+      cy={props.point.y}
+      r={TOUCH_ENDPOINT_REACH}
+      fill="transparent"
+      style={{ 'pointer-events': 'all', cursor: 'grab' }}
+    />
+  );
+}
 
 export function createGraphicsProjection(editor: GraphicsEditor) {
   const [camera, setCamera] = createSignal(editor.getCamera());
@@ -128,6 +171,11 @@ export function GraphicsSurface(props: {
     () => projection.session().transform?.nodes ?? emptyOverrides
   );
   const cameraScale = createMemo(() => projection.camera().scale);
+  // A surface that leaves one finger to the page lets it pan and scroll on;
+  // otherwise every touch is the canvas's.
+  const yieldsToPage = () => props.input?.yieldToPage?.();
+  const touchAction = () => (yieldsToPage() ? 'pan-x pan-y' : 'none');
+  const overscroll = () => (yieldsToPage() ? 'auto' : 'contain');
   const selected = createMemo(
     () => roots(scene(), projection.session().selectedIds),
     undefined,
@@ -233,6 +281,8 @@ export function GraphicsSurface(props: {
   const radiusRectangle = () => {
     const gesture = projection.session().transform;
     if (
+      // Sitting inside each corner, they would take a finger meant to resize.
+      props.input?.touchHandles ||
       selected().length !== 1 ||
       props.input?.tool?.() !== 'select' ||
       props.input?.suspended?.() ||
@@ -256,24 +306,12 @@ export function GraphicsSurface(props: {
     if (points.length !== 4) return undefined;
     return { start: points[index]!, end: points[(index + 1) % 4]! };
   };
-  const rotationHandle = () => {
-    const points = handleCorners();
-    if (points.length !== 4) return undefined;
-    if (selected().length === 1 && isShape(scene().items[selected()[0]!])) {
-      const [a, b, c] = [points[0]!, points[1]!, points[2]!];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      // Keep the normal outside the box even after a resize flips an axis.
-      const direction = dy * (c.x - a.x) - dx * (c.y - a.y) > 0 ? -1 : 1;
-      const offset = (16 * direction) / Math.hypot(dx, dy);
-      return {
-        x: (a.x + b.x) / 2 + dy * offset,
-        y: (a.y + b.y) / 2 - dx * offset,
-      };
-    }
-    const bounds = enclosing(points);
-    return { x: bounds.x + bounds.width / 2, y: bounds.y - 16 };
-  };
+  const rotationHandle = () =>
+    rotationKnobPoint(
+      handleCorners(),
+      selected().length === 1 && isShape(scene().items[selected()[0]!]),
+      rotationKnobOffset(props.input?.touchHandles)
+    );
   const renderers = { ...defaultRenderers, ...props.renderers };
   const previewItem = (): ShapeItem | undefined => {
     if (!projection.preview()) return undefined;
@@ -297,8 +335,8 @@ export function GraphicsSurface(props: {
         overflow: 'hidden',
         width: '100%',
         height: '100%',
-        'touch-action': 'none',
-        'overscroll-behavior': 'contain',
+        'touch-action': touchAction(),
+        'overscroll-behavior': overscroll(),
         'user-select': 'none',
         cursor: isShapeKind(props.input?.tool?.())
           ? 'crosshair'
@@ -513,33 +551,41 @@ export function GraphicsSurface(props: {
               singleConnector()
             }
           >
-            {(item) => (
-              <For each={['start', 'end'] as const}>
-                {(end) => {
-                  const point = () =>
-                    screen(
-                      transformPoint(
-                        worldMatrix(scene(), item().id, overrides()),
-                        item().geometry[end].point
-                      )
-                    );
-                  return (
-                    <circle
-                      data-graphics-connector-end={end}
-                      data-graphics-connector-id={item().id}
-                      aria-label={`Connector ${end}`}
-                      role="img"
-                      cx={point().x}
-                      cy={point().y}
-                      r="6"
-                      fill="white"
-                      stroke={SELECTION_COLOR}
-                      style={{ 'pointer-events': 'all', cursor: 'grab' }}
-                    />
-                  );
-                }}
-              </For>
-            )}
+            {(item) => {
+              const point = (end: 'start' | 'end') =>
+                screen(
+                  transformPoint(
+                    worldMatrix(scene(), item().id, overrides()),
+                    item().geometry[end].point
+                  )
+                );
+              return (
+                <>
+                  {/* Both targets go under both drawn ends: on a short
+                      connector one end's target would cover the other end. */}
+                  <Show when={props.input?.touchHandles}>
+                    <For each={CONNECTOR_ENDS}>
+                      {(end) => (
+                        <ConnectorEndTarget
+                          end={end}
+                          connectorId={item().id}
+                          point={point(end)}
+                        />
+                      )}
+                    </For>
+                  </Show>
+                  <For each={CONNECTOR_ENDS}>
+                    {(end) => (
+                      <ConnectorEndHandle
+                        end={end}
+                        connectorId={item().id}
+                        point={point(end)}
+                      />
+                    )}
+                  </For>
+                </>
+              );
+            }}
           </Show>
           <For
             each={selected().filter((id) => {

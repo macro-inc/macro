@@ -1183,7 +1183,7 @@ export type ForwardCalendarEventError = {
 /**
  * Why a forward was not sent.
  */
-export type ForwardCalendarEventErrorCode = 'not_found' | 'invalid_recipients' | 'inbox_unavailable' | 'send_failed';
+export type ForwardCalendarEventErrorCode = 'not_found' | 'invalid_recipients' | 'inbox_unavailable' | 'send_failed' | 'confirmation_required';
 
 /**
  * One person a forwarded invitation goes to.
@@ -2257,7 +2257,7 @@ export type ForwardCalendarEventErrors = {
      */
     401: unknown;
     /**
-     * The inbox holding the copy cannot send for the viewer
+     * The inbox holding the copy cannot send for the viewer, or an agent's program asked to forward
      */
     403: ForwardCalendarEventError;
     /**

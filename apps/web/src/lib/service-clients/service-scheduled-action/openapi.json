@@ -2478,7 +2478,7 @@
     "/suggestions/{id}/accept": {
       "post": {
         "tags": ["suggestions"],
-        "summary": "The caller, or someone acting for them, acts on a suggestion: a background\nprompt suggestion starts its run when the person accepts it in the app (anyone\nelse only takes it on); a note or prompt is done once they act on it (open its\nitem or the composer), and shows in the feed's `done`. A routine suggestion is\nrefused: the person saves its routine in the app, which makes it done.",
+        "summary": "The caller, or someone acting for them, acts on a suggestion: a background\nprompt suggestion starts its run when the person accepts it in the app (anyone\nelse only takes it on); a reply suggestion is only taken on, and is done once\nthe person replies on its item; any other note or prompt is done once they act\non it (open its item or the composer), and shows in the feed's `done`. A\nroutine suggestion is refused: the person saves its routine in the app, which\nmakes it done.",
         "operationId": "accept_suggestion",
         "parameters": [
           {
@@ -2503,7 +2503,7 @@
         },
         "responses": {
           "204": {
-            "description": "Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing"
+            "description": "Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), a reply suggestion is taken on and stays open until the person replies on its item, any other suggestion is done; accepting a done suggestion again changes nothing"
           },
           "400": {
             "description": "A routine suggestion: the person saves its routine in the app instead",

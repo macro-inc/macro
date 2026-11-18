@@ -30,10 +30,19 @@ struct StubRepo {
 }
 
 impl EmailPrivacyRepository for StubRepo {
+    async fn email_consent(
+        &self,
+        _: uuid::Uuid,
+        _: &str,
+    ) -> Result<crate::domain::email_privacy::EmailContributionConsent, CrmError> {
+        panic!("unexpected email_consent call")
+    }
+
     async fn excluded_email_threads(
         &self,
         _: uuid::Uuid,
         _: &str,
+        _: Option<uuid::Uuid>,
         _: Option<uuid::Uuid>,
     ) -> Result<crate::domain::email_privacy::ExcludedEmailThreads, CrmError> {
         panic!("unexpected excluded_email_threads call")
@@ -67,6 +76,8 @@ impl EmailPrivacyRepository for StubRepo {
             mailbox_email: None,
             team_domains: vec![],
             personal_domains: vec![],
+            team_domain_warnings: Default::default(),
+            personal_domain_warnings: Default::default(),
             can_remove_team_domains: false,
         })
     }

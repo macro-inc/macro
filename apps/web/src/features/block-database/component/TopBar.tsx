@@ -7,7 +7,6 @@ import {
   makeCopyLinkAction,
   makeFavoriteAction,
 } from '@app/features/next-soup/actions';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
@@ -22,9 +21,9 @@ import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { enableForms } from '@core/constant/featureFlags';
 import { useGetPermissions } from '@core/signal/permissions';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazy } from '@core/util/lazy';
 import type { DatabaseEntity } from '@entity';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
@@ -32,7 +31,7 @@ import type { TableDetail } from '@service-storage/generated/schemas/tableDetail
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { ButtonGroup } from '@ui';
 import type { ResultAsync } from 'neverthrow';
-import { createSignal, lazy, Show, Suspense } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { DatabaseTitle } from '../../database/components/database-title';
 import {
   type DatabaseEntityFailure,
@@ -67,7 +66,6 @@ export function TopBar(props: {
 }) {
   const databaseId = props.databaseId;
   const permissions = useGetPermissions();
-  const formsFlag = useFeatureFlag(enableForms);
   let editTitle: (() => void) | undefined;
   const name = () => props.detail?.database.name ?? 'Database';
   const openShare = useShareModal(() => {
@@ -81,13 +79,11 @@ export function TopBar(props: {
       owner: detail.database.owner_id,
       userPermissions: permissions(),
       // Form editors hold Edit here through their form: say so, and where.
-      audience: formsFlag().enabled
-        ? () => (
-            <Suspense>
-              <DatabaseFormEditors databaseId={databaseId} />
-            </Suspense>
-          )
-        : undefined,
+      audience: () => (
+        <Suspense>
+          <DatabaseFormEditors databaseId={databaseId} />
+        </Suspense>
+      ),
     };
   });
   const favoriteAction = makeFavoriteAction();
@@ -196,7 +192,7 @@ export function TopBar(props: {
                   canEdit={props.canEdit}
                   onSelect={props.onSelectTable}
                   menuItems={
-                    formsFlag().enabled && props.activeTable
+                    props.activeTable
                       ? () => (
                           <Suspense>
                             <DatabaseFormsEntry

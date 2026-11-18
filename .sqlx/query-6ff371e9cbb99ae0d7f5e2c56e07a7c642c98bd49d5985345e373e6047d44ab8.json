@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT mode,enabled,selected_enabled,active_rule_revision,policy_version FROM crm_email_consent WHERE team_id=$1 AND user_id=$2 AND consent_incarnation=$3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "selected_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "active_rule_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "policy_version",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "6ff371e9cbb99ae0d7f5e2c56e07a7c642c98bd49d5985345e373e6047d44ab8"
+}

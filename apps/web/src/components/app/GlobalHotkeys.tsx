@@ -11,7 +11,6 @@ import {
 } from '@app/features/command/Launcher';
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { inEnglish, t } from '@app/lib/i18n';
 import { beginInteraction } from '@app/observability/flow';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
@@ -19,7 +18,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { useLogout } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';
-import { enableSnippets, LOCAL_ONLY } from '@core/constant/featureFlags';
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -227,7 +226,6 @@ export default function GlobalShortcuts() {
   const logout = useLogout();
 
   const handleFileUpload = useHandleFileUpload();
-  const snippetsFlag = useFeatureFlag(enableSnippets);
 
   const handleCommandMenu = (event?: KeyboardEvent) => {
     const willOpen = !CommandState.isOpen();
@@ -276,9 +274,7 @@ export default function GlobalShortcuts() {
       scopeId: CREATE_MENU_COMMAND_SCOPE,
       description: item.description,
       condition: () =>
-        (item.condition?.() ?? true) &&
-        (item.enabled?.() ?? true) &&
-        (item.blockName !== 'snippet' || snippetsFlag().enabled),
+        (item.condition?.() ?? true) && (item.enabled?.() ?? true),
       // Entries that deliberately share a key (the flagged agent pair) opt
       // into 'add' so both survive registration and the dispatcher picks the
       // one whose condition passes, rather than the later silently winning.
@@ -287,9 +283,7 @@ export default function GlobalShortcuts() {
       icon: Plus,
       tags: item.tags,
       keywords: item.keywords,
-      hide: () =>
-        !(item.enabled?.() ?? true) ||
-        (item.blockName === 'snippet' && !snippetsFlag().enabled),
+      hide: () => !(item.enabled?.() ?? true),
       runWithInputFocused: item.runWithInputFocused ?? true,
     });
   });

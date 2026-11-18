@@ -26,6 +26,11 @@ A Shift-click that also holds Option (Alt) opens below the split it came from:
 `split-below-intent.ts` remembers the click, as `tab-layout/open-in-tab-intent.ts`
 does for Cmd-click. Moving panes (swap left/right, mobile bring-to-front)
 keeps the tiles and their sizes and changes which split shows where.
+Bring-to-front activates the split at once and leaves the order to the
+router's move. Inside an effect or a `batch`, `splits()` follows the router
+only after the activation returns; while the router commits or runs a URL
+navigation, the move itself waits. Never wait on the new order there
+(`tests/stacked-panes.test.ts`).
 Directional focus (`Shift+H/J/K/L`, `Shift+Arrow`) picks its target from the
 tiles, not the pane order: `split-direction.ts` returns to the previously
 active split when it borders that side, else the one level with the focused
@@ -76,6 +81,10 @@ leave guards, middleware, URL updates, and single-owner content claims.
 
 Resolve restoration keys and initial entry-state slices from the current router
 entry, not the layout mirror: an outlet can mount before the mirror updates.
+`SplitPanel` also resolves collection ownership from that entry's registered
+component metadata. CRM supplies its own collection state, while Calls requires
+the panel's `SoupViewContextProvider`; choosing the provider from the previous
+mount lets the new route render without its required context.
 
 The remaining notes below describe the original split layout.
 

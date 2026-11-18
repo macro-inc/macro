@@ -5,9 +5,7 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { ProjectAttachment } from '@app/features/projects/project-attachment';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { enableProjects } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
 import {
@@ -75,7 +73,6 @@ function attachmentSoupAst(attachments: ApiChannelAttachment[]) {
 }
 
 export function ChannelAttachmentEntitySection(props: { channelId: string }) {
-  const projectsFlag = useFeatureFlag(enableProjects);
   const attachmentsQuery = useChannelDocumentAttachmentsQuery(
     () => props.channelId
   );
@@ -147,7 +144,7 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
 
   return (
     <>
-      <Show when={projectsFlag().enabled && projectAttachments().length > 0}>
+      <Show when={projectAttachments().length > 0}>
         <AttachmentSection label="Projects">
           <div class="flex flex-wrap gap-2 p-4">
             <For each={projectAttachments()}>

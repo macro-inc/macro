@@ -82,10 +82,45 @@ tools/HTTP/GraphQL surfaces over them.
 
 - Selected-email policy types live in `domain/email_rules.rs`; their validation
   checks format/resource bounds only. Target authorization and activation are
-  separate operations. Dormant selected storage keeps legacy `enabled` false;
-  never treat that bit as the effective selected consent or bypass its guards.
+  separate operations. Selected storage keeps legacy `enabled` false;
+  recognize `enabled OR selected_enabled` for compatible grant readers without
+  bypassing legacy-write guards. Keep the scalar predicate, set-based ingestion
+  and inlined Team reader in parity; live contact/company selectors follow
+  same-team role visibility and retain every exclusion veto. Activation is gated by default-off
+  `enable-crm-selective-email-contribution`; inspection and withdrawal remain
+  available independently. Keep the flag off until all PR 5 gates pass.
   Private rule controls use the membership boundary of `/crm/email-privacy`,
   including after CRM viewing denial; resolving CRM details still needs record access.
+
+- Private policy storage lives in `domain/email_policy.rs` and
+  `outbound/companies_repo/email_policy/`. Inspection must never initialize consent or move historical work. The first
+  policy mutation compares the legacy observation under locks, initializes
+  identity and transfers history atomically. `Existing` never creates a row.
+  `email_policy_api.rs` owns opaque CAS, direct activation and trusted actor audit.
+  Use empty struct variants for payload-free policy commands so serde rejects unknown fields.
+  Fingerprint explicit authority fields, never whole mailbox/member row versions
+  or sync/billing fields. A cleared same-grant reauth may preserve intent; an
+  actual revocation changes version. Recheck live eligibility before granting. Worker checkpoints/completion must pass their captured
+  generation, never substitute the transaction's current version. Preview starts
+  compare the observed policy and slot ID; exact retries reuse the retained
+  result, and replacements receive a new server-generated ID.
+  Source events page raw contact/company rule references before filtering active
+  revisions. Wire event insertion inside the source edit's existing transaction;
+  preserve its lock order and never enqueue as a separate post-commit effect.
+  Bulk teardown must keep withdrawal available: plain deletes on the no-rule
+  path, then one fresh team-reference probe/coarse event; referenced deletes
+  return IDs and recheck references in a new statement. Activation locks and
+  revalidates live targets. Never add a team privacy lock around bulk teardown.
+  `domain/email_policy_work.rs` and its service own generation-bound history:
+  raw contact pages of 100, sent-first passes, effect reauthorization and exact
+  cursor completion. Source reconciliation uses stable retry receipts and system
+  audit entries; matching edit hooks live in `email_policy/source_changes.rs`.
+  Add the same transactional hook to any new address/domain/visibility writer.
+  `email_policy_preview.rs` owns count-only work: one retained owner slot,
+  stable read-only snapshot, raw pages of 100, 10,000-thread/five-minute budgets
+  and conditional completion. Previewing never initializes consent. Matching
+  edit hooks invalidate preview metadata; no mailbox index is added for counts.
+  No worker initializes consent or activates selected contribution.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
@@ -193,7 +228,13 @@ tools/HTTP/GraphQL surfaces over them.
 - When depopulating an email, prefer its domain-linked contact over a manual
   unfiled record so mailbox-source teardown reaches the synced contact.
 - Thread exceptions live in `crm_email_thread_exclusions`, scoped to one
-  team/member/mailbox/thread; mutations and paginated listing are owner-only.
+  team/member/mailbox/thread; mutations, paginated listing and the optional
+  `thread_id` lookup on that list are owner-only. The optional `consent_only=true`
+  projection on `GET /crm/email-privacy` reads only the current mailbox and
+  effective consent, with the same authorization and 15-second read timeout;
+  leave domain-list queries on the full settings path. Exact lookup returns zero or
+  one row without a cursor through an indexed owner lookup; reject it with
+  `after`.
   Keep these contribution controls available to members denied CRM viewing,
   like mailbox consent; use membership authority without `check_access`.
   Require `enable-crm-thread-exclusions` in the domain before set/clear, failing
@@ -204,6 +245,12 @@ tools/HTTP/GraphQL surfaces over them.
   preserves records and prior interaction dates, like personal blocked domains.
 - Domain exclusions affect contribution and CRM email reads, never record
   visibility. Preserve archive state on block/unblock and consent withdrawal.
+  Apply `domain/email_privacy/mailbox_domains` before every new exclusion:
+  team blocks (including company sync-off/archive) protect all members' connected
+  primary mailboxes; personal blocks protect the caller's. The adapter gathers
+  and locks mailbox facts before domain/entity locks and invokes domain policy
+  within the write transaction. Full settings report existing matches without
+  removing them; consent-only and the three eligibility readers stay independent.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
   them; continue valid rows, but propagate lookup storage and authorization failures.
 

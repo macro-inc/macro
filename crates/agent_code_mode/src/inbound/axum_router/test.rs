@@ -91,3 +91,18 @@ fn a_routine_owner_token_cannot_decide_a_review_without_the_marker() {
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
+
+#[test]
+fn a_rate_limited_connected_app_is_too_many_requests_with_retry_after() {
+    let response = CodeExecutionApiError(CodeModeError::ConnectedAppRateLimited {
+        retry_after: Some(std::time::Duration::from_millis(1500)),
+    })
+    .into_response();
+
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(
+        response.headers()[axum::http::header::RETRY_AFTER],
+        "2",
+        "Retry-After rounds up to whole seconds"
+    );
+}

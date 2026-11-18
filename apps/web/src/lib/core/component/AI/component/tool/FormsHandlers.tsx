@@ -1,7 +1,7 @@
 /** Forms UI loads only when an enabled Forms tool appears in the transcript. */
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableForms, isFeatureEnabled } from '@core/constant/featureFlags';
-import { lazy, Show, Suspense } from 'solid-js';
+
+import { lazy } from '@core/util/lazy';
+import { Suspense } from 'solid-js';
 import type {
   RenderContext,
   ToolHandler,
@@ -23,29 +23,18 @@ function handler<N extends Name>(name: N): ToolHandler<N, RenderContext> {
   }));
   return {
     render: (props) => {
-      const enabled = useFeatureFlag(enableForms);
       return (
-        <Show
-          when={enabled().enabled}
-          fallback={
-            <span class="text-xs text-ink-muted">
-              Forms is not enabled for this account.
-            </span>
-          }
+        <Suspense
+          fallback={<span class="text-xs text-ink-muted">Form tool</span>}
         >
-          <Suspense
-            fallback={<span class="text-xs text-ink-muted">Form tool</span>}
-          >
-            <Render {...props} />
-          </Suspense>
-        </Show>
+          <Render {...props} />
+        </Suspense>
       );
     },
     handleResponse: async (context) => {
-      if (isFeatureEnabled(enableForms))
-        await (await import('./Forms')).formsToolHandlers[
-          name
-        ].handleResponse?.(context);
+      await (await import('./Forms')).formsToolHandlers[name].handleResponse?.(
+        context
+      );
     },
   };
 }

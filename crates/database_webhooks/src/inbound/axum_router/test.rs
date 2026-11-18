@@ -164,3 +164,108 @@ async fn an_unknown_or_orphaned_webhook_answers_its_status() {
         )
     );
 }
+
+mod creation_by_programs {
+    use super::*;
+    use axum::http::{Request, header};
+    use macro_authorization::{InternalIdentityClaims, MacroAuthorizationError};
+    use model_user::UserContext;
+    use rootcause::Report;
+    use tower::ServiceExt;
+
+    /// `valid` is a person's session; `agent` and `routine` stand for a
+    /// Macro API JWT signed for an agent or a routine run, as the same user.
+    #[derive(Clone, Default)]
+    struct FakeAuthorization;
+
+    impl MacroAuthorizationService for FakeAuthorization {
+        async fn authorize(
+            &self,
+            jwt: &str,
+        ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+            if matches!(jwt, "valid" | "agent" | "routine") {
+                return Ok(UserContext {
+                    user_id: "macro|owner@example.com".to_owned(),
+                    fusion_user_id: "fusion-user-id".to_owned(),
+                    organization_id: None,
+                    permissions: None,
+                });
+            }
+            Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+        }
+
+        async fn authorize_identity(
+            &self,
+            jwt: &str,
+        ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>>
+        {
+            let context = self.authorize(jwt).await?;
+            let mut credential = macro_authorization::ValidatedCredential::session(context);
+            match jwt {
+                "agent" => {
+                    credential.origin = macro_authorization::CredentialOrigin::MacroApiJwt;
+                    credential.identity.agent_id = Some(bot_id::MACRO_AI_BOT_ID);
+                }
+                "routine" => {
+                    credential.origin = macro_authorization::CredentialOrigin::MacroApiJwt;
+                    credential.identity.routine_id = Some(Uuid::nil());
+                }
+                _ => {}
+            }
+            Ok(credential)
+        }
+
+        async fn authorize_internal(
+            &self,
+            _: &str,
+            _: InternalIdentityClaims,
+        ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+            Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+        }
+    }
+
+    /// The creation route behind the guard, answering 201 when reached.
+    fn router() -> Router {
+        Router::new()
+            .route("/{id}/webhooks", post(|| async { StatusCode::CREATED }))
+            .layer(axum::middleware::from_fn_with_state(
+                MacroAuthorizationState::new(Arc::new(FakeAuthorization)),
+                refuse_programs::<FakeAuthorization>,
+            ))
+    }
+
+    async fn create(bearer: &str, code_execution: bool) -> StatusCode {
+        let mut request = Request::post(format!("/{}/webhooks", Uuid::from_u128(1)))
+            .header(header::AUTHORIZATION, format!("Bearer {bearer}"));
+        if code_execution {
+            request = request.header(macro_authorization::CODE_EXECUTION_HEADER, "1");
+        }
+        router()
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status()
+    }
+
+    /// A webhook's URL is a lasting secret that writes rows as its creator,
+    /// so a program must not mint one it could return to the model.
+    #[tokio::test]
+    async fn a_program_cannot_create_a_webhook() {
+        for (program, bearer, code_execution) in [
+            ("an agent run", "agent", false),
+            ("an owner-identity routine run", "routine", false),
+            ("the code-mode runtime", "valid", true),
+        ] {
+            assert_eq!(
+                create(bearer, code_execution).await,
+                StatusCode::FORBIDDEN,
+                "{program}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_person_creates_a_webhook() {
+        assert_eq!(create("valid", false).await, StatusCode::CREATED);
+    }
+}

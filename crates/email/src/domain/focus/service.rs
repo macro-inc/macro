@@ -2,11 +2,15 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Mutex, MutexGuard, PoisonError},
+    sync::{
+        Mutex, MutexGuard, PoisonError,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use chrono_tz::Tz;
+use futures::{StreamExt as _, stream};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use tracing::{Instrument as _, field::Empty};
@@ -15,12 +19,12 @@ use uuid::Uuid;
 use super::{
     input::{due_date_input, jev_input},
     models::{
-        FocusAnswers, FocusMessage, FocusRecord, FocusThread, FocusVerdict, StaleThread,
-        StoredClassification, ThreadFocus,
+        FocusAnswers, FocusInboxOwner, FocusMessage, FocusRecord, FocusThread, FocusVerdict,
+        StaleThread, StoredClassification, ThreadFocus,
     },
     ports::{
-        DueDateExtractor, FocusClassifier, FocusClassifierError, FocusNotifier, FocusStore,
-        ProfileSource,
+        DueDateExtractor, FocusClassifier, FocusClassifierError, FocusEnrollment, FocusNotifier,
+        FocusStore, ProfileSource,
     },
     questions::FOCUS_QUESTIONS,
     rule::{FOCUS_RULE_VERSION, decide},
@@ -54,7 +58,7 @@ pub enum ClassifyOutcome {
     /// The thread is out of the inbox, or outside the signal inbox without
     /// being key mail right now.
     NotSignal,
-    /// The inbox is not on the allowlist, so nothing left the system.
+    /// The inbox's owner is not in the Focus rollout, so nothing left the system.
     NotEnabled,
     /// The classifier was unavailable; a later sweep retries.
     Unavailable,
@@ -65,6 +69,11 @@ pub enum ClassifyOutcome {
 /// Counts from one sweep.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SweepReport {
+    /// Inboxes swept: those whose owner is in the rollout.
+    pub inboxes: usize,
+    /// Inboxes left out because their owner's place in the rollout could not
+    /// be read; the next sweep tries them again.
+    pub inboxes_unknown: usize,
     /// Threads the sweep found stale.
     pub candidates: usize,
     /// Threads classified.
@@ -82,71 +91,174 @@ pub struct SweepReport {
     pub stopped_early: bool,
 }
 
-/// Classifies threads for inboxes on the allowlist.
-pub struct FocusService<S, P, C, N, D> {
+/// One look at every connected inbox's place in the rollout.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EnrolledInboxes {
+    /// Inboxes whose owner is in the rollout.
+    pub enrolled: Vec<FocusInboxOwner>,
+    /// Inboxes whose owner's place could not be read; the next look tries again.
+    pub unknown: usize,
+}
+
+/// Which newly classified mail gets its due date read, for a thread that can be
+/// in Focus for a reason other than a calendar hold.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DueDates {
+    /// Every thread's.
+    Read,
+    /// Only a thread's whose latest mail is from this time on; older ones store
+    /// no date. For the old mail a backfill reaches past the top of the tab,
+    /// where a date costs more than it shows; the thread's next mail reads one.
+    ReadSince(DateTime<Utc>),
+}
+
+impl DueDates {
+    /// Whether a thread last active at `latest_at` gets its due date read.
+    fn reads(self, latest_at: DateTime<Utc>) -> bool {
+        match self {
+            Self::Read => true,
+            Self::ReadSince(since) => latest_at >= since,
+        }
+    }
+}
+
+/// Stale threads one backfill read asks for at a time.
+const BACKFILL_PAGE: i64 = 500;
+
+/// How one inbox's stale threads are walked.
+struct Walk {
+    since: DateTime<Utc>,
+    /// Stale threads read at a time.
+    page: i64,
+    /// Checks the whole sweep may make; no limit when `None`.
+    budget: Option<i64>,
+    /// Threads at the classifier at once.
+    at_once: usize,
+    due_dates: DueDates,
+}
+
+/// Where one sweep stands as it moves from inbox to inbox.
+#[derive(Default)]
+struct SweepProgress {
+    report: SweepReport,
+    /// Stale threads seen, settled or not.
+    seen: HashSet<Uuid>,
+    /// Threads checked so far, against the sweep's limit.
+    checks: i64,
+    rejections_in_a_row: usize,
+}
+
+/// Classifies threads for inboxes whose owner is in the Focus rollout.
+pub struct FocusService<S, P, C, N, D, E> {
     store: S,
     profiles: P,
     classifier: C,
     notifier: N,
     due_dates: D,
-    enabled_domains: Vec<String>,
+    enrollment: E,
+    /// Inboxes last seen with their owner in the rollout, which the sweep
+    /// covers along with every inbox holding Focus. In memory: after a restart
+    /// an inbox with no Focus yet joins again with its next mail.
+    enrolled: Mutex<HashMap<Uuid, MacroUserIdStr<'static>>>,
     /// Threads a sweep checked at their latest mail without storing a result
     /// (rejected, nothing to classify, or a result already stored), so later
     /// sweeps skip them until new mail arrives. In memory: a restart retries
     /// each once.
     settled: Mutex<HashMap<Uuid, DateTime<Utc>>>,
+    /// Inboxes being backfilled, which the sweep leaves to the backfill so no
+    /// thread goes to the classifier twice at once.
+    backfilling: Mutex<HashSet<Uuid>>,
 }
 
-impl<S, P, C, N, D> FocusService<S, P, C, N, D>
+/// Marks an inbox as backfilling until dropped, however the backfill ends.
+struct Backfilling<'a> {
+    inboxes: &'a Mutex<HashSet<Uuid>>,
+    link_id: Uuid,
+}
+
+impl Drop for Backfilling<'_> {
+    fn drop(&mut self) {
+        self.inboxes
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&self.link_id);
+    }
+}
+
+impl<S, P, C, N, D, E> FocusService<S, P, C, N, D, E>
 where
     S: FocusStore,
     P: ProfileSource,
     C: FocusClassifier,
     N: FocusNotifier,
     D: DueDateExtractor,
+    E: FocusEnrollment,
 {
-    /// Classify only inboxes whose address is at one of `enabled_domains`;
-    /// with none, nothing is classified.
+    /// Classify only inboxes whose owner `enrollment` puts in the rollout.
     pub fn new(
         store: S,
         profiles: P,
         classifier: C,
         notifier: N,
         due_dates: D,
-        enabled_domains: Vec<String>,
+        enrollment: E,
     ) -> Self {
-        let enabled_domains = enabled_domains
-            .into_iter()
-            .map(|domain| domain.trim().to_lowercase())
-            .filter(|domain| !domain.is_empty())
-            .collect();
         Self {
             store,
             profiles,
             classifier,
             notifier,
             due_dates,
-            enabled_domains,
+            enrollment,
+            enrolled: Mutex::default(),
             settled: Mutex::default(),
+            backfilling: Mutex::default(),
         }
+    }
+
+    fn backfilling(&self) -> MutexGuard<'_, HashSet<Uuid>> {
+        self.backfilling
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 
     fn settled(&self) -> MutexGuard<'_, HashMap<Uuid, DateTime<Utc>>> {
         self.settled.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn is_enabled(&self, address: &str) -> bool {
-        let address = address.to_lowercase();
-        address
-            .rsplit_once('@')
-            .is_some_and(|(_, domain)| self.enabled_domains.iter().any(|enabled| enabled == domain))
+    fn enrolled(&self) -> MutexGuard<'_, HashMap<Uuid, MacroUserIdStr<'static>>> {
+        self.enrolled.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Whether the owner of inbox `link_id` is in the rollout now, remembering
+    /// the answer so the sweep covers the inbox while they are.
+    async fn is_enrolled(
+        &self,
+        link_id: Uuid,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<bool, Report> {
+        let enrolled = self.enrollment.is_enrolled(owner).await?;
+        let mut inboxes = self.enrolled();
+        if enrolled {
+            inboxes.insert(link_id, owner.clone());
+        } else {
+            inboxes.remove(&link_id);
+        }
+        Ok(enrolled)
     }
 
     /// Classify a thread as it stands now. Safe to call repeatedly: a thread
     /// already classified at its latest message under the current rule is left
     /// alone, and one classified under an older rule is decided again from its
     /// stored answers without calling the classifier.
+    pub async fn classify_thread(&self, thread_id: Uuid) -> Result<ClassifyOutcome, Report> {
+        self.classify(thread_id, true).await
+    }
+
+    /// [`Self::classify_thread`], reading the due date of newly classified mail
+    /// only when `read_due_date`.
     #[tracing::instrument(
+        name = "classify_thread",
         skip(self),
         err,
         fields(
@@ -160,15 +272,20 @@ where
             redecided = tracing::field::Empty,
         )
     )]
-    pub async fn classify_thread(&self, thread_id: Uuid) -> Result<ClassifyOutcome, Report> {
+    async fn classify(
+        &self,
+        thread_id: Uuid,
+        read_due_date: bool,
+    ) -> Result<ClassifyOutcome, Report> {
         let Some(inbox) = self.store.thread_inbox(thread_id).await? else {
             return Ok(ClassifyOutcome::Missing);
         };
-        if !self.is_enabled(&inbox.owner_email) {
-            return Ok(ClassifyOutcome::NotEnabled);
-        }
         if !inbox.inbox_visible {
             return Ok(ClassifyOutcome::NotSignal);
+        }
+        // Checked after the single-row read, and before any message content.
+        if !self.is_enrolled(inbox.link_id, &inbox.owner).await? {
+            return Ok(ClassifyOutcome::NotEnabled);
         }
         let mail = self.store.thread_mail(&inbox).await?;
         let thread = FocusThread::new(inbox, mail);
@@ -236,7 +353,11 @@ where
         };
         let verdict = decide(&answers, &signals);
         let model = self.classifier.model().to_owned();
-        let due_on = self.due_on(&thread, &verdict).await;
+        let due_on = if read_due_date {
+            self.due_on(&thread, &verdict).await
+        } else {
+            None
+        };
         let saved = self
             .save_verdict(&thread, latest, verdict, answers, model, due_on)
             .await?;
@@ -335,56 +456,229 @@ where
         Ok(stored)
     }
 
-    /// Check up to `limit` stale threads from the last `window`, newest first,
-    /// and classify those that need it. Stops at the first sign the classifier is
+    /// Which connected inboxes' owners are in the rollout now, reading up to
+    /// `checks_at_once` owners' places at a time. Every inbox found in it is
+    /// remembered for the sweep, so an owner who joins is found without mail
+    /// of theirs arriving, and a restart forgets nobody for longer than one look.
+    #[tracing::instrument(
+        name = "email_focus.enrollment_scan",
+        skip(self),
+        err,
+        fields(inboxes = Empty, enrolled = Empty, unknown = Empty)
+    )]
+    pub async fn enrolled_inboxes(&self, checks_at_once: usize) -> Result<EnrolledInboxes, Report> {
+        let inboxes = self.store.syncing_inboxes().await?;
+        let span = tracing::Span::current();
+        span.record("inboxes", inboxes.len());
+        let mut checks = stream::iter(inboxes)
+            .map(|inbox| async move {
+                let enrolled = self.is_enrolled(inbox.link_id, &inbox.owner).await;
+                (inbox, enrolled)
+            })
+            .buffer_unordered(checks_at_once.max(1));
+        let mut found = EnrolledInboxes::default();
+        while let Some((inbox, enrolled)) = checks.next().await {
+            match enrolled {
+                Ok(true) => found.enrolled.push(inbox),
+                Ok(false) => {}
+                Err(error) => {
+                    tracing::warn!(error = ?error, link_id = %inbox.link_id, "focus rollout unknown for an inbox");
+                    found.unknown += 1;
+                }
+            }
+        }
+        span.record("enrolled", found.enrolled.len());
+        span.record("unknown", found.unknown);
+        Ok(found)
+    }
+
+    /// Classify every stale thread in `inbox` from the last `window`, newest
+    /// first, `at_once` at a time: what fills an inbox whose owner just joined
+    /// the rollout. `due_dates` says whether newly classified mail gets a due
+    /// date. Stops on the same signs as a sweep, and the sweep leaves
+    /// the inbox alone meanwhile. An owner outside the rollout gets nothing.
+    #[tracing::instrument(
+        name = "email_focus.backfill",
+        skip(self, inbox),
+        err,
+        fields(
+            link_id = %inbox.link_id,
+            candidates = Empty,
+            classified = Empty,
+            stopped_early = Empty,
+        )
+    )]
+    pub async fn backfill(
+        &self,
+        inbox: &FocusInboxOwner,
+        window: Duration,
+        at_once: usize,
+        due_dates: DueDates,
+    ) -> Result<SweepReport, Report> {
+        let mut progress = SweepProgress::default();
+        if !self.is_enrolled(inbox.link_id, &inbox.owner).await? {
+            return Ok(progress.report);
+        }
+        self.backfilling().insert(inbox.link_id);
+        let _backfilling = Backfilling {
+            inboxes: &self.backfilling,
+            link_id: inbox.link_id,
+        };
+        progress.report.inboxes = 1;
+        let walk = Walk {
+            since: Utc::now() - window,
+            page: BACKFILL_PAGE,
+            budget: None,
+            at_once: at_once.max(1),
+            due_dates,
+        };
+        self.sweep_inbox(inbox.link_id, &walk, &mut progress)
+            .await?;
+        let span = tracing::Span::current();
+        span.record("candidates", progress.report.candidates);
+        span.record("classified", progress.report.classified);
+        span.record("stopped_early", progress.report.stopped_early);
+        Ok(progress.report)
+    }
+
+    /// Check up to `limit` stale threads from the last `window` in the inboxes
+    /// whose owner is in the rollout, each inbox newest first, and classify
+    /// those that need it. Stops at the first sign the classifier is
     /// unavailable, or after a run of rejections.
     ///
-    /// A thread checked without storing a result stays stale in the store, so the
-    /// sweep pages past those: taking only the newest `limit` would hand every
-    /// sweep the same threads once enough of them pile up, and never reach older
-    /// ones.
+    /// The inboxes are every inbox holding Focus, so none is forgotten across a
+    /// restart, and every inbox seen in the rollout since; an owner who left the
+    /// rollout drops out here, and an inbox being backfilled is left to the
+    /// backfill. A thread checked without storing a result stays stale in the
+    /// store, so the sweep pages past those: taking only the newest `limit`
+    /// would hand every sweep the same threads once enough of them pile up, and
+    /// never reach older ones.
     #[tracing::instrument(skip(self), err)]
     pub async fn sweep(&self, window: Duration, limit: i64) -> Result<SweepReport, Report> {
-        let mut report = SweepReport::default();
-        if self.enabled_domains.is_empty() {
-            return Ok(report);
-        }
-        let since = Utc::now() - window;
-        let mut seen = HashSet::new();
-        let mut after = None;
-        let mut checks = 0;
-        let mut saw_them_all = false;
-        let mut rejections_in_a_row = 0;
-        'pages: loop {
-            let page = self
-                .store
-                .stale_threads(since, &self.enabled_domains, after, limit)
-                .await?;
-            report.candidates += page.len();
-            let last_page = i64::try_from(page.len()).is_ok_and(|len| len < limit);
-            after = page.last().copied();
-            if after.is_none() {
-                saw_them_all = true;
+        let walk = Walk {
+            since: Utc::now() - window,
+            page: limit,
+            budget: Some(limit),
+            at_once: 1,
+            due_dates: DueDates::Read,
+        };
+        let mut inboxes: HashMap<Uuid, MacroUserIdStr<'static>> = self
+            .store
+            .inboxes_with_focus()
+            .await?
+            .into_iter()
+            .map(|inbox| (inbox.link_id, inbox.owner))
+            .collect();
+        inboxes.extend(
+            self.enrolled()
+                .iter()
+                .map(|(link_id, owner)| (*link_id, owner.clone())),
+        );
+
+        let mut progress = SweepProgress::default();
+        let mut saw_them_all = true;
+        for (link_id, owner) in inboxes {
+            if self.backfilling().contains(&link_id) {
+                saw_them_all = false;
+                continue;
+            }
+            match self.is_enrolled(link_id, &owner).await {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(error) => {
+                    tracing::warn!(error = ?error, %link_id, "focus sweep left out an inbox: its rollout is unknown");
+                    progress.report.inboxes_unknown += 1;
+                    saw_them_all = false;
+                    continue;
+                }
+            }
+            progress.report.inboxes += 1;
+            if !self.sweep_inbox(link_id, &walk, &mut progress).await? {
+                saw_them_all = false;
                 break;
             }
+        }
+
+        // Only stale threads can be skipped, so the map stays as small as one
+        // full sweep. A sweep that stopped short hasn't seen the rest.
+        if saw_them_all {
+            self.settled()
+                .retain(|thread_id, _| progress.seen.contains(thread_id));
+        }
+        Ok(progress.report)
+    }
+
+    /// Page through one inbox's stale threads as `walk` says, until the sweep
+    /// has made its budget of checks. Returns whether the sweep can go on to
+    /// the next inbox: false once it hits the budget or must stop early.
+    async fn sweep_inbox(
+        &self,
+        link_id: Uuid,
+        walk: &Walk,
+        progress: &mut SweepProgress,
+    ) -> Result<bool, Report> {
+        let mut after = None;
+        loop {
+            let threads = self
+                .store
+                .stale_threads(link_id, walk.since, after, walk.page)
+                .await?;
+            progress.report.candidates += threads.len();
+            let last_page = i64::try_from(threads.len()).is_ok_and(|len| len < walk.page);
+            after = threads.last().copied();
+            if after.is_none() {
+                return Ok(true);
+            }
+            let mut to_check = Vec::with_capacity(threads.len());
+            let mut out_of_budget = false;
             for StaleThread {
                 thread_id,
                 latest_at,
-            } in page
+            } in threads
             {
-                seen.insert(thread_id);
+                progress.seen.insert(thread_id);
                 if self.settled().get(&thread_id) == Some(&latest_at) {
-                    report.skipped += 1;
+                    progress.report.skipped += 1;
                     continue;
                 }
-                if checks >= limit {
-                    break 'pages;
+                if walk.budget.is_some_and(|budget| progress.checks >= budget) {
+                    out_of_budget = true;
+                    break;
                 }
-                checks += 1;
-                let outcome = self.classify_thread(thread_id).await;
+                progress.checks += 1;
+                to_check.push((thread_id, latest_at));
+            }
+
+            // Once one result says stop, the threads not yet started stay for
+            // a later sweep; those already at the classifier finish.
+            let stop = AtomicBool::new(false);
+            let mut outcomes = stream::iter(to_check)
+                .map(|(thread_id, latest_at)| {
+                    let stop = &stop;
+                    async move {
+                        if stop.load(Ordering::Relaxed) {
+                            return (thread_id, latest_at, None);
+                        }
+                        (
+                            thread_id,
+                            latest_at,
+                            Some(
+                                self.classify(thread_id, walk.due_dates.reads(latest_at))
+                                    .await,
+                            ),
+                        )
+                    }
+                })
+                .buffer_unordered(walk.at_once);
+            while let Some((thread_id, latest_at, outcome)) = outcomes.next().await {
+                let Some(outcome) = outcome else {
+                    progress.checks -= 1;
+                    continue;
+                };
                 if !matches!(outcome, Ok(ClassifyOutcome::Rejected)) {
-                    rejections_in_a_row = 0;
+                    progress.rejections_in_a_row = 0;
                 }
+                let report = &mut progress.report;
                 match outcome {
                     Ok(ClassifyOutcome::Classified(_)) => {
                         report.classified += 1;
@@ -397,19 +691,20 @@ where
                     Ok(ClassifyOutcome::Unavailable) => {
                         report.failed += 1;
                         report.stopped_early = true;
-                        break 'pages;
+                        stop.store(true, Ordering::Relaxed);
                     }
                     Ok(ClassifyOutcome::Rejected) => {
                         report.failed += 1;
                         self.settled().insert(thread_id, latest_at);
-                        rejections_in_a_row += 1;
-                        if rejections_in_a_row >= MAX_REJECTIONS_IN_A_ROW {
+                        progress.rejections_in_a_row += 1;
+                        if progress.rejections_in_a_row >= MAX_REJECTIONS_IN_A_ROW
+                            && !stop.swap(true, Ordering::Relaxed)
+                        {
                             tracing::warn!(
-                                rejections_in_a_row,
+                                rejections_in_a_row = progress.rejections_in_a_row,
                                 "focus sweep stopped: the classifier rejects every thread"
                             );
                             report.stopped_early = true;
-                            break 'pages;
                         }
                     }
                     Ok(_) => {
@@ -422,18 +717,13 @@ where
                     }
                 }
             }
+            if progress.report.stopped_early || out_of_budget {
+                return Ok(false);
+            }
             if last_page {
-                saw_them_all = true;
-                break;
+                return Ok(true);
             }
         }
-        // Only stale threads can be skipped, so the map stays as small as one
-        // full sweep. A sweep that stopped short hasn't seen the rest.
-        if saw_them_all {
-            self.settled()
-                .retain(|thread_id, _| seen.contains(thread_id));
-        }
-        Ok(report)
     }
 }
 
