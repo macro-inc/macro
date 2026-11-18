@@ -18,11 +18,12 @@ import { Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ListHeader, ListHeaderSearch } from '../ListHeader';
+import { ViewCreateButton } from '../ViewCreateButton';
 import { ViewSidebar } from '../ViewSidebar';
 
 const RECENT = ['budget', 'roadmap'];
 
-const HEADER_ACTIONS = ['Filter', 'Group', 'Display', 'Visible', 'New'];
+const HEADER_ACTIONS = ['Filter', 'Group', 'Display', 'Visible'];
 
 const FILES = [
   'Budget 2026',
@@ -172,6 +173,7 @@ function Fixture() {
                     <For each={HEADER_ACTIONS}>
                       {(name) => <Button variant="secondary">{name}</Button>}
                     </For>
+                    <ViewCreateButton presentation="toolbar" menu />
                     {field()}
                   </ListHeader>
                 </SplitPanelContext.Provider>

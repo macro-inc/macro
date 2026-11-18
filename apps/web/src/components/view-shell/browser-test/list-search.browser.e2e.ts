@@ -157,3 +157,25 @@ test('narrows the open field to keep it whole beside the header actions', async 
   expect(wide.width).toBeCloseTo(224, 0);
   expect(wide.right).toBeLessThanOrEqual(wide.rowRight);
 });
+
+test('New drops its label in a narrow header so the open field fits', async ({
+  page,
+}) => {
+  const narrow = await openInHeader(page, 550);
+  expect(narrow.overflow).toBeLessThanOrEqual(0);
+  expect(narrow.width).toBeGreaterThanOrEqual(96);
+  await expect(
+    page.getByRole('button', { name: 'Close search' })
+  ).toBeInViewport({ ratio: 1 });
+
+  const create = page.getByRole('button', { name: 'New' });
+  await expect(create).toBeInViewport({ ratio: 1 });
+  await expect(create.getByText('New')).toBeHidden();
+  await create.hover();
+  await expect(page.getByRole('tooltip')).toHaveText('New');
+
+  await openInHeader(page, 700);
+  await expect(
+    page.getByRole('button', { name: 'New' }).getByText('New')
+  ).toBeVisible();
+});
