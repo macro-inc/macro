@@ -5,6 +5,7 @@ import {
   parseAgentFace,
   randomFace,
   renderFace,
+  resolvedParts,
   shuffle,
 } from '../src/index';
 
@@ -192,4 +193,36 @@ test('a pinned background swatch is the colour the face is drawn on', () => {
 
   expect(navy).toBe('#2E3A66');
   expect(svg).toContain('<rect width="100" height="100" fill="#2E3A66"/>');
+});
+
+test('resolvedParts gives the option of every part, pinned or from the seed', () => {
+  const face: AgentFace = { v: 1, seed: 'ada', pins: { hair: 12, glasses: 0 } };
+
+  const parts = resolvedParts(face);
+
+  expect(Object.keys(parts)).toEqual(FACE_PARTS.map((entry) => entry.part));
+  expect(parts.hair).toBe(12);
+  expect(parts.glasses).toBe(0);
+  for (const { part, options } of FACE_PARTS) {
+    expect(parts[part]).toBeGreaterThanOrEqual(0);
+    expect(parts[part]).toBeLessThan(options);
+  }
+});
+
+test('pinning every part to its resolved option draws the same face', () => {
+  for (const seed of ['ada', 'macro', 'golden-7', 'golden-31', 'k3x9q2']) {
+    const face: AgentFace = { v: 1, seed, pins: {} };
+
+    const allPinned: AgentFace = { v: 1, seed, pins: resolvedParts(face) };
+
+    expect(renderFace(allPinned)).toBe(renderFace(face));
+  }
+});
+
+test('a pin outside the options resolves to what the seed chose', () => {
+  const fromSeed = resolvedParts({ v: 1, seed: 'ada', pins: {} });
+
+  expect(resolvedParts({ v: 1, seed: 'ada', pins: { hair: 99 } })).toEqual(
+    fromSeed
+  );
 });
