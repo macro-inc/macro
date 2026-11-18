@@ -376,6 +376,9 @@ impl<S: PredicateIndexStorage> Engine<S> {
         if current.ready && current.policy.as_ref() == Some(&policy) {
             return Ok(current);
         }
+        // A persisted transition still owns its unfinished cleanup, even when
+        // the next proof repeats the policy written before the interruption.
+        let retire_snapshots = retire_snapshots || (current.policy.is_some() && !current.ready);
         if retire_snapshots {
             self.ensure_revision_can_advance()?;
         }

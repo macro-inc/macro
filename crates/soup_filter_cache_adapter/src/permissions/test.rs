@@ -782,3 +782,68 @@ fn changing_or_leaving_a_team_retires_the_previous_scope() {
         }
     });
 }
+
+#[test]
+fn interrupted_scope_retirement_resumes_before_accepting_the_same_proof() {
+    block_on(async {
+        for policy in ["other-team:allowed", "none"] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let initial = engine.current_authority("profile").await.unwrap();
+            let allowed = transition_crm_authority(
+                &mut engine,
+                "profile",
+                initial.generation,
+                "team:allowed".into(),
+            )
+            .await
+            .unwrap();
+            let contact = key("GraphqlSoupCrmContact", "old-contact");
+            let document = key("GraphqlSoupDocument", "independent");
+            let independent = record(&[("name", CacheValue::String("kept".into()))]);
+            engine
+                .put_records_with_projections(
+                    None,
+                    vec![
+                        (
+                            contact.clone(),
+                            record(&[("name", CacheValue::String("old team".into()))]),
+                        ),
+                        (document.clone(), independent.clone()),
+                    ],
+                    vec![],
+                )
+                .await
+                .unwrap();
+            let interrupted = engine
+                .begin_authority_transition(
+                    "profile",
+                    allowed.authority.generation,
+                    policy.into(),
+                    true,
+                )
+                .await
+                .unwrap();
+            assert!(!interrupted.ready);
+            // Reopening after interruption retains the new policy and the old
+            // records; an identical proof still has to finish the cleanup.
+            let mut reopened = Engine::new(engine.into_storage());
+            let resumed = transition_crm_authority(
+                &mut reopened,
+                "profile",
+                interrupted.generation,
+                policy.into(),
+            )
+            .await
+            .unwrap();
+            assert!(resumed.authority.ready);
+            assert_eq!(
+                reopened
+                    .storage()
+                    .get_batch(&[contact, document])
+                    .await
+                    .unwrap(),
+                vec![None, Some(independent)]
+            );
+        }
+    });
+}
