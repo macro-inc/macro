@@ -87,7 +87,7 @@ cursors and contact reconciliation use coordinator protocol 17; native menu poli
 lists people the viewer has a direct message with first among matches at a word
 start, however exactly a stranger's name matches; within each group, exact names
 (full, or the first name for a one-term query) come before all-word prefixes, then
-recency and identity. Literal contains matches come last. "Has a direct message" means a
+recency and identity. Literal contains matches follow, then address-only matches (domain or local part). "Has a direct message" means a
 positive interaction time, which context facts take from direct-message channels,
 including group and never-written DMs. Native (desktop, iOS, Android) binaries released
 before policy 6 still answer with policy 5; keep accepting it (`PEOPLE_MIN_POLICY_VERSION`).
