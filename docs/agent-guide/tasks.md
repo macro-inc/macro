@@ -715,8 +715,13 @@ filter icon inside its button. A separate
 status"`) picks the status in the desktop header and above the list on touch
 devices, and the board hides it. The desktop sidebar has no layout or status
 switches. Status tabs size to their labels with even horizontal padding and use
-the shared fully rounded segmented style. Open is the default; Closed includes
-both closed and merged PRs, and All shows every status. The filter dropdown and mobile drawer also
+the shared fully rounded segmented style. When the header's actions would run
+past it, the status tabs show only their icons (named by tooltip), then the
+scope name hides; each comes back once the header has room. Opening the search
+can take the tab labels when the field would not fit beside them. Check a 640px
+window and 860px beside the docked sidebar, with search closed and open. Open
+is the default; Closed includes both closed and merged PRs, and All shows every
+status. The filter dropdown and mobile drawer also
 offer independent Open, Closed, and Merged selections. Custom multi-status
 selections hide the toggle, except the combined Closed preset keeps it visible.
 A partial Closed-only or Merged-only selection leaves every option unhighlighted.

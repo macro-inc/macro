@@ -273,6 +273,15 @@ filters (the real phone filter trigger, one button on desktop) and for the
 Tasks view's pill:
 `bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
 
+The Reviews list header (the real `ReviewsListHeader`, status tabs, New and
+Search) has a backend-free regression for making room as the pane narrows:
+labelled tabs while everything fits, icon-only tabs and then no scope name only
+when the actions would overflow, each step undone once there is room again, an
+open search taking the tab labels, icon tabs keeping their names, tooltips
+and distinct icons, keyboard focus staying on a status as the tabs switch, and
+list/board switches:
+`bunx playwright test --config src/features/reviews-view/browser-test/playwright.config.ts`.
+
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
 regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
 
