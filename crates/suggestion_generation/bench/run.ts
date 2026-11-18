@@ -3,7 +3,7 @@
 // transcripts (they are deleted with the sessions), and read back what it
 // wrote, how long it took and what it cost.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -86,13 +86,38 @@ export type Generation = {
 
 export const userId = (email: string) => `macro|${email}`;
 
+/** FusionAuth on `instance`: its host port and API key, from what `run_local` generated. */
+function fusionAuth(instance: string): { url: string; key: string } {
+  const generated = join(REPO, 'infra/local/generated', instance);
+  const compose = readFileSync(join(generated, 'docker-compose.override.yml'), 'utf8');
+  const port = compose.split(/\n {2}fusionauth:\n/)[1]?.split(/\n {2}\S/)[0].match(/- "?(\d+):9011"?/)?.[1];
+  const key = readFileSync(join(generated, 'local.generated.env'), 'utf8').match(/^FUSIONAUTH_API_KEY=(.*)$/m)?.[1];
+  if (!port || !key) throw new Error(`no FusionAuth port or API key in ${instance}'s generated files`);
+  return { url: `http://localhost:${port}`, key };
+}
+
+/** Delete `email`'s FusionAuth account, so seeding them signs them up anew. */
+async function forgetLogin(instance: string, email: string) {
+  const auth = fusionAuth(instance);
+  const found = await fetch(`${auth.url}/api/user?email=${encodeURIComponent(email)}`, { headers: { Authorization: auth.key } });
+  if (found.status === 404) return;
+  if (!found.ok) throw new Error(`FusionAuth lookup of ${email}: ${found.status}`);
+  const { user } = (await found.json()) as { user: { id: string } };
+  const gone = await fetch(`${auth.url}/api/user/${user.id}?hardDelete=true`, { method: 'DELETE', headers: { Authorization: auth.key } });
+  if (!gone.ok) throw new Error(`FusionAuth delete of ${email}: ${gone.status}`);
+}
+
 /**
- * Seed a variant's scenario afresh with the seed CLI. `apply` alone deletes
- * only the rows carrying the scenario's id marker, and a person signed up
- * through the signup webhook has an id of the database's: `reset` deletes
- * them by email too, and everything of theirs goes with them.
+ * Seed a variant's scenario afresh, as if each person signed up just now.
+ * `apply` alone deletes only rows carrying the scenario's id marker, while a
+ * person who signed up through the signup webhook has an id of the
+ * database's, so their suggestions from an earlier run would survive. So:
+ * `reset` deletes them by email (everything of theirs goes with them), the
+ * bench deletes their FusionAuth account, and `apply` signs them up again
+ * (FusionAuth keeps the old account's id, and a login with it fails once its
+ * user is gone).
  */
-export function seed(instance: string, persona: Persona, variant: Variant, now: number, log: string) {
+export async function seed(instance: string, persona: Persona, variant: Variant, now: number, log: string) {
   const dir = join(CACHE, instance, 'scenarios');
   mkdirSync(dir, { recursive: true });
   const path = join(dir, `${scenarioName(persona, variant)}.json`);
@@ -105,6 +130,10 @@ export function seed(instance: string, persona: Persona, variant: Variant, now: 
     });
     writeFileSync(log, result.stdout.toString() + result.stderr.toString(), { flag: 'a' });
     if (result.exitCode !== 0) throw new Error(`seed-scenario ${step} ${scenarioName(persona, variant)} exited with ${result.exitCode}; see ${log}`);
+    if (step === 'reset') {
+      const users = scenario(persona, variant, now).users as Record<string, { email: string }>;
+      for (const user of Object.values(users)) await forgetLogin(instance, user.email);
+    }
   }
 }
 
@@ -179,7 +208,7 @@ const DEADLINE_MS: Record<Trigger, number> = { onboarding: 12 * 60_000, manual: 
 
 /** Seed `persona` clean as it is at `now`, and check nothing of an earlier run is left. */
 export async function prepare(at: Stack, persona: Persona, variant: Variant, now: number, out: string) {
-  seed(at.instance, persona, variant, now, `${out}.seed.log`);
+  await seed(at.instance, persona, variant, now, `${out}.seed.log`);
   const db = new SQL(at.postgres);
   try {
     await assertClean(db, userId(ownerEmail(persona, variant)));

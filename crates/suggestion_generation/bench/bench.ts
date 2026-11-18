@@ -187,7 +187,7 @@ async function runSection(section: Section, values: Record<string, string | unde
   await exclusive(at.instance, `suggestions bench ${section}`, async () => {
     startStub(at.instance);
     await setFlags(at.instance, spec.flags);
-    seedGrader(at.instance);
+    await seedGrader(at.instance);
     for (let rep = 1; rep <= reps; rep++) {
       const now = Date.now();
       for (const persona of people) await prepare(at, persona, spec.variant, now, join(dir, `${persona.name}-${rep}`));
@@ -225,7 +225,7 @@ const readRun = (path: string) => JSON.parse(readFileSync(path, 'utf8')) as RunF
 async function rejudge(path: string, values: Record<string, string | undefined>) {
   const run = readRun(path);
   const at = stack(values.instance!, values.tempo!);
-  seedGrader(at.instance);
+  await seedGrader(at.instance);
   const people = new Map(personas(run.set).map((persona) => [persona.name, persona]));
   for (const attempt of run.attempts) {
     if (attempt.generation.error) continue; // a build failure keeps its 0

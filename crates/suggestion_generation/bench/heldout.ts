@@ -51,13 +51,12 @@ export function spent(): string[] {
 
 // ---------- writing a set ----------
 
-let authorSeeded = false;
+let authorSeeded: Promise<void> | undefined;
 let authorToken: Promise<string> | undefined;
 
 /** The author's token, seeding the author once per process. */
-function author(at: Stack): Promise<string> {
-  if (!authorSeeded) {
-    authorSeeded = true;
+async function author(at: Stack): Promise<string> {
+  authorSeeded ??= (async () => {
     const account = {
       name: 'author',
       heldout: false,
@@ -65,8 +64,9 @@ function author(at: Stack): Promise<string> {
       workspace: { scenario: 'sugbench-author', description: 'The account the bench writes held-out personas as.', users: { author: { email: AUTHOR, first_name: 'Bench', last_name: 'Author', roles: ['team_subscriber', 'sub_opus'] } } },
       inbox: { owner: { name: 'Bench Author', email: AUTHOR }, persona: '', timezone: 'UTC', messages: [] },
     } as unknown as Persona;
-    seed(at.instance, account, 'full', Date.now(), join(HELDOUT_DIR, 'author.seed.log'));
-  }
+    await seed(at.instance, account, 'full', Date.now(), join(HELDOUT_DIR, 'author.seed.log'));
+  })();
+  await authorSeeded;
   authorToken ??= login(at, AUTHOR);
   return authorToken;
 }
