@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type Knob,
   knobsOutsideSentence,
+  knobText,
   knobToWire,
   knobValueProblem,
   sentenceParts,
@@ -152,6 +153,10 @@ describe('entity knobs', () => {
       { ...bugs, value: other },
     ]);
     expect(withKnobValue([bugs], 'bugs', 'bug-reports')).toEqual([bugs]);
+    // A knob allowing several kinds asks for "an item".
+    const either: Knob = { ...bugs, entity_types: ['channel', 'document'] };
+    expect(knobValueProblem(either, null)).toBe('Pick an item.');
+    expect(knobText({ ...either, value: null })).toBe('an item');
   });
 
   it('round-trip, including a starter’s knob with nothing picked', () => {

@@ -291,6 +291,8 @@ function KnobPopover(props: {
           // A choice opens on its picked option, not the first one, so
           // Space and the arrows start from it.
           onOpenAutoFocus={(event) => {
+            // An item's picker opens on its search instead.
+            if (props.knob.type !== 'choice') return;
             const picked = editor?.querySelector<HTMLElement>(
               'input[type="radio"]:checked'
             );

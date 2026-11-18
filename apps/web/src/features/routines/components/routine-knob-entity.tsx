@@ -1,5 +1,6 @@
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
@@ -10,7 +11,7 @@ import { Button, InputGroup, RadioGroup } from '@ui';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
-  entityKnobNoun,
+  aEntityKnob,
   type Knob,
   type KnobEntity,
   type KnobEntityType,
@@ -73,19 +74,22 @@ function EntityName(props: { id: string; type: EntityType }) {
   );
   return (
     <>
-      <span class="inline-flex shrink-0">{display.icon()}</span>
+      <span class="inline-flex shrink-0">
+        <Show when={props.type === 'USER'} fallback={display.icon()}>
+          {/* The avatar's own click (a DM, or the user card on touch)
+              would take the tap that opens the knob's editor. */}
+          <UserIcon id={props.id} size="sm" suppressClick showTooltip={false} />
+        </Show>
+      </span>
       <span class="truncate">{display.name()}</span>
     </>
   );
 }
 
 function DatabaseName(props: { id: string }) {
-  const quickAccess = useQuickAccess();
+  const databases = useQuickAccess().useList('database').items;
   const name = () =>
-    quickAccess
-      .useList('database')
-      .items()
-      .find((item) => item.id === props.id)?.data.name ?? 'Database';
+    databases().find((item) => item.id === props.id)?.data.name ?? 'Database';
   return (
     <>
       <EntityIcon targetType="database" size="xs" class="shrink-0" />
@@ -142,7 +146,6 @@ function EntityList(props: {
   onCancel(): void;
 }) {
   const types = () => pickerTypes(props.knob);
-  const noun = () => entityKnobNoun(props.knob);
   const select = (
     ids: Set<string>,
     picked?: { id: string; entity_type: EntityType }[]
@@ -158,13 +161,11 @@ function EntityList(props: {
     props.onInput({ type, id });
   };
   return (
-    <Suspense
-      fallback={<p class="p-3 text-sm text-ink-muted">Loading {noun()}s…</p>}
-    >
+    <Suspense fallback={<p class="p-3 text-sm text-ink-muted">Loading…</p>}>
       <PropertyEntitySelector
         config={{
           isMultiSelect: false,
-          placeholder: `Find a ${noun()}`,
+          placeholder: `Find ${aEntityKnob(props.knob)}`,
           specificEntityType: types().length === 1 ? types()[0] : types(),
           fillHeight: isTouchDevice(),
         }}
@@ -176,29 +177,33 @@ function EntityList(props: {
   );
 }
 
+function databaseName(database: { data: { name?: string | null } }) {
+  return database.data.name || 'Untitled database';
+}
+
 function DatabaseList(props: {
   knob: EntityKnob;
   value: KnobEntity | null;
   onInput(value: KnobEntity | null): void;
 }) {
-  const quickAccess = useQuickAccess();
+  const all = useQuickAccess().useList('database').items;
   const [query, setQuery] = createSignal('');
   const databases = () => {
     const words = query().trim().toLowerCase();
-    return quickAccess
-      .useList('database')
-      .items()
-      .map((item) => ({
-        id: item.id,
-        name: item.data.name ?? 'Untitled database',
-      }))
-      .filter((item) => !words || item.name.toLowerCase().includes(words));
+    return all().filter(
+      (item) => !words || databaseName(item).toLowerCase().includes(words)
+    );
+  };
+  // On touch the search field keeps the keyboard while a row is picked.
+  const keepFocus = (event: Event) => {
+    if (isTouchDevice()) event.preventDefault();
   };
   return (
     <div class="flex min-h-0 flex-auto flex-col gap-2">
       <InputGroup class="shrink-0">
         <InputGroup.Input
-          type="search"
+          // A text field, so the touch sheet hands it the keyboard.
+          type="text"
           value={query()}
           onInput={(event) => setQuery(event.currentTarget.value)}
           placeholder="Find a database"
@@ -217,6 +222,8 @@ function DatabaseList(props: {
           // Cleared, no database is picked.
           value={props.value?.id ?? ''}
           onChange={(id) => props.onInput({ type: 'database', id })}
+          onPointerDown={keepFocus}
+          onMouseDown={keepFocus}
         >
           <RadioGroup.Label class="sr-only">
             {props.knob.label}
@@ -231,7 +238,7 @@ function DatabaseList(props: {
                     size="xs"
                     class="shrink-0"
                   />
-                  <span class="truncate">{database.name}</span>
+                  <span class="truncate">{databaseName(database)}</span>
                 </RadioGroup.ItemLabel>
               </RadioGroup.Item>
             )}

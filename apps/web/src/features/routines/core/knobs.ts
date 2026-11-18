@@ -69,6 +69,12 @@ export function entityKnobNoun(knob: { entity_types: KnobEntityType[] }) {
   return only && !rest.length ? entityNoun(only) : 'item';
 }
 
+/** "a channel", or "an item" for a knob that allows several kinds. */
+export function aEntityKnob(knob: { entity_types: KnobEntityType[] }) {
+  const noun = entityKnobNoun(knob);
+  return `${/^[aeiou]/.test(noun) ? 'an' : 'a'} ${noun}`;
+}
+
 export const KNOB_LIMITS = {
   text: 500,
   question: 300,
@@ -165,9 +171,7 @@ export function knobText(knob: Knob): string {
       .with({ type: 'text' }, { type: 'choice' }, (knob) => knob.value)
       // Plain text has no name to show; the step's sentence shows the item.
       .with({ type: 'entity' }, (knob) =>
-        knob.value
-          ? `the chosen ${entityKnobNoun(knob)}`
-          : `a ${entityKnobNoun(knob)}`
+        knob.value ? `the chosen ${entityKnobNoun(knob)}` : aEntityKnob(knob)
       )
       .exhaustive()
   );
@@ -283,7 +287,7 @@ export function knobValueProblem(
       typeof value === 'boolean' ? undefined : 'Turn it on or off.'
     )
     .with({ type: 'entity' }, (knob) =>
-      isEntityOf(knob, value) ? undefined : `Pick a ${entityKnobNoun(knob)}.`
+      isEntityOf(knob, value) ? undefined : `Pick ${aEntityKnob(knob)}.`
     )
     .exhaustive();
 }

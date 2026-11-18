@@ -130,6 +130,14 @@ describe('an entity knob', () => {
       (screen.getByRole('button', { name: 'Clear' }) as HTMLButtonElement)
         .disabled
     ).toBe(true);
+    // Picking another makes it savable again.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Pick triage (CHANNEL)' })
+    );
+    expect(
+      (screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false);
     fireEvent.click(screen.getByText('Cancel'));
     expect(current()[0]).toMatchObject({
       value: { type: 'channel', id: 'c1' },
@@ -183,7 +191,7 @@ describe('an entity knob', () => {
       })
     );
     fireEvent.input(
-      await screen.findByRole('searchbox', { name: 'Find a database' }),
+      await screen.findByRole('textbox', { name: 'Find a database' }),
       { target: { value: 'hir' } }
     );
     expect(screen.queryByRole('radio', { name: 'Bugs' })).toBeNull();
@@ -219,6 +227,34 @@ describe('an entity knob', () => {
     fireEvent.click(screen.getByText('Done'));
     expect(current()[0]).toMatchObject({
       value: { type: 'channel', id: 'c2' },
+    });
+  });
+
+  it('on touch drops a pick on Cancel, and reopens on the saved channel', async () => {
+    touch.value = true;
+    const current = renderSentence(bugs);
+    const open = () => {
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Channel to post in: the chosen channel. Change it',
+        })
+      );
+      const sheet = document.querySelector<HTMLElement>(
+        '[data-corvu-drawer-content]'
+      )!;
+      fireEvent(sheet, new Event('transitionend'));
+    };
+    open();
+    fireEvent.click(await screen.findByText('Pick triage (CHANNEL)'));
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(current()[0]).toMatchObject({
+      value: { type: 'channel', id: 'c1' },
+    });
+    // The dropped pick doesn't come back: Done saves what was saved.
+    open();
+    fireEvent.click(screen.getByText('Done'));
+    expect(current()[0]).toMatchObject({
+      value: { type: 'channel', id: 'c1' },
     });
   });
 });
