@@ -123,35 +123,117 @@ let
       ++ expressions alert.reducer condition;
     };
   # Warning and critical are mutually exclusive bands, as in the dev rules.
-  prodRulePair =
-    alert:
+  prodRulePairWith =
+    makeRule: alert:
     let
       critical = builtins.toJSON alert.critical;
       warning = builtins.toJSON alert.warning;
     in
     if alert.firesWhen == "above" then
       [
-        (prodRule alert {
+        (makeRule alert {
           severity = "critical";
           condition = "$B > ${critical}";
         })
-        (prodRule alert {
+        (makeRule alert {
           severity = "warning";
           condition = "$B > ${warning} && $B <= ${critical}";
         })
       ]
     else
       [
-        (prodRule alert {
+        (makeRule alert {
           severity = "critical";
           condition = "$B < ${critical}";
         })
-        (prodRule alert {
+        (makeRule alert {
           severity = "warning";
           condition = "$B < ${warning} && $B >= ${critical}";
         })
       ];
-  prodRules = lib.concatMap (row: lib.concatMap prodRulePair row.alerts) prodAlerts.rows;
+  prodRules = lib.concatMap (
+    row: lib.concatMap (prodRulePairWith prodRule) row.alerts
+  ) prodAlerts.rows;
+
+  # Email Focus rollout rules: the go/stop numbers in email-focus.nix, linked
+  # to their panels on the "Email Focus rollout" dashboard. They notify and
+  # never page.
+  emailFocus = import ./email-focus.nix;
+  focusRule =
+    check:
+    { severity, condition }:
+    {
+      uid = "${check.uid}-${if severity == "critical" then "crit" else "warn"}";
+      title = "[PROD] ${check.title} (${severity})";
+      condition = "C";
+      for = "0s";
+      # Every counter is published each minute, so no data means the worker
+      # isn't publishing, or no samples for a percentile: nothing to judge.
+      # The restarts check alone fires on it, as critical, for a worker that
+      # stopped.
+      noDataState = if severity == "critical" then check.noData or "OK" else "OK";
+      execErrState = "Error";
+      isPaused = false;
+      labels = {
+        environment = "prod";
+        inherit severity;
+        service = "email-focus-worker";
+        pages = "false";
+      };
+      annotations = {
+        summary = check.title;
+        inherit (check) description;
+        runbook_url = "https://github.com/macro-inc/macro/blob/main/docs/runbooks/${emailFocus.runbook}";
+        panel_url = ''{{ reReplaceAll "/$" "" externalURL }}/d/${emailFocus.dashboardUid}?viewPanel=${toString check.panelId}'';
+        __dashboardUid__ = emailFocus.dashboardUid;
+        __panelId__ = toString check.panelId;
+      };
+      # Each input queried alone and reduced to its one value (see
+      # email-focus.nix), then the check's value (B) and its threshold (C).
+      data =
+        map (input: {
+          refId = "${input.id}_query";
+          datasourceUid = "cloudwatch";
+          relativeTimeRange = {
+            from = check.window - 60;
+            to = 0;
+          };
+          model = emailFocus.query "prod" check.window input // {
+            refId = "${input.id}_query";
+          };
+        }) check.inputs
+        ++ map (input: {
+          refId = input.id;
+          datasourceUid = "__expr__";
+          relativeTimeRange = {
+            from = 0;
+            to = 0;
+          };
+          model = {
+            refId = input.id;
+            type = "reduce";
+            expression = "${input.id}_query";
+            reducer = "last";
+          };
+        }) check.inputs
+        ++ [
+          {
+            refId = "B";
+            datasourceUid = "__expr__";
+            relativeTimeRange = {
+              from = 0;
+              to = 0;
+            };
+            model = {
+              refId = "B";
+              type = "math";
+              expression = check.value;
+            };
+          }
+          (lib.last (expressions "last" condition))
+        ];
+    };
+  focusRules = lib.concatMap (prodRulePairWith focusRule) emailFocus.checks;
   dss = [
     (lokiQuery ''sum(count_over_time({service_name="cloud-storage-service",deployment_environment="dev"} |~ "(?i)\\berror\\w*" [5m]))'')
   ];
@@ -333,6 +415,13 @@ in
         folder = "Macro";
         interval = "1m";
         rules = prodRules;
+      }
+      {
+        orgId = 1;
+        name = "Email Focus";
+        folder = "Macro";
+        interval = "1m";
+        rules = focusRules;
       }
       {
         orgId = 1;

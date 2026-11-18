@@ -23,10 +23,11 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import type { EntityData } from '@entity';
+import type { EntityData, SearchLocation } from '@entity';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import type { Accessor } from 'solid-js';
 import type { DriveHostActions } from './context/drive-context';
+import type { DriveLocation } from './core/types';
 import { useDriveDetailNavigation } from './drive-detail-navigation';
 import { detailTargetFromRoute } from './primitives/drive-detail-trail';
 import { driveDocumentFromContent } from './primitives/drive-route';
@@ -50,6 +51,13 @@ function inlineDetailTarget(
   }
 }
 
+type OpenItemOptions = {
+  event?: MouseEvent;
+  location?: SearchLocation;
+  newSplit?: boolean;
+  shortcut?: boolean;
+};
+
 /** App-specific navigation, upload and sharing adapters for the Drive workspace. */
 export function createDriveHostActions(options: {
   projectId: Accessor<string | undefined>;
@@ -71,6 +79,45 @@ export function createDriveHostActions(options: {
     },
   });
 
+  const openItem = (
+    entity: EntityData,
+    { event, location, newSplit = false, shortcut }: OpenItemOptions
+  ) => {
+    const openInNewSplit = newSplit || event?.shiftKey === true;
+
+    // Nested project/content targets reach this adapter. The main row
+    // consumes Cmd/Ctrl itself for selection.
+    if (event?.metaKey || event?.ctrlKey) {
+      markRowNotificationsSeenOnOpen(entity, notificationSource);
+      openEntityInNewTab({ entity, location });
+
+      return;
+    }
+
+    if (entity.type === 'project' && !openInNewSplit && !event?.altKey) {
+      options.selectFolder(entity.id);
+
+      return;
+    }
+
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
+
+    const target =
+      openInNewSplit || location ? undefined : inlineDetailTarget(entity);
+    if (target && navigation.openRoot(target, { event, shortcut })) return;
+
+    fireAndForget(
+      openEntityInSplitFromUnifiedList(entity, {
+        splitHandle: panel.handle,
+        referredFrom: 'documents',
+        openInNewSplit,
+        location,
+        notificationSource,
+      }),
+      'open-entity-in-split'
+    );
+  };
+
   return {
     userId: useUserId(),
 
@@ -78,39 +125,11 @@ export function createDriveHostActions(options: {
       !isTouchDevice() && !!globalSplitManager()?.canAppendSplit(),
 
     openEntity(entity, event, location, newSplit = false) {
-      const openInNewSplit = newSplit || event?.shiftKey === true;
+      openItem(entity, { event, location, newSplit });
+    },
 
-      // Nested project/content targets reach this adapter. The main row
-      // consumes Cmd/Ctrl itself for selection.
-      if (event?.metaKey || event?.ctrlKey) {
-        markRowNotificationsSeenOnOpen(entity, notificationSource);
-        openEntityInNewTab({ entity, location });
-
-        return;
-      }
-
-      if (entity.type === 'project' && !openInNewSplit && !event?.altKey) {
-        options.selectFolder(entity.id);
-
-        return;
-      }
-
-      markRowNotificationsSeenOnOpen(entity, notificationSource);
-
-      const target =
-        openInNewSplit || location ? undefined : inlineDetailTarget(entity);
-      if (target && navigation.openRoot(target, { event })) return;
-
-      fireAndForget(
-        openEntityInSplitFromUnifiedList(entity, {
-          splitHandle: panel.handle,
-          referredFrom: 'documents',
-          openInNewSplit,
-          location,
-          notificationSource,
-        }),
-        'open-entity-in-split'
-      );
+    openShortcut(entity, event) {
+      openItem(entity, { event, shortcut: true });
     },
 
     openFavorite(favorite, name, event) {
@@ -139,13 +158,7 @@ export function createDriveHostActions(options: {
           fallbackName: name,
         });
 
-        if (
-          navigation.openRoot(target, {
-            event,
-            location: { kind: 'tab', tab: 'owned' },
-          })
-        )
-          return;
+        if (navigation.openRoot(target, { event, shortcut: true })) return;
       }
 
       if (
@@ -156,7 +169,7 @@ export function createDriveHostActions(options: {
             { type: favorite.entityType, id: favorite.entityId },
             name
           ),
-          { event, location: { kind: 'tab', tab: 'owned' } }
+          { event, shortcut: true }
         )
       )
         return;
@@ -178,7 +191,14 @@ export function createDriveHostActions(options: {
               driveDocumentFromContent({ type: blockName, id })
             );
 
-      return target !== undefined && navigation.openRoot(target);
+      const projectId = options.projectId();
+      const createdIn: DriveLocation = projectId
+        ? { kind: 'folder', id: projectId }
+        : { kind: 'tab', tab: 'owned' };
+      return (
+        target !== undefined &&
+        navigation.openRoot(target, { location: createdIn })
+      );
     },
 
     openFolderInNewSplit: (folder) => {

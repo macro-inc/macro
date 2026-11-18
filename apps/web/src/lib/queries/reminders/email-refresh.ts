@@ -14,9 +14,6 @@ export async function refreshEmailFollowup(threadId: string) {
       queryKey: reminderKeys.email(threadId).queryKey,
     }),
     refetchSoupEntity(threadId, 'emailThread'),
-    queryClient.invalidateQueries({
-      queryKey: emailKeys.threadMessages(threadId).queryKey,
-    }),
     queryClient.invalidateQueries({ queryKey: emailKeys.previews._def }),
     // Reading the thread again updates its cached record, and with it every
     // list the cache maintains; only the others are read again.

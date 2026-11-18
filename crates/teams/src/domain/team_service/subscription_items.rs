@@ -12,8 +12,8 @@ use crate::domain::{
     crm_enqueuer::CrmEnqueuer,
     customer_repo::CustomerRepository,
     model::{
-        ItemChangeSettlement, ItemChangeStatus, ItemProration, ItemQuantityChange, ItemRemoval,
-        PriceInfo, SubscriptionItemView, SubscriptionTerms,
+        ComputerPurchaseCredit, ItemChangeSettlement, ItemChangeStatus, ItemProration,
+        ItemQuantityChange, ItemRemoval, PriceInfo, SubscriptionItemView, SubscriptionTerms,
     },
     open_seat_release::OpenSeatRelease,
     owned_entity_cleanup::OwnedEntityCleanup,
@@ -147,6 +147,21 @@ where
         Ok(self
             .customer_repository
             .remove_subscription_item(&subscription, item_id, idempotency_key)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn refund_computer_purchase(
+        &self,
+        team_id: &uuid::Uuid,
+        computer_id: computer_id::ComputerId,
+        idempotency_key: &str,
+    ) -> Result<Option<ComputerPurchaseCredit>, TeamSubscriptionItemsError> {
+        let _billing = self.customer_repository.lock_team_billing(team_id).await?;
+        let subscription = self.team_subscription(team_id).await?;
+        Ok(self
+            .customer_repository
+            .refund_computer_purchase(&subscription, computer_id, idempotency_key)
             .await?)
     }
 

@@ -114,3 +114,8 @@ From `infra/`:
   `crates/hosted_runtimes/src/domain/telemetry.rs` records; its header is the
   tag contract. Renaming a gauge, tag or `resource` value there silently turns
   its monitors into missing data.
+- `monitors/firecracker.ts` reads `firecracker_host.*` from the host agent,
+  `computer.host.memory.*` from fleet admission, and the `firecracker_host.launch`
+  span's stable snake_case `source`. Its header and the Firecracker runbook are
+  the contract; the local Datadog hostname must equal fleet `host`. Only the
+  readiness gauge alerts on missing data; an idle host has no failure events.

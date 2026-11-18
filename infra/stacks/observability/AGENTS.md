@@ -27,6 +27,8 @@ Paths below `grafana-provisioning/` are under `nixos/`.
   panel both read it), and its Datadog copy in
   `infra/stacks/monitoring/monitors/` by hand. A new entry takes the next free
   `panelId`; never renumber one, since sent notifications link to it.
+- Change an Email Focus rollout check: edit `grafana-provisioning/email-focus.nix`;
+  its rules and the `Email Focus rollout` dashboard both read it. No Datadog copy.
 - Change a CI percentile, queue or CI hours query: edit
   `grafana-provisioning/ci-report.json`; the `Macro CI` dashboard's Loki panels
   and `scripts/ci-report.ts` both read it.

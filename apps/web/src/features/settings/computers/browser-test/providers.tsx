@@ -26,7 +26,7 @@ const QUICK_ACCESS: QuickAccessContextValue = {
   interactionForUser: () => undefined,
 };
 
-/** The app-shell contexts the composer and the agent editor read. */
+/** The app-shell contexts the agent editor reads. */
 export function FixtureProviders(props: ParentProps) {
   return (
     <AnalyticsContextProvider>

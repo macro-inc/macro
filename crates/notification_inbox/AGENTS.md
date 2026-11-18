@@ -63,6 +63,12 @@ agent session, runtime or team-scoped vault access request). Built on the shared
   (`groupId`, `principalId`, `targetId`).
 - Row contents must not depend on the scope; scopes only filter rows, so the
   web cache can normalize rows by id across inboxes.
+- A scope lists a row by its `row_type` or any of its `also_listed_as` kinds
+  (`also_listed_as` in `src/domain/rows.rs`), for pages, live changes and
+  clears alike: a thread whose reply mentions the viewer is listed under
+  channel mentions too, and a clear of mentions takes the whole thread. A pull
+  request or agent session row that mentions the viewer is also a discussion
+  mention, the kind for mentions outside a channel.
 - A clear belongs to the server, not the request. `start_clear` stores it
   with its scope and start time frozen; `run_clear` applies it a chunk at a
   time, each chunk one transaction (state, ledger, cursor) under a lease. A

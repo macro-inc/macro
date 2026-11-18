@@ -435,6 +435,20 @@ impl<T: GroupName> KafkaEventConsumer<T> {
     ) -> KafkaResult<()> {
         either::for_both!(&self.consumer.0, consumer => consumer.commit_message(message, mode))
     }
+
+    /// Commits each listed partition's offset, the next record the group reads.
+    pub fn commit_offsets(
+        &self,
+        offsets: &TopicPartitionList,
+        mode: CommitMode,
+    ) -> KafkaResult<()> {
+        either::for_both!(&self.consumer.0, consumer => consumer.commit(offsets, mode))
+    }
+
+    /// The partitions currently assigned to this group member.
+    pub fn assignment(&self) -> KafkaResult<TopicPartitionList> {
+        either::for_both!(&self.consumer.0, consumer => consumer.assignment())
+    }
 }
 
 impl KafkaEventConsumer<Ungrouped> {

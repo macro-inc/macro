@@ -45,6 +45,7 @@ fn rust_ci_job() -> Job {
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .add_step(checkout())
         .add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -55,6 +56,7 @@ fn dependency_check() -> Job {
         .add_step(install_checker())
         .add_step(run_checker())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// The workspace-hack crate pins every third-party dep to its union feature
@@ -69,14 +71,15 @@ fn hakari_and_dep_closures() -> Job {
     rust_ci_job()
         .add_step(deps_check())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses(
+    steps::abort_stalled_fetch(Step::new("Checkout Repo").uses(
         "actions",
         "checkout",
         "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    ) // v6
+    )) // v6
 }
 
 /// `cargo install` skips the build when the same version is already present
