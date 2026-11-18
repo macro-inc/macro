@@ -14,11 +14,11 @@ import { channelNotificationRefresh } from './notification-refresh';
 export const CHANNEL_PARTICIPANTS_MUTATION_KEY = [
   'channel-participants',
 ] as const;
-export const ADD_CHANNEL_PARTICIPANTS_MUTATION_KEY = [
+const ADD_CHANNEL_PARTICIPANTS_MUTATION_KEY = [
   ...CHANNEL_PARTICIPANTS_MUTATION_KEY,
   'add',
 ] as const;
-export const REMOVE_CHANNEL_PARTICIPANTS_MUTATION_KEY = [
+const REMOVE_CHANNEL_PARTICIPANTS_MUTATION_KEY = [
   ...CHANNEL_PARTICIPANTS_MUTATION_KEY,
   'remove',
 ] as const;
