@@ -584,6 +584,12 @@ jobs:
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
+    - name: Volume usage (diagnostic)
+      if: always()
+      run: |
+        df -h /cache || true
+        du -sh /cache/* 2>/dev/null || true
+        du -sh target target/debug target/debug/deps target/debug/build 2>/dev/null || true
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
