@@ -1,4 +1,6 @@
 import '@app/index.css';
+// The app's own font: label and pitch widths depend on it.
+import '@fontsource-variable/inter';
 import { IMPORT_CATEGORIES } from '@app/features/connector-import/core/catalog';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { createSignal, For, Show } from 'solid-js';

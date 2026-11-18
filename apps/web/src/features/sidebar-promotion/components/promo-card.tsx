@@ -62,7 +62,7 @@ export function PromoCard(props: {
         <Button
           variant="secondary"
           size="sm"
-          class="grow"
+          class="flex-1"
           onClick={(event) => props.action.onClick(event.currentTarget)}
         >
           {props.action.label}
@@ -72,7 +72,7 @@ export function PromoCard(props: {
             <Button
               variant="secondary"
               size="sm"
-              class="grow"
+              class="flex-1"
               onClick={(event) => secondary().onClick(event.currentTarget)}
             >
               {secondary().label}
