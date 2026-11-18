@@ -15,7 +15,7 @@ import type { ScheduleDraft } from '../core/draft';
 import type { UnusableItem } from '../core/knobs';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
-import { programSteps } from '../core/routine-steps';
+import { picksItems, programSteps } from '../core/routine-steps';
 import { scheduleToEntity } from './entities';
 import {
   draftFromSchedule,
@@ -124,9 +124,13 @@ export function createRoutineDetailSource(
   const upgrades = useCodeUpgradesQuery(id, () =>
     Boolean(raw() && raw()?.owner === userId())
   );
-  const unusable = useUnusableItemsQuery(id, () =>
-    Boolean(raw() && raw()?.owner === userId())
-  );
+  // Only a routine that picks an item can have one go missing.
+  const unusable = useUnusableItemsQuery(id, () => {
+    const current = raw();
+    return Boolean(
+      current && current.owner === userId() && picksItems(current.task)
+    );
+  });
   // Only picked items: an unpicked knob shows as not set on its own.
   const unusableItems = createMemo((): UnusableItem[] =>
     unusable.isPending
