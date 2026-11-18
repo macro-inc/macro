@@ -479,8 +479,9 @@ const PROGRAM_CREATE_REFUSAL: &str = "An agent's program cannot create a calenda
 /// Refuse an agent run's create (see [`is_agent_run`]) that carries no
 /// approval of the user's; a person in the app creates from the composer,
 /// which is their confirmation. Only an internal caller forwards an
-/// `approval` (`macro_authorization::forwarded_approval`): the native tool a
-/// person reviewed, or one quoting their reply.
+/// `approval` (`macro_authorization::forwarded_approval`): `Reviewed` from a
+/// native tool a person reviewed, or `Quoted` from one quoting what the model
+/// says is their reply, which nothing checks (as with `SendConfirmedEmail`).
 fn refuse_program_create(
     attribution: CredentialAttribution,
     headers: &HeaderMap,

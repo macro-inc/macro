@@ -53,15 +53,17 @@ pub struct RequestContext {
     /// agent session actor does, for the in-process runtime - so each call is
     /// counted once.
     pub genai_telemetry: bool,
-    /// The user's approval of this call, when a person gave it (see
-    /// [`UserApproval`]); never something the model's arguments can set.
+    /// The approval this call carries, if any (see [`UserApproval`]); the
+    /// model's arguments never set it.
     approval: Option<UserApproval>,
 }
 
-/// How the user approved a tool call. Only this crate makes one: a user tool
-/// finished after review ([`crate::AsyncToolCollection::try_user_tool_call`])
-/// is [`ApprovalKind::Reviewed`], and a call quoting the user's reply
-/// ([`RequestContext::with_quoted_confirmation`]) is [`ApprovalKind::Quoted`].
+/// The approval a tool call carries. [`ApprovalKind::Reviewed`] is a person's:
+/// only this crate makes it, when a user tool is finished after review
+/// ([`crate::AsyncToolCollection::try_user_tool_call`]).
+/// [`ApprovalKind::Quoted`] is the model's claim: any caller makes it from a
+/// non-blank quote ([`RequestContext::with_quoted_confirmation`]), and nothing
+/// checks the quote against what the user said.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct UserApproval(ApprovalKind);
 
@@ -70,8 +72,8 @@ pub struct UserApproval(ApprovalKind);
 pub enum ApprovalKind {
     /// The user accepted the call on a review card or in a composer.
     Reviewed,
-    /// The call quotes the user's reply approving it: as strong as a quote
-    /// the model supplies.
+    /// The call quotes what it says is the user's reply approving it: only as
+    /// strong as the model's honesty, like a send's `userConfirmation`.
     Quoted,
 }
 

@@ -23,11 +23,11 @@ deliberately stable and widely depended on.
   these).
 - `src/actor.rs`: session-only `acting_as` schema injection, required selection, and trusted owner/requester resolution; public tool inputs remain unchanged.
 - `src/context.rs`: `RequestContext`/`ServiceContext` and the `FromRef`
-  extraction pattern. `RequestContext::approval` is the user's approval of a
-  call (`UserApproval`), which only this crate makes: `try_user_tool_call`
-  (a user tool runs only after a person reviewed it) gives `Reviewed`, and
-  `with_quoted_confirmation` gives `Quoted` for a non-blank quote. The model's
-  arguments never set it.
+  extraction pattern. `RequestContext::approval` is the approval a call
+  carries (`UserApproval`). `Reviewed` is a person's, and only this crate makes
+  it: `try_user_tool_call` (a user tool runs only after a person reviewed it).
+  `Quoted` is the model's claim: `with_quoted_confirmation` makes it from any
+  non-blank quote, unchecked. The model's arguments never set either.
 
 ## Scope
 
