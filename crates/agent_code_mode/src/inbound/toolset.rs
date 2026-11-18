@@ -301,10 +301,8 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCodeWithOcaml {
 #[schemars(
     title = "ExecuteCode",
     description = format!(
-        "{}\n{}\n{}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}\n{}",
-        include_str!("toolset/session/execute_code.md"),
-        include_str!("toolset/shared/program.md"),
-        include_str!("toolset/shared/runtime.md"),
+        "{SESSION_EXECUTE_CODE}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}\n{}",
+        SESSION_PRESENT.trim_end(),
         dynamic_ui::present_view_schema(),
         include_str!("toolset/session/ocaml.md"),
         include_str!("toolset/session/ocaml_permissions.md"),
