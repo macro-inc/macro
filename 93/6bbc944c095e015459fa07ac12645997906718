@@ -1,0 +1,23 @@
+crates/agent_correlation/src/scope/test.rs
+  s_6966afebcdde0a::t_259e0fa8ffe888 112-113
+  s_6966afebcdde0a::t_e7f74a1449501a 86-87
+crates/agent_correlation/src/scope.rs
+  s_6966afebcdde0a::t_259e0fa8ffe888 29-30
+  s_6966afebcdde0a::t_27c3d636785c47 90-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "936bbc944c095e015459fa07ac12645997906718",
+  "prompts": {},
+  "sessions": {
+    "s_6966afebcdde0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13694447-aca1-404a-8fbf-c900186fe6c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
