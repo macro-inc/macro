@@ -569,7 +569,7 @@ pub fn transition(
         }
 
         Event::MacrodConnectedWithoutAgentHandOff => {
-            if !(state.awaiting_agent && !gave_up(&state.phase)) {
+            if !state.awaiting_agent || gave_up(&state.phase) {
                 return transition(state, &Event::MacrodConnected, context);
             }
             give_up(
