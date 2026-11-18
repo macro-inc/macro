@@ -17,6 +17,12 @@ INSERT INTO comms_channels (id, name, channel_type, owner_id, team_id) VALUES
     ('72000000-0000-0000-0000-000000000001', 'Eng-API', 'team', 'macro|alice@example.com',
      '71000000-0000-0000-0000-000000000001'),
     ('72000000-0000-0000-0000-000000000002', NULL, 'direct_message', 'macro|alice@example.com', NULL);
+-- Dave left the channel: his personal sections no longer hold it.
+INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at, left_at) VALUES
+    ('72000000-0000-0000-0000-000000000001', 'macro|alice@example.com', 'owner', NOW(), NULL),
+    ('72000000-0000-0000-0000-000000000001', 'macro|bob@example.com', 'member', NOW(), NULL),
+    ('72000000-0000-0000-0000-000000000001', 'macro|carol@example.com', 'member', NOW(), NULL),
+    ('72000000-0000-0000-0000-000000000001', 'macro|dave@example.com', 'member', NOW(), NOW());
 -- Team sections: a manual one holding the channel, a rule matching its name,
 -- and a manual one that doesn't hold it.
 INSERT INTO channel_label (id, team_id, name, name_contains, sort_order) VALUES
@@ -36,3 +42,5 @@ INSERT INTO channel_label_channel (scope_key, channel_id, label_id) VALUES
 INSERT INTO favorite (user_id, entity_type, entity_id) VALUES
     ('macro|carol@example.com', 'channel', '72000000-0000-0000-0000-000000000001'),
     ('macro|dave@example.com', 'channel', '72000000-0000-0000-0000-000000000002');
+INSERT INTO channel_label (id, user_id, name, name_contains, sort_order) VALUES
+    ('73000000-0000-0000-0000-000000000007', 'macro|dave@example.com', 'Old', 'eng', 0);

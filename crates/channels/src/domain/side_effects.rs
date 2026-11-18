@@ -914,7 +914,18 @@ where
                 context.excluded_user_ids.iter().map(String::as_str),
             )
             .collect(),
-            mention_fallback_ids: context.mentioned_members.clone(),
+            // Only members who follow the thread hear about its replies.
+            mention_fallback_ids: context
+                .mentioned_members
+                .iter()
+                .filter(|user_id| {
+                    context
+                        .thread_audience
+                        .iter()
+                        .any(|id| id == user_id.as_ref())
+                })
+                .cloned()
+                .collect(),
         })
         .await;
     }

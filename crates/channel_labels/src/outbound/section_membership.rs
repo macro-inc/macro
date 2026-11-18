@@ -41,8 +41,9 @@ impl ChannelSectionMembershipReader for PgChannelSectionMembership {
         // when they belong to the channel's team (`team_user.user_id` is
         // unique, so that is one lookup, never a scan of the team), and
         // personal sections, manual or by name rule, for team, public and
-        // private channels; direct messages are never in a section. Rule
-        // matching repeats the section listing's `strpos(lower(..))`.
+        // private channels they are an active member of, as the listing
+        // requires; direct messages are never in a section. Rule matching
+        // repeats the section listing's `strpos(lower(..))`.
         let rows = sqlx::query!(
             r#"
             WITH c AS MATERIALIZED (
@@ -68,14 +69,20 @@ impl ChannelSectionMembershipReader for PgChannelSectionMembership {
                     WHERE (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = r.user_id)
                           = (SELECT team_id FROM c)
                     UNION ALL
-                    SELECT lc.label_id FROM channel_label_channel lc, c
-                    WHERE lc.scope_key = 'user:' || r.user_id AND lc.channel_id = c.id
-                      AND c.channel_type IN ('team', 'public', 'private')
-                    UNION ALL
-                    SELECT l.id FROM channel_label l, c
-                    WHERE l.scope_key = 'user:' || r.user_id AND l.name_contains IS NOT NULL
-                      AND c.channel_type IN ('team', 'public', 'private')
-                      AND strpos(c.lname, lower(l.name_contains)) > 0
+                    SELECT personal.id FROM (
+                        SELECT lc.label_id AS id FROM channel_label_channel lc, c
+                        WHERE lc.scope_key = 'user:' || r.user_id AND lc.channel_id = c.id
+                        UNION ALL
+                        SELECT l.id FROM channel_label l, c
+                        WHERE l.scope_key = 'user:' || r.user_id
+                          AND l.name_contains IS NOT NULL
+                          AND strpos(c.lname, lower(l.name_contains)) > 0
+                    ) personal, c
+                    WHERE c.channel_type IN ('team', 'public', 'private')
+                      AND EXISTS (
+                          SELECT 1 FROM comms_channel_participants p
+                          WHERE p.channel_id = c.id AND p.user_id = r.user_id
+                            AND p.left_at IS NULL)
                 ) AS "label_ids!",
                 EXISTS (
                     SELECT 1 FROM favorite f, c

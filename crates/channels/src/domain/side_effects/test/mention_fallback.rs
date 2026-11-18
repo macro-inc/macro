@@ -97,11 +97,12 @@ async fn a_message_names_the_members_it_mentions_as_fallbacks() {
 }
 
 #[tokio::test]
-async fn a_reply_names_the_members_it_mentions_as_fallbacks() {
+async fn a_reply_names_the_thread_members_it_mentions_as_fallbacks() {
     let channel_id = Uuid::new_v4();
     let sender = user("sender@example.com");
     let follower = user("follower@example.com");
     let mentioned = user("mentioned@example.com");
+    let elsewhere = user("elsewhere@example.com");
     let notifications = FakeNotifications::default();
     let service = ChannelSideEffectService::new(
         FakeContext {
@@ -126,8 +127,12 @@ async fn a_reply_names_the_members_it_mentions_as_fallbacks() {
                 member(channel_id, &sender),
                 member(channel_id, &follower),
                 member(channel_id, &mentioned),
+                member(channel_id, &elsewhere),
             ],
-            vec![SimpleMention::user(&mentioned)],
+            vec![
+                SimpleMention::user(&mentioned),
+                SimpleMention::user(&elsewhere),
+            ],
         ))
         .await;
 
@@ -144,6 +149,7 @@ async fn a_reply_names_the_members_it_mentions_as_fallbacks() {
         })
         .expect("expected a reply notification");
 
+    // A member outside the thread hears about it only through the mention.
     assert_eq!(reply.0, &HashSet::from([follower]));
     assert_eq!(reply.1, &HashSet::from([mentioned]));
 }
