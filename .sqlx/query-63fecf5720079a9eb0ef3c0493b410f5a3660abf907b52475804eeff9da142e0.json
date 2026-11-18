@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT kind, target, state, created_at\n            FROM agent_session_tool_permission\n            WHERE agent_session_id = $1\n            ",
+  "query": "\n            SELECT kind, target, state, via_agent, updated_at\n            FROM persona_tool_permission\n            WHERE user_id = $1 AND persona_id = $2\n            ",
   "describe": {
     "columns": [
       {
@@ -20,12 +20,18 @@
       },
       {
         "ordinal": 3,
-        "name": "created_at",
+        "name": "via_agent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
+        "Text",
         "Uuid"
       ]
     },
@@ -33,8 +39,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "1e65cc186251eb6afbea9e3ec5cffbcf9f06797c306211d67051ef2966270362"
+  "hash": "63fecf5720079a9eb0ef3c0493b410f5a3660abf907b52475804eeff9da142e0"
 }

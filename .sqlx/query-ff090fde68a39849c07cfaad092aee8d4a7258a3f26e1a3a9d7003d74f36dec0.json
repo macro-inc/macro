@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT kind, target, state, via_agent, updated_at\n                FROM agent_tool_permission\n                WHERE bot_id = $1\n                ",
+  "query": "\n        SELECT kind, target, state, created_at\n        FROM agent_session_tool_permission\n        WHERE agent_session_id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -20,12 +20,7 @@
       },
       {
         "ordinal": 3,
-        "name": "via_agent",
-        "type_info": "Bool"
-      },
-      {
-        "ordinal": 4,
-        "name": "updated_at",
+        "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
@@ -38,9 +33,8 @@
       false,
       false,
       false,
-      false,
       false
     ]
   },
-  "hash": "cdce338cc4b4024a63e03775cf37d04944963344c39ae38e0a65cb5809261b3e"
+  "hash": "ff090fde68a39849c07cfaad092aee8d4a7258a3f26e1a3a9d7003d74f36dec0"
 }

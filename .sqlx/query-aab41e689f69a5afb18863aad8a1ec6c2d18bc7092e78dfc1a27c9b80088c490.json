@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO persona_tool_permission\n                    (user_id, persona_id, kind, target, state, via_agent)\n                SELECT $1, $2, kind, target, state, $6\n                FROM UNNEST($3::text[], $4::text[], $5::text[]) AS change (kind, target, state)\n                ON CONFLICT (user_id, persona_id, kind, target) DO UPDATE\n                SET state = EXCLUDED.state,\n                    via_agent = EXCLUDED.via_agent,\n                    updated_at = now()\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aab41e689f69a5afb18863aad8a1ec6c2d18bc7092e78dfc1a27c9b80088c490"
+}
