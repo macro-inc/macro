@@ -108,6 +108,15 @@ function person(id: string, name: string): CommandMenuItem {
   };
 }
 
+/** A person the viewer has a direct message with: the people window gives them
+ * an interaction time. */
+function messagedPerson(id: string, name: string): CommandMenuItem {
+  return {
+    ...person(id, name),
+    timestamps: { lastInteraction: new Date(NOW - 3 * DAY) },
+  };
+}
+
 function ids(items: CommandMenuItem[], query: string, cacheEnabled = true) {
   return rankCommandSearchItems(items, query, {
     preserveAdditionalEntityMatches: cacheEnabled,
@@ -201,11 +210,11 @@ describe('command menu search ranking', () => {
     const items = [
       note('notes', 'Avery Morgan notes'),
       {
-        ...contact('contact', 'Avery Morgan'),
+        ...messagedPerson('person', 'Avery Morgan'),
         searchText: 'Avery Morgan | avery.morgan@example.com',
       },
     ];
-    expect(ids(items, 'avery morgan')[0]).toBe('contact');
+    expect(ids(items, 'avery morgan')[0]).toBe('person');
 
     const create = {
       ...command('create', 'Create', NOW - DAY),
@@ -390,7 +399,7 @@ describe('command menu search ranking', () => {
   });
 
   it.each([false, true])(
-    'keeps old DMs and people without activity ahead of recent CRM contacts with GraphQL %s',
+    'keeps an old DM, then people without activity, ahead of recent CRM contacts with GraphQL %s',
     (cacheEnabled) => {
       const items = [
         contact('crm', 'Jack Healey'),
@@ -398,10 +407,10 @@ describe('command menu search ranking', () => {
         channel('dm', 'Jackson Kustec', NOW - 60 * DAY, 'dm'),
       ];
 
-      expect(ids(items, 'jack', cacheEnabled)).toEqual(['jack', 'dm', 'crm']);
+      expect(ids(items, 'jack', cacheEnabled)).toEqual(['dm', 'jack', 'crm']);
       expect(ids([...items].reverse(), 'jack', cacheEnabled)).toEqual([
-        'jack',
         'dm',
+        'jack',
         'crm',
       ]);
     }
@@ -421,10 +430,10 @@ describe('command menu search ranking', () => {
     expect(ids(items, 'jack')).toEqual([
       'recent-dm',
       'old-dm',
-      'jack',
       'channel-slot',
-      'recent-crm',
       'command',
+      'jack',
+      'recent-crm',
       'older-crm',
     ]);
   });
@@ -540,7 +549,7 @@ describe('command menu search ranking', () => {
     const fullNameDm = channel('full-name-dm', 'Avery Morgan', NOW, 'dm');
 
     it.each([false, true])(
-      'puts the recent full-name DM above an older DM and a person named only the query with GraphQL %s',
+      'puts the recent full-name DM above an older DM, and DMs above a never-messaged person named only the query with GraphQL %s',
       (cacheEnabled) => {
         const items = [
           shortDm,
@@ -548,9 +557,10 @@ describe('command menu search ranking', () => {
           fullNameDm,
           channel('longer-handle', 'avery+1', NOW - 40 * DAY, 'dm'),
         ];
-        expect(ids(items, 'avery', cacheEnabled).slice(0, 3)).toEqual([
+        expect(ids(items, 'avery', cacheEnabled)).toEqual([
           'full-name-dm',
           'short-dm',
+          'longer-handle',
           'person',
         ]);
       }
@@ -628,11 +638,11 @@ describe('command menu search ranking', () => {
     expect(order.indexOf('exact-channel')).toBeLessThan(order.indexOf('major'));
     expect(order.indexOf('exact-note')).toBeLessThan(order.indexOf('major'));
   });
-  it('lists a person before documents and channels that match equally well, and never above a better match', () => {
+  it('lists a person the viewer messages before documents and channels that match equally well, and never above a better match', () => {
     const items = [
       channel('prefix-channel', 'jacob-team', NOW),
       note('prefix-note', 'Jacob onboarding', NOW),
-      { ...person('prefix-person', 'Jacobson Amy'), personOrder: 0 },
+      { ...messagedPerson('prefix-person', 'Jacobson Amy'), personOrder: 0 },
       note('exact-note', 'Jacob', NOW - 90 * DAY),
     ];
 
@@ -667,12 +677,76 @@ describe('command menu search ranking', () => {
       viewerId: 'viewer',
     }).map((item) => item.id);
 
+    expect(order.slice(0, 3)).toEqual(
+      expect.arrayContaining(['teammate', 'teammate-dm', 'exact-note'])
+    );
     expect(order.slice(0, 2).sort()).toEqual(['teammate', 'teammate-dm']);
-    expect(order.indexOf('outside')).toBe(2);
+    // Someone outside the team the viewer never messaged follows every
+    // result that matches at a word start, however exactly they match.
+    expect(order.indexOf('outside')).toBe(3);
     // A teammate who matches less well stays below better matches.
     expect(order.indexOf('weak-teammate')).toBeGreaterThan(
       order.indexOf('exact-note')
     );
+  });
+
+  it.each([false, true])(
+    'lists people the viewer never messaged after their own results and the people they know with GraphQL %s',
+    (cacheEnabled) => {
+      const windowed = (item: CommandMenuItem, personOrder: number) => ({
+        ...item,
+        personOrder,
+      });
+      const items = [
+        // The people window lists the never-messaged exact name first.
+        windowed(person('stranger-exact', 'macro'), 0),
+        windowed(person('stranger-prefix', 'macro.acct1'), 1),
+        windowed(messagedPerson('messaged', 'Macro Lee'), 2),
+        windowed(person('stranger-contains', 'Jo Macropoulos'), 3),
+        windowed(person('teammate', 'Macroeconomics Club'), 4),
+        project('project', 'Macro roadmap', NOW - 20 * DAY),
+        channel('channel', 'macro-eng', NOW - 20 * DAY),
+        note('contains-note', 'Notes on macro', NOW),
+      ];
+      const order = rankCommandSearchItems(items, 'macro', {
+        preserveAdditionalEntityMatches: cacheEnabled,
+        teammateIds: new Set(['teammate']),
+      }).map((item) => item.id);
+
+      expect(order).toEqual([
+        'messaged',
+        'teammate',
+        'channel',
+        'project',
+        'stranger-exact',
+        'stranger-prefix',
+        'contains-note',
+        'stranger-contains',
+      ]);
+    }
+  );
+
+  it('keeps email-only contacts below a channel and never lifts a person past another result', () => {
+    const emailOnly = (id: string, name: string, personOrder: number) => ({
+      ...person(id, name),
+      data: { id, name, email: `${id}@example.com` },
+      personOrder,
+    });
+    const items = [
+      emailOnly('randall', 'Randall Malcom', 0),
+      contact('crm', 'Randall Stillwell'),
+      emailOnly('miranda', 'mirandahaymon', 1),
+      note('script', 'get-random-doc.sh', NOW),
+      channel('random', 'random', NOW - 30 * DAY),
+    ];
+
+    expect(ids(items, 'rand')).toEqual([
+      'random',
+      'randall',
+      'crm',
+      'script',
+      'miranda',
+    ]);
   });
 });
 
