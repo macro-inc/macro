@@ -246,6 +246,7 @@ where
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    ensure_policy_fits_parent(&path, &input)?;
     input.attribution = sender_attribution(&user.authorization);
     Ok(Json(
         state
@@ -256,6 +257,23 @@ where
             )
             .await?,
     ))
+}
+
+/// A caller may quiet only a channel message. Discussion delivery on other
+/// parents also grants mentioned people access, which a quieter policy would
+/// skip, so they take only the default.
+fn ensure_policy_fits_parent(
+    path: &ParentPath,
+    input: &PostMessage,
+) -> Result<(), MessageHttpError> {
+    let is_channel = matches!(
+        MessageParent::parse(&path.parent_type, &path.parent_id),
+        Ok(MessageParent::Channel(_))
+    );
+    if is_channel || input.notification_policy == PostMessageNotificationPolicy::Default {
+        return Ok(());
+    }
+    Err(MessageError::Invalid("notification_policy applies only to channel messages").into())
 }
 
 /// How a new message's signed agent attribution labels it: with the client a
@@ -537,3 +555,6 @@ where
             .await?,
     ))
 }
+
+#[cfg(test)]
+mod test;

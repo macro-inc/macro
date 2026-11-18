@@ -3,12 +3,9 @@ import { createMentionPageLoader } from '@core/component/LexicalMarkdown/compone
 import { useEntityMention } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useEntityMention';
 import type { MentionItem } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { fileDrop } from '@core/directive/fileDrop';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
-import UploadIcon from '@icon/system/regular/upload-simple.svg';
-import { Button } from '@ui/components/Button';
 import {
   ctrlJKMenuNavigation,
   wrapIndex,
@@ -18,23 +15,31 @@ import {
   createMemo,
   createSignal,
   createUniqueId,
+  type JSX,
   Show,
 } from 'solid-js';
 import { VList, type VListHandle } from 'virtua/solid';
-import type { CanvasAsset } from '../core/assets';
-import { type CanvasInsertMode, canInsertAsset } from '../core/insert';
+import type { CanvasAsset } from '../../core/assets';
+import { type CanvasInsertMode, canInsertAsset } from '../../core/insert';
 
-false && fileDrop;
 false && ctrlJKMenuNavigation;
 
+const ROW_HEIGHT = 36;
+const TOUCH_ROW_HEIGHT = 44;
+
+/**
+ * Search the workspace for something to put on the canvas: images and videos,
+ * or files to reference. `children` sits between the search field and the
+ * results, for a view that offers another way in (uploading from the device).
+ */
 export function CanvasAssetPicker(props: {
   mode: CanvasInsertMode;
   onSelect: (asset: CanvasAsset) => void;
-  onFiles: (files: File[]) => void;
   onClose: () => void;
+  /** Size the search field and the rows for fingers. */
+  touch?: boolean;
+  children?: JSX.Element;
 }) {
-  const [dragging, setDragging] = createSignal(false);
-  let fileInput: HTMLInputElement | undefined;
   const [search, setSearch] = createSignal('');
   const [index, setIndex] = createSignal(0);
   const searchTerm = debouncedDependent(search, 60);
@@ -123,7 +128,12 @@ export function CanvasAssetPicker(props: {
           placeholder={
             props.mode === 'media' ? 'Find images or videos…' : 'Find a file…'
           }
-          class="h-7 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-placeholder"
+          class="min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-placeholder"
+          classList={{
+            'h-7 text-sm': !props.touch,
+            // 16px text keeps iOS from zooming the page into the field.
+            'h-11 text-base': props.touch,
+          }}
           value={search()}
           onInput={(event) => {
             setIndex(0);
@@ -150,47 +160,7 @@ export function CanvasAssetPicker(props: {
           }}
         />
       </div>
-      <Show when={props.mode === 'media'}>
-        <div
-          aria-label="Upload canvas media"
-          class="m-3 mb-1.5 flex min-h-44 shrink-0 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-edge-muted p-4 text-center"
-          classList={{ 'bg-hover': dragging() }}
-          use:fileDrop={{
-            multiple: true,
-            onDrop: props.onFiles,
-            onDragStart: setDragging,
-            onDragEnd: () => setDragging(false),
-          }}
-        >
-          <UploadIcon class="size-8 text-ink-extra-muted" />
-          <div>
-            <p class="text-sm text-ink">Drop files here</p>
-            <p class="mt-1 text-xs text-ink-muted">
-              Add images or videos to this canvas.
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => fileInput?.click()}
-          >
-            Add files
-          </Button>
-          <input
-            ref={fileInput}
-            type="file"
-            multiple
-            accept="image/*,video/*,.heic,.heif"
-            aria-label="Choose canvas media"
-            class="hidden"
-            onChange={(event) => {
-              const files = Array.from(event.currentTarget.files ?? []);
-              if (files.length) props.onFiles(files);
-              event.currentTarget.value = '';
-            }}
-          />
-        </div>
-      </Show>
+      {props.children}
       <div class="flex min-h-0 flex-1 flex-col py-1.5">
         <div
           id={listId}
@@ -204,7 +174,7 @@ export function CanvasAssetPicker(props: {
               list = handle;
             }}
             data={items()}
-            itemSize={36}
+            itemSize={props.touch ? TOUCH_ROW_HEIGHT : ROW_HEIGHT}
             class="overscroll-contain"
             style={{ height: '100%' }}
           >
@@ -213,6 +183,8 @@ export function CanvasAssetPicker(props: {
                 id={`${listId}-${itemIndex()}`}
                 role="option"
                 aria-selected={selected() === itemIndex()}
+                // The row fills its slot on touch, so all of it takes a tap.
+                classList={{ 'flex h-11 *:min-w-0 *:flex-1': props.touch }}
               >
                 <MentionsMenuItem
                   item={item}
@@ -243,6 +215,7 @@ export function CanvasAssetPicker(props: {
           <button
             type="button"
             class="w-full rounded px-3 py-2 text-xs text-ink-muted hover:bg-hover disabled:opacity-50"
+            classList={{ 'min-h-11': props.touch }}
             disabled={loading()}
             onClick={() => fireAndForget(source.loadMore(), 'canvas-assets')}
           >

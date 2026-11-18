@@ -10,7 +10,6 @@ mod environment;
 mod focus_environment;
 
 use std::collections::BTreeMap;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -18,7 +17,6 @@ use gmail_emulator::{GmailEmulator, PushConfig};
 use outlook_emulator::OutlookEmulator;
 use rootcause::prelude::*;
 use sqlx::PgPool;
-use tokio::net::TcpListener;
 use uuid::Uuid;
 
 use self::calendar_reads::CalendarReads;
@@ -26,6 +24,7 @@ pub use self::calendar_reads::CalendarSignal;
 use crate::aws::{Aws, StoredObject};
 use crate::evidence::{Collected, Recorder, counted, path_shape, shape};
 use crate::focus::{FocusClassifier, FocusStandIns};
+use crate::host::{PORT_ATTEMPTS, port_backoff};
 use crate::inbox::{Mail, Provider};
 use crate::infra::postgres::Database;
 use crate::infra::redis::RedisDatabase;
@@ -89,9 +88,6 @@ const DUE_PROJECTIONS_QUERY: &str =
 const PROJECTIONS_SETTLE: Duration = Duration::from_secs(5);
 /// How long a service gets to answer its health check.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
-/// How often a service is started again on another port when the one picked
-/// for it was taken in between.
-const PORT_ATTEMPTS: u8 = 3;
 /// What a Rust process writes when a thread panics.
 const PANIC_MARKER: &str = "panicked at";
 /// What a service logs once it has bound its port.
@@ -182,8 +178,15 @@ impl Stack {
         Self::start_with(StackOptions::default()).await
     }
 
-    /// Starts a stack.
+    /// Starts a stack. When it cannot, the report says what open files and
+    /// local ports the machine had left.
     pub async fn start_with(options: StackOptions) -> Result<Self, Report> {
+        Self::start_parts(options)
+            .await
+            .map_err(|report| report.attach(crate::host::resources()))
+    }
+
+    async fn start_parts(options: StackOptions) -> Result<Self, Report> {
         let servers = environment::Servers::from_env()?;
         let id = Uuid::now_v7().simple().to_string();
         let log_dir = log_dir(&id)?;
@@ -192,18 +195,23 @@ impl Stack {
             crate::process::ensure_built(&[CALENDAR])?;
         }
 
-        let gmail = GmailEmulator::start(gmail_emulator::Seed::default())
-            .await
-            .context("could not start the Gmail emulator")?;
-        let outlook = OutlookEmulator::start_on(
-            SocketAddr::from(([127, 0, 0, 1], 0)),
+        let gmail = GmailEmulator::start_with_listener(
+            crate::host::local_listener()
+                .await
+                .context("could not listen for the Gmail emulator")?,
+            gmail_emulator::Seed::default(),
+        )
+        .context("could not start the Gmail emulator")?;
+        let outlook = OutlookEmulator::start_with_listener(
+            crate::host::local_listener()
+                .await
+                .context("could not listen for the Outlook emulator")?,
             outlook_emulator::Seed::default(),
             outlook_emulator::Options {
                 trusted_certificates: vec![crate::tls::AUTHORITY.as_bytes().to_vec()],
                 ..outlook_emulator::Options::default()
             },
         )
-        .await
         .context("could not start the Outlook emulator")?;
 
         // From here on a failure must give back what was created: the stack
@@ -347,7 +355,8 @@ impl Stack {
         let mut attempt = 0;
         loop {
             attempt += 1;
-            let port = free_port().await?;
+            let reserved = free_port().await?;
+            let port = reserved.port();
             let mut env = document_storage_environment::document_storage_env(
                 &document_storage_environment::DocumentStorage {
                     port,
@@ -358,6 +367,8 @@ impl Stack {
             );
             env.extend(options.env.iter().cloned());
 
+            // Held until now, so no listener of the harness took it.
+            reserved.release();
             let mut service = ServiceProcess::spawn(DOCUMENT_STORAGE, &env, &self.log_dir)?;
             let url = format!("http://127.0.0.1:{port}");
             match wait_for_health(&self.http, &url, &mut service).await {
@@ -376,6 +387,7 @@ impl Stack {
                 Err(error) if attempt < PORT_ATTEMPTS && service.log().contains("AddrInUse") => {
                     tracing::warn!(error = ?error, port, "the port was taken; trying another");
                     service.stop().await;
+                    tokio::time::sleep(port_backoff(attempt)).await;
                 }
                 Err(error) => {
                     let report = error.attach(format!(
@@ -410,7 +422,8 @@ impl Stack {
         let mut attempt = 0;
         loop {
             attempt += 1;
-            let port = free_port().await?;
+            let reserved = free_port().await?;
+            let port = reserved.port();
             let mut env = document_storage_environment::document_storage_env(
                 &document_storage_environment::DocumentStorage {
                     port,
@@ -422,6 +435,8 @@ impl Stack {
             env.extend(document_storage_environment::search_indexer_settings());
             env.extend(options.env.iter().cloned());
 
+            // Held until now, so no listener of the harness took it.
+            reserved.release();
             let mut service = ServiceProcess::spawn(SEARCH_INDEXER, &env, &self.log_dir)?;
             let url = format!("http://127.0.0.1:{port}");
             match wait_for_health(&self.http, &url, &mut service).await {
@@ -432,6 +447,7 @@ impl Stack {
                 Err(error) if attempt < PORT_ATTEMPTS && service.log().contains("AddrInUse") => {
                     tracing::warn!(error = ?error, port, "the port was taken; trying another");
                     service.stop().await;
+                    tokio::time::sleep(port_backoff(attempt)).await;
                 }
                 Err(error) => {
                     let report = error.attach(format!(
@@ -538,7 +554,8 @@ impl Stack {
         let mut attempt = 0;
         let (api, tls, api_proxy, env) = loop {
             attempt += 1;
-            let port = free_port().await?;
+            let reserved = free_port().await?;
+            let port = reserved.port();
             let api_url = format!("http://127.0.0.1:{port}");
             // Everything but the health check reaches the API through the
             // proxy, Outlook's notifications included.
@@ -559,6 +576,8 @@ impl Stack {
             });
             env.extend(options.env.iter().cloned());
 
+            // Held until now, so no listener of the harness took it.
+            reserved.release();
             let mut api = ServiceProcess::spawn(API, &env, log_dir)?;
             match wait_for_health(&http, &api_url, &mut api).await {
                 Ok(()) => break (api, tls, api_proxy, env),
@@ -567,6 +586,7 @@ impl Stack {
                     api.stop().await;
                     tls.stop().await;
                     api_proxy.stop().await;
+                    tokio::time::sleep(port_backoff(attempt)).await;
                 }
                 Err(error) => {
                     let report = error.attach(format!(
@@ -1430,14 +1450,18 @@ async fn start_calendar(
     let mut attempt = 0;
     let (service, port, env) = loop {
         attempt += 1;
-        let port = free_port().await?;
+        let reserved = free_port().await?;
+        let port = reserved.port();
         let env = calendar_environment::calendar_env(email_env, port, app_url, overrides);
+        // Held until now, so no listener of the harness took it.
+        reserved.release();
         let mut service = ServiceProcess::spawn(CALENDAR, &env, log_dir)?;
         match wait_for_health(http, &format!("http://127.0.0.1:{port}"), &mut service).await {
             Ok(()) => break (service, port, env),
             Err(error) if attempt < PORT_ATTEMPTS && service.log().contains("AddrInUse") => {
                 tracing::warn!(error = ?error, port, "the calendar service's port was taken; trying another");
                 service.stop().await;
+                tokio::time::sleep(port_backoff(attempt)).await;
             }
             Err(error) => return Err(error),
         }
@@ -1530,12 +1554,12 @@ async fn wait_for_health(
     .await
 }
 
-/// A port nothing listens on right now.
-async fn free_port() -> Result<u16, Report> {
-    let listener = TcpListener::bind("127.0.0.1:0")
+/// A port for a service, free on every address and held until released.
+async fn free_port() -> Result<crate::host::ReservedPort, Report> {
+    let reserved = crate::host::free_port()
         .await
-        .context("could not find a free port for the API")?;
-    Ok(listener.local_addr()?.port())
+        .context("could not find a free port for a service")?;
+    Ok(reserved)
 }
 
 /// The directory the scenario's service logs go to: one per scenario, named

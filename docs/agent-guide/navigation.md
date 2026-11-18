@@ -274,7 +274,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/for-you` | For you: the person's suggestions as cards (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` shows that suggestion first, ringed |
+| `/app/for-you` | For you: the person's suggestions as cards, Suggestions (work Macro can do), To do, Running and Done today (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` scrolls to that suggestion |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -1709,12 +1709,15 @@ person has no interaction history and other recently contacted participants matc
 only scattered letters: the named person must lead and be selected by Enter or tap.
 The controlled composer regression is `people-ranking.browser.e2e.ts` in
 `apps/web/src/features/channel/Input/browser-test/`.
-People rows follow the assignee menus' rule (`@core/user/people-before-agents`):
-browsing lists you, then other people, then agents with Macro first; while
-searching, an agent is listed only when its name or handle holds the typed words,
-not just their letters scattered, and never above a person whose name matches as
-well; bots get no score boost. Phone rows keep that People order in the slots the
-blended ranking gives people.
+People rows follow the assignee menus' rule (`@core/user/people-before-agents`)
+with Macro lifted to the top: browsing lists Macro, then you, then other people,
+then the other agents. While searching, Macro stays first while its name starts
+with the query (`m`, `ma`, `mac`); otherwise, and for every other agent, an agent
+is listed only when its name or handle holds the typed words, not just their
+letters scattered, and never above a person whose name matches as well; bots get
+no score boost. Channel and DM composers still list `@here` above Macro while
+browsing. Phone rows keep that People order in the slots the blended ranking
+gives people, so Macro is the first pinned row (after `@here` in a channel or DM).
 
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue

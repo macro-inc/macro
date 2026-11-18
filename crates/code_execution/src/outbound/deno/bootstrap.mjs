@@ -71,7 +71,7 @@ globalThis.console = {
 // The bootstrap keeps one timer for itself: the loop report before the deadline.
 const bootstrapTimeout = globalThis.setTimeout.bind(globalThis);
 const sleepBanned = (name) => function () {
-  throw new Error(`${name} is unavailable in ExecuteCode: do not sleep or poll in a program. Finish this execution, and to check back later create a routine with macro.routines.create.`);
+  throw new Error(`${name} is unavailable in ExecuteCode: Custom timers are unsupported, including Promise.race deadline guards. The host already enforces the execution deadline (30 s by default in ExecuteCode). Use bounded batches with Promise.allSettled and return successful results with any failures before the deadline. Promise.allSettled does not add a timeout. To check back later, create a routine with macro.routines.create.`);
 };
 for (const name of ["setTimeout", "setInterval", "setImmediate", "Worker"]) globalThis[name] = sleepBanned(name);
 AbortSignal.timeout = sleepBanned("AbortSignal.timeout");

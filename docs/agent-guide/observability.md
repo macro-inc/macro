@@ -202,6 +202,27 @@ trace covers an email event from its Kafka publish to the browser's read:
 | `connection_gateway.websocket_send` | The frame leaving the gateway. |
 | `email.focus.refresh` | The browser's read after a push, joined through the push's `traceparent`. A read after a reconnect starts its own trace. `email.focus.threads` is the list's size. |
 
+## Contact searches
+
+Contact pickers read directory pages as they scroll, and read on by themselves
+past pages that list nothing new. Search for `{ name="contacts.search" }`
+(Datadog `resource_name:contacts.search`). One span covers one search, from its
+first page read to the page that ended it, with each `contacts.read_window`
+read as a child; server reads continue into the `contacts.graphql.page` span of
+`cloud-storage-service`.
+
+`contacts.search` records `contacts.mode`, `contacts.query_length`,
+`contacts.source` (`cache` or `server`, from the first page), `contacts.pages`,
+`contacts.server_pages`, `contacts.server_ms` (time in server reads),
+`contacts.failed_pages`, `contacts.empty_pages` (pages that listed no new
+eligible row), `contacts.max_empty_run` and `contacts.max_empty_run_ms` (the
+longest run of them), `contacts.listed`, `contacts.elapsed_ms`,
+`contacts.reached_end`, and `contacts.outcome` (`end`, `bound` at 500 rows,
+`changed` for a new query, `closed`). The span ends when its last page lands, so
+time a picker stays open afterwards is not counted. Reading the same input again
+after a search ended, as a reopened picker or a re-read after a contact change
+does, starts a new span with `contacts.repeat` true. Never add the query text.
+
 ## Agent sessions
 
 A session's lifetime is reconstructable from these spans. All of them carry

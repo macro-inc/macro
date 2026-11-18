@@ -28,15 +28,22 @@ signed out does. `touch-layout.browser.e2e.ts` runs against it in the touch
 project: the tools above the dock, uncovered and at least 44px; the grouped
 tools; the selection's actions and their undo steps; the inspector sheet
 resting under the shape and closing with the selection kept; the long-press
-menu outliving the lift (and a drag not opening it); the zoom sheet; and the
-in-canvas placement without the app's chrome. The long-press cases advance
-Playwright's clock rather than waiting.
+menu outliving the lift (and a drag not opening it); the zoom sheet; the
+in-canvas placement without the app's chrome; a corner taken from 12px outside
+it and the shape moved from its middle; an outlined shape selected by a tap
+near its stroke; the Attach sheet, whose Upload media row reaches the file
+picker and hands over the chosen file after the sheet has closed; Zoom to fit
+keeping the scene clear of the bottom chrome; and a turn of the device keeping
+the middle of the view. The long-press cases advance Playwright's clock rather than
+waiting.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an installed Chromium.
 
 The same spec checks that the lift of a long press presses no row of the menu
 that opened under the finger. That takes the browser's own click, which
 Chromium sends only for a finger that lifts within its tap time, so the test
-turns the sheet's slide off and lifts at once.
+turns the sheet's slide off and lifts at once. It also draws a connector and
+checks that a tap beside its end leaves it as it was, and that a drag from
+there moves the end.
 
 ![Two editors and a viewer sharing a scene and Alice's cursor](multiplayer.png)
 
