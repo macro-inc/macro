@@ -14,39 +14,59 @@ from bootstrap import LocalOpenBao
 from openbao_provisioning import provision_team as bootstrap
 
 
+def disposable_openbao(source, directory):
+    """A `run(*compose arguments)` for a fresh single-container Compose project."""
+    project = "passwords-persistence-" + uuid4().hex
+    compose = directory / "compose.json"
+    compose.write_text(json.dumps({
+        "services": {"openbao": {
+            "image": "openbao/openbao:2.7.2",
+            "entrypoint": ["/usr/bin/dumb-init", "--", "/bin/sh", "/openbao/config/start.sh"],
+            "environment": {"BAO_ADDR": "http://127.0.0.1:8200"},
+            "volumes": [
+                str(source / "local.hcl") + ":/openbao/config/macro-local.hcl:ro,z",
+                str(source / "start.sh") + ":/openbao/config/start.sh:ro,z",
+                "vault:/openbao/file",
+            ],
+            "ports": ["127.0.0.1::8200"],
+            "network_mode": "bridge",
+            "healthcheck": {"test": ["CMD", "bao", "status"], "interval": "1s", "timeout": "3s", "retries": 60},
+        }},
+        "volumes": {"vault": {}},
+    }))
+    command = ["docker", "compose", "-p", project, "-f", str(compose)]
+
+    def run(*arguments):
+        try:
+            return subprocess.check_output(command + list(arguments), stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError as error:
+            logs = subprocess.run(command + ["logs", "--tail", "20"], capture_output=True)
+            output = (logs.stdout + logs.stderr).decode()
+            raise RuntimeError(error.stderr.decode() + output) from None
+
+    return run
+
+
 @unittest.skipUnless(os.environ.get("PASSWORDS_TEST_OPENBAO_PERSISTENCE"), "disposable Docker lifecycle test opt-in required")
 class PersistenceIntegration(unittest.TestCase):
+    def test_an_empty_credentials_file_from_a_failed_init_is_retried(self):
+        source = Path(__file__).resolve().parent
+        with tempfile.TemporaryDirectory() as directory:
+            run = disposable_openbao(source, Path(directory))
+            try:
+                run("run", "--rm", "--no-deps", "--user", "root", "--entrypoint", "sh", "openbao",
+                    "-c", "touch /openbao/file/bootstrap.json.tmp")
+                run("up", "-d", "--wait", "--wait-timeout", "90")
+                credentials = json.loads(run("exec", "-T", "openbao", "cat", "/openbao/file/bootstrap.json"))
+                self.assertTrue(credentials["root_token"])
+                self.assertEqual(run("exec", "-T", "openbao", "ls", "/openbao/file").split(), [b"bootstrap.json", b"data", b"seal.key"])
+            finally:
+                run("down", "--volumes")
+
     def test_init_unseal_and_values_survive_restart_and_recreation(self):
         source = Path(__file__).resolve().parent
-        project = "passwords-persistence-" + uuid4().hex
         with tempfile.TemporaryDirectory() as directory:
-            compose = Path(directory) / "compose.json"
-            compose.write_text(json.dumps({
-                "services": {"openbao": {
-                    "image": "openbao/openbao:2.7.2",
-                    "entrypoint": ["/usr/bin/dumb-init", "--", "/bin/sh", "/openbao/config/start.sh"],
-                    "environment": {"BAO_ADDR": "http://127.0.0.1:8200"},
-                    "volumes": [
-                        str(source / "local.hcl") + ":/openbao/config/macro-local.hcl:ro,z",
-                        str(source / "start.sh") + ":/openbao/config/start.sh:ro,z",
-                        "vault:/openbao/file",
-                    ],
-                    "ports": ["127.0.0.1::8200"],
-                    "network_mode": "bridge",
-                    "healthcheck": {"test": ["CMD", "bao", "status"], "interval": "1s", "timeout": "3s", "retries": 60},
-                }},
-                "volumes": {"vault": {}},
-            }))
-            command = ["docker", "compose", "-p", project, "-f", str(compose)]
-
-            def run(*arguments):
-                try:
-                    return subprocess.check_output(command + list(arguments), stderr=subprocess.PIPE)
-                except subprocess.CalledProcessError as error:
-                    logs = subprocess.run(command + ["logs", "--tail", "20"], capture_output=True)
-                    output = (logs.stdout + logs.stderr).decode()
-                    raise RuntimeError(error.stderr.decode() + output) from None
-
+            run = disposable_openbao(source, Path(directory))
             try:
                 run("up", "-d", "--wait", "--wait-timeout", "90")
                 credentials = run("exec", "-T", "openbao", "cat", "/openbao/file/bootstrap.json")
