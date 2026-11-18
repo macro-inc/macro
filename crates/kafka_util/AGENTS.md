@@ -28,5 +28,12 @@ environments, with trace propagation and typed grouped/ungrouped consumers.
 
 - Statistics callbacks run while polling, not independently of consumption.
   Health reporters must detect stale samples rather than repeating old zero lag.
+- A grouped consumer reads all its partitions from one local queue, and
+  librdkafka's queue limits apply to that queue as a whole. With the defaults a
+  backlogged partition puts up to 100,000 records ahead of every other
+  partition's; `GroupName::PREFETCH` bounds it per group. A bounded queue also
+  caps how fast quick records drain, about one fetch per partition per
+  `BOUNDED_FETCH_QUEUE_BACKOFF_MS`, and a record batch larger than the fetch
+  size is still fetched whole.
 - Consumer-group lag cannot describe an ungrouped consumer; use application
   positions and explicitly handle unknown offsets and prefetched records.
