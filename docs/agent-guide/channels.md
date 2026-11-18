@@ -419,7 +419,10 @@ show whatever has arrived so far.
 
 ## Inline image actions
 
-An image attached to a channel message renders inline. Hovering it, or focusing
+An image attached to a channel message renders inline. So does a document
+attachment whose file is an image (PNG, JPG, GIF, WebP, SVG), the way agents
+post the images they make; its file chip stays below it for opening, renaming
+and sharing the document. Hovering an inline image, or focusing
 it with the keyboard, reveals a small toolbar at its top right with
 `Copy image` and `Download image`, the same two actions the lightbox offers;
 it fades out when the pointer leaves and stays up while an action runs. Copy writes the full-resolution image to the
