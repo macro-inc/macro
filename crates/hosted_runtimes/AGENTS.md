@@ -18,7 +18,7 @@ read it before changing behaviour.
 
 ## Start here
 
-- `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants.
+- `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants; `lifecycle/billing.rs` holds the billing and charging transitions.
 - `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, list, power, retry, cancel, release).
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
 - `src/domain/image.rs`: versioned images and the root/data disk split.
