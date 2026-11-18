@@ -143,7 +143,8 @@ export interface MutationQueueTelemetry {
 /**
  * `released`: the claim no longer holds the head. `moved`: the engine
  * refused, because the claim was settled, claimed again or released by
- * another page. `failed`: the claim still holds the head.
+ * another page. `failed`: the claim still holds the head, or the queue could
+ * not be read again to tell.
  */
 export type LeaseReleaseOutcome = 'released' | 'moved' | 'failed';
 

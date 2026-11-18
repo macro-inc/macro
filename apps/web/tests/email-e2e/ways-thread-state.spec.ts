@@ -195,7 +195,7 @@ test.describe('a reload just after a thread was opened, in an Outlook inbox', ()
   // opened, and its claim on the mutation queue outlived the page: Mark done
   // takes the row out of Macro's list, but waits behind that claim, so the
   // provider keeps the thread in the inbox. Without the release of a departed
-  // page's claim it still passes in about a quarter of runs, where the new
+  // page's claim it still passes in about a third of runs, where the new
   // page finds the head free at once: the page that reloaded put its claim
   // back before it went.
   test('Mark done after a reload reaches the provider', async ({

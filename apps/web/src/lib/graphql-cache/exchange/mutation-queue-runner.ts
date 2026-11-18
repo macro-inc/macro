@@ -37,7 +37,8 @@
  * releases the claim the holder has on it then with the holder's own owner and
  * generation, so the head runs again without waiting out `QUEUE_LEASE_MS`. The
  * engine refuses the release once the claim has moved on. Inspections read the
- * whole queue, so the pump looks at most once per poll.
+ * whole queue, so the pump looks at most once per poll, plus twice for each
+ * owner it saw leave: after the grace, and after a refused release.
  */
 
 import { anyAbortSignal } from '@core/util/abort-signal';
