@@ -165,3 +165,18 @@ fn a_newly_bound_agent_rewinds_the_next_stream_to_its_binding() {
     // Once open, later streams resume after the last event again.
     assert_eq!(position.resume_cursor(), handled.event_id.to_string());
 }
+
+/// This machine's clock may run ahead of the service's. The agents bound
+/// when the daemon starts were bound before it, so nothing the stream
+/// delivers for them is "from before their binding", whatever the clocks.
+#[test]
+fn an_agent_bound_at_start_keeps_events_minted_just_after_a_skewed_start() {
+    let service_now = SystemTime::now();
+    // This machine reads five seconds ahead of the service.
+    let started = service_now + Duration::from_secs(5);
+    let mut position = StreamPosition::new(started);
+    position.agents_read(&[BotId::TEST_A.to_string()], service_now);
+
+    let mention = request(BotId::TEST_A, service_now + Duration::from_secs(1));
+    assert!(position.admits(&mention));
+}

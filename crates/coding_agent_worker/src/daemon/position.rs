@@ -27,7 +27,11 @@ pub(super) struct StreamPosition {
     seen_order: VecDeque<String>,
     /// When each bound agent was bound here, as near as this daemon can
     /// tell: when the last read of its agents that did not list it began.
-    bound_since: HashMap<String, SystemTime>,
+    /// `None` for an agent already bound when the daemon started: nothing
+    /// the stream delivers for it predates its binding.
+    bound_since: HashMap<String, Option<SystemTime>>,
+    /// Whether the bound agents have been read yet.
+    read_once: bool,
     /// When the last read of the bound agents began.
     last_read: SystemTime,
     /// How far back the next stream must start for the agents newly bound
@@ -45,6 +49,7 @@ impl StreamPosition {
             seen: HashSet::new(),
             seen_order: VecDeque::new(),
             bound_since: HashMap::new(),
+            read_once: false,
             last_read: started,
             rewind_to: None,
         }
@@ -54,9 +59,20 @@ impl StreamPosition {
     /// listed for the first time was bound after the previous read began.
     pub(super) fn agents_read(&mut self, bots: &[String], read_at: SystemTime) {
         self.bound_since.retain(|bot, _| bots.contains(bot));
+        if !self.read_once {
+            // Bound before this daemon started. The start time is this
+            // machine's clock, so it cannot date their events: one running
+            // ahead of the service would skip a live mention.
+            self.read_once = true;
+            for bot in bots {
+                self.bound_since.insert(bot.clone(), None);
+            }
+            self.last_read = read_at;
+            return;
+        }
         for bot in bots {
             if !self.bound_since.contains_key(bot) {
-                self.bound_since.insert(bot.clone(), self.last_read);
+                self.bound_since.insert(bot.clone(), Some(self.last_read));
                 self.rewind_to = Some(
                     self.rewind_to
                         .map_or(self.last_read, |rewind| rewind.min(self.last_read)),
@@ -114,10 +130,11 @@ impl StreamPosition {
         let bound_since = event
             .event
             .bot_id()
-            .and_then(|bot| self.bound_since.get(&bot.to_string()));
+            .and_then(|bot| self.bound_since.get(&bot.to_string()).copied())
+            .flatten();
         let minted = minted_at(&event.event_id.to_string());
         if let (Some(since), Some(minted)) = (bound_since, minted)
-            && minted < *since
+            && minted < since
         {
             tracing::debug!(
                 event_id = %event.event_id,
