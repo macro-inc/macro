@@ -50,7 +50,10 @@ fn readable_mode(mode: u32) -> u32 {
 /// once `start.sh` has initialized and unsealed it.
 pub fn wait_ready(stage: &Stage, instance: &Instance, env: &env_layer::ResolvedEnv) -> Result<()> {
     let mut up = compose_cmd(instance, env);
-    up.args(["up", "-d", "--wait", "openbao"]);
+    // Bounded: a crash-looping container with a restart policy is not always
+    // reported unhealthy, and the healthcheck's start period exceeds the 60
+    // seconds `start.sh` gives initialization.
+    up.args(["up", "-d", "--wait", "--wait-timeout", "180", "openbao"]);
     stage.run("Starting OpenBao", &mut up).with_context(|| {
         format!(
             "local OpenBao did not initialize, so Passwords has no vault; \
