@@ -154,6 +154,20 @@ impl IntoResponse for CodeExecutionApiError {
             error @ CodeModeError::ConnectedAppUnreachable => {
                 (StatusCode::BAD_GATEWAY, error.to_string()).into_response()
             }
+            CodeModeError::ConnectedAppRateLimited { retry_after } => {
+                let message = CodeModeError::ConnectedAppRateLimited { retry_after }.to_string();
+                let seconds = retry_after
+                    .map_or(1, |wait| {
+                        wait.as_secs() + u64::from(wait.subsec_nanos() > 0)
+                    })
+                    .max(1);
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    [(axum::http::header::RETRY_AFTER, seconds.to_string())],
+                    message,
+                )
+                    .into_response()
+            }
             error => {
                 tracing::error!(error = ?error, "code execution read failed");
                 (

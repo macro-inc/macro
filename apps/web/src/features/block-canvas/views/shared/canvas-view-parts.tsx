@@ -55,6 +55,7 @@ import { ConnectorTargets } from '../connector-targets';
 import { CanvasDocumentView, CanvasMediaView } from '../embedded-items';
 import { CanvasTextContent } from '../text-content';
 import { TextEditingView } from '../text-editing-view';
+import { createCanvasFraming } from './canvas-framing';
 
 export type CanvasViewProps = {
   state: CanvasState;
@@ -76,10 +77,7 @@ function createCanvasView(props: CanvasViewProps) {
   const editor = state.editor;
   let host: HTMLDivElement | undefined;
 
-  const viewportSize = () => ({
-    width: host?.clientWidth ?? 0,
-    height: host?.clientHeight ?? 0,
-  });
+  const framing = createCanvasFraming(editor, () => host);
   /** The scene position under a point on the screen. */
   const worldPoint = (clientX: number, clientY: number) => {
     const rect = host?.getBoundingClientRect();
@@ -92,14 +90,9 @@ function createCanvasView(props: CanvasViewProps) {
     host
       ?.querySelector<HTMLElement>('[aria-label="Graphics canvas"]')
       ?.focus({ preventScroll: true });
-  const fit = () => editor.fitScene(viewportSize());
-  const fitSelection = () => editor.fitSelection(viewportSize());
+  const { fit, fitSelection } = framing;
   const zoom = (factor: number) => {
-    const { width, height } = viewportSize();
-    editor.zoomAt(
-      { x: width / 2, y: height / 2 },
-      editor.getCamera().scale * factor
-    );
+    editor.zoomAt(framing.centre(), editor.getCamera().scale * factor);
   };
 
   const selectedItem = () =>
@@ -184,12 +177,15 @@ function createCanvasView(props: CanvasViewProps) {
     editor,
     setHost(element: HTMLDivElement) {
       host = element;
+      framing.watchPresses(element);
     },
     host: () => host,
     worldPoint,
     focus,
     fit,
     fitSelection,
+    frameWithin: framing.frameWithin,
+    keepInFrame: framing.keepInFrame,
     zoom,
     selectedItem,
     selectedImage,
@@ -225,7 +221,7 @@ function createCanvasView(props: CanvasViewProps) {
     },
     finishText() {
       state.text.finish();
-      state.chooseTool('select');
+      state.toolDone();
       focus();
     },
     /**
@@ -235,8 +231,14 @@ function createCanvasView(props: CanvasViewProps) {
     selectAt(clientX: number, clientY: number, reach = 3) {
       if (state.embeds.active() || state.text.draft()) return;
       focus();
-      const id = editor.hitTest(worldPoint(clientX, clientY), false, reach);
-      if (id && !state.session().selectedIds.includes(id)) {
+      const world = worldPoint(clientX, clientY);
+      const selected = state.session().selectedIds;
+      // An item selected on its own inside a group is the subject already:
+      // picking its group again would act on more than was chosen.
+      const inside = editor.hitTest(world, true, reach);
+      if (inside && selected.includes(inside)) return;
+      const id = editor.hitTest(world, false, reach);
+      if (id && !selected.includes(id)) {
         state.chooseTool('select');
         editor.select(id);
       }
@@ -393,7 +395,7 @@ function Surface(props: {
             active: state.isConnectorTool,
             appearance: state.defaults,
             style: state.connector.defaults,
-            onCommit: () => state.chooseTool('select'),
+            onCommit: state.toolDone,
           });
           return () => {
             detachEraser();
@@ -526,6 +528,7 @@ function Surface(props: {
               editor={editor}
               camera={state.camera}
               onFinish={view.finishText}
+              ref={view.keepInFrame}
             />
           )}
         </Show>

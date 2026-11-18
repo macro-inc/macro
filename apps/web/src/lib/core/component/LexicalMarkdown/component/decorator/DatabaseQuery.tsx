@@ -1,4 +1,5 @@
 import { QuestionCardSkeleton } from '@app/features/database-query/components/answer-skeleton';
+import { lazy } from '@core/util/lazy';
 import {
   $createDatabaseQueryNode,
   $isDatabaseQueryNode,
@@ -17,7 +18,6 @@ import {
 } from 'lexical';
 import {
   createSignal,
-  lazy,
   onCleanup,
   Show,
   Suspense,

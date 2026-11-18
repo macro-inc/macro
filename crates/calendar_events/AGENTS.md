@@ -390,7 +390,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   Retirements carry it per event (`RetiredCalendarEvent::team_ooo_changed`): only
   removing a source whose typed `event_type` is out of office raises it, since
   every sync of a removed meeting's attendees reaches their teammates' calendars
-  and the hint blanks their overlay.
+  and the hint blanks their overlay. An Outlook event's changes reach viewers
+  through its `calendar_projection_outbox` row, whatever wrote them: the row's
+  trigger raises the hint only when the event's typed `event_type` was or is
+  out of office, a revision still waiting keeps the hint of every change it
+  carries, and `CalendarProjectionRelay` sends it. Outlook discovery refreshes
+  viewers only when a calendar was added, removed or changed, and raises the
+  hint for the calendar changes Google's calendar list raises it for
+  (`upsert_calendar_tx`).
 - The Outlook sync (`src/domain/outlook.rs`) refreshes a page's events one
   at a time, first pending id first, and retries that id after any error, so
   one error blocks the calendar. An event the adapter cannot normalize is not
@@ -479,6 +486,22 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `calendar_outlook_work_account_generation`. An `ON CONFLICT DO UPDATE ... WHERE`
   locks every conflicting row even when the `WHERE` is false: pre-filter rows
   it would not change, or concurrent claims serialize on those locks.
+  calendar-service runs eight claim loops (`OUTLOOK_SYNC_LOOPS`), so the
+  maintenance runs at eight loops' claim rate. A claim skips an account
+  that holds a live lease, so each mailbox has at most one item in flight
+  and uses at most one of its three Graph slots, as Google's one job per
+  account does. Two claims racing for an account both pick its first due row,
+  which `SKIP LOCKED` and the re-checked lease give to one of them.
+- A Graph call Macro's own request admission refuses (the per-mailbox gate,
+  shared with mail sync) reaches the calendar as
+  `CalendarProviderErrorKind::Deferred` with the gate's delay. The Outlook sync
+  then releases the lease to retry after that delay
+  (`defer_outlook_calendar`, 5 s when none is named, at most 15 min), and
+  records no failure, attempt or badge, since nothing reached Microsoft. A
+  throttle from Microsoft itself is still a transient failure. Every minute
+  the sync logs `Outlook calendar sync queue depth` with `due_items` and
+  `oldest_due_seconds`, which are the claimable rows waiting and the longest
+  wait.
 
 ## Related
 

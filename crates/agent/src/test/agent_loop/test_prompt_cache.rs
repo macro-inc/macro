@@ -439,17 +439,16 @@ async fn a_replayed_turn_repeats_its_live_requests() {
     assert_eq!(earlier[1]["content"][0]["id"], json!("toolu_load"));
 }
 
-/// The turn's own part of the system prompt follows everything the loop
-/// adds, so it changes nothing before it.
+/// Text recorded for a turn is measured, not sent in the system prompt.
 #[tokio::test]
-async fn the_turn_part_comes_after_the_model_line() {
+async fn recorded_turn_text_stays_out_of_the_prompt() {
     let transport = ScriptedProvider::new([text_response("hi")]);
     let (bodies, _) = run_session(
         &transport,
         "anthropic/claude-opus-4-8",
         {
             let mut prompt = split_prompt("task A");
-            prompt.push_turn(PromptSection::SdkDocs, "\n<macro_sdk>docs</macro_sdk>");
+            prompt.record(PromptSection::SdkDocs, "\n<macro_sdk>docs</macro_sdk>");
             prompt
         },
         "hi",
@@ -459,7 +458,7 @@ async fn the_turn_part_comes_after_the_model_line() {
     assert_eq!(
         bodies[0]["system"][1]["text"],
         json!(format!(
-            "\n<session_instructions>\ntask A\n</session_instructions>{MODEL_LINE}\n<macro_sdk>docs</macro_sdk>"
+            "\n<session_instructions>\ntask A\n</session_instructions>{MODEL_LINE}"
         ))
     );
 }

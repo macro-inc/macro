@@ -272,7 +272,11 @@ fn provider_action(
             return Ok(Some(MessageAction::SetTags(tags)));
         }
         MailboxAction::Archived(true) if current.state.in_inbox => FolderRole::Archive,
-        MailboxAction::Archived(false) if !current.state.in_inbox => FolderRole::Inbox,
+        // Restoring a conversation never moves its drafts out of Drafts: the
+        // move changes the draft's version under a pending send.
+        MailboxAction::Archived(false) if !current.state.in_inbox && !current.state.is_draft => {
+            FolderRole::Inbox
+        }
         MailboxAction::Trashed(true) if !current.state.in_trash => FolderRole::Trash,
         MailboxAction::Trashed(false) if current.state.in_trash => {
             if current.state.is_draft {

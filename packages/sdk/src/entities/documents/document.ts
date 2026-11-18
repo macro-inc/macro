@@ -372,8 +372,8 @@ export class Document
       );
       const next = page.data?.next_offset;
       return {
-        items: (page.data?.documents ?? []).map(
-          (d) => new Document(client, d.documentId),
+        items: (page.data?.documents ?? []).map((d) =>
+          new Document(client, d.documentId).withListed(d),
         ),
         nextCursor: next != null ? String(next) : null,
       };
@@ -489,7 +489,10 @@ export class Document
 
   /**
    * Current Markdown for native documents, extracted text for PDF/Word,
-   * or raw file content for other formats. Native reads include live edits.
+   * or raw file content for other formats. Native reads include live edits
+   * and are the same lossless Markdown as `contentWithRevision()`: chips,
+   * tables and other rich content are `<m-*>` tags. To write the text back,
+   * read it with `contentWithRevision()` so the revision matches it.
    *
    * @readonly
    */
@@ -1203,7 +1206,8 @@ export class Document
    * @readonly
    */
   webUrl(): string {
-    const fileType = this.detail.peek()?.fileType;
+    const fileType =
+      this.detail.peek()?.fileType ?? this.detail.listedField('fileType');
     const route = fileType && NATIVE_FILE_TYPES.has(fileType) ? fileType : 'md';
     return `${this.client.webAppUrl}/app/${route}/${this.id}`;
   }
@@ -1230,8 +1234,10 @@ export class Document
     return {
       tag: wrapXml('m-document-mention', {
         documentId: this.id,
-        documentName: loaded?.documentName ?? '',
-        blockName: loaded?.fileType ?? 'md',
+        documentName:
+          loaded?.documentName ?? this.detail.listedField('documentName') ?? '',
+        blockName:
+          loaded?.fileType ?? this.detail.listedField('fileType') ?? 'md',
       }),
       mention: { entity_type: 'document', entity_id: this.id },
     };

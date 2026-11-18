@@ -28,7 +28,7 @@ import {
   threadOf,
 } from './harness/sharing';
 import type { Provider } from './harness/stack';
-import { PHONE } from './harness/ways-list1';
+import { openTouchTab, PHONE } from './harness/ways-list1';
 import { longPress, rowMenu } from './harness/ways-organise';
 import { shareDialog } from './harness/ways-organise-more';
 import { confirmed, did, saw } from './ledger/record';
@@ -188,7 +188,7 @@ test.describe('asking for access to a thread on a phone', () => {
     expect(await page.evaluate(() => window.innerWidth)).toBe(
       PHONE.viewport.width
     );
-    await page.getByRole('button', { name: 'Shared', exact: true }).tap();
+    await openTouchTab(page, 'Shared');
     await expect.poll(() => rowIds(page)).toEqual([budget.id]);
     await scanned;
     await takeBackAccess(mailbox, budget.id);

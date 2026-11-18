@@ -40,6 +40,7 @@ import {
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazy } from '@core/util/lazy';
 import ChatIcon from '@icon/system/regular/chat.svg';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -64,7 +65,6 @@ import {
   createMemo,
   createSignal,
   type JSX,
-  lazy,
   onCleanup,
   onMount,
   Show,

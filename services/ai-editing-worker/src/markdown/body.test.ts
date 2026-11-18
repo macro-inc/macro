@@ -215,3 +215,100 @@ describe('runMarkdownRequest', () => {
     expect(synced.commits).toBe(0);
   });
 });
+
+/**
+ * Internal markdown with the rich nodes an agent reads: mentions in a
+ * paragraph, a table with a mention in a cell, a date, equations, a link, an
+ * uploaded image, a checklist and code.
+ */
+const RICH_BODY = [
+  '# Launch',
+  'Owner: <m-user-mention>{"userId":"macro|bob@example.com","email":"bob@example.com"}</m-user-mention>, spec <m-document-mention>{"documentId":"01a19313-9b37-7e60-b932-bf486394ba48","blockName":"md","documentName":"Spec","blockParams":{}}</m-document-mention>, due <m-date-mention>{"date":"2026-11-13","displayFormat":"Fri, Nov 13"}</m-date-mention>.',
+  '<m-table><m-table-row><m-table-cell header="row">Who</m-table-cell><m-table-cell header="row">What</m-table-cell></m-table-row><m-table-row><m-table-cell><m-user-mention>{"userId":"macro|ann@example.com","email":"ann@example.com"}</m-user-mention></m-table-cell><m-table-cell>Docs</m-table-cell></m-table-row></m-table>',
+  'Growth is $e^{x}$, see <m-link>{"url":"https://example.com","text":"the site"}</m-link>.',
+  '$$\nx^2\n$$',
+  '<m-image>{"url":"https://signed.example.com/x","alt":"shot","srcType":"dss","id":"img-1"}</m-image>',
+  '- [ ] Write the post\n- [x] Pick a date',
+  '```ts\nconst done = true;\n```',
+].join('\n\n');
+
+function nodesOfType(doc: LoroDoc, type: string): Node[] {
+  return walk({ children: blocks(doc) }).filter((node) => node.type === type);
+}
+
+describe('agent read and write back', () => {
+  it('writes back the unchanged body without a commit, keeping every rich node', async () => {
+    const synced = new SyncedDocument(
+      (await markdownToLoroSnapshot(RICH_BODY))!
+    );
+    const before = synced.doc.export({ mode: 'snapshot' });
+
+    const read = await runMarkdownRequest(
+      DOC,
+      { action: 'read' },
+      synced,
+      signal()
+    );
+    if (read.action !== 'read') throw new Error('expected a read');
+    expect(read.markdown).toContain('<m-user-mention>');
+    expect(read.markdown).toContain('<m-table>');
+
+    const written = await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: read.revision,
+        markdown: read.markdown,
+      },
+      synced,
+      signal()
+    );
+
+    expect(written).toEqual({
+      action: 'write',
+      revision: read.revision,
+      changed: false,
+    });
+    expect(synced.commits).toBe(0);
+    expect(synced.doc.export({ mode: 'snapshot' })).toEqual(before);
+  });
+
+  it('keeps mentions as mention nodes when a line beside them is edited', async () => {
+    const synced = new SyncedDocument(
+      (await markdownToLoroSnapshot(RICH_BODY))!
+    );
+    const read = await runMarkdownRequest(
+      DOC,
+      { action: 'read' },
+      synced,
+      signal()
+    );
+    if (read.action !== 'read') throw new Error('expected a read');
+    const mentionsBefore = nodesOfType(synced.doc, 'user-mention').length;
+
+    await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: read.revision,
+        markdown: read.markdown.replace('# Launch', '# Launch plan'),
+      },
+      synced,
+      signal()
+    );
+
+    expect(synced.commits).toBe(1);
+    expect(mentionsBefore).toBe(2);
+    expect(nodesOfType(synced.doc, 'user-mention')).toHaveLength(2);
+    const reread = await runMarkdownRequest(
+      DOC,
+      { action: 'read' },
+      synced,
+      signal()
+    );
+    if (reread.action !== 'read') throw new Error('expected a read');
+    expect(reread.markdown).toBe(
+      read.markdown.replace('# Launch', '# Launch plan')
+    );
+  });
+});

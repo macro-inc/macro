@@ -26,7 +26,10 @@ Type design, idioms, errors and observability, performance, and tests.
 - **CS-19** Give third-party errors their own variant — don't collapse e.g. a
   `jsonwebtoken` failure into a generic internal error. A provider outage
   (5xx, 429, unreachable, undecodable) is an `upstream_error::UpstreamError`,
-  answered 502/503 — see `crates/upstream_error`.
+  answered 502/503 — see `crates/upstream_error`. Exception: a 429 the
+  caller must pace on (a connected app's MCP endpoint refusing a burst) stays
+  a typed rate limit, is retried after its `Retry-After`, and is answered 429
+  with `Retry-After` once retries run out.
 - **CS-20** Depending on a rate-limited external provider requires a fallback
   (fallback model, retry story, or documented degradation).
 - **CS-21** Wire usage metering on every invocation path — MCP-triggered tool
