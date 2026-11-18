@@ -8,6 +8,7 @@ import {
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
@@ -32,9 +33,10 @@ const cardStateSchema = z.object({
 type CardState = z.infer<typeof cardStateSchema>;
 
 /**
- * The Calendar sidebar's prompt to connect another Google account. Adding
+ * The Calendar sidebar's prompt to connect another calendar account. Adding
  * accounts follows the multi-inbox flag, like "Connect another account" in
- * the calendar settings menu.
+ * the calendar settings menu. Its logos are the providers the button's
+ * chooser offers: Outlook only while the server offers it to this user.
  */
 export function ConnectCalendarsPromotion(props: { class?: string }) {
   const accounts = useLoadedCalendarAccounts();
@@ -66,6 +68,10 @@ export function ConnectCalendarsPromotion(props: { class?: string }) {
     },
     cardStateSchema
   );
+  const applies = () => state() !== undefined && !state()?.satisfied;
+  const outlookOffered = useOutlookAvailable(applies);
+  const logos = () =>
+    outlookOffered() ? [...COPY.logos, COPY.outlookLogo] : COPY.logos;
   const action = () => {
     const fix = state()?.fix;
     if (!fix)
@@ -97,7 +103,7 @@ export function ConnectCalendarsPromotion(props: { class?: string }) {
     <SidebarPromotion
       id={COPY.id}
       applies={allOf(state() === undefined ? undefined : !state()?.satisfied)}
-      logos={COPY.logos}
+      logos={logos()}
       headline={COPY.headline}
       pitch={COPY.pitch}
       class={props.class}

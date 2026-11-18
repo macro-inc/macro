@@ -88,6 +88,12 @@ arrived. The banner never suggests turning the calendar off, which deletes
 Macro's copy and starts the import again.
 The banner stays visible as partial results arrive and disappears when sync finishes.
 A routine sync of an already imported account never shows it.
+With the GraphQL calendar cache, months already in the cache fetch nothing, so
+the client reads the status itself: when the cache starts, whenever it catches
+up with the server (reconnect, coming online, becoming visible, a cache reset),
+and every minute while the server says syncing. Verify a reload during an
+import: load the calendar while the server reports syncing, let the background
+backfill settle, reload the same tab, and confirm the banner is back.
 Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
@@ -639,8 +645,9 @@ beside the calendar on desktop, as the full-screen composer on touch devices, in
 composer even when another one is open. Deleting an event asks first, and says guests will be
 notified only when someone besides you is on it.
 Guest pickers in event creation/editing, invitations/forwarding and AI drafts use
-paged personal suggestions. Type to find contacts outside the first window; Next
-options or PageDown replaces the page. Selected guests, their supplied/chosen
+paged personal suggestions. Type to find contacts outside the first page; scrolling
+to the end of the list, or PageDown on desktop, lists the next page below the
+earlier ones, and a failed page offers Retry options. Selected guests, their supplied/chosen
 names and custom addresses survive searches and paging. Known event guests are
 scoped extras, not personal-directory membership. Add-only editors exclude current
 and newly added guests case-insensitively without changing their stored address

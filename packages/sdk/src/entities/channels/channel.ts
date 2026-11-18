@@ -1,5 +1,6 @@
 import type {
   ActivityType,
+  ApiChannelWithLatest,
   ChannelType,
   GetChannelAttachmentsResponses,
   GetChannelParticipantsResponses,
@@ -23,6 +24,7 @@ import {
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
+import { onlyType } from '../search/exclusions';
 import { entitySearch } from '../search/options';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
@@ -34,6 +36,17 @@ import { postToChannel } from './post';
 import type { Thread } from './thread';
 
 type ChannelDetail = GetChannelResponses[200];
+
+const channelTypes: readonly string[] = [
+  'public',
+  'private',
+  'direct_message',
+  'team',
+] satisfies ChannelType[];
+
+function isChannelType(value: string): value is ChannelType {
+  return channelTypes.includes(value);
+}
 
 /** A member of a channel, with their role and join time. */
 export type ChannelParticipant = GetChannelParticipantsResponses[200][number];
@@ -172,6 +185,23 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /** A handle to a channel by id. Details load on first access. */
   static byId(client: MacroClient, id: string): Channel {
     return new Channel(client, id);
+  }
+
+  /**
+   * A handle seeded from a `GET /comms/channels` record. The listed name is
+   * the stored one, which the detail shows as is except on direct messages and
+   * unnamed private channels; those are named after the members, so they load.
+   */
+  static fromListing(
+    client: MacroClient,
+    record: ApiChannelWithLatest,
+  ): Channel {
+    const named =
+      record.channel_type !== 'direct_message' && !!record.name?.trim();
+    return new Channel(client, record.id).withListed({
+      channel_type: record.channel_type,
+      ...(named ? { channel_name: record.name ?? undefined } : {}),
+    });
   }
 
   /** Open (creating if needed) the DM channel with a user. */
@@ -565,6 +595,12 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /** Search channels by content, most relevant first, auto-paginated. */
   static search = entitySearch({
     type: 'channel',
-    make: (client, hit) => new Channel(client, hit.channel_id),
+    filters: onlyType('channel'),
+    make: (client, hit) =>
+      new Channel(client, hit.channel_id).withListed(
+        isChannelType(hit.channel_type)
+          ? { channel_type: hit.channel_type }
+          : {},
+      ),
   });
 }

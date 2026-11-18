@@ -1,4 +1,4 @@
-import { lazy } from 'solid-js';
+import { lazy } from '@core/util/lazy';
 
 /**
  * Lazy boundary for the dashboard view.

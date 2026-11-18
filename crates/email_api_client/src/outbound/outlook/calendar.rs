@@ -11,7 +11,7 @@ mod zones;
 
 use super::OutlookApiClientRepository;
 use crate::domain::{
-    models::{AccessToken, EmailApiError, MailboxAccess, StreamToken},
+    models::{AccessToken, EmailApiError, MailboxAccess, RateLimitOrigin, StreamToken},
     ports::ScopedMailboxRepository,
 };
 use calendar_events::domain::{ics::EventSnapshot, models::*, outlook::*, ports::*};
@@ -106,6 +106,18 @@ fn unsupported(message: &str) -> CalendarProviderError {
     CalendarProviderError::new(CalendarProviderErrorKind::Permanent, message)
 }
 fn error(error: EmailApiError) -> CalendarProviderError {
+    // Macro's own admission sent nothing, so a sync retries it shortly
+    // instead of counting a failure.
+    if let EmailApiError::RateLimited {
+        retry_after,
+        origin: RateLimitOrigin::Gate(_) | RateLimitOrigin::Local,
+    } = &error
+    {
+        return CalendarProviderError::deferred(
+            *retry_after,
+            "Microsoft request admission deferred the call",
+        );
+    }
     let kind = match &error {
         EmailApiError::AuthRequired => CalendarProviderErrorKind::ReauthRequired,
         EmailApiError::OutdatedCursor => CalendarProviderErrorKind::SyncTokenExpired,
