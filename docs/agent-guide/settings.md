@@ -289,11 +289,16 @@ pick for retry.
 When the agent itself first reports online (not when its computer connects),
 its inviter (the team agent's `created_by`) gets the `computer_setup` notification with the agent's
 `agent { userId, name }`: "<name> is ready", in-app as a one-minute notice
-with **Message <name>** (the DM, through the same open-DM path as any member)
-and, for owners and admins (who own the computer's runtime), **Connect
+with **Message <name>** and, for owners and admins (who own the computer's runtime), **Connect
 Claude plan**. A failed first setup notifies "<name> couldn't be set up" with the
 reason and **Retry**. Clicking the notification opens the DM (ready) or
-**Team → Members** (failed). The agent flow has no **Chat with <agent>**; that stays in
+**Team → Members** (failed). **Message <name>**, the notification, and the end
+of adding an agent all open the agent's real DM, created if it doesn't exist
+yet (`openTeamAgentDirectMessage`, `POST /channels/get_or_create_dm`), because
+the agent says hi first; a person's DM would wait for the viewer's first
+message (see [Empty direct messages](channels.md#empty-direct-messages)). If it
+can't be opened, a "Couldn't open the conversation. Try again." toast says so.
+The agent flow has no **Chat with <agent>**; that stays in
 the computer purchase flow. With `enable-macro-computers` on, **Connect
 <name> to your Claude plan** is the Claude sign-in for the agent's computer,
 opened from the notification or the row, never as a step of the invite. One

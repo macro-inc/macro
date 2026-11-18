@@ -10,8 +10,7 @@ import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { openDirectMessage } from '@core/util/open-direct-message';
-import { cachedUserId } from '@queries/auth/cached-user-id';
+import { openTeamAgentDirectMessage } from '@core/util/open-team-agent-direct-message';
 import { fetchHarnesses } from '@queries/harnesses/harnesses';
 import {
   openBillingSettings,
@@ -34,7 +33,7 @@ export function openAgentDirectMessage(agentUserId: string) {
   const layout = globalSplitManager();
   if (!layout) return;
   fireAndForget(
-    openDirectMessage(cachedUserId(), agentUserId, (content) => {
+    openTeamAgentDirectMessage(agentUserId, (content) => {
       layout.openWithSplit(content, { activate: true, referredFrom: null });
     }),
     'notifications'
