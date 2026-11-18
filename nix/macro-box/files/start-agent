@@ -130,8 +130,12 @@ fi
 # code newer than the image (a new agent seeded by a newer harness, or a
 # land) fails at import on every boot. Its package.json says which muppet
 # API it needs (`muppetApi`), the image's muppet which it has (`apiLevel`);
-# neither said is 0. Too old an image exits 78 and says so: retried, and
-# counted toward a rollback only on a head that isn't last-good.
+# neither said is 0. Too old an image:
+# - on code newer than last-good (a land) exits 78: counted, so it rolls
+#   back to last-good;
+# - with no other code to go back to (a new agent, or last-good itself)
+#   exits 79, which the unit doesn't restart: retrying can't help until a
+#   new enrollment (a newer image) restarts it.
 api_level() { # api_level <field> <file>: the field as a whole number, 0 if absent
   [[ -f $2 ]] || { echo 0; return; }
   FIELD=$1 bun -e '
@@ -151,7 +155,8 @@ has=$(api_level apiLevel "$runtime/node_modules/@macro-inc/muppet/package.json")
 }
 if ((needs > has)); then
   echo "this agent needs a newer image: its code needs muppet API $needs, the image has $has" >&2
-  exit 78
+  [[ -n $good && $good != "$head" ]] && exit 78
+  exit 79
 fi
 
 cd "$workspace"

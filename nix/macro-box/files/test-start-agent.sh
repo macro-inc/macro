@@ -182,7 +182,7 @@ needs_muppet 2
 image_muppet 1
 : >"$root/bun.ran"
 MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
-check 'B10 code that needs a newer muppet exits 78' bash -c "[[ $code == 78 ]]"
+check 'B10 a new agent whose code needs a newer muppet exits 79, which is not restarted' bash -c "[[ $code == 79 ]]"
 check 'B10 and says the agent needs a newer image' grep -q 'needs a newer image: its code needs muppet API 2, the image has 1' "$root/case/stderr"
 check 'B10 and the runtime did not run' bash -c "[[ ! -s '$root/bun.ran' ]]"
 check 'B10 that boot is counted against the head that needs it' bash -c "[[ \$(cat '$root/case/state/boot-head') == \$(git -C '$root/case/workspace' rev-parse HEAD) ]]"
@@ -200,7 +200,7 @@ start
 needs_muppet 1
 image_muppet 3
 : >"$root/bun.ran"
-check 'B10 an older need on a newer image boots' start
+check 'B10 code that needs a lower level runs on a newer image: the API only grows' start
 
 fresh
 image_muppet 1
@@ -213,7 +213,7 @@ needs_muppet 1
 rm -rf "$root/case/runtime/node_modules/@macro-inc"
 : >"$root/bun.ran"
 MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
-check 'B10 an image whose muppet declares no level has level 0' bash -c "[[ $code == 78 ]] && grep -q 'the image has 0' '$root/case/stderr'"
+check 'B10 an image whose muppet declares no level has level 0' bash -c "[[ $code == 79 ]] && grep -q 'the image has 0' '$root/case/stderr'"
 
 fresh
 start
@@ -230,5 +230,46 @@ image_muppet 1
 MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
 check 'B10 a need too large to compare exits 78 and says so' bash -c "[[ $code == 78 ]] && grep -q 'muppetApi must be a whole number' '$root/case/stderr'"
 check 'B10 and the runtime did not run' bash -c "[[ ! -s '$root/bun.ran' ]]"
+
+# A land whose code needs a newer muppet, with last-good to go back to: 78,
+# counted, so it rolls back.
+fresh
+start
+echo "$(ws rev-parse HEAD)" >"$root/case/state/last-good"
+needs_muppet 2
+image_muppet 1
+: >"$root/bun.ran"
+MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
+check 'B10 a land that needs a newer muppet exits 78, so it rolls back' bash -c "[[ $code == 78 ]]"
+echo 0 >"$root/case/state/failures"
+stopped 78
+check 'B10 and that boot counts toward the rollback' bash -c "[[ \$(cat '$root/case/state/failures') == 1 ]]"
+
+# An image whose muppet package.json has no apiLevel, or a garbled one.
+fresh
+start
+needs_muppet 1
+mkdir -p "$root/case/runtime/node_modules/@macro-inc/muppet"
+echo '{"name":"@macro-inc/muppet"}' >"$root/case/runtime/node_modules/@macro-inc/muppet/package.json"
+MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
+check 'B10 a muppet package.json without apiLevel has level 0' bash -c "[[ $code == 79 ]] && grep -q 'the image has 0' '$root/case/stderr'"
+image_muppet '"one"'
+MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
+check "B10 a garbled image apiLevel exits 78 and says so" bash -c "[[ $code == 78 ]] && grep -q 'apiLevel must be a whole number' '$root/case/stderr'"
+
+# --- B11: what agent-stopped counts around a mismatch and a healthy boot ------
+fresh
+echo good >"$root/case/state/last-good"
+echo bad >"$root/case/state/boot-head"
+echo 0 >"$root/case/state/failures"
+stopped 79
+check 'B11 a boot that needs a newer image never counts' bash -c "[[ \$(cat '$root/case/state/failures') == 0 ]]"
+echo 2 >"$root/case/state/failures"
+echo good >"$root/case/state/boot-head"
+stopped 0
+check 'B11 a clean stop of last-good code starts the count again' bash -c "[[ \$(cat '$root/case/state/failures') == 0 ]]"
+echo 2 >"$root/case/state/failures"
+stopped 75
+check 'B11 so does a restart of last-good code after a land' bash -c "[[ \$(cat '$root/case/state/failures') == 0 ]]"
 
 exit "$failed"
