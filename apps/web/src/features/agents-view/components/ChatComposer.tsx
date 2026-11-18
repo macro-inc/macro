@@ -72,6 +72,8 @@ export function ChatComposer(props: {
   onAttachFiles?: (files: File[]) => void;
   onRemoveAttachment?: (attachment: InputAttachmentData) => void;
   drawer?: JSX.Element;
+  /** Home retains its settings drawer below the desktop composer. */
+  settingsPlacement?: 'inside' | 'below';
   drawerOpen?: boolean;
   placeholder?: string;
 }) {
@@ -516,7 +518,13 @@ export function ChatComposer(props: {
                         role="group"
                         aria-label="Composer settings"
                       >
-                        <Show when={!isTouchDevice() && props.drawer}>
+                        <Show
+                          when={
+                            !isTouchDevice() &&
+                            props.settingsPlacement !== 'below' &&
+                            props.drawer
+                          }
+                        >
                           <div
                             class="min-w-0 max-w-full"
                             role="group"
@@ -548,6 +556,11 @@ export function ChatComposer(props: {
                 </Input.DropZone>
                 <DictationPanel dictation={dictation} />
               </ComposerSurface>
+              <Show
+                when={!isTouchDevice() && props.settingsPlacement === 'below'}
+              >
+                {repositoryDrawer()}
+              </Show>
             </>
           }
         >

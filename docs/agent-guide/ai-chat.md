@@ -1123,9 +1123,9 @@ file or a guessed remote revision.
 
 ## Starting from Home
 
-Home mounts the same new-conversation composer as the Agents page.
-The greeting, agent/model selector, coding repository/branch controls, and send flow
-are shared. Its bottom row keeps only + on the left, with model, dictation,
+Home shares new-conversation behavior with the Agents page but preserves its
+original layout: track mode tabs and repository/branch controls stay below the
+desktop composer. The unified model selector stays inside the composer. Its bottom row keeps only + on the left, with model, dictation,
 and Send on the right. Sending stays on Home and opens the new session in Home's detail
 pane (`/home/agent/<id>`) with the first prompt shown as sent; its row joins the
 top of the Home list once the session is created.

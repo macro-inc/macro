@@ -97,6 +97,8 @@ export type StartConversation = {
 /** One agent choice determines the session kind, default model, and repository context. */
 export function NewChatPage(props: {
   compact?: boolean;
+  /** Keep Home's original settings drawer and mode tabs. */
+  homeLayout?: boolean;
   active?: boolean;
   workspaceId?: string;
   draft?: string;
@@ -585,9 +587,19 @@ export function NewChatPage(props: {
           { value: 'chat', label: agentsModeLabel('chat'), icon: ChatIcon },
           { value: 'code', label: agentsModeLabel('code'), icon: CodeIcon },
         ]}
-        variant="grouped"
-        touch="inset"
-        size="sm"
+        {...(props.homeLayout
+          ? {
+              variant: 'track' as const,
+              fullWidth: true,
+              class: ownMode.autoAvailable()
+                ? 'w-72 touch:w-36'
+                : 'w-56 touch:w-24',
+            }
+          : {
+              variant: 'grouped' as const,
+              touch: 'inset' as const,
+              size: 'sm' as const,
+            })}
         // Phones keep the icons; the name stays for assistive tech.
         iconOnly={isTouchDevice()}
         value={mode()}
@@ -623,6 +635,7 @@ export function NewChatPage(props: {
       autoFocus={props.autoFocus}
       collapseOnBlur={props.compact}
       phoneLayout={phoneComposer()}
+      settingsPlacement={props.homeLayout ? 'below' : 'inside'}
       controlsOpen={repositoryPickerOpen() || effortPickerOpen()}
       registerFocus={(focus) => {
         focusInput = focus;
@@ -639,15 +652,19 @@ export function NewChatPage(props: {
       }
       drawer={
         <div
-          class="flex min-w-0 flex-wrap items-center gap-2 not-touch:justify-end"
-          classList={{ 'w-full': isTouchDevice() }}
+          class="flex min-w-0 items-center gap-2"
+          classList={{
+            'w-full': isTouchDevice() || props.homeLayout,
+            'flex-wrap not-touch:justify-end': !props.homeLayout,
+          }}
         >
           {modeSwitch()}
           <Show when={coding()}>
             <div
               class="min-w-0"
               classList={{
-                'w-60 max-w-full': !phoneComposer(),
+                'w-60 max-w-full': !phoneComposer() && !props.homeLayout,
+                'flex-1 touch:[&>div]:justify-end': props.homeLayout,
                 'w-fit max-w-[calc(100%_-_96px)]': phoneComposer(),
               }}
             >

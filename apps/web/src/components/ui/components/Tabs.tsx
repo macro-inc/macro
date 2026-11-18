@@ -92,7 +92,7 @@ export type TabsProps<T extends string> = {
     }
   | {
       /**
-       * Retained legacy track treatment. Production value switches use grouped tabs.
+       * Legacy track treatment, retained for Home; other value switches use grouped tabs.
        */
       variant: 'track';
       size?: never;

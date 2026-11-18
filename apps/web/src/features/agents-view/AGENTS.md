@@ -39,8 +39,8 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Render desktop row ages as pointer-transparent hover/focus overlays using the row's hover or active surface; never let the age change title truncation or appear on phone rows.
 - Compose menus from shared Dropdown content, groups, items, labels, and indicators without row spacing overrides; separate model-menu groups with labels and spacing, never divider lines, and keep phone choices on MobileDrawer parts.
 - Keep All models as a desktop submenu and a pushed phone page; derive both catalogs from non-Suggested IDs, including search, and omit empty provider groups.
-- Use the shared grouped Tabs pill for Auto/Chat/Code on desktop and in the phone drawer; keep its Auto gate and host mode state unchanged.
-- Keep session model controls inside the composer; place only + on the left and model, dictation, then Send/Stop on the right, with desktop mode/repository controls in the right group and phone controls in their upper drawer.
+- Use shared grouped Tabs for Agents modes and preserve Home's original track tabs and below-composer settings drawer; keep the Auto gate and host mode state unchanged.
+- Keep session model controls inside the composer; place only + on the left and model, dictation, then Send/Stop on the right, with Agents desktop mode/repository controls in the right group, Home settings below, and phone controls in their upper drawer.
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - Keep catalog option identities stable across capability updates; isolate optional speed-marker discovery with Suspense so it cannot detach the editor.
 - Keep phone file inputs and overlay owners mounted on blur; add-menu, model, and repository sheets hold the composer expanded.
