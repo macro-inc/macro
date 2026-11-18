@@ -15,10 +15,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MarkdownDocumentProvider } from '../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
 import type { MarkdownDocumentSource } from '../types';
-import { MarkdownNameProvider } from './MarkdownNameProvider';
+import { MarkdownNameProvider, useMarkdownName } from './MarkdownNameProvider';
 import { TitleEditor } from './TitleEditor';
 
-type RenameResult = { success: boolean };
+type RenameResult = { success: boolean; queued?: boolean };
 
 const rename = vi.hoisted(() =>
   vi.fn(
@@ -108,6 +108,12 @@ function renderTitle(initialName: string) {
     equals: false,
   });
   const state = createMarkdownDocumentState();
+  // The document's name as its breadcrumb and tab show it.
+  let label = (): string | undefined => undefined;
+  const Label = () => {
+    label = useMarkdownName().displayName;
+    return null;
+  };
   const view = render(() => (
     <QueryClientProvider client={queryClient}>
       <MarkdownDocumentProvider
@@ -128,6 +134,7 @@ function renderTitle(initialName: string) {
       >
         <MarkdownNameProvider>
           <TitleEditor />
+          <Label />
         </MarkdownNameProvider>
       </MarkdownDocumentProvider>
     </QueryClientProvider>
@@ -150,6 +157,7 @@ function renderTitle(initialName: string) {
         { discrete: true }
       ),
     text: () => editor.getEditorState().read(() => $getRoot().getTextContent()),
+    label: () => label(),
   };
 }
 
@@ -239,6 +247,61 @@ it('saves the old name typed into a reopened title while the closed one renames 
       newName: 'Roadmap',
     },
   ]);
+});
+
+it('saves the old name typed into a reopened title after the closed one queued its rename', async () => {
+  vi.useFakeTimers();
+  // With the GraphQL cache, a rename returns once it is queued, before the
+  // server applies it and before the preview shows it.
+  rename.mockImplementation(() =>
+    Promise.resolve({ success: true, queued: true })
+  );
+  const closed = renderTitle('Roadmap');
+  await vi.advanceTimersByTimeAsync(0);
+  closed.type('Weekly');
+  closed.unmount();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(rename).toHaveBeenCalledTimes(1);
+
+  // Reopened while the preview still says Roadmap, the title is typed back to
+  // that name; without a second rename the queued one would leave Weekly.
+  const reopened = renderTitle('Roadmap');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reopened.text()).toBe('Roadmap');
+  reopened.type('Road');
+  reopened.type('Roadmap');
+  reopened.blur();
+  await vi.advanceTimersByTimeAsync(400);
+
+  expect(rename.mock.calls.map(([variables]) => variables)).toEqual([
+    {
+      entity: { type: 'document', id: 'document-1', name: 'Roadmap' },
+      newName: 'Weekly',
+    },
+    {
+      entity: { type: 'document', id: 'document-1', name: 'Weekly' },
+      newName: 'Roadmap',
+    },
+  ]);
+});
+
+it('saves the name of its last rename typed again after a rename made elsewhere', async () => {
+  vi.useFakeTimers();
+  const title = renderTitle('Roadmap');
+  title.type('Weekly');
+  await vi.advanceTimersByTimeAsync(400);
+  title.publish('Weekly');
+  await vi.advanceTimersByTimeAsync(0);
+  title.publish('Agenda');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(title.text()).toBe('Agenda');
+
+  title.type('Weekly');
+  await vi.advanceTimersByTimeAsync(400);
+  expect(rename).toHaveBeenLastCalledWith({
+    entity: { type: 'document', id: 'document-1', name: 'Agenda' },
+    newName: 'Weekly',
+  });
 });
 
 it('leaves the rename from a closed title alone when the reopened title only shows the old name', async () => {
@@ -525,4 +588,20 @@ it('keeps the title when its rename is refused without an error', async () => {
   renames[0]({ success: false });
   await vi.advanceTimersByTimeAsync(0);
   expect(title.text()).toBe('Roadmap 2027');
+});
+
+it('labels the document with a rename made elsewhere after its own rename failed', async () => {
+  vi.useFakeTimers();
+  rename.mockImplementation(() => Promise.resolve({ success: false }));
+  const title = renderTitle('Roadmap');
+  await vi.advanceTimersByTimeAsync(0);
+  title.type('Weekly');
+  await vi.advanceTimersByTimeAsync(400);
+  expect(rename).toHaveBeenCalledTimes(1);
+  expect(title.label()).toBe('Weekly');
+
+  title.publish('Agenda');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(title.text()).toBe('Agenda');
+  expect(title.label()).toBe('Agenda');
 });

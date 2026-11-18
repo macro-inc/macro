@@ -67,6 +67,9 @@ type TitleRenameVariables = {
   newName: string;
 };
 
+/** What a title rename mutation returns. */
+type TitleRenameResult = { success: boolean };
+
 /**
  * Use the plugin architecture to set up command handlers on both the
  * title editor and the main editor. Pressing enter or the arrows can
@@ -199,11 +202,15 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       })
       .flatMap((mutation) => {
         // The scope holds only renames made by the mutation above.
+        const { status } = mutation.state;
         const variables = mutation.state.variables as
           | TitleRenameVariables
           | undefined;
+        const data = mutation.state.data as TitleRenameResult | undefined;
         if (!variables) return [];
-        return [{ pending: mutation.state.status === 'pending', variables }];
+        const failed =
+          status === 'error' || (status === 'success' && !data?.success);
+        return [{ pending: status === 'pending', failed, variables }];
       });
   const documentKind = kind();
   const entityBlockName = documentKind === 'document' ? 'md' : documentKind;
@@ -218,12 +225,25 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   // saved name can lag behind the title, so it must not replace the title.
   let renamesInFlight = 0;
 
-  /** The name the document ends with once the renames already sent, from any
-   * editor of it, settle. */
-  const nameAfterSentRenames = () =>
-    titleRenames().findLast((rename) => rename.pending)?.variables.newName ??
-    untrack(persistedDocumentName) ??
-    '';
+  /**
+   * The rename the title's text needs, or none when the document is sure to
+   * end with that name. Renames already sent from any editor of the document
+   * count: the last one that has not failed is the last the server applies.
+   */
+  const renameTo = (newName: string): TitleRename | undefined => {
+    const last = titleRenames().findLast((rename) => !rename.failed);
+    if (last?.pending) {
+      const sentName = last.variables.newName;
+      return newName === sentName ? undefined : { newName, oldName: sentName };
+    }
+    const savedName = untrack(persistedDocumentName) ?? '';
+    if (newName !== savedName) return { newName, oldName: savedName };
+    // A rename that has returned can still be queued, with the saved name not
+    // showing it yet: the document is sure to keep the saved name only when
+    // that rename agrees with it.
+    const sentName = last?.variables.newName ?? savedName;
+    return newName === sentName ? undefined : { newName, oldName: sentName };
+  };
 
   /** Whether a title rename sent or replaced `name`. A saved name outside
    * them can only come from a rename made elsewhere; one inside them can be a
@@ -262,14 +282,10 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     fireAndForget(saveTitle(next), 'block-md-title');
   };
 
-  const scheduleRename = (newName: string, oldName: string) => {
-    if (newName === oldName) {
-      pendingRename = undefined;
-      debouncedFlushRename.clear();
-      return;
-    }
-    pendingRename = { newName, oldName };
-    debouncedFlushRename();
+  const scheduleRename = (next: TitleRename | undefined) => {
+    pendingRename = next;
+    if (next) debouncedFlushRename();
+    else debouncedFlushRename.clear();
   };
 
   const debouncedFlushRename = debounce(flushPendingRename, 400);
@@ -381,6 +397,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     if (name === undefined || name === untrack(state).trim()) return;
     if (hasUnsavedEdits()) return;
     shownName = name;
+    // The label follows the title: drop a typed name that was never saved.
+    setOptimisticName(undefined);
     forceSetTextContent(editor, name);
   }
 
@@ -393,10 +411,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     if (nextName !== untrack(mdDocumentName)) {
       setOptimisticName(nextName);
     }
-    const serverName = nameAfterSentRenames();
-    if (nextName === serverName || canEdit()) {
-      scheduleRename(nextName, serverName);
-    }
+    const next = renameTo(nextName);
+    if (!next || canEdit()) scheduleRename(next);
   };
 
   createEffect(() => {
