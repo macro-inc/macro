@@ -147,7 +147,7 @@ describe('MacroEvents', () => {
       expect(unhandled).toEqual([]);
     } finally {
       process.off('unhandledRejection', record);
-      server.stop(true);
+      await server.stop(true);
     }
   });
 
