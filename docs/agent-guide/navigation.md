@@ -1790,11 +1790,20 @@ after typing stops and pages 100 contacts at a time, so contacts beyond the firs
 usual recency lists without contacts. A contact whose email belongs to a Macro user
 appears as that person instead, even when only the CRM name matched: their existing
 direct message when you have one, otherwise the person, and selecting them opens a
-direct message. Matching direct messages and Macro users rank ahead of CRM contacts,
-even when the conversation is old or has no recorded activity. Relevance and recency
-still order results within each group; other result types keep their positions.
+direct message. Matching direct messages rank ahead of CRM contacts, even when the
+conversation is old, and Macro users lead CRM contacts listed next to them.
+Relevance and recency still order results within each group.
 Verify this in both People and All with a recent CRM contact and a matching DM last
 viewed more than 30 days ago, including when server contacts arrive after the DM.
+
+People you never messaged (not a teammate, no direct message), CRM contacts and
+email-only correspondents included, rank after your own projects, channels,
+documents, agents and commands and after the people you know among names
+matching at a word start, however exactly their name matches; rows that only
+contain the query come last. The People tab lists the people you know first.
+To verify on dev as gab@, type `rand`: the `random`-named channels, agents and
+files lead, and email-only accounts follow them; then type the first name of a
+teammate you DM and check they lead strangers with the same first name.
 Other contacts show their email and open the contact page; Enter and
 click open in place, Shift+Enter in a new split. A server match that arrives after
 typing takes the default selection from the Search for… row. Global Search does not

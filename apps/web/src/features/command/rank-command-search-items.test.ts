@@ -1,4 +1,4 @@
-import type { EntityItem } from '@core/context/quickAccess';
+import type { EntityItem, UserItem } from '@core/context/quickAccess';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   rankCommandSearchItems,
@@ -96,7 +96,7 @@ function contact(
   };
 }
 
-function person(id: string, name: string): CommandMenuItem {
+function person(id: string, name: string): UserItem {
   return {
     id,
     kind: 'user',
@@ -110,7 +110,7 @@ function person(id: string, name: string): CommandMenuItem {
 
 /** A person the viewer has a direct message with: the people window gives them
  * an interaction time. */
-function messagedPerson(id: string, name: string): CommandMenuItem {
+function messagedPerson(id: string, name: string): UserItem {
   return {
     ...person(id, name),
     timestamps: { lastInteraction: new Date(NOW - 3 * DAY) },
@@ -693,7 +693,7 @@ describe('command menu search ranking', () => {
   it.each([false, true])(
     'lists people the viewer never messaged after their own results and the people they know with GraphQL %s',
     (cacheEnabled) => {
-      const windowed = (item: CommandMenuItem, personOrder: number) => ({
+      const windowed = (item: UserItem, personOrder: number): UserItem => ({
         ...item,
         personOrder,
       });
