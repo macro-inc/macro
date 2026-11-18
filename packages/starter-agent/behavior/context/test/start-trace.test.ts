@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test';
 import { Telemetry } from '@macro-inc/observability/core';
-import { context, propagation, trace } from '@opentelemetry/api';
+import {
+  context,
+  propagation,
+  SpanStatusCode,
+  trace,
+} from '@opentelemetry/api';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import {
@@ -67,4 +72,23 @@ test('without a setup trace the start is a trace of its own, timed from the proc
     ? start.startTime[0] * 1000 + start.startTime[1] / 1e6
     : 0;
   expect(Math.abs(startedMs - before)).toBeLessThan(50);
+});
+
+test('a failed step marks it and the start failed, and still ends both', async () => {
+  exporter.reset();
+  const failure = new Error('no claude');
+
+  await expect(
+    traceStart({}, async (phase) =>
+      phase('agent.start.checks', async () => {
+        throw failure;
+      })
+    )
+  ).rejects.toBe(failure);
+
+  const spans = Object.fromEntries(
+    exporter.getFinishedSpans().map((span) => [span.name, span])
+  );
+  expect(spans['agent.start.checks']?.status.code).toBe(SpanStatusCode.ERROR);
+  expect(spans['agent.start']?.status.code).toBe(SpanStatusCode.ERROR);
 });

@@ -4,7 +4,7 @@
  * dropped. Spans record ids, counts and outcomes, never content.
  */
 import { createHash } from 'node:crypto';
-import { Telemetry } from '@macro-inc/observability/core';
+import { type Span, Telemetry } from '@macro-inc/observability/core';
 import { createServerTracingProvider } from '@macro-inc/observability/server';
 import type { Trace } from '../agent/claude.ts';
 
@@ -89,6 +89,19 @@ export type StartPhase = <Value>(
   run: () => Promise<Value>
 ) => Promise<Value>;
 
+/** Runs `run`, marking `span` failed when it throws, so a failed start exports as one. */
+const failing = async <Value>(
+  span: Span,
+  run: () => Promise<Value>
+): Promise<Value> => {
+  try {
+    return await run();
+  } catch (error) {
+    span.error(error);
+    throw error;
+  }
+};
+
 /**
  * Runs the agent's start as one `agent.start` span, from the process's own
  * start (so loading the code counts), under the computer's setup trace when
@@ -103,7 +116,9 @@ export const traceStart = <Value>(
   const processStart = Date.now() - process.uptime() * 1000;
   const start = () =>
     Telemetry.span('agent.start', { startTime: processStart }, (span) =>
-      run((name, step) => span.span(name, () => step()))
+      failing(span, () =>
+        run((name, step) => span.span(name, (child) => failing(child, step)))
+      )
     );
   const traceparent = environment[setupTraceparentVariable];
   return traceparent === undefined || traceparent === ''
