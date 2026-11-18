@@ -250,6 +250,16 @@ function KnobPopover(props: {
               : 'w-auto min-w-64'
           )}
           onKeyDown={(event) => event.stopPropagation()}
+          // A choice opens on its picked option, not the first one, so
+          // Space and the arrows start from it.
+          onOpenAutoFocus={(event) => {
+            const picked = editor?.querySelector<HTMLElement>(
+              'input[type="radio"]:checked'
+            );
+            if (!picked) return;
+            event.preventDefault();
+            picked.focus();
+          }}
         >
           <div ref={editor} class="grid gap-3">
             <KnobEditor
@@ -435,7 +445,7 @@ function KnobEditor(props: {
             </RadioGroup.Label>
             <For each={knob().options}>
               {(option) => (
-                <RadioGroup.Item value={option}>
+                <RadioGroup.Item value={option} class="touch:min-h-11">
                   <RadioGroup.ItemControl />
                   <RadioGroup.ItemLabel>{option}</RadioGroup.ItemLabel>
                 </RadioGroup.Item>

@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type Knob, withKnobValue } from '../core/knobs';
@@ -94,6 +100,7 @@ describe('a step’s sentence', () => {
     trigger.focus();
     fireEvent.keyDown(trigger, { key: 'Enter' });
     const high = await screen.findByRole('radio', { name: 'High' });
+    await waitFor(() => expect(document.activeElement).toBe(high));
     expect((high as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole('radio', { name: 'Urgent' }));
     expect(current()[4]).toMatchObject({ value: 'High' });
@@ -178,6 +185,7 @@ describe('a knob’s editor', () => {
     const field = await screen.findByRole('textbox', { name: 'Label' });
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
     expect((field as HTMLInputElement).value).toBe('');
+    expect(document.activeElement).toBe(field);
     expect(current()[0]).toMatchObject({ value: 'vc' });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(current()[0]).toMatchObject({ value: '' });
@@ -214,6 +222,21 @@ describe('a knob’s editor', () => {
     const field = await screen.findByRole('textbox', { name: 'Label' });
     fireEvent.input(field, { target: { value: 'finance' } });
     fireEvent.keyDown(field, { key: 'Escape' });
+    const trigger = screen.getByRole('button', {
+      name: 'Label: vc. Change it',
+    });
+    await waitFor(() =>
+      expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    );
     expect(current()[0]).toMatchObject({ value: 'vc' });
+    // Reopened, it starts from the saved value again.
+    fireEvent.click(trigger);
+    expect(
+      (
+        (await screen.findByRole('textbox', {
+          name: 'Label',
+        })) as HTMLInputElement
+      ).value
+    ).toBe('vc');
   });
 });
