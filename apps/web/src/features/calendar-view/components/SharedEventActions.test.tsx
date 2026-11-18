@@ -11,6 +11,7 @@ import { SharedEventActions } from './SharedEventActions';
 const mocks = vi.hoisted(() => ({
   addSharedEvent: true,
   calendars: [] as VisibleCalendar[],
+  calendarListSucceeded: () => true,
   copy: vi.fn(),
   ask: vi.fn(),
   download: vi.fn(),
@@ -30,7 +31,9 @@ vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
 vi.mock('@queries/calendar/calendars', () => ({
   useVisibleCalendarsQuery: () => ({
     isPending: false,
-    isSuccess: true,
+    get isSuccess() {
+      return mocks.calendarListSucceeded();
+    },
     isPlaceholderData: false,
     data: mocks.calendars,
   }),
@@ -134,6 +137,7 @@ beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
   mocks.addSharedEvent = true;
   mocks.calendars = [];
+  mocks.calendarListSucceeded = () => true;
 });
 afterEach(() => {
   cleanup();
@@ -202,6 +206,19 @@ describe('shared event actions', () => {
       eventId: 'shared-event',
       title: 'Design review',
     });
+  });
+
+  it('keeps the Outlook calendar explanation when a background refresh fails', () => {
+    const [succeeded, setSucceeded] = createSignal(true);
+    mocks.calendarListSucceeded = succeeded;
+    mocks.calendars = [calendar({ provider: 'outlook' })];
+    renderActions();
+
+    setSucceeded(false);
+
+    expect(screen.getByRole('status').textContent).toBe(
+      'Adding shared events requires a writable Google calendar.'
+    );
   });
 
   it('says so when the meeting is already on a calendar', () => {

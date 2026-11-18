@@ -42,8 +42,10 @@ export function AddToCalendarButton(props: {
   // Only Google imports a copy under the meeting's own UID, which is what
   // lets the event resolve to it. Reading `data` while the list is pending
   // would suspend the host; until it arrives there is nothing to pick.
+  const visibleCalendars = () =>
+    queryReadyGate(calendars) ? calendars.data : [];
   const targetCalendars = createMemo(() =>
-    (queryReadyGate(calendars) ? calendars.data : []).filter(
+    visibleCalendars().filter(
       (calendar) =>
         calendar.isWritable &&
         calendar.provider === 'google' &&
@@ -51,10 +53,9 @@ export function AddToCalendarButton(props: {
     )
   );
   const needsGoogleCalendar = () =>
-    calendars.isSuccess &&
     !calendars.isPlaceholderData &&
     targetCalendars().length === 0 &&
-    calendars.data.some((calendar) => calendar.provider === 'outlook');
+    visibleCalendars().some((calendar) => calendar.provider === 'outlook');
 
   return (
     <Switch
