@@ -174,6 +174,25 @@ test('switching between list and board keeps the header settled', async ({
   expect(watch.problems()).toEqual([]);
 });
 
+test('tabs that first appear short of room get their labels back once there is room', async ({
+  page,
+}) => {
+  const watch = await open(page, '&board');
+  await resize(page, 360);
+  await expectHeader(page, { tabs: 'none', scope: false });
+  await page.getByRole('button', { name: 'Toggle board' }).click();
+  // Too narrow for the list even with everything given up.
+  await expect
+    .poll(async () => {
+      const { tabs, scope } = await header(page);
+      return { tabs, scope };
+    })
+    .toEqual({ tabs: 'icons', scope: false });
+  await resize(page, 1200);
+  await expectHeader(page, { tabs: 'labelled', scope: true });
+  expect(watch.problems()).toEqual([]);
+});
+
 test('a status that changes the room keeps keyboard focus on the status', async ({
   page,
 }) => {

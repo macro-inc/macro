@@ -43,6 +43,15 @@ export function createReviewsHeaderFit(elements: {
     if (!actions) return false;
     const list = available();
     const tabs = elements.tabs();
+    // Tabs that arrive already short of room (from the board, or a status
+    // preset after a custom filter) were never measured with their labels,
+    // so nothing could tell when the labels fit again: start them over.
+    if (tabs && applied('tabs') && labelledTabsWidth === undefined) {
+      keepTabFocus(tabs, () =>
+        setGiven((current) => current.filter((step) => !list.includes(step)))
+      );
+      return true;
+    }
     if (tabs) {
       const width = tabs.getBoundingClientRect().width;
       if (!applied('tabs')) labelledTabsWidth = width;
@@ -79,7 +88,8 @@ export function createReviewsHeaderFit(elements: {
         let pending: ReturnType<typeof setTimeout> | undefined;
         // Measured after the observer's turn: changing the header from
         // inside it would resize what it is still reporting on. Each pass
-        // lays the header out again, so it settles before it is painted.
+        // lays the header out again, so a change settles in one go rather
+        // than one step per frame.
         const schedule = () => {
           pending ??= setTimeout(() => {
             pending = undefined;
