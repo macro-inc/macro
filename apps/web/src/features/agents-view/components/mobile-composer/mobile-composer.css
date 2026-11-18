@@ -1,7 +1,7 @@
 /* Keep the expanded layout measurable. Only the enclosing shape clips it at rest,
    so the editor never changes flex direction while the keyboard is opening. */
 .phone-composer-surface {
-  --composer-motion-duration: 250ms;
+  --composer-motion-duration: 200ms;
   --composer-motion-ease: var(--ease-out);
   overflow: clip;
   border-radius: 23px;
@@ -39,7 +39,7 @@
   opacity: 1;
   visibility: visible;
   transform: translateY(0) scale(1);
-  transition-delay: var(--composer-motion-duration), var(--composer-motion-duration), 0s;
+  transition-delay: calc(var(--composer-motion-duration) * 0.6), calc(var(--composer-motion-duration) * 0.6), 0s;
 }
 
 @media (prefers-reduced-motion: reduce) {

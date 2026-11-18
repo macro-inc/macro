@@ -311,7 +311,7 @@ The phone Agents composer is a chrome island above the dock. At rest it is a
 one-line draft, and no Send control. Tapping the editor expands it to show
 attachments above the text, then Add on the left and model/agent, dictation, and Send on the right. The microphone sits immediately before Send.
 The 46px pill expands continuously with its corner radius and editor insets;
-controls fade and scale in after the shape settles. Empty blur reverses the
+the shape grows over 200ms and controls fade and scale in during its final part. Empty blur reverses the
 transition without moving the list behind it. Reduced motion skips the transition.
 The editor, controls, and attachment owners stay mounted while clipped or inert. Home keeps a separate draft and attachment store.
 
