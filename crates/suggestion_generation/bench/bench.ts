@@ -228,14 +228,17 @@ const readRun = (path: string) => JSON.parse(readFileSync(path, 'utf8')) as RunF
  */
 function readSide(arg: string): RunFile {
   const runs = arg.split(',').map(readRun);
-  if (new Set(runs.map((run) => run.section)).size > 1) throw new Error(`${arg} mixes sections`);
+  for (const field of ['section', 'set'] as const) {
+    if (new Set(runs.map((run) => run[field])).size > 1) throw new Error(`${arg} mixes ${field}s`);
+  }
   let offset = 0;
   const attempts = runs.flatMap((run) => {
     const shifted = run.attempts.map((attempt) => ({ ...attempt, rep: attempt.rep + offset }));
     offset += Math.max(0, ...run.attempts.map((attempt) => attempt.rep));
     return shifted;
   });
-  return { ...runs[0], label: runs.map((run) => run.label).join('+'), attempts };
+  const joined = (values: string[]) => [...new Set(values)].join('+');
+  return { ...runs[0], label: joined(runs.map((run) => run.label)), commit: joined(runs.map((run) => run.commit)), attempts };
 }
 
 /** Judge and score a run again, without generating: for a changed judge or answer key. */
