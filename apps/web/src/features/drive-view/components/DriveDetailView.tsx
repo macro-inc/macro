@@ -186,7 +186,7 @@ function StackEntityDetail(props: {
             );
           }}
           previewHeaderLeading={
-            <Show when={hasBlockHeader(props.entry.data)}>
+            <Show when={hasBlockHeader(props.entry.data) && props.order > 0}>
               <DriveBreadcrumbsOutlet
                 aria-label="File location"
                 class="max-w-[min(40vw,24rem)] overflow-hidden"

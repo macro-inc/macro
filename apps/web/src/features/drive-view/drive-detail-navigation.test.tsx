@@ -21,10 +21,7 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   useNavigate: () => navigate,
   useParams: () =>
-    new Proxy(
-      {},
-      { get: (_, key) => params()[key as keyof DriveRouteParams] }
-    ),
+    new Proxy({}, { get: (_, key) => params()[key as keyof DriveRouteParams] }),
   useRouteState: () => routeState,
 }));
 vi.mock('@app/routes/routes', () => ({
