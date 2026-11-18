@@ -154,18 +154,20 @@ prodMonitor('kafka-consumer-lag-high', {
 // under the floor fires a day after passing it: on a topic that gets 100
 // events within hours, about six of its seven retention days remain. A
 // stalled group on a topic with fewer than about 20 events a day, or a stuck
-// partition on one with fewer than about 100, can lose events first.
+// partition on one with fewer than about 100, can lose events first, and a
+// group replaying a topic from its start can already be days behind.
 prodMonitor('kafka-consumer-not-caught-up', {
   title: 'Kafka consumer has not caught up in a day',
   service: 'kafka',
-  query: `min(last_1d):${KAFKA_LAG} > 100`,
+  // Each point is its lowest sample, so a short catch-up is not averaged away.
+  query: `min(last_1d):${KAFKA_LAG}.rollup(min, 300) > 100`,
   monitorThresholds: { critical: '100' },
   // A new group, or one replaying a topic from its start, fires only after a
   // whole day behind.
   requireFullWindow: true,
   pages: false,
   description:
-    "{{consumer_group.name}}'s lag on {{topic.name}} has not dropped below {{value}} events in 24 hours; healthy groups fall under 100 within a day. When this first fires on a busy topic, the oldest unread event is at most about a day old: about six days remain before the topic's 7-day retention deletes events the group has not read.",
+    "{{consumer_group.name}}'s lag on {{topic.name}} has not dropped below {{value}} events in 24 hours; healthy groups fall under 100 within a day. For a group that had caught up on a busy topic, the oldest unread event is at most about a day old when this first fires, so about six days remain before the topic's 7-day retention deletes events it has not read. A group replaying a topic from its start can already be days behind.",
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/queues.md#kafka-consumer-lag',
 });

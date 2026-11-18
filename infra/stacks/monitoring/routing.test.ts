@@ -282,7 +282,9 @@ test('Kafka lag alerts per prod consumer group and topic, without paging', () =>
   const behind = monitors().find(
     (r) => r.name === 'kafka-consumer-not-caught-up'
   );
-  expect(behind?.inputs.query).toBe(`min(last_1d):${lag} > 100`);
+  expect(behind?.inputs.query).toBe(
+    `min(last_1d):${lag}.rollup(min, 300) > 100`
+  );
   expect(behind?.inputs.requireFullWindow).toBe(true);
   expect(high?.inputs.requireFullWindow).toBe(false);
   for (const monitor of [high, behind]) {

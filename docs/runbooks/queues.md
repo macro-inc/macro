@@ -41,8 +41,9 @@ not dropped below 100 events in 24 hours. Topics keep events for 7 days
 (`infra/stacks/kafka-cluster/topics.ts`). Once a group's next unread event is
 older than that, it is deleted and the group resets to its `INITIAL_OFFSET`:
 `Latest` skips the whole retained backlog, `Earliest` only the deleted part,
-and neither logs an error. On a busy topic the day-long alert leaves about six
-days before that happens.
+and neither logs an error. For a group that had caught up on a busy topic, the
+day-long alert leaves about six days before that happens; a group replaying a
+topic from its start, such as a new `Earliest` group, can have far less.
 
 - Find the group's service: the alert names the group, which is the
   `GROUP_NAME` of its consumer (`rg 'GROUP_NAME: &.*= "<group>"'`); one group

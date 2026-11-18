@@ -402,14 +402,16 @@ rules list CloudWatch dimensions exactly, and the groups and topics change
 with the code. [The runbook](../../../docs/runbooks/queues.md#kafka-consumer-lag)
 covers both.
 
-- **Not caught up in a day** (sustained backlog): the lag has not dropped below
-  100 in 24 hours, over a full day of data. Over the 30 days to 2026-11-18,
-  outside the search-processing-service backlog below, the highest any group's
-  lag stayed for a whole day was 17, so one floor fits every group and topic. On a topic that
-  gets 100 events within hours, the first alert leaves about six of its seven
-  retention days. A stalled group on a topic with fewer than about 20 events a
-  day, or a stuck partition on one with fewer than about 100, can lose events
-  before it fires.
+- **Not caught up in a day** (sustained backlog): the lowest 5-minute sample
+  of lag has not dropped below 100 in 24 hours, over a full day of data. Over
+  the 30 days to 2026-11-18, outside the search-processing-service backlog
+  below, the highest any group's lag stayed for a whole day was 17, so one
+  floor fits every group and topic. For a group that had caught up on a topic
+  that gets 100 events within hours, the first alert leaves about six of the
+  seven retention days. A stalled group on a topic with fewer than about 20
+  events a day, or a stuck partition on one with fewer than about 100, can
+  lose events before it fires, and a group replaying a topic from its start
+  can already be days behind.
 - **Far behind** (ceiling): the 15-minute average lag is above 5M, warning at
   2M. Ordinary bursts peaked at 0.95M on search-processing-service's
   `macro.email`, the busiest topic, and under 135k on every other group and
