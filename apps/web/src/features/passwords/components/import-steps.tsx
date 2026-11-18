@@ -31,7 +31,7 @@ import { KIND_ICONS } from './kind-icon';
 
 false && fileDrop;
 
-const ACCEPTED_EXTENSIONS = ['1pux', 'csv', 'json'];
+const ACCEPTED_EXTENSIONS = ['1pux', 'csv', 'json', 'zip'];
 /** Rows shown before a list says how many more there are. */
 const LIST_LIMIT = 50;
 

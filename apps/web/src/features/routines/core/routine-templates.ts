@@ -59,7 +59,7 @@ export function templateChain(template: RoutineTemplate) {
 export type TemplateContext = {
   /** Who runs agent steps. */
   target: RoutineTarget;
-  /** Code steps can be saved (`enable-routine-code-steps`). */
+  /** Code steps can be saved. */
   codeSteps: boolean;
 };
 

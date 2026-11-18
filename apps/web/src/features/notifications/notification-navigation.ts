@@ -21,8 +21,7 @@ import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
-  enableCalendarUi,
-  enableProjects,
+  enablePasswords,
   enableWhatsappLinked,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
@@ -79,7 +78,8 @@ type OpenOptions = {
   onApplied?: VoidFunction;
 };
 
-function openContent(
+/** Opens `content` and returns the layout's result, for callers that act on reuse. */
+function openContentWithResult(
   layoutManager: SplitManager,
   content: SplitContent,
   options: OpenOptions
@@ -99,6 +99,15 @@ function openContent(
   });
   if (result?.status === 'opened' || result?.status === 'reused')
     reportApplied();
+  return result;
+}
+
+function openContent(
+  layoutManager: SplitManager,
+  content: SplitContent,
+  options: OpenOptions
+): void {
+  openContentWithResult(layoutManager, content, options);
 }
 
 /** Chats open in External's main pane; the chat's route claim reuses an open one. */
@@ -526,7 +535,6 @@ function getSupportedHandler(
         };
       })
       .with('initiative_discussion', () => {
-        if (!isFeatureEnabled(enableProjects)) return null;
         const meta = notification.notification_metadata;
         if (
           meta.tag !== 'initiative_discussion' ||
@@ -580,13 +588,6 @@ function getSupportedHandler(
         if (meta.tag !== 'calendar_event_reminder') return null;
 
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          // A reminder delivered before the flag closed still has a live
-          // notification; opening it must not reach a surface the user is no
-          // longer meant to have.
-          if (!isFeatureEnabled(enableCalendarUi)) {
-            onApplied?.();
-            return;
-          }
           const content = meta.content;
           const time = content.startsAt
             ? {
@@ -619,10 +620,6 @@ function getSupportedHandler(
 
         // The request is answered from the shared event's details.
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          if (!isFeatureEnabled(enableCalendarUi)) {
-            onApplied?.();
-            return;
-          }
           openCalendarView(
             { eventId: meta.content.eventId },
             {
@@ -632,6 +629,41 @@ function getSupportedHandler(
               ...(onApplied ? { onApplied } : {}),
             }
           );
+        };
+      })
+      .with('password_access_requested', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'password_access_requested') return null;
+        // The request is answered in the item's pane in Passwords.
+        return async (lm: SplitManager, newSplit: boolean = false) => {
+          if (!isFeatureEnabled(enablePasswords)) {
+            onApplied?.();
+            return;
+          }
+          const content: SplitContent = {
+            type: 'component',
+            id: 'passwords',
+            params: {
+              teamId: meta.content.teamId,
+              itemId: meta.content.itemId,
+              requestId: meta.content.requestId,
+            },
+            entryMetadata: {
+              route: paneRoute({ id: 'view-passwords', params: {} }),
+            },
+          };
+          const result = openContentWithResult(lm, content, {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
+          // Reuse only activates the open vault; hand it this item's params.
+          if (result?.status === 'reused')
+            result.split?.replace({
+              next: content,
+              mergeHistory: true,
+              referredFrom: null,
+            });
         };
       })
       .with('crm_discussion', () => {
@@ -787,14 +819,9 @@ export function openTeamMembersSettings(
 
 /**
  * Where a notification was opened from: the app's own lists, a browser
- * notification, a native (iOS, Android, macOS) notification, or a home
- * recommendation that opens through its notification.
+ * notification, or a native (iOS, Android, macOS) notification.
  */
-export type NotificationOpenSource =
-  | 'in_app'
-  | 'browser_push'
-  | 'native_push'
-  | 'home_recommendation';
+export type NotificationOpenSource = 'in_app' | 'browser_push' | 'native_push';
 
 /**
  * Opens the notification given the layout manager.

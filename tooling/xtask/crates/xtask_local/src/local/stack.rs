@@ -536,6 +536,9 @@ fn remount(
     if sidecars.outlook_emulator {
         up.arg(super::microsoft_emulator::SERVICE);
     }
+    if sidecars.model_emulator {
+        up.arg(super::model_emulator::SERVICE);
+    }
     stage.run("Remounting Rust services", &mut up)?;
     write_state(
         instance,

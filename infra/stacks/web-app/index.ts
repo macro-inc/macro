@@ -64,8 +64,12 @@ const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 );
 
 // Stage web delivery and a native/OTA archive separately. Web delivery keeps
-// the Brotli sidecar for targeted S3 upload; native clients need the raw WASM
-// only, so their archive copy removes the sidecar before FileArchive snapshots it.
+// the Brotli sidecar for targeted S3 upload and the source maps; native clients
+// need the raw WASM only and never read source maps (crash frames point at the
+// public web copies), so their archive copy removes both before FileArchive
+// snapshots it.
+// The archive also leaves out web-hosted/ (videos), which native clients load
+// from this deploy's published copy instead.
 const buildOutputPath = './output/app';
 const appArchiveOutputPath = './output/app-archive';
 const cacheWasmRetentionDays = 7;
@@ -89,9 +93,12 @@ execSync(
   { stdio: 'inherit' }
 );
 execSync(
-  `find ${shellQuote(appArchiveOutputPath)} -type f -name 'cache_wasm_bg*.wasm.br' -delete`,
+  `find ${shellQuote(appArchiveOutputPath)} -type f \\( -name 'cache_wasm_bg*.wasm.br' -o -name '*.map' \\) -delete`,
   { stdio: 'inherit' }
 );
+execSync(`rm -rf ${shellQuote(`${appArchiveOutputPath}/web-hosted`)}`, {
+  stdio: 'inherit',
+});
 
 const appArchive = new pulumi.asset.FileArchive(appArchiveOutputPath);
 const appArchiveObject = new aws.s3.BucketObjectv2(

@@ -3,6 +3,8 @@
     reason = "Just to allow GetActivitiesResponse and UserActivitiesResponse"
 )]
 
+mod email_policy;
+
 use crate::api::saved_views::definitions::{
     CreateSavedViewDefinitionRequest, ReorderSavedViewDefinitionsRequest, SavedViewDefinition,
     SavedViewDefinitionPage, SavedViewSharingRequest, UpdateSavedViewDefinitionRequest,
@@ -223,12 +225,14 @@ use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
 use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
 use utoipa::OpenApi;
 
+use email_policy::EmailPolicySchemas;
+
 #[derive(OpenApi)]
 #[openapi(
     info(
         terms_of_service = "https://macro.com/terms",
     ),
-    modifiers(&FormsApiAddon),
+    modifiers(&FormsApiAddon, &EmailPolicySchemas),
     paths(
         passwords::inbound::router::teams,
         passwords::inbound::router::list,
@@ -255,6 +259,17 @@ use utoipa::OpenApi;
         passwords::inbound::router::set_totp,
         passwords::inbound::router::remove_totp,
         passwords::inbound::router::totp,
+        passwords::inbound::agent_router::search,
+        passwords::inbound::agent_router::disclose,
+        passwords::inbound::agent_router::totp_code,
+        passwords::inbound::agent_router::create,
+        passwords::inbound::agent_router::update,
+        passwords::inbound::agent_router::set_totp,
+        passwords::inbound::agent_router::request_access,
+        passwords::inbound::agent_router::my_request,
+        passwords::inbound::agent_router::pending,
+        passwords::inbound::agent_router::resolve,
+        passwords::inbound::agent_router::revoke,
 
         dictation::inbound::axum_router::transcribe_handler,
         health::health_handler,
@@ -707,6 +722,14 @@ use utoipa::OpenApi;
         crm::inbound::pipeline_workflows::pipeline_csv,
         crm::inbound::pipeline_workflows::export_pipeline,
         crm::inbound::axum_router::set_email_sync::handler,
+        crm::inbound::axum_router::email_policy::get_handler,
+        crm::inbound::axum_router::email_policy::update_handler,
+        crm::inbound::axum_router::email_policy::validate_handler,
+        crm::inbound::axum_router::email_policy::history_handler,
+        crm::inbound::axum_router::email_policy::revision_handler,
+        crm::inbound::axum_router::email_policy::start_preview_handler,
+        crm::inbound::axum_router::email_policy::preview_handler,
+        crm::inbound::axum_router::email_policy::cancel_preview_handler,
         crm::inbound::axum_router::email_privacy::get_handler,
         crm::inbound::axum_router::email_privacy::excluded_threads_handler,
         crm::inbound::axum_router::email_privacy::update_handler,
@@ -742,6 +765,8 @@ use utoipa::OpenApi;
         schemas(
             passwords::inbound::router::Failure,
             passwords::inbound::router::FailureCode,
+            passwords::inbound::agent_router::AgentFailure,
+            passwords::inbound::agent_router::AgentFailureCode,
             access_requests::domain::models::ShareEntity,
             DocumentStorageServiceApiVersion,
             GenericResponse,

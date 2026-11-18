@@ -20,7 +20,7 @@ use serde_json::Value;
 use utoipa::ToSchema;
 
 use super::event_trigger::ActionTrigger;
-use super::models::{ActionConfiguration, ActionPolicyError, ScheduledAction};
+use super::models::{ActionConfiguration, ActionPolicyError, Requester, ScheduledAction};
 use super::ports::{RoutineTemplateRepo, RoutineTemplateService, ScheduledActionService};
 
 #[cfg(test)]
@@ -245,6 +245,7 @@ where
         principal: &CreationPrincipal,
         template_id: Uuid,
         input: ActionConfiguration,
+        requester: Requester,
     ) -> Result<ScheduledAction> {
         self.require_sharing(principal.user()).await?;
         let template = self
@@ -253,7 +254,13 @@ where
             .await?
             .ok_or(ActionPolicyError::NotFound)?;
         self.actions
-            .create_action_from_template(principal, input, template_id, template.appearance)
+            .create_action_from_template(
+                principal,
+                input,
+                template_id,
+                template.appearance,
+                requester,
+            )
             .await
     }
 }

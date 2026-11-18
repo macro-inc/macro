@@ -580,8 +580,6 @@ export default {
       other: '{{count}} में से {{accepted}} आइटम अधूरे मार्क किए गए',
     },
     toastMarkNotDoneFailed: 'अधूरा मार्क नहीं किया जा सका',
-    toastThreadStaysDone: 'इस थ्रेड में कोई मैसेज नहीं आया है, इसलिए यह पूरा हुआ ही रहेगा',
-    toastThreadsStayDone: 'इन थ्रेड में कोई मैसेज नहीं आया है, इसलिए ये पूरे हुए ही रहेंगे',
     toastCountNotRestored: {
       one: '{{count}} आइटम वापस नहीं लाया जा सका।',
       other: '{{count}} आइटम वापस नहीं लाए जा सके।',
@@ -681,8 +679,6 @@ export default {
     create: 'बनाएं',
     getMobileApp: 'मोबाइल ऐप पाएं',
     signedInAs: '{{name}} के रूप में साइन इन किया है',
-    commandMenu: 'कमांड मेन्यू',
-    searchEverything: 'हर जगह खोजें',
     customizeSidebar: 'साइडबार को पसंद के मुताबिक बनाएं',
     customizeSidebarDescription:
       'चुनें कि साइडबार में कौन-से ऐप दिखें, और उनका क्रम बदलने के लिए उन्हें खींचें। होम हमेशा सबसे ऊपर रहता है।',

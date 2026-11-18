@@ -31,6 +31,59 @@ for (const theme of ['dark', 'light']) {
   });
 }
 
+for (const theme of ['dark', 'light']) {
+  test(`evening chips start at their own times, near now and the strip's end, in ${theme}`, async ({
+    page,
+  }, testInfo) => {
+    await page.goto(`/?view=home&day=evening&theme=${theme}`);
+
+    const today = page.getByRole('region', { name: 'Today' });
+    await expect(today.getByRole('button')).toHaveCount(6);
+    await today.screenshot({
+      path: testInfo.outputPath(`today-evening-${theme}.png`),
+    });
+    // Each hour mark's line is the left edge of its label's parent.
+    const hourX = async (label: string) =>
+      (
+        await today
+          .getByText(label, { exact: true })
+          .locator('..')
+          .boundingBox()
+      )?.x ?? Number.NaN;
+    const four = await hourX('4pm');
+    const six = await hourX('6pm');
+    const hour = (six - four) / 2;
+    const chipX = async (title: string) =>
+      (await today.getByRole('button', { name: `Open ${title}` }).boundingBox())
+        ?.x ?? Number.NaN;
+
+    // 18:00, a quarter hour before now: on the 6pm line, not ending at it.
+    expect(Math.abs((await chipX('Prod deploy')) - six)).toBeLessThan(1.5);
+    // 19:30, too close to the end for a full-width chip: still at 19:30.
+    expect(
+      Math.abs((await chipX('Release check')) - (six + 1.5 * hour))
+    ).toBeLessThan(1.5);
+    // 13:30: two and a half hours before 4pm.
+    expect(Math.abs((await chipX('1:1')) - (four - 2.5 * hour))).toBeLessThan(
+      1.5
+    );
+
+    const strip = await today.boundingBox();
+    for (const chip of await today.getByRole('button').all()) {
+      const box = await chip.boundingBox();
+      expect(
+        box && strip && box.x + box.width <= strip.x + strip.width + 0.5
+      ).toBe(true);
+    }
+
+    // The late chip is too narrow for its title: hovering names it and its time.
+    await today.getByRole('button', { name: 'Open Release check' }).hover();
+    await expect(page.getByRole('tooltip')).toContainText(
+      /Release check, 7:30\s*–\s*8:00\s*PM/
+    );
+  });
+}
+
 test('a priority opens For you on that suggestion, and events open the calendar', async ({
   page,
 }) => {

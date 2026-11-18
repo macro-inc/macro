@@ -97,6 +97,7 @@ fn format_names_round_trip() {
         SourceFormat::OnePasswordCsv,
         SourceFormat::BitwardenJson,
         SourceFormat::BitwardenCsv,
+        SourceFormat::BitwardenZip,
     ] {
         let name = serde_json::to_value(format).expect("serializes");
         assert_eq!(

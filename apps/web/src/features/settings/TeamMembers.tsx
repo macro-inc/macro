@@ -5,10 +5,7 @@ import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  enableAgentTeammates,
-  enableAiUsageBilling,
-} from '@core/constant/featureFlags';
+import { enableAgentTeammates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
   getDisplayName,
@@ -168,7 +165,6 @@ function MemberRow(props: {
   onRoleChange: (role: TeamRole) => void;
   onPlanChange: (plan: PaidPlan) => void;
 }) {
-  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
   const isMemberOwner = () => props.member.role === TeamRole.owner;
   const email = () => {
@@ -217,7 +213,7 @@ function MemberRow(props: {
               value={memberPlan(props.member)}
               onChange={props.onPlanChange}
               disabled={props.planPending}
-              aiUsageBilling={aiUsageBilling().enabled}
+              aiUsageBilling
               pendingDowngrade={props.pendingDowngrade}
             />
           </Show>

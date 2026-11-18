@@ -5,26 +5,17 @@ import {
 import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { itemToSafeName } from '@core/constant/allBlocks';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import type { ResultError } from '@core/util/result';
 import { toSubType } from '@entity/types/entity';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
-import type { ApiThread } from '@service-email/generated/schemas';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { entityMessagesClient } from '@service-storage/messages';
 import { formatDocumentName } from '@service-storage/util/filename';
-import type { InfiniteData } from '@tanstack/solid-query';
 import { fetchAgentSessionMentionPreviews } from '../agent-session/mention-fetchers';
-import { queryClient } from '../client';
-import { emailKeys } from '../email/keys';
-import { threadQueryOptions } from '../email/thread';
 import { representativeThreadMessage } from '../email/thread-subject';
 import { normalizeMessageSender } from '../messages/message-sender';
 import { fetchCachedDatabaseDetail } from '../storage/databases';
@@ -32,10 +23,7 @@ import { failedReadAccess } from './failed-read';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
 async function fetchSessionPreviews(ids: string[]): Promise<PreviewItem[]> {
-  const previews = await fetchAgentSessionMentionPreviews(
-    ids,
-    isFeatureEnabled(enableGraphqlSoup)
-  );
+  const previews = await fetchAgentSessionMentionPreviews(ids, true);
   return [...previews].map(([id, preview]): PreviewItem => {
     const base = {
       id,
@@ -173,7 +161,7 @@ async function fetchCallPreviews(ids: string[]): Promise<PreviewItem[]> {
 
     switch (call.type) {
       case 'exists': {
-        // Match the call block (CallRecordingSplitHeader / CallRecordingBody):
+        // Match the call block (its header views / CallRecordingBody):
         // prefer the user-supplied / AI-generated `customName`, fall back to
         // the channel the call lives in.
         const displayName = call.customName ?? call.channelName;
@@ -299,33 +287,6 @@ async function fetchInitiativePreviews(
   );
 }
 
-/**
- * Reuse the thread-messages query the email block fetches on open: returns
- * cached data (any staleness — previews tolerate 24h), or joins an in-flight
- * fetch, so the preview doesn't issue a separate getThread request.
- */
-async function threadFromOpenThreadQuery(
-  threadId: string
-): Promise<ApiThread | undefined> {
-  const queryKey = emailKeys.threadMessages(threadId).queryKey;
-  const cached =
-    queryClient.getQueryData<InfiniteData<ApiThread, number>>(queryKey);
-  if (cached?.pages[0]) return cached.pages[0];
-
-  if (queryClient.getQueryState(queryKey)?.fetchStatus !== 'fetching') {
-    return undefined;
-  }
-  try {
-    const data = await queryClient.fetchInfiniteQuery(
-      threadQueryOptions(threadId)
-    );
-    return data.pages[0];
-  } catch {
-    // Fall through to the limit=1 fetch so access errors map per-id.
-    return undefined;
-  }
-}
-
 async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
   const results = await Promise.all(
     threadIds.map(async (threadId) => {
@@ -334,28 +295,24 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         type: 'email',
       } as const;
 
-      let thread = await threadFromOpenThreadQuery(threadId);
+      const result = await emailClient.getThread({
+        thread_id: threadId,
+        offset: 0,
+        // Fetch a page rather than a single message: the newest message can
+        // be a subjectless draft (or, for a non-owner, be filtered out
+        // entirely), so a limit-1 fetch would resolve the thread as "No
+        // Subject" even though a real message in it has one.
+        limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+      });
 
-      if (!thread) {
-        const result = await emailClient.getThread({
-          thread_id: threadId,
-          offset: 0,
-          // Fetch a page rather than a single message: the newest message can
-          // be a subjectless draft (or, for a non-owner, be filtered out
-          // entirely), so a limit-1 fetch would resolve the thread as "No
-          // Subject" even though a real message in it has one.
-          limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-        });
-
-        if (result.isErr()) {
-          return {
-            ...base,
-            access: 'no_access' as const,
-            loading: false as const,
-          };
-        }
-        thread = result.value.thread;
+      if (result.isErr()) {
+        return {
+          ...base,
+          access: 'no_access' as const,
+          loading: false as const,
+        };
       }
+      const thread = result.value.thread;
 
       const representative = representativeThreadMessage(thread.messages);
       const subject = representative?.subject ?? 'No Subject';

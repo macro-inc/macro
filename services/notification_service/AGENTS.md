@@ -14,7 +14,8 @@ worker that sends email/mobile-push/websocket notifications.
   (`EmailAdapter`, `MobilePushAdapter`, `WebSocketGatewayAdapter`,
   `Kafka*RealtimePublisher`, `RedisRateLimitAdapter`) from `crates/notification`.
 - `src/api.rs` + `src/api/context.rs`: HTTP routes — `user_notification.rs`
-  (list/read), `unsubscribe.rs` (single and atomic bulk item mute/snooze), `health.rs`.
+  (list/read), `unsubscribe.rs` (single and atomic bulk item mute/snooze, and a
+  channel's `mentions_only` level on the single route), `health.rs`.
 - `src/model/notification.rs`: service-local request/response shapes.
 - Push payload schemas come from `notification::domain::models::apple`; keep the
   frontend push validators generated from those same OpenAPI components.

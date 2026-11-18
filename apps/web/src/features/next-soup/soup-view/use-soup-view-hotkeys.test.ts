@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   enter: undefined as ((event?: KeyboardEvent) => boolean) | undefined,
+  goToFirst: undefined as (() => boolean) | undefined,
   open: vi.fn(),
 }));
 
@@ -43,6 +44,9 @@ vi.mock('@core/hotkey/hotkeys', () => ({
     if (Array.isArray(options.hotkey) && options.hotkey[0] === 'enter') {
       mocks.enter = options.keyDownHandler;
     }
+    if (Array.isArray(options.hotkey) && options.hotkey[0] === 'home') {
+      mocks.goToFirst = options.keyDownHandler;
+    }
     return { withGroup: vi.fn() };
   },
 }));
@@ -67,12 +71,13 @@ afterEach(() => {
   mocks.open.mockClear();
 });
 
-function mountHotkeys() {
+function mountHotkeys(firstRow?: { index: number }) {
   createRoot((cleanup) => {
     dispose = cleanup;
     useSoupViewHotkeys({
       scopeId: 'reminder-native-action-test',
       soup: {
+        navigate: { toFirst: () => firstRow },
         focus: {
           row: () => ({
             getIsGrouped: () => false,
@@ -82,6 +87,7 @@ function mountHotkeys() {
         },
       },
       splitHandle: {},
+      virtualizerHandle: () => undefined,
       currentView: () => 'mail',
     } as unknown as Parameters<typeof useSoupViewHotkeys>[0]);
   });
@@ -118,4 +124,15 @@ describe('native reminder Enter activation', () => {
       expect(mocks.open).toHaveBeenCalledOnce();
     }
   );
+});
+
+describe('go to first item', () => {
+  it('answers whether the list had a row to land on', () => {
+    mountHotkeys(undefined);
+    expect(mocks.goToFirst?.()).toBe(false);
+    dispose?.();
+
+    mountHotkeys({ index: 0 });
+    expect(mocks.goToFirst?.()).toBe(true);
+  });
 });

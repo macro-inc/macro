@@ -63,6 +63,33 @@ export type AccessRequest = {
 };
 
 /**
+ * How an agent's access request was resolved.
+ */
+export type AccessRequestResolution = 'approved' | 'denied' | 'revoked';
+
+/**
+ * Metadata for [`PasswordTopicEvent::AccessRequestResolved`].
+ */
+export type AccessRequestResolvedMetadata = {
+    /**
+     * Requested item.
+     */
+    itemId: string;
+    /**
+     * Resolved request.
+     */
+    requestId: string;
+    /**
+     * Resolution.
+     */
+    status: AccessRequestResolution;
+    /**
+     * Team owning the item.
+     */
+    teamId: string;
+};
+
+/**
  * Share state visible to one authenticated viewer.
  */
 export type AccessRequestState = {
@@ -1439,6 +1466,11 @@ export type AttachmentChange = {
         remove: Array<string>;
     };
 };
+
+/**
+ * A kind of attachment a thread's messages carry, by MIME type.
+ */
+export type AttachmentKind = 'pdf' | 'image' | 'document';
 
 /**
  * RSVP state for an attendee.
@@ -4012,6 +4044,10 @@ export type ChannelWebhookRequest = {
      * Message body.
      */
     content: string;
+    /**
+     * Who hears about the message; `Silent` notifies no one.
+     */
+    notification_policy?: PostMessageNotificationPolicy;
 };
 
 /**
@@ -7557,6 +7593,15 @@ export type DocumentTopicEvent = {
      * A peer joined, left, or a periodic save occurred.
      */
     metadata: DocumentInteractionMetadata;
+} | {
+    event_type: 'document.email_attachments_released';
+    /**
+     * Documents whose mail is gone stopped being email attachments, in one
+     * batch: the system moved some to the Trash and left the rest. Like the
+     * documents in a trashed folder, the trashed ones are removed from open
+     * lists and trigger nothing per document.
+     */
+    metadata: EmailAttachmentsReleasedMetadata;
 };
 
 /**
@@ -9223,14 +9268,58 @@ export type EffectSpecSoftEdgeOptions = string | {
 };
 
 /**
+ * Metadata for [`DocumentTopicEvent::EmailAttachmentsReleased`]: the
+ * documents of one queue batch that lost their last email link.
+ */
+export type EmailAttachmentsReleasedMetadata = {
+    /**
+     * Documents left as they were: kept by their owner, or already in the
+     * Trash. They are no longer email attachments either.
+     */
+    kept_document_ids: Array<string>;
+    /**
+     * Documents the batch moved to the Trash.
+     */
+    trashed_document_ids: Array<string>;
+};
+
+/**
  * The audience affected by a domain exclusion.
  */
 export type EmailBlockScope = 'team' | 'personal';
 
 /**
+ * Current mailbox consent without loading domain exclusion lists.
+ */
+export type EmailContributionConsent = {
+    /**
+     * Whether this exact mailbox has explicit contribution consent.
+     */
+    enabled: boolean;
+    /**
+     * The primary mailbox that would contribute, if connected.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Exact current primary mailbox connection.
+     */
+    mailbox_link_id?: string | null;
+};
+
+/**
+ * The scope of an explicitly granted mailbox contribution.
+ */
+export type EmailContributionMode = 'all' | 'selected';
+
+/**
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
+    /**
+     * Only threads with at least one attachment of one of these kinds, by
+     * MIME type, on any of their messages. Empty applies no constraint.
+     */
+    attachments?: Array<AttachmentKind>;
     /**
      * Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC.
      */
@@ -9251,7 +9340,8 @@ export type EmailFilters = {
      * fully-qualified addresses. Each address is authorized against
      * `crm_contacts` + `crm_companies` (contact must not be hidden, company
      * must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_domains`.
+     * Mutually exclusive with `crm_domains`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_addresses?: Array<string>;
     /**
@@ -9260,9 +9350,16 @@ export type EmailFilters = {
      * domains (in any of sender/cc/bcc/recipient). Each domain is authorized
      * against `crm_domains` + `crm_companies` (must exist for the caller's
      * team, company must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_addresses`.
+     * Mutually exclusive with `crm_addresses`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_domains?: Array<string>;
+    /**
+     * Filter by whether the thread is done: true for threads out of the
+     * inbox (archived), false for threads still in it. This is the mailbox
+     * state the Email view's Done filter uses, independent of notifications.
+     */
+    done?: boolean | null;
     /**
      * Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads.
      */
@@ -9297,7 +9394,14 @@ export type EmailFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * A list of project ids to search within. Empty to ignore project filtering.
+     * Drive folder (project) ids to search within: threads filed in any of
+     * these folders. Besides the caller's own threads, it reaches every
+     * thread in a folder shared with the caller, whoever's inbox holds it,
+     * as the folder's list does. Search takes at most 50 folders and
+     * rejects more with a 400, and matches the query against at most 10,000
+     * of their threads in all; threads past that are not searched, unless
+     * `email_thread_ids` names them, and at most 10,000 named threads are
+     * searched in all. Empty to ignore project filtering.
      */
     project_ids?: Array<string>;
     /**
@@ -9313,6 +9417,7 @@ export type EmailFilters = {
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    view?: null | EmailSearchView;
 };
 
 /**
@@ -9394,6 +9499,334 @@ export type EmailFollowupResponse = {
 };
 
 /**
+ * One positive whole-thread selector; denials always take precedence.
+ */
+export type EmailInclusionRule = {
+    kind: 'thread';
+    /**
+     * Internal thread ID, never a provider thread ID.
+     */
+    thread_id: string;
+} | {
+    /**
+     * Address to normalize and validate before activation.
+     */
+    address: string;
+    kind: 'address';
+} | {
+    /**
+     * Stable contact ID, resolved live rather than expanded on activation.
+     */
+    contact_id: string;
+    kind: 'contact';
+} | {
+    /**
+     * Bare domain to normalize and validate before activation.
+     */
+    domain: string;
+    kind: 'domain';
+} | {
+    /**
+     * Stable company ID, resolved live rather than expanded on activation.
+     */
+    company_id: string;
+    kind: 'company';
+};
+
+/**
+ * Provenance established by authenticated credentials, never a request field.
+ */
+export type EmailPolicyActorKind = 'member' | 'agent' | 'api' | 'system';
+
+/**
+ * An audit record may predate incarnation-aware writers.
+ */
+export type EmailPolicyAudit = {
+    /**
+     * Absent only for a legacy audit row.
+     */
+    consent_incarnation?: string | null;
+    /**
+     * Database commit transaction's creation time.
+     */
+    created_at: string;
+    /**
+     * Stored event and provenance.
+     */
+    entry: NewEmailPolicyAudit;
+    /**
+     * Exact mailbox at the time of the event.
+     */
+    link_id: string;
+    /**
+     * Committed policy version within the recorded lifetime.
+     */
+    policy_version: number;
+};
+
+/**
+ * Events in the member-only policy history; records never contain mail content.
+ */
+export type EmailPolicyAuditAction = 'rules_activated' | 'all_mail_enabled' | 'withdrawn' | 'mailbox_revoked' | 'live_targets_changed';
+
+/**
+ * One explicit sharing command; member and team never come from the body.
+ */
+export type EmailPolicyChange = {
+    action: 'replace_rules';
+    /**
+     * Positive selectors for eligible past and future whole threads.
+     */
+    rules: EmailRuleSet;
+} | {
+    action: 'enable_all';
+} | {
+    action: 'withdraw';
+};
+
+/**
+ * Retry-safe command with the exact state observed by the caller.
+ */
+export type EmailPolicyCommand = {
+    /**
+     * The explicit sharing operation.
+     */
+    change: EmailPolicyChange;
+    /**
+     * State returned by inspection; stale tokens produce a conflict.
+     */
+    if_policy: EmailPolicyToken;
+    /**
+     * One UUID per intended operation, reused only for its retries.
+     */
+    request_id: string;
+};
+
+/**
+ * Owner history has a fixed fifty-event page.
+ */
+export type EmailPolicyHistory = {
+    /**
+     * Audit entries without mailbox contents or expanded source identities.
+     */
+    events: Array<EmailPolicyAudit>;
+    /**
+     * Exclusive UUID cursor for the next page.
+     */
+    next_cursor?: string | null;
+};
+
+/**
+ * Recorded outcome. A replay describes the original commit, not current state.
+ */
+export type EmailPolicyOutcome = {
+    /**
+     * Owner history entry identifying this operation.
+     */
+    audit_event_id: string;
+    /**
+     * Sharing and retention effects of the committed operation.
+     */
+    effect: string;
+    /**
+     * Whether this commit granted contribution.
+     */
+    enabled: boolean;
+    /**
+     * Committed scope.
+     */
+    mode: EmailContributionMode;
+    /**
+     * True means the stored result was returned without repeating any effects.
+     */
+    replayed: boolean;
+    /**
+     * Committed definition revision, if selected.
+     */
+    revision?: number | null;
+    /**
+     * State token produced by this commit.
+     */
+    token: EmailPolicyToken;
+};
+
+/**
+ * Count-only preview output; no mailbox contents or target identities.
+ */
+export type EmailPolicyPreviewCounts = {
+    /**
+     * Threads newly included by the proposal.
+     */
+    added?: number;
+    /**
+     * Currently included threads encountered so far.
+     */
+    current?: number;
+    /**
+     * Matching threads vetoed by other privacy settings.
+     */
+    denied?: number;
+    /**
+     * Proposed included threads encountered so far.
+     */
+    proposed?: number;
+    /**
+     * Threads held back by the proposal.
+     */
+    removed?: number;
+    /**
+     * Threads included by both policies.
+     */
+    retained?: number;
+};
+
+/**
+ * Preview state is independent of the contribution grant.
+ */
+export type EmailPolicyPreviewStatus = 'pending' | 'running' | 'complete' | 'partial' | 'cancelled' | 'stale';
+
+/**
+ * One immutable owner-only definition, fetched separately from history pages.
+ */
+export type EmailPolicyRevision = {
+    /**
+     * Time this definition was committed.
+     */
+    created_at: string;
+    /**
+     * Mailbox the saved definition refers to.
+     */
+    link_id: string;
+    /**
+     * Revision in this member's rule history.
+     */
+    revision: number;
+    /**
+     * Stored selectors; no expanded contact details or mail content.
+     */
+    rules: EmailRuleSet;
+};
+
+/**
+ * An observed consent state, not an authorization credential. Never refresh
+ * this token automatically after a conflict and replay a sharing command.
+ */
+export type EmailPolicyToken = {
+    /**
+     * Opaque observation; the first write compares it before initialization.
+     */
+    fingerprint: string;
+    kind: 'legacy';
+} | {
+    /**
+     * Explicit mailbox and membership authority, excluding sync state.
+     */
+    authority_fingerprint: string;
+    /**
+     * Never reused after deletion and recreation of consent.
+     */
+    consent_incarnation: string;
+    kind: 'policy';
+    /**
+     * Database-owned version observed by the caller.
+     */
+    policy_version: number;
+};
+
+/**
+ * Owner-only view. GET never initializes identity or transfers historical work.
+ */
+export type EmailPolicyView = {
+    /**
+     * Whether new rule authoring is available for this caller.
+     */
+    authoring_available: boolean;
+    /**
+     * Explain whole-thread sharing, live targets and overriding exclusions.
+     */
+    effect: string;
+    /**
+     * Current effective grant.
+     */
+    enabled: boolean;
+    /**
+     * Exact mailbox represented by the consent or prospective first grant.
+     */
+    link_id?: string | null;
+    /**
+     * The caller's mailbox address.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Current scope of contribution.
+     */
+    mode: EmailContributionMode;
+    /**
+     * Active immutable definition revision.
+     */
+    revision?: number | null;
+    rules?: null | EmailRuleSet;
+    token?: null | EmailPolicyToken;
+};
+
+/**
+ * A bounded preview request. The slot token fences delayed starts after replacement.
+ */
+export type EmailPreviewRequest = {
+    /**
+     * Observed sharing state; never refreshed automatically after a conflict.
+     */
+    if_policy: EmailPolicyToken;
+    /**
+     * Current preview ID from inspection, or null before the first preview.
+     */
+    if_preview_id?: string | null;
+    /**
+     * Hypothetical selected contribution; validation never activates it.
+     */
+    rules: EmailRuleSet;
+};
+
+/**
+ * Count-only result. Complete counts describe one stable snapshot; every other
+ * status is incomplete and must not be presented as the total mailbox count.
+ */
+export type EmailPreviewView = {
+    /**
+     * Time of the stable read snapshot, once a worker starts.
+     */
+    as_of?: string | null;
+    /**
+     * A new worker attempt gets a new context; old completions cannot overwrite it.
+     */
+    context_id: string;
+    /**
+     * Distinct counts of this member's mailbox-local threads, never team conversations.
+     */
+    counts: EmailPolicyPreviewCounts;
+    /**
+     * Enqueue time, used to explain queue delay.
+     */
+    created_at: string;
+    /**
+     * Five-minute work deadline; results remain inspectable after the deadline.
+     */
+    expires_at: string;
+    /**
+     * The member's current preview slot occupant.
+     */
+    preview_id: string;
+    /**
+     * Progress counts contain no identities, subjects, participants or bodies.
+     */
+    scanned_threads: number;
+    /**
+     * Pending, running, complete, partial, cancelled or stale.
+     */
+    status: EmailPolicyPreviewStatus;
+};
+
+/**
  * One explicit privacy change, avoiding lost updates to whole blocklists.
  */
 export type EmailPrivacyChange = {
@@ -9439,6 +9872,11 @@ export type EmailPrivacyChange = {
 };
 
 /**
+ * Full settings by default, or mailbox consent when explicitly requested.
+ */
+export type EmailPrivacyResponse = EmailPrivacySettings | EmailContributionConsent;
+
+/**
  * Current consent and exclusions, readable by any team member.
  */
 export type EmailPrivacySettings = {
@@ -9459,9 +9897,21 @@ export type EmailPrivacySettings = {
      */
     mailbox_link_id?: string | null;
     /**
+     * Existing personal exclusions that cover the caller's whole mailbox.
+     */
+    personal_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
+    /**
      * Domains excluded only for the caller's contributions.
      */
     personal_domains: Array<string>;
+    /**
+     * Existing team exclusions that cover a connected member's whole mailbox.
+     */
+    team_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
     /**
      * Domains excluded across the team, including legacy company exclusions.
      */
@@ -9500,6 +9950,48 @@ export type EmailReminderSummary = {
      */
     threadId: string;
 };
+
+/**
+ * A complete replacement definition; an empty list selects no mail.
+ * Contact/company edits affect matching without rewriting this definition.
+ */
+export type EmailRuleSet = {
+    /**
+     * OR-combined positive selectors over all non-draft thread participants.
+     */
+    include: Array<EmailInclusionRule>;
+    /**
+     * Wire-format version, not a contribution grant or revision number.
+     */
+    schema_version: number;
+};
+
+/**
+ * Canonical rules and bounded warnings; validation does not grant contribution.
+ */
+export type EmailRuleValidation = {
+    /**
+     * Indices that may select most mail because they match the owner or domain.
+     */
+    broad_rule_indices: Array<number>;
+    /**
+     * Human-readable effect to show before an agent changes sharing.
+     */
+    effect: string;
+    /**
+     * Indices into the canonical list that currently have no live targets.
+     */
+    inactive_rule_indices: Array<number>;
+    /**
+     * Normalized, sorted and deduplicated, without expanding live references.
+     */
+    rules: EmailRuleSet;
+};
+
+/**
+ * A mailbox view the Email list scopes a search to, as its tabs do.
+ */
+export type EmailSearchView = 'sent' | 'drafts';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -10640,6 +11132,13 @@ export type ExternalChatSendReply = {
      * Message being quoted, within this chat.
      */
     replyTo?: string | null;
+    /**
+     * The user's own reply approving this send, quoted verbatim. Required
+     * from an agent's program; never the request that asked for the message.
+     * Not part of the send's intent: it is neither stored nor compared on a
+     * retry.
+     */
+    userConfirmation?: string | null;
 };
 
 /**
@@ -13282,7 +13781,7 @@ export type InitiativeActivityRecord = {
  */
 export type InitiativeDescription = {
     /**
-     * GitHub-flavored markdown; empty while no one has opened or written it.
+     * Internal markdown, chips as XML tags such as `<m-user-mention>`; empty while no one has opened or written it.
      */
     markdown: string;
 };
@@ -13962,6 +14461,11 @@ export type LocationResponseV3 = {
 };
 
 export type MacroUserIdStr = string;
+
+/**
+ * Why a domain exclusion would hide an affected mailbox's entire history.
+ */
+export type MailboxDomainConflict = 'company' | 'personal_provider';
 
 /**
  * Mark messages through this message read.
@@ -14891,6 +15395,44 @@ export type NewColumn = {
 };
 
 /**
+ * Audit data supplied by the authorized use case, without mail content.
+ */
+export type NewEmailPolicyAudit = {
+    /**
+     * The operation that committed.
+     */
+    action: EmailPolicyAuditAction;
+    /**
+     * Provenance derived from authenticated credentials.
+     */
+    actor_kind: EmailPolicyActorKind;
+    /**
+     * Verified agent identity, if available.
+     */
+    agent_id?: string | null;
+    /**
+     * Verified session identity, if available; never inferred from a request.
+     */
+    agent_session_id?: string | null;
+    /**
+     * Bounded metadata, never email IDs, addresses, subjects or bodies.
+     */
+    details: unknown;
+    /**
+     * Server-generated UUIDv7, stable for a retried system event.
+     */
+    event_id: string;
+    /**
+     * New immutable definition.
+     */
+    next_revision?: number | null;
+    /**
+     * Previous immutable definition.
+     */
+    previous_revision?: number | null;
+};
+
+/**
  * One entry to add: at most one of `recordId` or `email`. A tracked
  * pipeline's entry names its record; a generic pipeline's names none.
  */
@@ -15528,6 +16070,426 @@ export type PasswordActivity = {
 };
 
 /**
+ * Access request body.
+ */
+export type PasswordAgentAccessRequestBody = {
+    /**
+     * Requested permission.
+     */
+    permission: PasswordPermission;
+};
+
+/**
+ * A page of requests for human review.
+ */
+export type PasswordAgentAccessRequestPage = {
+    /**
+     * Opaque cursor of the next page.
+     */
+    nextCursor?: string | null;
+    /**
+     * Pending requests on items the caller may manage.
+     */
+    requests: Array<PasswordAgentAccessRequestState>;
+};
+
+/**
+ * An agent's request state.
+ */
+export type PasswordAgentAccessRequestState = {
+    /**
+     * Current access.
+     */
+    access: PasswordAgentItemAccess;
+    /**
+     * Agent account.
+     */
+    agentAccountId: string;
+    /**
+     * Item id.
+     */
+    itemId: PasswordItemId;
+    permission?: null | PasswordPermission;
+    /**
+     * Request id; null when none exists.
+     */
+    requestId?: string | null;
+    /**
+     * Request revision; 0 when none exists.
+     */
+    revision: number;
+    /**
+     * Request status.
+     */
+    status: PasswordAgentRequestStatus;
+    /**
+     * Last transition.
+     */
+    updatedAt?: string | null;
+};
+
+/**
+ * Whether the agent can use an item now.
+ */
+export type PasswordAgentAccessStatus = 'usable' | 'request_access' | 'pending';
+
+/**
+ * API credential fields an agent may select.
+ */
+export type PasswordAgentApiField = 'key' | 'secret';
+
+/**
+ * Agent item creation; the kind is the secret's tag.
+ */
+export type PasswordAgentCreateItem = {
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * UUIDv7, stable across retries; becomes the item id.
+     */
+    operationId: string;
+    /**
+     * Typed values.
+     */
+    secret: PasswordAgentCreateSecret;
+    url?: null | PasswordLoginUrl;
+};
+
+/**
+ * New item values; the item kind is this tag.
+ */
+export type PasswordAgentCreateSecret = {
+    kind: 'login';
+    /**
+     * Required non-empty password.
+     */
+    password: PasswordSecretString;
+    username?: null | PasswordSecretString;
+} | {
+    key?: null | PasswordSecretString;
+    kind: 'api';
+    /**
+     * Required non-empty API secret.
+     */
+    secret: PasswordSecretString;
+};
+
+/**
+ * One-field disclosure request.
+ */
+export type PasswordAgentDiscloseRequest = {
+    /**
+     * When given, the committed version must match.
+     */
+    expectedVersion?: number | null;
+    /**
+     * Audited intent.
+     */
+    purpose: PasswordAgentPurpose;
+    /**
+     * The single slot to disclose.
+     */
+    selector: PasswordAgentSecretSelector;
+};
+
+/**
+ * One disclosed field.
+ */
+export type PasswordAgentDisclosed = {
+    /**
+     * The selector that was disclosed.
+     */
+    selector: PasswordAgentSecretSelector;
+    /**
+     * The selected value.
+     */
+    value: PasswordSecretString;
+    /**
+     * Committed version it was read from.
+     */
+    version: number;
+};
+
+/**
+ * Agent-editable display fields.
+ */
+export type PasswordAgentEditableMetadata = {
+    /**
+     * New display name.
+     */
+    name?: string | null;
+    /**
+     * New URL; null clears it, absent keeps it.
+     */
+    url?: string | null;
+};
+
+/**
+ * Closed, payload-free failure codes of the agent vault API.
+ */
+export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable';
+
+/**
+ * Sanitized agent vault failure.
+ */
+export type PasswordAgentFailure = {
+    /**
+     * Machine-readable category; never contains request or secret values.
+     */
+    code: PasswordAgentErrorCode;
+    /**
+     * Present only on `rate_limited`.
+     */
+    retryAfterMs?: number | null;
+};
+
+/**
+ * Current agent access to one item, recomputed on every use.
+ */
+export type PasswordAgentItemAccess = {
+    /**
+     * Whether the agent may enroll a verification-code seed.
+     */
+    canSetTotp: boolean;
+    /**
+     * Whether the agent may update values and metadata.
+     */
+    canUpdate: boolean;
+    grantPermission?: null | PasswordPermission;
+    /**
+     * Live request awaiting review.
+     */
+    pendingRequestId?: string | null;
+    /**
+     * Revision of this agent's grant/approval on the item.
+     */
+    permissionRevision: number;
+    /**
+     * Current status.
+     */
+    status: PasswordAgentAccessStatus;
+    useBasis?: null | PasswordAgentUseBasis;
+};
+
+/**
+ * Login item fields an agent may select.
+ */
+export type PasswordAgentLoginField = 'username' | 'password';
+
+/**
+ * Agent item update.
+ */
+export type PasswordAgentPatchItem = {
+    /**
+     * Committed version the update applies to.
+     */
+    expectedVersion: number;
+    metadataPatch?: null | PasswordAgentEditableMetadata;
+    /**
+     * UUIDv7, stable across retries of this one update.
+     */
+    operationId: string;
+    secretPatch?: null | PasswordAgentSecretPatch;
+};
+
+/**
+ * Accepted disclosure intent. Typing is a later additive value.
+ */
+export type PasswordAgentPurpose = 'copy';
+
+/**
+ * Wire request status.
+ */
+export type PasswordAgentRequestStatus = 'none' | 'pending' | 'approved' | 'denied' | 'revoked';
+
+/**
+ * Human decision on a pending request.
+ */
+export type PasswordAgentResolveRequest = {
+    decision: 'approve';
+    /**
+     * Granted permission.
+     */
+    permission: PasswordPermission;
+    /**
+     * Request revision observed by the reviewer.
+     */
+    revision: number;
+} | {
+    decision: 'deny';
+    /**
+     * Request revision observed by the reviewer.
+     */
+    revision: number;
+};
+
+/**
+ * Human revocation of agent access.
+ */
+export type PasswordAgentRevokeBody = {
+    /**
+     * Permission revision observed by the reviewer.
+     */
+    expectedPermissionRevision: number;
+    /**
+     * What to remove.
+     */
+    scope: PasswordAgentRevokeScope;
+};
+
+/**
+ * What a revocation removes.
+ */
+export type PasswordAgentRevokeScope = 'approval' | 'grant_and_approval';
+
+/**
+ * Metadata-only search hit; never values, usernames, notes or custom fields.
+ */
+export type PasswordAgentSearchHit = {
+    /**
+     * Current access.
+     */
+    access: PasswordAgentItemAccess;
+    /**
+     * Item id.
+     */
+    id: PasswordItemId;
+    /**
+     * Stored kind.
+     */
+    kind: PasswordItemKind;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Website URL.
+     */
+    url?: string | null;
+    /**
+     * Committed positive version.
+     */
+    version: number;
+};
+
+/**
+ * One search page.
+ */
+export type PasswordAgentSearchPage = {
+    /**
+     * Hits, newest first.
+     */
+    items: Array<PasswordAgentSearchHit>;
+    /**
+     * Opaque cursor of the next page.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * Replacement of supplied slots; absent slots keep their stored value.
+ */
+export type PasswordAgentSecretPatch = {
+    kind: 'login';
+    password?: null | PasswordSecretString;
+    username?: null | PasswordSecretString;
+} | {
+    key?: null | PasswordSecretString;
+    kind: 'api';
+    secret?: null | PasswordSecretString;
+};
+
+/**
+ * Closed kind-aware selector of exactly one stored slot. Notes, custom fields
+ * and TOTP seeds are never selectable.
+ */
+export type PasswordAgentSecretSelector = {
+    /**
+     * Selected login field.
+     */
+    field: PasswordAgentLoginField;
+    kind: 'login';
+} | {
+    /**
+     * Selected API credential field.
+     */
+    field: PasswordAgentApiField;
+    kind: 'api';
+};
+
+/**
+ * Verification-code seed setup for an item the agent created.
+ */
+export type PasswordAgentSetTotp = {
+    /**
+     * Committed version the setup applies to.
+     */
+    expectedVersion: number;
+    /**
+     * UUIDv7, stable across retries; identifies the enrollment generation.
+     */
+    operationId: string;
+    /**
+     * Base32 seed.
+     */
+    seed: PasswordSecretString;
+};
+
+/**
+ * A verification code with a conservative server-computed lifetime.
+ */
+export type PasswordAgentTotpCode = {
+    /**
+     * Current code; never the seed.
+     */
+    code: PasswordSecretString;
+    /**
+     * Conservative usable-until time under the documented provider clock bound;
+     * not an observed generation instant.
+     */
+    expiresAt: string;
+    /**
+     * Code period in seconds.
+     */
+    periodSeconds: number;
+    /**
+     * Whole milliseconds from the server's final check until `expiresAt`.
+     */
+    validForMs: number;
+};
+
+/**
+ * Verification-code request.
+ */
+export type PasswordAgentTotpCodeRequest = {
+    /**
+     * Audited intent.
+     */
+    purpose: PasswordAgentPurpose;
+};
+
+/**
+ * Why a usable item is usable.
+ */
+export type PasswordAgentUseBasis = 'creator_grant' | 'approved_grant';
+
+/**
+ * Created or updated item.
+ */
+export type PasswordAgentWriteResult = {
+    /**
+     * Item after the write.
+     */
+    item: PasswordAgentSearchHit;
+    /**
+     * Committed version.
+     */
+    version: number;
+};
+
+/**
  * New folder, at the top level or inside another folder of the team.
  */
 export type PasswordCreateFolderBody = {
@@ -15607,9 +16569,10 @@ export type PasswordGrant = {
 };
 
 /**
- * Future principals can extend this without exposing agent controls in v1.
+ * Grant recipient category. Agent grants are managed only through the agent
+ * access routes and never appear in, or count toward, human sharing.
  */
-export type PasswordGranteeKind = 'user' | 'team';
+export type PasswordGranteeKind = 'user' | 'team' | 'agent';
 
 /**
  * At most 25 credentials and 200 source folders in a request bounded to 4 MiB.
@@ -15692,7 +16655,7 @@ export type PasswordImportFolderResult = {
 /**
  * Recognized client-side source parser; contains no export contents.
  */
-export type PasswordImportFormat = 'one_password_pux' | 'one_password_csv' | 'bitwarden_json' | 'bitwarden_csv';
+export type PasswordImportFormat = 'one_password_pux' | 'one_password_csv' | 'bitwarden_json' | 'bitwarden_csv' | 'bitwarden_zip';
 
 /**
  * One normalized credential; intentionally has no Debug implementation.
@@ -15993,6 +16956,17 @@ export type PasswordShareBody = {
  * Team isolation boundary.
  */
 export type PasswordTeamId = string;
+
+/**
+ * An authorized human resolved, or revoked, an agent's access request.
+ */
+export type PasswordTopicEvent = {
+    event_type: 'passwords.access_request.resolved';
+    /**
+     * An authorized human resolved, or revoked, an agent's access request.
+     */
+    metadata: AccessRequestResolvedMetadata;
+};
 
 /**
  * Private seed submitted only to the verification-code provider.
@@ -16741,13 +17715,20 @@ export type PostMessage = {
      */
     nonce?: string | null;
     /**
+     * Who hears about this post. `Silent` still delivers and shows the
+     * message, but sends no notification of any kind, mentions included.
+     * Channel messages only; other parents accept only `Default`.
+     */
+    notification_policy?: PostMessageNotificationPolicy;
+    /**
      * Root to reply to, if this is a reply.
      */
     thread_id?: string | null;
 };
 
 /**
- * Internal notification behavior for a posted channel message.
+ * Who hears about a posted message. A caller may choose it for its own
+ * channel message, since every choice only narrows who is notified.
  */
 export type PostMessageNotificationPolicy = 'Default' | 'MentionsOnly' | 'Silent';
 
@@ -17328,9 +18309,13 @@ export type ReadSpreadsheetRequest = {
 
 export type RecentlyDeletedResponseData = {
     /**
-     * The items returned from the call
+     * The items returned from the call, most recently trashed first
      */
     items: Array<Item>;
+    /**
+     * Pass as `cursor` to get the next page; absent on the last page
+     */
+    next_cursor?: string | null;
 };
 
 /**
@@ -19973,6 +20958,12 @@ export type SoupItem = {
      */
     data: SoupHarness;
     tag: 'harness';
+} | {
+    /**
+     * Team, listed only by attention feeds.
+     */
+    data: SoupTeam;
+    tag: 'team';
 };
 
 /**
@@ -20162,6 +21153,26 @@ export type SoupProperty = {
      */
     id: string;
     value?: null | PropertyValue;
+};
+
+/**
+ * A team, listed only by attention feeds: team-scoped notifications (a
+ * vault access request) are filed under it, and it has no page of its own.
+ * Teams carry no timestamps; attention feeds order by attention time.
+ */
+export type SoupTeam = {
+    /**
+     * The team uuid.
+     */
+    id: string;
+    /**
+     * The team's display name.
+     */
+    name: string;
+    /**
+     * The user who owns the team.
+     */
+    ownerId: string;
 };
 
 /**
@@ -22386,9 +23397,13 @@ export type TypedSuccessResponse = {
      */
     data: {
         /**
-         * The items returned from the call
+         * The items returned from the call, most recently trashed first
          */
         items: Array<Item>;
+        /**
+         * Pass as `cursor` to get the next page; absent on the last page
+         */
+        next_cursor?: string | null;
     };
     /**
      * Indicates if an error occurred
@@ -23413,7 +24428,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent | PasswordTopicEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -27977,12 +28992,17 @@ export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmC
 export type GetCrmEmailPrivacyData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Return only consent and mailbox fields, without querying domain lists.
+         */
+        consent_only?: boolean;
+    };
     url: '/crm/email-privacy';
 };
 
 export type GetCrmEmailPrivacyResponses = {
-    200: EmailPrivacySettings;
+    200: EmailPrivacyResponse;
 };
 
 export type GetCrmEmailPrivacyResponse = GetCrmEmailPrivacyResponses[keyof GetCrmEmailPrivacyResponses];
@@ -28000,6 +29020,126 @@ export type UpdateCrmEmailPrivacyResponses = {
 
 export type UpdateCrmEmailPrivacyResponse = UpdateCrmEmailPrivacyResponses[keyof UpdateCrmEmailPrivacyResponses];
 
+export type GetCrmEmailPolicyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy';
+};
+
+export type GetCrmEmailPolicyResponses = {
+    200: EmailPolicyView;
+};
+
+export type GetCrmEmailPolicyResponse = GetCrmEmailPolicyResponses[keyof GetCrmEmailPolicyResponses];
+
+export type UpdateCrmEmailPolicyData = {
+    body: EmailPolicyCommand;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy';
+};
+
+export type UpdateCrmEmailPolicyErrors = {
+    /**
+     * Consent changed; inspect before deciding again
+     */
+    409: unknown;
+};
+
+export type UpdateCrmEmailPolicyResponses = {
+    200: EmailPolicyOutcome;
+};
+
+export type UpdateCrmEmailPolicyResponse = UpdateCrmEmailPolicyResponses[keyof UpdateCrmEmailPolicyResponses];
+
+export type ListCrmEmailPolicyHistoryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Exclusive audit event cursor; pages contain at most fifty events.
+         */
+        before?: string | null;
+    };
+    url: '/crm/email-privacy/policy/history';
+};
+
+export type ListCrmEmailPolicyHistoryResponses = {
+    200: EmailPolicyHistory;
+};
+
+export type ListCrmEmailPolicyHistoryResponse = ListCrmEmailPolicyHistoryResponses[keyof ListCrmEmailPolicyHistoryResponses];
+
+export type GetCrmEmailRulePreviewData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy/preview';
+};
+
+export type GetCrmEmailRulePreviewResponses = {
+    200: null | EmailPreviewView;
+};
+
+export type GetCrmEmailRulePreviewResponse = GetCrmEmailRulePreviewResponses[keyof GetCrmEmailRulePreviewResponses];
+
+export type PreviewCrmEmailRulesData = {
+    body: EmailPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy/preview';
+};
+
+export type PreviewCrmEmailRulesResponses = {
+    200: EmailPreviewView;
+};
+
+export type PreviewCrmEmailRulesResponse = PreviewCrmEmailRulesResponses[keyof PreviewCrmEmailRulesResponses];
+
+export type CancelCrmEmailRulePreviewData = {
+    body?: never;
+    path: {
+        preview_id: string;
+    };
+    query?: never;
+    url: '/crm/email-privacy/policy/preview/{preview_id}';
+};
+
+export type CancelCrmEmailRulePreviewResponses = {
+    204: void;
+};
+
+export type CancelCrmEmailRulePreviewResponse = CancelCrmEmailRulePreviewResponses[keyof CancelCrmEmailRulePreviewResponses];
+
+export type GetCrmEmailRuleRevisionData = {
+    body?: never;
+    path: {
+        revision: number;
+    };
+    query?: never;
+    url: '/crm/email-privacy/policy/revisions/{revision}';
+};
+
+export type GetCrmEmailRuleRevisionResponses = {
+    200: null | EmailPolicyRevision;
+};
+
+export type GetCrmEmailRuleRevisionResponse = GetCrmEmailRuleRevisionResponses[keyof GetCrmEmailRuleRevisionResponses];
+
+export type ValidateCrmEmailRulesData = {
+    body: EmailRuleSet;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy/validate';
+};
+
+export type ValidateCrmEmailRulesResponses = {
+    200: EmailRuleValidation;
+};
+
+export type ValidateCrmEmailRulesResponse = ValidateCrmEmailRulesResponses[keyof ValidateCrmEmailRulesResponses];
+
 export type ListCrmExcludedEmailThreadsData = {
     body?: never;
     path?: never;
@@ -28008,6 +29148,10 @@ export type ListCrmExcludedEmailThreadsData = {
          * Read entries after this thread ID.
          */
         after?: string | null;
+        /**
+         * Look up one thread instead of paging. Cannot be combined with `after`.
+         */
+        thread_id?: string | null;
     };
     url: '/crm/email-privacy/threads';
 };
@@ -32152,6 +33296,10 @@ export type ExternalChatSendData = {
 
 export type ExternalChatSendErrors = {
     /**
+     * An agent's program sent without userConfirmation (code confirmation_required), or the caller may not send
+     */
+    403: unknown;
+    /**
      * One send request per second per user; Retry-After: 1
      */
     429: unknown;
@@ -34007,6 +35155,311 @@ export type EntityMessageTypingResponses = {
 
 export type EntityMessageTypingResponse = EntityMessageTypingResponses[keyof EntityMessageTypingResponses];
 
+export type PasswordsAgentSearchData = {
+    body?: never;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: {
+        /**
+         * Metadata search text; never a value search.
+         */
+        q?: string | null;
+        /**
+         * Page size, 1 to 100; default 50.
+         */
+        limit?: string | null;
+        /**
+         * Cursor from the previous page.
+         */
+        cursor?: string | null;
+    };
+    url: '/passwords/agent/teams/{team}/items';
+};
+
+export type PasswordsAgentSearchErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentSearchError = PasswordsAgentSearchErrors[keyof PasswordsAgentSearchErrors];
+
+export type PasswordsAgentSearchResponses = {
+    200: PasswordAgentSearchPage;
+};
+
+export type PasswordsAgentSearchResponse = PasswordsAgentSearchResponses[keyof PasswordsAgentSearchResponses];
+
+export type PasswordsAgentCreateData = {
+    body: PasswordAgentCreateItem;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items';
+};
+
+export type PasswordsAgentCreateErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentCreateError = PasswordsAgentCreateErrors[keyof PasswordsAgentCreateErrors];
+
+export type PasswordsAgentCreateResponses = {
+    /**
+     * Replay of an accepted operation
+     */
+    200: PasswordAgentWriteResult;
+    201: PasswordAgentWriteResult;
+};
+
+export type PasswordsAgentCreateResponse = PasswordsAgentCreateResponses[keyof PasswordsAgentCreateResponses];
+
+export type PasswordsAgentUpdateData = {
+    body: PasswordAgentPatchItem;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}';
+};
+
+export type PasswordsAgentUpdateErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentUpdateError = PasswordsAgentUpdateErrors[keyof PasswordsAgentUpdateErrors];
+
+export type PasswordsAgentUpdateResponses = {
+    200: PasswordAgentWriteResult;
+};
+
+export type PasswordsAgentUpdateResponse = PasswordsAgentUpdateResponses[keyof PasswordsAgentUpdateResponses];
+
+export type PasswordsAgentRequestAccessData = {
+    body: PasswordAgentAccessRequestBody;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/access-requests';
+};
+
+export type PasswordsAgentRequestAccessErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    429: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentRequestAccessError = PasswordsAgentRequestAccessErrors[keyof PasswordsAgentRequestAccessErrors];
+
+export type PasswordsAgentRequestAccessResponses = {
+    /**
+     * Already usable
+     */
+    200: PasswordAgentAccessRequestState;
+    202: PasswordAgentAccessRequestState;
+};
+
+export type PasswordsAgentRequestAccessResponse = PasswordsAgentRequestAccessResponses[keyof PasswordsAgentRequestAccessResponses];
+
+export type PasswordsAgentMyRequestData = {
+    body?: never;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/access-requests/mine';
+};
+
+export type PasswordsAgentMyRequestErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentMyRequestError = PasswordsAgentMyRequestErrors[keyof PasswordsAgentMyRequestErrors];
+
+export type PasswordsAgentMyRequestResponses = {
+    200: PasswordAgentAccessRequestState;
+};
+
+export type PasswordsAgentMyRequestResponse = PasswordsAgentMyRequestResponses[keyof PasswordsAgentMyRequestResponses];
+
+export type PasswordsAgentDiscloseData = {
+    body: PasswordAgentDiscloseRequest;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/disclose';
+};
+
+export type PasswordsAgentDiscloseErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentDiscloseError = PasswordsAgentDiscloseErrors[keyof PasswordsAgentDiscloseErrors];
+
+export type PasswordsAgentDiscloseResponses = {
+    200: PasswordAgentDisclosed;
+};
+
+export type PasswordsAgentDiscloseResponse = PasswordsAgentDiscloseResponses[keyof PasswordsAgentDiscloseResponses];
+
+export type PasswordsAgentSetTotpData = {
+    body: PasswordAgentSetTotp;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/totp';
+};
+
+export type PasswordsAgentSetTotpErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentSetTotpError = PasswordsAgentSetTotpErrors[keyof PasswordsAgentSetTotpErrors];
+
+export type PasswordsAgentSetTotpResponses = {
+    204: void;
+};
+
+export type PasswordsAgentSetTotpResponse = PasswordsAgentSetTotpResponses[keyof PasswordsAgentSetTotpResponses];
+
+export type PasswordsAgentTotpCodeData = {
+    body: PasswordAgentTotpCodeRequest;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/totp/code';
+};
+
+export type PasswordsAgentTotpCodeErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentTotpCodeError = PasswordsAgentTotpCodeErrors[keyof PasswordsAgentTotpCodeErrors];
+
+export type PasswordsAgentTotpCodeResponses = {
+    200: PasswordAgentTotpCode;
+};
+
+export type PasswordsAgentTotpCodeResponse = PasswordsAgentTotpCodeResponses[keyof PasswordsAgentTotpCodeResponses];
+
 export type PasswordsTeamsData = {
     body?: never;
     path?: never;
@@ -34026,6 +35479,43 @@ export type PasswordsTeamsResponses = {
 };
 
 export type PasswordsTeamsResponse = PasswordsTeamsResponses[keyof PasswordsTeamsResponses];
+
+export type PasswordsAgentAccessRequestsData = {
+    body?: never;
+    path: {
+        team: string;
+    };
+    query?: {
+        /**
+         * Managed item: list every agent's access to it instead of the pending queue.
+         */
+        itemId?: string | null;
+        /**
+         * Page size, 1 to 100; default 50.
+         */
+        limit?: string | null;
+        /**
+         * Cursor from the previous page.
+         */
+        cursor?: string | null;
+    };
+    url: '/passwords/teams/{team}/agent-access-requests';
+};
+
+export type PasswordsAgentAccessRequestsErrors = {
+    400: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentAccessRequestsError = PasswordsAgentAccessRequestsErrors[keyof PasswordsAgentAccessRequestsErrors];
+
+export type PasswordsAgentAccessRequestsResponses = {
+    200: PasswordAgentAccessRequestPage;
+};
+
+export type PasswordsAgentAccessRequestsResponse = PasswordsAgentAccessRequestsResponses[keyof PasswordsAgentAccessRequestsResponses];
 
 export type PasswordsFoldersData = {
     body?: never;
@@ -34416,6 +35906,72 @@ export type PasswordsActivityResponses = {
 };
 
 export type PasswordsActivityResponse = PasswordsActivityResponses[keyof PasswordsActivityResponses];
+
+export type PasswordsAgentResolveRequestData = {
+    body: PasswordAgentResolveRequest;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+        request: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/agent-access-requests/{request}/resolve';
+};
+
+export type PasswordsAgentResolveRequestErrors = {
+    400: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentResolveRequestError = PasswordsAgentResolveRequestErrors[keyof PasswordsAgentResolveRequestErrors];
+
+export type PasswordsAgentResolveRequestResponses = {
+    200: PasswordAgentAccessRequestState;
+};
+
+export type PasswordsAgentResolveRequestResponse = PasswordsAgentResolveRequestResponses[keyof PasswordsAgentResolveRequestResponses];
+
+export type PasswordsAgentRevokeData = {
+    body: PasswordAgentRevokeBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+        agent: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/agents/{agent}/revoke';
+};
+
+export type PasswordsAgentRevokeErrors = {
+    400: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentRevokeError = PasswordsAgentRevokeErrors[keyof PasswordsAgentRevokeErrors];
+
+export type PasswordsAgentRevokeResponses = {
+    200: PasswordAgentItemAccess;
+};
+
+export type PasswordsAgentRevokeResponse = PasswordsAgentRevokeResponses[keyof PasswordsAgentRevokeResponses];
 
 export type PasswordsCopyData = {
     body: PasswordRevealBody;
@@ -35190,7 +36746,16 @@ export type RevertDeleteProjectResponse = RevertDeleteProjectResponses[keyof Rev
 export type RecentlyDeletedData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Page size (1-500, default 100)
+         */
+        limit?: number;
+        /**
+         * The previous page's next_cursor
+         */
+        cursor?: string;
+    };
     url: '/recents/deleted';
 };
 

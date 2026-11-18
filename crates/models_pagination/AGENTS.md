@@ -10,8 +10,8 @@ methods, shared by almost every list endpoint in the backend.
 - `src/cursor.rs`: `Identify`, `Sortable`, `SortOn`, `Paginate`/`Paginated` —
   the three traits an item/sort method must implement to be paginated, plus
   the opaque base64 cursor types.
-- `src/sort.rs`: concrete sort methods (`CreatedAt`, `Frecency`, `NotifiedAt`,
-  `TouchedByMe`, `SimpleSortMethod`); Soup extends position values in its own domain for numeric property sorts.
+- `src/sort.rs`: concrete sort methods (`CreatedAt`, `DeletedAt`, `Frecency`,
+  `NotifiedAt`, `TouchedByMe`, `SimpleSortMethod`); Soup extends position values in its own domain for numeric property sorts.
 - `src/collections.rs`: `CollectBy`/`CollectByIds` helpers.
 - `src/axum.rs` (feature `axum`): `BidirectionalCursor` extractor.
 

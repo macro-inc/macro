@@ -12,7 +12,7 @@ use rootcause::Report;
 use tower::ServiceExt;
 
 #[derive(Clone)]
-struct Authorization;
+pub(crate) struct Authorization;
 impl MacroAuthorizationService for Authorization {
     async fn authorize(&self, token: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
         Ok(UserContext {

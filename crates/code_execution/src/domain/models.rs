@@ -38,6 +38,21 @@ pub struct RunEnvironment {
     /// instead of an agent's or a person's call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unattended: Option<Unattended>,
+    /// How the program's requests leave its process. Host-only: the child
+    /// sees only the hosts it may reach.
+    #[serde(skip)]
+    pub egress: Egress,
+}
+
+/// How a program's requests reach the SDK hosts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Egress {
+    /// Straight from the process to the hosts, which `--allow-net` names.
+    #[default]
+    Direct,
+    /// Through a loopback forwarder the host runs for the run, the only
+    /// address `--allow-net` names; it marks every request.
+    Proxied,
 }
 
 /// The deployment's Macro SDK targets, so a program's requests and links stay
@@ -87,6 +102,11 @@ pub struct Limits {
     pub max_result_bytes: usize,
     /// Maximum regular events, plus a separate equal budget for advisory progress.
     pub max_events: usize,
+    /// Calls of any one SDK operation a program may make; the next one stops
+    /// the run with an error naming it. A program reading the same thing in
+    /// an unbounded loop would otherwise hammer one API until the deadline
+    /// and end with nothing to tell the agent why.
+    pub max_calls_per_operation: u32,
     /// CPU time a process may use across its threads before the kernel stops
     /// it; `None` leaves only the wall-clock deadline.
     pub max_cpu: Option<Duration>,
@@ -106,6 +126,7 @@ impl Default for Limits {
             max_output_bytes: 2 * 1024 * 1024,
             max_result_bytes: 64 * 1024,
             max_events: 1024,
+            max_calls_per_operation: 200,
             max_cpu: None,
             background: false,
         }
@@ -126,6 +147,7 @@ impl Limits {
             || self.max_result_bytes < 512
             || self.max_result_bytes + RESULT_FRAME_OVERHEAD > self.max_frame_bytes
             || !(2..=65536).contains(&self.max_events)
+            || !(1..=100_000).contains(&self.max_calls_per_operation)
             || self
                 .max_cpu
                 .is_some_and(|cpu| cpu < Duration::from_secs(1) || cpu > self.max_duration)

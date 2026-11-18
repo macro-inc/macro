@@ -23,7 +23,9 @@
 //!
 //! A row is listed only while it shows something. Team invites, inbox
 //! reconnection notices and external chat messages have no row at all. Each
-//! row also says who it is from and what the viewer can do from it.
+//! row also says who it is from, what the viewer can do from it, and which
+//! other kinds it is listed under, such as a thread whose reply mentions the
+//! viewer, listed under mentions as well.
 
 use std::collections::{HashMap, HashSet};
 
@@ -59,6 +61,8 @@ enum Slot {
     PullRequest,
     CalendarEvent,
     CalendarJoinRequest(Uuid),
+    /// One agent request for a vault item, by its request.
+    PasswordAccessRequested(Uuid),
     AccessRequested(Uuid),
     AccessGranted(Uuid),
     /// One removal of runtime access, by its notification.
@@ -77,6 +81,7 @@ impl Slot {
             Self::PullRequest => "pull_request".to_string(),
             Self::CalendarEvent => "calendar_event".to_string(),
             Self::CalendarJoinRequest(id) => format!("calendar_join_request:{id}"),
+            Self::PasswordAccessRequested(id) => format!("password_access_requested:{id}"),
             Self::AccessRequested(id) => format!("access_requested:{id}"),
             Self::AccessGranted(id) => format!("access_granted:{id}"),
             Self::AccessRemoved(id) => format!("access_removed:{id}"),
@@ -458,6 +463,9 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         NotifEvent::CalendarEventJoinRequest(request) => {
             (Slot::CalendarJoinRequest(request.request_id), true)
         }
+        NotifEvent::PasswordAccessRequested(request) => {
+            (Slot::PasswordAccessRequested(request.request_id), true)
+        }
         NotifEvent::AiResponse(_)
         | NotifEvent::AgentSessionSettled(_)
         | NotifEvent::AgentSessionWaitingForInput(_)
@@ -510,9 +518,69 @@ fn row_type(slot: &Slot, channel: bool, mention: bool) -> InboxRowType {
         (Slot::PullRequest, ..) => InboxRowType::PullRequest,
         (Slot::CalendarEvent, ..) => InboxRowType::CalendarEvent,
         (Slot::CalendarJoinRequest(_), ..) => InboxRowType::CalendarJoinRequest,
+        (Slot::PasswordAccessRequested(_), ..) => InboxRowType::PasswordAccessRequested,
         (Slot::AccessRequested(_), ..) => InboxRowType::AccessRequested,
         (Slot::AccessGranted(_), ..) => InboxRowType::AccessGranted,
         (Slot::AccessRemoved(_), ..) => InboxRowType::AccessRemoved,
+    }
+}
+
+/// The kinds besides its own that a row is listed under, because what it
+/// shows is that too. A filter selects the rows with what it names, so a
+/// reply that mentions the viewer lists its thread under mentions as well as
+/// threads, a mention's thread with replies under threads as well, and an
+/// entity's comments that mention the viewer under comments as well. A pull
+/// request or agent session that mentions the viewer is listed under mentions
+/// outside a channel, as comment mentions are.
+fn also_listed_as(
+    row_type: InboxRowType,
+    shown: &[FeedNotification],
+    viewer: &MacroUserIdStr<'static>,
+) -> Vec<InboxRowType> {
+    let channel_kinds = || {
+        shown
+            .iter()
+            .map(|notification| channel_view(notification, viewer).kind)
+    };
+    match row_type {
+        InboxRowType::ChannelThread
+            if channel_kinds().any(|kind| {
+                matches!(
+                    kind,
+                    ChannelKind::Message {
+                        role: MessageRole::Mention,
+                        ..
+                    }
+                )
+            }) =>
+        {
+            vec![InboxRowType::ChannelMention]
+        }
+        InboxRowType::ChannelMention
+            if channel_kinds().any(|kind| {
+                matches!(
+                    kind,
+                    ChannelKind::Message {
+                        thread_id: Some(_),
+                        ..
+                    }
+                )
+            }) =>
+        {
+            vec![InboxRowType::ChannelThread]
+        }
+        InboxRowType::DiscussionMention => vec![InboxRowType::DiscussionMessages],
+        InboxRowType::PullRequest | InboxRowType::Agent
+            if shown.iter().any(|notification| {
+                matches!(
+                    notification.notification_metadata,
+                    NotifEvent::GithubPrMention(_) | NotifEvent::AgentSessionMentioned(_)
+                )
+            }) =>
+        {
+            vec![InboxRowType::DiscussionMention]
+        }
+        _ => Vec::new(),
     }
 }
 
@@ -557,7 +625,7 @@ fn actions(slot: &Slot, shown: &[FeedNotification]) -> Vec<InboxRowAction> {
             action(InboxRowActionKind::Accept, Some(request), None),
             action(InboxRowActionKind::Decline, Some(request), None),
         ],
-        Slot::AccessGranted(_) | Slot::AccessRemoved(_) => {
+        Slot::AccessGranted(_) | Slot::AccessRemoved(_) | Slot::PasswordAccessRequested(_) => {
             vec![action(InboxRowActionKind::Open, None, None)]
         }
         Slot::Agent
@@ -659,8 +727,10 @@ pub fn rows(
                 }
                 _ => notifications.iter().any(|n| counts_as_unseen(n)),
             };
+            let row_type = row_type(&slot, channel, mention);
             Some(InboxRow {
-                row_type: row_type(&slot, channel, mention),
+                row_type,
+                also_listed_as: also_listed_as(row_type, &notifications, viewer),
                 actor: actor(&notifications[0]),
                 actions: actions(&slot, &notifications),
                 thread_id: match &slot {

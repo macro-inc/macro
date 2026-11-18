@@ -40,8 +40,8 @@ handle upload.
   (`src/api/event/s3_create.rs`) marks it uploaded — a client finishing a
   presigned PUT does not itself update file state.
 - Every route runs behind `agent_correlation::inbound::enforce_signed_scope`:
-  a code-mode credential is refused (403) outside the session scope it signs
-  (`agent_scope`). This service has no database, so it checks the signed
+  a code-mode or routine dry-run credential is refused (403) outside the
+  scope it signs (`agent_scope`). This service has no database, so it checks the signed
   claim, not the stored correlation; keep new routes inside `app`.
 - `tree_trace` and `dynamodb_client_test` are test-only Cargo features; don't
   enable them in a deployed build.

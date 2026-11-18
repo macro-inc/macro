@@ -10,9 +10,11 @@ export const ALLOWED_ORIGINS = () => {
     'https://platform.openai.com',
     'https://platform.claude.com',
     'https://console.anthropic.com',
-    // Google's sign-in pages send the browser back to FusionAuth, which reads
-    // their origin and otherwise ends Google sign-in with `invalid_origin`.
+    // Google's and Microsoft's sign-in pages send the browser back to
+    // FusionAuth, which reads their origin and otherwise ends the sign-in with
+    // `invalid_origin`.
     'https://accounts.google.com',
+    'https://login.microsoftonline.com',
   ];
 
   switch (stack) {

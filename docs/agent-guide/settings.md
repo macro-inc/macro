@@ -12,8 +12,7 @@ Deleted or replaced scratch databases fail the old import instead of silently
 continuing with incomplete history; its cleanup must leave a replacement intact.
 
 In **Integrations → Accounts**, the **Slack export** row appears only for team admins
-and owners with `enable-slack-archive-import` enabled. Production rollout stays
-off until explicitly enabled. Select an export ZIP, filter the grouped conversation
+and owners. Select an export ZIP, filter the grouped conversation
 picker, optionally show archived conversations, and use Space to toggle focused
 checkboxes. **Select all visible conversations** preserves selections hidden by
 filters; unchecking it or **Clear visible selection** clears only visible selections.
@@ -124,11 +123,26 @@ under that action, including the account catalog's durable refresh.
 
 ### Email read receipts
 
-Behind `enable-email-read-receipts` (on in dev), **Settings → Email → Read
+**Settings → Email → Read
 receipts** lists each owned inbox with a switch that saves immediately. It is
 on by default, and the section's only copy is "See when recipients open
 messages you send." Messages sent from an inbox with it on carry an invisible
 pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
+
+### Email row style
+
+**Settings → Email → Display options → Row style** picks how Mail rows look on
+this device: **Minimalist** (the default; an unread dot, the checkbox on hover)
+or **Classic** (rows wall to wall with one faint line between them and above
+each date group's first row, unread rows on a raised fill with bolder sender,
+subject and date, and the selection checkbox always shown instead of the dot).
+Below the tabs, an inert sample of two made-up rows (one unread, one read)
+shows the chosen style, drawn by the real Mail row; screen readers get a short
+description instead. The choice saves immediately and applies to every open
+Mail list. Phones always show Minimalist rows, so the section and its search
+entry are absent there. The backend-free desktop, tablet and phone
+regression, which also covers the sample (`?view=settings` in the fixture), is
+`bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts row-styles.browser.e2e.ts`.
 
 ### Notification permission prompt
 
@@ -364,10 +378,12 @@ sidebar matches Email and Tasks: a **Settings** title bar, a rounded
 searching): **Invite your team** with its icon and label in a soft pink-to-indigo gradient (opens the invite dialog;
 hidden for members when the team limits invites to admins) or, with no team,
 **Create a team** (opens the create-team dialog), then the grouped section
-pills. Unlike other views, it cannot be hidden at
-desktop widths: there is no **Hide navigation** toggle and `Cmd .` does
-nothing, even if it was hidden before. Below 720px the sidebar becomes an overlay opened from **Show
-navigation** (or `Cmd .`), which starts closed. Escape closes a
+pills. Above 720px, **Hide navigation** beside the title collapses the sidebar;
+**Show navigation** restores it. Wide touch panes always dock the sidebar left
+of the page, with no collapse control and no section pills. Below 720px the
+sidebar becomes an overlay that starts closed; narrow touch panes switch
+sections from pills at the top, led by **Show navigation**. `Cmd .` also
+toggles navigation. Escape closes a
 settings split that shares the layout, or steps back to the previous view when
 it is the only split (Home when there is none). Leave settings by picking any
 other rail item; there is no separate back or fullscreen control.
@@ -424,7 +440,7 @@ Left nav (feature and platform gates still apply):
   **Team · Members**. The team Slack export import and the GitHub App live in
   Integrations; `/app/settings/team-connections` opens Integrations.
 - **Blocks**: Email, Calendar, Agents, CRM. On touch devices, where the Agents
-  sidebar is hidden, **Routines** (`/app/settings/routines`) follows Agents.
+  sidebar can be collapsed, **Routines** (`/app/settings/routines`) follows Agents.
 - **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
 - **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
 - **Developer**: Machines, MCP server, API Keys, Account Managers, Bots.
@@ -537,12 +553,8 @@ language has loaded, PostHog stores it on the person as `interface_language`
 Existing settings URLs remain valid; `connections` still opens Integrations,
 `agent-connections` aliases Integrations, and `harness` aliases Machines (tab id `Harness`, slug `runtimes`).
 
-`Usage` appears directly above Billing, including for Free accounts. In
-production, the `enable-ai-usage-billing` PostHog flag controls activation. While
-it is off or loading, the page shows **AI billing changes take effect on October
-8, 2026.** and all Usage controls are disabled. Turning the flag on activates the
-page and removes the announcement. Dev and local remain interactive even with
-the flag off. The production usage-limit dialog follows the same flag. Its
+`Usage` appears directly above Billing, including for Free accounts. The
+usage-limit dialog's
 **Monthly limit** meter displays a percentage using the backend's current-period
 usage and allowance. The info button explains AI agent chat and AI document
 editing. **Usage Credits** shows the dollar balance and `Add more`, which opens
@@ -663,8 +675,7 @@ users keep their current plan. Cards appear only for users who can
 manage their subscription. Team-paid members see no plan options, including
 on Free seats. Member options stay hidden until the billing summary confirms
 they pay for their own seat. On a team, a plan change moves only the viewer's
-own seat. Max lists "10x more AI usage than Pro"; Free and Pro allowance labels
-still follow the `enable-ai-usage-billing` flag. Usage controls live in Usage.
+own seat. Max lists "10x more AI usage than Pro". Usage controls live in Usage.
 The upgrade modal and Billing use the same plan cards and benefits, including
 the same flag-gated AI usage label and responsive card layout. The modal offers
 Pro and Max to Free accounts, only Max to Pro accounts, and no upgrade cards to
@@ -734,7 +745,7 @@ available in all channels should refresh there without reloading the channel.
 
 ![Integrations overview with example connections](assets/settings-integrations.png)
 
-With `pipedream-mcp` enabled, Settings → Integrations is one searchable list
+Settings → Integrations is one searchable list
 styled like the Drive and Tasks lists, spanning nearly the full settings page
 width. Rows are separated by faint dividers and have Name (icon, name, an
 `mcp` or `native` badge, and a smaller, fainter second line on what it does in
@@ -823,9 +834,7 @@ custom servers. Agents configured with a fixed app selection do not receive the
 owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
 Cursor stays in Agents → Machines with its API key, default model and default effort controls; it is not
-featured or offered in the Connections catalog. Settings → Integrations lists
-Email, Accounts and AI apps above the agent tools and app catalog. The native-only integrations section remains
-available when `pipedream-mcp` is disabled.
+featured or offered in the Connections catalog.
 Open Settings with the rail's gear button or `Ctrl+;`; leave it by picking any other rail item.
 
 `Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
@@ -867,7 +876,7 @@ If the runtime rejects the saved model, the prompt fails instead of using a diff
 Under its title and description, the `Machines` section shows the MacroD `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog, except on touch devices. The `Machines` section shows built-in Macro, Cursor, and Codex configuration (under `Built-in machines`), followed by paired macrod machines. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in machines: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this machine) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Machines settings tab stays available in the desktop app even if the newer Agents view is disabled. A running machine with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped machine offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Machines navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New machine` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission bypass, then Approve and Done. `Pending requests`, at the top and only while any wait, lists teammates' requests to use machines the viewer owns (`<person> requested to use <machine>`, with `Deny` and `Approve`) and the viewer's own requests on teammates' machines (`Your access: Requested`, whose `Requested` button cancels); the `Machines` entry in the settings sidebar and the phone settings sheet shows how many incoming requests wait. `Your machines` lists every machine the viewer owns, offline ones included. Each row shows a status dot before the name, then a meta line (`Private` or `Team machine`, the count of waiting access requests in accent ink, and the last connection), with `Share`, `Options`, `Rename` and `Remove` at the top right; on narrow rows the name wraps, the meta line sits under it and the actions get their own line. `Options` opens a small menu on desktop and a sheet on touch with one toggle, `Don't ask before acting` (the machine's permission bypass: turning it on asks for confirmation and applies from each session's next turn). Only the owner can change it; everyone else sees it disabled with its current value. A machine's name and this toggle are set only here, and its sharing through Share; macrod.toml holds only machine-local config, and macrod refuses a file that still sets `[identity]` or a credentials `scope`. Desktop setup's Full access choice turns the toggle on for the new machine. Back/Cancel returns to the machine list. Destructive removal still requires confirmation. Every paired machine has one person as its owner; its `Team machine` or `Private` label says whether every teammate is a user of it. Everyone else on the team can see it and holds a role: No Access, Read (sees what is on it but cannot run agents), or User (can run agents); non-coding agents bound to it are Residents. `Share` opens the machine Share menu: the `Team machine` switch, the owner, residents, people with a `Read` or `User` role picker, access requests (each reads `Requested to use <machine>`) with `Approve` and `Deny`, and a filterable list of teammates to `Add` as users. It has no link, channel or outside sharing. Removing or lowering access a resident depends on first warns that it shuts the agent down. `Teammates' machines`, below, groups the team's other machines by owner. Each row uses the same layout: status dot and name, a meta line with `Online`/`Offline` and `Your access: None/Read/User/Requested`, `Request access` (or the pending `Requested`, which cancels) when the viewer cannot run agents on it, and the read-only `Options`; the team's owner also gets `Remove` on team machines. People never show machines: user cards, hover cards, drawers and chips list none. Agent cards and the agent session pane still show the machine an agent runs or lives on (`Runs on <machine>` / `Lives on <machine>`), with `Request access`, and so do the agent and routine pickers. When an agent's owner loses access to the machine it lives on, the agent stops: its session pane and DM header say `Stopped: no access to <machine>` with `Request access` for the owner, a prompt to it leaves a refusal line in the transcript instead of running, and the owner gets a notification ("<person> removed your access to <machine>" / "<agent> has stopped.") that opens this section with that machine pointed out. These notifications are filed under the machine and listed in Notifications (Access); clicking the row opens what its newest notification opens. An access-request notification ("requested to use <machine>") opens this section with that machine's row highlighted and its Share menu open; a grant notification highlights the row only. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported. A Macro computer is listed only under **Macro computers**, not here.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action. Beside it,
-the composer's speedometer effort control (the bottom sheet on touch) offers the
+the composer's labeled Effort control (the bottom sheet on touch) offers the
 selected default model's own effort stops and saves on change; it is hidden for a
 model with fewer than two stops. Changing the default model clears the saved
 effort, and a saved effort the model no longer offers shows, and starts
@@ -1169,8 +1178,7 @@ desktop and mobile and contains:
 
 - **Agent → Enable AI agent**: makes the bot available in the model selector
   and lets it respond to mentions, using a chat agent or a connected external
-  runtime. Saving an agent configuration enables it regardless of harness. This
-  section remains gated by the agents rollout.
+  runtime. Saving an agent configuration enables it regardless of harness.
 - **Ownership → Mentionable**: lets teammates find and @mention the bot and
   creates it under team ownership. With the switch off, the creator owns it.
   Only team admins and owners can enable this option.

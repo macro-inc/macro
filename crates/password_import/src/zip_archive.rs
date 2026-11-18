@@ -1,4 +1,7 @@
-//! Reads `export.data` out of a `.1pux` zip, and nothing else.
+//! Reads the export out of a zip: `export.data` from a 1Password `.1pux`, or
+//! `data.json` from a Bitwarden zip. Nothing else is inflated; Bitwarden's
+//! attachment entries are only counted by name.
+use std::collections::HashMap;
 use std::io::{Cursor, Read};
 
 use zeroize::Zeroizing;
@@ -7,10 +10,15 @@ use zip_inflate::read::ZipReadOptions;
 use zip_inflate::result::ZipError;
 
 use crate::error::ImportError;
-use crate::model::Limits;
+use crate::model::{Limits, SourceFormat};
 
 pub(crate) const ZIP_MAGIC: &[u8] = b"PK\x03\x04";
+/// 1Password's export inside a `.1pux`.
 pub(crate) const EXPORT_DATA: &str = "export.data";
+/// Bitwarden's JSON export inside its zip export.
+pub(crate) const BITWARDEN_DATA: &str = "data.json";
+/// Bitwarden's zip export stores each item's files as `attachments/<item id>/<file>`.
+const BITWARDEN_ATTACHMENTS: &str = "attachments/";
 
 const END_OF_CENTRAL_DIRECTORY: &[u8] = b"PK\x05\x06";
 /// The end-of-central-directory record without its comment.
@@ -31,12 +39,9 @@ const ZIP64_TOTAL_ENTRIES_OFFSET: usize = 32;
 
 type Archive<'a> = ZipArchive<Cursor<&'a [u8]>>;
 
-/// Open a `.1pux` archive and check it without inflating anything: entry
-/// count, entry names, and exactly one `export.data`.
-pub(crate) fn open_checked<'a>(
-    bytes: &'a [u8],
-    limits: &Limits,
-) -> Result<Archive<'a>, ImportError> {
+/// Open an archive and check it without inflating anything: entry count and
+/// entry names.
+fn open_checked<'a>(bytes: &'a [u8], limits: &Limits) -> Result<Archive<'a>, ImportError> {
     // Reject a huge entry count before the zip reader allocates per entry,
     // zip64 counts included.
     if let Some(count) = declared_entry_count(bytes)
@@ -45,8 +50,9 @@ pub(crate) fn open_checked<'a>(
         return Err(ImportError::TooManyEntries);
     }
 
-    let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(|_| ImportError::InvalidZip)?;
-    // Duplicate names are refused below, so this is every central-directory entry.
+    let archive = ZipArchive::new(Cursor::new(bytes)).map_err(|_| ImportError::InvalidZip)?;
+    // Duplicate names are refused when the data entry is read, so this is
+    // every central-directory entry.
     if archive.len() > limits.max_zip_entries {
         return Err(ImportError::TooManyEntries);
     }
@@ -58,25 +64,74 @@ pub(crate) fn open_checked<'a>(
         }
     }
 
-    // Header consistency refuses duplicate names anywhere in the archive, so
-    // the `export.data` read here is the only one, and the count above is real.
-    match archive.by_name_with_options(EXPORT_DATA, consistent()) {
-        Ok(_) => {}
-        Err(ZipError::FileNotFound) => return Err(ImportError::MissingExportData),
-        Err(_) => return Err(ImportError::InvalidZip),
-    }
-
     Ok(archive)
 }
 
-/// Inflate `export.data`, bounded by `limits` while reading.
-pub(crate) fn read_export_data(
+/// Whether the archive holds `entry`. Header consistency refuses duplicate
+/// names anywhere in the archive, so an `entry` found here is the only one,
+/// and the entry count checked on open is real.
+fn has_entry(archive: &mut Archive<'_>, entry: &str) -> Result<bool, ImportError> {
+    match archive.by_name_with_options(entry, consistent()) {
+        Ok(_) => Ok(true),
+        Err(ZipError::FileNotFound) => Ok(false),
+        Err(_) => Err(ImportError::InvalidZip),
+    }
+}
+
+/// The export a checked archive holds, by its data entry: `export.data` for
+/// 1Password, `data.json` for Bitwarden.
+pub(crate) fn detect(bytes: &[u8], limits: &Limits) -> Result<SourceFormat, ImportError> {
+    let mut archive = open_checked(bytes, limits)?;
+
+    if has_entry(&mut archive, EXPORT_DATA)? {
+        Ok(SourceFormat::OnePasswordPux)
+    } else if has_entry(&mut archive, BITWARDEN_DATA)? {
+        Ok(SourceFormat::BitwardenZip)
+    } else {
+        Err(ImportError::MissingExportData)
+    }
+}
+
+/// Attachment files per Bitwarden item id. Directory entries and anything
+/// outside `attachments/<item id>/` don't count.
+pub(crate) fn bitwarden_attachment_counts(
     bytes: &[u8],
     limits: &Limits,
+) -> Result<HashMap<String, usize>, ImportError> {
+    let archive = open_checked(bytes, limits)?;
+    let mut counts = HashMap::new();
+
+    for name in archive.file_names() {
+        let name = name.map_err(|_| ImportError::InvalidZip)?;
+        let Some((item_id, file)) = name
+            .strip_prefix(BITWARDEN_ATTACHMENTS)
+            .and_then(|path| path.split_once('/'))
+        else {
+            continue;
+        };
+        if item_id.is_empty() || file.is_empty() || file.ends_with('/') {
+            continue;
+        }
+
+        *counts.entry(item_id.to_owned()).or_insert(0) += 1;
+    }
+
+    Ok(counts)
+}
+
+/// Inflate the data `entry` (`export.data` or `data.json`), bounded by
+/// `limits` while reading.
+pub(crate) fn read_data(
+    bytes: &[u8],
+    limits: &Limits,
+    entry: &str,
 ) -> Result<Zeroizing<Vec<u8>>, ImportError> {
     let mut archive = open_checked(bytes, limits)?;
+    if !has_entry(&mut archive, entry)? {
+        return Err(ImportError::MissingExportData);
+    }
     let entry = archive
-        .by_name_with_options(EXPORT_DATA, consistent())
+        .by_name_with_options(entry, consistent())
         .map_err(|_| ImportError::InvalidZip)?;
 
     // The header's size is a hint only; `take` enforces the real bound.

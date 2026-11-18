@@ -39,6 +39,7 @@ impl JwtValidator for OwnerToken {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: OWNER.into(),
                 fusion_user_id: "test-fusion-user".into(),
                 organization_id: None,

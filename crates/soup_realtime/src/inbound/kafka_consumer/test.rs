@@ -15,7 +15,7 @@ use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
     DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
-    DocumentUpdatedMetadata, InteractionReason,
+    DocumentUpdatedMetadata, EmailAttachmentsReleasedMetadata, InteractionReason,
 };
 use email::domain::events::{
     EmailEventOrigin, EmailTopicEvent, MessageDraftSyncedMetadata, ThreadBackfilledMetadata,
@@ -162,6 +162,31 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
     let deleted = patches_from_document_event(&deleted);
     assert!(matches!(deleted[0].patch, Patch::Deleted(_)));
     assert_eq!(patch_entity(&deleted[0]).entity_id, DOCUMENT_ID);
+}
+
+#[test]
+fn released_email_attachments_leave_open_lists_only_when_trashed() {
+    let second = Uuid::now_v7().to_string();
+    let event = DocumentTopicEvent::EmailAttachmentsReleased(EmailAttachmentsReleasedMetadata {
+        trashed_document_ids: vec![DOCUMENT_ID.to_string(), second.clone()],
+        kept_document_ids: vec![Uuid::now_v7().to_string()],
+    });
+
+    let patches = patches_from_document_event(&event);
+
+    assert_eq!(patches.len(), 2);
+    assert!(
+        patches
+            .iter()
+            .all(|patch| matches!(patch.patch, Patch::Deleted(_)))
+    );
+    assert_eq!(
+        patches
+            .iter()
+            .map(|patch| patch_entity(patch).entity_id.clone())
+            .collect::<Vec<_>>(),
+        vec![DOCUMENT_ID.to_string(), second]
+    );
 }
 
 #[test]

@@ -38,4 +38,5 @@ fn all_topic_names_includes_declared_topics() {
     assert!(all_topic_names().contains(&MacroDatabasesTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroFormsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroUsersTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroPasswordsTopic::TOPIC_STR));
 }

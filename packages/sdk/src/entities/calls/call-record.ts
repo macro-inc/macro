@@ -50,7 +50,8 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   }
 
   /**
-   * Join only while this call is live; never start a replacement call.
+   * Join only while this call is live, never starting a replacement call;
+   * refused to an agent's program (ExecuteCode, a routine).
    *
    * @write
    * @mcp-exclude Returns a live call room credential; MCP calls carry JSON only.
@@ -167,7 +168,8 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   readonly access = new EntityAccess(this.client, 'call', this);
 
   /**
-   * Get or create a shareable meeting for this call.
+   * Get or create a shareable meeting for this call; refused to an agent's
+   * program (ExecuteCode, a routine), so there ask the user to share it.
    *
    * @write
    * @idempotent
@@ -318,10 +320,13 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
    */
   readonly shareWithTeam = this.field('shareWithTeam');
 
-  /** URL of the call recording, once available. */
+  /**
+   * URL of the call recording, once available; empty for an agent's program
+   * (ExecuteCode, a routine), which reads the bytes with `recording.bytes()`.
+   */
   readonly recordingUrl = this.field('recordingUrl');
 
-  /** URL of the recording preview (thumbnail), once available. */
+  /** URL of the recording preview (thumbnail), once available; empty for an agent's program. */
   readonly recordingPreviewUrl = this.field('recordingPreviewUrl');
 
   /** When the recording started, if it was recorded. */
@@ -392,7 +397,7 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
     );
   }
 
-  /** Search calls by name and transcript, most relevant first, auto-paginated. */
+  /** Search calls by name and transcript, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { call_filters: {} },
     type: 'call',

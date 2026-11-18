@@ -18,7 +18,6 @@ import {
   calendarDisplayLabel,
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { calendarConsentScopes } from '@core/email-link/consent';
@@ -129,8 +128,6 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
     requestedInbox()?.needs_calendar_permission;
   // The tool mints the Macro call when it executes, so the composer offers the
   // choice under the same flag as the calendar's own event composer.
-  const quickCalls = useQuickCallsFlag();
-  const macroCallsEnabled = () => quickCalls().enabled && !quickCalls().loading;
   // Guest permissions roll out with guest invites.
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
   const [operation, setOperation] = createSignal<'create' | 'reject'>();
@@ -323,7 +320,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
           </Show>
           <EventForm
             controller={controller}
-            macroCallsEnabled={macroCallsEnabled()}
+            macroCallsEnabled
             guestPolicyEditable={guestInvitesEnabled()}
             class="min-w-0"
             disabled={

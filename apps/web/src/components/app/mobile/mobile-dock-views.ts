@@ -1,10 +1,7 @@
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
-  enableCalendarScheduling,
-  enableCrm,
   enablePasswords,
   enableTasksReviews,
   enableWhatsappLinked,
@@ -154,10 +151,7 @@ export const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
 ];
 
 export function useMobileDockViews() {
-  const calendarEnabled = useCalendarUiFlag();
-  const crm = useFeatureFlag(enableCrm);
   const reviews = useFeatureFlag(enableTasksReviews);
-  const scheduling = useFeatureFlag(enableCalendarScheduling);
   const passwords = useFeatureFlag(enablePasswords);
   const team = useCurrentTeamQuery(() => passwords().enabled);
   const passwordsAvailable = () =>
@@ -165,11 +159,8 @@ export function useMobileDockViews() {
   const external = useFeatureFlag(enableWhatsappLinked);
   return createMemo(() =>
     MOBILE_DOCK_VIEWS.filter(
-      (view) => view.id !== 'calendar' || calendarEnabled()
+      (view) => view.id !== 'reviews' || reviews().enabled
     )
-      .filter((view) => view.id !== 'companies' || crm().enabled)
-      .filter((view) => view.id !== 'reviews' || reviews().enabled)
-      .filter((view) => view.id !== 'booking-links' || scheduling().enabled)
       .filter((view) => view.id !== 'passwords' || passwordsAvailable())
       .filter((view) => view.id !== 'external' || external().enabled)
   );

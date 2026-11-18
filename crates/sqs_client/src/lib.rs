@@ -3,9 +3,6 @@ mod queue;
 
 pub use queue::ReceivedMessage;
 
-#[cfg(feature = "ai_projection")]
-pub mod ai_projection;
-
 #[cfg(feature = "chat")]
 pub mod chat;
 
@@ -58,8 +55,6 @@ pub trait PrimaryId {
 #[derive(Clone, Debug)]
 pub struct SQS {
     inner: sqs::Client,
-    #[cfg(feature = "ai_projection")]
-    ai_projection_queue: Option<String>,
     #[cfg(feature = "organization_retention")]
     organization_retention_queue: Option<String>,
     #[cfg(feature = "document")]
@@ -102,8 +97,6 @@ impl SQS {
     pub fn new(inner: sqs::Client) -> Self {
         Self {
             inner,
-            #[cfg(feature = "ai_projection")]
-            ai_projection_queue: None,
             #[cfg(feature = "organization_retention")]
             organization_retention_queue: None,
             #[cfg(feature = "document")]

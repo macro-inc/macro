@@ -39,6 +39,8 @@ pub enum ImportFormat {
     BitwardenJson,
     /// Bitwarden CSV.
     BitwardenCsv,
+    /// Bitwarden zip: the unencrypted JSON plus attachments, which are not imported.
+    BitwardenZip,
 }
 
 /// Destination under which source folders are nested.

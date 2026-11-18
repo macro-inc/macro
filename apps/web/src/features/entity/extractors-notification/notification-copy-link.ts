@@ -1,6 +1,7 @@
 import { copyCalendarEventMentionTarget } from '@app/features/calendar-view/copy-event-mention';
 import { toast } from '@core/component/Toast/Toast';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import { getWebOrigin } from '@core/util/webOrigin';
 import {
   getChannelNotificationParams,
   type UnifiedNotification,
@@ -30,6 +31,12 @@ export async function copyNotificationLink(notification: UnifiedNotification) {
       eventId: metadata.content.eventId,
       title: metadata.content.title,
     });
+    return;
+  }
+  // Items have no route of their own; the link opens Passwords.
+  if (metadata.tag === 'password_access_requested') {
+    await navigator.clipboard.writeText(`${getWebOrigin()}/app/passwords`);
+    toast.success('Link copied to clipboard');
     return;
   }
   if (metadata.tag === 'reminder') {

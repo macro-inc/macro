@@ -8,7 +8,6 @@ import type { CallActiveResponse } from '@service-storage/generated/schemas/call
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { CallTokenResponse as ApiCallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
 import type { CreateMeetingRequest } from '@service-storage/generated/schemas/createMeetingRequest';
-import type { EditCallRecordRequest } from '@service-storage/generated/schemas/editCallRecordRequest';
 import type { GuestChatMessage } from '@service-storage/generated/schemas/guestChatMessage';
 import type { GuestChatPage } from '@service-storage/generated/schemas/guestChatPage';
 import type { GuestChatPatch } from '@service-storage/generated/schemas/guestChatPatch';
@@ -21,7 +20,6 @@ import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/m
 import type { MeetingPreparation } from '@service-storage/generated/schemas/meetingPreparation';
 import type { ReactionInput } from '@service-storage/generated/schemas/reactionInput';
 import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
-import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 import type { Message } from '@service-storage/messages';
 
 export type {
@@ -335,20 +333,11 @@ export const callServiceClient = {
     ).map((result) => result);
   },
 
-  async deleteCallRecord(callId: string) {
-    return (
-      await fetchWithToken<Record<string, never>>(
-        `${host}/call/record/${callId}`,
-        { method: 'DELETE' }
-      )
-    ).map(() => undefined);
-  },
-
   /**
    * `POST /call/record/{id}/share-with-team/toggle`: flips the live call's
    * share-with-team toggle and returns the new value. The toggle becomes
    * canonical team sharing (view for the creator's team) when the call is
-   * archived; archived calls answer 409 and are edited via `editCallRecord`.
+   * archived; archived calls answer 409 and are shared through the entity share policy.
    */
   async toggleShareWithTeam(callId: string) {
     // fetchWithToken requires T extends ObjectLike, but this endpoint returns a
@@ -359,32 +348,5 @@ export const callServiceClient = {
       { method: 'POST' }
     );
     return result.map((r) => r as unknown as boolean);
-  },
-
-  /**
-   * `PATCH /call/record/{id}`. Team sharing goes through
-   * `sharePermission.teamShareAccessLevel`, capped at `'view'` (`null`
-   * revokes). While the call is live it sets the pending toggle; once the
-   * call is archived the backend authorizes it against the call's creator.
-   */
-  async editCallRecord(params: {
-    callId: string;
-    customName?: string;
-    sharePermission?: UpdateSharePermissionRequestV2;
-  }) {
-    const body: EditCallRecordRequest = {};
-    if (params.customName !== undefined) body.customName = params.customName;
-    if (params.sharePermission !== undefined)
-      body.sharePermission = params.sharePermission;
-
-    return (
-      await fetchWithToken<Record<string, never>>(
-        `${host}/call/record/${params.callId}`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify(body),
-        }
-      )
-    ).map(() => undefined);
   },
 };

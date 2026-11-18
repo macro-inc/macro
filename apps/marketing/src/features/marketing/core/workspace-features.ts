@@ -102,9 +102,9 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
           'Attach the database to an agent conversation to ask questions or edit records, columns, and tables. Use a routine for updates you want to happen again.',
       },
       {
-        title: 'Migrate from Notion with 1 click.',
+        title: 'Import your Notion databases.',
         description:
-          'If your databases are in Notion today, connect Notion, choose the pages and databases you want, and import them straight into Macro. Your originals stay in Notion.',
+          'Connect Notion from Drive’s Import files dialog, then select Import. Review the pages and databases the agent found and choose who can see them before you approve. Your originals stay in Notion.',
       },
     ],
     faq: [

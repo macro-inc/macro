@@ -20,6 +20,7 @@ async fn signed_agent_uses_owner_scope_and_preserves_both_identities() {
         origin: macro_authorization::CredentialOrigin::MacroApiJwt,
         agent_id: Some(agent_id),
         agent_via: None,
+        routine_id: None,
         macro_user_id: owner,
         user_context: UserContext {
             user_id: "macro|owner@example.com".into(),
@@ -63,6 +64,7 @@ async fn signed_agent_cannot_send_without_owner_access() {
         origin: macro_authorization::CredentialOrigin::MacroApiJwt,
         agent_id: Some(bot_id::MACRO_NEW_BOT_ID),
         agent_via: None,
+        routine_id: None,
         macro_user_id: "macro|owner@example.com".to_string().try_into().unwrap(),
         user_context: UserContext {
             user_id: "macro|owner@example.com".into(),
@@ -90,6 +92,7 @@ async fn signed_agent_does_not_change_caller_identity_for_existing_messages() {
         origin: macro_authorization::CredentialOrigin::MacroApiJwt,
         agent_id: Some(bot_id::MACRO_NEW_BOT_ID),
         agent_via: None,
+        routine_id: None,
         macro_user_id: "macro|owner@example.com".to_string().try_into().unwrap(),
         user_context: UserContext {
             user_id: "macro|owner@example.com".into(),

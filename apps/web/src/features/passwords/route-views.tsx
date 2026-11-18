@@ -4,6 +4,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useBeforeLeave } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -11,6 +12,7 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { SplitPanel } from '@components/app/split-panel';
 import { enablePasswords } from '@core/constant/featureFlags';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { idToDisplayName } from '@core/user/util';
 import LockIcon from '@icon/system/regular/lock.svg';
 import { useUserNames } from '@queries/auth';
@@ -19,10 +21,15 @@ import { useQueryAccount } from '@queries/auth/use-query-account';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { PasswordsProvider } from './context/passwords-context';
+import { createAgentRequestSource } from './queries/agent-requests';
 import { createSessionImportResume } from './queries/import-resume';
 import { passwordRecipients } from './queries/recipients';
 import { createPasswordSource } from './queries/source';
-import { VaultView } from './views/vault-view';
+import {
+  focusFromParams,
+  type PasswordsFocus,
+  VaultView,
+} from './views/vault-view';
 
 function PasswordsSkeleton() {
   return (
@@ -90,6 +97,15 @@ function PasswordsTeamView() {
   );
   let guard: () => Promise<boolean> = async () => true;
   useBeforeLeave(() => guard());
+  // A notification opens Passwords on one of its items; a request for another
+  // team than the viewer's current one opens the vault without a selection.
+  const panel = useSplitPanel();
+  let focusRequests = 0;
+  const focus = createMemo((): PasswordsFocus | undefined => {
+    const content = panel?.handle.content();
+    if (content?.type !== 'component' || content.id !== 'passwords') return;
+    return focusFromParams(content.params, scope()?.teamId, ++focusRequests);
+  });
   return (
     // One panel frame for every state: loading, team failures and the vault.
     <SplitPanel.Root>
@@ -147,6 +163,8 @@ function PasswordsTeamView() {
                       names().some((name) => Boolean(name.error)),
                     writeClipboard: (value) =>
                       navigator.clipboard.writeText(value),
+                    displayName: (accountId) =>
+                      getDisplayName(tryMacroId(accountId)),
                     // The parser and its worker load only when a file is chosen.
                     parseExport: async (file) =>
                       (
@@ -159,6 +177,11 @@ function PasswordsTeamView() {
                     onGuard={(next) => {
                       guard = next;
                     }}
+                    agentRequests={createAgentRequestSource(current.teamId, {
+                      isCurrent,
+                      signal: viewer.signal,
+                    })}
+                    focus={focus()}
                   />
                 </PasswordsProvider>
               );

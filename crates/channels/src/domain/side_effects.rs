@@ -389,21 +389,22 @@ where
                 has_attachments,
                 notification_policy,
             } => {
-                if notification_policy == PostMessageNotificationPolicy::Silent {
-                    return;
+                // A silent post skips only notifications; its mention events
+                // below still publish.
+                if notification_policy != PostMessageNotificationPolicy::Silent {
+                    let bot_profile = self.bot_profile_for_message(&message).await;
+                    self.send_message_posted_notifications(PostedMessageNotificationInputs {
+                        channel_id,
+                        metadata,
+                        participants,
+                        message,
+                        mentions,
+                        has_attachments,
+                        bot_profile,
+                        notification_policy,
+                    })
+                    .await;
                 }
-                let bot_profile = self.bot_profile_for_message(&message).await;
-                self.send_message_posted_notifications(PostedMessageNotificationInputs {
-                    channel_id,
-                    metadata,
-                    participants,
-                    message,
-                    mentions,
-                    has_attachments,
-                    bot_profile,
-                    notification_policy,
-                })
-                .await;
             }
             ChannelEvent::ReactionAdded {
                 channel_id,
@@ -651,7 +652,7 @@ where
             // Bot first messages fall through to a regular channel-message
             // notification; invites (which can email unregistered users) are
             // only sent on behalf of user senders.
-            self.send_first_message_invites(channel_id, &message, context)
+            self.send_first_message_invites(channel_id, &message, has_attachments, context)
                 .await;
         } else {
             self.send_channel_message_notification(channel_id, &message, has_attachments, &context)
@@ -904,14 +905,16 @@ where
         &self,
         channel_id: Uuid,
         message: &MutatedMessage,
-        context: PostedMessageNotificationContext,
+        has_attachments: bool,
+        mut context: PostedMessageNotificationContext,
     ) {
         let Some(invited_by_user_id) = context.sender.as_user().cloned() else {
             return;
         };
-        let recipient_user_ids: Vec<_> = context
+        let mut recipient_user_ids: Vec<_> = context
             .recipients_without_sender_and_mentions
-            .into_iter()
+            .iter()
+            .cloned()
             .collect();
         let existing_user_ids = match self
             .context
@@ -925,6 +928,31 @@ where
                 return;
             }
         };
+
+        // A DM or group chat is created by its first message, so that message is
+        // the first its members hear of it: notify them as every later message
+        // does, so it counts as unread and shows its text. Only people without an
+        // account still get the invitation, which emails them (for a DM, the
+        // fallback when the immediate DM email could not be queued).
+        if context.metadata.is_dm_or_group_chat() {
+            context
+                .recipients_without_sender_and_mentions
+                .retain(|id| existing_user_ids.contains(id.as_ref()));
+            if !context.recipients_without_sender_and_mentions.is_empty() {
+                self.send_channel_message_notification(
+                    channel_id,
+                    message,
+                    has_attachments,
+                    &context,
+                )
+                .await;
+            }
+            recipient_user_ids.retain(|id| !existing_user_ids.contains(id.as_ref()));
+            if recipient_user_ids.is_empty() {
+                return;
+            }
+        }
+
         self.send_invite_notification(InviteNotificationRequest {
             message_id: (context.metadata.channel_type == ChannelType::DirectMessage)
                 .then_some(message.id),

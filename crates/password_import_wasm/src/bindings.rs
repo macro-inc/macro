@@ -30,7 +30,7 @@ pub fn detect(bytes: &[u8]) -> Result<JsValue, JsError> {
 }
 
 /// Parses `bytes` as `format` (`one_password_pux`, `one_password_csv`,
-/// `bitwarden_json` or `bitwarden_csv`) with the default limits.
+/// `bitwarden_json`, `bitwarden_csv` or `bitwarden_zip`) with the default limits.
 ///
 /// # Errors
 ///

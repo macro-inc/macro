@@ -28,15 +28,15 @@ crate that produces or consumes an SQS queue.
 
 ## Boundaries
 
-- Depends on: `aws-sdk-sqs`; optional `model`, `models_email`,
-  `models_ai_projection` behind their matching features. Never a domain crate:
-  ports implemented for `SQS` live with their trait, such as `email`'s `sqs`
-  feature, so this crate stays at the bottom of the compile chain.
+- Depends on: `aws-sdk-sqs`; optional `model` and `models_email` behind
+  their matching features. Never a domain crate: ports implemented for `SQS`
+  live with their trait, such as `email`'s `sqs` feature, so this crate stays
+  at the bottom of the compile chain.
 - Used by: most SQS-producing services (`document_storage_service`,
   `email_service`, `search_processing_service`, `authentication_service`,
   the `*_handler`/`*_trigger` Lambda services) and `crates/teams`,
-  `crates/webhook`, `crates/documents`, `crates/ai_projections`,
-  `crates/ai_tools`, `crates/projects`, `crates/memory`.
+  `crates/webhook`, `crates/documents`, `crates/ai_tools`,
+  `crates/projects`, `crates/memory`.
 
 ## Recipes
 

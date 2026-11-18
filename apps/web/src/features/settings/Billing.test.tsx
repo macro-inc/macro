@@ -24,7 +24,6 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@core/auth', () => ({ useHasPaidAccess: () => () => false }));
 vi.mock('@core/constant/featureFlags', () => ({
   LOCAL_ONLY: false,
-  enableAiUsageBilling: {},
   enableMacroComputers: {},
 }));
 vi.mock('@core/context/user', () => ({

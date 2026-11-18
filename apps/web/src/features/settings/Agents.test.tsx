@@ -170,7 +170,7 @@ function modelTargetKey(target: {
 }
 
 function successfulModels(
-  models: { id: string; name: string }[],
+  models: { id: string; name: string; description?: string }[],
   currentModel = models[0]?.id
 ) {
   return {
@@ -268,7 +268,6 @@ vi.mock('@core/context/channels', () => ({
 }));
 
 const pipedreamMocks = vi.hoisted(() => ({
-  enabled: true,
   connected: [] as string[],
   connect: vi.fn(),
   catalog: [
@@ -285,10 +284,6 @@ const pipedreamMocks = vi.hoisted(() => ({
       icon_url: null,
     },
   ],
-}));
-
-vi.mock('@core/pipedream/flag', () => ({
-  usePipedreamMcpFlag: () => () => pipedreamMocks.enabled,
 }));
 
 vi.mock('@queries/pipedream-connectors', () => ({
@@ -352,7 +347,6 @@ beforeEach(() => {
   agentMocks.isTeamOwner = false;
   agentMocks.isTeamAdmin = false;
   harnessMocks.query.data = [];
-  pipedreamMocks.enabled = true;
   pipedreamMocks.connected = [];
   pipedreamMocks.connect.mockReset();
   pipedreamMocks.connect.mockImplementation(
@@ -415,6 +409,8 @@ describe('Agents', () => {
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
+      // The agent list asks first, for no runtimes: no agent is on `default`.
+      vi.mocked(useAgentModelsQueries).mockImplementationOnce(() => []);
       vi.mocked(useAgentModelsQueries).mockImplementationOnce((targets) =>
         targets().map((target) =>
           useQuery(() => ({
@@ -695,6 +691,41 @@ describe('Agents', () => {
     ).toBeTruthy();
     expect(
       within(list).getByText('Disconnected machine · codex · All channels')
+    ).toBeTruthy();
+  });
+
+  it("names the model a machine's default choice runs", () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels([
+      { id: 'default', name: 'Default (recommended)', description: 'Opus 4.8' },
+      { id: 'sonnet', name: 'Sonnet', description: 'Sonnet 4.6' },
+    ]);
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-default',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Default helper',
+          handle: 'default-helper',
+          has_agent: true,
+        },
+        instructions: '',
+        harness: 'macrod',
+        harness_id: MACROD_HARNESS.id,
+        default_model: 'default',
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+
+    render(() => <Agents {...agentsPageProps} />);
+    const list = screen.getByRole('region', { name: 'Your agents' });
+
+    expect(
+      within(list).getByText(
+        'On your machine · Dev box · Opus 4.8 (default) · All channels'
+      )
     ).toBeTruthy();
   });
 
@@ -1926,31 +1957,6 @@ describe('Agents', () => {
       ],
     },
   };
-
-  it('hides the Connections section when the Pipedream stack is off but keeps the selection', async () => {
-    pipedreamMocks.enabled = false;
-    agentMocks.query.data = [linearAgent];
-    render(() => <Agents {...agentsPageProps} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Triage bot' }));
-
-    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
-    expect(
-      within(dialog).getByRole('group', { name: 'Channels' })
-    ).toBeTruthy();
-    expect(within(dialog).queryByText('Connections')).toBeNull();
-    fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Save changes' })
-    );
-
-    await waitFor(() => {
-      expect(agentMocks.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          mcp: { scope: 'selected', servers: linearAgent.mcp.servers },
-        })
-      );
-    });
-  });
 
   it('defaults new agents to the owner connections policy', () => {
     render(() => <Agents {...agentsPageProps} />);

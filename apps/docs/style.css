@@ -228,59 +228,6 @@ html.dark .home-start-modes > span.is-selected {
   color: #fff;
 }
 
-.home-suggestions {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin: 36px 15px 8px;
-}
-
-.home-suggestion {
-  display: flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 8px 0 12px;
-  border-radius: 8px;
-  color: rgb(28 25 23 / 0.45);
-  font-size: 14px;
-  line-height: 20px;
-}
-
-html.dark .home-suggestion {
-  color: rgb(255 255 255 / 0.42);
-}
-
-.home-suggestion-main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-.home-suggestion-main span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.home-suggestion-title {
-  color: rgb(28 25 23 / 0.62);
-}
-
-html.dark .home-suggestion-title {
-  color: rgb(255 255 255 / 0.55);
-}
-
-.home-suggestion-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 8px;
-  flex: none;
-}
-
 .search-preview {
   margin: 1.25rem auto;
   border: 1px solid rgb(3 7 18 / 0.1);

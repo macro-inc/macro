@@ -91,3 +91,5 @@ service with Axum, agent-tool and Postgres adapters.
 
 - Skill: `database-core` · Rules: `.agents/rules/rust/db.md`,
   `.agents/rules/rust/architecture.md`
+
+- Creating a database webhook (`POST /databases/{id}/webhooks`, `crates/database_webhooks`) refuses an agent's program or a bot (403): its URL is a lasting secret that writes rows as its creator.

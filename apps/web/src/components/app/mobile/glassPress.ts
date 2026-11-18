@@ -8,12 +8,12 @@ const CONTROL =
 const INPUT = '[data-glass-input], [data-input] [data-composer-collapsed]';
 const DISABLED = ':disabled, [data-disabled], [aria-disabled="true"]';
 
-/** Round controls grow 28%; wide surfaces expand their paint by up to 6px per edge. */
+/** Nearly square controls grow 28%; elongated surfaces expand their paint by up to 6px per edge. */
 export function glassPressGeometry(width: number, height: number) {
   const outset = Math.min(6, width * 0.15, height * 0.15);
   return {
     outset,
-    round: width <= height * 1.15,
+    round: Math.max(width, height) <= Math.min(width, height) * 1.15,
     scale: 1.28,
   };
 }

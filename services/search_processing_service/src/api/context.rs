@@ -22,5 +22,6 @@ pub(crate) struct ApiContext {
     pub config: Arc<Config>,
     pub backfill_service: Arc<BackfillServiceImpl>,
     pub backfill_jobs: BackfillJobs,
+    pub email_attachment_status_backfill: Arc<crate::EmailAttachmentStatusBackfill>,
     pub macro_event_broker: SpsEventBroker,
 }

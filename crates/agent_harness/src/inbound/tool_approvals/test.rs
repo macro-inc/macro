@@ -34,16 +34,24 @@ fn the_wire_speaks_snake_case() {
 
 #[test]
 fn an_agent_cannot_approve_a_held_call() {
-    let response = refuse_program_approval(ToolApprovalAnswerDto::Approve, true, &HeaderMap::new())
-        .unwrap_err()
-        .into_response();
+    let response = refuse_program_approval(
+        ToolApprovalAnswerDto::Approve,
+        CredentialAttribution::Agent,
+        &HeaderMap::new(),
+    )
+    .unwrap_err()
+    .into_response();
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
 #[test]
 fn an_agent_can_deny_a_held_call() {
-    let result = refuse_program_approval(ToolApprovalAnswerDto::Deny, true, &HeaderMap::new());
+    let result = refuse_program_approval(
+        ToolApprovalAnswerDto::Deny,
+        CredentialAttribution::Agent,
+        &HeaderMap::new(),
+    );
 
     assert!(result.is_ok());
 }
@@ -55,7 +63,10 @@ fn both_agent_run_markers_refuse_approvals_but_allow_denial_and_cancellation() {
         axum::http::HeaderValue::from_static("execution"),
     )]);
 
-    for (attributed, headers) in [(true, HeaderMap::new()), (false, execution_headers)] {
+    for (attributed, headers) in [
+        (CredentialAttribution::Agent, HeaderMap::new()),
+        (CredentialAttribution::Person, execution_headers),
+    ] {
         for answer in [
             ToolApprovalAnswerDto::Approve,
             ToolApprovalAnswerDto::ApproveAndRemember,
@@ -77,6 +88,35 @@ fn a_person_can_approve_or_remember_a_held_call() {
         ToolApprovalAnswerDto::Approve,
         ToolApprovalAnswerDto::ApproveAndRemember,
     ] {
-        assert!(refuse_program_approval(answer, false, &HeaderMap::new()).is_ok());
+        assert!(
+            refuse_program_approval(answer, CredentialAttribution::Person, &HeaderMap::new())
+                .is_ok()
+        );
+    }
+}
+
+/// A routine code step running as its owner signs `routine_id` and no
+/// `agent_id`; the token alone must refuse its approval.
+#[test]
+fn a_routine_owner_token_cannot_approve_a_held_call_without_the_marker() {
+    let routine_step = macro_authorization::MacroUserAuthentication {
+        origin: macro_authorization::CredentialOrigin::MacroApiJwt,
+        agent_id: None,
+        agent_via: None,
+        routine_id: Some(Uuid::from_u128(0x7001)),
+        macro_user_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
+            .unwrap(),
+        user_context: Default::default(),
+    };
+
+    for answer in [
+        ToolApprovalAnswerDto::Approve,
+        ToolApprovalAnswerDto::ApproveAndRemember,
+    ] {
+        let response =
+            refuse_program_approval(answer, routine_step.attribution(), &HeaderMap::new())
+                .unwrap_err()
+                .into_response();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 }
