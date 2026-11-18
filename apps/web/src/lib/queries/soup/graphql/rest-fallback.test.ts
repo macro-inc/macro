@@ -1,0 +1,70 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+
+const telemetry = vi.hoisted(() => ({
+  warn: vi.fn(),
+  span: vi.fn(
+    async (
+      _name: string,
+      _options: unknown,
+      operation: (span: { error: (error: unknown) => void }) => Promise<unknown>
+    ) => await operation({ error: vi.fn() })
+  ),
+}));
+vi.mock('@macro-inc/observability', () => ({ Telemetry: telemetry }));
+
+const { resetSoupRestFallbackLog, soupRestFallback, traceSoupRestFallback } =
+  await import('./rest-fallback');
+
+const SECRET_ID = '11111111-2222-3333-4444-555555555555';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  resetSoupRestFallbackLog();
+});
+
+it('has no fallback for a request GraphQL can answer', () => {
+  expect(
+    soupRestFallback({
+      params: { limit: 10, sort_method: 'updated_at' },
+      body: { df: { l: { id: SECRET_ID } } },
+    })
+  ).toBeUndefined();
+});
+
+it('names the reason and shape of an untranslatable request without values', () => {
+  const fallback = soupRestFallback({
+    params: { limit: 10, sort_method: 'frecency' },
+    body: { df: { l: { id: SECRET_ID } }, emailView: 'inbox' },
+  });
+  expect(fallback).toEqual({
+    reason: 'sort_method frecency',
+    shape: 'sort=frecency group=none view=inbox targets=df',
+  });
+  expect(JSON.stringify(fallback)).not.toContain(SECRET_ID);
+});
+
+it('spans every fallback read and logs each shape once', async () => {
+  const fallback = { reason: 'sort_method frecency', shape: 'sort=frecency' };
+  await expect(
+    traceSoupRestFallback(fallback, 'flat', async () => 'page')
+  ).resolves.toBe('page');
+  await traceSoupRestFallback(fallback, 'flat', async () => 'page');
+
+  expect(telemetry.span).toHaveBeenCalledTimes(2);
+  expect(telemetry.span).toHaveBeenCalledWith(
+    'soup.rest_fallback',
+    {
+      kind: 'client',
+      attributes: {
+        'soup.fallback.reason': 'sort_method frecency',
+        'soup.fallback.shape': 'sort=frecency',
+        'soup.fallback.kind': 'flat',
+      },
+    },
+    expect.any(Function)
+  );
+  expect(telemetry.warn).toHaveBeenCalledExactlyOnceWith(
+    'soup.rest_fallback',
+    expect.objectContaining({ 'soup.fallback.kind': 'flat' })
+  );
+});

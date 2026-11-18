@@ -36,6 +36,10 @@ import type { PredicateQueryStatus } from './graphql/create-predicate-query';
 import type { SoupEntityRef } from './graphql/entity-input';
 import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
+import {
+  soupRestFallback,
+  traceSoupRestFallback,
+} from './graphql/rest-fallback';
 import { soupPageTimestamp } from './page-timestamp';
 import {
   createSoupRequestSignal,
@@ -175,6 +179,24 @@ export const useSoupItemsQuery = (
 type RestSoupAstItemsMeta = SoupItemsQueryOptions['meta'];
 
 async function fetchRestSoupAstItemsPage(
+  args: SoupAstItemsQueryArgs,
+  cursor: string | null,
+  requestSignal: AbortSignal
+): Promise<SoupAstItemsPage> {
+  // An explicit REST transport is a choice, not a fallback; everything else
+  // reads REST only because GraphQL had no translation.
+  const fallback =
+    args.transport === 'rest' ? undefined : soupRestFallback(args);
+  const read = () => readRestSoupAstItemsPage(args, cursor, requestSignal);
+  if (!fallback) return await read();
+  return await traceSoupRestFallback(
+    fallback,
+    args.groupBy ? 'grouped' : 'flat',
+    read
+  );
+}
+
+async function readRestSoupAstItemsPage(
   { params, body, groupBy }: SoupAstItemsQueryArgs,
   cursor: string | null,
   requestSignal: AbortSignal
