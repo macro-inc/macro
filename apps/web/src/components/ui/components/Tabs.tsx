@@ -39,15 +39,16 @@ export type TabOption<T extends string> = {
 /** Button-sized pills; touch treatments keep their own minimum targets. */
 export type TabsSize = LabeledControlSize | 'composer';
 
-// Match a composer repository pill: 36px control, 8px label inset, 14/20 text.
+// Match a composer repository pill: 36px control, 8px label inset, 14px text with inherited line height.
 const iconControlSizes = {
   ...sharedIconControlSizes,
-  composer: 'h-9 w-9 min-h-9 shrink-0 aspect-square p-0 text-sm leading-5',
+  composer:
+    'h-9 w-9 min-h-9 shrink-0 aspect-square p-0 text-sm leading-[inherit]',
 };
 const labeledControlFrames = { ...sharedControlFrames, composer: 'min-h-9' };
 const labeledControlContents = {
   ...sharedControlContents,
-  composer: 'px-2 py-0 text-sm leading-5',
+  composer: 'px-2 py-0 text-sm leading-[inherit]',
 };
 
 const tabIconSizes: Record<TabsSize, { square: string; labeled: string }> = {
@@ -186,7 +187,7 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
             class={cn(
               'inline-flex min-w-0 items-stretch overflow-hidden rounded-full border border-edge-button bg-control gap-0.5',
               props.size === 'composer'
-                ? 'px-1 py-0 text-sm leading-5'
+                ? 'px-1 py-0 text-sm leading-[inherit]'
                 : 'p-0.5',
               labeledControlFrames[props.size ?? 'md'],
               props.fullWidth && 'w-full'
@@ -455,7 +456,9 @@ function TouchInset<T extends string>(props: TabsProps<T>) {
       <div
         class={cn(
           'relative flex items-center rounded-full border border-edge-muted bg-surface has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
-          size() === 'composer' ? 'px-1 py-0 text-sm leading-5' : 'p-0.5',
+          size() === 'composer'
+            ? 'px-1 py-0 text-sm leading-[inherit]'
+            : 'p-0.5',
           props.fullWidth && 'w-full'
         )}
       >
