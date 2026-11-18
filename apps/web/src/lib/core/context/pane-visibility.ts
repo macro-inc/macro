@@ -1,27 +1,13 @@
 import { type Accessor, createContext, useContext } from 'solid-js';
 
 /**
- * A view kept mounted while hidden: a parked pane on phones. `hidden` views
- * must not act as if seen (Back handlers, reads); `suspended` ones also hold
- * their query results and apply the latest once shown. Both are false outside
- * a provider.
+ * Whether the view is kept mounted while hidden: a parked pane on phones. A
+ * hidden view must not act as if seen (Back handlers, reads), and it holds
+ * its query results, applying the latest once shown. False outside a
+ * provider.
  */
-export type PaneVisibility = {
-  hidden: Accessor<boolean>;
-  suspended: Accessor<boolean>;
-};
-
-const SHOWN: PaneVisibility = {
-  hidden: () => false,
-  suspended: () => false,
-};
-
-export const PaneVisibilityContext = createContext<PaneVisibility>(SHOWN);
+export const PaneHiddenContext = createContext<Accessor<boolean>>(() => false);
 
 export function usePaneHidden(): Accessor<boolean> {
-  return useContext(PaneVisibilityContext).hidden;
-}
-
-export function usePaneSuspended(): Accessor<boolean> {
-  return useContext(PaneVisibilityContext).suspended;
+  return useContext(PaneHiddenContext);
 }

@@ -1,4 +1,4 @@
-import { PaneVisibilityContext } from '@core/context/pane-visibility';
+import { PaneHiddenContext } from '@core/context/pane-visibility';
 import {
   type AnyVariables,
   type Client,
@@ -261,14 +261,14 @@ describe('createUrqlQuery reactive state', () => {
     expect(fake.executions).toHaveLength(1);
   });
 
-  it('holds pushed results while its pane is suspended and applies the latest on showing', () => {
+  it('holds pushed results while its pane is hidden and applies the latest on showing', () => {
     const fake = makeFakeClient();
-    const [suspended, setSuspended] = createSignal(false);
+    const [hidden, setHidden] = createSignal(false);
     let query!: UrqlQueryResult<Data, Variables>;
     disposals.push(
       createRoot((dispose) => {
-        createComponent(PaneVisibilityContext.Provider, {
-          value: { hidden: suspended, suspended },
+        createComponent(PaneHiddenContext.Provider, {
+          value: hidden,
           get children() {
             query = createUrqlQuery(() => activeOptions(fake.client));
             return undefined;
@@ -281,12 +281,12 @@ describe('createUrqlQuery reactive state', () => {
     execution?.next({ data: { value: 'shown' } });
     expect(query.data).toEqual({ value: 'shown' });
 
-    setSuspended(true);
+    setHidden(true);
     execution?.next({ data: { value: 'first while hidden' } });
     execution?.next({ data: { value: 'second while hidden' } });
     expect(query.data).toEqual({ value: 'shown' });
 
-    setSuspended(false);
+    setHidden(false);
     expect(query.data).toEqual({ value: 'second while hidden' });
     expect(fake.executions).toHaveLength(1);
   });

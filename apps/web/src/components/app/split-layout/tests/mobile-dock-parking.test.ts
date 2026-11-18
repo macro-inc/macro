@@ -3,11 +3,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const [flag, setFlag] = createSignal<{
   enabled: boolean;
-  payload: { maxParked?: number; hiddenViews?: string } | undefined;
+  payload: { maxParked?: number } | undefined;
   loading: boolean;
 }>({ enabled: true, payload: { maxParked: 3 }, loading: false });
 
 vi.mock('@app/lib/analytics/posthog', () => ({ useFeatureFlag: () => flag }));
+// The attributes each navigation's perf span starts with.
+const navigationAttributes = vi.hoisted((): Record<string, unknown>[] => []);
+vi.mock(import('@app/observability/flow'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    beginInteraction: (...args: Parameters<typeof actual.beginInteraction>) => {
+      if (args[0] === 'navigation')
+        navigationAttributes.push({ ...args[1]?.attributes });
+      return actual.beginInteraction(...args);
+    },
+  };
+});
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => true }));
 // The test routes stand in for the app's: `block` shows an entity, the
 // others are dock views named after their route.
@@ -68,7 +81,10 @@ function setup(url: string, returnsTo: (view: string) => boolean = () => true) {
           Promise.resolve(
             router.navigate(
               { location: appLocation(content.id) },
-              { park: options.park as readonly string[] as readonly PaneId[] }
+              {
+                park: options.park as readonly string[] as readonly PaneId[],
+                attributes: options.attributes,
+              }
             )
           ),
           'test'
@@ -112,6 +128,7 @@ const track = <T extends { dispose: () => void }>(context: T) => {
 afterEach(() => {
   cleanup?.();
   cleanup = undefined;
+  navigationAttributes.length = 0;
   setFlag({ enabled: true, payload: { maxParked: 3 }, loading: false });
 });
 
@@ -129,6 +146,19 @@ describe('mobile dock parking', () => {
     expect(router.entry(pane(1))).toBe(home);
     expect(parked()).toEqual([pane(2)]);
     expect(activated).toEqual([pane(1)]);
+  });
+
+  it('records on the navigation span whether the view came back from parked', async () => {
+    const { show } = track(setup('/home'));
+    navigationAttributes.length = 0;
+
+    await show('mail');
+    await show('home');
+    expect(
+      navigationAttributes.map(
+        (attributes) => attributes['navigation.restored_from_parked']
+      )
+    ).toEqual([false, true]);
   });
 
   it('closes panes opened above the view and parks only the view', async () => {

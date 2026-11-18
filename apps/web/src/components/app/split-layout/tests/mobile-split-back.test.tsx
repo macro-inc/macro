@@ -43,7 +43,6 @@ function mountContainer(stack: MobilePaneStack) {
       }}
       stack={stack}
       parkedPanes={() => []}
-      suspendsParked={() => false}
       panelRefs={new Map<SplitId, HTMLDivElement>()}
     />
   ));
@@ -82,7 +81,6 @@ describe('Android system Back in the mobile split container', () => {
           }}
           stack={stubPaneStack({ goBack })}
           parkedPanes={() => []}
-          suspendsParked={() => false}
           panelRefs={new Map<SplitId, HTMLDivElement>()}
         />
       );
@@ -106,7 +104,6 @@ describe('Android system Back in the mobile split container', () => {
           }}
           stack={stubPaneStack({ goBack })}
           parkedPanes={() => []}
-          suspendsParked={() => false}
           panelRefs={new Map<SplitId, HTMLDivElement>()}
         />
       );
@@ -129,7 +126,6 @@ describe('Android system Back in the mobile split container', () => {
           }}
           stack={stubPaneStack({ canGoBack: () => false })}
           parkedPanes={() => []}
-          suspendsParked={() => false}
           panelRefs={new Map<SplitId, HTMLDivElement>()}
         />
       );

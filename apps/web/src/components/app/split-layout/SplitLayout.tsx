@@ -8,6 +8,7 @@ import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
+import { isPlatform } from '@core/util/platform';
 import {
   createEffect,
   createMemo,
@@ -61,7 +62,9 @@ export function SplitLayoutProvider(props: ParentProps) {
     sessionKey,
     consumeSplitBelowIntent,
   });
-  const dockParking = isNativeMobilePlatform()
+  // Android only for now: iOS before Safari 18 has no `content-visibility`,
+  // so a parked pane there would still lay out on every change.
+  const dockParking = isPlatform('android')
     ? createMobileDockParking({ router, manager: splitManager, sessionKey })
     : undefined;
   if (!isTouchDevice()) onCleanup(installSplitBelowIntentTracker());
@@ -229,7 +232,6 @@ export function SplitLayout() {
                 .retainedPanes()
                 .filter((pane) => !router.panes().includes(pane))
             }
-            suspendsParked={() => layout.dockParking?.suspendsHidden() ?? false}
             panelRefs={panelRefs}
           />
         )}

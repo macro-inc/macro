@@ -1,4 +1,4 @@
-import { PaneVisibilityContext } from '@core/context/pane-visibility';
+import { PaneHiddenContext } from '@core/context/pane-visibility';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { createSignal, onMount } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -155,9 +155,9 @@ it('counts a parked view shown again as another page view, and none while hidden
     return null;
   }
   render(() => (
-    <PaneVisibilityContext.Provider value={{ hidden, suspended: () => false }}>
+    <PaneHiddenContext.Provider value={hidden}>
       <TrackedView />
-    </PaneVisibilityContext.Provider>
+    </PaneHiddenContext.Provider>
   ));
   expect(pageViews).toEqual(['mail']);
 

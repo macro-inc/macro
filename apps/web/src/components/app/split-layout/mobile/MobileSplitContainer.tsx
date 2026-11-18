@@ -1,5 +1,5 @@
 import type { PaneId } from '@app/lib/split-router';
-import { PaneVisibilityContext } from '@core/context/pane-visibility';
+import { PaneHiddenContext } from '@core/context/pane-visibility';
 import { useAndroidBackNavigation } from '@core/mobile/androidBack';
 import {
   type Accessor,
@@ -27,8 +27,6 @@ export type MobileSplitContainerProps = {
   stack: MobilePaneStack;
   /** Panes kept mounted off screen (parked dock views). */
   parkedPanes: Accessor<readonly PaneId[]>;
-  /** Whether parked panes hold their query results until shown. */
-  suspendsParked: Accessor<boolean>;
   panelRefs: Map<SplitId, HTMLDivElement>;
 };
 
@@ -99,10 +97,6 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
           const isFront = () => stack.front() === id;
           const isPresented = () => motion.presentedFront() === id;
           const isParked = () => props.parkedPanes().includes(paneOf(id));
-          const visibility = {
-            hidden: isParked,
-            suspended: () => isParked() && props.suspendsParked(),
-          };
 
           return (
             <Show when={pane()}>
@@ -124,7 +118,7 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
                     motion.handleTransitionEnd(e, isFront())
                   }
                 >
-                  <PaneVisibilityContext.Provider value={visibility}>
+                  <PaneHiddenContext.Provider value={isParked}>
                     <Suspense>
                       <SplitPanel
                         split={current().split}
@@ -134,7 +128,7 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
                         index={index()}
                       />
                     </Suspense>
-                  </PaneVisibilityContext.Provider>
+                  </PaneHiddenContext.Provider>
                 </div>
               )}
             </Show>

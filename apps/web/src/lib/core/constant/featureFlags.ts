@@ -606,12 +606,12 @@ export function isCalendarSearchUiEnabled(): boolean {
   return isFeatureEnabled(enableCalendarSearchUi);
 }
 
-// Phones keep recently used dock views mounted, hidden and inert, so going
-// back to one shows it instead of rendering it again. Off by default
-// everywhere, including dev, until the memory and background-work
-// measurements are settled. The payload tunes it: `maxParked` (views kept
-// besides the shown one) and `hiddenViews` (`live` keeps updating hidden
-// views; `suspended` holds their query results until they are shown).
+// Android phones keep recently used dock views mounted, hidden and inert, so
+// going back to one shows it instead of rendering it again; a hidden view
+// holds its query results until it is shown. Off by default everywhere,
+// including dev, until its cost on first visits and scrolling is measured
+// within bounds. The payload's `maxParked` sets how many views are kept
+// besides the shown one (default 5; 0 turns parking off).
 export const enableMobileParkedDockViews = defineFlag({
   key: 'enable-mobile-parked-dock-views',
   env: 'ENABLE_MOBILE_PARKED_DOCK_VIEWS',

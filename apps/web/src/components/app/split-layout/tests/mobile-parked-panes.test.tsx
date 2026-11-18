@@ -17,20 +17,20 @@ const mounts = new Map<string, number>();
 const backs: string[] = [];
 vi.mock('../components/SplitPanel', async () => {
   const { useAndroidBackNavigation } = await import('@core/mobile/androidBack');
-  const { usePaneSuspended } = await import('@core/context/pane-visibility');
+  const { usePaneHidden } = await import('@core/context/pane-visibility');
 
   return {
     SplitPanel: (props: { split: { id: string } }) => {
       const id = props.split.id;
       mounts.set(id, (mounts.get(id) ?? 0) + 1);
-      const suspended = usePaneSuspended();
+      const hidden = usePaneHidden();
       useAndroidBackNavigation(() => {
         backs.push(id);
         return true;
       });
       onCleanup(() => mounts.set(id, (mounts.get(id) ?? 0) - 100));
       return (
-        <p data-view={id} data-suspended={String(suspended())}>
+        <p data-view={id} data-hidden={String(hidden())}>
           {id}
         </p>
       );
@@ -45,7 +45,7 @@ import { MobileSplitContainer } from '../mobile/MobileSplitContainer';
 
 const id = (value: string) => value as SplitId;
 
-function mountContainer(suspends = false) {
+function mountContainer() {
   const [open, setOpen] = createSignal<readonly SplitId[]>([id('mail')]);
   const [parked, setParked] = createSignal<readonly PaneId[]>([]);
   const stack: MobilePaneStack = {
@@ -65,7 +65,6 @@ function mountContainer(suspends = false) {
       }}
       stack={stack}
       parkedPanes={parked}
-      suspendsParked={() => suspends}
       panelRefs={new Map<SplitId, HTMLDivElement>()}
     />
   ));
@@ -125,21 +124,14 @@ describe('parked panes in the mobile split container', () => {
     expect(backs).toEqual(['channels']);
   });
 
-  it('marks parked views suspended only when hidden views are suspended', () => {
-    const live = mountContainer(false);
-    live.switchTo('channels');
-    expect(
-      live.container
-        .querySelector('[data-view="mail"]')
-        ?.getAttribute('data-suspended')
-    ).toBe('false');
-    live.unmount();
+  it('tells a view it is hidden while parked', () => {
+    const { container, switchTo } = mountContainer();
+    const mail = () => container.querySelector('[data-view="mail"]');
+    expect(mail()?.getAttribute('data-hidden')).toBe('false');
 
-    const suspended = mountContainer(true);
-    suspended.switchTo('channels');
-    const mail = () => suspended.container.querySelector('[data-view="mail"]');
-    expect(mail()?.getAttribute('data-suspended')).toBe('true');
-    suspended.switchTo('mail');
-    expect(mail()?.getAttribute('data-suspended')).toBe('false');
+    switchTo('channels');
+    expect(mail()?.getAttribute('data-hidden')).toBe('true');
+    switchTo('mail');
+    expect(mail()?.getAttribute('data-hidden')).toBe('false');
   });
 });

@@ -173,7 +173,6 @@ export function AndroidBackFixture() {
           setComposerOpen(false);
         })}
         parkedPanes={() => []}
-        suspendsParked={() => false}
         panelRefs={new Map<SplitId, HTMLDivElement>()}
       />
       <Show

@@ -1,5 +1,5 @@
 import { usePending } from '@app/observability/flow';
-import { usePaneSuspended } from '@core/context/pane-visibility';
+import { usePaneHidden } from '@core/context/pane-visibility';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
@@ -74,7 +74,7 @@ export function createPredicateQuery<T extends object>(options: {
   const [status, setStatus] = createSignal<PredicateQueryStatus>('idle');
   const [error, setError] = createSignal<unknown>();
   let requestRefresh = () => {};
-  const suspended = usePaneSuspended();
+  const paneHidden = usePaneHidden();
   // A caller may derive a new request object from a query snapshot even when
   // its actual membership evidence and selection have not changed.
   const query = createMemo(options.query, undefined, {
@@ -278,10 +278,10 @@ export function createPredicateQuery<T extends object>(options: {
         if (!running) runPromise = run();
       };
       requestRefresh = refresh;
-      // Every open tab shares one cache engine. A hidden tab or suspended pane
+      // Every open tab shares one cache engine. A hidden tab or parked pane
       // keeps a dirty bit instead of reading on each revision; initial and
       // explicit reads still run.
-      const deferral = createHiddenDeferral(refresh, suspended);
+      const deferral = createHiddenDeferral(refresh, paneHidden);
       const unsubscribeChanges = host.onCacheChanged(
         (revision) => {
           latest = revision;

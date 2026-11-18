@@ -1,4 +1,4 @@
-import { usePaneSuspended } from '@core/context/pane-visibility';
+import { usePaneHidden } from '@core/context/pane-visibility';
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/index';
@@ -40,7 +40,7 @@ export function useVisibleCalendarsQuery(
 ) {
   const cacheHost = useGraphqlCalendarHost();
   const activeQueryClient = useQueryClient();
-  const suspended = usePaneSuspended();
+  const paneHidden = usePaneHidden();
   const userId = useUserId();
 
   createEffect(() => {
@@ -56,7 +56,7 @@ export function useVisibleCalendarsQuery(
             { queryKey },
             { cancelRefetch: false }
           ),
-        { live: () => !suspended() }
+        { live: () => !paneHidden() }
       )
     );
   });

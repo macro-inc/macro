@@ -1,6 +1,6 @@
 import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { usePending } from '@app/observability/flow';
-import { usePaneSuspended } from '@core/context/pane-visibility';
+import { usePaneHidden } from '@core/context/pane-visibility';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { until } from '@solid-primitives/promise';
@@ -110,7 +110,7 @@ export function createSoupLiveQuery(
   const owner = getOwner();
   const pendingDeleteKeys = usePendingGraphqlSoupDeleteKeys();
   const pendingAppearance = usePendingEntityAppearance();
-  const suspended = usePaneSuspended();
+  const paneHidden = usePaneHidden();
   const offline = createBrowserOfflineSignal();
   const [fetchingMailPage, setFetchingMailPage] = createSignal(false);
   // The position of the last local Mail row loaded (a page's `endCursor`).
@@ -326,13 +326,13 @@ export function createSoupLiveQuery(
       }
     };
     let latestRevision: CacheRevision | undefined;
-    // Every open tab shares one cache engine. A hidden tab or suspended pane
+    // Every open tab shares one cache engine. A hidden tab or parked pane
     // keeps a dirty bit instead of evaluating this list on each revision or
     // engine replacement.
     const deferral = createHiddenDeferral(() => {
       if (latestRevision !== undefined) setCurrentCacheRevision(latestRevision);
       else fireAndForget(observeCurrentRevision(), 'soup-live-query');
-    }, suspended);
+    }, paneHidden);
     const unsubscribeChanges = host.onCacheChanged(
       (revision) => {
         cacheObservation += 1;

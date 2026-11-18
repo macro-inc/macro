@@ -1,4 +1,4 @@
-import { PaneVisibilityContext } from '@core/context/pane-visibility';
+import { PaneHiddenContext } from '@core/context/pane-visibility';
 import { render } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -487,18 +487,17 @@ describe('TraceFlow in a hidden (parked) pane', () => {
   });
 
   it('records nothing and never holds the visible navigation open', async () => {
-    const hidden = { hidden: () => true, suspended: () => true };
     function Content() {
       usePending('mail.items', () => true);
       return null;
     }
     const navigation = beginInteraction('navigation');
     render(() => (
-      <PaneVisibilityContext.Provider value={hidden}>
+      <PaneHiddenContext.Provider value={() => true}>
         <TraceFlow name="view.mail">
           <Content />
         </TraceFlow>
-      </PaneVisibilityContext.Provider>
+      </PaneHiddenContext.Provider>
     ));
     navigation.end();
     await flush();
@@ -514,13 +513,11 @@ describe('TraceFlow in a hidden (parked) pane', () => {
       return null;
     }
     render(() => (
-      <PaneVisibilityContext.Provider
-        value={{ hidden: isHidden, suspended: isHidden }}
-      >
+      <PaneHiddenContext.Provider value={isHidden}>
         <TraceFlow name="view.mail">
           <Content />
         </TraceFlow>
-      </PaneVisibilityContext.Provider>
+      </PaneHiddenContext.Provider>
     ));
     await flush();
     expect(operations).toEqual([{ name: 'view.mail', outcome: undefined }]);
@@ -547,17 +544,15 @@ describe('loads in a hidden (parked) pane under an app-level flow', () => {
     }
     render(() => (
       <TraceFlow name="view.app">
-        <PaneVisibilityContext.Provider
-          value={{ hidden: isHidden, suspended: isHidden }}
-        >
+        <PaneHiddenContext.Provider value={isHidden}>
           <List />
-        </PaneVisibilityContext.Provider>
+        </PaneHiddenContext.Provider>
       </TraceFlow>
     ));
     await flush();
     expect(operations).toEqual([{ name: 'view.app', outcome: undefined }]);
 
-    // Parked while its list still loads (suspended, it would never finish).
+    // Parked while its list still loads (hidden, it would never finish).
     setHidden(true);
     await flush();
     await flush();

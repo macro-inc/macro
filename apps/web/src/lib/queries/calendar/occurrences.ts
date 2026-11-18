@@ -1,4 +1,4 @@
-import { usePaneSuspended } from '@core/context/pane-visibility';
+import { usePaneHidden } from '@core/context/pane-visibility';
 import { throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
@@ -194,7 +194,7 @@ export function useCalendarOccurrencesQuery(
 ) {
   const cacheHost = useGraphqlCalendarHost();
   const activeQueryClient = useQueryClient();
-  const suspended = usePaneSuspended();
+  const paneHidden = usePaneHidden();
 
   createEffect(() => {
     const host = cacheHost();
@@ -210,7 +210,7 @@ export function useCalendarOccurrencesQuery(
             { queryKey },
             { cancelRefetch: false }
           ),
-        { live: () => !suspended() }
+        { live: () => !paneHidden() }
       )
     );
   });

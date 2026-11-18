@@ -221,7 +221,13 @@ export function createLayout(options: {
       cause: 'navigate',
       targets: [],
       removed,
-      attributes: { 'navigation.restored_from_parked': true },
+      // Whether a view comes back from parked instead of rendering, so a
+      // restore is not read as a fast render.
+      attributes: {
+        'navigation.restored_from_parked': next.some(
+          (pane) => !open.includes(pane)
+        ),
+      },
       apply: () => {
         batch(() => {
           panes.show(next);

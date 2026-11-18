@@ -1,5 +1,5 @@
 import { useFlowTrace } from '@app/observability/flow';
-import { usePaneSuspended } from '@core/context/pane-visibility';
+import { usePaneHidden } from '@core/context/pane-visibility';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -113,12 +113,12 @@ export function createBaseQuery<
     );
   };
 
-  // A suspended view (a hidden parked pane) keeps only the latest result and
-  // applies it once shown, so nothing it renders changes while hidden.
-  const suspended = usePaneSuspended();
+  // A hidden parked pane keeps only the latest result and applies it once
+  // shown, so nothing it renders changes while hidden.
+  const paneHidden = usePaneHidden();
   let held: Result | undefined;
   const deliver = (next: Result): void => {
-    if (untrack(suspended)) {
+    if (untrack(paneHidden)) {
       held = next;
       return;
     }
@@ -126,7 +126,7 @@ export function createBaseQuery<
   };
   createComputed(
     on(
-      suspended,
+      paneHidden,
       (hidden) => {
         if (hidden || !held) return;
         const next = held;

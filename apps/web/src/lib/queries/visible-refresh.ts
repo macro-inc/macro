@@ -130,14 +130,14 @@ export function createVisibleRefresh(
 /**
  * Runs immediately while visible, with no throttle. A hidden tab keeps one dirty
  * bit and runs once when it becomes visible, for a source whose own reads
- * already coalesce. `suspended` hides it the same way inside a visible tab (a
- * parked pane); it needs a reactive owner.
+ * already coalesce. `paneHidden` defers it the same way inside a visible tab
+ * (a parked pane); it needs a reactive owner.
  *
  * The caller must dispose it.
  */
 export function createHiddenDeferral(
   run: () => void,
-  suspended?: Accessor<boolean>
+  paneHidden?: Accessor<boolean>
 ): {
   request: () => void;
   dispose: () => void;
@@ -145,14 +145,14 @@ export function createHiddenDeferral(
   let deferred = false;
   const isHidden = () =>
     document.visibilityState === 'hidden' ||
-    (suspended !== undefined && untrack(suspended));
+    (paneHidden !== undefined && untrack(paneHidden));
   const runDeferred = () => {
     if (!deferred || isHidden()) return;
     deferred = false;
     run();
   };
   const dispose = makeEventListener(document, 'visibilitychange', runDeferred);
-  if (suspended) createComputed(on(suspended, runDeferred, { defer: true }));
+  if (paneHidden) createComputed(on(paneHidden, runDeferred, { defer: true }));
   return {
     request: () => {
       deferred = isHidden();
