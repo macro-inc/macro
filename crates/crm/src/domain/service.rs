@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod test;
 
+mod email_policy_api;
+mod email_policy_preview;
 mod email_policy_work;
 mod email_privacy;
 
@@ -629,6 +631,8 @@ where
     metadata_resolver: R,
     /// Absent means thread-exclusion writes are unavailable.
     thread_exclusion_gate: Option<std::sync::Arc<dyn super::email_privacy::ThreadExclusionGate>>,
+    /// Absent or failed evaluation refuses new policy grants.
+    selective_email_gate: Option<std::sync::Arc<dyn super::email_policy_api::SelectiveEmailGate>>,
 }
 
 impl<CR, R> Clone for CrmServiceImpl<CR, R>
@@ -641,6 +645,7 @@ where
             companies_repository: self.companies_repository.clone(),
             metadata_resolver: self.metadata_resolver.clone(),
             thread_exclusion_gate: self.thread_exclusion_gate.clone(),
+            selective_email_gate: self.selective_email_gate.clone(),
         }
     }
 }
@@ -656,7 +661,17 @@ where
             companies_repository,
             metadata_resolver,
             thread_exclusion_gate: None,
+            selective_email_gate: None,
         }
+    }
+
+    /// Supply the rollout gate for rule authoring; stored restrictions are unconditional.
+    pub fn with_selective_email_gate(
+        mut self,
+        gate: std::sync::Arc<dyn super::email_policy_api::SelectiveEmailGate>,
+    ) -> Self {
+        self.selective_email_gate = Some(gate);
+        self
     }
 
     /// Supply the rollout gate for thread-exclusion writes; otherwise they stay off.

@@ -145,6 +145,7 @@ async fn a_tools_server_is_the_one_it_was_registered_under() {
             "",
             Arc::new(serde_json::Map::new()),
         )],
+        trace_context: TraceContext::Withhold,
     };
     let impostor_first = RemoteMcpToolSet::from_listed(
         vec![
@@ -183,4 +184,106 @@ async fn a_tools_server_is_the_one_it_was_registered_under() {
         internal_first.server_of("mcp__macro_internal__echo"),
         Some("macro_internal")
     );
+}
+
+/// Answers `echo` and keeps each call's `traceparent`.
+#[derive(Clone, Default)]
+struct TraceRecordingServer {
+    traceparents: Arc<std::sync::Mutex<Vec<Option<String>>>>,
+}
+
+impl ServerHandler for TraceRecordingServer {
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+    }
+
+    async fn call_tool(
+        &self,
+        _request: CallToolRequestParams,
+        context: McpRequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, ErrorData> {
+        self.traceparents
+            .lock()
+            .unwrap()
+            .push(context.meta.get_traceparent().map(str::to_owned));
+        Ok(CallToolResult::success(vec![ContentBlock::text("echo")]).into())
+    }
+}
+
+/// Our own server gets the caller's trace context in `_meta`; anyone else's
+/// gets none.
+#[tokio::test]
+async fn only_servers_we_run_are_sent_the_callers_trace_context() {
+    use opentelemetry::trace::{TraceContextExt as _, TracerProvider as _};
+    use tracing::Instrument as _;
+    use tracing_opentelemetry::OpenTelemetrySpanExt as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+    // Global: other tests reach `call_tool`'s span callsite with no
+    // subscriber of their own, and a thread-local one can lose that race.
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("no other test in this binary installs a global subscriber");
+
+    let session = |server: TraceRecordingServer| async move {
+        let (server_side, client_side) = tokio::io::duplex(8192);
+        tokio::spawn(async move {
+            let running = server.serve(server_side).await.unwrap();
+            let _ = running.waiting().await;
+        });
+        Arc::new(crate::client_info().serve(client_side).await.unwrap())
+    };
+    let ours = TraceRecordingServer::default();
+    let theirs = TraceRecordingServer::default();
+    let echo = || vec![Tool::new("echo", "", Arc::new(serde_json::Map::new()))];
+    let tools = RemoteMcpToolSet::from_listed(
+        vec![
+            ListedServer {
+                name: "macro_internal".into(),
+                client: session(ours.clone()).await,
+                tools: echo(),
+                trace_context: TraceContext::Propagate,
+            },
+            ListedServer {
+                name: "Linear".into(),
+                client: session(theirs.clone()).await,
+                tools: echo(),
+                trace_context: TraceContext::Withhold,
+            },
+        ],
+        None,
+    );
+    let turn = tracing::info_span!("turn");
+    let trace_id = turn.context().span().span_context().trace_id();
+    for name in ["mcp__macro_internal__echo", "mcp__Linear__echo"] {
+        ToolSet::<()>::dispatch_tool_call(
+            &tools,
+            (),
+            RequestContext::new(
+                macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
+                    .unwrap(),
+            ),
+            name,
+            &serde_json::json!({}),
+        )
+        .instrument(turn.clone())
+        .await
+        .unwrap()
+        .unwrap();
+    }
+
+    let ours = ours.traceparents.lock().unwrap().clone();
+    let [Some(traceparent)] = ours.as_slice() else {
+        panic!("our server is sent the caller's context: {ours:?}");
+    };
+    assert!(
+        traceparent.contains(&trace_id.to_string()),
+        "{traceparent} is in trace {trace_id}"
+    );
+    assert_eq!(*theirs.traceparents.lock().unwrap(), vec![None]);
 }

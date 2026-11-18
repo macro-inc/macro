@@ -131,18 +131,21 @@ fn test_pool(workers: usize, capacity: usize) -> (WorkerPool, Vec<mpsc::Receiver
 }
 
 fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEvent {
-    ReceivedEvent {
-        event: DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
-            EMAIL_LINK_ID.to_string(),
-            EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
-                link_id: EMAIL_LINK_ID,
-                owner: user_id(),
-                thread_id,
-            }),
-        )),
-        partition: 0,
+    let event = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
+        EMAIL_LINK_ID.to_string(),
+        EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
+            link_id: EMAIL_LINK_ID,
+            owner: user_id(),
+            thread_id,
+        }),
+    ));
+    attach_event_coordinates(
+        Ok::<_, EventBrokerError>(event),
+        0,
         offset,
-    }
+        tracing::Span::none(),
+    )
+    .expect("attached event")
 }
 
 fn received_agent_session_event(session: Uuid, offset: i64) -> ReceivedEvent {
@@ -170,8 +173,13 @@ fn received_agent_session_event(session: Uuid, offset: i64) -> ReceivedEvent {
         id,
         Event::new(event),
     );
-    attach_event_coordinates(DeclaredMacroEvent::decode(&message), 0, offset)
-        .expect("decodable agent-session event")
+    attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        0,
+        offset,
+        tracing::Span::none(),
+    )
+    .expect("decodable agent-session event")
 }
 
 const AGENT_SESSION_ID: Uuid = Uuid::from_u128(10);
@@ -1950,7 +1958,12 @@ async fn malformed_missing_key_and_unsupported_email_messages_are_commit_safe() 
         key: Some(EMAIL_LINK_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 7, 60);
+    let malformed = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&malformed),
+        7,
+        60,
+        tracing::Span::none(),
+    );
 
     let missing_key = TestMessage {
         topic: MacroEmailTopic::TOPIC_STR,
@@ -1962,14 +1975,24 @@ async fn malformed_missing_key_and_unsupported_email_messages_are_commit_safe() 
         )
         .payload,
     };
-    let missing_key = attach_event_coordinates(DeclaredMacroEvent::decode(&missing_key), 7, 61);
+    let missing_key = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&missing_key),
+        7,
+        61,
+        tracing::Span::none(),
+    );
 
     let unsupported = encoded_message(
         MacroEmailTopic::TOPIC_STR,
         EMAIL_LINK_ID,
         Event::with_schema_version(draft_email_event(false), 2),
     );
-    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 7, 62);
+    let unsupported = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&unsupported),
+        7,
+        62,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
@@ -2005,7 +2028,12 @@ async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
         key: Some(CHAT_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 5, 40);
+    let malformed = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&malformed),
+        5,
+        40,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
@@ -2022,7 +2050,12 @@ async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
         CHAT_ID,
         Event::with_schema_version(unsupported_event, 2),
     );
-    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 5, 41);
+    let unsupported = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&unsupported),
+        5,
+        41,
+        tracing::Span::none(),
+    );
     match pool.handoff(unsupported).await {
         HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
             topic,
@@ -2056,7 +2089,12 @@ async fn unsupported_project_schema_message_is_commit_safe() {
         PROJECT_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 4, 30);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        4,
+        30,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     match pool.handoff(decoded).await {
@@ -2091,7 +2129,12 @@ async fn unsupported_property_schema_message_is_commit_safe() {
         PROPERTY_ENTITY_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 6, 50);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        6,
+        50,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     match pool.handoff(decoded).await {
@@ -2123,7 +2166,12 @@ async fn unsupported_channel_schema_message_is_commit_safe() {
         CHANNEL_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 2, 20);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        2,
+        20,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     match pool.handoff(decoded).await {
@@ -2151,7 +2199,12 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         key: Some(CALL_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 1, 10);
+    let malformed = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&malformed),
+        1,
+        10,
+        tracing::Span::none(),
+    );
     assert!(matches!(malformed, Err(EventBrokerError::Serialization(_))));
 
     let missing_key = TestMessage {
@@ -2164,7 +2217,12 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         )
         .payload,
     };
-    let missing_key = attach_event_coordinates(DeclaredMacroEvent::decode(&missing_key), 1, 11);
+    let missing_key = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&missing_key),
+        1,
+        11,
+        tracing::Span::none(),
+    );
     assert!(matches!(
         missing_key,
         Err(EventBrokerError::MissingMessageKey)
@@ -2175,7 +2233,12 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         CALL_ID,
         Event::with_schema_version(archived_event(), 2),
     );
-    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 1, 12);
+    let unsupported = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&unsupported),
+        1,
+        12,
+        tracing::Span::none(),
+    );
     assert!(matches!(
         unsupported,
         Err(EventBrokerError::UnsupportedSchemaVersion {
@@ -2206,7 +2269,12 @@ async fn successful_handoff_carries_event_partition_and_offset() {
         CALL_ID,
         Event::new(event.clone()),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        3,
+        42,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
@@ -2230,7 +2298,12 @@ async fn closed_worker_channel_leaves_the_current_message_uncommitted() {
         CALL_ID,
         Event::new(archived_event()),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        3,
+        42,
+        tracing::Span::none(),
+    );
     let (pool, receivers) = test_pool(1, 1);
     drop(receivers);
 
@@ -2666,4 +2739,194 @@ fn standalone_call_deletion_indexes_by_call_without_channel_context() {
             channel_id: None,
         }
     );
+}
+
+/// Exports every finished span to memory, through the same OpenTelemetry layer
+/// production uses, so tests see real parents and end times.
+struct OtelCapture {
+    exporter: opentelemetry_sdk::trace::InMemorySpanExporter,
+    _provider: opentelemetry_sdk::trace::SdkTracerProvider,
+    _guard: tracing::subscriber::DefaultGuard,
+}
+
+impl OtelCapture {
+    fn install() -> Self {
+        use opentelemetry::trace::TracerProvider as _;
+        use tracing_subscriber::layer::SubscriberExt as _;
+
+        let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .build();
+        let guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(
+            tracing_opentelemetry::layer().with_tracer(provider.tracer("search-processing-test")),
+        ));
+        Self {
+            exporter,
+            _provider: provider,
+            _guard: guard,
+        }
+    }
+
+    /// Call after a first pass has registered the callsites under test:
+    /// another test thread may have cached a "never" interest for them before
+    /// this subscriber existed, so recompute it and measure a second pass.
+    fn rearm(&self) {
+        tracing::callsite::rebuild_interest_cache();
+        self.exporter.reset();
+    }
+
+    fn finished(&self, name: &str) -> Vec<opentelemetry_sdk::trace::SpanData> {
+        self.exporter
+            .get_finished_spans()
+            .expect("in-memory exporter")
+            .into_iter()
+            .filter(|span| span.name == name)
+            .collect()
+    }
+}
+
+fn attribute(span: &opentelemetry_sdk::trace::SpanData, key: &str) -> Option<String> {
+    span.attributes
+        .iter()
+        .find(|attribute| attribute.key.as_str() == key)
+        .map(|attribute| attribute.value.to_string())
+}
+
+fn kafka_record(
+    topic: &str,
+    key: String,
+    partition: i32,
+    offset: i64,
+) -> rdkafka::message::OwnedMessage {
+    rdkafka::message::OwnedMessage::new(
+        None,
+        Some(key.into_bytes()),
+        topic.to_owned(),
+        rdkafka::message::Timestamp::CreateTime(1_000),
+        partition,
+        offset,
+        None,
+    )
+}
+
+#[tokio::test]
+async fn coalesced_event_records_a_process_event_span_with_its_outcome() {
+    let capture = OtelCapture::install();
+    let (pool, _receivers) = test_pool(1, 8);
+
+    for session in [SECOND_AGENT_SESSION_ID, AGENT_SESSION_ID] {
+        capture.rearm();
+        for offset in [1, 2] {
+            let mut event = received_agent_session_event(session, offset);
+            event.partition = 3;
+            let _ = pool.handoff(Ok::<_, EventBrokerError>(event)).await;
+        }
+    }
+
+    let spans = capture.finished("process_event");
+    let [coalesced] = spans.as_slice() else {
+        panic!("only the coalesced event has finished: {spans:?}");
+    };
+    assert_eq!(
+        attribute(coalesced, "outcome").as_deref(),
+        Some("coalesced")
+    );
+    assert_eq!(
+        attribute(coalesced, "event_type").as_deref(),
+        Some("agent_session.renamed")
+    );
+    assert_eq!(attribute(coalesced, "partition").as_deref(), Some("3"));
+    assert_eq!(attribute(coalesced, "offset").as_deref(), Some("2"));
+}
+
+#[test]
+fn received_record_span_names_its_event() {
+    let capture = OtelCapture::install();
+    let record = kafka_record(
+        macro_event_topics::MacroAgentSessionLifecycleTopic::TOPIC_STR,
+        AGENT_SESSION_ID.to_string(),
+        1,
+        4,
+    );
+    let mut id = None;
+    for _ in 0..2 {
+        capture.rearm();
+        let event = received_agent_session_event(AGENT_SESSION_ID, 4).event;
+        id = Some(event_id(&event));
+        let (span, received) = receive_record(&record, || Ok::<_, EventBrokerError>(event));
+        let received = received.expect("decoded record");
+        assert_eq!(received.event_type, "agent_session.renamed");
+        assert_eq!(received.produced_at_ms, Some(1_000));
+        drop((span, received));
+    }
+    let id = id.expect("measured pass");
+
+    let spans = capture.finished("kafka.process");
+    let [record] = spans.as_slice() else {
+        panic!("expected one record span, got {spans:?}");
+    };
+    assert_eq!(
+        attribute(record, "macro.event.type").as_deref(),
+        Some("agent_session.renamed")
+    );
+    assert_eq!(attribute(record, "macro.event.id"), Some(id.to_string()));
+    assert_eq!(
+        attribute(record, "agent.session.id"),
+        Some(AGENT_SESSION_ID.to_string())
+    );
+    assert_eq!(
+        attribute(record, "messaging.kafka.offset").as_deref(),
+        Some("4")
+    );
+}
+
+#[tokio::test]
+async fn record_span_covers_processing_and_fails_with_a_dropped_event() {
+    let capture = OtelCapture::install();
+    let record = kafka_record(MacroEmailTopic::TOPIC_STR, EMAIL_LINK_ID.to_string(), 2, 7);
+    for _ in 0..2 {
+        capture.rearm();
+        let event = received_thread_backfilled_event(EMAIL_THREAD_ID, 7).event;
+        let (span, received) = receive_record(&record, || Ok::<_, EventBrokerError>(event));
+        let received = received.expect("decoded record");
+        // The poll loop is inside the record span only while it hands off.
+        async {}.instrument(span.clone()).await;
+        drop(span);
+
+        process_received(&received, |_| async {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            EventOutcome::Dropped
+        })
+        .await;
+        drop(received);
+    }
+
+    let records = capture.finished("kafka.process");
+    let processing = capture.finished("process_event");
+    let ([record], [processing]) = (records.as_slice(), processing.as_slice()) else {
+        panic!("expected one record and one processing span: {records:?} {processing:?}");
+    };
+    assert_eq!(processing.parent_span_id, record.span_context.span_id());
+    assert!(
+        record.end_time >= processing.end_time,
+        "the record span must cover the processing it waited for"
+    );
+    for span in [record, processing] {
+        assert!(
+            matches!(span.status, opentelemetry::trace::Status::Error { .. }),
+            "a dropped event fails {}",
+            span.name
+        );
+    }
+    assert_eq!(attribute(processing, "outcome").as_deref(), Some("dropped"));
+    assert_eq!(
+        attribute(processing, "event_type").as_deref(),
+        Some("email.thread_backfilled")
+    );
+    assert_eq!(
+        attribute(processing, "entity_id"),
+        Some(EMAIL_THREAD_ID.to_string())
+    );
+    assert!(attribute(processing, "record_age_ms").is_some());
 }

@@ -217,6 +217,26 @@ always the user's. Each row names the item with a chip that opens it; edit and
 sharing rows expand to show the new text or settings. Verify with throwaway
 items, since these mutate real data.
 
+### Selective CRM email contribution
+
+The member's rule API is behind a default-off rollout flag; public code-mode SDK
+wrappers follow in the next phase. A member-authorized agent may activate rules
+directly once available. Inspecting settings is read-only and does not enroll the
+member or move backfill work. Use the exact returned policy observation for an
+explicit sharing mutation; a conflict requires inspecting and deciding again,
+never an automatic token refresh and retry. Scoped credentials cannot grant
+contribution.
+
+Explain that one matching participant shares the whole eligible thread, including
+past and future messages; contact/company selectors follow live records, and
+private-thread/domain exclusions always win. Preview results contain counts only,
+may be partial, and describe the member's own mailbox copies. A teammate may still
+contribute another copy. Narrowing or withdrawing preserves CRM records and
+interaction dates. Report active only after the server commits; a recorded retry
+is evidence of that earlier operation, not current state. Members can inspect
+private history and saved definitions even with CRM viewing off. A request to
+inspect mail is not permission to contribute it.
+
 ### Requesting access the user lacks
 
 A write the user can only view fails in code mode with `MacroForbiddenError`
@@ -1370,7 +1390,10 @@ either.
 Ask the agent to discover SDK entities and write a JavaScript module exporting
 `async function main({macro, session, execution})`. These are actual public SDK
 handles; for example, `macro.documents.search(...)` is an async iterator and
-`await document.content()` fetches a document. Use the direct `ListEntities` tool
+`await document.content()` fetches a document as Macro's internal Markdown, with
+chips, tables and other rich content as `<m-*>` tags. To write text back, the
+agent reads it with `contentWithRevision()` and keeps the tags intact. Use the
+direct `ListEntities` tool
 for workspace feeds with type, time, task, tag, mailbox, and sorting filters.
 Return plain JSON
 in `{data}`. The optional `reviews` array contains saved review references and
