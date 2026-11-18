@@ -152,7 +152,7 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
     if (operation === 'Soup') {
       // The app sidebar also queries channel Soup, explicitly excluding mail.
       if (excludesMail(input)) {
-        return { items: [], nextCursor: null };
+        return { items: [], nextCursor: null, notifiedAt: [] };
       }
       const tree = input.initial?.filters?.emailFilter?.tree;
       // The sidebar's unread badge adds read=false to the same Signal scope.
@@ -171,6 +171,7 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
           ? signalMail.filter((item) => item.isRead === false)
           : signalMail,
         nextCursor: null,
+        notifiedAt: [],
       };
     }
     throw new Error(`Unimplemented Soup operation: ${operation}`);
