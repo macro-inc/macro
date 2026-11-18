@@ -546,9 +546,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       emails,
     };
   });
-  /** An option's fields, read once per list for every listed option. */
+  const selected = createMemo(() => new Set<unknown>(props.selectedOptions));
+  /** An option's fields, read once per list for every listed option. A chip's
+   * own fields are read live, so an address that changes in place re-keys it. */
   const fieldsOf = (option: CombinedRecipientItem) =>
-    untrack(recipients).listed.fields(option);
+    untrack(selected).has(option)
+      ? getRecipientOptionFields(option)
+      : untrack(recipients).listed.fields(option);
 
   const options = createMemo(() => {
     const { listed, emails } = recipients();
