@@ -84,13 +84,24 @@ function load(dir: string, name: string, heldout: boolean): Persona {
   };
 }
 
-const folders = (root: string) =>
-  existsSync(root) ? readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort() : [];
+/** A set's people: its folders, leaving out the hidden ones a held-out writer is still filling. */
+export const folders = (root: string) =>
+  existsSync(root)
+    ? readdirSync(root, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+        .map((e) => e.name)
+        .sort()
+    : [];
 
 /** The tune personas, or the held-out set `set` (a folder under the held-out directory). */
 export function personas(set: 'tune' | string): Persona[] {
   if (set === 'tune') return folders(TUNE_DIR).map((name) => load(join(TUNE_DIR, name), name, false));
   const root = join(HELDOUT_DIR, set);
+  const listed = join(root, 'people.json');
+  if (existsSync(listed)) {
+    const missing = (JSON.parse(readFileSync(listed, 'utf8')) as { slug: string }[]).map((person) => person.slug).filter((slug) => !existsSync(join(root, slug)));
+    if (missing.length) throw new Error(`held-out set ${set} is not finished (${missing.join(', ')}); run heldout make ${set} again first`);
+  }
   const found = folders(root).map((name) => load(join(root, name), name, true));
   if (!found.length) throw new Error(`no held-out set ${set} in ${HELDOUT_DIR}; make one with \`heldout make\``);
   return found;

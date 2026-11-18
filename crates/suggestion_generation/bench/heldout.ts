@@ -4,13 +4,13 @@
 // confirmed a change (a baseline and one candidate) it is spent, and the
 // next confirmation needs a fresh set: `heldout make <name>`.
 
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
 import { CATALOG } from './catalog';
 import { ANCHOR } from './clock';
-import { HELDOUT_DIR, type Persona, personas } from './personas';
+import { HELDOUT_DIR, type Persona, folders, personas } from './personas';
 import { seed } from './run';
 
 const AUTHOR_MODEL = 'anthropic/claude-opus-5-5';
@@ -44,7 +44,7 @@ export function spent(): string[] {
       const path = ledgerPath(entry.name);
       const uses = existsSync(path) ? readFileSync(path, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line).section as string) : [];
       const counts = Object.entries(Object.groupBy(uses, (use) => use)).map(([section, list]) => `${section} ×${list!.length}${list!.length >= USES ? ' (spent)' : ''}`);
-      const people = readdirSync(join(HELDOUT_DIR, entry.name), { withFileTypes: true }).filter((e) => e.isDirectory()).length;
+      const people = folders(join(HELDOUT_DIR, entry.name)).length;
       return `${entry.name}: ${people} personas; ${counts.join(', ') || 'unused'}`;
     });
 }
@@ -182,27 +182,30 @@ const ROUTINES_TRUTH = obj({
 
 const anchor = new Date(ANCHOR).toISOString();
 
-const PERSONA_FILES = ['inbox.json', 'workspace.json', 'feed-truth.json', 'routines-truth.json'];
-
 /**
  * Write `count` new personas into held-out set `name`. A set whose writing
  * stopped part way (the model timed out) is finished by running it again:
- * the people are kept in `people.json` and each is written whole or again.
+ * the people are kept in `people.json`, and each is written into a hidden
+ * folder that becomes theirs only once all of it is written.
  */
 export async function makeHeldout(at: Stack, name: string, count: number) {
   if (!name) throw new Error('heldout make <name> [count]');
   const root = join(HELDOUT_DIR, name);
   const sketches = join(root, 'people.json');
-  const written = (slug: string) => PERSONA_FILES.every((file) => existsSync(join(root, slug, file)));
+  const written = (slug: string) => existsSync(join(root, slug));
   let people: Sketch[];
   if (existsSync(sketches)) {
     people = JSON.parse(readFileSync(sketches, 'utf8'));
     if (people.every((sketch) => written(sketch.slug))) throw new Error(`held-out set ${name} exists; pick a new name`);
-    console.log(`finishing held-out set ${name}`);
+    console.log(`finishing held-out set ${name}: ${people.length} people, as first written`);
   } else {
     if (existsSync(root)) throw new Error(`held-out set ${name} exists; pick a new name`);
-    mkdirSync(root, { recursive: true });
     people = (await sketch(at, count)).slice(0, count);
+    const slugs = people.map((person) => person.slug);
+    if (slugs.some((slug) => !/^[a-z]+$/.test(slug)) || new Set(slugs).size !== slugs.length) {
+      throw new Error(`the people came back with unusable slugs (${slugs.join(', ')}); run heldout make again`);
+    }
+    mkdirSync(root, { recursive: true });
     writeFileSync(sketches, `${JSON.stringify(people, null, 1)}\n`);
   }
   const failed: string[] = [];
@@ -233,7 +236,8 @@ For each: a short slug (lowercase letters), a one-sentence persona, a first and 
 /** Write one held-out persona's mailbox, workspace and answer keys. */
 async function writePersona(at: Stack, name: string, root: string, sketch: Sketch) {
   {
-    const dir = join(root, sketch.slug);
+    const dir = join(root, `.${sketch.slug}.partial`);
+    rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
     const owner = { name: `${sketch.owner_first} ${sketch.owner_last}`, email: `${sketch.owner_first.toLowerCase()}@${sketch.domain}` };
     const who = `${owner.name} <${owner.email}>: ${sketch.persona} Labels: ${sketch.labels.join(', ')}. Colleagues: ${sketch.colleagues.map((c) => `${c.first} ${c.last} (${c.role}, ${c.first.toLowerCase()}@${sketch.domain})`).join('; ')}. Recurring mail: ${sketch.streams.join('; ')}. This month: ${sketch.situation}`;
@@ -345,7 +349,10 @@ Write the transcript of call ${c.key} ("${c.name}"): 8 to 16 turns, speakers are
     writeFileSync(join(dir, 'workspace.json'), `${JSON.stringify(workspace, null, 1)}\n`);
     const feedTruth = await write(
       at,
-      `Write the answer key for judging the suggestions feed of ${owner.name}. It is now ${anchor}. List the planted opportunities (ids p1, p2, …: what, evidence as "document:<key>", "task:<key>", "channel:<key>", "call:<key>" or "inbox subject: <subject>", and the ideal suggestion) and the decoys (ids d1, …: what, and why it is stale), exactly as the workspace and mail below show them. The planted opportunities are these and no others, one entry each: ${plan.opportunities.join(' | ')}. The decoys are these and no others: ${plan.decoys.join(' | ')}.
+      `Write the answer key for judging the suggestions feed of ${owner.name}. It is now ${anchor}. List the planted opportunities (ids p1, p2, …: what, evidence as "document:<key>", "task:<key>", "channel:<key>", "call:<key>" or "inbox subject: <subject>", and the ideal suggestion) and the decoys (ids d1, …: what, and why it is stale), exactly as the workspace and mail below show them. The planted opportunities are these and no others, one entry each:
+${plan.opportunities.map((o) => `- ${o}`).join('\n')}
+The decoys are these and no others, one entry each:
+${plan.decoys.map((o) => `- ${o}`).join('\n')}
 <workspace>${JSON.stringify(workspace)}</workspace>
 <mail>${digest}</mail>`,
       FEED_TRUTH,
@@ -362,6 +369,7 @@ ${catalog}
     );
     routinesTruth.needs = routinesTruth.needs.map((need) => (need.drafted ? need : { ...need, drafted: undefined }));
     writeFileSync(join(dir, 'routines-truth.json'), `${JSON.stringify(routinesTruth, null, 1)}\n`);
-    console.log(`wrote held-out persona ${sketch.slug} in ${dir}`);
+    renameSync(dir, join(root, sketch.slug));
+    console.log(`wrote held-out persona ${sketch.slug} in ${join(root, sketch.slug)}`);
   }
 }
