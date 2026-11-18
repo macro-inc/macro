@@ -39,3 +39,5 @@ From the repository root, run `just check`. Exercise the sidebar, archive action
 
 - [AI chat walkthrough](../../../../../docs/agent-guide/ai-chat.md)
 - [Web guide](../../../AGENTS.md)
+
+Keep session names and agent-bubble labels at the normal list-row weight on desktop and phone, including archive, preview, and header surfaces; unread uses a dot, never heavier text.

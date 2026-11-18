@@ -86,7 +86,7 @@ export function ArchivedConversationRow(props: {
               <ChatIcon class="size-4 shrink-0 text-ink-muted" />
             </Match>
           </Switch>
-          <span class="truncate text-sm font-medium text-ink">{title()}</span>
+          <span class="truncate text-sm font-normal text-ink">{title()}</span>
         </span>
         <span class="relative flex w-[220px] shrink-0 items-center gap-1.5">
           <Show when={details()}>

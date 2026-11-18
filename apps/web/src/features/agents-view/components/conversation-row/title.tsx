@@ -6,8 +6,7 @@ export function ConversationRowTitle() {
   return (
     <span
       class={cn(
-        'pointer-events-none relative min-w-0 flex-1 truncate text-sm text-ink',
-        row.unread && !row.waiting && 'font-semibold',
+        'pointer-events-none relative min-w-0 flex-1 truncate text-sm font-normal text-ink',
         row.untitled && 'text-ink-extra-muted'
       )}
     >
