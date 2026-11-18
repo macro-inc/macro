@@ -114,8 +114,8 @@ export function scoreRoutines(generation: Generation, marks: RoutineMark[], trut
         };
     for (const [name, holds] of Object.entries(flags)) count(wrong, name, holds);
     if (Object.values(flags).some(Boolean)) bad++;
-    // One that can't work or doesn't fit meets nothing.
-    if (!mark.broken && !mark.unsafe && !mark.misfit) for (const id of meets) found.add(id);
+    // One that can't work or doesn't fit meets nothing: for a catalog pick, by its key too.
+    if (!flags.broken && !flags.unsafe && !flags.misfit) for (const id of meets) found.add(id);
   });
   const needs = truth.needs.length;
   return {
@@ -252,7 +252,7 @@ function byPersona(attempts: Attempt[]) {
   return groups;
 }
 
-/** Student's t at 97.5% for `df` degrees of freedom (Cornish–Fisher; within 0.01 from 5 up). */
+/** Student's t at 97.5% for `df` degrees of freedom (Cornish–Fisher; within 0.01 from 7 up, 0.025 at 5). */
 function t975(df: number) {
   const z = 1.959964;
   return z + (z ** 3 + z) / (4 * df) + (5 * z ** 5 + 16 * z ** 3 + 3 * z) / (96 * df ** 2);

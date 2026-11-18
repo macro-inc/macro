@@ -238,7 +238,7 @@ async function runSection(section: Section, values: Record<string, string | unde
           save();
           const s = attempt.score;
           console.log(
-            `${section} ${slotName(slot)} #${rep}: ${generation.buildFailed ? `build failed (scored 0): ${generation.error}` : attempt.benchError ?? `score ${s!.score.toFixed(0)} (found ${s!.found}/${s!.needs}, bad ${s!.bad}, ${s!.suggestions} suggested), ${generation.status}, ${((generation.wallMs ?? 0) / 1000).toFixed(0)}s, ${generation.cost.usd.toFixed(3)}`}`,
+            `${section} ${slotName(slot)} #${rep}: ${generation.buildFailed ? `build failed (scored 0): ${generation.error}` : attempt.benchError ?? `score ${s!.score.toFixed(0)} (found ${s!.found}/${s!.needs}, bad ${s!.bad}, ${s!.suggestions} suggested), ${generation.status}, ${((generation.wallMs ?? 0) / 1000).toFixed(0)}s, $${generation.cost.usd.toFixed(3)}`}`,
           );
         };
         if (generation.buildFailed) attempt.score = failedScore(truth.length);
@@ -300,6 +300,10 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
 function rescore(path: string) {
   const run = readRun(path);
   const people = new Map(personas(run.set).map((persona) => [persona.name, persona]));
+  if (run.section === 'routines') {
+    const gaps = [...people.values()].flatMap((persona) => keyGaps(persona.routinesTruth!).map((gap) => `${persona.name}'s routines answer key ${gap}`));
+    if (gaps.length) throw new Error(gaps.join('\n'));
+  }
   for (const attempt of run.attempts) {
     const persona = people.get(attempt.persona)!;
     if (attempt.routineMarks) attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!);

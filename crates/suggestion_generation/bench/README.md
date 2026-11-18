@@ -112,10 +112,11 @@ bun $B/bench.ts rescore <run.json>...               # after changing an answer k
 
 A section's default size is 3 personas × 3 seats × 3 reps: 27 attempts. A
 seat is a copy of a persona under a domain of its own (`founder`,
-`founder/s2`, `founder/s3`), a person of its own, so all nine copies
-generate at once and a rep takes about as long as one attempt. Seats sign
-up on their first run (one signup each for `routines`, five for `feed`'s
-teams), against the webhook's 50 an hour. Judging runs alongside, as three
+`founder/s2`, `founder/s3`), a person of its own, so copies generate side
+by side (see **Seats** below). Seats sign up on their first run (one signup
+each for `routines`, five for `feed`'s teams), against the webhook's 50
+an hour: on a new stack, run the two sections an hour apart, or `all` stops
+part way through the feed when the webhook refuses a seat. Judging runs alongside, as three
 grader accounts, while the next rep seeds.
 
 Each run writes `~/.cache/suggestions-bench/runs/<label>-<section>-<set>-<time>/run.json`,
@@ -294,7 +295,9 @@ cost nothing beyond the model calls.
   (`--concurrency`). At nine onboarding generations at once, three
   sessions each, the harness on a busy machine took more than its 30 s to
   accept sessions' first prompts; the bench marks a generation with such a
-  session (`delivery_unknown`) a bench error. The feed section indexes the
+  session (`delivery_unknown`) a bench error, so a build that breaks prompt
+  delivery has nothing scored and `compare` refuses it rather than calling it
+  a loss. The feed section indexes the
   seeded items for search first. Judging runs alongside, three grader
   accounts at a time, each judgement's cost read from its grader's usage.
 
