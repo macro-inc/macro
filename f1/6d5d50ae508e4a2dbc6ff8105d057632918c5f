@@ -1,0 +1,87 @@
+.github/workflows/pr-ci.yml
+  s_7a060e6ddc313c::t_05b84afdacb64b 553
+.github/workflows/sdk-ocaml-check.yml
+  s_7a060e6ddc313c::t_5c77f09fe24866 13
+.github/workspace-dep-closures.json
+  s_7a060e6ddc313c::t_a1b0e817a3f40c 1392-1395
+Cargo.lock
+  s_7a060e6ddc313c::t_1ceb974e19873c 913-921
+Cargo.toml
+  s_7a060e6ddc313c::t_ac25e36be570a2 33
+apps/web/src/features/agent-permissions/core/registry.ts
+  s_7a060e6ddc313c::t_0c0f9264fcd473 1-79
+apps/web/tsconfig.json
+  s_7a060e6ddc313c::t_cac6bdfc2fd18e 5-6,51-53
+crates/agent_permission_registry/AGENTS.md
+  s_7a060e6ddc313c::t_2a6ec00c095b3e 1-55
+crates/agent_permission_registry/CLAUDE.md
+  s_7a060e6ddc313c::t_0f5d93cad8fd9c 1
+crates/agent_permission_registry/Cargo.toml
+  s_7a060e6ddc313c::t_2c19742d7f1770 1-11
+crates/agent_permission_registry/registry.json
+  s_7a060e6ddc313c::t_a2a0abfdb40f0a 1-964
+crates/agent_permission_registry/src/lib.rs
+  s_7a060e6ddc313c::t_01180c3e57c316 1-104
+crates/agent_permission_registry/src/test.rs
+  s_7a060e6ddc313c::t_a0d3812d3c8df4 1-68
+packages/sdk-ocaml/AGENTS.md
+  s_33167d4cf077ea::t_8892256fff6918 12-13,49-53,83-88
+packages/sdk-ocaml/README.md
+  s_7a060e6ddc313c::t_899ae910f8b9fc 383-387,389-392,395-399,405-419
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_7a060e6ddc313c::t_6767c843db4a2b 77-86,89,92,96-97,188-198,205-206,269-275,476,482,488,491-492,495,497-498,501-505,525
+packages/sdk-ocaml/analyzer/lib/analyze.mli
+  s_7a060e6ddc313c::t_6f182078a1ebb2 29-31
+packages/sdk-ocaml/analyzer/test/code_mode_interfaces/dune
+  s_7a060e6ddc313c::t_879fd8fef504b8 1-17
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_branches.ml
+  s_7a060e6ddc313c::t_550a45acaa5cd7 1-44
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_config.ml
+  s_7a060e6ddc313c::t_cb66fd5df9b859 1-11
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_config_create.ml
+  s_7a060e6ddc313c::t_ec5f23539c2088 1-12
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_fetch_as_module.ml
+  s_7a060e6ddc313c::t_4409bd713f977f 1-17
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_js_interop.ml
+  s_7a060e6ddc313c::t_6243778423d1c7 1-8
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_redirect_hosts.ml
+  s_7a060e6ddc313c::t_cf6d0a62283096 1-15
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_task.ml
+  s_7a060e6ddc313c::t_1e2d1c238b443f 1-25
+packages/sdk-ocaml/analyzer/test/corpus/dune
+  s_7a060e6ddc313c::t_7d15c7cba83d45 7-13
+packages/sdk-ocaml/analyzer/test/corpus/types_and_codecs.ml
+  s_7a060e6ddc313c::t_53d7a99b14a11f 3-4,12
+packages/sdk-ocaml/analyzer/test/dune
+  s_7a060e6ddc313c::t_4af40fb9895c2a 3-5,37-54
+packages/sdk-ocaml/analyzer/test/test_registry.ml
+  s_7a060e6ddc313c::t_262a598117f15b 1-70
+packages/sdk-ocaml/analyzer/test/test_trusted.ml
+  s_7a060e6ddc313c::t_6b93ceab68f549 1-86
+tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check.rs
+  s_7a060e6ddc313c::t_36468316c4ada8 20-21,27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f16d5d50ae508e4a2dbc6ff8105d057632918c5f",
+  "prompts": {},
+  "sessions": {
+    "s_33167d4cf077ea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "744ef236-3548-43fa-ada2-62959115fcce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_7a060e6ddc313c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f59b40e3-6b51-40c1-8aae-dd5c473806e2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
