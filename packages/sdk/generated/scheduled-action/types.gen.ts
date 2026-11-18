@@ -292,6 +292,12 @@ export type CheckRoutineRequest = {
      * the database it writes to; kept with its draft for the person to see.
      */
     created?: Array<CreatedItem>;
+    /**
+     * Apps a routine draft's session found the routine needs that its owner
+     * hasn't connected, for the person to connect before saving. The routine
+     * itself requires only connected ones.
+     */
+    missingApps?: Array<AgentMcpServer>;
     routine: ActionConfiguration;
 };
 
@@ -616,10 +622,20 @@ export type DraftUpdateState = 'drafting' | 'ready' | 'failed' | 'removed';
  */
 export type DraftedRoutine = {
     /**
+     * Apps outside Macro its Ask AI step uses that its owner connected,
+     * which the routine requires (its task's `mcp_servers`).
+     */
+    apps?: Array<AgentMcpServer>;
+    /**
      * What AI created while drafting, such as the database the routine
      * writes to. These exist whether or not the routine is saved.
      */
     created: Array<DraftCreated>;
+    /**
+     * Apps its Ask AI step needs that its owner hasn't connected: the owner
+     * connects each one, or removes it, before saving.
+     */
+    missingApps?: Array<AgentMcpServer>;
     name: string;
     /**
      * Steps whose code still fails the type checker.
@@ -1146,6 +1162,12 @@ export type RewriteSuggestion = {
  * `POST /scheduled-actions/check`.
  */
 export type RoutineCheck = {
+    /**
+     * Apps the routine needs that its owner hasn't connected, as a routine
+     * draft's session named them (`missingApps`): the person connects each
+     * one before saving. Never ones the routine already requires.
+     */
+    missingApps?: Array<AgentMcpServer>;
     /**
      * Whether saving it would succeed: no problems and no failing steps.
      */
