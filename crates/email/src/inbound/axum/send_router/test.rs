@@ -54,11 +54,15 @@ async fn a_channel_mention_program_never_sends_even_when_confirmed() {
         ..Default::default()
     };
     agent_correlation::context::scope_attribution(mention, async {
-        let refusal = refuse_program_send(true, &program, Some("yes, send it")).unwrap_err();
+        let refusal =
+            refuse_program_send(CredentialAttribution::Agent, &program, Some("yes, send it"))
+                .unwrap_err();
         assert!(matches!(refusal, SendMessageError::ChannelMention));
         assert_eq!(refusal.into_response().status(), StatusCode::FORBIDDEN);
     })
     .await;
     // An agent session's confirmed program send is unchanged.
-    assert!(refuse_program_send(true, &program, Some("yes, send it")).is_ok());
+    assert!(
+        refuse_program_send(CredentialAttribution::Agent, &program, Some("yes, send it")).is_ok()
+    );
 }
