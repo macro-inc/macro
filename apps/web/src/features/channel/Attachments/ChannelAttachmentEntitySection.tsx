@@ -92,17 +92,17 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
         .map((item) => item.entity_id)
     ),
   ]);
+  const hasSoupAttachments = () =>
+    documentAttachments().some((item) => item.entity_type !== 'initiative');
   const soupQuery = useSoupAstItemsQuery(
     () => ({
       params: { limit: 500 },
       body: attachmentSoupAst(documentAttachments()),
     }),
-    () => ({
-      enabled: documentAttachments().some(
-        (item) => item.entity_type !== 'initiative'
-      ),
-    })
+    () => ({ enabled: hasSoupAttachments() })
   );
+  // A disabled query also reads as pending, so only wait when Soup has work.
+  const soupPending = () => hasSoupAttachments() && soupQuery.isPending;
 
   const attachmentByEntityId = createMemo(() => {
     const map = new Map<string, ApiChannelAttachment>();
@@ -121,18 +121,17 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
 
   // Soup returns only live entities the viewer can list, of the types the AST
   // names: a trashed or deleted document, one without access, or a pull request
-  // is missing from it although its message still shows it. Such an attachment
-  // keeps its row and shows as the message shows it.
+  // is missing from it although its message still shows it. Once Soup answers,
+  // such an attachment keeps its row and shows as the message shows it.
   const rows = createMemo<AttachmentEntityListRow[]>(() => {
     const attachments = [...attachmentByEntityId().values()].filter(
       (attachment) => attachment.entity_type !== 'initiative'
     );
-    if (attachments.length === 0) return [];
+    if (attachments.length === 0 || soupQuery.isPending) return [];
 
-    const entities = soupQuery.isPending
-      ? []
-      : (soupQuery.data?.entities ?? []);
-    const entityById = new Map(entities.map((entity) => [entity.id, entity]));
+    const entityById = new Map(
+      (soupQuery.data?.entities ?? []).map((entity) => [entity.id, entity])
+    );
 
     return attachments
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -161,7 +160,7 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
           </div>
           <Show
             when={
-              !soupQuery.isLoading &&
+              !soupPending() &&
               rows().length === 0 &&
               attachmentsQuery.hasNextPage
             }
@@ -174,7 +173,7 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
         </AttachmentSection>
       </Show>
       <Show
-        when={!attachmentsQuery.isPending && !soupQuery.isLoading}
+        when={!attachmentsQuery.isPending && !soupPending()}
         fallback={
           <AttachmentSection label="Documents">
             <div class="grid place-items-center py-3 text-ink-muted">

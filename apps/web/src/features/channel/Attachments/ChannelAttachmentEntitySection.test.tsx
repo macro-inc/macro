@@ -204,14 +204,22 @@ it('keeps pagination available for a page containing only projects', () => {
     isFetchingNextPage: false,
     fetchNextPage,
   };
+  fixture.soupQuery = {
+    isPending: true,
+    isLoading: false,
+    get data() {
+      throw new Error('Disabled Soup data must not be read');
+    },
+  };
   const view = render(() => (
     <ChannelAttachmentEntitySection channelId="channel" />
   ));
+  expect(view.queryByLabelText('Loading documents')).toBeNull();
   fireEvent.click(view.getByRole('button', { name: 'Load More' }));
   expect(fetchNextPage).toHaveBeenCalledOnce();
 });
 
-it('lists attachments from their messages while Soup is paused offline', () => {
+it('keeps loading instead of showing chips while Soup is paused offline', () => {
   fixture.query = {
     isPending: false,
     data: {
@@ -239,6 +247,7 @@ it('lists attachments from their messages while Soup is paused offline', () => {
   const view = render(() => (
     <ChannelAttachmentEntitySection channelId="channel" />
   ));
-  expect(view.getByText('Chip Offline notes')).toBeTruthy();
+  expect(view.getByLabelText('Loading documents')).toBeTruthy();
+  expect(view.queryByText('Chip Offline notes')).toBeNull();
   expect(view.queryByText('No documents in this channel yet.')).toBeNull();
 });
