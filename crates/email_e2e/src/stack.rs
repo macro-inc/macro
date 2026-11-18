@@ -191,6 +191,9 @@ impl Stack {
         let id = Uuid::now_v7().simple().to_string();
         let log_dir = log_dir(&id)?;
         crate::process::ensure_built(&[API, WORKERS])?;
+        // Before any service starts: document storage exits when a topic it
+        // reads is missing.
+        crate::infra::kafka::ensure_topics(&servers.kafka).await?;
         if options.calendar {
             crate::process::ensure_built(&[CALENDAR])?;
         }
@@ -342,9 +345,6 @@ impl Stack {
             bail!("the stack was torn down");
         };
         queues.add_document_storage_queues().await?;
-        if let Some(brokers) = self.worker_env.get(KAFKA_BROKERS) {
-            crate::infra::kafka::ensure_topics(brokers).await?;
-        }
         for queue in queues.all() {
             self.worker_env
                 .insert(queue.override_env.to_owned(), queue.url.clone());
@@ -467,7 +467,6 @@ impl Stack {
     async fn start_focus_worker(&mut self, options: &StackOptions) -> Result<(), Report> {
         crate::process::ensure_built(&[FOCUS_WORKER])?;
         if let Some(brokers) = self.worker_env.get(KAFKA_BROKERS) {
-            crate::infra::kafka::ensure_topics(brokers).await?;
             // The group starts at the end of the topic. With an offset in
             // place before the worker joins, mail that arrives while it
             // joins is still read.
