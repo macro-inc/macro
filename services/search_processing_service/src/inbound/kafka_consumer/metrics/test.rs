@@ -101,9 +101,15 @@ pub(in crate::inbound::kafka_consumer) fn tags(pairs: &[(&str, &str)]) -> BTreeM
 fn an_undecodable_record_counts_as_dropped_for_its_topics_entity_type() {
     let recorded = Recorded::new();
 
-    recorded.metrics.record_undecodable("macro.email");
-    recorded.metrics.record_undecodable("macro.email");
-    recorded.metrics.record_undecodable("not.subscribed");
+    recorded
+        .metrics
+        .record_loss("macro.email", Loss::Undecodable);
+    recorded
+        .metrics
+        .record_loss("macro.email", Loss::Undecodable);
+    recorded
+        .metrics
+        .record_loss("not.subscribed", Loss::Undecodable);
 
     assert_eq!(
         recorded.points(DROPPED),
@@ -195,5 +201,40 @@ fn every_subscribed_topic_has_its_own_entity_type() {
     assert_eq!(
         EntityType::from_topic("macro.email"),
         Some(EntityType::Email)
+    );
+}
+
+#[test]
+fn records_lost_at_a_stop_count_by_their_topics_entity_type() {
+    use crate::inbound::kafka_consumer::offsets::RecordPosition;
+
+    let recorded = Recorded::new();
+    let on = |topic| RecordPosition {
+        topic,
+        partition: 0,
+        offset: 1,
+    };
+
+    recorded.metrics.record_losses(
+        &[on("macro.email"), on("macro.email"), on("macro.documents")],
+        Loss::NotRewound,
+    );
+
+    assert_eq!(
+        recorded
+            .points(DROPPED)
+            .iter()
+            .map(|point| (point.tags.clone(), point.value))
+            .collect::<Vec<_>>(),
+        [
+            (
+                tags(&[("entity_type", "document"), ("failure", "not_rewound")]),
+                1
+            ),
+            (
+                tags(&[("entity_type", "email"), ("failure", "not_rewound")]),
+                2
+            ),
+        ]
     );
 }

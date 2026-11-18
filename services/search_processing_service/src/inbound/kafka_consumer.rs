@@ -92,6 +92,7 @@ use self::{
     property::{describe_property_event, process_property_event},
 };
 
+use self::metrics::Loss;
 pub(crate) use self::{context::KafkaProcessingContext, metrics::IndexMetrics};
 
 /// Consumer group used for live search-index event offsets.
@@ -788,6 +789,30 @@ fn track_handoff<E>(
     }
 }
 
+/// Waits for a record's `handoff`, which a full worker channel holds. The wait
+/// is a stall, so worker reports still reach `ledger` and pending ages are
+/// still sampled meanwhile. Returns `None` if `shutdown` resolves first,
+/// without waiting: the record was never committed and stays open.
+async fn await_handoff<T>(
+    handoff: impl Future<Output = T>,
+    shutdown: &mut (impl Future<Output = ()> + Unpin),
+    sample_tick: &mut tokio::time::Interval,
+    reports: &mut mpsc::UnboundedReceiver<WorkerReport>,
+    ledger: &mut OffsetLedger,
+    mut sample: impl FnMut(&OffsetLedger),
+) -> Option<T> {
+    let mut handoff = std::pin::pin!(handoff);
+    loop {
+        tokio::select! {
+            biased;
+            _ = &mut *shutdown => return None,
+            outcome = &mut handoff => return Some(outcome),
+            _ = sample_tick.tick() => sample(ledger),
+            Some(report) = reports.recv() => ledger.report(report),
+        }
+    }
+}
+
 async fn poll_events(
     consumer: &SearchProcessingKafkaConsumer,
     workers: WorkerPool,
@@ -799,7 +824,7 @@ async fn poll_events(
     let mut sampler = BacklogSampler::new(workers.metrics.pending_ages().clone());
     let mut sample_tick = tokio::time::interval(SAMPLE_INTERVAL);
     sample_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
-    'poll: loop {
+    loop {
         tokio::select! {
             biased;
             _ = &mut shutdown => {
@@ -840,23 +865,17 @@ async fn poll_events(
                     ledger.received(position, kafka_message.timestamp().to_millis());
                 }
 
-                // A full worker channel holds the handoff. Shutdown does not
-                // wait for it: the record was never committed and stays open.
-                // Meanwhile the ledger and the pending ages stay current, since
-                // the wait is a stall.
-                let mut handoff =
-                    std::pin::pin!(workers.handoff(decoded).instrument(span.clone()));
-                let outcome = loop {
-                    tokio::select! {
-                        biased;
-                        _ = &mut shutdown => {
-                            tracing::info!("search processing event consumer shutting down");
-                            break 'poll;
-                        }
-                        outcome = &mut handoff => break outcome,
-                        _ = sample_tick.tick() => sampler.sample_consumer(consumer, ledger),
-                        Some(report) = reports.recv() => ledger.report(report),
-                    }
+                let Some(outcome) = await_handoff(
+                    workers.handoff(decoded).instrument(span.clone()),
+                    &mut shutdown,
+                    &mut sample_tick,
+                    reports,
+                    ledger,
+                    |ledger| sampler.sample_consumer(consumer, ledger),
+                )
+                .await else {
+                    tracing::info!("search processing event consumer shutting down");
+                    break;
                 };
                 if let Some(position) = position {
                     track_handoff(ledger, position, &outcome);
@@ -869,7 +888,7 @@ async fn poll_events(
                         record_span_error(&span, &error);
                         workers
                             .metrics
-                            .record_undecodable(rdkafka::Message::topic(kafka_message));
+                            .record_loss(rdkafka::Message::topic(kafka_message), Loss::Undecodable);
                         tracing::error!(
                             parent: &span,
                             error = %error,
@@ -1113,6 +1132,7 @@ pub(crate) async fn run_event_consumer(
 
         let lost = ledger.started_unfinished();
         span.record("lost", lost.len());
+        let metrics = &context.metrics;
         if !lost.is_empty() {
             tracing::warn!(
                 events = %display_positions(&lost),
@@ -1121,6 +1141,9 @@ pub(crate) async fn run_event_consumer(
         }
         if graceful && drained.panic.is_none() {
             let rewind = rewind_queued(&consumer, &ledger);
+            metrics.record_losses(&replayed_none_of(&lost, &rewind.rewound), Loss::CutOffAtStop);
+            metrics.record_losses(&rewind.not_rewound, Loss::NotRewound);
+            metrics.record_losses(&rewind.unconfirmed, Loss::RewindUnconfirmed);
             span.record("rewound_partitions", rewind.rewound.len());
             span.record("not_rewound", rewind.not_rewound.len());
             span.record("unconfirmed", rewind.unconfirmed.len());
@@ -1144,6 +1167,8 @@ pub(crate) async fn run_event_consumer(
             }
         } else {
             let queued = ledger.queued();
+            metrics.record_losses(&lost, Loss::CutOffAtStop);
+            metrics.record_losses(&queued, Loss::QueuedAtErrorExit);
             span.record("not_rewound", queued.len());
             if !queued.is_empty() {
                 tracing::warn!(
@@ -1162,6 +1187,22 @@ pub(crate) async fn run_event_consumer(
         Err(rootcause::report!(error))?;
     }
     Ok(())
+}
+
+/// The records in `started` that no rewind point redelivers: a partition
+/// committed back to an offset at or before a record replays it.
+fn replayed_none_of(started: &[RecordPosition], rewound: &[RecordPosition]) -> Vec<RecordPosition> {
+    started
+        .iter()
+        .filter(|record| {
+            !rewound.iter().any(|point| {
+                point.topic == record.topic
+                    && point.partition == record.partition
+                    && point.offset <= record.offset
+            })
+        })
+        .copied()
+        .collect()
 }
 
 fn display_positions(positions: &[RecordPosition]) -> String {

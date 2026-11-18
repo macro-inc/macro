@@ -163,7 +163,7 @@ async fn supervise_event_consumer(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
+    let telemetry = MacroEntrypoint::default().init();
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
@@ -393,6 +393,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     #[cfg(feature = "processing")]
-    consumer_result?;
-    api_result
+    let result = consumer_result.and(api_result);
+    #[cfg(not(feature = "processing"))]
+    let result = api_result;
+    telemetry.shutdown();
+    result
 }

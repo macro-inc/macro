@@ -233,3 +233,86 @@ fn a_long_stall_keeps_its_history_bounded_and_never_reads_younger_than_it_is() {
         );
     }
 }
+
+#[test]
+fn a_backlog_inherited_at_assignment_ages_from_the_newest_received_record() {
+    let mut sampler = BacklogSampler::new(PendingAges::default());
+    let mut ledger = OffsetLedger::default();
+    let hour = 3_600 * SECOND;
+    // Restarted 3 h behind: offsets 9 and below were received and finished,
+    // and the first sample already sees the watermark at 1000.
+    ledger.received(at(0, 9), Some(T0 - 3 * hour));
+    ledger.started(at(0, 9));
+    ledger.finished(at(0, 9));
+
+    assert_eq!(
+        sample(
+            &mut sampler,
+            T0,
+            &[reading(0, Some(10), Some(1_000))],
+            &ledger
+        ),
+        [(0, 3 * 3_600_000)],
+        "the inherited backlog is not caught up at the first sample"
+    );
+
+    ledger.received(at(0, 499), Some(T0 - 2 * hour));
+    ledger.started(at(0, 499));
+    ledger.finished(at(0, 499));
+    assert_eq!(
+        sample(
+            &mut sampler,
+            T0 + 10 * SECOND,
+            &[reading(0, Some(500), Some(1_000))],
+            &ledger
+        ),
+        [(0, 2 * 3_600_000 + 10_000)]
+    );
+    assert_eq!(
+        sample(
+            &mut sampler,
+            T0 + 20 * SECOND,
+            &[reading(0, Some(1_000), Some(1_000))],
+            &ledger
+        ),
+        [(0, 0)]
+    );
+}
+
+#[test]
+fn a_partition_reassigned_between_samples_starts_over() {
+    let mut sampler = BacklogSampler::new(PendingAges::default());
+    let ledger = OffsetLedger::default();
+
+    assert_eq!(
+        sample(&mut sampler, T0, &[reading(0, Some(50), Some(50))], &ledger),
+        [(0, 0)]
+    );
+    // Another member processed 50 to 79, then the partition came back.
+    let reassigned = [reading(0, None, Some(80))];
+    assert_eq!(
+        sample(&mut sampler, T0 + 10 * SECOND, &reassigned, &ledger),
+        [(0, 0)]
+    );
+    assert_eq!(
+        sample(&mut sampler, T0 + 20 * SECOND, &reassigned, &ledger),
+        [(0, 0)],
+        "records seen before the reassignment are not pending"
+    );
+}
+
+#[test]
+fn a_reading_ignores_unset_positions_and_unfetched_watermarks() {
+    assert_eq!(
+        PartitionReading::new(TOPIC, 2, Offset::Offset(7), Some((0, 12))),
+        reading(2, Some(7), Some(12))
+    );
+    assert_eq!(
+        PartitionReading::new(TOPIC, 2, Offset::Invalid, Some((-1_001, -1_001))),
+        reading(2, None, None)
+    );
+    assert_eq!(
+        PartitionReading::new(TOPIC, 2, Offset::Invalid, None),
+        reading(2, None, None)
+    );
+}

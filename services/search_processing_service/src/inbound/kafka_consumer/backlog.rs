@@ -3,13 +3,16 @@
 //! [`OLDEST_PENDING`](super::metrics::OLDEST_PENDING).
 //!
 //! A partition's next unprocessed record is either one the consumer took and
-//! has not finished, which the [`OffsetLedger`] holds with its broker
+//! has not finished, which the [`OffsetLedger`] holds with its Kafka
 //! timestamp, or the first one the application has not received: in
 //! librdkafka's prefetch queue or still on the broker. That one has no
 //! timestamp until it is received, so its age counts from the first sample
 //! whose cached high watermark was past it, when it already existed: at most
-//! one interval low. Until the application receives a record from a partition
-//! after its assignment, the partition counts as caught up at its first sample.
+//! one interval low. Records that were already there at the partition's first
+//! sample, a backlog inherited at assignment, have no such sample; once the
+//! application has received from the partition, they count from the newest
+//! record it received, which is at least as old. Until it has, the partition
+//! counts as caught up at its first sample.
 //!
 //! The position and cached watermarks are the client's own state, kept by its
 //! fetcher, so samples taken while the poll loop waits on a full worker
@@ -29,7 +32,7 @@ mod test;
 use super::{
     SearchProcessingKafkaConsumer,
     metrics::PendingAges,
-    offsets::{OffsetLedger, OldestOpen},
+    offsets::{OffsetLedger, RecordTime},
     subscribed_topic,
 };
 
@@ -49,6 +52,26 @@ pub(super) struct PartitionReading {
     pub(super) position: Option<i64>,
     /// The high watermark as of the client's last fetch; `None` before one.
     pub(super) high_watermark: Option<i64>,
+}
+
+impl PartitionReading {
+    /// A reading from the client's raw position and cached watermarks.
+    pub(super) fn new(
+        topic: &'static str,
+        partition: i32,
+        position: Offset,
+        watermarks: Option<(i64, i64)>,
+    ) -> Self {
+        Self {
+            topic,
+            partition,
+            position: match position {
+                Offset::Offset(offset) => Some(offset),
+                _ => None,
+            },
+            high_watermark: watermarks.map(|(_, high)| high).filter(|high| *high >= 0),
+        }
+    }
 }
 
 /// Samples one consumer's partitions into the shared [`PendingAges`], which
@@ -115,6 +138,7 @@ impl BacklogSampler {
                     now_ms,
                     reading,
                     ledger.oldest_open(reading.topic, reading.partition),
+                    ledger.newest_received(reading.topic, reading.partition),
                 );
             ages.set(reading.topic, reading.partition, age_ms, sampled_at);
         }
@@ -141,20 +165,12 @@ fn read_partitions(
         .filter_map(|element| {
             let topic = subscribed_topic(element.topic())?;
             let partition = element.partition();
-            let high_watermark = consumer
-                .cached_watermarks(topic, partition)
-                .ok()
-                .map(|(_, high)| high)
-                .filter(|high| *high >= 0);
-            Some(PartitionReading {
+            Some(PartitionReading::new(
                 topic,
                 partition,
-                position: match element.offset() {
-                    Offset::Offset(offset) => Some(offset),
-                    _ => None,
-                },
-                high_watermark,
-            })
+                element.offset(),
+                consumer.cached_watermarks(topic, partition).ok(),
+            ))
         })
         .collect())
 }
@@ -164,9 +180,11 @@ struct WatermarkHistory {
     /// `(high watermark, unix ms)` pairs, both increasing: every record below
     /// the watermark existed by that time.
     seen: VecDeque<(i64, i64)>,
-    /// The watermark at the partition's first sample, its position until the
-    /// application receives a record from it.
+    /// The watermark at the partition's first sample: records below it were
+    /// there before the sampler began.
     first_high_watermark: Option<i64>,
+    /// The position at the previous sample.
+    position: Option<i64>,
 }
 
 impl WatermarkHistory {
@@ -174,8 +192,20 @@ impl WatermarkHistory {
         &mut self,
         now_ms: i64,
         reading: &PartitionReading,
-        oldest_open: Option<OldestOpen>,
+        oldest_open: Option<RecordTime>,
+        newest_received: Option<RecordTime>,
     ) -> u64 {
+        // A position that went back to unset or moved back means the partition
+        // was reassigned between samples, possibly after another owner's rewind.
+        let reassigned = match (self.position, reading.position) {
+            (Some(_), None) => true,
+            (Some(before), Some(now)) => now < before,
+            _ => false,
+        };
+        if reassigned {
+            *self = Self::default();
+        }
+        self.position = reading.position;
         if let Some(high) = reading.high_watermark {
             self.first_high_watermark.get_or_insert(high);
             if self.seen.back().is_none_or(|&(last, _)| high > last) {
@@ -185,20 +215,42 @@ impl WatermarkHistory {
                 }
             }
         }
-        let next = match oldest_open {
-            Some(open) => Some(open.offset),
-            None => reading.position.or(self.first_high_watermark),
+        let age_since = |since_ms: i64| u64::try_from(now_ms - since_ms).unwrap_or(0);
+
+        if let Some(open) = oldest_open {
+            self.forget_through(open.offset);
+            return open
+                .produced_at_ms
+                .or_else(|| self.seen.front().map(|&(_, seen_at)| seen_at))
+                .map_or(0, age_since);
+        }
+        let Some(position) = reading.position else {
+            let first = self.first_high_watermark;
+            return self
+                .seen
+                .iter()
+                .find(|&&(high, _)| first.is_some_and(|first| high > first))
+                .map_or(0, |&(_, seen_at)| age_since(seen_at));
         };
-        let Some(next) = next else {
+        self.forget_through(position);
+        let Some(&(_, seen_at)) = self.seen.front() else {
             return 0;
         };
+        let inherited = self
+            .first_high_watermark
+            .is_some_and(|first| position < first);
+        match newest_received.and_then(|newest| newest.produced_at_ms) {
+            Some(produced_at_ms) if inherited => age_since(produced_at_ms),
+            _ => age_since(seen_at),
+        }
+    }
+
+    /// Drops observations that only cover records below `next`, which the
+    /// application has received.
+    fn forget_through(&mut self, next: i64) {
         while self.seen.front().is_some_and(|&(high, _)| high <= next) {
             self.seen.pop_front();
         }
-        let since_ms = oldest_open
-            .and_then(|open| open.produced_at_ms)
-            .or_else(|| self.seen.front().map(|&(_, seen_at)| seen_at));
-        since_ms.map_or(0, |since_ms| u64::try_from(now_ms - since_ms).unwrap_or(0))
     }
 
     /// Halves the history, keeping the oldest observation exact.

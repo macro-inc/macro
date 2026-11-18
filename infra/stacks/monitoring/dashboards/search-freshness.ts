@@ -7,8 +7,8 @@
 // that publishes events. Their names and tags are this file's contract;
 // renaming one there silently empties its widgets.
 //
-// - `search.index.lag_ms`: ms from the broker recording an event to the end of
-//   its processing (histogram), tagged `entity_type`, `event_type` (the wire
+// - `search.index.lag_ms`: ms from the record's Kafka timestamp, set when it was
+//   published, to the end of its processing (histogram), tagged `entity_type`, `event_type` (the wire
 //   type, e.g. `email.message_received`) and `outcome` (`indexed`, `ignored`,
 //   `dropped`, `coalesced`, `no_index_change`). Freshness reads
 //   `outcome:indexed`. It covers processed events only: a stalled consumer
@@ -19,11 +19,14 @@
 //   reports only its own partitions, and a partition that moves stops
 //   reporting within 30 s, so it is read with `max`.
 // - `search.index.dropped_events`: events committed without reaching the
-//   index (counter), tagged `entity_type` and `event_type`, or `failure` for
-//   records that did not decode.
+//   index (counter), tagged `entity_type`, plus `event_type` when dropped after
+//   their processing retries, or `failure` (`undecodable`, `cut_off_at_stop`,
+//   `not_rewound`, `rewind_unconfirmed`, `queued_at_error_exit`) for records
+//   lost outside the workers.
 // - `event_broker.publishes`: events handed to the broker (counter), tagged
-//   `topic`, `event_type` (the payload's tag, e.g. `email.message_received`) and
-//   `outcome` (`published`, `failed`, `timed_out`, `unserializable`).
+//   `topic`, `event_type` (the payload's tag, e.g. `email.message_received`;
+//   absent for the calendar topic, whose events carry no tag) and `outcome`
+//   (`published`, `failed`, `timed_out`, `unserializable`).
 //
 // All are exported every 60 s, and percentiles are not enabled on the lag
 // histogram, so it is graphed by max and count.

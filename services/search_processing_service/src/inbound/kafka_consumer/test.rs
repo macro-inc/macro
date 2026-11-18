@@ -3289,3 +3289,95 @@ async fn an_event_committed_at_handoff_records_its_lag_there() {
         "the first reread is handed off; the second is coalesced into it"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_held_handoff_keeps_applying_reports_and_sampling() {
+    let (release, released) = tokio::sync::oneshot::channel::<()>();
+    let mut shutdown = std::pin::pin!(std::future::pending::<()>());
+    let mut sample_tick = tokio::time::interval(backlog::SAMPLE_INTERVAL);
+    let (worker_reports, mut reports) = mpsc::unbounded_channel();
+    let mut ledger = OffsetLedger::default();
+    ledger.received(email_position(1), None);
+    ledger.received(email_position(2), None);
+    worker_reports
+        .send(WorkerReport::Started(email_position(1)))
+        .expect("open reports");
+    worker_reports
+        .send(WorkerReport::Done(email_position(1)))
+        .expect("open reports");
+    let mut oldest_at_samples = Vec::new();
+
+    let (outcome, ()) = tokio::join!(
+        await_handoff(
+            async move {
+                released.await.ok();
+                "handed off"
+            },
+            &mut shutdown,
+            &mut sample_tick,
+            &mut reports,
+            &mut ledger,
+            |ledger| {
+                oldest_at_samples.push(
+                    ledger
+                        .oldest_open("macro.email", 0)
+                        .map(|record| record.offset),
+                )
+            },
+        ),
+        async {
+            tokio::time::sleep(Duration::from_secs(25)).await;
+            release.send(()).expect("waiting handoff");
+        }
+    );
+
+    assert_eq!(outcome, Some("handed off"));
+    assert_eq!(
+        oldest_at_samples,
+        [Some(1), Some(2), Some(2)],
+        "a sample at 0, 10 and 20 s; offset 1 finished while the handoff waited"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_stop_during_a_held_handoff_leaves_the_record_queued() {
+    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let mut shutdown = std::pin::pin!(async move {
+        stopped.await.ok();
+    });
+    let mut sample_tick = tokio::time::interval(backlog::SAMPLE_INTERVAL);
+    let (_worker_reports, mut reports) = mpsc::unbounded_channel();
+    let mut ledger = OffsetLedger::default();
+    ledger.received(email_position(3), None);
+
+    let (outcome, ()) = tokio::join!(
+        await_handoff(
+            std::future::pending::<()>(),
+            &mut shutdown,
+            &mut sample_tick,
+            &mut reports,
+            &mut ledger,
+            |_| {},
+        ),
+        async {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            stop.send(()).expect("waiting consumer");
+        }
+    );
+
+    assert_eq!(outcome, None);
+    assert_eq!(ledger.rewind_points(any_partition), [email_position(3)]);
+}
+
+#[test]
+fn records_cut_off_at_a_stop_are_lost_unless_a_rewind_replays_them() {
+    let on = |partition, offset| RecordPosition {
+        topic: "macro.email",
+        partition,
+        offset,
+    };
+    let started = [on(0, 4), on(0, 9), on(1, 2)];
+    let rewound = [on(0, 6)];
+
+    assert_eq!(replayed_none_of(&started, &rewound), [on(0, 4), on(1, 2)]);
+}

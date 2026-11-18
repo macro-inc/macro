@@ -38,25 +38,26 @@ pub(super) enum WorkerReport {
 struct OpenRecord {
     deliveries: u32,
     started: u32,
-    /// When the broker recorded it, in Unix milliseconds, if it did.
+    /// The record's Kafka timestamp, in Unix milliseconds, if it has one.
     produced_at_ms: Option<i64>,
 }
 
-/// A partition's lowest open record.
+/// A record's offset and Kafka timestamp.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct OldestOpen {
+pub(super) struct RecordTime {
     pub(super) offset: i64,
     pub(super) produced_at_ms: Option<i64>,
 }
 
 /// Unfinished records per partition. A partition leaves the ledger once its
 /// last open record finishes, so it never holds state for partitions this
-/// consumer has lost.
+/// consumer has lost, apart from the newest record it received on each.
 #[derive(Debug, Default)]
 pub(super) struct OffsetLedger {
     /// A rebalance can deliver a record again while the first delivery is
     /// still open, so each offset counts its deliveries.
     open: HashMap<(&'static str, i32), BTreeMap<i64, OpenRecord>>,
+    newest_received: HashMap<(&'static str, i32), RecordTime>,
 }
 
 impl OffsetLedger {
@@ -71,6 +72,13 @@ impl OffsetLedger {
             .or_default();
         record.deliveries += 1;
         record.produced_at_ms = record.produced_at_ms.or(produced_at_ms);
+        self.newest_received.insert(
+            (position.topic, position.partition),
+            RecordTime {
+                offset: position.offset,
+                produced_at_ms,
+            },
+        );
     }
 
     /// Applies a worker's report.
@@ -153,12 +161,21 @@ impl OffsetLedger {
     }
 
     /// The partition's lowest record not finished yet, started or not.
-    pub(super) fn oldest_open(&self, topic: &'static str, partition: i32) -> Option<OldestOpen> {
+    pub(super) fn oldest_open(&self, topic: &'static str, partition: i32) -> Option<RecordTime> {
         let (&offset, record) = self.open.get(&(topic, partition))?.first_key_value()?;
-        Some(OldestOpen {
+        Some(RecordTime {
             offset,
             produced_at_ms: record.produced_at_ms,
         })
+    }
+
+    /// The partition's most recently received record, finished or not.
+    pub(super) fn newest_received(
+        &self,
+        topic: &'static str,
+        partition: i32,
+    ) -> Option<RecordTime> {
+        self.newest_received.get(&(topic, partition)).copied()
     }
 
     /// Records a worker started and did not finish: a stop does not

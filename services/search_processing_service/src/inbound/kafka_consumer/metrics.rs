@@ -2,14 +2,16 @@
 //! the meter `macro_entrypoint` installs (exported every 60 s). Tags are closed
 //! sets (entity type, wire event type, outcome, topic, partition), never ids.
 //!
-//! - [`LAG`]: how long after the broker recorded an event its processing
-//!   ended, by `entity_type`, `event_type` and `outcome`. Only events that
-//!   were processed appear here; freshness reads `outcome:indexed`.
+//! - [`LAG`]: how long after its record's Kafka timestamp (set when it was
+//!   published) an event's processing ended, by `entity_type`, `event_type`
+//!   and `outcome`. Only events that were processed appear here; freshness
+//!   reads `outcome:indexed`.
 //! - [`OLDEST_PENDING`]: per assigned `topic` and `partition`, the age of the
 //!   oldest record not yet processed, 0 when caught up ([`super::backlog`]).
 //!   It keeps rising while the consumer is stalled, when [`LAG`] goes silent.
 //! - [`DROPPED`]: events committed without reaching the index, by
-//!   `entity_type`, and `event_type` or `failure`.
+//!   `entity_type`, and `event_type` for those dropped after their processing
+//!   retries or `failure` (a [`Loss`]) for those that never finished.
 
 use std::{
     collections::HashMap,
@@ -22,7 +24,7 @@ use opentelemetry::{
     metrics::{Counter, Histogram, Meter, ObservableGauge},
 };
 
-use super::{EventOutcome, ReceivedEvent, entity_type::EntityType};
+use super::{EventOutcome, ReceivedEvent, entity_type::EntityType, offsets::RecordPosition};
 
 #[cfg(test)]
 pub(super) mod test;
@@ -39,8 +41,24 @@ const FAILURE: &str = "failure";
 const TOPIC: &str = "topic";
 const PARTITION: &str = "partition";
 
-/// The `failure` of a record that did not decode, so never reached a worker.
-const UNDECODABLE: &str = "undecodable";
+/// Why a record was committed without reaching the index other than by
+/// running out of processing retries: the `failure` tag of [`DROPPED`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub(super) enum Loss {
+    /// The record did not decode, so never reached a worker.
+    Undecodable,
+    /// A worker had started it when the consumer stopped, and no partition
+    /// rewind redelivers it.
+    CutOffAtStop,
+    /// Queued when the consumer stopped, on a partition it no longer owned.
+    NotRewound,
+    /// Queued when the consumer stopped, and committing its partition back
+    /// failed.
+    RewindUnconfirmed,
+    /// Queued when the consumer stopped after an error.
+    QueuedAtErrorExit,
+}
 
 /// [`LAG`] bucket bounds in ms: dense around the 60 s and 5 min targets, then
 /// out to the email topic's 10-day retention.
@@ -155,13 +173,19 @@ impl IndexMetrics {
         }
     }
 
-    /// Counts a record on `topic` that did not decode and was committed.
-    pub(super) fn record_undecodable(&self, topic: &str) {
-        let mut tags = vec![KeyValue::new(FAILURE, UNDECODABLE)];
+    /// Counts a record on `topic` lost as `loss`.
+    pub(super) fn record_loss(&self, topic: &str, loss: Loss) {
+        let mut tags = vec![KeyValue::new(FAILURE, <&'static str>::from(loss))];
         if let Some(entity_type) = EntityType::from_topic(topic) {
             tags.push(KeyValue::new(ENTITY_TYPE, entity_type.as_str()));
         }
         self.dropped.add(1, &tags);
+    }
+
+    pub(super) fn record_losses(&self, records: &[RecordPosition], loss: Loss) {
+        for record in records {
+            self.record_loss(record.topic, loss);
+        }
     }
 
     pub(super) fn pending_ages(&self) -> &PendingAges {
