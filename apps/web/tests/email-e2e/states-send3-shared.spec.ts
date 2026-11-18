@@ -162,18 +162,26 @@ for (const provider of PROVIDERS) {
         expect(drafts).toHaveLength(1);
         const [draft] = drafts;
         expect(draft.id).not.toBe(thread);
-        expect(await threadMessages(mailbox, draft.id)).toEqual([
-          expect.objectContaining({
-            is_draft: true,
-            body_html_sanitized: expect.stringContaining('The second week.'),
-          }),
-        ]);
+        const savedDraft = expect.objectContaining({
+          is_draft: true,
+          body_html_sanitized: expect.stringContaining('The second week.'),
+          provider_id: provider === 'OUTLOOK' ? expect.any(String) : null,
+        });
+        // Outlook sync binds its draft to a provider ID after the Macro save.
+        await expect
+          .poll(() => threadMessages(mailbox, draft.id))
+          .toEqual([savedDraft]);
         confirmed('F-117');
         await accounts?.release();
 
         await page.reload();
         await expect(page.getByText('Which week suits you?')).toBeVisible();
         await expect(replyEditor(page)).toContainText('The second week.');
+        expect(
+          (await threadMessages(mailbox, thread)).filter(
+            (message) => message.is_draft
+          )
+        ).toEqual([savedDraft]);
         saw('STL-996');
       });
     }
