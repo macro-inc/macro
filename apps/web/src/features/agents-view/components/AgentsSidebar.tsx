@@ -228,11 +228,16 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const rowsOf = (
     section: ConversationSection,
     conversations: AgentConversationEntity[]
-  ): ConversationRow[] =>
-    conversations.map((conversation) => ({
+  ): ConversationRow[] => {
+    // Pages can overlap as conversations move up the list; a row lists once.
+    const unique = new Map(
+      conversations.map((conversation) => [conversation.id, conversation])
+    );
+    return [...unique.values()].map((conversation) => ({
       key: `${section}:${conversation.id}`,
       conversation,
     }));
+  };
   // The rows on screen, in screen order: a collapsed section has none.
   const visibleRows = () => [
     ...(agentUpdates().enabled && openPullRequestsOpen()
@@ -256,6 +261,12 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   });
   const listId = createUniqueId();
   const rowDomId = (key: string) => `${listId}-${key}`;
+  // The row whose button holds DOM focus, as Tab leaves it.
+  const rowKeyWithFocus = () => {
+    const id = document.activeElement?.id;
+    const prefix = `${listId}-`;
+    return id?.startsWith(prefix) ? id.slice(prefix.length) : undefined;
+  };
   let sidebar: HTMLElement | undefined;
   let listRoot: HTMLDivElement | undefined;
 
@@ -277,6 +288,12 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
       panel.isPanelActive() &&
       Boolean(sidebar?.contains(document.activeElement)),
     navigation: {
+      // A row tabbed to is where the keyboard is, so j and k move from it.
+      onBeforeMove: () => {
+        const key = rowKeyWithFocus();
+        if (key !== undefined) list.focus.set(key, { reason: 'keyboard' });
+        return true;
+      },
       onNavigate: (event) => {
         listRoot?.focus({ preventScroll: true });
         if (event.kind !== 'move' || event.direction !== 1 || !event.result)
@@ -412,6 +429,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
         <ViewSidebar.Content
           ref={listRoot}
           role="group"
+          aria-label="Conversations"
           tabIndex={isTouchDevice() ? undefined : -1}
           aria-activedescendant={focusedRowId()}
           class="gap-2 overflow-hidden pt-2 outline-none"

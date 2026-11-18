@@ -773,7 +773,9 @@ of its open sections (Open PRs, the conversation groups, Archived), with `Home`
 and `End` for the ends; the row under the keyboard takes the hover fill.
 `Enter` opens it as a click does and `Shift+Enter` opens it in a new split.
 These keys belong to the sidebar only while focus is in it: pressed in the
-conversation beside it, they stay with the conversation.
+conversation beside it, they stay with the conversation. As in every list view,
+`Shift+Up`/`Shift+Down` belong to the list in that split, so moving to a split
+above or below takes `Shift+K`/`Shift+J` there.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including

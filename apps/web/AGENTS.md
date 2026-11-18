@@ -1135,7 +1135,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   header (`onSearchOpenChange(false)` when the sidebar keeps it open itself).
   A sidebar that leaves the open state to the header would hide a live query,
   so pass `searchOpen` (open while a query is set) and clear the query in
-  `onSearchOpenChange(false)`, as Home and Chat do. Pass `hasResults` when
+  `onSearchOpenChange(false)`, as Home, Chat and Agents do. Pass `hasResults` when
   another list shares the split (Chat's rail beside a conversation's calls):
   the "go to first item" lookup answers for whichever list registered last.
   Its search clears only on an Escape pressed inside the sidebar

@@ -25,7 +25,7 @@ import {
 type Props = {
   entity: AgentSessionEntity;
   surface: 'home' | 'agents';
-  /** The row element's id, for a list that points at its focused row. */
+  /** The row button's id, for a list that points at its focused row. */
   domId?: string;
   active?: boolean;
   focused?: boolean;

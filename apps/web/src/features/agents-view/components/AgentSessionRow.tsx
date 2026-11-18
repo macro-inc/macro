@@ -9,6 +9,7 @@ import {
 /** Shared row geometry; the host supplies the Home icon or Agents status. */
 export function AgentSessionRow(props: {
   id: string;
+  /** The row button's id, for a list that points at its focused row. */
   domId?: string;
   title: string;
   kind: 'chat' | 'code';
@@ -30,7 +31,6 @@ export function AgentSessionRow(props: {
   return (
     <ViewSidebar.Item
       as="div"
-      id={props.domId}
       active={props.active}
       class={cn(
         'relative text-ink',
@@ -44,6 +44,7 @@ export function AgentSessionRow(props: {
       data-session-state={props.state}
     >
       <button
+        id={props.domId}
         type="button"
         class="absolute inset-0 rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-accent"
         aria-label={props.title}

@@ -931,9 +931,17 @@ describe('Agents sidebar keyboard list', () => {
     fireEvent.keyUp(document.activeElement ?? document, { key, ...init });
   }
 
-  function setup() {
+  function setup(
+    options: {
+      conversations?: AgentConversationEntity[];
+      archived?: AgentConversationEntity[];
+      grouping?: 'none' | 'status';
+      hasNextPage?: boolean;
+    } = {}
+  ) {
     const [search, setSearch] = createSignal('');
     const open = vi.fn();
+    const loadMore = vi.fn();
     let detail!: HTMLDivElement;
 
     // The split holds the sidebar and, beside it, the conversation it opened.
@@ -949,27 +957,32 @@ describe('Agents sidebar keyboard list', () => {
                 onCreateAgent={vi.fn()}
                 onCreateRoutine={vi.fn()}
                 filters={EMPTY_CONVERSATION_FILTERS}
-                grouping="none"
+                grouping={options.grouping ?? 'none'}
                 onFilterChange={vi.fn()}
                 onClearFilters={vi.fn()}
                 onGroupingChange={vi.fn()}
                 activePage="new"
                 onOpenPage={vi.fn()}
-                conversations={conversations}
-                archived={[]}
-                modeForConversation={() => 'chat'}
+                conversations={options.conversations ?? conversations}
+                archived={options.archived ?? []}
+                modeForConversation={(conversation) =>
+                  conversation.type === 'agent_session' &&
+                  conversation.pullRequestUrl
+                    ? 'code'
+                    : 'chat'
+                }
                 activeConversationId={undefined}
                 search={search()}
                 loading={false}
                 error={false}
-                hasNextPage={false}
+                hasNextPage={options.hasNextPage ?? false}
                 loadingNextPage={false}
                 onSearchChange={setSearch}
                 showUnlistedRuns={false}
                 onShowUnlistedRunsChange={vi.fn()}
                 onOpenConversation={open}
                 onRetry={vi.fn()}
-                onLoadMore={vi.fn()}
+                onLoadMore={loadMore}
               />
             </div>
             <div ref={detail} tabIndex={0} />
@@ -979,14 +992,35 @@ describe('Agents sidebar keyboard list', () => {
     }
 
     render(() => <Harness />);
-    const list = () =>
-      document.querySelector<HTMLElement>('[aria-activedescendant]') ??
-      screen.getByRole('group');
+    const list = () => screen.getByRole('group', { name: 'Conversations' });
+    // The name a screen reader reads for the row the list points at.
     const focusedRow = () => {
-      const id = list().getAttribute('aria-activedescendant');
-      return id ? document.getElementById(id)?.textContent : undefined;
+      const row = document.getElementById(
+        list().getAttribute('aria-activedescendant') ?? ''
+      );
+      return row?.getAttribute('aria-label') ?? row?.textContent;
     };
-    return { search, setSearch, open, list, focusedRow, detail: () => detail };
+    const enterList = async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Search conversations' })
+      );
+      const field = await screen.findByRole('searchbox', {
+        name: 'Search conversations',
+      });
+      field.focus();
+      press(field, 'ArrowDown');
+      return field;
+    };
+    return {
+      search,
+      setSearch,
+      open,
+      loadMore,
+      list,
+      focusedRow,
+      enterList,
+      detail: () => detail,
+    };
   }
 
   it('moves from the search field into the results and keeps the search on Escape', async () => {
@@ -1014,21 +1048,14 @@ describe('Agents sidebar keyboard list', () => {
   });
 
   it('walks the rows with j, k and the arrows, and opens the focused one with Enter', async () => {
-    const { open, list, focusedRow } = setup();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Search conversations' })
-    );
-    const field = await screen.findByRole('searchbox', {
-      name: 'Search conversations',
-    });
-    field.focus();
-    press(field, 'ArrowDown');
-    expect(focusedRow()).toContain('Fix build');
+    const { open, list, focusedRow, enterList } = setup();
+    await enterList();
+    expect(focusedRow()).toBe('Fix build');
 
     press(list(), 'j');
     expect(focusedRow()).toContain('Plan launch');
     press(list(), 'ArrowDown');
-    expect(focusedRow()).toContain('Summarize notes');
+    expect(focusedRow()).toBe('Summarize notes');
     press(list(), 'k');
     expect(focusedRow()).toContain('Plan launch');
 
@@ -1038,27 +1065,116 @@ describe('Agents sidebar keyboard list', () => {
     expect(open).toHaveBeenLastCalledWith(conversations[1], true);
 
     press(list(), 'ArrowUp');
-    expect(focusedRow()).toContain('Fix build');
+    expect(focusedRow()).toBe('Fix build');
+  });
+
+  it('follows the rows on screen across open PRs, status groups and archived, and skips a collapsed section', async () => {
+    sidebarState.agentUpdates = true;
+    const pullRequest: AgentConversationEntity = {
+      type: 'agent_session',
+      id: 'pr',
+      name: 'Ship parser',
+      ownerId: 'me',
+      archivedBy: null,
+      botId: 'cursor',
+      status: 'acp_ready',
+      turnState: 'idle',
+      pullRequestState: 'open',
+      pullRequestUrl: 'https://github.com/example/repo/pull/7',
+    };
+    const waiting: AgentConversationEntity = {
+      type: 'agent_session',
+      id: 'waiting',
+      name: 'Answer question',
+      ownerId: 'me',
+      archivedBy: null,
+      botId: 'macro',
+      status: 'acp_ready',
+      turnState: 'blocked',
+    };
+    const { list, focusedRow, enterList } = setup({
+      grouping: 'status',
+      conversations: [pullRequest, waiting],
+      archived: [
+        {
+          type: 'agent_session',
+          id: 'old',
+          name: 'Old spike',
+          ownerId: 'me',
+          archivedBy: 'user',
+          botId: 'macro',
+          status: 'disconnected',
+        },
+      ],
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Archived/ }));
+    await screen.findByRole('button', { name: 'Old spike' });
+
+    await enterList();
+    const visited = [focusedRow()];
+    for (let step = 0; step < 3; step++) {
+      press(list(), 'j');
+      visited.push(focusedRow());
+    }
+    // The open PR lists twice: in Open PRs, then in its status group.
+    expect(visited).toEqual([
+      'Ship parser',
+      'Answer question',
+      'Ship parser',
+      'Old spike',
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Conversations' }));
+    press(list(), 'Home');
+    press(list(), 'j');
+    expect(focusedRow()).toBe('Old spike');
+  });
+
+  it('loads the next page as the keyboard nears the last rows', async () => {
+    const many: AgentConversationEntity[] = Array.from(
+      { length: 24 },
+      (_, index) => ({
+        type: 'chat',
+        id: `chat-${index}`,
+        name: `Chat ${index}`,
+        ownerId: 'me',
+      })
+    );
+    const { list, loadMore, enterList, focusedRow } = setup({
+      conversations: many,
+      hasNextPage: true,
+    });
+    await enterList();
+    for (let step = 0; step < 19; step++) press(list(), 'j');
+    expect(focusedRow()).toContain('Chat 19');
+    expect(loadMore).not.toHaveBeenCalled();
+
+    press(list(), 'j');
+    expect(focusedRow()).toContain('Chat 20');
+    expect(loadMore).toHaveBeenCalledOnce();
+  });
+
+  it('moves on from a row reached with Tab', async () => {
+    const { list, focusedRow, enterList } = setup();
+    await enterList();
+    expect(focusedRow()).toBe('Fix build');
+
+    screen.getByRole('button', { name: 'Summarize notes' }).focus();
+    press(document.activeElement ?? list(), 'k');
+    expect(document.activeElement).toBe(list());
+    expect(focusedRow()).toContain('Plan launch');
   });
 
   it('leaves keys pressed in the conversation beside it alone', async () => {
-    const { open, list, focusedRow, detail } = setup();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Search conversations' })
-    );
-    const field = await screen.findByRole('searchbox', {
-      name: 'Search conversations',
-    });
-    field.focus();
-    press(field, 'ArrowDown');
-    expect(focusedRow()).toContain('Fix build');
+    const { open, focusedRow, detail, enterList } = setup();
+    await enterList();
+    expect(focusedRow()).toBe('Fix build');
 
     detail().focus();
     press(detail(), 'j');
     press(detail(), 'Enter');
-    expect(focusedRow()).toContain('Fix build');
+    expect(focusedRow()).toBe('Fix build');
     expect(open).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(detail());
-    expect(list()).toBeTruthy();
   });
 });
