@@ -320,8 +320,12 @@ export class Session {
       if (painted !== undefined) return painted;
       await sleep(100);
     }
-    await this.cdp.evaluate('window.__macroBenchmarkContent?.stop()');
     return undefined;
+  }
+
+  /** Stops watching for content, if a watch is still running. */
+  async stopWatchingContent(): Promise<void> {
+    await this.cdp.evaluate('window.__macroBenchmarkContent?.stop()');
   }
 
   /**

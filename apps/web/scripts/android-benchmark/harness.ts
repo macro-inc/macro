@@ -59,7 +59,36 @@ export async function measureStep(
   // come back in between, because it lasts as long as the connection.
   const throttleBefore = await session.checkCpuThrottle();
   const point = await settledTarget(session, step.target(targets));
-  if (step.ready.visible) await session.watchContent(step.ready.visible);
+  const tap = { variant, iteration, point, throttleBefore, holdMs };
+  if (!step.ready.visible) return tapAndMeasure(session, step, targets, tap);
+  await session.watchContent(step.ready.visible);
+  try {
+    return await tapAndMeasure(session, step, targets, tap);
+  } finally {
+    // A step that failed early would leave the watcher running into the next.
+    await session.stopWatchingContent();
+  }
+}
+
+/** Taps the located target and waits for the step to be ready. */
+async function tapAndMeasure(
+  session: Session,
+  step: Step,
+  targets: Targets,
+  {
+    variant,
+    iteration,
+    point,
+    throttleBefore,
+    holdMs,
+  }: {
+    variant: Variant;
+    iteration: number;
+    point: Located;
+    throttleBefore: number;
+    holdMs: number | undefined;
+  }
+): Promise<Sample> {
   const failures = session.captureFailures;
   // The same clock as the page's event and span times.
   const before = await session.cdp.evaluate<number>(
