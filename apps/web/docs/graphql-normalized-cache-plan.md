@@ -1239,6 +1239,8 @@ Missing matches become durable incomplete projections, not deleted records or
 invented archive/signal facts. Mail retention excludes explicitly invalidated
 (`Dirty`) baseline rows in the same projection scope unless an optimistic shadow
 takes precedence; an older open view cannot restore the revoked evidence.
+While a write to the row is queued, an older view's baseline can still list it,
+until the write settles.
 This differs from missing metadata, which still retains same-query membership.
 Full canonical snapshots restore their proof;
 partial patches cannot. Backfills, cursor pages, incomplete responses,

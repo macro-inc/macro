@@ -660,7 +660,9 @@ prefix of those writes all still match the page (a queued mark read does not
 keep a thread the page left out; a queued Undo of an archive keeps its row). It
 does not use cursor pages or backfill gaps as negative evidence. An older open
 view's server snapshot cannot restore
-explicitly invalidated membership; pending local edits still take precedence.
+explicitly invalidated membership; pending local edits still take precedence,
+so an older view can list a thread its first page dropped (the trashed thread
+with a queued mark read) until that write settles.
 Invalidated facts stay unqueryable until a full canonical snapshot arrives,
 rather than guessing whether a thread was moved or
 deleted. Verification: seed stale Noise matches between returned rows, apply a
