@@ -146,7 +146,7 @@ mod test {
             .to_string()
             .expect("workflow yaml");
         assert!(
-            yaml.contains("nix-cache-url: ${{ vars.NIX_CACHE_URL }}"),
+            yaml.contains(&format!("nix-cache-url: {}", vars::NIX_CACHE_URL)),
             "{yaml}"
         );
         assert!(!yaml.contains("NIX_CACHE_SIGNING_KEY"), "{yaml}");
