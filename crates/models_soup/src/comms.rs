@@ -284,8 +284,10 @@ pub struct ChannelWithParticipants {
     /// Participants in the channel. Bots are in `bot_participants`.
     pub participants: Vec<ChannelParticipant>,
     /// Bots that are participants in the channel.
+    // A boxed slice: a `Vec` would make the channel the one oversized
+    // `SoupItem` variant.
     #[serde(default)]
-    pub bot_participants: Vec<ChannelBotParticipant>,
+    pub bot_participants: Box<[ChannelBotParticipant]>,
     /// Whether the requesting user is an active participant of the channel.
     /// False for team channels of the user's teams they have not joined.
     #[serde(default)]
