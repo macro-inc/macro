@@ -1130,6 +1130,48 @@ describe('Agents sidebar keyboard list', () => {
     expect(focusedRow()).toBe('Old spike');
   });
 
+  it('lists a conversation that arrives twice once, in the state it last arrived in', async () => {
+    const { list, focusedRow, enterList } = setup({
+      grouping: 'status',
+      conversations: [
+        {
+          type: 'agent_session',
+          id: 'twice',
+          name: 'Review draft',
+          ownerId: 'me',
+          archivedBy: null,
+          botId: 'macro',
+          status: 'acp_ready',
+          turnState: 'blocked',
+        },
+        conversations[1],
+        {
+          type: 'agent_session',
+          id: 'twice',
+          name: 'Review draft',
+          ownerId: 'me',
+          archivedBy: null,
+          botId: 'macro',
+          status: 'acp_ready',
+          turnState: 'idle',
+        },
+      ],
+    });
+    expect(
+      screen.getAllByRole('button', { name: 'Review draft' })
+    ).toHaveLength(1);
+    expect(
+      screen
+        .getAllByRole('heading', { level: 3 })
+        .map((heading) => heading.textContent)
+    ).toEqual(['Recent2']);
+
+    await enterList();
+    expect(focusedRow()).toBe('Review draft');
+    press(list(), 'j');
+    expect(focusedRow()).toContain('Plan launch');
+  });
+
   it('loads the next page as the keyboard nears the last rows', async () => {
     const many: AgentConversationEntity[] = Array.from(
       { length: 24 },

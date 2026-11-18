@@ -214,30 +214,32 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     conversations.filter((conversation) =>
       conversationMatchesFilters(factsOf(conversation), props.filters)
     );
-  const conversations = () => matching(props.conversations);
+  // Pages can overlap as conversations move up the list, so one can arrive
+  // twice, even in two states; it lists once, as the last copy received.
+  const unique = (conversations: AgentConversationEntity[]) => [
+    ...new Map(
+      conversations.map((conversation) => [conversation.id, conversation])
+    ).values(),
+  ];
+  const conversations = () => matching(unique(props.conversations));
   const openPullRequests = () =>
     selectOpenPullRequests(
-      props.conversations,
+      unique(props.conversations),
       userId(),
       props.modeForConversation
     );
-  const archived = () => matching(props.archived);
+  const archived = () => matching(unique(props.archived));
   const groups = () =>
     groupConversations(conversations(), factsOf, props.grouping);
   const filtering = () => activeFilterCount(props.filters) > 0;
   const rowsOf = (
     section: ConversationSection,
     conversations: AgentConversationEntity[]
-  ): ConversationRow[] => {
-    // Pages can overlap as conversations move up the list; a row lists once.
-    const unique = new Map(
-      conversations.map((conversation) => [conversation.id, conversation])
-    );
-    return [...unique.values()].map((conversation) => ({
+  ): ConversationRow[] =>
+    conversations.map((conversation) => ({
       key: `${section}:${conversation.id}`,
       conversation,
     }));
-  };
   // The rows on screen, in screen order: a collapsed section has none.
   const visibleRows = () => [
     ...(agentUpdates().enabled && openPullRequestsOpen()
