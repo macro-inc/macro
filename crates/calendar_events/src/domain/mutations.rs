@@ -23,9 +23,9 @@ use super::{
     models::{
         ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
         CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
-        CalendarEventPatch, CalendarEventUpsert, DisconnectedCalendar, EventReminders, EventTime,
-        OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX,
-        REMINDER_OVERRIDES_MAX,
+        CalendarEventPatch, CalendarEventSource, CalendarEventUpsert, CalendarProvider,
+        DisconnectedCalendar, EventReminders, EventTime, OccurrenceRange, REMINDER_METHOD_EMAIL,
+        REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventChange,
@@ -123,11 +123,14 @@ where
     }
 
     /// Announce retired events and, when anything was actually retired, nudge
-    /// the link's calendar viewers to refetch their projections.
+    /// the link's calendar viewers to refetch their projections. An Outlook
+    /// copy's viewers hear of it from the projection relay instead, which
+    /// publishes the outbox row the retirement queued.
     async fn announce_retirements(
         &self,
         owner_id: &str,
         email_link_id: Uuid,
+        provider: CalendarProvider,
         retired: Vec<RetiredCalendarEvent>,
     ) {
         if retired.is_empty() {
@@ -135,9 +138,11 @@ where
         }
         let team_ooo_changed = retired.iter().any(|event| event.team_ooo_changed);
         self.publish_retirements(retired);
-        self.refresh
-            .calendar_changed(owner_id, email_link_id, team_ooo_changed)
-            .await;
+        if provider != CalendarProvider::Outlook {
+            self.refresh
+                .calendar_changed(owner_id, email_link_id, team_ooo_changed)
+                .await;
+        }
     }
 
     /// Announce what a write did to the canonical row. A write that changed
@@ -226,6 +231,10 @@ where
     ) -> Result<CalendarEvent, CalendarMutationError> {
         let source = upsert.source.details();
         let email_link_id = source.email_link_id;
+        // An Outlook copy's viewers hear of a change through the projection
+        // relay, which publishes the outbox row every change to the event's
+        // row queues, so its own inbox gets no nudge from here.
+        let relayed = matches!(upsert.source, CalendarEventSource::Outlook(_));
         let outcome = self
             .repository
             .upsert_event(CalendarEventWrite::UserMutation(upsert))
@@ -233,7 +242,7 @@ where
             .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
         event.id = outcome.event_id;
         self.publish_write_outcome(&outcome);
-        if outcome.change != CalendarEventChange::Unchanged {
+        if !relayed && outcome.change != CalendarEventChange::Unchanged {
             self.refresh
                 .calendar_changed(&outcome.owner_id, email_link_id, outcome.team_ooo_changed)
                 .await;
@@ -671,8 +680,13 @@ where
             .unwrap_or_default();
         // The row may be gone now, so search cannot rediscover this by
         // re-reading Postgres — the retirement has to be announced.
-        self.announce_retirements(&target.owner_id, target.email_link_id, retired)
-            .await;
+        self.announce_retirements(
+            &target.owner_id,
+            target.email_link_id,
+            target.token_identity.provider,
+            retired,
+        )
+        .await;
     }
 }
 
@@ -910,8 +924,13 @@ where
                 .remove_provider_source(target.account_id, target.calendar_id, &provider_id)
                 .await
                 .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
-            self.announce_retirements(&target.owner_id, target.email_link_id, retired)
-                .await;
+            self.announce_retirements(
+                &target.owner_id,
+                target.email_link_id,
+                target.token_identity.provider,
+                retired,
+            )
+            .await;
         }
         Ok(())
     }

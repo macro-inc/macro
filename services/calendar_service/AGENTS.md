@@ -79,7 +79,11 @@ gateway `/calendar` prefix.
   (`calendar.projection_publish`), and refreshes each inbox the batch changed
   once. A round that claims fewer waits for the next two-second poll, so a
   first import or a bulk change refreshes open clients about every two
-  seconds instead of once per event.
+  seconds instead of once per event. It is the only refresh for an Outlook
+  event's changes, Macro writes included, so it runs while either
+  `OUTLOOK_SYNC_ENABLED` or `OUTLOOK_WRITES_ENABLED` is on (inside
+  `CALENDAR_SYNC_ENABLED`; `config::OutlookLoops`), and startup logs which
+  Outlook loops the task runs.
 - Reauth-required notifications ride the shared `LinkManagerQueue`, consumed by
   `email_service`; don't add a second calendar-specific reconnect notification.
 - Forward `team_ooo_changed` to both inbox and teammate refresh notifications;

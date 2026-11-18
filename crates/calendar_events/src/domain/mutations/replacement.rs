@@ -248,8 +248,13 @@ where
                         )
                         .await
                         .map_err(internal)?;
-                    self.announce_retirements(&target.owner_id, target.email_link_id, retired)
-                        .await;
+                    self.announce_retirements(
+                        &target.owner_id,
+                        target.email_link_id,
+                        target.token_identity.provider,
+                        retired,
+                    )
+                    .await;
                 }
                 self.repository
                     .complete_replacement(id, &event)
