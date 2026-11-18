@@ -1,5 +1,4 @@
 id	on	kind	reason
-F-020	outlook	bug	a message deleted at Outlook stays in the thread (outlook-deleted-message-stays-in-thread); its test is kept as a known bug
 F-057	both	needs	the image proxy refuses the private addresses of a stack, so what it fetched cannot be checked at the service; the UI half is tested
 AL-401	-	no-user-path	The token is only declared in tokens.ts; no hotkey is registered with it.
 AL-041	-	no-user-path	EmailInboxFilter is exported but no component imports or renders it.
