@@ -5,7 +5,6 @@
  * call, ask it onto one, hang up, post in a call's chat, and read a call
  * back.
  */
-import { behavior } from '@macro-inc/muppet/core/behavior';
 import { module } from '@macro-inc/muppet/core/capability';
 import { postCallChat } from './capabilities/chat.ts';
 import {
@@ -21,7 +20,6 @@ import {
   callDecisions,
   callsNow,
 } from './capabilities/watch.ts';
-import type { CallsContext } from './context.ts';
 
 // Scripts import the functions from the module's file, which is this one.
 export { postCallChat } from './capabilities/chat.ts';
@@ -59,6 +57,3 @@ export const callsModule = module({
     replayCall,
   },
 });
-
-export const callsCapabilities =
-  behavior<CallsContext>().capability(callsModule);

@@ -6,8 +6,11 @@ keeps its own memory, and can change its own code.
 
 When its owner described it in the invite, that is who it is
 (`state/memory/identity/identity.md`). When they didn't, it is not anyone
-yet: the first thing it does is DM its owner to ask who it should be, and
-what it is told becomes part of every later run.
+yet, and what it is told becomes part of every later run. Either way, the
+first thing it does is greet its owner in their DM: a few lines, written
+from `behavior/capabilities/identity/greeting.md`, on what it has to work
+with, ending with what it can help with (and, if it doesn't know, who it
+should be).
 
 - `AGENT.md` is its charter: how it works. It says nothing about who it is.
 - `ARCHITECTURE.md` is how the code is laid out and the rules it keeps.
@@ -25,9 +28,9 @@ repository, provides `@macro-inc/muppet`, `@macro-inc/sdk`, Claude Code and
 the programs the capabilities use, and runs `bin/agent run` as a system
 service.
 
-Once it is running, it DMs you in Macro. Answer it: that conversation is how
-it learns its name, its purpose and how to talk. It writes what you tell it
-to `state/memory/identity/identity.md`.
+Within seconds of starting, it greets you in your DM in Macro. Answer it:
+that conversation is how it learns its name, its purpose and how to talk.
+It writes what you tell it to `state/memory/identity/identity.md`.
 
 ## What it can do
 

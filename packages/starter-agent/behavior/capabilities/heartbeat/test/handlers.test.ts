@@ -20,7 +20,7 @@ import { fixedClock, join, memoryDisk } from '../../../context/test/fakes.ts';
 import { heartbeatHandlers } from '../../../events/handlers/heartbeat.ts';
 import { logs, paths } from '../config.ts';
 import type { HeartbeatContext } from '../context.ts';
-import { heartbeatCapabilities } from '../index.ts';
+import { heartbeatModule } from '../index.ts';
 import { tick } from '../schedules.ts';
 
 const root = '/agent';
@@ -145,7 +145,7 @@ const setup = () => {
         },
       },
     })
-    .use(heartbeatCapabilities)
+    .capability(heartbeatModule)
     .use(heartbeatHandlers({ sources: { schedules: firings.source } }))
     .on(
       (sources) => sources.hooks.failed,

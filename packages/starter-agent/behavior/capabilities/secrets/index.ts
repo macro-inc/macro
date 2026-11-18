@@ -5,7 +5,6 @@
  * back: a value goes from the vault to the clipboard, or from the clipboard
  * (or the agent's own input) to the vault, inside the script's process.
  */
-import { behavior } from '@macro-inc/muppet/core/behavior';
 import { module } from '@macro-inc/muppet/core/capability';
 import type { Base } from '../../context/index.ts';
 import { addPending } from './access.ts';
@@ -561,5 +560,3 @@ export const secretsModule = module({
     requestSecretAccess,
   },
 });
-
-export const secretsCapabilities = behavior<Needs>().capability(secretsModule);

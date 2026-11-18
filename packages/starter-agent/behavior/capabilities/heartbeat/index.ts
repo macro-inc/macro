@@ -3,7 +3,6 @@
  * it records, and how its repository changes. Each is what the tick, a hook or
  * a schedule runs, so it can also be run by hand and read in a log.
  */
-import { behavior } from '@macro-inc/muppet/core/behavior';
 import { module } from '@macro-inc/muppet/core/capability';
 import type { Schedule } from '@macro-inc/muppet/utilities/schedules/schedule';
 import type { Changed } from '@macro-inc/muppet/utilities/schedules/schedules';
@@ -405,6 +404,3 @@ export const heartbeatModule = module({
     clockReport,
   },
 });
-
-export const heartbeatCapabilities =
-  behavior<Needs>().capability(heartbeatModule);

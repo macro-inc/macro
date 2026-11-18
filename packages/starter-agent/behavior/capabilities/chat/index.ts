@@ -2,7 +2,6 @@
  * Talking in Macro: the capabilities the agent uses to post, reply, react
  * and read conversations, as its own account.
  */
-import { behavior } from '@macro-inc/muppet/core/behavior';
 import { module } from '@macro-inc/muppet/core/capability';
 import type { ChatContext } from './context.ts';
 import type { Line, Posted } from './macro.ts';
@@ -229,5 +228,3 @@ export const chatModule = module({
     readEmailThread,
   },
 });
-
-export const chatCapabilities = behavior<ChatContext>().capability(chatModule);

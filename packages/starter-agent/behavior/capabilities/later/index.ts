@@ -5,7 +5,6 @@
  * asked. A task is a one-off schedule whose data says to wake the agent, so
  * it survives a restart and can be handed over from any process.
  */
-import { behavior } from '@macro-inc/muppet/core/behavior';
 import { module } from '@macro-inc/muppet/core/capability';
 import type { Schedules } from '@macro-inc/muppet/utilities/schedules';
 import type { Clock } from '@macro-inc/muppet/utilities/time';
@@ -96,6 +95,3 @@ export const laterModule = module({
   file: import.meta.path,
   functions: { doLater, listLater },
 });
-
-export const laterCapabilities =
-  behavior<LaterContext>().capability(laterModule);

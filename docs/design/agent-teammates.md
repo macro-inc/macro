@@ -53,8 +53,14 @@ Team admins and owners can read the repo with their Macro credential.
 5. **Claude Code** reaches Anthropic through the customer's Claude login
    (harnessd), or through the Macro-credits gateway when `agent.env` says so.
 6. **The agent boots**: it reads its credentials, shows online, starts its
-   event sources and records the healthy HEAD. With no identity, its first
-   wake DMs its owner to ask who it should be; otherwise it introduces itself.
+   event sources and records the healthy HEAD. At the same moment it greets
+   its owner in their DM, once in its life (muppet's `utilities/greeting`
+   behavior, `agent.greeting` span): one quick model call with no tools
+   writes the hello from the starter agent's `identity/greeting.md` and the
+   capabilities it has, and asks what it can help with, and who it should be
+   when it has no identity yet. It stands down once the DM has a message.
+   Its span is a child of `agent.start`, which isn't held for it: start
+   ends at the healthy boot, and the greeting a few seconds later.
 
 `create_default_agent` at the computer's first connection keeps creating the
 default coding agent only on computers without an agent teammate.

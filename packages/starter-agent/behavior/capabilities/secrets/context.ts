@@ -49,9 +49,14 @@ export const secretsContext = (
         return { origin: client.hosts.storage, key: auth.apiKey };
       },
       team: () => {
+        // A lookup that failed isn't kept: the next call asks again.
         team ??= macro()
           .then((client) => client.teams.current())
-          .then(({ id }) => id);
+          .then(({ id }) => id)
+          .catch((error: unknown) => {
+            team = undefined;
+            throw error;
+          });
         return team;
       },
       wakeId: wakeIds(process.env[wakeVariable], clock),

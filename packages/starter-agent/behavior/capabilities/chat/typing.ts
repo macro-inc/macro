@@ -4,8 +4,12 @@
  * sent once; and it never types forever.
  */
 export type Typing = {
-  /** Shows the agent typing in the channel, in a thread if `root` is given, until stopped. */
-  readonly start: (channelId: string, root?: string) => void;
+  /**
+   * Shows the agent typing in the channel, in a thread if `root` is given,
+   * until stopped. Returns a stop for this indicator only: once another start
+   * in the channel has replaced it, calling it does nothing.
+   */
+  readonly start: (channelId: string, root?: string) => () => Promise<void>;
   /** Stops it. Resolves once "stop" is sent, at once if it wasn't typing there. */
   readonly stop: (channelId: string) => Promise<void>;
 };
@@ -49,6 +53,7 @@ export const typing = ({
       const cap = setTimeout(() => void end(), most);
       stops.set(channelId, end);
       void quiet('start');
+      return end;
     },
   };
 };
