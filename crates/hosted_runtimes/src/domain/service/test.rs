@@ -55,6 +55,8 @@ pub(crate) struct FakeBilling {
     pub decline: AtomicBool,
     /// The add fails before it reaches the provider.
     pub provider_error: AtomicBool,
+    /// Another change to the team's subscription is still in flight.
+    pub change_in_flight: AtomicBool,
     /// The add is charged but its answer is lost.
     pub lose_response: AtomicBool,
     pub remove_outcome: Mutex<RemoveOutcome>,
@@ -152,6 +154,9 @@ impl Billing for FakeBilling {
             return Err(BillingError::Provider(rootcause::report!(
                 "billing timed out"
             )));
+        }
+        if self.change_in_flight.load(Ordering::SeqCst) {
+            return Err(BillingError::ChangeInFlight);
         }
         if self.decline.load(Ordering::SeqCst) {
             return Err(BillingError::PaymentFailed);

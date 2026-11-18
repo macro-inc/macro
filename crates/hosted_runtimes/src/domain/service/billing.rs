@@ -20,6 +20,12 @@ use crate::domain::ports::{
 
 /// Billing effects leased per worker pass.
 const BILLING_BATCH: u32 = 16;
+/// How soon a billing effect refused because another change to the team's
+/// subscription is still in flight runs again. That change settles within
+/// the teams guard's own window (five minutes at most), so this never spins
+/// for long, and it spends no attempt.
+pub(crate) const CHANGE_IN_FLIGHT_RETRY: chrono::Duration = chrono::Duration::seconds(5);
+
 /// How long a leased billing effect stays hidden from other workers.
 const BILLING_LEASE: chrono::Duration = chrono::Duration::minutes(2);
 /// Failed attempts after which a billing item removal stops retrying and
