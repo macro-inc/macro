@@ -1001,7 +1001,10 @@ Projects use the same list rows, property cells, selection, group headers, and
 keyboard navigation as Tasks. On touch devices, where the list fills a phone or
 a tablet's narrow list pane, there are no column headings and no checkbox
 column, as in the Tasks list on phones: each row is the project's name followed
-by its Status, Priority, Assignees, and Due date icons. Search (`Cmd/Ctrl+F`), `Sort projects`,
+by its Status, Priority, Assignees, and Due date icons. On desktop, when the
+list is narrower than 840px, those columns show their values as icons and their
+headings as icons with tooltips, as the Tasks list does, and Tasks and Updated
+leave the grid without an empty column. Search (`Cmd/Ctrl+F`), `Sort projects`,
 `Group projects`, and `Filter projects` sit above the list. Groups default to
 Status; choose None, Priority, or Assignee to change them. Click a group header
 or use the list's disclosure keys to collapse or expand it. Sort by Updated
@@ -1084,7 +1087,10 @@ and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,
 including `Delete` for its owner. Choose Overview or Tasks using the inset
 tabs in that top bar; below 600px they collapse to icons, with tooltips on
-desktop, and the project name truncates instead. In Tasks, an outlined
+desktop, and the project name truncates instead. Below 480px (every phone) the
+bar keeps its room for the name: the Tasks breadcrumb becomes a back arrow, the
+project icon is no longer its own button, and Share and Copy link leave the
+bar; Change icon, Share, and Copy Link stay in `Project actions`. In Tasks, an outlined
 circular search button expands into a focused `Search in <project name>` field.
 Close or Escape clears the query and restores focus to the button. The task
 toolbar stays the same height and scrolls
