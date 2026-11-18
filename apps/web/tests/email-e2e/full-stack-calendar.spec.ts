@@ -292,6 +292,24 @@ function invitationCard(page: Page): Locator {
   return page.getByRole('region', { name: `Calendar invitation: ${TITLE}` });
 }
 
+/** Delays only the test's new account's first Calendar API discovery. */
+async function delayCalendarDiscovery(mailbox: Mailbox, address: string) {
+  const faults = `${mailbox.stack.info.gmailUrl}/_emulator/faults`;
+  const response = await fetch(faults, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      mailbox: address,
+      route: 'calendarList.list',
+      delay_ms: 25_000,
+    }),
+  });
+  if (!response.ok)
+    throw new Error(`discovery delay refused: ${response.status}`);
+  const { id } = (await response.json()) as { id: number };
+  return () => fetch(`${faults}/${id}`, { method: 'DELETE' });
+}
+
 /** Grace's invitation to her meeting, synced and open in the thread. */
 async function openInvitation(page: Page, mailbox: Mailbox): Promise<Meeting> {
   await calendarReady(mailbox);
@@ -553,6 +571,91 @@ test.describe('shared events in email on GMAIL', { tag: '@full-stack' }, () => {
       )
       .toContain(TITLE);
     confirmed('F-156');
+  });
+});
+
+test.describe('first calendar sync from email', { tag: '@full-stack' }, () => {
+  test.use({ provider: 'GMAIL', access: 'mail', video: 'on' });
+
+  test('shared-event actions recover when the first writable calendar arrives', async ({
+    page,
+    mailbox,
+  }) => {
+    const grace = mailbox.stack.address('grace@example.com');
+    const address = 'calendar@example.com';
+    const calendarAddress = mailbox.stack.address(address);
+    const revisedTitle = `${TITLE} with notes`;
+    await withoutExtraction(page);
+    await deliverCalendarMail(
+      mailbox,
+      { from: grace, subject: TITLE, method: 'PUBLISH' },
+      calendarFile({
+        method: 'PUBLISH',
+        uid: `first-calendar-${mailbox.inbox.linkId}@example.com`,
+        organizer: grace,
+      })
+    );
+    const thread = await mailbox.synced(TITLE);
+    await invitationReady(mailbox, thread.id, false);
+
+    const release = await delayCalendarDiscovery(mailbox, calendarAddress);
+    try {
+      await mailbox.stack.link(
+        mailbox.user,
+        'GMAIL',
+        address,
+        'mail-and-calendar'
+      );
+      await mailbox.open(`/app/mail/${thread.id}`);
+      const origin = await page.evaluate(() => performance.timeOrigin);
+      const syncing = 'Syncing your calendar…';
+      const card = page.getByRole('region', { name: `Shared event: ${TITLE}` });
+      const cardSync = card.getByRole('status').filter({ hasText: syncing });
+      await expect(cardSync).toBeVisible({ timeout: 15_000 });
+      await expect(
+        card.getByRole('button', { name: 'Add to calendar' })
+      ).toHaveCount(0);
+      saw('STL-523');
+
+      await page.keyboard.press('b');
+      did('AL-136');
+      const composer = await composerFor(page, grace);
+      const title = composer.getByRole('textbox', { name: 'Title' });
+      await expect(
+        composer.getByRole('status').filter({ hasText: syncing })
+      ).toBeVisible();
+      await expect(
+        composer.getByRole('button', { name: 'Calendar', exact: true })
+      ).toHaveCount(0);
+      await expect(
+        composer.getByRole('button', { name: 'Create event' })
+      ).toHaveCount(0);
+      await title.fill(revisedTitle);
+      saw('STL-524');
+
+      // An in-flight discovery returns after its delay. Later requests proceed normally.
+      expect((await release()).ok).toBe(true);
+      await expect(
+        composer.getByRole('button', { name: 'Create event' })
+      ).toBeEnabled({ timeout: 60_000 });
+      await expect(title).toHaveValue(revisedTitle);
+      await composer.getByRole('button', { name: 'Create event' }).click();
+      await expect(composer).toHaveCount(0);
+      const titles = async () =>
+        (await providerEvents(mailbox, calendarAddress)).map(titleOf);
+      await expect.poll(titles).toContain(revisedTitle);
+      confirmed('F-114');
+
+      await card.getByRole('button', { name: 'Add to calendar' }).click();
+      did('AL-183');
+      await expect
+        .poll(titles)
+        .toEqual(expect.arrayContaining([TITLE, revisedTitle]));
+      confirmed('F-156');
+      expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
+    } finally {
+      await release();
+    }
   });
 });
 
