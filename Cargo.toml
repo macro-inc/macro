@@ -417,6 +417,7 @@ proptest = { version = "1.11", default-features = false, features = ["std"] }
 proc-macro2 = "1"
 prost = "0.14"
 prost-build = "0.14"
+psl = "2.1"
 protox = "0.10"
 quote = "1"
 rand = "0.9.0"

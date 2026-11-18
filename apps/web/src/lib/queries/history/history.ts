@@ -125,6 +125,19 @@ const restHistoryQueryOptions = {
 };
 
 export function useHistoryQuery() {
+  return createHistoryQuery();
+}
+
+/**
+ * History for Quick Access, which lists it only while one of its lists reads
+ * the cache: cache changes reread it only while `reading` is true, and once
+ * when it turns true after changes it missed.
+ */
+export function useHistoryQueryWhileRead(reading: Accessor<boolean>) {
+  return createHistoryQuery(reading);
+}
+
+function createHistoryQuery(live?: Accessor<boolean>) {
   const authenticated = useIsAuthenticated();
   const activeQueryClient = useQueryClient();
   const graphqlCacheHost = () => {
@@ -143,7 +156,7 @@ export function useHistoryQuery() {
             { queryKey: historyKeys.graphqlList.queryKey },
             { cancelRefetch: false }
           ),
-        { searchBuckets: () => HISTORY_SEARCH_BUCKETS }
+        { searchBuckets: () => HISTORY_SEARCH_BUCKETS, live }
       )
     );
   });

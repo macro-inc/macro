@@ -249,16 +249,22 @@ switcher triggers, and scrolling list controls have a backend-free regression:
 The same suite's `list-search.browser.e2e.ts` drives the list header's search
 field, and the sidebar's (`?surface=sidebar`), over the real hotkey engine and
 list controller: ArrowDown and Enter move to the first result, and Escape keeps
-the search in the field and clears it from the list after a selection.
+the search in the field and clears it from the list after a selection. In a real
+`ListHeader` (`?surface=header&width=<px>`) the open field narrows, down to its
+96px minimum, before the header's other actions would push its end out of view,
+and keeps its full width when there is room.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
 tasks to an icon and narrowing the open search on phones only; tablet and desktop
-keep the labels. On touch, New task is the project's own floating `+ Task`
-pill, which replaces the Tasks view's (that one creates outside any project), and
-read-only viewers get none. Its backend-free regression renders the real row and
-float host with a stand-in for the task filters (the real phone filter trigger,
-one button on desktop) and for the Tasks view's pill:
+keep the labels. Its icon buttons share one size on phones (the filter trigger is
+`inline`), and on touch Add existing tasks picks in a `PickerSheet`. On touch,
+New task is the project's own floating `+ Task` pill on every project tab,
+which replaces the Tasks view's (that one creates outside any project and stays
+hidden on project routes), and read-only viewers get none. Its backend-free
+regression renders the real row and float host with a stand-in for the task
+filters (the real phone filter trigger, one button on desktop) and for the
+Tasks view's pill:
 `bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
 
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
@@ -569,7 +575,10 @@ local search has text. Its cache rows (`SearchProvider`'s `entityPool`) are
 read only while a caller passes a `searching` accessor that is true
 (`readsCache` on the list), because a pool reading the cache rereads it on every
 change and queues behind every other read; its in-memory rows stay listed, so
-the first keystroke does not rebuild them. Measure Quick Access ranking at scale with the
+the first keystroke does not rebuild them. Quick Access's history and recent
+channel sources follow cache changes the same way: only while one of its lists
+reads the cache (`subscribeToVisibleCacheChanges`'s `live`), catching up once
+when one starts. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
 Ordinary DM entity matching in Cmd+K and mobile name search treats the first
 name as exact, so it reaches a full-name DM; personal contact windows count an

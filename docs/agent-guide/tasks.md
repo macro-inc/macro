@@ -998,7 +998,10 @@ search namespace: `tasks.tab=my-projects`, `projects`, or `created-projects`.
 Desktop project-view titles open the same view switcher as Tasks; individual
 project names remain content titles. Mobile keeps the Projects picker.
 Projects use the same list rows, property cells, selection, group headers, and
-keyboard navigation as Tasks. Search (`Cmd/Ctrl+F`), `Sort projects`,
+keyboard navigation as Tasks. On touch devices, where the list fills a phone or
+a tablet's narrow list pane, there are no column headings and no checkbox
+column, as in the Tasks list on phones: each row is the project's name followed
+by its Status, Priority, Assignees, and Due date icons. Search (`Cmd/Ctrl+F`), `Sort projects`,
 `Group projects`, and `Filter projects` sit above the list. Groups default to
 Status; choose None, Priority, or Assignee to change them. Click a group header
 or use the list's disclosure keys to collapse or expand it. Sort by Updated
@@ -1087,11 +1090,13 @@ Close or Escape clears the query and restores focus to the button. The task
 toolbar stays the same height and scrolls
 horizontally in narrow splits, keeping list controls, Add existing tasks, and New
 task accessible. On touch devices New task leaves the toolbar for the floating
-`+ Task` pill above the dock: on this tab it creates the task in this project,
-and people who can't edit the project get no pill. Elsewhere in Tasks, including
-the project's Overview, the pill creates a task with no project. On phones (touch, under 640px) Add existing tasks shows as an
-icon button named by its label and the open search field narrows, so the row fits
-from 320px wide without scrolling. Opening an associated task
+`+ Task` pill above the dock: on both of a project's tabs it creates the task in
+this project, and people who can't edit the project get no pill. The Tasks
+view's own pill, which creates a task with no project, stays off a project's tabs
+while they load. On touch the project's content starts below its floating top
+bar. On phones (touch, under 640px) Add existing tasks shows as an icon button
+named by its label, the same size as search and filters, and the open search
+field narrows, so the row fits from 320px wide without scrolling. Opening an associated task
 extends the breadcrumb trail; choose the project breadcrumb to return, or
 Projects to restore the collection and its filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/tasks/projects/<project-id>/overview` (or `tasks`). Share, and Copy Link
@@ -1182,7 +1187,8 @@ use the same control as Channels. Editors can choose `Add existing tasks` beside
 `New task` (on touch, New task is the floating pill); both actions use bordered
 buttons with a background. `Add existing
 tasks` opens an anchored task-selector dropdown: search, select several, and
-confirm `Add N tasks`. Scrolling to the end (or PageDown) appends later loaded
+confirm `Add N tasks`. On touch it opens a picker sheet instead: search, select
+several, and confirm with `Done`. Scrolling to the end (or PageDown) appends later loaded
 task pages to the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
 already in this project are excluded. Adding a task moves it from its previous
 project. A partial failure keeps only

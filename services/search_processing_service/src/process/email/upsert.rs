@@ -199,7 +199,7 @@ pub async fn process_upsert_thread_message(
         for mut message in messages {
             match classify_thread_message(&message) {
                 ThreadMessageDisposition::Delete => {
-                    delete_message_ids.push(message.db_id);
+                    delete_message_ids.push(message.db_id.to_string());
                     continue;
                 }
                 ThreadMessageDisposition::SkipMissingContent => {
@@ -222,9 +222,9 @@ pub async fn process_upsert_thread_message(
             ));
         }
 
-        for message_id in delete_message_ids {
+        if !delete_message_ids.is_empty() {
             opensearch_client
-                .delete_email_message_by_id(&message_id.to_string(), index_override)
+                .delete_email_messages(&delete_message_ids, index_override)
                 .await?;
         }
 
@@ -282,7 +282,7 @@ pub async fn process_upsert_thread_batch_message(
     for mut message in messages {
         match classify_thread_message(&message) {
             ThreadMessageDisposition::Delete => {
-                delete_message_ids.push(message.db_id);
+                delete_message_ids.push(message.db_id.to_string());
                 continue;
             }
             ThreadMessageDisposition::SkipMissingContent => {
@@ -304,9 +304,9 @@ pub async fn process_upsert_thread_batch_message(
             .push(upsert_args(message, content, owner, properties, now_millis));
     }
 
-    for message_id in delete_message_ids {
+    if !delete_message_ids.is_empty() {
         opensearch_client
-            .delete_email_message_by_id(&message_id.to_string(), index_override)
+            .delete_email_messages(&delete_message_ids, index_override)
             .await?;
     }
 

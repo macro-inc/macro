@@ -33,7 +33,7 @@ type PendingSavedViewAction = {
   scope: SavedViewScope;
 };
 
-export function TasksFilterDrawer() {
+export function TasksFilterDrawer(props: { inline?: boolean }) {
   const { state, setPrimarySort, setState, savedViews, savedViewScope } =
     useTasksView();
   const filters = useTaskFilters();
@@ -94,6 +94,7 @@ export function TasksFilterDrawer() {
         onOpenChange={setOpen}
         onContentPresentChange={afterClose}
         triggerLabel="Open task filters"
+        inline={props.inline}
         label="Task list controls"
         activeCount={filters.activeCount()}
         onClear={filters.clear}

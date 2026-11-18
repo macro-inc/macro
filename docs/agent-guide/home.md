@@ -220,6 +220,12 @@ the details toggle, including tasks, snippets, skills, canvases, PDFs, images,
 code, and videos. Share uses the selected item's permissions and updates when
 switching items; copied links point to the entity rather than the Home feed.
 
+Markdown previews (documents, tasks, snippets, skills) register the same entity
+commands as their standalone pages, so Cmd+K lists **Copy link**, **Copy ID**
+and, for tasks, **Copy branch name** while the preview has focus. They live in
+the preview's own hotkey scope; with focus on the feed, the list's commands act
+on the focused row. Verify with the cursor in the preview's body.
+
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
 Desktop AI chats, agents, and channel composers share Home's rounded composer
 surface: a muted dark fill or a white light-mode surface with a soft shadow,
