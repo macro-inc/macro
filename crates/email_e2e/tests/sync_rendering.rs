@@ -267,6 +267,87 @@ async fn sanitized_html_keeps_layout_and_drops_scripts(provider: Provider) -> Re
     stack.finish().await
 }
 
+/// Text that only looks like markup (tags written out in a mail about HTML,
+/// an address in angle brackets) is still text in the sanitized HTML. When
+/// this fails, the escaped text is served as real tags: the words in angle
+/// brackets vanish from the mail, or turn into formatting.
+async fn escaped_markup_stays_text(provider: Provider) -> Result<(), Report> {
+    let (stack, inbox) = linked_inbox(provider).await?;
+
+    let cases = [
+        (
+            "Escaped tag",
+            "<p>Wrap a word in &lt;b&gt; and &lt;/b&gt; to make it bold.</p>",
+        ),
+        (
+            "Escaped tag before markup",
+            "<div>Type &lt;i&gt;word&lt;/i&gt; for italics, then <b>stop</b></div>",
+        ),
+        (
+            "Escaped address",
+            "<div>Ask Grace &lt;grace@example.com&gt; <i>today</i></div>",
+        ),
+    ];
+    for (subject, html) in &cases {
+        inbox.deliver(&html_mail(subject, html))?;
+    }
+    for (subject, html) in &cases {
+        let message = served(&inbox, subject).await?;
+        assert_eq!(
+            text(&message, "body_html_sanitized"),
+            *html,
+            "{subject}: escaped text must stay escaped"
+        );
+        assert_eq!(text(&message, "body_replyless"), *html, "{subject}");
+    }
+
+    stack.finish().await
+}
+
+/// The HTML outside a document's style elements, as a browser reads it: each
+/// style element ends at the first `</style>` after it.
+fn outside_style_elements(html: &str) -> String {
+    let mut outside = html.to_owned();
+    while let Some(start) = outside.find("<style>") {
+        let Some(length) = outside[start..].find("</style>") else {
+            break;
+        };
+        outside.replace_range(start..start + length + "</style>".len(), "");
+    }
+    outside
+}
+
+/// A quote inside an attribute value stays inside the value, and scrubbing a
+/// style sheet cannot end its style element. When this fails, part of an
+/// attribute value or of a style sheet is served as markup of its own.
+async fn sanitized_html_keeps_its_shape(provider: Provider) -> Result<(), Report> {
+    let (stack, inbox) = linked_inbox(provider).await?;
+    let quoted_html = r#"<p title="Say &quot;hi&quot; to everyone">Hover</p>"#;
+
+    let quoted = received(&inbox, &html_mail("Quote in attribute", quoted_html)).await?;
+    let styled = received(
+        &inbox,
+        &html_mail(
+            "Comment in style",
+            "<style></sty/**/le><b>Bold</b></style><p>hi</p>",
+        ),
+    )
+    .await?;
+
+    assert_eq!(
+        [
+            text(&quoted, "body_html_sanitized").to_owned(),
+            outside_style_elements(text(&styled, "body_html_sanitized")),
+        ],
+        [quoted_html.to_owned(), "<p>hi</p>".to_owned()],
+        "served: {} / {}",
+        text(&quoted, "body_html_sanitized"),
+        text(&styled, "body_html_sanitized")
+    );
+
+    stack.finish().await
+}
+
 /// Delivers a message whose HTML shows an attached image through `cid:`.
 fn deliver_inline_image(stack: &Stack, inbox: &Inbox, subject: &str) -> Result<String, Report> {
     let html = format!("<p>Inline</p><img src=\"cid:{CONTENT_ID}\" alt=\"inline\">");
@@ -437,6 +518,26 @@ async fn gmail_sanitized_html_keeps_layout_and_drops_scripts() -> Result<(), Rep
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_sanitized_html_keeps_layout_and_drops_scripts() -> Result<(), Report> {
     sanitized_html_keeps_layout_and_drops_scripts(Provider::Outlook).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_escaped_markup_stays_text() -> Result<(), Report> {
+    escaped_markup_stays_text(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_escaped_markup_stays_text() -> Result<(), Report> {
+    escaped_markup_stays_text(Provider::Outlook).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_sanitized_html_keeps_its_shape() -> Result<(), Report> {
+    sanitized_html_keeps_its_shape(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_sanitized_html_keeps_its_shape() -> Result<(), Report> {
+    sanitized_html_keeps_its_shape(Provider::Outlook).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
