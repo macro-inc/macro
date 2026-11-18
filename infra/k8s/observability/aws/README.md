@@ -102,7 +102,22 @@ nix fmt -- $(git ls-files '*.nix')
 into `.tofu/<config>/` (gitignored) and runs the flake's OpenTofu there, with the
 AWS provider pinned by the flake. `tofu plan` needs credentials that can read
 the Pulumi stack's resources in us-east-2 (EC2, ELB, Route 53, SNS, Secrets
-Manager describe, EKS add-on versions) and the state bucket.
+Manager describe, EKS add-on versions, `tag:GetResources` for the host's
+buckets) and the state bucket. `ReadOnlyAccess` covers all of them.
+
+## Preview
+
+A plan without the state bucket, which writes nothing to AWS: review it before
+the first apply. Read-only credentials are enough. Set the two `TF_VAR_` values
+from "First apply" step 3 first, then:
+
+```sh
+nix run .#tofu -- main version                 # creates .tofu/main/
+echo '{"terraform":{"backend":{"local":{"path":"preview.tfstate"}}}}' > .tofu/main/override.tf.json
+nix run .#tofu -- main init
+nix run .#tofu -- main plan
+rm -rf .tofu/main                              # before the real init
+```
 
 ## First apply
 
@@ -162,10 +177,23 @@ cluster steps, is in `infra/k8s/observability/cluster/README.md`. This layer's p
    adds two listener rules (priorities 10 and 11) and four alarms, nothing
    else. No traffic moves: the Pulumi stack's priority-1 rule still matches
    both hostnames.
-2. The Pulumi stack drops `grafana.` and `otlp.` from its priority-1 rule (a
-   reviewed manual `pulumi up`); from then on the ALB sends them here.
+2. Wait until both target groups show healthy targets. The ALB health-checks a
+   target group only once a listener rule uses it, so before this apply they
+   report nothing:
+   ```sh
+   for tg in obs-k8s-grafana obs-k8s-otlp; do
+     arn=$(aws elbv2 describe-target-groups --region us-east-2 --names "$tg" --query 'TargetGroups[0].TargetGroupArn' --output text)
+     aws elbv2 describe-target-health --region us-east-2 --target-group-arn "$arn" --query 'TargetHealthDescriptions[].TargetHealth.State' --output text
+   done
+   ```
+3. The Pulumi stack drops `grafana.` and `otlp.` from its priority-1 rule (a
+   reviewed manual `pulumi up`); from then on the ALB sends them here. That
+   rule is the only one on the host's target group, so the same change retires
+   the `observability-ui` alarm, which would otherwise breach on missing data.
 
-To go back, restore the Pulumi rule; this layer can stay switched.
+Going back is more than restoring the Pulumi rule once Loki and Tempo use the
+host's buckets: the cluster runbook's "Going back" stops the cluster's Loki
+and Tempo before the host's start again. This layer can stay switched.
 
 ## Removing it
 
