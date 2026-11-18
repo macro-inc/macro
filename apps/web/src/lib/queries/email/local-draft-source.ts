@@ -13,10 +13,27 @@ import {
   onCleanup,
 } from 'solid-js';
 import { authKeys } from '../auth/keys';
+import type { UserInfoData } from '../auth/user-info';
 import { queryClient } from '../client';
 import { listLocalDrafts, localDraftStore } from './local-drafts';
 
 export { localDraftEntities } from './local-draft-entities';
+
+const userInfoHash = JSON.stringify(authKeys.userInfo.queryKey);
+
+/**
+ * What `listLocalDrafts` reads from `userInfo`: the signed-in account, and
+ * whether this document confirmed it with the server (which gates taking
+ * storage over from another account).
+ */
+function storageIdentity(): string {
+  const state = queryClient.getQueryState<UserInfoData>(
+    authKeys.userInfo.queryKey
+  );
+  const user = state?.data;
+  if (!state || !user?.authenticated || !user.id) return '';
+  return `${user.id}:${state.dataUpdatedAt >= performance.timeOrigin}`;
+}
 
 /** Account-scoped local data source; notifications are invalidations, never the truth. */
 export function createLocalDraftSource(enabled: Accessor<boolean>) {
@@ -52,9 +69,15 @@ export function createLocalDraftSource(enabled: Accessor<boolean>) {
       if (!disposed) fireAndForget(refresh(), 'email-local-drafts');
     });
   const unsubscribe = localDraftStore.subscribe(scheduleRefresh);
+  // Observer and fetch-status events leave the identity unchanged, and fire
+  // many times a second while views mount.
+  let identity = storageIdentity();
   const auth = queryClient.getQueryCache().subscribe((event) => {
-    if (event.query.queryHash === JSON.stringify(authKeys.userInfo.queryKey))
-      scheduleRefresh();
+    if (event.query.queryHash !== userInfoHash) return;
+    const next = storageIdentity();
+    if (next === identity) return;
+    identity = next;
+    scheduleRefresh();
   });
   onCleanup(() => {
     disposed = true;
