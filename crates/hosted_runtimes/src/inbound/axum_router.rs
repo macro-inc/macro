@@ -103,6 +103,10 @@ where
             get(offers::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
+            "/team/computers/rollout",
+            get(rollout::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
+        )
+        .route(
             "/team/computers/{computer_id}/power",
             post(power::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
@@ -207,6 +211,43 @@ pub async fn offers<
             .offers(team_id(receipt)?, user_id(receipt)?)
             .await?,
     ))
+}
+
+/// Whether computers are rolled out to the caller.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputerRollout {
+    /// The computer UI and purchases are on for this user.
+    pub enabled: bool,
+}
+
+/// Whether the caller sees computers: the same rollout check purchases and
+/// offers make, so the web never shows computers the backend would refuse.
+#[utoipa::path(
+    get,
+    path = "/team/computers/rollout",
+    operation_id = "get_team_computer_rollout",
+    responses((status = 200, body = ComputerRollout)),
+)]
+#[tracing::instrument(skip_all, err)]
+pub async fn rollout<
+    Repo: ComputerRepo,
+    Bill: Billing,
+    Time: Clock,
+    EntityAccess: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+>(
+    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
+) -> Result<Json<ComputerRollout>, ComputersHttpError> {
+    let user = user_id(&access.entity_access_receipt)?;
+    Ok(Json(ComputerRollout {
+        enabled: state.service.rollout_enabled(&user).await,
+    }))
 }
 
 /// Body of a team purchase.

@@ -297,6 +297,16 @@ export type CodexLoginStart = {
 export type CodexLoginState = 'pending' | 'connected' | 'expired' | 'failed';
 
 /**
+ * Whether computers are rolled out to the caller.
+ */
+export type ComputerRollout = {
+    /**
+     * The computer UI and purchases are on for this user.
+     */
+    enabled: boolean;
+};
+
+/**
  * A size a team can buy.
  */
 export type ComputerSize = 'standard' | 'large' | 'xl';
@@ -4626,6 +4636,19 @@ export type ListTeamComputerOffersResponses = {
 };
 
 export type ListTeamComputerOffersResponse = ListTeamComputerOffersResponses[keyof ListTeamComputerOffersResponses];
+
+export type GetTeamComputerRolloutData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers/rollout';
+};
+
+export type GetTeamComputerRolloutResponses = {
+    200: ComputerRollout;
+};
+
+export type GetTeamComputerRolloutResponse = GetTeamComputerRolloutResponses[keyof GetTeamComputerRolloutResponses];
 
 export type UndoCancelTeamComputerData = {
     body?: never;

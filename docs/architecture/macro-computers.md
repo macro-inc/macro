@@ -47,9 +47,16 @@ authenticated Macro user through `feature_flags`. Missing providers, missing
 flags and load errors refuse team purchase and offers with 403.
 Composition roots inject it with `with_rollout`; `offers` takes the caller
 user id. Existing reads and management, Stripe reconciliation and workers remain
-available when rollout is off. The web hides the computer UI with the flag off
+available when rollout is off. The web hides the computer UI with rollout off
 while existing computers keep running and billing: the flag is a sales kill
 switch, not a way to manage computers.
+
+Dev only, `COMPUTERS_ROLLOUT_ALLOWLIST` (comma-separated Macro user ids, read by
+authentication_service and agent_harness_service) admits those users without the
+flag, so a deployment can be tested before its PostHog targeting exists. Startup
+refuses it in production. The web shows the computer UI from the backend's
+answer (`GET /team/computers/rollout`, the same `ComputerRollout` check), never
+from its own PostHog read, so the flag and the allowlist drive both.
 
 ## Explicit configuration
 

@@ -239,6 +239,13 @@ impl<
         self
     }
 
+    /// Whether the caller sees and may buy computers: the check purchases
+    /// and offers make, so the web follows the same rollout (flag and dev
+    /// allowlist).
+    pub async fn rollout_enabled(&self, user_id: &MacroUserIdStr<'static>) -> bool {
+        self.rollout.enabled(user_id).await
+    }
+
     async fn require_rollout(
         &self,
         user_id: &MacroUserIdStr<'static>,

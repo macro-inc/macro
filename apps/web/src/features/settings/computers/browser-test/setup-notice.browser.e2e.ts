@@ -90,6 +90,10 @@ const row = (page: Page) =>
 // test does not answer itself is refused, so nothing reaches a real backend.
 test.beforeEach(async ({ page }) => {
   await page.route(/\.macro\.com\//, (route) => route.abort());
+  // Computers are on for this caller: the backend's rollout answer.
+  await page.route('**/auth/team/computers/rollout', (route) =>
+    route.fulfill({ status: 200, json: { enabled: true } })
+  );
   page.on('pageerror', (error) => console.log('pageerror', error.stack));
 });
 

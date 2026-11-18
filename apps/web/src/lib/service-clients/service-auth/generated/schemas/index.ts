@@ -39,6 +39,7 @@ export * from './codexEnvironmentRepository';
 export * from './codexLoginPoll';
 export * from './codexLoginStart';
 export * from './codexLoginState';
+export * from './computerRollout';
 export * from './computerSize';
 export * from './computerStatus';
 export * from './computerStatusBilling';

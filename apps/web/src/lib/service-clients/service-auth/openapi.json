@@ -4289,6 +4289,25 @@
         }
       }
     },
+    "/team/computers/rollout": {
+      "get": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Whether the caller sees computers: the same rollout check purchases and\noffers make, so the web never shows computers the backend would refuse.",
+        "operationId": "get_team_computer_rollout",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerRollout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/computers/{computer_id}/cancel": {
       "post": {
         "tags": ["hosted_runtimes::inbound::axum_router"],
@@ -7820,6 +7839,17 @@
         "type": "string",
         "description": "Device authorization state visible to its initiating user.",
         "enum": ["pending", "connected", "expired", "failed"]
+      },
+      "ComputerRollout": {
+        "type": "object",
+        "description": "Whether computers are rolled out to the caller.",
+        "required": ["enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "The computer UI and purchases are on for this user."
+          }
+        }
       },
       "ComputerSize": {
         "type": "string",

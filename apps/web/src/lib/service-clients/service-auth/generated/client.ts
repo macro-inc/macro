@@ -18,6 +18,7 @@ import type {
   CodexEnvironment,
   CodexLoginPoll,
   CodexLoginStart,
+  ComputerRollout,
   ComputerStatus,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
@@ -4991,6 +4992,47 @@ export const listTeamComputerOffers = async (
     status: res.status,
     headers: res.headers,
   } as listTeamComputerOffersResponse;
+};
+
+/**
+ * @summary Whether the caller sees computers: the same rollout check purchases and
+offers make, so the web never shows computers the backend would refuse.
+ */
+export type getTeamComputerRolloutResponse200 = {
+  data: ComputerRollout;
+  status: 200;
+};
+
+export type getTeamComputerRolloutResponseSuccess =
+  getTeamComputerRolloutResponse200 & {
+    headers: Headers;
+  };
+
+export type getTeamComputerRolloutResponse =
+  getTeamComputerRolloutResponseSuccess;
+
+export const getGetTeamComputerRolloutUrl = () => {
+  return `/team/computers/rollout`;
+};
+
+export const getTeamComputerRollout = async (
+  options?: RequestInit
+): Promise<getTeamComputerRolloutResponse> => {
+  const res = await fetch(getGetTeamComputerRolloutUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamComputerRolloutResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamComputerRolloutResponse;
 };
 
 /**

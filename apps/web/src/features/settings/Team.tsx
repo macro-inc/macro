@@ -1,10 +1,7 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import {
-  enableAgentTeammates,
-  enableMacroComputers,
-} from '@core/constant/featureFlags';
+import { enableAgentTeammates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -12,6 +9,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import XIcon from '@icon/system/regular/x.svg';
+import { useMacroComputersRollout } from '@queries/computers/computers';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -480,7 +478,7 @@ export function InviteToTeamDialog(props: {
   const inviteToTeamMutation = useInviteToTeamMutation();
   const agentFlag = useFeatureFlag(enableAgentTeammates);
   // Adding an agent buys its computer, so it needs computers on too.
-  const computersFlag = useFeatureFlag(enableMacroComputers);
+  const computersFlag = useMacroComputersRollout();
   const canInviteAgents = () =>
     !!props.canInviteAgents &&
     !agentFlag().loading &&

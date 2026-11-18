@@ -174,6 +174,34 @@ export function retryComputerOffers(failures: number, error: unknown): boolean {
   );
 }
 
+const ROLLOUT_STALE_MS = 5 * 60_000;
+
+function computerRolloutQueryOptions() {
+  return queryOptions({
+    queryKey: computerKeys.rollout.queryKey,
+    queryFn: () => throwOnErr(computersClient.rollout),
+    staleTime: ROLLOUT_STALE_MS,
+    // A refusal (no team, signed out) means not rolled out; it won't change on retry.
+    retry: false,
+  });
+}
+
+type ComputersRollout = { enabled: boolean; loading: boolean };
+
+/**
+ * Whether the computer UI is on for the current user. The backend answers
+ * with the same check purchases and offers make (`enable-macro-computers`,
+ * plus the dev-only allowlist), so the web never shows computers the backend
+ * would refuse. Any failure reads as off.
+ */
+export function useMacroComputersRollout(): () => ComputersRollout {
+  const query = useQuery(() => computerRolloutQueryOptions());
+  return () => ({
+    enabled: query.isSuccess && query.data.enabled,
+    loading: query.isPending,
+  });
+}
+
 function computerOffersQueryOptions(enabled: boolean) {
   return queryOptions({
     queryKey: computerKeys.offers.queryKey,

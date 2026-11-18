@@ -164,6 +164,7 @@ export const authBacklog = [
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
+  'getTeamComputerRollout', // Whether the app shows computers is an app gate.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'purchaseTeamComputer', // Computer checkout belongs to the app.

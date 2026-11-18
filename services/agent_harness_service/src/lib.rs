@@ -1990,7 +1990,8 @@ pub async fn run() -> anyhow::Result<()> {
         feature_flags
             .clone()
             .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
-            .unwrap_or_default(),
+            .unwrap_or_default()
+            .with_allowlist(config.computer_rollout_allowlist()?),
         hosted_runtimes::domain::models::FleetAttachment::from_operator_present(
             computer_operator.is_some(),
         ),

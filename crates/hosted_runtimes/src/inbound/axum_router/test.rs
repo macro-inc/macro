@@ -325,6 +325,38 @@ async fn registered_routes_preserve_rollout_denials() {
 }
 
 #[tokio::test]
+async fn rollout_reports_the_callers_rollout_even_while_the_fleet_is_detached() {
+    for (rolled_out, expected) in [(true, true), (false, false)] {
+        let (service, _) = detached_router_service(false, rolled_out).await;
+        let router: Router = team_router(ComputerRouterState {
+            service: service.clone(),
+            entity_access_service: Arc::new(TeamAccess(TeamRole::Member)),
+            authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
+        });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/team/computers/rollout")
+                    .header("authorization", "Bearer test-user")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+            serde_json::json!({ "enabled": expected })
+        );
+        assert_no_http_work(&service);
+    }
+}
+
+#[tokio::test]
 async fn listing_answers_with_the_teams_rows_while_the_fleet_is_detached() {
     // A team that never bought a computer, and one with a computer.
     let (with_computer, id) = detached_router_service(false, false).await;

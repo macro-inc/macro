@@ -1,7 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import { enableMacroComputers } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
@@ -11,6 +9,7 @@ import {
 } from '@queries/computers/claude';
 import {
   useCancelComputerMutation,
+  useMacroComputersRollout,
   useReleaseComputerMutation,
   useRestoreComputerMutation,
   useRetryComputerMutation,
@@ -134,7 +133,7 @@ function ManagedComputerRow(props: {
   onSignIn: () => void;
   onRelease: () => void;
 }) {
-  const rollout = useFeatureFlag(enableMacroComputers);
+  const rollout = useMacroComputersRollout();
   const mode = useClaudeModeQuery(() =>
     rollout().enabled && props.canManageClaude
       ? (props.computer.harnessId ?? undefined)

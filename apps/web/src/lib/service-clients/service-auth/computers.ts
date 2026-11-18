@@ -10,6 +10,7 @@ import {
   getRetryTeamComputerUrl,
 } from './generated/client';
 import type {
+  ComputerRollout,
   ComputerStatus,
   PowerBody,
   PurchaseBody,
@@ -260,6 +261,11 @@ export const computersClient = {
   list: () =>
     withinDeadline((signal) =>
       fetchWithToken<ComputerStatus[]>(base, { signal })
+    ),
+  /** Whether computers are rolled out to the caller (flag or dev allowlist). */
+  rollout: () =>
+    withinDeadline((signal) =>
+      fetchWithToken<ComputerRollout>(`${base}/rollout`, { signal })
     ),
   offers: () =>
     withinDeadline((signal) =>

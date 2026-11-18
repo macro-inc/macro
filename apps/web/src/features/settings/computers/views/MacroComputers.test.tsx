@@ -48,6 +48,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@queries/computers/computers', () => ({
+  useMacroComputersRollout: () => () => ({
+    enabled: mocks.rollout,
+    loading: false,
+  }),
   useComputerOffersQuery: () => ({
     get isPending() {
       return mocks.offersPending;
