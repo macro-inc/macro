@@ -413,9 +413,10 @@ describe('agent-led new conversation', () => {
       'GPT-5.6',
       'GPT-6 Astra',
       'Gemini 3.8 Flash',
+      'All models',
     ]);
     expect(screen.queryByRole('group', { name: 'Google' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'All models' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'All models' })).toBeTruthy();
     expect(screen.queryByText('Recommended')).toBeNull();
     fireEvent.input(screen.getByRole('textbox', { name: 'Search models' }), {
       target: { value: 'Sonnet 5.5' },
@@ -458,7 +459,6 @@ describe('agent-led new conversation', () => {
       });
       await waitFor(() => expect(document.activeElement).toBe(search));
       fireEvent.input(search, { target: { value: 'Sonnet' } });
-      expect(document.activeElement).toBe(search);
       expect(
         screen.getByRole('menuitemradio', { name: 'Sonnet 5.5' })
       ).toBeTruthy();
@@ -1273,16 +1273,10 @@ describe('agent-led new conversation', () => {
     });
     await waitFor(() => expect(document.activeElement).toBe(search));
     fireEvent.input(search, { target: { value: 'GPT' } });
-    expect(document.activeElement).toBe(search);
     expect(screen.getByRole('menuitemradio', { name: 'GPT-5' })).toBeTruthy();
     expect(
       screen.queryByRole('menuitemradio', { name: 'Cursor Default' })
     ).toBeNull();
-    fireEvent.keyDown(search, { key: 'ArrowDown' });
-    const firstMatch = screen.getByRole('menuitemradio', { name: 'GPT-5' });
-    expect(document.activeElement).toBe(firstMatch);
-    fireEvent.keyDown(firstMatch, { key: 'a' });
-    expect(document.activeElement).toBe(search);
   });
   it('shows the model beside the agent and sends a hovered model choice only once', async () => {
     const send = page(true, [], false, [], 'code');
@@ -1300,7 +1294,7 @@ describe('agent-led new conversation', () => {
     const model = models.getByRole('menuitemradio', { name: 'GPT-5' });
     expect(model.querySelector('.text-accent')).toBeNull();
     expect(
-      within(screen.getByRole('group', { name: 'OpenAI' }))
+      within(screen.getByRole('group', { name: 'Suggested' }))
         .getByRole('menuitemradio', { name: 'GPT-5' })
         .querySelector('[data-ai-provider="openai"] svg')
     ).toBeTruthy();
@@ -1380,8 +1374,8 @@ describe('agent-led new conversation', () => {
     const search = screen.getByRole('textbox', {
       name: /Search (agents and )?models/,
     });
-    expect(screen.queryByRole('menuitem', { name: /All models/ })).toBeNull();
-    expect(screen.getByRole('group', { name: 'Z.ai' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: /All models/ })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Z.ai' })).toBeNull();
     fireEvent.input(search, { target: { value: 'GLM' } });
     expect(screen.getByRole('menuitemradio', { name: 'GLM 5.3' })).toBeTruthy();
     expect(

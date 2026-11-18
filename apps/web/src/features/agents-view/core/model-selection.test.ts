@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  initiallyExpandedProviders,
-  modelSelection,
-  speedChoices,
-  speedTier,
-  visibleProviderModels,
-} from './model-selection';
+import { modelSelection, speedChoices, speedTier } from './model-selection';
 
 const models = [
   { id: 'anthropic/claude-sonnet-5-5', label: 'Sonnet 5.5' },
@@ -61,63 +55,45 @@ describe('unified model selection', () => {
   });
 });
 
-const fullCatalog = [
-  { id: 'openai/gpt-6.1-sol', label: 'GPT-6.1 Sol' },
-  { id: 'openai/gpt-6-astra', label: 'GPT-6 Astra' },
-  { id: 'openai/gpt-5.6', label: 'GPT-5.6' },
-  { id: 'openai/gpt-5.6-mini', label: 'GPT-5.6 mini' },
-  { id: 'openai/gpt-5.5', label: 'GPT-5.5' },
-  { id: 'openai/gpt-5-mini', label: 'GPT-5 mini' },
-  { id: 'cerebras/gpt-oss-120b', label: 'GPT OSS 120B' },
-  { id: 'anthropic/haiku-4.5', label: 'Haiku 4.5' },
-];
-
-describe('provider groups and folding', () => {
-  it('keeps suggested models separate from provider matches', () => {
-    const selected = modelSelection(fullCatalog, [], 'gpt');
-    expect(selected.suggested.map((option) => option.id)).toEqual([
-      'openai/gpt-6.1-sol',
-      'openai/gpt-6-astra',
+describe('All models exclusion', () => {
+  const catalog = [
+    { id: 'sonnet', label: 'Sonnet 5.5' },
+    { id: 'astra', label: 'GPT-6 Astra' },
+    { id: 'haiku', label: 'Haiku 4.5' },
+    { id: 'gpt-5-mini', label: 'GPT-5 mini' },
+  ];
+  it('removes Suggested IDs from the remaining catalog and its search', () => {
+    const result = modelSelection(catalog, [], '');
+    const suggestedIds = new Set(result.suggested.map((option) => option.id));
+    expect(result.allModels.map((option) => option.id)).toEqual([
+      'haiku',
+      'gpt-5-mini',
     ]);
-    expect(selected.providers.map((provider) => provider.label)).toEqual([
-      'OpenAI',
-    ]);
-    expect(selected.providers[0].options).toEqual(fullCatalog.slice(2, 7));
-    const ids = [
-      ...selected.suggested,
-      ...selected.providers.flatMap((group) => group.options),
-    ].map((option) => option.id);
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(modelSelection(fullCatalog, [], 'no-such-model')).toEqual({
-      suggested: [],
-      providers: [],
-      agents: [],
-    });
-  });
-
-  it('folds only groups over three and lets search ignore the fold', () => {
-    const provider = modelSelection(fullCatalog, [], '').providers.find(
-      (group) => group.label === 'OpenAI'
-    )!;
-    expect(visibleProviderModels(provider, false, '')).toEqual(
-      fullCatalog.slice(2, 4)
-    );
-    expect(visibleProviderModels(provider, true, '')).toEqual(provider.options);
-    expect(visibleProviderModels(provider, false, 'gpt')).toEqual(
-      provider.options
-    );
     expect(
-      visibleProviderModels(
-        { ...provider, options: provider.options.slice(0, 3) },
-        false,
-        ''
-      )
-    ).toHaveLength(3);
+      result.allModels.every((option) => !suggestedIds.has(option.id))
+    ).toBe(true);
+    expect(modelSelection(catalog, [], 'sonnet').allModels).toEqual([]);
     expect(
-      initiallyExpandedProviders(fullCatalog, 'openai/gpt-5-mini')
-    ).toEqual(['OpenAI']);
-    expect(initiallyExpandedProviders(fullCatalog, 'openai/gpt-5.6')).toEqual(
+      modelSelection(catalog, [], 'gpt').allModels.map((option) => option.id)
+    ).toEqual(['gpt-5-mini']);
+    expect(modelSelection(catalog.slice(0, 2), [], '').allProviders).toEqual(
       []
     );
+  });
+  it('recomputes exclusion when the advertised Suggested choice changes', () => {
+    const initial = [
+      { id: 'sonnet-fast', label: 'Sonnet 5.5 Fast' },
+      { id: 'haiku', label: 'Haiku 4.5' },
+    ];
+    expect(
+      modelSelection(initial, [], '').allModels.map((option) => option.id)
+    ).toEqual(['haiku']);
+    const updated = [{ id: 'sonnet-base', label: 'Sonnet 5.5' }, ...initial];
+    expect(
+      modelSelection(updated, [], '').suggested.map((option) => option.id)
+    ).toEqual(['sonnet-base']);
+    expect(
+      modelSelection(updated, [], '').allModels.map((option) => option.id)
+    ).toEqual(['sonnet-fast', 'haiku']);
   });
 });

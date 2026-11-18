@@ -1,7 +1,6 @@
 import {
   buildModelCatalog,
   type CatalogModelOption,
-  type ModelProviderGroup,
   matchesModelQuery,
 } from '@core/component/AI/component/input/modelCatalog';
 import {
@@ -16,49 +15,28 @@ export function modelSelection(
   query: string
 ) {
   const search = query.trim().toLocaleLowerCase();
-  const catalog = buildModelCatalog(options);
+  const catalog = buildModelCatalog(options, true);
+  const suggested = catalog.frontier.length ? catalog.frontier : options;
+  const suggestedIds = new Set(suggested.map((option) => option.id));
+  const allProviders = catalog.providers
+    .map((provider) => ({
+      ...provider,
+      options: provider.options.filter(
+        (option) =>
+          !suggestedIds.has(option.id) && matchesModelQuery(option, search)
+      ),
+    }))
+    .filter((provider) => provider.options.length > 0);
   return {
-    suggested: catalog.frontier.filter((option) =>
+    suggested: (search ? options : suggested).filter((option) =>
       matchesModelQuery(option, search)
     ),
-    providers: catalog.providers
-      .map((provider) => ({
-        ...provider,
-        options: provider.options.filter((option) =>
-          matchesModelQuery(option, search)
-        ),
-      }))
-      .filter((provider) => provider.options.length > 0),
+    allProviders,
+    allModels: allProviders.flatMap((provider) => provider.options),
     agents: agents.filter((agent) =>
       agent.name.toLocaleLowerCase().includes(search)
     ),
   };
-}
-
-/** Search exposes every match without changing the remembered fold state. */
-export function visibleProviderModels(
-  provider: ModelProviderGroup,
-  expanded: boolean,
-  query: string
-) {
-  if (query.trim() || expanded || provider.options.length <= 3)
-    return provider.options;
-  return provider.options.slice(0, 2);
-}
-
-/** Only a current model hidden beyond a fold opens that provider initially. */
-export function initiallyExpandedProviders(
-  options: CatalogModelOption[],
-  model: string | undefined
-) {
-  if (!model) return [];
-  return buildModelCatalog(options)
-    .providers.filter(
-      (provider) =>
-        provider.options.length > 3 &&
-        provider.options.findIndex((option) => option.id === model) >= 2
-    )
-    .map((provider) => provider.label);
 }
 
 /** Display tiers are distinct from the wire values, especially priority (OpenAI Fast). */

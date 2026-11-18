@@ -2,14 +2,13 @@ import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
-import CaretDown from '@icon/system/regular/caret-down.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
-import CaretUp from '@icon/system/regular/caret-up.svg';
 import Check from '@icon/system/regular/check.svg';
 import Gauge from '@icon/system/regular/gauge.svg';
 import Lightning from '@icon/system/regular/lightning.svg';
 import Search from '@icon/system/regular/magnifying-glass.svg';
 import Plus from '@icon/system/regular/plus.svg';
+import Squares from '@icon/system/regular/squares-four.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
@@ -22,7 +21,6 @@ import {
   selectorOptions,
   speedChoices,
   speedTier,
-  visibleProviderModels,
 } from '../../core/model-selection';
 import { MACRO_PERSONA_ID } from '../../core/roster';
 import { createModelSelectorNavigation } from '../../primitives/model-selector-navigation';
@@ -39,45 +37,37 @@ export function MobileModelSelector() {
     setPage,
     changeOpen: setDrawerOpen,
     back,
-    expanded,
-    toggleProvider,
-  } = createModelSelectorNavigation(state.onOpenChange, {
-    models: () => state.suggestedModels,
-    model: () => (state.suggestedSelected === false ? undefined : state.model),
-  });
+  } = createModelSelectorNavigation(state.onOpenChange);
   let searchInput: HTMLInputElement | undefined;
   const changeOpen = (next: boolean) => {
     setDrawerOpen(next);
     if (next) setTimeout(() => searchInput?.focus(), 0);
   };
-  // Keep row identity stable when a speed marker's capability request settles.
   const catalog = createMemo(() => state.suggestedModels);
-  const agentModels = createMemo(() => state.models);
   const agents = createMemo(() => state.agents);
   const selected = createMemo(() =>
     modelSelection(catalog(), agents() ?? [], query())
   );
-  const modelGroups = createMemo(() => {
-    if (page() === 'model')
-      return [
-        {
-          label: t('agentControls.model'),
-          options: agentModels(),
-          foldable: false,
-        },
-      ];
-    return [
-      {
-        label: t('agentControls.suggested'),
-        options: selected().suggested,
-        foldable: false,
-      },
-      ...selected().providers.map((provider) => ({
-        ...provider,
-        foldable: provider.options.length > 3,
-      })),
-    ].filter((group) => group.options.length > 0);
-  });
+  const models = () =>
+    page() === 'model'
+      ? state.models
+      : page() === 'all'
+        ? selected().allModels
+        : selected().suggested;
+  const modelGroups = createMemo(() =>
+    page() === 'all'
+      ? selected().allProviders
+      : [
+          {
+            label: t(
+              page() === 'model'
+                ? 'agentControls.model'
+                : 'agentControls.suggested'
+            ),
+            options: models(),
+          },
+        ].filter((group) => group.options.length > 0)
+  );
   const speeds = () => speedChoices(state.speeds ?? []);
   const chooseModel = (id: string) => {
     (page() === 'model'
@@ -131,22 +121,24 @@ export function MobileModelSelector() {
                   ? t('agentControls.speed')
                   : page() === 'effort'
                     ? t('agentControls.reasoningEffort')
-                    : t('agentControls.model')}
+                    : page() === 'model'
+                      ? t('agentControls.model')
+                      : t('agentControls.allModels')}
               </h2>
             </div>
           </Show>
-          <Show when={page() === 'list'}>
+          <Show when={page() === 'list' || page() === 'all'}>
             <div class="mx-3 mb-3 flex h-11 shrink-0 items-center gap-2.5 rounded-full bg-ink/3 px-3.5">
               <Search class="size-[18px] text-ink-subtle" />
               <input
                 ref={searchInput}
                 aria-label={
-                  state.agents?.length
+                  page() !== 'all' && state.agents?.length
                     ? t('agentControls.searchAgentsModels')
                     : t('agentControls.searchModels')
                 }
                 placeholder={
-                  state.agents?.length
+                  page() !== 'all' && state.agents?.length
                     ? t('agentControls.searchAgentsModels')
                     : t('agentControls.searchModels')
                 }
@@ -157,24 +149,15 @@ export function MobileModelSelector() {
             </div>
           </Show>
           <MobileDrawer.ScrollBody class="gap-4">
-            <Show when={page() === 'list' || page() === 'model'}>
+            <Show
+              when={page() === 'list' || page() === 'all' || page() === 'model'}
+            >
               <Key each={modelGroups()} by="label">
                 {(group) => (
                   <div>
                     <MobileDrawer.Label>{group().label}</MobileDrawer.Label>
                     <MobileDrawer.Section>
-                      <Key
-                        by="id"
-                        each={
-                          group().foldable
-                            ? visibleProviderModels(
-                                group(),
-                                expanded(group().label),
-                                query()
-                              )
-                            : group().options
-                        }
-                      >
+                      <Key each={group().options} by="id">
                         {(option) => (
                           <MobileDrawer.Item
                             disabled={
@@ -183,9 +166,7 @@ export function MobileModelSelector() {
                             }
                             onClick={() => chooseModel(option().id)}
                           >
-                            <span class="flex size-4.5 shrink-0 items-center justify-center">
-                              <ModelIcon model={option().id} />
-                            </span>
+                            <ModelIcon model={option().id} />
                             <span class="min-w-0 flex-1 truncate">
                               {option().label}
                             </span>
@@ -197,43 +178,37 @@ export function MobileModelSelector() {
                                 state.model === option().id
                               }
                             >
-                              <Check class="size-4.5 text-accent" />
+                              <Check class="size-4 text-accent" />
                             </Show>
                           </MobileDrawer.Item>
                         )}
                       </Key>
-                      <Show when={group().foldable && !query().trim()}>
+                      <Show
+                        when={
+                          page() === 'list' &&
+                          !query().trim() &&
+                          selected().allModels.length > 0
+                        }
+                      >
                         <MobileDrawer.Item
-                          onClick={() => toggleProvider(group().label)}
+                          onClick={() => {
+                            setQuery('');
+                            setPage('all');
+                            searchInput?.focus();
+                          }}
                         >
-                          <span class="flex size-4.5 shrink-0 items-center justify-center text-ink-subtle">
-                            <Show
-                              when={expanded(group().label)}
-                              fallback={<CaretDown class="size-4.5" />}
-                            >
-                              <CaretUp class="size-4.5" />
-                            </Show>
+                          <Squares class="size-[18px]" />
+                          <span class="flex-1">
+                            {t('agentControls.allModels')}
                           </span>
-                          <span class="text-ink-muted">
-                            {expanded(group().label)
-                              ? t('agentControls.showFewerModels')
-                              : t('agentControls.showAllModels', {
-                                  count: group().options.length,
-                                })}
-                          </span>
+                          <CaretRight class="size-4" />
                         </MobileDrawer.Item>
                       </Show>
                     </MobileDrawer.Section>
                   </div>
                 )}
               </Key>
-              <Show
-                when={
-                  modelGroups().length === 0 &&
-                  selected().agents.length === 0 &&
-                  !state.loading
-                }
-              >
+              <Show when={page() === 'all' && models().length === 0}>
                 <p role="status" class="px-3 py-2.5 text-ink-subtle">
                   {t('agentControls.noMatches')}
                 </p>
@@ -267,7 +242,7 @@ export function MobileModelSelector() {
                                 {agent.runtime.label}
                               </span>
                               <Show when={state.agent?.id === agent.id}>
-                                <Check class="size-4.5 text-accent" />
+                                <Check class="size-4 text-accent" />
                               </Show>
                             </MobileDrawer.Item>
                           )}
@@ -276,7 +251,7 @@ export function MobileModelSelector() {
                     </div>
                   )}
                 </For>
-                <Show when={state.onCreate && !query().trim()}>
+                <Show when={state.onCreate}>
                   <MobileDrawer.Item
                     onClick={() => {
                       changeOpen(false);
@@ -312,7 +287,7 @@ export function MobileModelSelector() {
                           (state.effortValue ?? state.effort?.currentValue)
                         }
                       >
-                        <Check class="size-4.5 text-accent" />
+                        <Check class="size-4 text-accent" />
                       </Show>
                     </MobileDrawer.Item>
                   )}
@@ -341,7 +316,7 @@ export function MobileModelSelector() {
                         <span class="flex-1" />
                       </Show>
                       <Show when={choice.value === state.speedValue}>
-                        <Check class="size-4.5 text-accent" />
+                        <Check class="size-4 text-accent" />
                       </Show>
                     </MobileDrawer.Item>
                   )}
