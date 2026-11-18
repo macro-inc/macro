@@ -4,6 +4,7 @@ import {
   NAME_MATCH_RANKING,
   NAME_STARTS_WITH_QUERY_RANK,
 } from '@core/util/freshSort';
+import { ANY_SCRIPT_FUZZY_OPTIONS } from '@core/util/fuzzy';
 import { normalizeNameText, startsWordsOf } from '@core/util/name-match-score';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import uFuzzy from '@leeoniya/ufuzzy';
@@ -12,7 +13,7 @@ import type { CommandMenuItem } from './useCommandItems';
 
 // Command keyword eligibility is not a database-person lookup. Keep its existing
 // matcher for commands and ordinary entities; personal windows retain core order.
-const COMMAND_MATCHER = new uFuzzy({});
+const COMMAND_MATCHER = new uFuzzy(ANY_SCRIPT_FUZZY_OPTIONS);
 
 /** The label a row shows; its search text can add emails, aliases, or command keywords. */
 function displayName(item: CommandMenuItem): string {

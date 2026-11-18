@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT host.id FROM hosted_runtime_host host\n            WHERE host.id = $2\n               OR host.id = (SELECT host_id FROM hosted_runtime WHERE id = $1)\n            ORDER BY host.id\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "83ec24a4f6022673abd94657a69556e59c42014b96bd1bb22eb1f981ceff78ae"
+}
