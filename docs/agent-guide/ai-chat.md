@@ -2,7 +2,7 @@
 
 ## Chat in code mode
 
-The standalone and doc-scoped chat (and AI projections) answer with
+The standalone and doc-scoped chat answer with
 `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` instead of the direct
 Macro tools. People never see code: an execution reads as **Working in your
 workspace** / **Worked in your workspace**, and the SDK lookups render nothing.
