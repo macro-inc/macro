@@ -31,7 +31,7 @@ import {
 } from './directory';
 import { contactsKeys } from './keys';
 import { createContactQueryEpoch } from './query-epoch';
-import { requestContactRefresh } from './refresh';
+import { openContactReader, requestContactRefresh } from './refresh';
 
 export type ContactWindowHost = ContactDirectoryHost &
   Pick<CacheHost, 'onCacheChanged' | 'onCacheGenerationChanged'>;
@@ -177,6 +177,9 @@ export function createContactDirectoryWindow(
     return result.page;
   };
 
+  createEffect(() => {
+    if (enabled()) onCleanup(openContactReader());
+  });
   createEffect(() => {
     const host = scope().host;
     if (!host) return;

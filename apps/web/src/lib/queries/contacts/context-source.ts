@@ -24,6 +24,7 @@ import { queryReadyGate } from '../gate';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
 import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '../visible-refresh';
 import { buildContactContextFacts } from './context-facts';
+import { contactReadersOpen } from './refresh';
 
 // Selectors capture resolved ownership. Retained data from an old observer/key
 // can never be relabeled with the current account during Solid reconciliation.
@@ -94,8 +95,11 @@ export function createContactContextSource(options: {
           host,
           () => cached.refetch({ cancelRefetch: false }),
           {
-            searchBuckets: () => ['channel', 'dm'],
+            // Only DM rows reach contact facts, and only an open contact
+            // window reads them; the first to open catches up once.
+            searchBuckets: () => ['dm'],
             intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+            live: contactReadersOpen,
           }
         )
       );

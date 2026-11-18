@@ -58,7 +58,11 @@ The settings signature browser suite also exercises real channel/link observers
 and the contact context publisher across account switches with delayed responses
 (`account-sources.browser.e2e.ts`). `queries/contacts/context-source.ts` reuses
 those keyed queries through ownership-tagged selectors; gate missing inputs rather
-than publishing an empty snapshot. `context-publisher.ts` caps pending IDs and
+than publishing an empty snapshot. Its cached-channel overlay rereads the cache only
+for `dm` changes while a contact window in the tab is enabled
+(`openContactReader`, held by `createContactDirectoryWindow`), and once when one
+opens after changes it missed: channel rows never reach contact facts, and nothing
+reads them while no window is open. `context-publisher.ts` caps pending IDs and
 write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
 and never writes directory names or membership. `useContactContextPublisher`
 shares Soup's leader, rollout and generation lifecycle; do not add another leader.
