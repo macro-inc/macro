@@ -1,0 +1,59 @@
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.test.ts
+  s_661bd9a2a08729::t_593ea0939fe4fa 121-157
+apps/web/src/features/block-agent/component/parts/CodeExecutionToolCall.test.tsx
+  s_661bd9a2a08729::t_b11a08e32ee1f5 128-161
+apps/web/src/features/block-agent/component/parts/CodeExecutionToolCall.tsx
+  s_661bd9a2a08729::t_99deb078bf93b4 1
+  s_661bd9a2a08729::t_bbe9d7ead2654e 104-109,114-115
+apps/web/src/features/block-agent/component/ToolApprovalRequest.tsx
+  s_661bd9a2a08729::t_99deb078bf93b4 6
+  s_661bd9a2a08729::t_4535878f027b85 3,13,17-27
+  s_661bd9a2a08729::t_903e09475cebf5 38,61
+apps/web/src/features/block-agent/component/parts/ToolApprovalPart.tsx
+  s_661bd9a2a08729::t_4535878f027b85 6-7,12-15,48-85,100-117
+apps/web/src/features/block-agent/state/permission-approval.ts
+  s_661bd9a2a08729::t_fe27b17c856318 1-19,27-95,97-164
+  s_661bd9a2a08729::t_99deb078bf93b4 20-26,96
+apps/web/src/features/block-agent/state/tool-groups.ts
+  s_661bd9a2a08729::t_7b318ac48b0f7d 10-12,29-33,89-91,158-167
+  s_661bd9a2a08729::t_cbfb03ffdad9c2 168-169
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.tsx
+  s_661bd9a2a08729::t_1c9e233f638928 1-61,65-168
+  s_661bd9a2a08729::t_99deb078bf93b4 62-64
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.ts
+  s_661bd9a2a08729::t_fd7b705db8c714 40-44,72-75,84-89
+apps/web/src/features/block-agent/component/parts/ToolCallPart.tsx
+  s_661bd9a2a08729::t_1b15025ae6646b 15,24,79-84
+  s_661bd9a2a08729::t_0a70ba9d8b8852 85
+apps/web/src/features/block-agent/views/CodeExecutionPart.tsx
+  s_661bd9a2a08729::t_d6ec04c53f4c13 117
+  s_661bd9a2a08729::t_467f74029c43f4 1-7,14-16,67-83,103-116,118-152
+apps/web/src/features/block-agent/views/ShowPermissionsPart.tsx
+  s_661bd9a2a08729::t_b4be5637afa2da 30-35
+  s_661bd9a2a08729::t_1b15025ae6646b 1-29,36-56
+apps/web/src/features/block-agent/state/permission-approval.test.ts
+  s_661bd9a2a08729::t_593ea0939fe4fa 1-93,99-141,146-169
+  s_661bd9a2a08729::t_8ddd278cbcfc50 94-98
+  s_661bd9a2a08729::t_99deb078bf93b4 142-145
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.test.tsx
+  s_661bd9a2a08729::t_99deb078bf93b4 11
+  s_661bd9a2a08729::t_0c9c9252f62a17 1-10,12-150
+apps/web/src/features/block-agent/ui/ToolApprovalCard.tsx
+  s_661bd9a2a08729::t_f3a41a0e5d0e0e 3,29-48,60-61,69-72,75-78,80-92,108,121,131,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "92d62a592c0f1e5675adc09aec6610b604eb732e",
+  "prompts": {},
+  "sessions": {
+    "s_661bd9a2a08729": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d2d88736-ecda-463f-806d-69cacb50e672",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
