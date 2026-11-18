@@ -2863,7 +2863,9 @@ impl CalendarRepository for PgCalendarRepository {
 impl PgCalendarRepository {
     /// Turn one link's Google calendar off if its grant still lacks the
     /// capability. The link row is the lock a grant or disconnect takes, so a
-    /// link one of them holds is left to the next round.
+    /// link one of them holds is left to the next round; the scopes row is
+    /// locked too, so a grant that committed since this statement's snapshot
+    /// is re-checked rather than read stale.
     async fn disable_google_account_without_capability(
         &self,
         email_link_id: Uuid,
@@ -2880,7 +2882,7 @@ impl PgCalendarRepository {
               AND account.provider = 'google'
               AND account.sync_status <> 'disabled'
               AND NOT scopes.granted_scopes @> $2::text[]
-            FOR UPDATE OF link SKIP LOCKED
+            FOR UPDATE OF link, scopes SKIP LOCKED
             "#,
             email_link_id,
             required_scopes,
