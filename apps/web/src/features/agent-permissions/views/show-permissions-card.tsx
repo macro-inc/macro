@@ -359,7 +359,11 @@ function SelectionGroup(props: {
         disabled={!props.canEdit || !action()}
         onChange={(state) => {
           const current = action();
-          if (current) props.onTool(changeForTool(current, tool, state), state);
+          if (current)
+            props.onTool(
+              changeForTool(actionState(tool.action), tool, state),
+              state
+            );
         }}
       />
     );
