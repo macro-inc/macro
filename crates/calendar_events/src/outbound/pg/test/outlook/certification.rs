@@ -40,13 +40,7 @@ async fn team_view(repo: &PgCalendarRepository, owner: &str) -> TeamView {
         .unwrap()
         .coverage;
     let mut sources: Vec<_> = team
-        .sources(
-            VIEWER,
-            july_2026_range(),
-            &[owner.to_owned()],
-            None,
-            100,
-        )
+        .sources(VIEWER, july_2026_range(), &[owner.to_owned()], None, 100)
         .await
         .unwrap()
         .into_iter()
@@ -316,7 +310,10 @@ async fn a_copy_written_under_a_stale_role_stays_out_until_a_scan_reads_it_again
     discover(&repo, vec![discovered_calendar("primary")]).await;
     let (scan_after, full_scan) = scan(&repo, whole.id).await;
     assert_ne!(scan_after, scan_before);
-    assert!(full_scan, "the primary calendar's next round reads every event");
+    assert!(
+        full_scan,
+        "the primary calendar's next round reads every event"
+    );
 
     let full = next_round(&repo, whole.id).await;
     assert!(!full.near_window, "its coverage stays");
@@ -415,7 +412,10 @@ async fn a_calendar_listed_again_after_its_removal_is_imported_anew(pool: PgPool
     discover(&repo, vec![discovered_calendar("shared")]).await;
     discover(
         &repo,
-        vec![discovered_calendar("primary"), discovered_calendar("shared")],
+        vec![
+            discovered_calendar("primary"),
+            discovered_calendar("shared"),
+        ],
     )
     .await;
 

@@ -3191,8 +3191,8 @@ async fn upsert_calendar_tx(
     let needs_verification = previous
         .as_ref()
         .is_some_and(|previous| previous.needs_verification);
-    let access_changed = role_changed
-        || (provider_sync != Some(CalendarProvider::Outlook) && needs_verification);
+    let access_changed =
+        role_changed || (provider_sync != Some(CalendarProvider::Outlook) && needs_verification);
     let row = sqlx::query_as!(
         StoredCalendarRow,
         r#"
