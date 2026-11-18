@@ -1,0 +1,45 @@
+apps/web/src/features/agent-permissions/queries/permissions.ts
+  s_ce4c4fb10e3875::t_b7716863de7fb9 8
+apps/web/src/features/agent-permissions/tests/fixtures.ts
+  s_ce4c4fb10e3875::t_b7716863de7fb9 4
+apps/web/src/features/agent-permissions/components/permission-tool-row.tsx
+  s_ce4c4fb10e3875::t_b7716863de7fb9 4,27,36
+apps/web/src/features/agent-permissions/views/agent-permissions-page.tsx
+  s_ce4c4fb10e3875::t_b7716863de7fb9 17
+apps/web/src/features/agent-permissions/views/permission-changes.ts
+  s_ce4c4fb10e3875::t_b7716863de7fb9 9
+apps/web/src/lib/service-clients/service-agent-harness/tool-permissions.ts
+  s_ce4c4fb10e3875::t_b7716863de7fb9 9
+apps/web/src/features/agent-permissions/components/permission-state-glyph.tsx
+  s_ce4c4fb10e3875::t_b7716863de7fb9 4,14
+apps/web/src/features/agent-permissions/views/agent-permissions-list.tsx
+  s_ce4c4fb10e3875::t_b7716863de7fb9 5-6,8-9,11-12,54,63-66,125,129,132,155,186,199,204-205,209-211,214-217,219,222-225,229-232
+apps/web/src/features/agent-permissions/views/agent-permissions-page.test.tsx
+  s_ce4c4fb10e3875::t_b7716863de7fb9 6
+apps/web/src/features/agent-permissions/components/labels.ts
+  s_ce4c4fb10e3875::t_b7716863de7fb9 3-5,9,18,26,35,46
+apps/web/src/features/agent-permissions/components/permission-action-row.tsx
+  s_ce4c4fb10e3875::t_b7716863de7fb9 3,16,24
+apps/web/src/features/agent-permissions/components/permission-state-control.tsx
+  s_ce4c4fb10e3875::t_b7716863de7fb9 2,6,8,22-23,26,28
+apps/web/src/features/agent-permissions/core/model.ts
+  s_ce4c4fb10e3875::t_b7716863de7fb9 3-4,6-7,9,11,13,21,45,55,61,63,81,83,97-98,107,112-114,120-121,132,141-142,182-183,219-221,233
+apps/web/src/features/agent-permissions/primitives/pending-changes.ts
+  s_ce4c4fb10e3875::t_b7716863de7fb9 3-4,22-24,41,54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "988959f5ce2a7dc50ba914864e0e987f1f5df9a5",
+  "prompts": {},
+  "sessions": {
+    "s_ce4c4fb10e3875": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b6b57a6-b78c-40d9-9d42-b7ccad1c549b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
