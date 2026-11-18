@@ -79,6 +79,16 @@ pub struct GraphqlPropertyDefinition<R> {
     reader: PhantomData<R>,
 }
 
+impl<R> GraphqlPropertyDefinition<R> {
+    /// Wrap a definition returned by the properties domain.
+    pub(crate) fn new(definition: PropertyDefinition) -> Self {
+        Self {
+            definition,
+            reader: PhantomData,
+        }
+    }
+}
+
 /// A globally identified property definition, independent of any assignment.
 #[Object(name = "GraphqlPropertyDefinition")]
 impl<R: EntityPropertyReader> GraphqlPropertyDefinition<R> {
@@ -223,10 +233,7 @@ pub async fn load_property_definitions<R: EntityPropertyReader>(
         .map_err(|err| async_graphql::Error::new(err.to_string()))?;
     Ok(definitions
         .into_iter()
-        .map(|definition| GraphqlPropertyDefinition {
-            definition,
-            reader: PhantomData,
-        })
+        .map(GraphqlPropertyDefinition::new)
         .collect())
 }
 
