@@ -1,4 +1,3 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type {
@@ -6,18 +5,16 @@ import type {
   SuggestionsSource,
 } from '../context/suggestions-source';
 import {
-  type FeedFilter,
-  matchesFilter,
+  doneWhenTakenUp,
   type Suggestion,
   type SuggestionStatus,
-  tabCounts,
 } from '../core/suggestion';
 
-/** One card in the feed. */
+/** One row in the feed. */
 export type FeedEntry = {
   suggestion: Suggestion;
   status: SuggestionStatus;
-  /** Turned down during this visit: its card is a one-line Undo row. */
+  /** Turned down during this visit: its row stays, with Undo. */
   dismissed: boolean;
   /** Proposed since the person last opened their feed. */
   isNew: boolean;
@@ -36,8 +33,8 @@ export type FeedView =
   | { kind: 'suggestions'; entries: FeedEntry[] };
 
 /**
- * The feed's state: its filter and each card's action. The server decides
- * every card's status, order and counts; a dismissal is sent at once, and a
+ * The feed's state and each row's action. The server decides every
+ * suggestion's status and order; a dismissal is sent at once, and a
  * suggestion dismissed during this visit stays as a row whose Undo asks the
  * server to restore it.
  */
@@ -52,18 +49,11 @@ export function createSuggestionsFeed(
     viewer?: Accessor<string | undefined>;
   } = {}
 ) {
-  const [filter, setFilter] = createSignal<FeedFilter>('all');
   // Dismissed during this visit, as they were: the feed no longer lists them.
   const [dismissed, setDismissed] = createSignal<Suggestion[]>([]);
   const [busyIds, setBusyIds] = createSignal<string[]>([]);
   const [failedIds, setFailedIds] = createSignal<string[]>([]);
   const [changedIds, setChangedIds] = createSignal<string[]>([]);
-
-  const counts = createMemo(() =>
-    tabCounts(
-      source.feed()?.counts ?? { open: 0, running: 0, failed: 0, done: 0 }
-    )
-  );
 
   const view = createMemo((): FeedView => {
     const feed = source.feed();
@@ -87,7 +77,7 @@ export function createSuggestionsFeed(
         )
         .map((suggestion) => entry(suggestion, false)),
       ...gone.map((suggestion) => entry(suggestion, true)),
-    ].filter((shown) => matchesFilter(shown.status, filter()));
+    ];
     if (entries.length === 0) return { kind: 'empty' };
 
     return { kind: 'suggestions', entries };
@@ -153,55 +143,65 @@ export function createSuggestionsFeed(
     });
 
   return {
-    filter,
-    setFilter,
-    counts,
     view,
     accept,
     /**
-     * Open what a finished suggestion left, a running one's session, else
-     * what taking it up opened.
+     * Take a suggestion up without opening anything: the person has dealt
+     * with it. Only for a suggestion that taking up finishes
+     * (`doneWhenTakenUp`): a background prompt would start its run, a routine
+     * suggestion be saved, and a reply stay open until the person replies.
      */
-    open(suggestion: Suggestion) {
-      if (suggestion.result) return actions.openItem(suggestion.result);
+    markDone: (suggestion: Suggestion) =>
+      act(suggestion, 'done', async () => {
+        if (!doneWhenTakenUp(suggestion)) return;
 
-      if (suggestion.kind === 'prompt' && suggestion.runMode === 'background') {
-        // Its run's session shows the work under way.
-        if (suggestion.run) {
-          actions.openItem({
-            entityType: 'agent_session',
-            entityId: suggestion.run.sessionId,
-          });
+        const answer = await source.accept(suggestion);
+        if (answer === 'changed') {
+          setChangedIds((ids) => [...ids, suggestion.id]);
         }
-        return;
-      }
-
-      if (suggestion.kind === 'prompt') {
-        return fireAndForget(
-          actions.openComposer(suggestion.prompt),
-          'suggestions'
-        );
-      }
-
-      if (suggestion.kind === 'entity' && suggestion.draft) {
-        return actions.openDraft(suggestion.draft);
-      }
-
-      const [about] = suggestion.about;
-      if (about) actions.openItem(about);
-    },
-    /** Put a prompt suggestion's prompt in the composer to edit, without taking it up. */
-    openInChat(suggestion: Suggestion) {
-      if (suggestion.kind !== 'prompt') return;
-
-      fireAndForget(actions.openComposer(suggestion.prompt), 'suggestions');
-    },
-    /** A routine that can't be opened for review marks the card failed. */
-    reviewRoutine: (suggestion: Suggestion) =>
-      act(suggestion, 'review', async () => {
+      }),
+    /**
+     * Look at work Macro would do without taking it up: a routine's draft, a
+     * run's session while it is under way, else its prompt in the composer,
+     * to read or edit. A routine that can't be opened marks the row failed.
+     */
+    look: (suggestion: Suggestion) =>
+      act(suggestion, 'look', async () => {
         if (suggestion.kind === 'routine') {
           actions.reviewRoutine(suggestion.routineSuggestionId);
+          return;
         }
+        if (suggestion.kind !== 'prompt') return;
+
+        if (suggestion.status === 'running') {
+          if (suggestion.runMode === 'background' && suggestion.run) {
+            actions.openItem({
+              entityType: 'agent_session',
+              entityId: suggestion.run.sessionId,
+            });
+          }
+          return;
+        }
+
+        await actions.openComposer(suggestion.prompt);
+      }),
+    /** Open what a finished suggestion left, else what taking it up opened. */
+    open: (suggestion: Suggestion) =>
+      act(suggestion, 'open', async () => {
+        if (suggestion.result) return actions.openItem(suggestion.result);
+        // A finished run that left nothing has nothing to open.
+        if (suggestion.kind === 'routine') return;
+        if (suggestion.kind === 'prompt') {
+          if (suggestion.runMode === 'composer') {
+            await actions.openComposer(suggestion.prompt);
+          }
+          return;
+        }
+
+        if (suggestion.draft) return actions.openDraft(suggestion.draft);
+
+        const [about] = suggestion.about;
+        if (about) actions.openItem(about);
       }),
     /** Sent at once; a refusal leaves the card, marked failed. */
     dismiss: (suggestion: Suggestion) =>
