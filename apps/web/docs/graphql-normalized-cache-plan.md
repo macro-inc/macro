@@ -800,6 +800,12 @@ form for it records a `soup.rest_fallback` span (attributes
 grouping, email view and targets, never ids or values. A request made with
 `transport: 'rest'` is a choice, not a fallback, and is not recorded.
 
+Without the cache, writes read mounted Soup lists again
+(`refreshActiveGraphqlSoupQueries`). A list that never shows, filters or sorts
+by unread state (the Quick Access and menu feeds) passes
+`ignoresNotifications: true`, and notification and email read-state writes
+refresh with `notificationsOnly: true`, which skips it.
+
 `createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
 document and variables are arguments, other options pass through, and the result
 and live projection path are the same. Existing `createUrqlQuery` call sites are
