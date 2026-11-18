@@ -1,6 +1,7 @@
 use super::*;
 use async_graphql::{EmptySubscription, Schema, SimpleObject};
 use email::domain::models::EmailErr;
+use macro_authorization::ForwardedProgram;
 use std::{pin::Pin, sync::Mutex};
 use uuid::Uuid;
 
@@ -125,10 +126,9 @@ impl EmailThreadMutationOutput for ThreadOutput {
         })
     }
 }
-fn schema(
-    service: Arc<Service>,
-    authenticated: bool,
-) -> Schema<Query, GraphqlEmailSendMutation<Service, ThreadOutput>, EmptySubscription> {
+type SendSchema = Schema<Query, GraphqlEmailSendMutation<Service, ThreadOutput>, EmptySubscription>;
+
+fn schema(service: Arc<Service>, authenticated: bool) -> SendSchema {
     let builder = Schema::build(
         Query,
         GraphqlEmailSendMutation::default(),
@@ -138,10 +138,24 @@ fn schema(
     if authenticated {
         builder
             .data(MacroUserIdStr::try_from_email("viewer@example.com").unwrap())
+            .data(ForwardedProgram::new(None, None, false))
             .finish()
     } else {
         builder.finish()
     }
+}
+
+/// The viewer's schema, for a request `program` sent.
+fn schema_for(service: Arc<Service>, program: ForwardedProgram) -> SendSchema {
+    Schema::build(
+        Query,
+        GraphqlEmailSendMutation::default(),
+        EmptySubscription,
+    )
+    .data(service)
+    .data(MacroUserIdStr::try_from_email("viewer@example.com").unwrap())
+    .data(program)
+    .finish()
 }
 const SEND: &str = r#"mutation { sendEmailAttempt(input: {
     attempt: {attemptId:"00000000-0000-4000-8000-000000000001",linkId:"00000000-0000-4000-8000-000000000002"},
@@ -261,4 +275,51 @@ async fn pending_sends_require_authentication_and_reject_malformed_cursors() {
         service.calls.lock().unwrap()[0].0,
         "macro|viewer@example.com"
     );
+}
+
+/// GraphQL sends in-process, so no route's program guard runs: the
+/// resolver refuses an agent's program itself, as the send route does.
+#[tokio::test]
+async fn an_agents_program_cannot_send_an_attempt() {
+    for program in [
+        ForwardedProgram::new(Some(bot_id::MACRO_AI_BOT_ID), None, false),
+        ForwardedProgram::new(None, None, true),
+    ] {
+        let service = Arc::new(Service::default());
+        let response = schema_for(service.clone(), program.clone())
+            .execute(SEND)
+            .await;
+        assert_eq!(
+            response.errors[0].extensions.as_ref().unwrap().get("code"),
+            Some(&async_graphql::Value::from("CONFIRMATION_REQUIRED")),
+            "{program:?}"
+        );
+        assert!(service.calls.lock().unwrap().is_empty(), "{program:?}");
+    }
+}
+
+/// An owner routine's step sends as the send route lets it.
+#[tokio::test]
+async fn an_owner_routine_still_sends_an_attempt() {
+    let service = Arc::new(Service::default());
+    let program = ForwardedProgram::new(None, Some(Uuid::nil()), true);
+    let response = schema_for(service.clone(), program).execute(SEND).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(service.calls.lock().unwrap().len(), 1);
+}
+
+/// A request whose program the host never recorded can't send.
+#[tokio::test]
+async fn a_send_with_no_recorded_program_is_refused() {
+    let service = Arc::new(Service::default());
+    let schema = Schema::build(
+        Query,
+        GraphqlEmailSendMutation::<Service, ThreadOutput>::default(),
+        EmptySubscription,
+    )
+    .data(service.clone())
+    .data(MacroUserIdStr::try_from_email("viewer@example.com").unwrap())
+    .finish();
+    assert!(!schema.execute(SEND).await.errors.is_empty());
+    assert!(service.calls.lock().unwrap().is_empty());
 }

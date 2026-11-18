@@ -17,6 +17,9 @@ use tower_http::compression::CompressionLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+#[cfg(test)]
+mod refuse_programs_test;
+
 // Utilities
 pub(crate) mod context;
 mod saved_views;
@@ -120,17 +123,23 @@ fn items_router(state: ApiContext) -> Router<ApiContext> {
         soup::inbound::axum_router::soup_router(state.soup_router_state.clone()),
         &state,
     )
-    .merge(refuse_programs(graphql_soup::router(), &state))
+    .merge(refuse_programs(
+        graphql_soup::router(),
+        state.authorization_state.clone(),
+    ))
 }
 
 /// GraphQL lets a client pick its fields and aliases, so no response
 /// rewrite can find a sign-in email in it; programs use the SDK's REST item
 /// routes instead, which nothing program-side ever stops doing.
-fn refuse_programs<S: Clone + Send + Sync + 'static>(
+fn refuse_programs<S, Svc>(
     router: Router<S>,
-    state: &ApiContext,
-) -> Router<S> {
-    let authorization = state.authorization_state.clone();
+    authorization: macro_authorization::MacroAuthorizationState<Svc>,
+) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+    Svc: macro_authorization::MacroAuthorizationService,
+{
     router.layer(axum::middleware::from_fn(
         move |request: axum::extract::Request, next: axum::middleware::Next| {
             let authorization = authorization.clone();

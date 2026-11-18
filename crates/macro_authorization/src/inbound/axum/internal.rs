@@ -76,9 +76,10 @@ where
         .authorize_internal(provided_key, claims)
         .await
         .map_err(internal_authorization_rejection)?;
-    let acting_user = user_context
+    let mut acting_user = user_context
         .map(|user_context| authenticated_user(user_context, CredentialOrigin::Internal))
         .transpose()?;
+    super::forwarded_program::accept(&parts.headers, acting_user.as_mut())?;
 
     Ok(Some(MacroAuthorization::Internal(acting_user)))
 }

@@ -84,3 +84,29 @@ async fn unauthenticated_send_never_reaches_the_domain() {
     assert!(!response.errors.is_empty());
     assert!(service.calls.lock().unwrap().is_empty());
 }
+
+/// GraphQL sends in-process, so no route's program guard runs: the
+/// resolver refuses an agent's program itself, as the send route does.
+#[tokio::test]
+async fn an_agents_program_cannot_send_a_message() {
+    let service = Arc::new(CapturingEmailMutationService::default());
+    let schema = Schema::build(
+        QueryRoot,
+        GraphqlEmailMutation::<CapturingEmailMutationService, TestEmailThreadOutput>::new(),
+        EmptySubscription,
+    )
+    .data(service.clone())
+    .data(MacroUserIdStr::try_from_email("viewer@example.com").unwrap())
+    .data(macro_authorization::ForwardedProgram::new(
+        Some(bot_id::MACRO_AI_BOT_ID),
+        None,
+        false,
+    ))
+    .finish();
+    let response = schema.execute(format!(r#"mutation {{ sendEmailMessage(input: {{ draft: {{ draftId: "{}", subject: "s" }} }}) {{ messageId }} }}"#, Uuid::now_v7())).await;
+    assert_eq!(
+        response.errors[0].extensions.as_ref().unwrap().get("code"),
+        Some(&async_graphql::Value::from("CONFIRMATION_REQUIRED"))
+    );
+    assert!(service.send_inputs.lock().unwrap().is_empty());
+}

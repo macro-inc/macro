@@ -7,11 +7,12 @@ publish = false
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
-email = { path = "../email", default-features = false, features = ["ports"] }
+email = { path = "../email", default-features = false, features = ["axum", "inbound", "ports"] }
 email_utils = { path = "../email_utils" }
 entity_access = { path = "../entity_access", default-features = false }
 futures = { workspace = true }
 graphql_common = { path = "../graphql_common" }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
@@ -21,4 +22,5 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../bot_id" }
 tracing-subscriber = { workspace = true }

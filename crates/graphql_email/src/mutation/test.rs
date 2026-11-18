@@ -407,6 +407,9 @@ fn schema(
     )
     .data(service)
     .data(MacroUserIdStr::try_from_email("viewer@example.com").unwrap())
+    .data(macro_authorization::ForwardedProgram::new(
+        None, None, false,
+    ))
     .finish()
 }
 
