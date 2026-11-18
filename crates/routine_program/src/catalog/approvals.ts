@@ -12,6 +12,8 @@ export async function main({ macro, trigger, knobs }: StepContext) {
   const firstLine = String(message.text).split('\n')[0].slice(0, 80);
   const task = await macro.tasks.create({
     name: `Decide: ${firstLine}`,
+    // The message may be from a private channel: the task is not shared with the owner's team.
+    shareWithTeam: false,
     markdown: [`${message.sender ?? 'Someone'} asked: ${link}`, message.text].join('\n\n'),
     assignees: [await macro.users.me()],
   });

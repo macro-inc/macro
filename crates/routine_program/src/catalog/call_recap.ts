@@ -1,8 +1,19 @@
 export async function main({ macro, run, trigger }: StepContext) {
   if (trigger.kind !== 'event' || !trigger.item.call) return { document: null };
   const call = trigger.item.call;
-  const transcript: string[] = call.transcript ?? [];
+  let transcript: unknown[] = call.transcript ?? [];
   if (transcript.length === 0) return { document: null };
+  if (run.dryRun) return { document: null, wouldWrite: true };
+  if (call.transcript_omitted) {
+    // The event holds only the start of a long call: read the rest.
+    const segments = (await macro.calls.byId(trigger.item.entity_id).transcript()) ?? [];
+    let room = 120_000;
+    transcript = [];
+    for (const segment of segments) {
+      if ((room -= segment.content.length) < 0) break;
+      transcript.push({ speaker: segment.speakerId, text: segment.content });
+    }
+  }
   const { outcome } = await macro.ai.structuredCompletion({
     model: 'google/gemini-3.8-flash',
     thinking: 'low',
@@ -14,7 +25,7 @@ export async function main({ macro, run, trigger }: StepContext) {
       transcript,
     }),
     additional_instructions:
-      'Recap this call from its transcript: what was decided, what is still open, and each action item with who owns it and when it is due. Give a due date only when one was said. Put anything the transcript leaves unclear under "open" instead of guessing. Decisions and commitments only, not a play-by-play.',
+      'Recap this call from its transcript: what was decided, what is still open, and each action item with who owns it and when it is due. Give a due date only when one was said, and an empty string otherwise. Put anything the transcript leaves unclear under "open" instead of guessing. Decisions and commitments only, not a play-by-play.',
     output_schema: {
       name: 'Recap',
       schema: {
@@ -27,7 +38,7 @@ export async function main({ macro, run, trigger }: StepContext) {
             items: {
               type: 'object',
               properties: { owner: { type: 'string' }, action: { type: 'string' }, due: { type: 'string' } },
-              required: ['owner', 'action'],
+              required: ['owner', 'action', 'due'],
             },
           },
         },
@@ -39,7 +50,7 @@ export async function main({ macro, run, trigger }: StepContext) {
   const recap = outcome.result as {
     decisions?: string[];
     open?: string[];
-    actions?: { owner: string; action: string; due?: string }[];
+    actions?: { owner: string; action: string; due: string }[];
   };
   const list = (items: string[]) => (items.length > 0 ? items.map((item) => `- ${item}`).join('\n') : '- None');
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: run.timezone }).format(new Date(run.at));

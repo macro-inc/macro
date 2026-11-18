@@ -1,4 +1,4 @@
-export async function main({ macro, trigger, knobs }: StepContext) {
+export async function main({ macro, run, trigger, knobs }: StepContext) {
   if (trigger.kind !== 'event' || !trigger.item.email?.from?.email || !trigger.item.message_id) {
     return { draft: null };
   }
@@ -12,6 +12,9 @@ export async function main({ macro, trigger, knobs }: StepContext) {
     questions: { cold: knobs.isColdOutreach },
   });
   if ((probabilities.cold ?? 0) < 0.5) return { draft: null };
+  if (run.dryRun) return { draft: null, wouldDraft: true };
+  // Making a reply draft replaces one already there: look again, now that AI has taken its time.
+  if ((await thread.drafts()).length > 0) return { draft: null };
   const subject = String(email.subject ?? '');
   const draft = await macro.email.createDraft(
     {

@@ -1,4 +1,4 @@
-export async function main({ macro, trigger, knobs }: StepContext) {
+export async function main({ macro, run, trigger, knobs }: StepContext) {
   if (trigger.kind !== 'event' || !trigger.item.email?.from?.email || !trigger.item.message_id) {
     return { draft: null };
   }
@@ -11,9 +11,10 @@ export async function main({ macro, trigger, knobs }: StepContext) {
     questions: { needsReply: knobs.needsReply },
   });
   if ((probabilities.needsReply ?? 0) < 0.5) return { draft: null };
+  if (run.dryRun) return { draft: null, wouldDraft: true };
   const earlier = [];
   for (const message of await thread.messages({ limit: 8 })) {
-    earlier.push({ from: await message.from(), sentAt: await message.sentAt(), body: await message.body() });
+    earlier.push({ from: await message.from(), sentAt: await message.sentAt(), body: String((await message.body()) ?? '').slice(0, 4000) });
   }
   const { outcome } = await macro.ai.structuredCompletion({
     model: 'google/gemini-3.8-flash',
@@ -33,6 +34,8 @@ export async function main({ macro, trigger, knobs }: StepContext) {
   if (outcome.status !== 'completed') throw new Error(`The reply couldn't be written: ${outcome.reason}`);
   const body = (outcome.result as { body?: string }).body?.trim();
   if (!body) return { draft: null };
+  // Making a reply draft replaces one already there: look again, now that AI has taken its time.
+  if ((await thread.drafts()).length > 0) return { draft: null };
   const subject = String(email.subject ?? '');
   const draft = await macro.email.createDraft(
     {

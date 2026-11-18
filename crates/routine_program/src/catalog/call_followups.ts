@@ -1,8 +1,19 @@
-export async function main({ macro, trigger, knobs }: StepContext) {
+export async function main({ macro, run, trigger, knobs }: StepContext) {
   if (trigger.kind !== 'event' || !trigger.item.call) return { draft: null };
   const call = trigger.item.call;
-  const transcript: string[] = call.transcript ?? [];
+  let transcript: unknown[] = call.transcript ?? [];
   if (transcript.length === 0) return { draft: null };
+  if (run.dryRun) return { draft: null, wouldWrite: true };
+  if (call.transcript_omitted) {
+    // The event holds only the start of a long call: read the rest.
+    const segments = (await macro.calls.byId(trigger.item.entity_id).transcript()) ?? [];
+    let room = 120_000;
+    transcript = [];
+    for (const segment of segments) {
+      if ((room -= segment.content.length) < 0) break;
+      transcript.push({ speaker: segment.speakerId, text: segment.content });
+    }
+  }
   const me = await macro.users.me();
   const { outcome } = await macro.ai.structuredCompletion({
     model: 'google/gemini-3.8-flash',
