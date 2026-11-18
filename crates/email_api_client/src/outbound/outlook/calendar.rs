@@ -447,6 +447,11 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
                         .flatten()
                         .filter_map(|v| v.as_str().map(str::to_owned))
                         .collect(),
+                    owner_address: c["owner"]["address"]
+                        .as_str()
+                        .filter(|address| !address.is_empty())
+                        .map(str::to_owned),
+                    shared_with_me: c["isSharedWithMe"].as_bool() == Some(true),
                 })
             })
             .collect::<Result<_, CalendarProviderError>>()?;

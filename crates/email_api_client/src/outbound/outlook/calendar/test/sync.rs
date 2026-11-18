@@ -803,3 +803,49 @@ async fn rediscovery_refreshes_viewers_only_when_a_calendar_changed(pool: PgPool
         "a renamed calendar, as on Google"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn viewers_hear_when_a_sync_error_badge_shows_and_when_it_clears(pool: PgPool) {
+    let (server, api) = setup().await;
+    let repo = linked_mailbox(
+        &pool,
+        &server,
+        mailbox_settings(Some("Pacific Standard Time")),
+        json!([default_calendar("AAMkCalendar")]),
+    )
+    .await;
+    let hints = TeamHints::default();
+    let sync = OutlookCalendarSync::new(repo, api, IssuedToken, hints.clone());
+    assert!(sync.run_once().await.unwrap(), "the discovery");
+    hints.0.lock().unwrap().clear();
+
+    // Microsoft fails the calendar's first listing, one more time than it
+    // takes to show the badge.
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/AAMkCalendar/calendarView"))
+        .respond_with(ResponseTemplate::new(503))
+        .mount(&server)
+        .await;
+    for _ in 0..=CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD {
+        next_round(&pool).await;
+        assert!(sync.run_once().await.is_err());
+    }
+    assert_eq!(
+        *hints.0.lock().unwrap(),
+        vec![true],
+        "only the failure that shows the badge refreshes viewers"
+    );
+
+    server.reset().await;
+    serve_near_window(&server, &[]).await;
+    serve_delta(&server, None, &[], "complete").await;
+    next_round(&pool).await;
+    // The near window, the whole window's page and the finish.
+    while sync.run_once().await.unwrap() {}
+    assert_synced(&pool).await;
+    assert_eq!(
+        *hints.0.lock().unwrap(),
+        vec![true, true],
+        "the round that clears the badge refreshes them again"
+    );
+}

@@ -249,3 +249,52 @@ async fn a_failed_acknowledgement_leaves_the_rest_acknowledged() {
         "the revision after it is not published again"
     );
 }
+
+fn listed_calendar(
+    access_role: &str,
+    owner: Option<&str>,
+    shared_with_me: bool,
+) -> OutlookCalendar {
+    OutlookCalendar {
+        calendar: ProviderCalendar {
+            provider_calendar_id: "calendar".into(),
+            name: "United States holidays".into(),
+            description: None,
+            time_zone: None,
+            color: None,
+            access_role: Some(access_role.into()),
+            is_primary: false,
+            is_selected: true,
+            default_reminders: vec![],
+        },
+        online_meeting_providers: vec![],
+        owner_address: owner.map(str::to_owned),
+        shared_with_me,
+    }
+}
+
+#[test]
+fn only_the_mailboxs_own_read_only_calendars_are_system_calendars() {
+    let mailbox = "olivia@example.com";
+    assert!(listed_calendar("reader", Some("Olivia@Example.com"), false).is_system(mailbox));
+    assert!(
+        !listed_calendar("writer", Some(mailbox), false).is_system(mailbox),
+        "a calendar the mailbox can edit is its own work"
+    );
+    assert!(
+        !listed_calendar("reader", Some("ada@example.com"), false).is_system(mailbox),
+        "a colleague's calendar shared read-only is their schedule"
+    );
+    assert!(
+        !listed_calendar("reader", Some(mailbox), true).is_system(mailbox),
+        "shared with the mailbox, whoever Graph names as owner"
+    );
+    assert!(!listed_calendar("reader", None, false).is_system(mailbox));
+    assert!(
+        !listed_calendar("reader", None, true).is_system(mailbox),
+        "Graph lists a calendar subscribed from the web as shared, with no owner"
+    );
+    let mut primary = listed_calendar("reader", Some(mailbox), false);
+    primary.calendar.is_primary = true;
+    assert!(!primary.is_system(mailbox));
+}

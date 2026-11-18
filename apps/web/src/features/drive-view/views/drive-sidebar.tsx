@@ -53,7 +53,7 @@ function DriveDatabases(props: { onNavigate?: () => void }) {
             <ViewSidebar.Item
               title={database.name}
               onClick={(event) => {
-                actions.openEntity(database, event);
+                actions.openShortcut(database, event);
                 props.onNavigate?.();
               }}
             >
