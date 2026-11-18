@@ -9,43 +9,26 @@ holds the backfill, the audit and the tests.
 
 ## Release order
 
-1. **Deploy as usual.** The migration creates the table, its read index and the
-   triggers in one transaction (5 s lock timeout; it needs a brief write lock on
-   `entity_access`, `"Document"`, `"Chat"`, `"Project"` and `document_sub_type`).
-   A second migration builds the `"Document"` owner index concurrently, and a
-   third the `"UserHistory"` index that view-time sorts read; indexing
-   `"updatedAt"` makes a view's history upsert a non-HOT update (6 µs, 4%, on
-   the synthetic copy). From then on every write keeps the rows of the items it
-   touches current, so no writer needs to deploy first. Projected reads stay off
+1. **Deploy the base migration.** It creates the table, its read index, the
+   mutex table and the maintenance functions. It installs no trigger and takes
+   no lock on `entity_access`, `"Document"`, `"Chat"`, `"Project"` or
+   `document_sub_type`, so writes cost what they did. Projected reads stay off
    (`SOUP_SOURCE_ITEMS_ENABLED` defaults to false).
-2. **Backfill against the primary.** Items untouched since the migration have no
-   rows yet. With `DATABASE_URL` from the environment's normal secret handling:
+2. **Enable, in this order, following the enabling runbook:** build the two
+   indexes only projected reads use (`"Document"(owner, "updatedAt" DESC, id
+   DESC)` for the owner driver, `"UserHistory"("userId", "itemType",
+   "updatedAt" DESC, "itemId" DESC)` for view-time sorts), install the triggers
+   (`source_items_install_triggers()`), backfill, audit, then turn on reads.
+   `source_items_remove_triggers()` turns maintenance off again; the table is
+   then stale until the next backfill.
 
-   ```sh
-   cargo run --release -p source_items --features cli --bin source_items -- backfill
-   ```
-
-   It rewrites every document, chat and project, and every id the table holds,
-   in 500-item batches through `source_items_refresh`, which takes the items'
-   buckets as a commit does, so it is safe to run alongside writers and to
-   interrupt and rerun. Contention retries after one second with a 200 ms lock
-   timeout, and 30 failed attempts on one batch stop the run. The first run also
-   creates the mutex rows, so watch database load and replication lag. On a
-   synthetic copy at production scale (11.8M documents, 13.9M grants) it wrote
-   13.1M rows in 9 minutes and the audit took 69 seconds.
-3. **Audit the primary and every replica soup reads:**
-
-   ```sh
-   cargo run --release -p source_items --features cli --bin source_items -- audit
-   ```
-
-   It compares the whole table with its inputs in one read-only snapshot and
-   fails unless both mismatch counts are zero. It reads every grant and item, so
-   allow for its load.
-4. **Enable projected reads gradually.** Set `SOUP_SOURCE_ITEMS_ENABLED=true` for
-   a document storage canary and restart it. Watch soup latency and errors,
-   write latency on the item and grant tables, lock waits and replication lag
-   before expanding.
+The backfill (`cargo run --release -p source_items --features cli --bin
+source_items -- backfill`) rewrites every document, chat and project in
+500-item batches through `source_items_refresh`, which takes the items' buckets
+as a commit does, so it is safe alongside writers and to interrupt and rerun.
+On a synthetic copy at production scale (11.8M documents, 13.9M grants) it wrote
+13.1M rows in 9 minutes and the audit (`... -- audit`, one read-only snapshot
+that fails unless both mismatch counts are zero) took 69 seconds.
 
 ## Consistency and recovery
 
@@ -53,8 +36,9 @@ Statement triggers only record what changed, in a session temporary table; they
 take no locks, so no writer waits on anything it did not wait on before. At
 commit, a deferred trigger first re-queues itself behind the transaction's other
 deferred constraint checks, then takes ACCESS SHARE on the five inputs, locks a
-mutex row per touched item's bucket (`source_items_mutex`, created on first use)
-in bucket order in one statement, and rewrites those items' rows in later
+mutex row per touched item's bucket (`source_items_mutex`, created on first use;
+a bucket is the item key's full 32-bit hash, so unrelated items almost never
+share one) in bucket order in one statement, and rewrites those items' rows in later
 statements. Each rewrite therefore reads what the previous committer on that
 item committed. A transaction holding buckets is past its statements and its
 deferred checks and waits only for other such transactions, so the projection
@@ -81,18 +65,13 @@ transaction continues. The temporary tables rule out `PREPARE TRANSACTION`, and
 transactions it is harmless).
 
 For a read regression, set `SOUP_SOURCE_ITEMS_ENABLED=false` and restart.
-Drift can only come from disabling the triggers or writing `source_items` by
+Drift can only come from removing the triggers or writing `source_items` by
 hand; the backfill repairs it and the audit confirms it.
 
-Disabling reads leaves the history index's write cost in place. If view upserts
-regress, disable projected reads, then drop `idx_user_history_user_type_updated`
-with `DROP INDEX CONCURRENTLY` outside a transaction. Its migration is recorded
-as applied, so restoring the index takes a new migration; do that before
-enabling view-time projected reads again.
-
-Verify `source_items_read`, `idx_document_owner_updated_live` and
-`idx_user_history_user_type_updated` have `pg_index.indisready` and
-`pg_index.indisvalid` true before enabling reads. An interrupted concurrent
+The read indexes ship with the enabling migrations. Indexing `"updatedAt"`
+makes a view's history upsert a non-HOT update (6 µs, 4%, on the synthetic
+copy). Verify `source_items_read` and both indexes have `pg_index.indisready`
+and `pg_index.indisvalid` true before enabling reads. An interrupted concurrent
 build can leave an invalid index that `IF NOT EXISTS` skips: drop only that
 index with `DROP INDEX CONCURRENTLY`, outside a transaction, then rerun the
 statement.
@@ -134,6 +113,8 @@ thresholds are routing heuristics fit to the benchmark (users of up to 354
 sources), not bounds on the rows a page reads.
 
 Soup's query tests run every case on both paths and require identical pages,
-and assert the projection is exact after every fixture. `crates/source_items`
+over a projection backfilled from each fixture and audited; the feed tests
+install the triggers before their fixtures, so the projection follows their
+writes. `crates/source_items`
 tests every kind of write, forced interleavings of each race, and concurrent
 random writes with an audit of every committed snapshot.

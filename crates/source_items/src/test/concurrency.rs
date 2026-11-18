@@ -497,3 +497,63 @@ async fn commits_on_the_same_items_in_opposite_orders_both_finish(
     }
     assert_exact(&pool).await
 }
+
+/// Two document ids that shared a bucket when buckets were the hash's low 22 bits, so a lock on
+/// one stood for both.
+async fn ids_sharing_a_22_bit_bucket(
+    c: &mut PgConnection,
+) -> Result<(String, String), sqlx::Error> {
+    let pair = sqlx::query!(
+        r#"WITH ids AS (
+               SELECT lpad(to_hex(n), 8, '0') || '-0000-4000-8000-000000000000' AS id
+               FROM generate_series(1, 20000) n
+           )
+           SELECT min(id) AS "first!", max(id) AS "second!" FROM ids
+           GROUP BY hashtext('document:' || id) & 4194303
+           HAVING count(*) > 1
+           ORDER BY 1
+           LIMIT 1"#
+    )
+    .fetch_one(c)
+    .await?;
+    Ok((pair.first, pair.second))
+}
+
+/// A transaction holding one item's bucket, as a bulk change does for the length of its rewrite,
+/// must not make a commit on an unrelated item wait. With 2^22 buckets a 200,000-item team share
+/// held about 5% of them for its 10-30 s rewrite.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("triggers"))
+)]
+async fn a_held_bucket_does_not_block_an_unrelated_item(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    let (held, unrelated) = ids_sharing_a_22_bit_bucket(&mut conn).await?;
+    insert_document(&mut conn, &held, "2026-01-01 00:00:00").await?;
+    insert_document(&mut conn, &unrelated, "2026-01-01 00:00:00").await?;
+    grant(&mut conn, "document", &unrelated, OWNER, "user").await?;
+
+    // Immediate constraints apply at the end of the statement and hold the bucket until commit.
+    let mut bulk = pool.begin().await?;
+    sqlx::query!("SET CONSTRAINTS ALL IMMEDIATE")
+        .execute(&mut *bulk)
+        .await?;
+    grant(&mut bulk, "document", &held, OWNER, "user").await?;
+
+    let mut edit = pool.begin().await?;
+    no_wait(&mut edit).await?;
+    sqlx::query!(
+        r#"UPDATE "Document" SET "updatedAt" = '2026-02-01 00:00:00' WHERE id = $1"#,
+        unrelated
+    )
+    .execute(&mut *edit)
+    .await?;
+    edit.commit().await?;
+    bulk.commit().await?;
+
+    assert_eq!(
+        rows(&mut conn, &unrelated).await?,
+        [row(OWNER, "document", Some("2026-02-01 00:00:00"), 1)]
+    );
+    assert_exact(&pool).await
+}

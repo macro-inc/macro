@@ -52,13 +52,14 @@ CREATE INDEX source_items_read
     WHERE sort_ts IS NOT NULL;
 
 -- One row per bucket of items, created when first needed; an item's bucket is
--- source_items_bucket. 2^22 buckets keep unrelated items from sharing one, even when a single
--- transaction touches hundreds of thousands.
+-- source_items_bucket, the item key's full 32-bit hash. A transaction touching 200,000 items then
+-- holds about 0.005% of the buckets, so a commit on an unrelated item almost never waits for it,
+-- and the table grows to about one row per item ever written.
 CREATE TABLE public.source_items_mutex (bucket int PRIMARY KEY);
 
 CREATE FUNCTION public.source_items_bucket(p_type text, p_id text) RETURNS int
 LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
-    SELECT pg_catalog.hashtext(p_type || ':' || p_id) & 4194303
+    SELECT pg_catalog.hashtext(p_type || ':' || p_id)
 $$;
 
 CREATE FUNCTION public.source_items_require_read_committed() RETURNS void
