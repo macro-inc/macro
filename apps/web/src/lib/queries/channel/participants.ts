@@ -36,10 +36,10 @@ export type ChannelParticipantsMutationVariables = {
 };
 
 /**
- * Re-reads the channel's GraphQL record for mounted participant readers after
- * a write the normalized cache cannot apply itself (a bot or agent joining,
- * an approved request, auto-join). Resolves without a request when nothing
- * reads the channel, and never fails the write that asked for it.
+ * Re-reads the channel's GraphQL record after a write the normalized cache
+ * cannot apply itself (a bot or agent joining, an approved request,
+ * auto-join), so a cached roster no reader has open does not stay stale for
+ * the next cache-first read. Never fails the write that asked for it.
  */
 export async function refreshChannelParticipants(channelId: string) {
   const input = buildGraphqlEntitySoupInput('CHANNEL', channelId);
@@ -53,12 +53,19 @@ export async function refreshChannelParticipants(channelId: string) {
 }
 
 // The soup client module sets up the GraphQL cache; load it only when a write
-// needs a refresh, so mutation modules stay light to import.
+// needs a refresh, so mutation modules stay light to import. Mounted readers
+// refresh through the coordinator, which dedupes with notification refreshes;
+// without one, a direct read updates the cached record.
 async function refreshChannelDetail(query: QueryRevalidation) {
   const { getGraphqlSoupClient } = await import(
     '@service-storage/graphql-soup'
   );
-  await channelNotificationRefresh(getGraphqlSoupClient()).refresh([query]);
+  const client = getGraphqlSoupClient();
+  if (channelNotificationRefresh(client).invalidateQuery(query)) return;
+  const result = await client
+    .query(query.document, query.variables, { requestPolicy: 'network-only' })
+    .toPromise();
+  if (result.error) throw result.error;
 }
 
 // Readers show these mutations over the channel's participants while they are
