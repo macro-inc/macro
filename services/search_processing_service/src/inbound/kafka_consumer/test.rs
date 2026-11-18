@@ -2374,7 +2374,10 @@ async fn agent_session_flood_does_not_delay_email_events_on_other_partitions() {
     for worker in drained {
         delivered_emails += worker.await.expect("draining worker did not panic");
     }
-    assert_eq!(queued_rereads, 1, "one queued reread covers the whole flood");
+    assert_eq!(
+        queued_rereads, 1,
+        "one queued reread covers the whole flood"
+    );
     assert_eq!(delivered_emails, EMAIL_EVENTS as usize);
 }
 
