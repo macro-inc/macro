@@ -1,0 +1,162 @@
+packages/sdk-ocaml/analyzer/test/corpus/unsafe_get.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-2
+packages/sdk-ocaml/analyzer/test/corpus/functor_root_module.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-16
+packages/sdk-ocaml/analyzer/test/corpus/reads_request.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-4
+packages/sdk-ocaml/analyzer/test/corpus/forged_request.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-13
+packages/sdk-ocaml/analyzer/test/corpus/types_and_codecs.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-11
+packages/sdk-ocaml/analyzer/test/corpus/camlinternal.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-2
+packages/sdk-ocaml/README.md
+  s_0d20781b0961ab::t_c68d60a910fbcb 334-398
+packages/sdk-ocaml/analyzer/test/corpus/functor_parameter.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-15
+packages/sdk-ocaml/analyzer/test/corpus/input_value.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-3
+packages/sdk-ocaml/analyzer/test/all/dune
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-22
+packages/sdk-ocaml/analyzer/lib/dune
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-14
+packages/sdk-ocaml/analyzer/test/corpus/other_unit.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-3
+packages/sdk-ocaml/analyzer/test/corpus/class_method.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-5
+packages/sdk-ocaml/analyzer/test/test_cli.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-84
+packages/sdk-ocaml/analyzer/test/corpus/recursive_module.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-10
+packages/sdk-ocaml/analyzer/lib/analyze.mli
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-67
+packages/sdk-ocaml/analyzer/index/index.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-96
+packages/sdk-ocaml/analyzer/test/corpus/functor_alias_argument.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-17
+packages/sdk-ocaml/analyzer/test/all/gen_all.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-7
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-758
+packages/sdk-ocaml/analyzer/test/corpus/include_toplevel.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-5
+packages/sdk-ocaml/analyzer/test/corpus/let_module.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-4
+packages/sdk-ocaml/analyzer/test/corpus/local_open.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-2
+packages/sdk-ocaml/analyzer/test/corpus/obj_functor.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-9
+packages/sdk-ocaml/analyzer/test/corpus/nested_alias.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-17
+packages/sdk-ocaml/analyzer/test/corpus/abstract_view.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-19
+packages/sdk-ocaml/analyzer/test/corpus/first_class_module.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-14
+packages/sdk-ocaml/analyzer/test/corpus/partial_application.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-3
+packages/sdk-ocaml/analyzer/test/corpus/forged_update.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-3
+packages/sdk-ocaml/analyzer/test/corpus/module_alias.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-4
+packages/sdk-ocaml/analyzer/test/corpus/external_in_signature.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-6
+packages/sdk-ocaml/analyzer/test/corpus/obj_first_class.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-6
+packages/sdk-ocaml/analyzer/test/corpus/object_method.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-5
+packages/sdk-ocaml/analyzer/test/corpus/pack_inferred.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-11
+packages/sdk-ocaml/analyzer/test/corpus/sneaky2.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-4
+packages/sdk-ocaml/analyzer/test/corpus/let_open.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-4
+packages/sdk-ocaml/analyzer/test/corpus/open_service.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-4
+packages/sdk-ocaml/analyzer/test/corpus/obj_magic.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-5
+packages/sdk-ocaml/analyzer/test/corpus/open_struct.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-7
+packages/sdk-ocaml/analyzer/test/corpus/data_structures.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-13
+packages/sdk-ocaml/analyzer/index/dune
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-5
+packages/sdk-ocaml/analyzer/test/dune
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-33
+packages/sdk-ocaml/analyzer/test/corpus/open_root.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-4
+packages/sdk-ocaml/analyzer/test/corpus/marshal.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-3
+packages/sdk-ocaml/analyzer/test/corpus/functor_returns_sdk.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-5
+packages/sdk-ocaml/analyzer/bin/macro_sdk_calls.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-59
+packages/sdk-ocaml/analyzer/bin/dune
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-3
+packages/sdk-ocaml/analyzer/test/corpus/signature_constraint.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-10
+packages/sdk-ocaml/analyzer/test/corpus/alias_of_alias.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-5
+packages/sdk-ocaml/analyzer/test/test_coverage.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-168
+packages/sdk-ocaml/analyzer/test/corpus/include_nested.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-17
+packages/sdk-ocaml/analyzer/test/test_corpus.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-114
+packages/sdk-ocaml/analyzer/test/corpus/unapplied_functor.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-8
+packages/sdk-ocaml/analyzer/test/corpus/exception_payload.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-7
+packages/sdk-ocaml/analyzer/test/corpus/local_module_named_like_sdk.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-6
+packages/sdk-ocaml/analyzer/test/corpus/obj_alias.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-4
+packages/sdk-ocaml/analyzer/test/corpus/dune
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-9
+packages/sdk-ocaml/analyzer/test/corpus/binding_operator.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-6
+packages/sdk-ocaml/analyzer/test/corpus/sneaky.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-8
+packages/sdk-ocaml/analyzer/test/corpus/helper.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-5
+packages/sdk-ocaml/AGENTS.md
+  s_0d20781b0961ab::t_c68d60a910fbcb 55-58,76-80
+  s_0d20781b0961ab::t_89d1d1712da208 11-13,33-34,42
+packages/sdk-ocaml/analyzer/test/corpus/probe.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-26
+packages/sdk-ocaml/analyzer/test/corpus/refusal_hides_operations.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-4
+packages/sdk-ocaml/analyzer/test/corpus/shadowing.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-9
+packages/sdk-ocaml/analyzer/test/corpus/direct.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-2
+packages/sdk-ocaml/analyzer/test/corpus/forged_reexported_type.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-28
+packages/sdk-ocaml/analyzer/test/corpus/unsafe_through_functor.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-9
+packages/sdk-ocaml/analyzer/test/corpus/function_value.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-3
+packages/sdk-ocaml/analyzer/test/corpus/uses_dynlink.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-3
+packages/sdk-ocaml/analyzer/test/corpus/functor_whole_module.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-8
+packages/sdk-ocaml/analyzer/test/corpus/renamed_operation.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-3
+packages/sdk-ocaml/analyzer/test/corpus/obj_open.ml
+  s_0d20781b0961ab::t_c68d60a910fbcb 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8ece3a20baadca0bf04694cf8c442bd543c89b66",
+  "prompts": {},
+  "sessions": {
+    "s_0d20781b0961ab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4872cb4-4667-43b0-b58e-3a155924d613",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
