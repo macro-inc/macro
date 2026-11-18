@@ -371,3 +371,92 @@ it('keeps only the people the read for the typed text can list, from the same ca
   expect(listed()).toEqual([]);
   client.clear();
 });
+
+it('keeps nobody listed before a new cache generation while the list reads on', async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient();
+  const [search, setSearch] = createSignal('');
+  let changeGeneration = () => {};
+  const host = {
+    clientId: 'client',
+    onCacheChanged: () => () => {},
+    onCacheGenerationChanged: (listener: () => void) => {
+      changeGeneration = listener;
+      return () => {};
+    },
+  } as unknown as NonNullable<
+    ReturnType<Parameters<typeof createContactRecipientSource>[0]>['host']
+  >;
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (viewer, _host, request) => {
+      if (request.cursor) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        return {
+          query: request.query,
+          source: 'cache',
+          sync: 'snapshot',
+          offline: false,
+          users: [],
+          nextCursor: null,
+        };
+      }
+      return {
+        query: request.query,
+        source: 'cache',
+        sync: 'snapshot',
+        offline: false,
+        users: [
+          {
+            id: 'macro|sam@example.com',
+            email: 'sam@example.com',
+            name: 'Sam Lee',
+          },
+        ],
+        nextCursor: {
+          source: 'people',
+          generation: 'fixture',
+          after: 'next',
+          userId: viewer,
+          query: request.query,
+          policyKey: hashKey([request.policy]),
+        },
+      };
+    });
+  let source: ReturnType<typeof createContactRecipientSource> | undefined;
+  function Harness() {
+    source = createContactRecipientSource(
+      () => ({ userId: 'macro|viewer@example.com', host }),
+      {
+        search,
+        enabled: () => true,
+        selfId: () => undefined,
+        senderDomain: () => undefined,
+        includeSelf: () => true,
+      },
+      () => false,
+      reader
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const listed = () => source!.items().map((item) => item.data.name);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(listed()).toEqual(['Sam Lee']);
+
+  // The list keeps its rows while the next page loads, also once the
+  // generation changes, but typing keeps none of them.
+  const nextPage = Promise.allSettled([source!.next()]);
+  await vi.advanceTimersByTimeAsync(0);
+  changeGeneration();
+  expect(listed()).toEqual(['Sam Lee']);
+  setSearch('sam');
+  expect(listed()).toEqual([]);
+  await vi.advanceTimersByTimeAsync(800);
+  await nextPage;
+  client.clear();
+});

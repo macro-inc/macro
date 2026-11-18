@@ -8,7 +8,7 @@ import type {
   RecipientSourceInput,
 } from '@core/user/recipient-source';
 import type { IUser } from '@core/user/types';
-import { createMemo } from 'solid-js';
+import { createMemo, untrack } from 'solid-js';
 import { readContactDirectory } from './directory';
 import { createContactDirectoryList } from './directory-list';
 import type { createContactDirectoryWindow } from './directory-query';
@@ -101,7 +101,9 @@ export function createContactRecipientSource(
         );
         return kept.length === shown.length ? shown : kept;
       }
-      shownFor = owner;
+      // Only a page that has landed belongs to this owner: the list keeps
+      // earlier rows on screen while it reads, even across a new generation.
+      if (!untrack(directory.loading)) shownFor = owner;
       return (
         page.users
           .filter(listable)
