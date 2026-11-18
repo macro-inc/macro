@@ -18,6 +18,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import type { MessageOperationSourceFactory } from '../../email-message/context/message-operation-source';
@@ -528,10 +529,11 @@ export function createEmailComposer(props: EmailComposerOptions) {
     !!draftTransfer?.pending() ||
     completed() ||
     schedule?.pending() ||
-    schedule?.state().type === 'scheduled' ||
-    // Until the composer settles a draft the server says was sent.
-    session.alreadySent();
-  const persistencePaused = () => operationBlocked() || composerBusy();
+    schedule?.state().type === 'scheduled';
+  const editingPaused = () => operationBlocked() || composerBusy();
+  // Until the composer settles a draft the server says was sent, edits still
+  // count, so it can keep what the sent message lacks, but nothing is saved.
+  const persistencePaused = () => editingPaused() || session.alreadySent();
   // A mailbox conflict or unconfirmed write locks editing, not discarding.
   const discardBlocked = () =>
     composerBusy() ||
@@ -662,7 +664,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     return true;
   };
   const markDirtyAndScheduleSave = () => {
-    if (persistencePaused()) return;
+    if (editingPaused()) return;
     editVersion += 1;
     setDraftDirty(true);
     autosave.schedule();
@@ -1190,6 +1192,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
           await reportPersistenceFailure(error, 'delete');
           setDiscarding(false);
           void lifecycle.refresh().catch(props.notices.reportError);
+          // A refusal that arrived during the delete was left to the discard.
+          if (session.alreadySent())
+            fireAndForget(settleAlreadySent(), 'email-compose');
           throw error;
         }
       }
@@ -1318,7 +1323,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
       editVersion,
       state.type === 'sent' ? state.sentCopy : undefined
     );
-    if (unsavedEdits > 0) {
+    // Edits that emptied the draft leave nothing to keep.
+    if (unsavedEdits > 0 && collectDraft()) {
       detachFromObsoleteDraft(
         state.type === 'sent' ? 'sent-elsewhere' : 'changed-elsewhere',
         unsavedEdits,
@@ -1348,10 +1354,15 @@ export function createEmailComposer(props: EmailComposerOptions) {
     return false;
   }
 
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const settleAlreadySent = createAlreadySentSettlement({
     session,
     read: lifecycle.refreshIdentity,
     notices: props.notices,
+    superseded: () => disposed || discarding(),
     settle: settleTerminal,
   });
 
@@ -1387,7 +1398,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
       movingInbox() ||
       completed() ||
       schedule.state().type === 'scheduled' ||
-      scheduling()
+      scheduling() ||
+      session.alreadySent()
     )
       return;
     setMovingInbox(true);
@@ -1512,12 +1524,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
     // Form state (write)
     setRecipients: (field, value) => {
-      if (persistencePaused() || scheduling()) return;
+      if (editingPaused() || scheduling()) return;
       form.setRecipients(field, value);
       markDirtyAndScheduleSave();
     },
     setSubject: (value) => {
-      if (persistencePaused() || scheduling()) return;
+      if (editingPaused() || scheduling()) return;
       form.setSubject(value);
       markDirtyAndScheduleSave();
     },
@@ -1574,7 +1586,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
       terminalState() !== undefined ||
       scheduling() ||
       attachmentLinks.uploading() ||
-      schedule.action() === 'unavailable',
+      schedule.action() === 'unavailable' ||
+      session.alreadySent(),
     isSending: () =>
       submitting() || scheduling() || operationSending(currentOperation()),
     hasDraft: () => currentDraftId() != null,

@@ -85,6 +85,8 @@ export function createAlreadySentSettlement(options: {
   session: DraftSession;
   read: ReadDraftLifecycle | undefined;
   notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>;
+  /** The composer is gone, or a discard under way owns the draft. */
+  superseded(): boolean;
   settle(sent: SentDraft): boolean;
 }) {
   const { session, notices } = options;
@@ -94,7 +96,7 @@ export function createAlreadySentSettlement(options: {
   let keptAt: number | undefined;
   return async () => {
     const draftId = session.draftId();
-    if (!draftId) return;
+    if (!draftId || options.superseded()) return;
     if (
       keptAt !== undefined &&
       session.epoch() === keptAt + 1 &&
@@ -114,8 +116,14 @@ export function createAlreadySentSettlement(options: {
           )
         : undefined;
     if (read?.isErr()) notices.reportError(read.error);
-    // A discard, send or restore that settled the draft meanwhile stands.
-    if (session.draftId() !== draftId || !session.alreadySent()) return;
+    // A discard, send or restore that settled the draft meanwhile stands,
+    // and so does a discard still under way.
+    if (
+      session.draftId() !== draftId ||
+      !session.alreadySent() ||
+      options.superseded()
+    )
+      return;
     const observed = read?.isOk() ? read.value : undefined;
     notices.feedback.alert(
       'This scheduled email was sent. Your composer has been updated.'

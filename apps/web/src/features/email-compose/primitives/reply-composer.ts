@@ -910,7 +910,8 @@ export function createReplyComposer(
       schedule.pending() ||
       schedule.state().type === 'scheduled' ||
       terminalState() ||
-      sendLocked()
+      sendLocked() ||
+      session.alreadySent()
     )
       return;
     hasLocalChanges = true;
@@ -1514,6 +1515,9 @@ export function createReplyComposer(
           await reportPersistenceFailure(error, 'delete');
           setPendingDeletion(false);
           void lifecycle.refresh().catch(props.notices.reportError);
+          // A refusal that arrived during the delete was left to the discard.
+          if (session.alreadySent())
+            fireAndForget(settleAlreadySent(), 'email-compose');
           throw error;
         }
       }
@@ -1715,7 +1719,8 @@ export function createReplyComposer(
       editVersion,
       state.type === 'sent' ? state.sentCopy : undefined
     );
-    if (unsavedEdits > 0) {
+    // Edits that emptied the draft leave nothing to keep.
+    if (unsavedEdits > 0 && collectDraft()) {
       detachFromObsoleteDraft(
         state.type === 'sent' ? 'sent-elsewhere' : 'changed-elsewhere',
         unsavedEdits,
@@ -1745,6 +1750,7 @@ export function createReplyComposer(
     session,
     read: lifecycle.refreshIdentity,
     notices: props.notices,
+    superseded: () => !mounted || pendingDeletion(),
     settle: settleTerminal,
   });
 
@@ -1786,7 +1792,8 @@ export function createReplyComposer(
     sendLocked() ||
     attachmentPersistence.uploading() ||
     attachmentLinks.uploading() ||
-    schedule.action() === 'unavailable';
+    schedule.action() === 'unavailable' ||
+    session.alreadySent();
   const toggleQuotedText = () => {
     if (editingDisabled()) return;
     const replyingTo = replyTarget;

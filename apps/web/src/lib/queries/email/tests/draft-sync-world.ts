@@ -408,6 +408,7 @@ async function boot(world: WorldCore) {
     let text = seed.draft?.text ?? '';
     let edit = 0;
     let busy = false;
+    let discarding = false;
     let serverGeneration = seed.draft?.generation ?? 0;
     const replyThread = seed.reply?.threadId ?? seed.draft?.threadId;
     return solid.createRoot((dispose) => {
@@ -461,6 +462,7 @@ async function boot(world: WorldCore) {
         session,
         read: undefined,
         notices,
+        superseded: () => discarding,
         settle: (sent) => {
           const unsavedEdits = persistence.unsavedEdits(edit, sent.sentCopy);
           serverGeneration = 0;
@@ -521,6 +523,7 @@ async function boot(world: WorldCore) {
       });
       const discard = async () => {
         busy = true;
+        discarding = true;
         autosave.cancel();
         try {
           await autosave.settled().catch(() => {});
@@ -536,8 +539,16 @@ async function boot(world: WorldCore) {
           text = '';
           serverGeneration = 0;
           session.dispatch({ type: 'reset' });
+        } catch (error) {
+          busy = false;
+          discarding = false;
+          // A refusal that arrived during the delete was left to the discard.
+          if (session.alreadySent())
+            fireAndForget(settleAlreadySent(), 'draft-sync-world');
+          throw error;
         } finally {
           busy = false;
+          discarding = false;
         }
       };
       const sync = createDraftSyncStatus({
