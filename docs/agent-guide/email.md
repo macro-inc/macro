@@ -1355,8 +1355,10 @@ Further typing saves locally without retrying the rejected write. Verify that
 pending attachment bytes survive reopening and that a reply stays in its
 conversation.
 An already-sent rejection after reconnect follows the same path as an immediate
-already-sent response: announce that the email or reply was sent, clear the local
-composer, and cancel pending autosave. It must never offer Retry for that draft.
+already-sent response: cancel pending autosave, announce that the email or reply
+was sent, then keep any text the sent message lacks as a new draft (saying it
+was not sent), or else leave the sent draft. Autosave and Send wait until the
+composer has settled it, and it must never offer Retry for that draft.
 Verify this in standalone and reply composers, including a queued edit awaiting
 its debounce and a failure racing the first identity read. A settlement for a
 previous or different draft must not clear the current editor.
