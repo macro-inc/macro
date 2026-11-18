@@ -22,7 +22,7 @@ export function CalendarViewSkeleton(props: { period?: CalendarPeriodView }) {
     >
       <ViewSkeleton.Sidebar title="Calendar" createLabel="New" />
       <CalendarMainSkeleton title={monthTitle()} period={period()}>
-        <div class="flex min-h-0 flex-1">
+        <div class="flex min-h-0 flex-1 not-touch:m-3 not-touch:overflow-hidden not-touch:rounded-xl not-touch:bg-surface">
           <Show
             when={period() === 'agenda'}
             fallback={

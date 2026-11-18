@@ -19,7 +19,7 @@ export function ComposerPin(props: {
       disabled={props.disabled}
       onClick={props.onToggle}
     >
-      <SidePanelIcon class="size-4 rotate-180" />
+      <SidePanelIcon class="size-4" />
     </Button>
   );
 }

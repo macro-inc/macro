@@ -1,7 +1,7 @@
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { onCleanup } from 'solid-js';
 
-/** Reserve space in the grid without moving or remounting the floating editor. */
+/** Reserve the left sidebar slot without moving or remounting the floating editor. */
 export function CalendarComposerDock() {
   const host = useCalendarComposerHost();
   if (!host)
@@ -19,10 +19,7 @@ export function CalendarComposerDock() {
       aria-hidden="true"
       class="min-h-0 shrink-0"
       style={{
-        width:
-          host.sessions.state.session && host.sessions.state.pinned
-            ? 'min(384px, 45%)'
-            : '0px',
+        width: host.leftPanelPinned() ? 'min(384px, 45%)' : '0px',
       }}
     />
   );

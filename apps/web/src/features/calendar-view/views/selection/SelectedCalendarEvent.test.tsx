@@ -98,6 +98,9 @@ it('suppresses only editable details already shown in a pinned or floating edito
           boundary: () => undefined,
           dock: () => undefined,
           setDock: () => {},
+          cardPinned: () => false,
+          setCardPinned: () => {},
+          leftPanelPinned: () => sessions.state.pinned,
           open: sessions.open,
         }}
       >

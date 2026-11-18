@@ -1,6 +1,7 @@
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { CalendarComposerHostContext } from '@app/features/calendar/context/calendar-composer-host-context';
 import { createCalendarComposerSession } from '@app/features/calendar/primitives/create-calendar-composer-session';
+import { createCalendarPanelState } from '@app/features/calendar/primitives/create-calendar-panel-state';
 import { createPinnedComposerSelection } from '@app/features/calendar/primitives/create-pinned-composer-selection';
 import { t } from '@app/lib/i18n';
 import { useBeforeLeave } from '@app/lib/split-router';
@@ -45,6 +46,11 @@ export function CalendarComposerHost(props: ParentProps) {
     replacePinned: sessions.replacePinned,
     open: sessions.open,
   });
+  const panels = createCalendarPanelState({
+    event: calendarView.selectedEvent,
+    sessions,
+    open: selection.open,
+  });
   useBeforeLeave(async ({ signal, onCommit }) => {
     const session = sessions.state.session;
     if (!session) return true;
@@ -70,8 +76,11 @@ export function CalendarComposerHost(props: ParentProps) {
         boundary,
         dock,
         setDock,
+        cardPinned: panels.cardPinned,
+        setCardPinned: panels.setCardPinned,
+        leftPanelPinned: panels.leftPanelPinned,
         open: (request) =>
-          selection.open({
+          panels.open({
             ...request,
             returnFocus:
               request.returnFocus ??

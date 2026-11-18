@@ -1,7 +1,7 @@
 import { ComposerDropTarget } from '@app/features/calendar/components/composer/drop-target/ComposerDropTarget';
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import type { CalendarComposerSession } from '@app/features/calendar/primitives/create-calendar-composer-session';
-import { createComposerHeaderDrag } from '@app/features/calendar/primitives/create-composer-header-drag';
+import { createCalendarPanelPlacement } from '@app/features/calendar/primitives/create-calendar-panel-placement';
 import {
   classifyOpenEventOutsidePress,
   handleOpenEventOutsidePress,
@@ -15,7 +15,7 @@ import {
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Popover } from '@kobalte/core/popover';
-import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { onCleanup, onMount, Show } from 'solid-js';
 
 type ComposerSession = NonNullable<CalendarComposerSession['state']['session']>;
 
@@ -26,14 +26,13 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
     throw new Error('CalendarComposerSurface requires CalendarComposerHost');
   const session = props.session;
   const pinned = () => host.sessions.state.pinned;
-  const [measureVersion, setMeasureVersion] = createSignal(0);
   let content: HTMLDivElement | undefined;
-  let measureFrame: number | undefined;
   let operation: UiOperation | undefined;
-  const drag = createComposerHeaderDrag({
-    // The dock's parent is the content area below the toolbar and beside the sidebar.
-    boundary: () => host.dock()?.parentElement?.getBoundingClientRect(),
-    surface: () => content?.getBoundingClientRect(),
+  const { drag, docked, dockRect, anchorRect } = createCalendarPanelPlacement({
+    boundary: host.boundary,
+    dock: host.dock,
+    surface: () => content,
+    anchor: () => session.request.anchorRect?.(),
     disabled: () => host.sessions.state.transitioning,
     pinned,
     onPin: () => host.sessions.setPinned(session.key, true),
@@ -48,56 +47,14 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
       operation = undefined;
     },
   });
-  const measure = () => {
-    if (measureFrame !== undefined) return;
-    measureFrame = requestAnimationFrame(() => {
-      measureFrame = undefined;
-      setMeasureVersion((version) => version + 1);
-    });
-  };
   onMount(() => {
     // Let the creation menu finish its focus handoff before focusing the editor.
     const openingFrame = requestAnimationFrame(() => {
       const target = content?.querySelector<HTMLElement>('textarea') ?? content;
       target?.focus({ preventScroll: true });
     });
-    window.addEventListener('scroll', measure, true);
-    window.addEventListener('resize', measure);
-    onCleanup(() => {
-      cancelAnimationFrame(openingFrame);
-      window.removeEventListener('scroll', measure, true);
-      window.removeEventListener('resize', measure);
-      if (measureFrame !== undefined) cancelAnimationFrame(measureFrame);
-    });
+    onCleanup(() => cancelAnimationFrame(openingFrame));
   });
-  createEffect(() => {
-    const observer = new ResizeObserver(measure);
-    const boundary = host.boundary();
-    const dock = host.dock();
-    if (boundary) observer.observe(boundary);
-    if (dock) observer.observe(dock);
-    onCleanup(() => observer.disconnect());
-  });
-  const docked = () => pinned() && !drag.state.active;
-  const dockRect = () => {
-    measureVersion();
-    return host.dock()?.getBoundingClientRect();
-  };
-  const anchorRect = () => {
-    measureVersion();
-    const dock = dockRect();
-    if (docked() && dock)
-      return new DOMRect(dock.left, dock.top, 0, dock.height);
-    const position = drag.position();
-    if (position) return new DOMRect(position.x - 8, position.y, 0, 0);
-    const anchor = session.request.anchorRect?.();
-    if (anchor) return anchor;
-    const boundary = host.boundary()?.getBoundingClientRect();
-    const left =
-      (boundary?.left ?? 0) +
-      Math.max(8, ((boundary?.width ?? window.innerWidth) - 384) / 2);
-    return new DOMRect(left, (boundary?.top ?? 0) + 108, 0, 0);
-  };
   const close = () =>
     fireAndForget(host.sessions.close(session.key), 'calendar-composer-close');
 
@@ -125,7 +82,7 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
           class="portal-scope menu-surface z-modal flex min-h-0 flex-col overflow-visible outline-none"
           classList={{
             'rounded-[14px] shadow-lg': !docked(),
-            'rounded-none border-l border-edge shadow-none': docked(),
+            'rounded-none border-r border-edge shadow-none': docked(),
           }}
           style={{
             width: docked() ? `${dockRect()?.width ?? 384}px` : '384px',

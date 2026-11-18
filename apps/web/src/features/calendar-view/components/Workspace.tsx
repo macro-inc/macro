@@ -7,6 +7,7 @@ import {
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
+import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
@@ -205,7 +206,7 @@ function CalendarPageContent(props: { agenda: boolean }) {
   return (
     <div
       ref={tourTarget(CALENDAR_TOUR.grid)}
-      class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col"
+      class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col not-touch:m-3 not-touch:overflow-hidden not-touch:rounded-xl not-touch:bg-surface"
     >
       <Show when={props.agenda} fallback={<CalendarPages />}>
         <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -222,6 +223,8 @@ function WorkspaceContent(props: {
   agenda: boolean;
 }) {
   const panel = useSplitPanelOrThrow();
+  const composerHost = useCalendarComposerHost();
+  const composerPinned = () => composerHost?.leftPanelPinned() ?? false;
 
   // An inline preview keeps its host's name.
   useSplitDisplayName(() => (panel.isInlinePreview ? undefined : 'Calendar'));
@@ -232,34 +235,41 @@ function WorkspaceContent(props: {
         <div class="flex size-full min-h-0 min-w-0 flex-col">
           <Header presentation="preview" leading={props.headerLeading} />
           <main class="flex min-h-0 flex-1">
-            <CalendarPageContent agenda={props.agenda} />
             <CalendarComposerDock />
+            <CalendarPageContent agenda={props.agenda} />
           </main>
         </div>
       </Match>
       <Match when={!panel.isInlinePreview}>
         <SplitPanel.Root>
           <SplitPanel.Body>
-            <ViewShell.Root
-              asidePreferenceKey="calendar"
-              resizable
-              aside={isMobile() ? false : { preserveDuringResize: false }}
-              main={{ preferredWidth: 640 }}
-            >
-              <Show when={!isMobile()}>
-                <ViewShell.Aside>
-                  <CalendarSidebar />
-                </ViewShell.Aside>
-              </Show>
-              <ViewShell.Main>
-                <Header presentation="workspace" />
-                <ViewTour tour={calendarTour} />
-                <ViewShell.Content class="flex min-h-0 flex-1">
-                  <CalendarPageContent agenda={props.agenda} />
-                  <CalendarComposerDock />
-                </ViewShell.Content>
-              </ViewShell.Main>
-            </ViewShell.Root>
+            <div class="flex size-full min-h-0 min-w-0">
+              <CalendarComposerDock />
+              <ViewShell.Root
+                asidePreferenceKey="calendar"
+                resizable
+                aside={
+                  isMobile() || composerPinned()
+                    ? false
+                    : { preserveDuringResize: false }
+                }
+                main={{ preferredWidth: 640 }}
+                class="min-w-0 flex-1 !w-auto"
+              >
+                <Show when={!isMobile()}>
+                  <ViewShell.Aside>
+                    <CalendarSidebar />
+                  </ViewShell.Aside>
+                </Show>
+                <ViewShell.Main>
+                  <Header presentation="workspace" />
+                  <ViewTour tour={calendarTour} />
+                  <ViewShell.Content class="flex min-h-0 flex-1">
+                    <CalendarPageContent agenda={props.agenda} />
+                  </ViewShell.Content>
+                </ViewShell.Main>
+              </ViewShell.Root>
+            </div>
           </SplitPanel.Body>
         </SplitPanel.Root>
       </Match>

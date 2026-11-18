@@ -114,11 +114,11 @@ it('moves the same surface and pins only after release in the future dock', () =
   pointer(window, 'pointermove', 800, 250);
   expect(source.state.position).toEqual({ x: 700, y: 240 });
   expect(source.state.overTarget).toBe(false);
-  pointer(window, 'pointermove', 1100, 250);
-  expect(source.state.position).toEqual({ x: 908, y: 240 });
+  pointer(window, 'pointermove', 400, 250);
+  expect(source.state.position).toEqual({ x: 308, y: 240 });
   expect(source.state.overTarget).toBe(true);
   expect(onPin).not.toHaveBeenCalled();
-  pointer(window, 'pointerup', 1100, 250);
+  pointer(window, 'pointerup', 400, 250);
   expect(onPin).toHaveBeenCalledOnce();
   expect(onFinish).toHaveBeenCalledExactlyOnceWith('pinned');
   expect(header.releasePointerCapture).toHaveBeenCalledExactlyOnceWith(1);
@@ -131,7 +131,7 @@ it('keeps an unpinned drop position and restores it when a later drag is cancell
   expect(source.state.position).toEqual({ x: 600, y: 240 });
   expect(onFinish).toHaveBeenLastCalledWith('floating');
   pointer(header, 'pointerdown', 600, 210);
-  pointer(window, 'pointermove', 1100, 250);
+  pointer(window, 'pointermove', 400, 250);
   const escapeEvent = new KeyboardEvent('keydown', {
     key: 'Escape',
     cancelable: true,
@@ -140,7 +140,7 @@ it('keeps an unpinned drop position and restores it when a later drag is cancell
   expect(escapeEvent.defaultPrevented).toBe(true);
   expect(source.state.position).toEqual({ x: 600, y: 240 });
   expect(source.state.active).toBe(false);
-  pointer(window, 'pointerup', 1100, 250);
+  pointer(window, 'pointerup', 400, 250);
   expect(onPin).not.toHaveBeenCalled();
   expect(onFinish).toHaveBeenLastCalledWith('cancelled');
 });
@@ -149,12 +149,12 @@ it('cancels on capture loss, blur, permission loss, and owner disposal', () => {
   for (const reason of ['lostpointercapture', 'blur', 'disabled', 'dispose']) {
     const { header, source, onPin, onFinish, disable } = setup();
     pointer(header, 'pointerdown', 600, 210);
-    pointer(window, 'pointermove', 1100, 250);
-    if (reason === 'lostpointercapture') pointer(header, reason, 1100, 250);
+    pointer(window, 'pointermove', 400, 250);
+    if (reason === 'lostpointercapture') pointer(header, reason, 400, 250);
     if (reason === 'blur') window.dispatchEvent(new Event('blur'));
     if (reason === 'disabled') {
       disable();
-      pointer(window, 'pointerup', 1100, 250);
+      pointer(window, 'pointerup', 400, 250);
     }
     if (reason === 'dispose') disposers.pop()?.();
     expect(source.state.active).toBe(false);
@@ -190,13 +190,13 @@ it('keeps a moved surface inside resized content without mutating its saved posi
 it('drags a pinned composer over the grid and restores its event anchor on drop', () => {
   const { header, source, onPin, onUnpin, onFinish, setPinned } = setup();
   setPinned(true);
-  pointer(header, 'pointerdown', 850, 210);
-  pointer(window, 'pointermove', 650, 250);
+  pointer(header, 'pointerdown', 500, 210);
+  pointer(window, 'pointermove', 900, 250);
   expect(source.state.active).toBe(true);
   expect(source.state.overTarget).toBe(false);
-  expect(source.state.position).toEqual({ x: 308, y: 240 });
+  expect(source.state.position).toEqual({ x: 900, y: 240 });
   expect(onUnpin).not.toHaveBeenCalled();
-  pointer(window, 'pointerup', 650, 250);
+  pointer(window, 'pointerup', 900, 250);
   expect(onUnpin).toHaveBeenCalledOnce();
   expect(onPin).not.toHaveBeenCalled();
   expect(source.state.position).toBeUndefined();
@@ -206,11 +206,11 @@ it('drags a pinned composer over the grid and restores its event anchor on drop'
 it('retains pinning when a pinned drag returns to the dock', () => {
   const { header, source, onPin, onUnpin, onFinish, setPinned } = setup();
   setPinned(true);
-  pointer(header, 'pointerdown', 850, 210);
-  pointer(window, 'pointermove', 650, 250);
-  pointer(window, 'pointermove', 1000, 250);
+  pointer(header, 'pointerdown', 500, 210);
+  pointer(window, 'pointermove', 900, 250);
+  pointer(window, 'pointermove', 400, 250);
   expect(source.state.overTarget).toBe(true);
-  pointer(window, 'pointerup', 1000, 250);
+  pointer(window, 'pointerup', 400, 250);
   expect(onPin).not.toHaveBeenCalled();
   expect(onUnpin).not.toHaveBeenCalled();
   expect(source.state.position).toBeUndefined();
@@ -223,12 +223,12 @@ it('resets a floating position after pinning and unpins the same session on a la
   pointer(window, 'pointerup', 700, 250);
   expect(source.state.position).toEqual({ x: 600, y: 240 });
   pointer(header, 'pointerdown', 600, 210);
-  pointer(window, 'pointerup', 1100, 250);
+  pointer(window, 'pointerup', 400, 250);
   expect(onPin).toHaveBeenCalledOnce();
   expect(source.state.position).toBeUndefined();
   setPinned(true);
-  pointer(header, 'pointerdown', 850, 210);
-  pointer(window, 'pointerup', 650, 250);
+  pointer(header, 'pointerdown', 500, 210);
+  pointer(window, 'pointerup', 900, 250);
   expect(onUnpin).toHaveBeenCalledOnce();
   expect(source.state.position).toBeUndefined();
 });
@@ -236,15 +236,15 @@ it('resets a floating position after pinning and unpins the same session on a la
 it('cancels a pinned drag without changing pinning or its anchor', () => {
   const { header, source, onPin, onUnpin, onFinish, setPinned } = setup();
   setPinned(true);
-  pointer(header, 'pointerdown', 850, 210);
-  pointer(window, 'pointermove', 650, 250);
+  pointer(header, 'pointerdown', 500, 210);
+  pointer(window, 'pointermove', 900, 250);
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   expect(source.state.active).toBe(false);
   expect(source.state.position).toBeUndefined();
   expect(onPin).not.toHaveBeenCalled();
   expect(onUnpin).not.toHaveBeenCalled();
   expect(onFinish).toHaveBeenLastCalledWith('cancelled');
-  pointer(window, 'pointerup', 650, 250);
+  pointer(window, 'pointerup', 900, 250);
   expect(onUnpin).not.toHaveBeenCalled();
 });
 

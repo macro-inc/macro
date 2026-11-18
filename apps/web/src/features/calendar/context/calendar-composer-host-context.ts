@@ -7,6 +7,9 @@ export interface CalendarComposerHostContextValue {
   boundary: Accessor<HTMLElement | undefined>;
   dock: Accessor<HTMLElement | undefined>;
   setDock: (element: HTMLElement | undefined) => void;
+  cardPinned: Accessor<boolean>;
+  setCardPinned: (pinned: boolean) => void;
+  leftPanelPinned: Accessor<boolean>;
   open: (request: ComposerOpenRequest) => Promise<number | undefined>;
 }
 export const CalendarComposerHostContext =

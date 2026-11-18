@@ -16,7 +16,7 @@ export function composerPinTarget(
 ): ComposerDragBounds {
   const width = Math.min(384, bounds.width * 0.45);
   return {
-    left: bounds.left + bounds.width - width,
+    left: bounds.left,
     top: bounds.top,
     width,
     height: bounds.height,

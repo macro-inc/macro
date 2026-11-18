@@ -1,10 +1,13 @@
+import { ComposerDropTarget } from '@app/features/calendar/components/composer/drop-target/ComposerDropTarget';
 import { hasEveryoneElseDeclined } from '@app/features/calendar/components/EventContent';
 import { EventDetails } from '@app/features/calendar/components/EventDetails';
+import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import {
   useCalendarGuestInvitesFlag,
   useCalendarInvitationForwardFlag,
 } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { createCalendarPanelPlacement } from '@app/features/calendar/primitives/create-calendar-panel-placement';
 import {
   type CalendarEvent,
   type CalendarTimeFormat,
@@ -24,6 +27,10 @@ import { useForwardEventEmail } from '@app/features/calendar-view/components/use
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { copyCalendarEventMention } from '@app/features/calendar-view/copy-event-mention';
 import { downloadCalendarEventIcs } from '@app/features/calendar-view/download-event-ics';
+import {
+  startUiOperation,
+  type UiOperation,
+} from '@app/observability/ui-operation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
@@ -33,6 +40,7 @@ import DownloadSimpleIcon from '@icon/system/regular/download-simple.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
+import SidePanelIcon from '@icon/system/regular/sidebar-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
@@ -460,6 +468,32 @@ function DeleteEventDialog(
  */
 function EventDetailsPopover(props: EventDetailsPopoverProps) {
   const openEventComposer = useOpenEventComposer();
+  const host = useCalendarComposerHost();
+  let content: HTMLDivElement | undefined;
+  let operation: UiOperation | undefined;
+  const pinned = () => host?.cardPinned() ?? false;
+  const { drag, docked, dockRect, anchorRect } = createCalendarPanelPlacement({
+    boundary: () => host?.boundary() ?? props.boundary,
+    dock: () => host?.dock(),
+    surface: () => content,
+    anchor: () =>
+      props.anchor.isConnected
+        ? props.anchor.getBoundingClientRect()
+        : undefined,
+    pinned,
+    disabled: () => !host || host.sessions.state.transitioning,
+    onPin: () => host?.setCardPinned(true),
+    onUnpin: () => host?.setCardPinned(false),
+    onStart: () => {
+      operation = startUiOperation('calendar.event_card.drag');
+    },
+    onFinish: (outcome) => {
+      operation?.span.setAttr('calendar.event_card.drag_outcome', outcome);
+      if (outcome === 'cancelled') operation?.cancel();
+      else operation?.afterPaint();
+      operation = undefined;
+    },
+  });
   const deleteDialog = useDeleteEventDialog({
     event: () => props.event,
     onDeleted: () => props.onOpenChange(false),
@@ -490,8 +524,8 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
 
   return (
     <Popover
-      anchorRef={() => props.anchor}
-      boundary={() => props.boundary}
+      getAnchorRect={anchorRect}
+      boundary={() => host?.boundary() ?? props.boundary}
       open
       onOpenChange={(open) => {
         // Keep the popover mounted while its delete dialog or guest editor
@@ -504,23 +538,35 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
         )
           return;
         props.onOpenChange(open);
+        if (!open) host?.setCardPinned(false);
       }}
       placement="right-start"
-      gutter={8}
+      gutter={docked() ? 0 : 8}
       // Flip only to the other side, never to an end alignment: sections
       // that arrive after opening (join requests) change the
       // height, and an end fallback would re-place the popover from below
       // the event to above it. Slide keeps a tall popover in view instead.
-      flip="left-start"
-      slide
-      overlap
+      flip={!docked() && !drag.state.position && 'left-start'}
+      slide={!docked() && !drag.state.position}
+      overlap={!docked()}
       fitViewport
     >
-      <Popover.Portal mount={props.boundary}>
+      <Popover.Portal mount={host?.boundary() ?? props.boundary}>
+        <Show when={drag.state.active && drag.target()}>
+          {(bounds) => (
+            <ComposerDropTarget
+              bounds={bounds()}
+              active={drag.state.overTarget}
+            />
+          )}
+        </Show>
         <Layer depth={3}>
           <Popover.Content
             class="portal-scope z-modal max-w-[var(--kb-popper-content-available-width)] outline-none"
-            onInteractOutside={handleOpenEventOutsidePress}
+            onInteractOutside={(event) => {
+              if (pinned()) event.preventDefault();
+              else handleOpenEventOutsidePress(event);
+            }}
             onOpenAutoFocus={(event) => {
               // Aims can arrive while the keyboard is elsewhere — arrow-key
               // scanning in the inbox previews a calendar notification here,
@@ -545,10 +591,45 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
               }
             }}
           >
-            <Popover.Arrow class="fill-surface" />
-            <div class="flex max-h-[min(32rem,var(--kb-popper-content-available-height,32rem))] w-fit min-w-[min(20rem,var(--kb-popper-content-available-width,20rem))] max-w-[min(24rem,var(--kb-popper-content-available-width,24rem))] flex-col overflow-hidden menu-surface">
+            <Show when={!docked()}>
+              <Popover.Arrow class="fill-surface" />
+            </Show>
+            <div
+              ref={content}
+              class="flex w-96 max-w-[calc(100vw-32px)] flex-col overflow-hidden menu-surface"
+              style={{
+                height: docked() ? `${dockRect()?.height ?? 0}px` : undefined,
+                width: docked() ? `${dockRect()?.width ?? 384}px` : undefined,
+                'max-height': docked()
+                  ? undefined
+                  : 'min(32rem, var(--kb-popper-content-available-height, 32rem))',
+              }}
+            >
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
-              <div class="flex shrink-0 items-center justify-end gap-1 px-2 pt-2">
+              <div
+                class="flex shrink-0 cursor-grab touch-none select-none items-center justify-end gap-1 px-2 pt-2"
+                onPointerDown={drag.start}
+              >
+                <div class="min-h-7 flex-1" />
+                <Show when={host}>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={
+                      pinned() ? 'Unpin event details' : 'Pin event details'
+                    }
+                    tooltip={
+                      pinned() ? 'Unpin event details' : 'Pin event details'
+                    }
+                    aria-pressed={pinned()}
+                    onClick={() => {
+                      drag.reset();
+                      host?.setCardPinned(!pinned());
+                    }}
+                  >
+                    <SidePanelIcon class="size-4" />
+                  </Button>
+                </Show>
                 <Show when={!props.event.teamProjection}>
                   <Button
                     aria-label="Copy event"
