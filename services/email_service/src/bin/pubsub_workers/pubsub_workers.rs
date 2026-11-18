@@ -413,6 +413,10 @@ async fn main() -> anyhow::Result<()> {
         crm_service_backfill.clone(),
         worker_cancellation_token.clone(),
     ));
+    worker_tracker.spawn(email_service::email_policy_worker::run_previews(
+        crm_service_backfill.clone(),
+        worker_cancellation_token.clone(),
+    ));
 
     if config.outlook_sync_enabled {
         worker_tracker.spawn(email_service::mailbox_sync_worker::run_watches(

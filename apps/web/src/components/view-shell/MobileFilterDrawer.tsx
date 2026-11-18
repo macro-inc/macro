@@ -37,6 +37,11 @@ type MobileFilterDrawerProps = {
   triggerLabel?: string;
   label?: string;
   class?: string;
+  /**
+   * The trigger sits in an in-flow header row, sized and framed like the
+   * row's other icon buttons, rather than floating as an island.
+   */
+  inline?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onContentPresentChange?: (present: boolean) => void;
@@ -71,11 +76,12 @@ function Root(props: MobileFilterDrawerProps) {
         ref={setTrigger}
         as={Button}
         aria-label={props.triggerLabel ?? 'Open filters'}
-        variant="ghost"
+        variant={props.inline ? 'secondary' : 'ghost'}
         size={props.activeCount > 0 ? 'md' : 'icon-md'}
         class={cn(
-          'island bg-chrome pointer-events-auto relative z-10 h-10 shrink-0 rounded-full',
-          props.activeCount > 0 ? 'px-3' : 'w-10',
+          'pointer-events-auto relative z-10 shrink-0',
+          !props.inline && 'island bg-chrome h-10 rounded-full',
+          !props.inline && (props.activeCount > 0 ? 'px-3' : 'w-10'),
           props.class
         )}
       >

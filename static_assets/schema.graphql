@@ -11759,6 +11759,12 @@ type NotificationInboxRow {
 	"""
 	rowType: NotificationInboxRowType!
 	"""
+	Other kinds an inbox scope lists the row under, because what it shows
+	is that too: a thread whose reply mentions the viewer is listed under
+	mentions as well. A clear of any of these kinds takes the row.
+	"""
+	alsoListedAs: [NotificationInboxRowType!]!
+	"""
 	For a thread row, the channel root message or discussion root
 	comment it is about.
 	"""

@@ -704,28 +704,31 @@ impl<
     /// revision that fails to publish keeps its lease and is claimed again
     /// once the lease expires, as a crash leaves it; the rest still complete.
     /// Returns whether the batch was full, so more may be due.
-    #[tracing::instrument(
-        name = "calendar.projection_relay",
-        skip_all,
-        fields(
-            claimed = tracing::field::Empty,
-            failed = tracing::field::Empty,
-            refreshes = tracing::field::Empty,
-        ),
-        err(level = tracing::Level::DEBUG)
-    )]
     pub async fn run_once(&self) -> Result<bool, Report> {
         let leases = self
             .repository
             .claim_projections(Uuid::now_v7(), PROJECTION_BATCH)
             .await?;
-        let span = tracing::Span::current();
-        let claimed = leases.len();
-        span.record("claimed", claimed as i64);
+        // An idle poll claims nothing and gets no span, so the relay's root
+        // spans are only the rounds that published something.
         if leases.is_empty() {
             return Ok(false);
         }
-
+        self.publish_batch(leases).await
+    }
+    #[tracing::instrument(
+        name = "calendar.projection_relay",
+        skip_all,
+        fields(
+            claimed = leases.len() as i64,
+            failed = tracing::field::Empty,
+            refreshes = tracing::field::Empty,
+        ),
+        err(level = tracing::Level::DEBUG)
+    )]
+    async fn publish_batch(&self, leases: Vec<CalendarProjectionLease>) -> Result<bool, Report> {
+        let span = tracing::Span::current();
+        let claimed = leases.len();
         let outcomes =
             futures::future::join_all(leases.iter().map(|lease| self.publish(lease))).await;
         if let Some(error) = outcomes.iter().find_map(|outcome| outcome.as_ref().err()) {

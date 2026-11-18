@@ -49,6 +49,7 @@ import {
   type ProjectSection,
 } from './core/project';
 import type { ProjectRoute } from './core/route';
+import { NewProjectTaskPill } from './new-project-task';
 import { openProject } from './open-project';
 import {
   ProjectBreadcrumbItem,
@@ -216,8 +217,15 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       },
     });
   };
+  const canCreateTask = () => {
+    const project = source.project();
+    return project !== undefined && canEditProject(project);
+  };
   return (
     <>
+      <NewProjectTaskPill
+        onCreateTask={canCreateTask() ? createTask : undefined}
+      />
       <Show when={props.breadcrumb}>
         {(breadcrumb) => (
           <ProjectBreadcrumbItem {...breadcrumb()} project={source.project()} />

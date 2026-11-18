@@ -85,6 +85,7 @@ fn doc_entry() -> InboxEntry<SoupProjectionHydration> {
         rows: vec![InboxRow {
             id: thread_row_id(),
             row_type: InboxRowType::DiscussionThread,
+            also_listed_as: Vec::new(),
             thread_id: Some("a".to_string()),
             actor: Some(InboxActor::User(
                 MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
