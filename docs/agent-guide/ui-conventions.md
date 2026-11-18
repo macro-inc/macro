@@ -31,8 +31,8 @@ the right side of a bar at one height: detail headers use `sm`/`icon-sm` segment
 (32px). New and Search retain `md` sizing. The open Search field narrows, down
 to its 96px minimum, before the header's actions would push its end and its
 close button out of view; check a narrowed pane (Customers or Tasks at 760px,
-or beside a docked sidebar) with the field open. A block whose split header is 32px
-passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
+or beside a docked sidebar) with the field open. A block whose split header is
+32px passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
 island matches.
 Compose their actions with `ButtonGroup.Button`; the group shares Button's frame
 materials while each segment keeps its own interaction states. Standalone Buttons

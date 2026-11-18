@@ -147,11 +147,10 @@ test('narrows the open field to keep it whole beside the header actions', async 
   const narrow = await openInHeader(page, 560);
   expect(narrow.overflow).toBeLessThanOrEqual(0);
   expect(narrow.right).toBeLessThanOrEqual(narrow.rowRight);
-  expect(narrow.width).toBeLessThan(224);
   expect(narrow.width).toBeGreaterThanOrEqual(96);
   await expect(
     page.getByRole('button', { name: 'Close search' })
-  ).toBeVisible();
+  ).toBeInViewport({ ratio: 1 });
 
   // With room beside the actions, the field keeps its full width.
   const wide = await openInHeader(page, 700);

@@ -1,3 +1,4 @@
+import '@fontsource-variable/inter';
 import '@app/index.css';
 import {
   createListController,
@@ -21,7 +22,6 @@ import { ViewSidebar } from '../ViewSidebar';
 
 const RECENT = ['budget', 'roadmap'];
 
-// The actions a Customers list header has beside its search.
 const HEADER_ACTIONS = ['Filter', 'Group', 'Display', 'Visible', 'New'];
 
 const FILES = [
