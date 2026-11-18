@@ -167,14 +167,17 @@ ignores:
 ```js
 fetch(url, {
   method, headers: [[name, value], ...], body, // body: Uint8Array, if any
-  macroSdkOperation: { service: "contacts", operation: "getContacts" },
+  macroSdkOperation: { service: "contacts", operation: "getContacts", operationId: "get_contacts" },
 });
 ```
 
 `service` is the spec name and `operation` the TypeScript SDK's method name
 (`Macro_sdk_fetch.sdk_method`: the operationId in camelCase), so
 `` `${service}.${operation}` `` is the key of `sdkVerbs` and the code-mode
-operation catalog. The wrapper may answer with its own `Response` (a skip;
+operation catalog. `operationId` is the raw operationId, the key the
+analyzer reports and agent permissions resolve: code mode's bootstrap
+refuses a gated program's request whose `service.operationId`, method and
+route are not among those its analysis listed. The wrapper may answer with its own `Response` (a skip;
 it is decoded as the reply), reject (a refusal; `Error (Transport _)`), or
 send the request with headers added. One known gap: cognition declares
 `get_state_handler` twice (both reads); both map to `getStateHandler`, where
@@ -229,7 +232,7 @@ it too:
 | `cmi/` | the interfaces a program may use: the SDK, its runtime, yojson, uri, `Macro_sdk_fetch`, `Code_mode` (not js_of_ocaml) |
 | `stdlib/` | the standard library's `.cmi` files (`ocamlc -nostdlib -I stdlib`) |
 | `assets/` | the library modules as `wasm_of_ocaml link` names them (`<library>-<content hash>.wasm`, the same for every program), served to every program's loader |
-| `bin/` | `ocamlc`, `wasm_of_ocaml`, `wasm-opt`, `wasm-merge`, `wasm-metadce`, and `code_mode_policy` (below) |
+| `bin/` | `ocamlc`, `wasm_of_ocaml`, `wasm-opt`, `wasm-merge`, `wasm-metadce`, `code_mode_policy` (below), and the call analyzer `macro_sdk_calls` (`analyzer/`), which code mode runs on each program its permissions gate |
 | `findlib/` | the one findlib package (`stdlib`) wasm_of_ocaml looks up at start (`OCAMLFIND_CONF`) |
 | `compile.sh` | the reference per-program compile |
 | `fingerprint` | `<SDK version>+<12 hex of sha256 over cmi/>`, e.g. `0.1.0+65d27fd120f3` |
@@ -349,6 +352,7 @@ dune exec analyzer/bin/macro_sdk_calls.exe -- --json main.cmt
   "operations": [
     { "service": "storage", "operation": "create_task_handler",
       "path": "Macro_sdk.Storage.create_task_handler",
+      "method": "POST", "route": "/documents/create_task",
       "locations": [ { "file": "main.ml", "line": 4, "column": 10, "via": "reference" } ] } ] }
 ```
 
@@ -365,7 +369,9 @@ How it finds operations:
 - An operation is a value in a service module whose result is a
   `Request.t`. A build rule reads `generated/*.ml` and records which
   service and operationId each one sends (the OCaml name can differ from the
-  operationId).
+  operationId), and its method and route (its path with `{}` for each
+  parameter segment): two values can share an operationId on different
+  routes, so code mode's fetch backstop matches the route too.
 - Every value the program names is identified by the uid of its
   declaration, so `open`, `let open`, `M.(...)`, module aliases and a
   toplevel `include` all resolve to the SDK value. Partial application,
