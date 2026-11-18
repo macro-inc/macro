@@ -46,9 +46,6 @@ function listed(
   );
   return listRecipients(options, personal, senderDomain, fields);
 }
-const names = (options: CombinedRecipientItem[]) =>
-  options.map((option) => getRecipientOptionFields(option).text);
-
 it('ranks an empty field once per list, people on the sending domain first', () => {
   const outside = user('Ana Outside', 'ana@elsewhere.example');
   const colleague = user('Bo Colleague', 'bo@macro.com');
