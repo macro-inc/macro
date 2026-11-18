@@ -1360,6 +1360,7 @@ pub trait GoogleCalendarProvider: Send + Sync + 'static {
         &self,
         access_token: &str,
         email_link_id: Uuid,
+        calendar_id: Uuid,
         provider_calendar_id: &str,
         channel_id: Uuid,
         config: &GoogleWatchConfig,

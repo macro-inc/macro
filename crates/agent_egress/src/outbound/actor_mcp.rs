@@ -6,7 +6,9 @@ use crate::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::outbound::guarded_http::{self, AddressPolicy};
-use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
+use rmcp::transport::streamable_http_client::{
+    StreamableHttpClientTransportConfig, StreamableHttpError,
+};
 use rmcp::{ServiceExt, model::ClientConfig, transport::StreamableHttpClientTransport};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -153,7 +155,7 @@ impl ActorMcpTransport for HttpActorMcpTransport {
                 client
                     .call_tool(params)
                     .await
-                    .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))
+                    .map_err(call_error)
                     .and_then(|result| {
                         serde_json::to_value(result).map_err(|error| {
                             EgressError::Internal(rootcause::report!(error).into())
@@ -165,4 +167,35 @@ impl ActorMcpTransport for HttpActorMcpTransport {
             )),
         }
     }
+}
+
+/// A failed call: a 429 the upstream answered is a typed rate limit, since
+/// the request did not run and may be sent again; anything else broke the
+/// exchange.
+fn call_error(error: rmcp::ServiceError) -> EgressError {
+    if let rmcp::ServiceError::TransportSend(transport) = &error
+        && let Some(StreamableHttpError::HttpStatus(status)) = transport
+            .error
+            .downcast_ref::<StreamableHttpError<reqwest::Error>>()
+        && status.status == http::StatusCode::TOO_MANY_REQUESTS.as_u16()
+    {
+        return EgressError::RateLimited {
+            retry_after: status.retry_after.as_deref().and_then(retry_after),
+        };
+    }
+    EgressError::Upstream(rootcause::report!(error).into())
+}
+
+/// A `Retry-After` value as a wait: delay-seconds, or an HTTP date, which
+/// counts from now (a date already past is no wait).
+fn retry_after(value: &str) -> Option<std::time::Duration> {
+    let value = value.trim();
+    if let Ok(seconds) = value.parse() {
+        return Some(std::time::Duration::from_secs(seconds));
+    }
+    let at = httpdate::parse_http_date(value).ok()?;
+    Some(
+        at.duration_since(std::time::SystemTime::now())
+            .unwrap_or_default(),
+    )
 }
