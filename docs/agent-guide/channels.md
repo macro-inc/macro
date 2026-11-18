@@ -520,7 +520,8 @@ clears both, and after a reload the draft appears once.
 Shift+Enter adds a line to the draft; Enter sends. In a bullet, numbered or
 check list, Enter belongs to the list as in a document: it adds an item, leaves
 the list from an empty item, and outdents an empty nested item; Enter sends
-once the caret is outside the list, and Cmd/Ctrl+Enter sends from anywhere.
+once the caret, or a whole selection, is outside the list, and Cmd/Ctrl+Enter
+sends from anywhere.
 This holds in every composer whose Enter sends (channels, threads, DMs,
 comments, AI and agent inputs). A message is sent without the blank lines at
 the end of its draft, so a list left with Enter sends without an empty line
