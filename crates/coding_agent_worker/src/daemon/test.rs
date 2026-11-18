@@ -1,5 +1,7 @@
 use super::*;
 
+mod prompt_at_ready;
+
 #[test]
 fn a_fresh_dial_is_not_a_held_connection_until_it_has_lasted() {
     let (connected, mut runtime) = watch::channel(false);
@@ -82,6 +84,10 @@ async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime(
         |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
             assert_eq!(request.uri().path(), "/runtime/ws");
             assert_eq!(request.headers()["x-macro-harness-token"], "mhns_test");
+            assert_eq!(
+                request.headers()["x-macro-runtime-accepts"],
+                "agents-changed"
+            );
             Ok(response)
         },
     )

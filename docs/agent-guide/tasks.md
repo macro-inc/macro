@@ -715,8 +715,13 @@ filter icon inside its button. A separate
 status"`) picks the status in the desktop header and above the list on touch
 devices, and the board hides it. The desktop sidebar has no layout or status
 switches. Status tabs size to their labels with even horizontal padding and use
-the shared fully rounded segmented style. Open is the default; Closed includes
-both closed and merged PRs, and All shows every status. The filter dropdown and mobile drawer also
+the shared fully rounded segmented style. When the header's actions would run
+past it, the status tabs show only their icons (named by tooltip), then the
+scope name hides; each comes back once the header has room. Opening the search
+can take the tab labels when the field would not fit beside them. Check a 640px
+window and 860px beside the docked sidebar, with search closed and open. Open
+is the default; Closed includes both closed and merged PRs, and All shows every
+status. The filter dropdown and mobile drawer also
 offer independent Open, Closed, and Merged selections. Custom multi-status
 selections hide the toggle, except the combined Closed preset keeps it visible.
 A partial Closed-only or Merged-only selection leaves every option unhighlighted.
@@ -998,7 +1003,13 @@ search namespace: `tasks.tab=my-projects`, `projects`, or `created-projects`.
 Desktop project-view titles open the same view switcher as Tasks; individual
 project names remain content titles. Mobile keeps the Projects picker.
 Projects use the same list rows, property cells, selection, group headers, and
-keyboard navigation as Tasks. Search (`Cmd/Ctrl+F`), `Sort projects`,
+keyboard navigation as Tasks. On touch devices, where the list fills a phone or
+a tablet's narrow list pane, there are no column headings and no checkbox
+column, as in the Tasks list on phones: each row is the project's name followed
+by its Status, Priority, Assignees, and Due date icons. On desktop, when the
+list is narrower than 840px, those columns show their values as icons and their
+headings as icons with tooltips, as the Tasks list does, and Tasks and Updated
+leave the grid without an empty column. Search (`Cmd/Ctrl+F`), `Sort projects`,
 `Group projects`, and `Filter projects` sit above the list. Groups default to
 Status; choose None, Priority, or Assignee to change them. Click a group header
 or use the list's disclosure keys to collapse or expand it. Sort by Updated
@@ -1045,6 +1056,12 @@ row menu: `Open in new split`, `Copy Link`, `Copy ID`, and `Share`, plus
 so an editor who doesn't own the project gets neither; several owned projects
 offer only `Delete`. The dialogs are the Projects list's own.
 
+While a project page shows its Overview, Cmd+K lists `Copy link` and `Copy ID`
+(the same URL and id as the title menu), plus the tag and notification commands
+its Home row offers. In the Tasks section, Cmd+K and Shift+Cmd+C act on the
+focused task row instead. In Home's project preview the commands live in the
+preview's own hotkey scope, so they apply once the cursor is in the preview.
+
 `New project` and the global Create menu's `Project` action (C, then P) open
 the same native composer host and layout as task creation,
 with a project name, a Markdown description (`Add description...`), and the
@@ -1081,17 +1098,23 @@ and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,
 including `Delete` for its owner. Choose Overview or Tasks using the inset
 tabs in that top bar; below 600px they collapse to icons, with tooltips on
-desktop, and the project name truncates instead. In Tasks, an outlined
+desktop, and the project name truncates instead. On phones the bar keeps its
+room for the name, as phone file headers do: the Tasks breadcrumb becomes a back
+arrow, the project icon is no longer its own button, and Share and Copy link
+leave the bar; Change icon, Share, and Copy Link stay in `Project actions`.
+Tablets and desktop keep the full bar. In Tasks, an outlined
 circular search button expands into a focused `Search in <project name>` field.
 Close or Escape clears the query and restores focus to the button. The task
 toolbar stays the same height and scrolls
 horizontally in narrow splits, keeping list controls, Add existing tasks, and New
 task accessible. On touch devices New task leaves the toolbar for the floating
-`+ Task` pill above the dock: on this tab it creates the task in this project,
-and people who can't edit the project get no pill. Elsewhere in Tasks, including
-the project's Overview, the pill creates a task with no project. On phones (touch, under 640px) Add existing tasks shows as an
-icon button named by its label and the open search field narrows, so the row fits
-from 320px wide without scrolling. Opening an associated task
+`+ Task` pill above the dock: on both of a project's tabs it creates the task in
+this project, and people who can't edit the project get no pill. The Tasks
+view's own pill, which creates a task with no project, stays off a project's tabs
+while they load. On touch the project's content starts below its floating top
+bar. On phones (touch, under 640px) Add existing tasks shows as an icon button
+named by its label, the same size as search and filters, and the open search
+field narrows, so the row fits from 320px wide without scrolling. Opening an associated task
 extends the breadcrumb trail; choose the project breadcrumb to return, or
 Projects to restore the collection and its filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/tasks/projects/<project-id>/overview` (or `tasks`). Share, and Copy Link
@@ -1182,7 +1205,8 @@ use the same control as Channels. Editors can choose `Add existing tasks` beside
 `New task` (on touch, New task is the floating pill); both actions use bordered
 buttons with a background. `Add existing
 tasks` opens an anchored task-selector dropdown: search, select several, and
-confirm `Add N tasks`. Scrolling to the end (or PageDown) appends later loaded
+confirm `Add N tasks`. On touch it opens a picker sheet instead: search, select
+several, and confirm with `Done`. Scrolling to the end (or PageDown) appends later loaded
 task pages to the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
 already in this project are excluded. Adding a task moves it from its previous
 project. A partial failure keeps only

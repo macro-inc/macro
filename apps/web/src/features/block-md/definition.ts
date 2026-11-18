@@ -1,11 +1,11 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
+import { lazy } from '@core/util/lazy';
 import { NOOP_SPAN } from '@macro-inc/observability';
 import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 export const definition = defineBlock({
   name: 'md',

@@ -358,6 +358,8 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.setCrmContactEmail",
         "storage.addCrmContactEmail",
         "storage.removeCrmContactEmail",
+        // Cancelling an owner-only count preview changes no contribution.
+        "storage.cancelCrmEmailRulePreview",
         // Deleting a message in a call's guest chat, like a channel message.
         "storage.guestCallChatDeleteMessage",
         "storage.setEmailSync",

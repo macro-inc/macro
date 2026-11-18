@@ -1,14 +1,23 @@
 // The other ways to the tabs of the mail list: the sidebar's Inbox item, the
-// number keys, Tab and Shift+Tab, and the phone's pills, each for a Gmail and
-// an Outlook inbox; and the header breadcrumb's name.
+// number keys, Tab and Shift+Tab, and on a phone the Inbox pills and the
+// sidebar's sheet, each for a Gmail and an Outlook inbox; and the header
+// breadcrumb's name.
 
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { deliverToSpam, spamFolder, syncedInView } from './harness/journeys';
 import { deliverNoise, openThreadId } from './harness/list';
 import { anInbox, PROVIDERS } from './harness/providers';
-import { expectRows, GRACE, listQuery, PHONE } from './harness/ways-list1';
-import { confirmed, did } from './ledger/record';
+import {
+  expectRows,
+  GRACE,
+  listQuery,
+  openSidebarSheet,
+  PHONE,
+  sidebarSheet,
+  touchHeaderName,
+} from './harness/ways-list1';
+import { confirmed, did, saw } from './ledger/record';
 
 for (const provider of PROVIDERS) {
   test.describe(`the other ways to the tabs of ${anInbox(provider)}`, () => {
@@ -77,9 +86,14 @@ for (const provider of PROVIDERS) {
     test.use({ ...PHONE, provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
-    // When this fails, a pill of the phone's tab row does not open its tab:
-    // Noise, All, Spam or Shared lists what another tab holds, or nothing.
-    test('each pill opens its tab', async ({ page, mailbox }) => {
+    // When this fails, a pill of the phone's Inbox row or a tab of its
+    // sidebar sheet does not open its tab (Noise, All, Spam or Shared lists
+    // what another tab holds, or nothing), the sheet stays open over the
+    // list, or the header does not name the tab chosen there.
+    test('the Noise pill and each tab of the sidebar sheet open their tab', async ({
+      page,
+      mailbox,
+    }) => {
       await deliverNoise(mailbox, {
         from: 'Deals <deals@example.com>',
         subject: 'Sale',
@@ -94,8 +108,14 @@ for (const provider of PROVIDERS) {
       const lunch = (await mailbox.synced('Lunch?')).id;
       const sale = (await mailbox.synced('Sale')).id;
       const photos = await syncedInView(mailbox, 'spam', 'Team photos');
+      // The header's pills, not the sheet's tabs of the same names.
       const pill = (name: string) =>
-        page.getByRole('button', { name, exact: true });
+        page.getByRole('main').getByRole('button', { name, exact: true });
+      const sheet = sidebarSheet(page);
+      const sheetTab = (name: string) =>
+        sheet
+          .getByRole('navigation', { name: 'Email tabs' })
+          .getByRole('button', { name, exact: true });
 
       await mailbox.open();
       expect(await page.evaluate(() => window.innerWidth)).toBe(
@@ -104,18 +124,26 @@ for (const provider of PROVIDERS) {
       await expectRows(page, [lunch]);
 
       await pill('Noise').tap();
-      did('AL-004', 'F-029');
+      did('AL-004');
       await expect(pill('Noise')).toHaveAttribute('aria-pressed', 'true');
       await expectRows(page, [sale]);
 
-      await pill('All').tap();
-      did('AL-004', 'F-030');
-      await expect(pill('All')).toHaveAttribute('aria-pressed', 'true');
+      // The other tabs are in the sidebar's sheet, which closes on the
+      // choice; the header then names the tab in place of the pills.
+      await openSidebarSheet(page);
+      await sheetTab('All').tap();
+      did('AL-002', 'F-030');
+      await expect(sheet).toHaveCount(0);
+      await expect(touchHeaderName(page, 'All')).toBeVisible();
+      await expect(pill('Signal')).toHaveCount(0);
+      saw('STL-989');
       await expectRows(page, [lunch, sale]);
+      saw('STL-923');
 
-      await pill('Spam').tap();
-      did('AL-004', 'F-031');
-      await expect(pill('Spam')).toHaveAttribute('aria-pressed', 'true');
+      await openSidebarSheet(page);
+      await sheetTab('Spam').tap();
+      did('AL-002', 'F-031');
+      await expect(touchHeaderName(page, 'Spam')).toBeVisible();
       await expectRows(page, [photos]);
       // What the tab lists is what the provider holds as spam.
       expect(
@@ -124,14 +152,16 @@ for (const provider of PROVIDERS) {
           .map((message) => message.subject)
       ).toEqual(['Team photos']);
       confirmed('F-031');
+      saw('STL-924');
 
       // Shared asks the service for the threads other people shared: none.
       const shared = page.waitForResponse((response) =>
         listQuery(response.request(), '"shared":"ONLY"')
       );
-      await pill('Shared').tap();
-      did('AL-004', 'F-032');
-      await expect(pill('Shared')).toHaveAttribute('aria-pressed', 'true');
+      await openSidebarSheet(page);
+      await sheetTab('Shared').tap();
+      did('AL-002', 'F-032');
+      await expect(touchHeaderName(page, 'Shared')).toBeVisible();
       const listed = (await (await shared).json()) as {
         data: { user: { soup: { items: unknown[] } } };
       };
@@ -139,7 +169,10 @@ for (const provider of PROVIDERS) {
       confirmed('F-032');
       await expectRows(page, []);
 
-      await pill('Signal').tap();
+      await openSidebarSheet(page);
+      await sheetTab('Signal').tap();
+      await expect(sheet).toHaveCount(0);
+      await expect(pill('Signal')).toHaveAttribute('aria-pressed', 'true');
       await expectRows(page, [lunch]);
     });
   });

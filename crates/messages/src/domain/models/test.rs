@@ -216,3 +216,33 @@ fn fig_anchor_round_trips_with_and_without_a_layer() {
         );
     }
 }
+
+#[test]
+fn a_post_chooses_its_notification_policy_but_never_its_attribution() {
+    let silent: PostMessage = serde_json::from_value(serde_json::json!({
+        "content": "nightly sync done",
+        "thread_id": null,
+        "anchor": null,
+        "nonce": null,
+        "notification_policy": "Silent",
+        "attribution": "AccountManager",
+    }))
+    .unwrap();
+    assert_eq!(
+        silent.notification_policy,
+        PostMessageNotificationPolicy::Silent
+    );
+    assert_eq!(silent.attribution, MessageAttribution::ActingUser);
+
+    let unset: PostMessage = serde_json::from_value(serde_json::json!({
+        "content": "hello",
+        "thread_id": null,
+        "anchor": null,
+        "nonce": null,
+    }))
+    .unwrap();
+    assert_eq!(
+        unset.notification_policy,
+        PostMessageNotificationPolicy::Default
+    );
+}

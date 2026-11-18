@@ -36,6 +36,12 @@ pub struct SendChannelMessage {
         description = "Optional images, videos, or documents to attach, at most 10. Upload media before sending; a media attachment whose upload has not finished shows as broken."
     )]
     pub attachments: Vec<ChannelMessageAttachmentInput>,
+    /// post without notifying anyone
+    #[serde(default)]
+    #[schemars(
+        description = "Send without notifying anyone, mentioned people included: no push, email or inbox entry. The message still appears in the channel. Use it for routine updates nobody needs to be alerted to."
+    )]
+    pub silent: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -80,7 +86,11 @@ where
                 PostMessage {
                     id: None,
                     attribution: service_context.attribution(),
-                    notification_policy: PostMessageNotificationPolicy::Default,
+                    notification_policy: if self.silent {
+                        PostMessageNotificationPolicy::Silent
+                    } else {
+                        PostMessageNotificationPolicy::Default
+                    },
                     content: self.content.clone(),
                     thread_id: self.thread_id,
                     anchor: None,

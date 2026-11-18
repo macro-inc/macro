@@ -289,7 +289,10 @@ where
 {
     tracing::Span::current().record("channel_id", tracing::field::display(path.channel_id));
 
-    let content = parse_webhook_content(&headers, body)?;
+    let ChannelWebhookRequest {
+        content,
+        notification_policy,
+    } = parse_webhook_request(&headers, body)?;
     let access =
         webhook_access(&state, path.channel_id, preferred_authentication, &headers).await?;
 
@@ -301,7 +304,7 @@ where
                 id: None,
                 // External webhook bot posting on its own; no triggering user.
                 attribution: MessageAttribution::Unprompted,
-                notification_policy: Default::default(),
+                notification_policy,
                 content,
                 thread_id: None,
                 anchor: None,
@@ -345,26 +348,42 @@ fn channel_bot_token(headers: &HeaderMap) -> Result<&str, ChannelBotWebhookHandl
     Ok(token)
 }
 
-fn parse_webhook_content(
+/// Read a JSON request, or take a plain-text body as the content with the
+/// default notification policy.
+fn parse_webhook_request(
     headers: &HeaderMap,
     body: Bytes,
-) -> Result<String, ChannelBotWebhookHandlerErr> {
+) -> Result<ChannelWebhookRequest, ChannelBotWebhookHandlerErr> {
     if body.is_empty() {
         return Err(ChannelBotWebhookHandlerErr::BadRequest(
             "content is required",
         ));
     }
 
-    if is_json_body(headers)
-        && let Ok(request) = serde_json::from_slice::<ChannelWebhookRequest>(&body)
-    {
-        return require_non_empty_content(request.content);
+    if is_json_body(headers) {
+        if let Ok(request) = serde_json::from_slice::<ChannelWebhookRequest>(&body) {
+            return Ok(ChannelWebhookRequest {
+                content: require_non_empty_content(request.content)?,
+                notification_policy: request.notification_policy,
+            });
+        }
+        // A body that asks for a policy must get it, never fall back to
+        // posting itself as text with the default, which notifies everyone.
+        // Look at the raw text, since a malformed body can't be parsed.
+        if std::str::from_utf8(&body).is_ok_and(|text| text.contains("\"notification_policy\"")) {
+            return Err(ChannelBotWebhookHandlerErr::BadRequest(
+                "notification_policy must be Default, MentionsOnly or Silent, with content",
+            ));
+        }
     }
 
     let content = std::str::from_utf8(&body)
         .map_err(|_| ChannelBotWebhookHandlerErr::BadRequest("content must be valid UTF-8"))?
         .to_string();
-    require_non_empty_content(content)
+    Ok(ChannelWebhookRequest {
+        content: require_non_empty_content(content)?,
+        notification_policy: Default::default(),
+    })
 }
 
 fn is_json_body(headers: &HeaderMap) -> bool {

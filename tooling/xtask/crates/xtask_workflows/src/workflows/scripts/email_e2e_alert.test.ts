@@ -13,8 +13,10 @@ import {
   failureMessage,
   type Job,
   jobsLine,
+  LOOK_BACK,
   type Names,
   passed,
+  readStream,
   readMore,
   recoveryMessage,
   rustFindings,
@@ -265,6 +267,71 @@ describe('decide', () => {
     const decision = decideThis(false, entries, streamRun(9));
     assert.equal(decision.post, null);
     assert.equal(decision.failing, false);
+  });
+});
+
+describe('readStream', () => {
+  /** Reads a stream whose runs have the jobs `jobs` gives, and which runs it read. */
+  const read = async (stream: StreamRun[], red: boolean, jobs: (run: StreamRun) => Job[], run = THIS) => {
+    const asked: number[] = [];
+    const decision = await readStream(
+      stream,
+      NAMES,
+      (entries) => decideThis(red, entries, run),
+      async (each) => {
+        asked.push(each.run_number);
+        return jobs(each);
+      },
+    );
+    return { decision, asked };
+  };
+
+  test('reads past pushes replaced while they waited, to the pass before them', async () => {
+    // Run 100 fails; 99 to 60 were replaced while they waited, and started no job.
+    const run = streamRun(100, 'a');
+    const stream = Array.from({ length: 42 }, (_, i) => streamRun(100 - i));
+    const jobs = (each: StreamRun) =>
+      each.run_number === 100
+        ? entry(100, 'red').jobs
+        : each.run_number === 59
+          ? entry(59, 'green', [alert({ minute: 5, shows: 'passing' })]).jobs
+          : [];
+    const { decision } = await read(stream, true, jobs, run);
+
+    assert.equal(decision.post, 'failure');
+    const lastGreen = decision.post === 'failure' ? decision.lastGreen : null;
+    assert.equal(lastGreen?.run_number, 59);
+    // The changes since the last pass span the replaced pushes' commits.
+    assert.match(failureMessage(CONTEXT, [], null, lastGreen), new RegExp(`compare/${sha('9')}\\.\\.\\.${sha('a')}`));
+  });
+
+  test('reads a run whose job ran out of time for what it recorded, though the run was cancelled', async () => {
+    // The runs API lists run 11 as cancelled: a job of it ran out of time.
+    const run = streamRun(12, 'a');
+    const timedOut = Object.assign(streamRun(11), { conclusion: 'cancelled' });
+    const jobs = (each: StreamRun) =>
+      each.run_number === 11
+        ? [job(110, 'Email end-to-end (1/3)', 'cancelled'), alert({ minute: 30, posted: true, shows: 'failing' })]
+        : each.run_number === 10
+          ? entry(10, 'green', [alert({ minute: 20, shows: 'passing' })]).jobs
+          : entry(12, 'green').jobs;
+    const { decision } = await read([run, timedOut, streamRun(10)], false, jobs, run);
+
+    assert.equal(decision.post, 'recovery');
+    assert.equal(decision.post === 'recovery' && decision.failingSince?.run_number, 11);
+  });
+
+  test('stops at LOOK_BACK runs with jobs, and counts no replaced push toward them', async () => {
+    const stream = Array.from({ length: 100 }, (_, i) => streamRun(100 - i));
+    // Nothing recorded, so only the bound stops it.
+    const ran = await read(stream, false, (each) => entry(each.run_number, 'green').jobs);
+    assert.equal(ran.asked.length, LOOK_BACK);
+
+    // Three of every four replaced: 25 runs with jobs, fewer than LOOK_BACK, so it reads the whole listing.
+    const replaced = await read(stream, false, (each) =>
+      each.run_number % 4 === 0 ? entry(each.run_number, 'green').jobs : [],
+    );
+    assert.equal(replaced.asked.length, stream.length);
   });
 });
 

@@ -9,15 +9,15 @@
 //! reads what the gating scenarios recorded and reports which functions of
 //! email and which backend entry points they cover (`cargo x email-coverage`).
 //!
-//! It runs on every push to `main` that changes backend code, because a
-//! shared crate or a migration can break email as easily as email code can,
-//! and in the daily sweep ([`SWEEP`]), which also runs the scenarios kept
-//! for known bugs, as a run by hand with `known_bugs` does. It is not part
-//! of `PR CI`: a pull request branch is run by hand (`workflow_dispatch`,
-//! `crates/email_e2e/AGENTS.md`).
-//! A failure on `main` is a red run on the merge commit; nothing is reverted
-//! or blocked by it. Its last job tells the Macro Alerts channel when the
-//! pushes or the sweep turn red, and when they pass again
+//! It runs on pushes to `main` that change backend code, one run at a time
+//! ([`concurrency`]), because a shared crate or a migration can break email
+//! as easily as email code can, and in the daily sweep ([`SWEEP`]), which
+//! also runs the scenarios kept for known bugs, as a run by hand with
+//! `known_bugs` does. It is not part of `PR CI`: a pull request branch is run
+//! by hand (`workflow_dispatch`, `crates/email_e2e/AGENTS.md`).
+//! A failure on `main` is a red run on the commit it tested; nothing is
+//! reverted or blocked by it. Its last job tells the Macro Alerts channel
+//! when the pushes or the sweep turn red, and when they pass again
 //! ([`email_e2e_alert`]).
 
 use gh_workflow::{
@@ -115,7 +115,7 @@ pub fn email_e2e() -> Workflow {
             .push(push)
             .add_schedule(Schedule::new(SWEEP))
             .workflow_dispatch(dispatch()))
-        .concurrency(concurrency())
+        .concurrency(concurrency("email-e2e"))
         .map(vars::with_global_env)
         .add_job("email-e2e", scenarios())
         .add_job("email-e2e-search", search())
@@ -173,15 +173,22 @@ pub(crate) fn render(build: fn() -> Workflow) -> anyhow::Result<String> {
     Ok(lines.join("\n") + "\n")
 }
 
-/// Every commit on `main` gets its own result: a later merge does not cancel
-/// the run of an earlier one, so a break can be traced to its commit. The
-/// event is in the group so the sweep and a run by hand do not cancel the
-/// push's run of the same commit; runs by hand never cancel each other.
-fn concurrency() -> Concurrency {
-    Concurrency::new(Expression::new(
-        "email-e2e-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}",
-    ))
-    .cancel_in_progress(true)
+/// The part of an email end-to-end workflow's concurrency group after its
+/// name: one group for each event and branch, and one for each run by hand and
+/// each re-run.
+const QUEUE: &str = "${{ (github.event_name == 'workflow_dispatch' || github.run_attempt != '1') && github.run_id || format('{0}-{1}', github.event_name, github.ref) }}";
+
+/// The runs of the email end-to-end workflow `name` queue as the dev deploys
+/// do: one at a time for each event and branch, the one running never
+/// cancelled. Of the pushes to `main` that come meanwhile only the newest
+/// waits, replacing (cancelling) the one that waited before it; its run tests
+/// the newer tree, so a replaced commit is tested with the commits after it.
+/// The sweep has its own group, so a push never replaces it, and a run by
+/// hand neither waits for nor replaces another. Nor does a re-run: in the
+/// queue it would replace the push waiting and test an older commit in its
+/// place, leaving the commit pushed untested until the next push.
+pub(crate) fn concurrency(name: &str) -> Concurrency {
+    Concurrency::new(Expression::new(format!("{name}-{QUEUE}"))).cancel_in_progress(false)
 }
 
 /// Start a job of the suite: the runner, the servers every scenario needs,
@@ -383,8 +390,11 @@ pub(crate) fn sqs_service() -> Container {
         .ports(vec![Port::Name("9324:9324".to_string())])
 }
 
-/// A single-node Kafka, the version the local stack runs. The services only
-/// publish to it.
+/// A single-node Kafka, the version the local stack runs. Its
+/// `__consumer_offsets` has one partition, not 50: the broker creates that
+/// topic when the first consumer group asks for it and serves no topic
+/// created after until its partitions exist, which for 50 took a runner 15
+/// to 18 seconds.
 pub(crate) fn kafka_service() -> Container {
     Container::default()
         .image("apache/kafka:3.9.1")
@@ -404,6 +414,7 @@ pub(crate) fn kafka_service() -> Container {
                 )
                 .add("KAFKA_INTER_BROKER_LISTENER_NAME", "PLAINTEXT")
                 .add("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
+                .add("KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS", "1")
                 .add("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
                 .add("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
                 .add("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "true"),
