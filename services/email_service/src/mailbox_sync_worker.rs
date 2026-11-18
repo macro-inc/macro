@@ -33,10 +33,12 @@ pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
             for _ in 0..32 {
                 let enumerated = reported(service.enumerate_once().await);
                 let reconciled = reported(service.reconcile_once().await);
-                if !enumerated && !reconciled {
+                worked |= enumerated || reconciled;
+                // With no message to read, the next cycle checks the folder
+                // catalogs again instead of reading up to 32 more pages first.
+                if !reconciled {
                     break;
                 }
-                worked = true;
             }
             worked
         };

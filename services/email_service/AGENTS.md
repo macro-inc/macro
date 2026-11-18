@@ -172,7 +172,8 @@ the gateway `/email` prefix.
 - The Outlook sync loop (`mailbox_sync_worker::run`) claims a due folder page
   before every message read. An import keeps its folders' next pages due, so
   claiming pages once per cycle would leave a folder with new mail behind
-  every worker's whole cycle of queued messages.
+  every worker's whole cycle of queued messages. A cycle ends when no message
+  is due, so folder catalogs are checked again before more pages are read.
 - `OUTLOOK_IMPORTS_PAUSED` (read at startup) makes the Outlook sync loop claim
   only live message work; import rows wait and live changes keep importing.
   `src/bin/reimport_outlook_folders` re-imports folders whose delta round
