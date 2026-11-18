@@ -44,6 +44,8 @@ use std::{
 use uuid::Uuid;
 
 const TEST_USER_ID: &str = "macro|channel-owner@example.com";
+/// A channel member other than the requesting user.
+const OTHER_USER_ID: &str = "macro|someone-else@example.com";
 
 type PostedSharedMessage = (
     EntityAccessReceipt<messages::domain::service::MessageWrite>,
@@ -1640,7 +1642,7 @@ async fn edit_channel_message_edits_the_assistants_message_for_the_user_as_the_b
 
 #[tokio::test]
 async fn edit_channel_message_cannot_rewrite_the_assistants_message_for_another_user() {
-    let messages = RecordingMessages::assistant_message_for("macro|someone-else@example.com");
+    let messages = RecordingMessages::assistant_message_for(OTHER_USER_ID);
     let patches = messages.patches.clone();
 
     let error = EditChannelMessage {
@@ -1665,7 +1667,7 @@ async fn edit_channel_message_cannot_rewrite_the_assistants_message_for_another_
 
 #[tokio::test]
 async fn delete_channel_message_deletes_the_assistants_message_for_another_user_as_the_user() {
-    let messages = RecordingMessages::assistant_message_for("macro|someone-else@example.com");
+    let messages = RecordingMessages::assistant_message_for(OTHER_USER_ID);
     let deletes = messages.deletes.clone();
 
     DeleteChannelMessage {
@@ -1707,7 +1709,7 @@ async fn edit_channel_message_rejects_empty_content_before_any_access_check() {
 async fn edit_channel_message_explains_a_forbidden_edit() {
     let messages = RecordingMessages {
         stored_sender: Some(Sender::new_from_user(
-            MacroUserIdStr::try_from("macro|someone-else@example.com".to_string()).unwrap(),
+            MacroUserIdStr::try_from(OTHER_USER_ID.to_string()).unwrap(),
         )),
         mutation_error: Some(|| messages::domain::ports::MessageError::Forbidden),
         ..RecordingMessages::default()
