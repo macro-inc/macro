@@ -1,0 +1,48 @@
+packages/sdk-ocaml/fetch/macro_sdk_fetch.mli
+  s_a79cb5c5d752a9::t_71d58a968c995d 18-22
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_a79cb5c5d752a9::t_2f2684bfa67e9b 3-10,35,37,49,739-740
+packages/sdk-ocaml/code_mode/bundle/build.sh
+  s_a79cb5c5d752a9::t_0d566caf9c8a6e 21,60-63,71
+packages/sdk-ocaml/fetch/test/run.mjs
+  s_a79cb5c5d752a9::t_54703fc6987cce 52,62,71
+packages/sdk-ocaml/analyzer/test/test_cli.ml
+  s_a79cb5c5d752a9::t_d672612a976cc7 41-42
+  s_a79cb5c5d752a9::t_adc1623c9b2101 43,52-61
+packages/sdk-ocaml/analyzer/lib/analyze.mli
+  s_a79cb5c5d752a9::t_2f2684bfa67e9b 14-17
+packages/sdk-ocaml/analyzer/index/index.ml
+  s_a79cb5c5d752a9::t_2f2684bfa67e9b 7-11,23-34,37-42,44-66,79-84,86-97,122-124
+  s_a79cb5c5d752a9::t_ebee5c56e59ddb 35-36
+  s_a79cb5c5d752a9::t_999b4ef24b581e 43
+  s_ce4c4fb10e3875::t_831723845e2460 137,156-158
+packages/sdk-ocaml/fetch/test/test_fetch.ml
+  s_a79cb5c5d752a9::t_54703fc6987cce 45-47
+  s_ce4c4fb10e3875::t_b4dc259c7911a1 88
+packages/sdk-ocaml/fetch/macro_sdk_fetch.ml
+  s_a79cb5c5d752a9::t_4a545ceecbb77b 53-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "317e4baca45faaa9469105706042b74dc2205e9a",
+  "prompts": {},
+  "sessions": {
+    "s_a79cb5c5d752a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8bf8f92a-181b-4d3a-aaa6-3d5c01f60534",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_ce4c4fb10e3875": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b6b57a6-b78c-40d9-9d42-b7ccad1c549b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
