@@ -2053,12 +2053,17 @@ for (const [device, viewport] of [
 
       // A draft growing to several lines raises the composer; the timeline
       // follows it.
+      const accessory = page.locator('[data-float-region="accessory"]');
+      const before = (await accessory.boundingBox())?.height ?? 0;
       await composer.click();
       await page.keyboard.type('One');
       for (const line of ['Two', 'Three', 'Four']) {
         await page.keyboard.press('Enter');
         await page.keyboard.type(line);
       }
+      await expect
+        .poll(async () => (await accessory.boundingBox())?.height ?? 0)
+        .toBeGreaterThan(before + 40);
       await expect.poll(clearance).toBeGreaterThanOrEqual(0);
       expect(unexpected).toEqual([]);
     });
