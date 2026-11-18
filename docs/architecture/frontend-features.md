@@ -351,8 +351,9 @@ switches between a desktop `views/*-header.tsx` and a
 files are still in the baseline. A hook above the switch
 (`useAgentSessionHeader`) can hold the header's state and actions so both
 views list from the same source. The file blocks (image, video, code, PDF,
-canvas, slides, Word and the rest) and the chat block are at the same stage:
-each has `views/<block>-header.tsx`, `views/mobile/<block>-header.tsx`, and
+canvas, slides, Word and the rest), chat, project, call recording, spreadsheet
+and form are at the same stage: each has `views/<block>-header.tsx`,
+`views/mobile/<block>-header.tsx`, and
 `views/shared/<block>-header-parts.tsx`, which returns the header's actions by
 name. The entries of the split views are listed in
 `rules/ast-grep/tsx-no-device-composition.yml`.
@@ -687,7 +688,8 @@ for the first three:
 `tsx-no-device-composition` ignores two lists of files: the entries, which hold
 each view's one switch, and "Not yet split", a baseline of files that predate
 the rule. When you split a view, delete its files from the baseline and add its
-entry. Never add a file to the baseline.
+entry. Add a file to the baseline only when its view's split is already a
+task, named in a comment on the file's line.
 
 The four feature-layer rules have warning severity and cover only the feature
 paths registered in their `files` lists. They do not automatically enforce every

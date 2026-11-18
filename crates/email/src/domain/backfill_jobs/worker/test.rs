@@ -4,6 +4,7 @@ use models_email::service::{
     pubsub::{DetailedError, FailureReason},
 };
 use uuid::Uuid;
+mod crm_policy;
 mod events;
 mod fakes;
 mod import_fakes;

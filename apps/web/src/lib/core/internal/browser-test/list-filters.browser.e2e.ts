@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { scrollList } from './scroll-gesture';
 
 for (const view of ['drive', 'notes']) {
   test(`${view} people filters keep selections across bounded search and pages`, async ({
@@ -37,19 +38,23 @@ for (const view of ['drive', 'notes']) {
     await expect(
       page.getByRole(role, { name: /Viewer \(me\)/ }).first()
     ).toBeVisible();
-    if (!phone)
-      await page.getByRole('listbox').evaluate((element) => {
-        element.scrollTop = element.scrollHeight;
-      });
-    await page
-      .getByRole(phone ? 'button' : 'option', {
-        name: 'Next options',
-        exact: true,
-      })
-      .click();
+    // Reaching the end of the list reads the next page, listed below.
+    const requests = Number(await page.getByTestId('requests').textContent());
+    if (phone)
+      await page
+        .getByRole(role, { name: /Person 49/ })
+        .first()
+        .scrollIntoViewIfNeeded();
+    else await scrollList(page.getByRole('listbox'));
+    const next = page.getByRole(role, { name: /Person 50/ }).first();
+    await expect(next).toBeAttached();
+    await expect(page.getByTestId('requests')).toHaveText(String(requests + 1));
+    if (phone) await next.scrollIntoViewIfNeeded();
+    else await scrollList(page.getByRole('listbox'), 150);
+    await expect(next).toBeInViewport();
     await expect(
-      page.getByRole(role, { name: /Person 50/ }).first()
-    ).toBeInViewport();
+      page.getByRole(phone ? 'button' : 'option', { name: 'Next options' })
+    ).toHaveCount(0);
     await expect(page.getByTestId('selected-ids')).toContainText(
       'unavailable-person'
     );

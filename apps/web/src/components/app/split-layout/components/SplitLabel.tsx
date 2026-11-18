@@ -417,6 +417,16 @@ function SplitLabelContextMenu(props: ParentProps) {
   const hasActions = createMemo(() => sections().length > 0);
 
   const item = (action: () => SplitFileMenuAction) => {
+    const label = () => (
+      <>
+        {action().label}
+        <Show when={action().disabledReason}>
+          <span class="block whitespace-normal text-xs text-ink-muted">
+            {action().disabledReason}
+          </span>
+        </Show>
+      </>
+    );
     const children = () => action().children?.filter(Boolean) ?? [];
     return (
       <Switch>
@@ -463,8 +473,9 @@ function SplitLabelContextMenu(props: ParentProps) {
             icon={
               action().icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
             }
-            text={action().label}
+            text={label()}
             hotkeyToken={action().hotkeyToken}
+            disabled={!!action().disabledReason}
             onClick={() => action().action?.()}
           />
         </Match>

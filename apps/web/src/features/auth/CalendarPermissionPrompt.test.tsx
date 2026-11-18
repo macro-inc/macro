@@ -21,11 +21,6 @@ vi.mock(
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 
-vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
-  useCalendarUiFlag: () => () => true,
-  useCalendarPromptAllowed: () => () => true,
-}));
-
 vi.mock('@core/context/user', () => ({ useUserId: () => userId }));
 
 vi.mock('@core/email-link', () => ({

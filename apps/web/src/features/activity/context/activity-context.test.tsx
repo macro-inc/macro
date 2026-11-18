@@ -1,17 +1,13 @@
 import { MACRO_SYSTEM_BOT_ID } from '@core/constant/macroSystem';
-import { createRoot, createSignal } from 'solid-js';
+import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const [databasesEnabled, setDatabasesEnabled] = createSignal(true);
 const useBotsQuery = vi.fn();
 const useDatabasesQuery = vi.fn();
 const usePropertyEntityDisplay = vi.fn(
   (_entityId: () => string, _entityType: () => string) => ({})
 );
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: databasesEnabled() }),
-}));
 vi.mock('@queries/bots/bots', () => ({
   useBotsQuery: () => useBotsQuery(),
 }));
@@ -43,20 +39,6 @@ const { useActivityContext } = await import('./activity-context');
 
 const TEAM_BOT = '11111111-1111-4111-8111-111111111111';
 const OTHER_BOT = '22222222-2222-4222-8222-222222222222';
-
-describe('appActivityContext.entityTypeShown', () => {
-  it('shows database rows only while databases are on', () => {
-    createRoot((dispose) => {
-      const context = useActivityContext();
-      setDatabasesEnabled(false);
-      expect(context.entityTypeShown('database')).toBe(false);
-      expect(context.entityTypeShown('document')).toBe(true);
-      setDatabasesEnabled(true);
-      expect(context.entityTypeShown('database')).toBe(true);
-      dispose();
-    });
-  });
-});
 
 describe('appActivityContext.botName', () => {
   beforeEach(() => {

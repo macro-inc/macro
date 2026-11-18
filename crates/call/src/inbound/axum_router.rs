@@ -37,8 +37,9 @@ use entity_access::{
     },
 };
 use macro_authorization::{
-    CODE_EXECUTION_HEADER, CredentialAttribution, CredentialOrigin, MacroAuthorizationExtractor,
-    MacroAuthorizationService, MacroAuthorizationState, UserOrInternal, is_program_run,
+    AnyPrincipal, CODE_EXECUTION_HEADER, CredentialAttribution, CredentialOrigin,
+    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, OptionalMacroAuthorizationExtractor, UserOrInternal, is_program_run,
 };
 use model_error_response::ErrorResponse;
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
@@ -187,7 +188,10 @@ where
         )
         .route(
             "/record/{call_id}/link",
-            post(meetings::share::<S, Svc, Auth>),
+            post(meetings::share::<S, Svc, Auth>).layer(axum::middleware::from_fn_with_state(
+                state.authorization_state.clone(),
+                refuse_program_link::<Auth>,
+            )),
         )
         .route(
             "/{channel_id}",
@@ -488,6 +492,44 @@ fn credential_is_program(origin: &CredentialOrigin) -> bool {
     )
 }
 
+/// A new meeting link for a call lets anyone holding it join as a guest, so
+/// an agent's program (a credential signed for an agent or a routine run, or
+/// the code-mode header) or a bot never mints one; a person shares the call
+/// from Macro. A credential that does not verify is rejected here.
+async fn refuse_program_link<Auth: MacroAuthorizationService>(
+    State(authorization): State<MacroAuthorizationState<Auth>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::extract::FromRequestParts as _;
+    let (mut parts, body) = request.into_parts();
+    let principal = match macro_authorization::OptionalMacroAuthorizationExtractor::<
+        Auth,
+        macro_authorization::AnyPrincipal,
+    >::from_request_parts(&mut parts, &authorization)
+    .await
+    {
+        Ok(extractor) => extractor.authorization,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let program = match &principal {
+        Some(macro_authorization::MacroAuthorization::User(user)) => {
+            macro_authorization::is_program_run(user.attribution(), &parts.headers)
+        }
+        Some(macro_authorization::MacroAuthorization::Bot(_)) => true,
+        _ => parts.headers.contains_key(CODE_EXECUTION_HEADER),
+    };
+    if program {
+        tracing::warn!("refused a meeting link to a program");
+        return CallError::Forbidden(
+            "An agent's program cannot make a meeting link for a call: anyone holding it can join as a guest. Tell the user to share the call from Macro.".to_string(),
+        )
+        .into_response();
+    }
+    next.run(axum::extract::Request::from_parts(parts, body))
+        .await
+}
+
 /// Start or join a channel call explicitly.
 #[utoipa::path(post, operation_id = "start_call", path = "/call/{channel_id}",
     params(("channel_id" = Uuid, Path)), request_body = JoinCallRequest,
@@ -749,12 +791,38 @@ pub async fn get_call_record_handler<
 >(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     access: CallAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
+    authorization: OptionalMacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    headers: HeaderMap,
 ) -> Result<Json<CallRecord>, CallError> {
     let record = state
         .service
         .get_call_record(access.entity_access_receipt)
         .await?;
-    Ok(Json(record))
+    let attribution = match &authorization.authorization {
+        Some(MacroAuthorization::User(user)) => user.attribution(),
+        _ => CredentialAttribution::Person,
+    };
+    Ok(Json(without_presigned_urls_for_programs(
+        record,
+        attribution,
+        &headers,
+    )))
+}
+
+/// A presigned recording URL is a bearer secret for as long as it lasts, so
+/// a program (`is_program_run`: a credential signed for an agent or a
+/// routine run, or the code-mode header) reads the record without it and
+/// fetches the bytes through `GET /record/{id}/recording` instead.
+pub(super) fn without_presigned_urls_for_programs(
+    mut record: CallRecord,
+    attribution: CredentialAttribution,
+    headers: &HeaderMap,
+) -> CallRecord {
+    if is_program_run(attribution, headers) {
+        record.recording_url = None;
+        record.recording_preview_url = None;
+    }
+    record
 }
 
 /// OpenAPI representation of streamed recording bytes.

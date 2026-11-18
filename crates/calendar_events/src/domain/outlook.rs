@@ -7,6 +7,9 @@ use automatic_decline::{AutomaticDeclineProvider, AutomaticDeclineRepository};
 use rootcause::Report;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// One lease on an account discovery or calendar synchronization job.
 #[derive(Clone)]
 pub struct OutlookCalendarLease {
@@ -63,10 +66,52 @@ pub struct OutlookDiscovery {
     pub unmapped_time_zone: Option<String>,
 }
 
+/// One occurrence or single event a page lists.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OutlookPageMember {
+    /// Provider occurrence/single ID.
+    pub provider_id: String,
+    /// Normalized master/single ID.
+    pub master_id: String,
+    /// Its start and end, when the listing carries a time Macro can read.
+    pub occurs: Option<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>,
+}
+
+/// The master/single IDs a first import's near-window page lists, each once,
+/// in the order it reads them: the event closest to `now` first, so this week
+/// arrives before the rest of the two months. A series counts by its nearest
+/// listed occurrence and an event under way is at distance zero. Members
+/// without a readable time come last, by ID, the order every other page reads.
+pub fn nearest_first(
+    members: &[OutlookPageMember],
+    now: chrono::DateTime<chrono::Utc>,
+) -> Vec<String> {
+    let mut nearest = std::collections::BTreeMap::<&str, Option<chrono::TimeDelta>>::new();
+    for member in members {
+        let distance = member.occurs.map(|(starts_at, ends_at)| {
+            if now < starts_at {
+                starts_at - now
+            } else if now < ends_at {
+                chrono::TimeDelta::zero()
+            } else {
+                now - ends_at
+            }
+        });
+        let entry = nearest.entry(&member.master_id).or_insert(distance);
+        *entry = match (*entry, distance) {
+            (Some(known), Some(distance)) => Some(known.min(distance)),
+            (known, distance) => known.or(distance),
+        };
+    }
+    let mut order: Vec<_> = nearest.into_iter().collect();
+    order.sort_by_key(|(_, distance)| (distance.is_none(), *distance));
+    order.into_iter().map(|(id, _)| id.to_owned()).collect()
+}
+
 /// One page of event identities. Its cursor is staged with its child work.
 pub struct OutlookCalendarPage {
-    /// (Provider occurrence/single ID, normalized master/single ID).
-    pub members: Vec<(String, String)>,
+    /// The occurrences and single events listed.
+    pub members: Vec<OutlookPageMember>,
     /// Tombstoned provider occurrence/single IDs.
     pub removed: Vec<String>,
     /// Next page URL, when this round is not complete.
@@ -219,7 +264,32 @@ pub trait OutlookCalendarRepository: CalendarRepository {
         lease: &OutlookCalendarLease,
         kind: CalendarProviderErrorKind,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Release a matching lease to retry after `delay`, recording no failure:
+    /// Macro's own request admission refused a call, so nothing reached
+    /// Microsoft.
+    fn defer_outlook_calendar(
+        &self,
+        lease: &OutlookCalendarLease,
+        delay: std::time::Duration,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// How much claimable work is waiting.
+    fn outlook_queue_depth(&self)
+    -> impl Future<Output = Result<OutlookQueueDepth, Report>> + Send;
 }
+
+/// The claimable work waiting for an Outlook sync loop.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OutlookQueueDepth {
+    /// Due, unleased work rows of accounts a claim may take.
+    pub due_items: i64,
+    /// How long the longest-waiting of them has been due, when any is.
+    pub oldest_due_seconds: Option<i64>,
+}
+
+/// The wait before retrying a deferred claim when the admission names none.
+const DEFERRAL: std::time::Duration = std::time::Duration::from_secs(5);
+/// The longest a deferred claim waits, the same cap as a failure's backoff.
+const MAX_DEFERRAL: std::time::Duration = std::time::Duration::from_secs(900);
 
 /// Domain coordinator for discovery, backfill, delta and bounded polling.
 pub struct OutlookCalendarSync<R, P, T, N> {
@@ -252,6 +322,28 @@ impl<
         self.writes_enabled = enabled;
         self
     }
+    /// Log how much claimable work is waiting, so a monitor can read queue
+    /// depth and the longest wait directly. Spans are sampled; the log is not.
+    #[tracing::instrument(
+        name = "calendar.outlook_queue_depth",
+        skip_all,
+        fields(due_items = tracing::field::Empty, oldest_due_seconds = tracing::field::Empty),
+        err
+    )]
+    pub async fn report_queue_depth(&self) -> Result<OutlookQueueDepth, Report> {
+        let depth = self.repository.outlook_queue_depth().await?;
+        let span = tracing::Span::current();
+        span.record("due_items", depth.due_items);
+        if let Some(oldest) = depth.oldest_due_seconds {
+            span.record("oldest_due_seconds", oldest);
+        }
+        tracing::info!(
+            due_items = depth.due_items,
+            oldest_due_seconds = depth.oldest_due_seconds,
+            "Outlook calendar sync queue depth"
+        );
+        Ok(depth)
+    }
     /// Claim and perform one bounded job. Heartbeats also revalidate custody.
     pub async fn run_once(&self) -> Result<bool, Report> {
         let Some(lease) = self
@@ -266,10 +358,23 @@ impl<
             return Ok(false);
         };
         let result = self.run_claim(&lease).await;
-        if let Err(error) = &result {
-            self.repository
-                .fail_outlook_calendar(&lease, error.kind())
-                .await?;
+        match &result {
+            Err(error) if error.kind() == CalendarProviderErrorKind::Deferred => {
+                let delay = error
+                    .retry_after()
+                    .unwrap_or(DEFERRAL)
+                    .clamp(std::time::Duration::from_secs(1), MAX_DEFERRAL);
+                self.repository
+                    .defer_outlook_calendar(&lease, delay)
+                    .await?;
+                return Ok(true);
+            }
+            Err(error) => {
+                self.repository
+                    .fail_outlook_calendar(&lease, error.kind())
+                    .await?;
+            }
+            Ok(()) => {}
         }
         result.map_err(|error| rootcause::report!(error))?;
         if lease.target.is_none() {
@@ -288,6 +393,7 @@ impl<
             calendar_id = lease.target.as_ref().map(|target| tracing::field::display(target.calendar_id)),
             step = tracing::field::Empty,
             near_window = tracing::field::Empty,
+            untimed_members = tracing::field::Empty,
             milestone = tracing::field::Empty,
             provider_event_id = tracing::field::Empty,
             outcome = tracing::field::Empty,
@@ -396,7 +502,19 @@ impl<
                         .calendar_page(&token, listed, delta, lease.page_cursor.as_deref())
                         .await
                     {
-                        Ok(page) => OutlookCalendarProgress::Page(page),
+                        Ok(page) => {
+                            if lease.near_window {
+                                // Members without a time Macro can read are
+                                // read last, so a rising count means the
+                                // near window lost its order.
+                                span.record(
+                                    "untimed_members",
+                                    page.members.iter().filter(|m| m.occurs.is_none()).count()
+                                        as i64,
+                                );
+                            }
+                            OutlookCalendarProgress::Page(page)
+                        }
                         Err(error)
                             if error.kind() == CalendarProviderErrorKind::SyncTokenExpired =>
                         {
@@ -480,7 +598,14 @@ fn record_milestone(
 }
 
 fn record_failure(span: &tracing::Span, error: &CalendarProviderError) {
-    span.record("outcome", "failed");
+    span.record(
+        "outcome",
+        if error.kind() == CalendarProviderErrorKind::Deferred {
+            "deferred"
+        } else {
+            "failed"
+        },
+    );
     span.record("error_kind", tracing::field::debug(error.kind()));
 }
 

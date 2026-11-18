@@ -26,12 +26,9 @@ dot, including desktop preview activation, keyboard opening, and phone navigatio
 The read is saved in the background; a failed request restores the dot so opening
 it again can retry. Marking read does not mark the notification done.
 
-**Rollout:** Sales Tasks, Sales Email, Sales Notes and Sales Calls require PostHog `enable-crm-activity`
-(off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
-this flag to decide whether to supply its task-composer preset, and with
-`enable-crm` to show the Customer / Contact pill when creating any task. With it off, only Companies and People
-appear in Records, activity queries do not run, and activity deep links return to
-Companies after flags finish loading. Global task creation uses the standard
+Records lists Sales Tasks, Sales Email, Sales Notes and Sales Calls beside Companies
+and People. CRM supplies its task-composer preset, and creating any task shows the
+Customer / Contact pill. Global task creation uses the standard
 composer; record-level New task still associates the new task with that record.
 With it on, the activity and contextual composer behavior below applies.
 Task creation opens immediately from the focused pane's registered preset,
@@ -125,7 +122,7 @@ display options, and saved views), then the shared **New** menu and expandable
 Search. New has the same options as the sidebar.
 The header Owner menu remains team-scoped. An active Owner chip can search paged
 personal contacts on desktop or phone, with No owner and unavailable saved IDs
-preserved across window changes. Next options replaces its page; Only changes
+preserved as further pages load on scroll. Only changes
 Owner without clearing Stage. Closed chips resolve only their selected labels,
 not the full personal directory.
 
@@ -727,26 +724,36 @@ flow, and disabled sources must not leave it waiting once metadata is ready.
 Traces hold opaque record ids and section categories, never names or addresses.
 Metadata errors may cancel the detail flow when the outer error panel replaces it.
 
-### Keep one thread out of CRM
+### Exclude one thread from CRM
 
 These controls require `enable-crm-thread-exclusions`, off by default everywhere.
 The API also refuses set/clear while its rollout flag is unavailable or disabled.
 Keep the flag off until ingestion and Team email reader binaries both support
 thread exceptions; older inlined readers ignore them.
 
-Open a thread from your own mailbox and choose **Keep this thread out of CRM**
-from its menu (the title menu on desktop, the thread menu on phone). This stops
+Open a thread from your contributed mailbox and choose **Exclude thread from CRM**
+beside sharing in its menu (the title menu on desktop, the thread menu on phone).
+The desktop header also has an exclusion icon immediately before the reminder
+bell; an excluded thread offers **Remove from excluded threads**, even after
+mailbox sharing is turned off. Both surfaces disable exclusion with a reason for another member’s thread, an unshared
+mailbox, or unavailable privacy state. The phone header keeps its existing
+title and Info controls. This stops
 sharing your copy through CRM, including mail already contributed, on the next
 CRM read. It does not remove the email from your mailbox. Another consenting
 teammate's copy of the same conversation may still appear, including the same
 messages. Separately granted thread access is also unaffected.
 Sales Email uses your own mailbox, so your copy remains visible there too.
 
-Open **Email settings → Threads kept out of CRM** to see your exceptions.
-**Remove exception** makes that thread eligible again when your consent and
-other privacy settings permit; restoration also queues a backfill. Use **Next
+Open **Email settings → Excluded threads** to see your exclusions. Each thread
+is an email mention with the same icon, subject, and hover preview as mentions
+in documents and channels. Click or press Enter to open it, reusing a split that
+already shows it. Desktop clicks and Shift-clicks prefer a new split when it is
+not already open; phones navigate in place. On phones the Settings
+sheet closes to reveal the thread. **Remove** makes that thread eligible again
+when your consent and other privacy settings permit; restoration also queues a backfill. Use **Next
 page** for further exceptions and **Back to first page** to return. Other members
-cannot see or change your exception list. Company and contact records and their
+cannot see or change your exclusion list. **Remove** never opens the thread;
+the empty list says **No excluded threads.** Company and contact records and their
 existing interaction dates remain; later population recomputes dates from
 eligible history. Labels and folders are not supported yet.
 

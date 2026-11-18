@@ -195,6 +195,10 @@ fn completion_row(link: bool) -> Row {
 }
 fn crm_row() -> Row {
     Row::Crm(CrmOutboxRow {
+        link_id: None,
+        consent_incarnation: None,
+        policy_version: None,
+        work_id: None,
         team_id: Uuid::from_u128(1),
         user_id: "macro|owner@example.com".into(),
         traceparent: Some("parent".into()),
@@ -362,6 +366,10 @@ async fn crm_failure_keeps_the_locked_row_for_retry() {
 async fn malformed_crm_owner_fails_only_when_current_consent_is_enabled() {
     for enabled in [true, false] {
         let f = queued(Row::Crm(CrmOutboxRow {
+            link_id: None,
+            consent_incarnation: None,
+            policy_version: None,
+            work_id: None,
             team_id: Uuid::nil(),
             user_id: "invalid".into(),
             traceparent: None,
