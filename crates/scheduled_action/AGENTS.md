@@ -448,6 +448,12 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   candidate's owner isn't the inbox's (`event_runs/admission.rs`, `Audience`).
   Like the other audience rules (`IncomingEvent::is_for_owner`), it is never
   an access grant: each owner's entity access is still checked.
+- A new-email filter can name `inboxes` (email link ids, at most 25; empty is
+  every inbox). Saving checks them against the owner's current own and
+  delegated inboxes (`OwnerInboxes`, `PgOwnerInboxes`) on create and on a
+  trigger change, so a later disconnect never blocks unrelated edits. The run
+  event keeps the received `inbox` only for routines with an inbox filter, so
+  dispatch re-checks the same filter.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
 
