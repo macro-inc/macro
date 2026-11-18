@@ -145,6 +145,41 @@ fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEve
     }
 }
 
+fn received_agent_session_event(session: Uuid, offset: i64) -> ReceivedEvent {
+    use ::agent_session::domain::{
+        events::{AgentSessionLifecycleEvent, SessionIdentity, SessionRenamedMetadata},
+        model::{AgentSessionId, SessionSource},
+    };
+    use macro_event_topics::MacroAgentSessionLifecycleTopic;
+
+    let id = AgentSessionId::new_from_uuid(session);
+    let event = AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata {
+        identity: SessionIdentity {
+            session_id: id,
+            session_name: "Indexed session".into(),
+            bot_id: serde_json::from_value(serde_json::json!(Uuid::from_u128(2))).unwrap(),
+            bot_name: "Agent".into(),
+            owner_id: user_id(),
+            origin: None,
+            audience: vec![],
+            source: SessionSource::User,
+        },
+    });
+    let message = encoded_message(
+        MacroAgentSessionLifecycleTopic::TOPIC_STR,
+        id,
+        Event::new(event),
+    );
+    attach_event_coordinates(DeclaredMacroEvent::decode(&message), 0, offset)
+        .expect("decodable agent-session event")
+}
+
+const AGENT_SESSION_ID: Uuid = Uuid::from_u128(10);
+const SECOND_AGENT_SESSION_ID: Uuid = Uuid::from_u128(11);
+/// Long enough that a handoff blocked on a full channel fails the test
+/// instead of hanging it; paused time makes the wait instant.
+const BLOCKED_HANDOFF_TIMEOUT: Duration = Duration::from_secs(60);
+
 fn user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|owner@example.com".to_string()).expect("valid user id")
 }
@@ -2230,6 +2265,105 @@ async fn bounded_handoff_blocks_when_full_and_preserves_order() {
         HandoffOutcome::HandedOff
     ));
     assert_eq!(receivers[0].recv().await.expect("second event").offset, 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn queued_agent_session_reread_absorbs_later_hints_without_blocking() {
+    let (pool, mut receivers) = test_pool(1, 1);
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+            AGENT_SESSION_ID,
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    for offset in 2..40 {
+        let outcome = tokio::time::timeout(
+            BLOCKED_HANDOFF_TIMEOUT,
+            pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+                AGENT_SESSION_ID,
+                offset,
+            ))),
+        )
+        .await
+        .expect("a hint for a session with a queued reread must not wait on its full worker");
+        assert!(matches!(outcome, HandoffOutcome::Coalesced));
+    }
+
+    assert_eq!(receivers[0].recv().await.expect("queued reread").offset, 1);
+    assert!(matches!(
+        receivers[0].try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
+}
+
+#[tokio::test]
+async fn hint_after_its_reread_starts_queues_the_next_reread() {
+    let (pool, mut receivers) = test_pool(1, 4);
+    let first = received_agent_session_event(AGENT_SESSION_ID, 1);
+    let key = coalescible_reread_key(&first.event)
+        .expect("agent-session events reread")
+        .to_owned();
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(first)).await,
+        HandoffOutcome::HandedOff
+    ));
+
+    // The worker clears the session as it dequeues, before the reread reads.
+    assert_eq!(receivers[0].recv().await.expect("first reread").offset, 1);
+    pool.pending_rereads.release(&key);
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+            AGENT_SESSION_ID,
+            2
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    assert_eq!(receivers[0].recv().await.expect("next reread").offset, 2);
+}
+
+#[tokio::test]
+async fn distinct_sessions_and_non_reread_events_each_hand_off() {
+    let (pool, mut receivers) = test_pool(1, 8);
+    for event in [
+        received_agent_session_event(AGENT_SESSION_ID, 1),
+        received_agent_session_event(SECOND_AGENT_SESSION_ID, 2),
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 3),
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 4),
+    ] {
+        assert!(matches!(
+            pool.handoff(Ok::<_, EventBrokerError>(event)).await,
+            HandoffOutcome::HandedOff
+        ));
+    }
+    drop(pool);
+
+    let mut offsets = Vec::new();
+    while let Some(event) = receivers[0].recv().await {
+        offsets.push(event.offset);
+    }
+    assert_eq!(offsets, [1, 2, 3, 4]);
+}
+
+#[tokio::test]
+async fn closed_worker_releases_the_reread_claim() {
+    let (pool, receivers) = test_pool(1, 1);
+    drop(receivers);
+
+    for offset in [1, 2] {
+        assert!(matches!(
+            pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+                AGENT_SESSION_ID,
+                offset
+            )))
+            .await,
+            HandoffOutcome::WorkerClosed
+        ));
+    }
 }
 
 #[tokio::test]
