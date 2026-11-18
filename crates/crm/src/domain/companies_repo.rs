@@ -200,6 +200,8 @@ pub trait CompaniesRepository:
 
     /// Adds `domain` (lowercase) to the team's contribution exclusions.
     /// Preserves company/contact records and archive state. Idempotent.
+    /// Applies the domain mailbox guard against every member's connected
+    /// primary mailbox inside the write transaction.
     fn block_domain(
         &self,
         team_id: &uuid::Uuid,
@@ -447,7 +449,8 @@ pub trait CompaniesRepository:
     /// True clears exact team exclusions and schedules consenting mailboxes
     /// for backfill. Personal and broader parent-domain blocks still apply.
     /// Hidden companies must be unhidden first. Privacy changes and ingestion
-    /// serialize through the same transaction lock.
+    /// serialize through the same transaction lock. Refuse exclusions covering
+    /// a team member's primary connected mailbox domain.
     fn set_email_sync(
         &self,
         team_id: &uuid::Uuid,
@@ -466,7 +469,8 @@ pub trait CompaniesRepository:
     ///
     /// Hide additionally forces `email_sync = false`, blocking ingestion and
     /// team email access. Unhide leaves that exclusion in place until an admin
-    /// explicitly removes it with [`set_email_sync`].
+    /// explicitly removes it with [`set_email_sync`]. Refuse hiding when that
+    /// exclusion covers a team member's primary connected mailbox domain.
     ///
     /// Both branches hold the same per-`(team, domain)` advisory locks
     /// [`populate_contact`] takes so a populate-vs-hide race can't
