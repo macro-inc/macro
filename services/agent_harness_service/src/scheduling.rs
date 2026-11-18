@@ -751,6 +751,11 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
         )))
         .with_conditions_enabled(conditions_enabled)
+        // A routine's draft may require the apps its owner connected,
+        // counted as saving and every run count them.
+        .with_apps(Arc::new(crate::routine_sessions::PipedreamConnectedApps(
+            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
+        )))
         .with_finding(DraftFinding {
             model: Arc::new(routine_drafting::RouterDraftModels {
                 admission: Arc::clone(&ai_admission),
