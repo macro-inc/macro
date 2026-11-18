@@ -42,11 +42,11 @@ export function ProjectBreadcrumbItem(
     >
       {(item) => (
         <div class="flex min-w-0 items-center">
-          {/* A phone-narrow bar shows the plain icon to keep room for the
+          {/* A compact (phone) bar shows the plain icon to keep room for the
               name; Change icon stays in the project's menu. */}
           <Show when={editableProject()}>
             {(project) => (
-              <div class="contents @max-[480px]/split-header:hidden">
+              <div class="contents group-data-[compact]/location:hidden">
                 <EntityAppearanceTrigger
                   entity={{
                     type: 'initiative',
@@ -72,7 +72,8 @@ export function ProjectBreadcrumbItem(
               size="xs"
               class={cn(
                 'shrink-0',
-                editableProject() && 'hidden @max-[480px]/split-header:block'
+                editableProject() &&
+                  'hidden group-data-[compact]/location:block'
               )}
             />
             <span class="truncate">{name()}</span>

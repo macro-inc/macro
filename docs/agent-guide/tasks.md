@@ -1087,10 +1087,11 @@ and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,
 including `Delete` for its owner. Choose Overview or Tasks using the inset
 tabs in that top bar; below 600px they collapse to icons, with tooltips on
-desktop, and the project name truncates instead. Below 480px (every phone) the
-bar keeps its room for the name: the Tasks breadcrumb becomes a back arrow, the
-project icon is no longer its own button, and Share and Copy link leave the
-bar; Change icon, Share, and Copy Link stay in `Project actions`. In Tasks, an outlined
+desktop, and the project name truncates instead. On phones the bar keeps its
+room for the name, as phone file headers do: the Tasks breadcrumb becomes a back
+arrow, the project icon is no longer its own button, and Share and Copy link
+leave the bar; Change icon, Share, and Copy Link stay in `Project actions`.
+Tablets and desktop keep the full bar. In Tasks, an outlined
 circular search button expands into a focused `Search in <project name>` field.
 Close or Escape clears the query and restores focus to the button. The task
 toolbar stays the same height and scrolls

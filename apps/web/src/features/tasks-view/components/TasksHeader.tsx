@@ -50,7 +50,7 @@ export function TaskViewBreadcrumbItem() {
             <span class="truncate">{tabTitle()}</span>
           </>
         );
-        // A phone-narrow bar keeps its room for the open entity's name, so
+        // A compact (phone) bar keeps its room for the open entity's name, so
         // the way back is an arrow; the view's name stays its accessible name.
         const button = () => (
           <ViewBreadcrumbs.ReturnButton
@@ -60,13 +60,13 @@ export function TaskViewBreadcrumbItem() {
             class="gap-2"
           >
             <span
-              data-narrow-back
+              data-compact-back
               aria-hidden="true"
-              class="hidden @max-[480px]/split-header:flex"
+              class="hidden group-data-[compact]/location:flex"
             >
               <ArrowLeftIcon class="size-4 shrink-0" />
             </span>
-            <span class="flex min-w-0 items-center gap-2 @max-[480px]/split-header:sr-only">
+            <span class="flex min-w-0 items-center gap-2 group-data-[compact]/location:sr-only">
               {label()}
             </span>
           </ViewBreadcrumbs.ReturnButton>
