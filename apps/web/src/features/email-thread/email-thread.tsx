@@ -4,9 +4,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
-import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
 import { useInboxEmail } from '@queries/email/inbox-email';
-import { createEffect, onCleanup, Suspense } from 'solid-js';
+import { Suspense } from 'solid-js';
 import { useCalendarPreferences } from '../calendar/utils/preferences';
 import { createEmailComposeContext } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
@@ -156,10 +155,6 @@ export function EmailThread(props: EmailThreadProps) {
         void source.refresh().catch(compose.notices.reportError);
     }
   );
-  createEffect(() => {
-    const id = props.threadId();
-    onCleanup(() => clearSavedDraftThreadCache(id));
-  });
   return (
     <EmailThreadSurface
       {...props}

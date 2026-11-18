@@ -125,6 +125,14 @@ pub enum ModelProbeResult {
     },
 }
 
+/// The dial header a runtime lists the optional messages it accepts in,
+/// comma-separated. The service sends an optional message only to a runtime
+/// that listed it, so older runtimes never receive one they cannot read.
+pub const RUNTIME_ACCEPTS_HEADER: &str = "x-macro-runtime-accepts";
+
+/// The [`RUNTIME_ACCEPTS_HEADER`] entry for [`ToRuntimeMessage::AgentsChanged`].
+pub const ACCEPTS_AGENTS_CHANGED: &str = "agents-changed";
+
 /// Agent Service to Agent Runtime traffic on the logical protocol stream.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -138,6 +146,13 @@ pub enum ToRuntimeMessage {
     /// configured harness what it advertises. Answers are therefore
     /// interchangeable, so nothing correlates a response to a request.
     ModelProbeRequest,
+    /// The agents bound to this runtime may have changed: re-read them.
+    ///
+    /// A hint with no payload, sent when the service may have just bound an
+    /// agent to the runtime, so it starts serving that agent's triggers at
+    /// once rather than at its next poll. Runtimes that do not serve
+    /// triggers ignore it.
+    AgentsChanged,
 }
 
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.

@@ -8,7 +8,7 @@ import {
   routeDraftId,
   watchDraftSaves,
 } from './harness/drafts';
-import { expect, type Mailbox, test } from './harness/fixtures';
+import { expect, test } from './harness/fixtures';
 import { readMailbox } from './harness/journeys';
 import { replyEditor, threadMessages } from './harness/send';
 import { sentCopy } from './harness/ways-compose1';
@@ -18,35 +18,6 @@ import { did } from './ledger/record';
 const WORK = 'ada.work@example.com';
 
 test.beforeEach(({ page }) => loadAppSteadily(page));
-
-/**
- * Waits until Outlook holds every save of the draft: until then the service
- * refuses to move it and asks to wait (as `compose-new.spec.ts` does).
- */
-async function outlookHoldsDraft(
-  mailbox: Mailbox,
-  draftId: string,
-  saves: number
-): Promise<void> {
-  if (mailbox.inbox.provider !== 'OUTLOOK') return;
-  await expect
-    .poll(
-      async () => {
-        const answer = await mailbox.api(
-          `/email/email/drafts/${draftId}/operation`
-        );
-        const { operation } = (await answer.json()) as {
-          operation?: { state?: string; revision?: string } | null;
-        };
-        return (
-          operation?.state === 'SYNCHRONIZED' &&
-          Number(operation.revision) >= saves
-        );
-      },
-      { timeout: 30_000 }
-    )
-    .toBe(true);
-}
 
 /** Opens the From menu of the composer on the screen and picks `email`. */
 async function chooseFrom(page: Page, email: string): Promise<void> {
@@ -62,10 +33,13 @@ for (const provider of ['GMAIL', 'OUTLOOK'] as const) {
 
     // When this fails, the From menu of a reply's open envelope does not
     // change the inbox it is sent from: the reply leaves the inbox the
-    // thread is in, not the one chosen.
-    test(`${provider === 'OUTLOOK' ? 'known bug: outlook-from-choice-dropped-while-draft-syncs: ' : ''}a reply is sent from the inbox chosen in its From`, {
-      tag: provider === 'OUTLOOK' ? ['@known-bug', '@sometimes'] : [],
-    }, async ({ page, mailbox }) => {
+    // thread is in, not the one chosen. From is chosen while an Outlook
+    // reply may still be being written to Outlook (see
+    // `compose-new.spec.ts`).
+    test('a reply is sent from the inbox chosen in its From', async ({
+      page,
+      mailbox,
+    }) => {
       const work = await mailbox.stack.link(mailbox.user, provider, WORK);
       const saves = watchDraftSaves(page);
       const subject = 'From the other inbox';
@@ -84,8 +58,6 @@ for (const provider of ['GMAIL', 'OUTLOOK'] as const) {
           message: 'the reply was never stored',
         })
         .toBe(1);
-      const [draft] = await drafts();
-      await outlookHoldsDraft(mailbox, draft.db_id, saves.length);
 
       // The envelope opens from its summary of the recipients.
       await page.getByRole('button', { name: /^Replying to / }).click();

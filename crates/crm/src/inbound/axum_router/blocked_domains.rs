@@ -66,9 +66,9 @@ pub async fn list_handler<
     Ok(Json(blocked.into_iter().map(Into::into).collect()))
 }
 
-/// Block a domain: email sync stops creating or updating CRM records for
-/// it, and the company and contacts the CRM holds for it are hidden.
-/// Idempotent. Requires an admin/owner team role (403).
+/// Block a domain and its subdomains from email contributions, preserving records.
+/// Refuses a domain covering any member's connected primary mailbox (400).
+/// Idempotent for permitted domains. Requires an admin/owner team role (403).
 #[utoipa::path(
     put,
     path = "/crm/blocked-domains/{domain}",
@@ -101,8 +101,8 @@ pub async fn block_handler<
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Unblock a domain: email sync resumes for it, and what blocking hid is
-/// shown again. Idempotent. Requires an admin/owner team role (403).
+/// Remove a team domain exclusion and schedule eligible email backfill,
+/// preserving record visibility. Idempotent. Requires an admin/owner role (403).
 #[utoipa::path(
     delete,
     path = "/crm/blocked-domains/{domain}",

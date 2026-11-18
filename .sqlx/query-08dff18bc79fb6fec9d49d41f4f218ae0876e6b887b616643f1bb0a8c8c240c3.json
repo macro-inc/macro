@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_email_policy_previews\n               (team_id,user_id,link_id,preview_id,context_id,consent_incarnation,policy_version,\n                definition,observed_token,observed_fingerprint,request_hash,expires_at,traceparent)\n               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now()+interval '5 minutes',$12)\n               ON CONFLICT(team_id,user_id) DO UPDATE SET link_id=EXCLUDED.link_id,preview_id=EXCLUDED.preview_id,\n                   context_id=EXCLUDED.context_id,consent_incarnation=EXCLUDED.consent_incarnation,policy_version=EXCLUDED.policy_version,\n                   definition=EXCLUDED.definition,observed_token=EXCLUDED.observed_token,observed_fingerprint=EXCLUDED.observed_fingerprint,\n                   request_hash=EXCLUDED.request_hash,status='pending',counts='{}',after_thread_id=NULL,scanned_threads=0,\n                   created_at=now(),expires_at=EXCLUDED.expires_at,run_after=now(),as_of=NULL,traceparent=EXCLUDED.traceparent",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Jsonb",
+        "Jsonb",
+        "Text",
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "08dff18bc79fb6fec9d49d41f4f218ae0876e6b887b616643f1bb0a8c8c240c3"
+}

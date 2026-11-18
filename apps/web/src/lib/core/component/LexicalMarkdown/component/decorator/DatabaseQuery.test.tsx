@@ -235,11 +235,11 @@ function renderBlock(test: ReturnType<typeof createTestEditor>) {
   ));
 }
 
-describe('database answer while databases are off', () => {
+describe('database answer in an editor that skips preview fetches', () => {
   it('renders the placeholder in a live editor and leaves the node as saved', () => {
     const test = createTestEditor();
+    test.wrapper.skipPreviewFetch = true;
     const saved = test.editor.getEditorState().toJSON();
-    control.enabled = () => false;
     control.mounts = 0;
     const rendered = render(() => (
       <LexicalWrapperContext.Provider value={test.wrapper}>

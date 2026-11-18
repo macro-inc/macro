@@ -10,9 +10,12 @@ env_vars! {
     pub struct MacroDbUrl;
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub struct KafkaBrokers;
-    /// PostHog project key; the worker reads each inbox owner's
-    /// `enable-email-focus` flag with it.
+    /// PostHog project key: names the project whose flag definitions the
+    /// worker polls.
     pub struct PosthogApiKey;
+    /// PostHog feature flags secure API key: lets the worker poll the
+    /// `enable-email-focus` definition and evaluate it for each inbox owner.
+    pub struct PosthogFeatureFlagsSecureApiKey;
 }
 
 maybe_env_vars! {
@@ -35,15 +38,17 @@ pub struct Config {
     pub internal_api_key: InternalApiKey,
     /// TypeSafe credential for Jev. While it is unset the worker classifies nothing.
     pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    /// The PostHog project the Focus rollout's flag is in.
+    pub posthog_api_key: PosthogApiKey,
     /// Reads the Focus rollout: an inbox is classified while its owner's
     /// `enable-email-focus` flag is on.
-    pub posthog_api_key: PosthogApiKey,
+    pub posthog_feature_flags_secure_api_key: PosthogFeatureFlagsSecureApiKey,
     /// PostHog host (optional).
     pub posthog_host: PosthogHost,
     /// Seconds between sweeps for threads the event stream missed.
     #[macro_config_default(3600)]
     pub focus_sweep_interval_secs: u64,
-    /// Days of mail the sweep and the Focus list cover.
+    /// Days of mail the backfill and the sweep cover, at most 90.
     #[macro_config_default(30)]
     pub focus_window_days: u16,
 }

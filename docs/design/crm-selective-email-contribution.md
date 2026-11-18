@@ -130,33 +130,59 @@ addresses/domains; bound query and preview work instead. Measure pathological
 records before rollout. Warn on the contributor's address, aliases or mailbox
 domain because those may match nearly all mail; preserve their intended meaning.
 
-Use compare-and-swap on `(consent_incarnation, policy_version)` for modern
-policy mutations. The incarnation is a fresh server-generated identifier for each
-consent row's lifetime, immutable across its updates; the database owns the
-version within that lifetime. Compare both inside the authorization transaction
-before executing a new mutation. A missing row or a different incarnation/version
-returns 409. Deleting and recreating consent, including after leaving and rejoining
-a team, must never
-make a delayed mutation's token valid again.
+Use compare-and-swap on the observed policy token. For modern rows it contains
+`consent_incarnation`, `policy_version` and an opaque fingerprint of current
+mailbox/membership authority. The incarnation is fresh for each consent row's
+lifetime and immutable across updates; the database owns the version. Compare
+these under the mailbox/membership and consent locks before a new mutation.
+A missing row or changed incarnation, version or authority returns 409. Leaving
+the team cascades consent; rejoining cannot reuse a prior modern token.
 
-Before issuing a token for previously absent consent, initialize a disabled row
-with a fresh incarnation under the mailbox/membership locks; do not create it
-without an eligible primary mailbox. For an existing row, initialize only a
-missing incarnation, preserving its grant and version. Its token and withdrawal
-remain available even when the mailbox is disconnected or otherwise ineligible;
-activation still rechecks live-primary eligibility. Never issue a generic
-"absent/version 0" token. A mutation carrying an old token cannot recreate the
-row or initialize its replacement. Scope idempotency keys and stored results to
-the incarnation and recheck that incarnation before replaying a result. A
-committed retry returns its recorded outcome without executing the mutation
-again; identify it as a replay rather than evidence of the current active policy.
-A key alone cannot fence a delayed request that has never committed.
+Inspection is always read-only, with the flag on or off. It must not create
+consent, initialize an incarnation or transfer historical work. With the flag
+on, legacy inspection returns an opaque fingerprint of the observed consent and
+explicit mailbox/membership authority; with the flag off it returns legacy state
+without an editable token. The first sharing mutation compares that legacy
+observation under the existing locks, initializes a fresh identity while preserving
+any existing grant, and atomically replaces unfinished legacy work with a complete
+generation-bound history pass. This includes work already published out of the
+legacy outbox. Withdrawal cancels unfinished work. All-mail members who only read
+settings stay on the legacy worker path, even with the flag enabled.
+
+Authority fingerprints cover link ID, owner/address/provider and credential-owner
+identity, primary/deleting/disconnect/reauth state, grant ID/generation, team and
+member keys, role and CRM access. They exclude sync activity, history/provider
+cursors, timestamps, whole mailbox/member row versions, billing plan and seat
+bookkeeping. Legacy consent alone uses its row identity because it lacks a durable
+incarnation and has no sync writer. Modern tokens use incarnation/version instead.
+Recheck the exact live mailbox and target authorization at submit: a currently
+unhealthy, deleting, disconnected or non-primary mailbox cannot grant contribution.
+A grant, ownership, role or access change requires a new observation; CRM access
+denial still permits the member's own controls after that observation.
+
+A transient reauthentication failure that clears on the same link and grant may
+be accepted if consent itself did not change: the member's sharing intent still
+applies. An active grant revoked during that interval changes policy version and
+conflicts even after reauthentication clears. An absent-consent member who leaves
+and rejoins with identical authority may use the same first-grant observation;
+there is no previous consent to revive. No authority epochs or triggers are added
+to mailbox or membership tables. Live contact/company edits do not conflict with
+a policy token: their changing match sets are part of the grant. They invalidate
+previews independently.
+
+Scope idempotency keys and results to the incarnation and recheck that lifetime
+before replay. A committed retry returns its recorded outcome without executing
+any effect, marked as a replay rather than evidence of the current policy. A new
+mutation carrying a stale token cannot recreate or initialize replacement consent.
+Withdrawal remains available for existing consent while its mailbox is ineligible;
+inspect its current token first. Never automatically refresh a conflict and replay
+a sharing command.
 
 A definition revision, policy version and `schema_version` are distinct.
 Concurrent source edits do not rewrite the rule revision: preview results carry
 a separate effective-context generation. Unknown future modes/versions fail
 closed, never become all-mail. Incarnation storage and these guards are required
-before the policy API ships; the dormant foundation has no CAS consumer yet.
+before the policy API ships; the API consumes them without migrating on reads.
 
 **Alternatives rejected:** a team allowlist enrolls other people; snapshots fail
 to follow the selected record; unversioned JSON loses safe replacement and audit;
@@ -417,23 +443,32 @@ Use entity handles for thread/contact/company selectors in public SDK methods;
 UUIDs belong to the wire transport. Follow operation-category and generated-verb
 registration conventions. Do not add a separate code-mode toolset.
 
-| Proposed method | Contract |
+| SDK method | Contract |
 | --- | --- |
-| `get()` | Caller-only effective consent/mode, exact mailbox, consent incarnation/version, active rules, current live targets and applicable exclusions. Initialize disabled consent or a missing incarnation as above before issuing an editable token; never change an existing grant. |
+| `get()` | Caller-only consent/mode, exact mailbox, active definition and observed-state token. Always read-only. Read domain exclusions separately with `settings()` and private exceptions with `excludedThreads()`; creating target handles fetches no record details. |
 | `validateRules(input)` | Authorize and canonicalize; return current live resolution, warnings and field errors. No grant and no mailbox content. |
-| `replaceRules(input, {ifConsentIncarnation, ifPolicyVersion, idempotencyKey})` | Directly activate the validated replacement for the authenticated member; require both CAS fields and return the new version, revision, audit event and whole-thread/live effects. No human approval token. |
-| `previewRules(input)` | Start a bounded asynchronous comparison for the caller's mailbox; return a preview handle. Validation is repeated at activation. |
+| `replaceRules(input, {ifPolicy, idempotencyKey})` | Directly activate a validated replacement for the authenticated member using the exact opaque observation. Initialize legacy identity only in this mutation; return the new token, revision, audit event and whole-thread/live effects. No human approval token. |
+| `previewRules(input, {ifPolicy, ifPreview})` | Start a bounded asynchronous comparison for the caller's mailbox, including before consent exists. Compare the observed policy and current preview slot; return a handle without initializing contribution. Repeat validation at activation. |
 | `preview.get()` | Status, as-of time/context and distinct counts: current, proposed, added, removed, retained and denied; no IDs, subjects, participants or bodies. |
-| `history({cursor})` | Owner-only keyset history of actor, definitions, live-source events and resulting state. |
+| `history()` / `revision.get()` | Owner-only fifty-event keyset history of actor, revision references, live-source events and resulting state; fetch one immutable definition separately. |
 | Existing consent/domain/thread methods | Reuse the privacy-settings/exclusion APIs; modern mode transitions use the same CAS/audit domain path. |
 
-Counts concern the caller's copies, not conversations disappearing for the entire
-team. Denial reason counts may overlap. Never inspect another mailbox to dedupe
-a preview. Use keyset batches, progress/cancellation and a proposed five-minute
-job budget. Timeout returns explicit partial/lower-bound counts, never an exact
-claim. Invalidate on relevant privacy/live-source context changes. Concurrent
-mail updates make counts an as-of estimate unless a stable scan is proven.
-Rate-limit per member and reuse unchanged definition/context results.
+Counts concern only the caller's mailbox-local copies. Denied counts are proposed
+matches vetoed by exclusions; no teammate mailbox is inspected to deduplicate.
+The API uses a read-only repeatable-read snapshot, raw timestamp/ID pages of 100,
+a 10,000-raw-thread ceiling and a five-minute deadline from enqueue. Missing
+matches and drafts advance the cursor. Each statement has at most 15 seconds,
+limited further by the remaining deadline. Budget exhaustion returns explicit
+partial/lower-bound counts, never an exact total. Progress has no thread IDs,
+subjects, addresses or content. Cancellation and replacement fence late completions.
+
+A separate poller runs counts so they cannot delay source reconciliation. A
+matching edit invalidates the team's preview metadata in its existing transaction;
+mailbox/member/consent changes are also detected through the authority observation.
+Ordinary imports do not invalidate a stable as-of result. Enforce one new request
+per member per thirty seconds and reuse identical retries; the retained slot ID
+prevents a delayed start from resurrecting older work. Previewing writes only
+bounded preview metadata, never consent or contribution/backfill work.
 
 Publish routing/agent guidance through `DescribeCodeTools`/`ReadCodeDocs` and
 `ExecuteCode`: agents may manage and activate rules directly, must explain past
@@ -477,9 +512,10 @@ That version fences updates only within one consent row's lifetime. Before
 PR 3 exposes any modern policy mutation token, add `consent_incarnation` through a
 forward migration and enforce one fresh, immutable identifier per row lifetime.
 Keep legacy inserts compatible: a nullable column with guarded initialization
-can avoid rewriting existing rows. Modern operations must initialize a null
-incarnation under the authorization locks before issuing a token and reject
-null during CAS. Preserve existing grants during initialization. Upgrade
+can avoid rewriting existing rows. Inspection returns a read-only legacy
+observation. Only the first mutating request initializes a null incarnation under
+the authorization locks after comparing that observation; preserve any existing
+grant and transfer unfinished history atomically. Upgrade
 idempotency storage, queued-work envelopes and completion checks together;
 all must carry the incarnation before activation. Never edit an applied
 foundation migration to add this support.
@@ -492,9 +528,14 @@ Test real legacy upserts, no-op withdrawal and membership/mailbox cascades.
 Deploy schema/guards and all three compatible eligibility paths before any
 selected activation. Older readers may temporarily show no selected mail; old
 workers may acknowledge without population, so **every worker must be upgraded**
-before enablement. Once active, an old-binary rollback is fail-closed only and
-requires a later backfill repair; never roll back schema/guards or widen consent
-to preserve old-binary visibility. Keep stored restrictions enforced indefinitely.
+before enablement. PR 3c teardown hooks can produce coarse `team` source events
+that pre-3c workers cannot deserialize. The initial rollout is safe while saved
+rule tables are empty. After activation, disabling the flag does not stop these
+producers or make an old worker compatible: stop the new event producers and
+drain their events with compatible workers before an old-binary rollback.
+Older eligibility readers fail closed and need a later backfill repair; never
+roll back schema/guards or widen consent to preserve old-binary visibility.
+Keep stored restrictions enforced indefinitely.
 Initial rollout also requires private-thread mutations to be available to the
 same cohort, after both ingestion and the optimized Team reader are upgraded.
 
@@ -532,9 +573,9 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
 
    - **3a: storage and repository contracts.** Add nullable consent incarnation
      with guarded initialization/immutability; stamp audit, idempotency, preview
-     and durable work with incarnation/version. New owner inspection initializes
-     a disabled row only with an eligible primary; old-token operations never
-     initialize. Store one replaceable preview and historical-work slot per
+     and durable work with incarnation/version. The repository can initialize
+     a disabled row only with an eligible primary; the API reserves initialization
+     for a first mutation, never inspection. Old modern tokens never initialize. Store one replaceable preview and historical-work slot per
      member, retaining tiny start receipts through the applicable mailbox/member
      lifetime to reject delayed starts after replacement or completion, plus
      durable source events and bounded reverse-reference indexes on saved contact/company rule targets. No API, worker wiring, hot email-table
@@ -558,20 +599,31 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
      committed while it waited for source rows. The dormant worker's early
      no-reference shortcut and same-statement deletion/reference snapshot do
      not provide that guarantee. Do not hold the team privacy lock through bulk
-     teardown: its existing long cascades would delay or fail withdrawal.
+     teardown: its existing long cascades would delay or fail withdrawal. Keep
+     plain deletes when the initial reverse-index probe finds no references; a
+     fresh post-delete probe emits one coarse team reconcile event if first
+     activation appeared meanwhile. Return IDs only on the referenced branch,
+     and probe their references in a new statement. Measure both branches on the
+     10,000-contact seed with fresh and stale statistics.
 
    Merge 3a, then 3b, then 3c. These depend on PR 2 and confirmed reader/ingestion
    compatibility. The unmatched discovery bound and million-thread mailbox tier
    remain required PR 5 activation gates, not substitutes for these contracts.
 
-4. **SDK and member settings.** Read/validate/replace/preview/history methods,
-   code-mode guidance, readable rules/JSON edit/history/withdrawal UI, default-off
-   registry entry and responsive presentation. Coordinate with the existing
-   privacy SDK task. Depends on PR 3; regenerate storage SDK conflicts.
+4. **SDK and member settings.** Split delivery into SDK wrappers and an approved
+   UI change. The SDK exposes read/validate/replace/preview/history/withdrawal,
+   existing consent/domain/thread controls, generated contracts and code-mode
+   guidance in `macro.crm.emailPrivacy`; existing team-domain methods stay on
+   `macro.crm`. Policy writes carry exact tokens and caller-owned retry keys.
+   Prepare readable rules, JSON edit, counts, history and withdrawal as a desktop
+   and phone proposal grounded in the existing privacy rows; implement the UI
+   only after approval. Keep the server gate unchanged and default-off. Depends
+   on PR 3; regenerate storage SDK conflicts.
 5. **Rollout hardening and readiness.** Integration/parity/performance tests,
    mixed-version drills, mixed sparse/dense policies across contributors,
    concurrent source edits/backfill recovery, flag-off and
-   rollback checks, operational counters and rollout runbook. Measure the
+   rollback checks, connected runtime traces, operational counters and rollout
+   runbook. Measure the
    **1m-thread mailbox tier before activation**, including sparse selections,
    large live targets and fresh/stale custom/generic plans; the eligibility
    phase does not establish that tier's budget. Bound work examining unmatched
@@ -597,7 +649,7 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
 
 No further product decision is required to begin the foundation. Verify actual
 mailbox/rule/live-target distributions before setting rollout budgets; the sizes
-above are assumptions. Confirm credential provenance available for agent audit
-and the privacy SDK task's final names. None requires a member-only approval
+above are assumptions. Credential provenance and SDK names are now defined by the own-member API
+and `macro.crm.emailPrivacy`. None requires a member-only approval
 capability. The separate cutoff and CRM-access projects retain ownership of
 their product boundaries.

@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_email_policy_previews SET status=$5::jsonb #>> '{}',counts=$6,scanned_threads=$7,as_of=$8\n               WHERE team_id=$1 AND user_id=$2 AND preview_id=$3 AND context_id=$4\n                 AND status IN ('pending','running')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Jsonb",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fa217597e4ed56d83e354bb08b699d91f500b2cb6acb5c7a2224f3848e54ca5f"
+}

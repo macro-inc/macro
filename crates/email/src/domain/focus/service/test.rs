@@ -29,6 +29,8 @@ struct FakeStore {
     stale: Arc<Mutex<Vec<(Uuid, StaleThread)>>>,
     /// Inboxes holding Focus.
     focus_inboxes: Arc<Mutex<Vec<FocusInboxOwner>>>,
+    /// Every connected inbox.
+    syncing: Arc<Mutex<Vec<FocusInboxOwner>>>,
     /// The inbox each stale-thread read was given.
     stale_reads: Arc<Mutex<Vec<Uuid>>>,
     mail_reads: Arc<Mutex<usize>>,
@@ -104,6 +106,10 @@ impl FocusStore for FakeStore {
 
     async fn inboxes_with_focus(&self) -> Result<Vec<FocusInboxOwner>, Report> {
         Ok(self.focus_inboxes.lock().unwrap().clone())
+    }
+
+    async fn syncing_inboxes(&self) -> Result<Vec<FocusInboxOwner>, Report> {
+        Ok(self.syncing.lock().unwrap().clone())
     }
 
     async fn focus_thread_ids(
@@ -1391,4 +1397,193 @@ async fn an_unknown_time_zone_falls_back_without_failing() {
         due_dates.inputs.lock().unwrap()[0].messages[0].written_on,
         NaiveDate::from_ymd_opt(2026, 10, 8).unwrap()
     );
+}
+
+/// A connected inbox for `owner_email`, listed with the store's syncing inboxes.
+fn connect(store: &FakeStore, owner_email: &str) -> FocusInboxOwner {
+    let inbox = FocusInboxOwner {
+        link_id: Uuid::new_v4(),
+        owner: owner(owner_email),
+    };
+    store.syncing.lock().unwrap().push(inbox.clone());
+    inbox
+}
+
+#[tokio::test]
+async fn a_look_finds_enrolled_inboxes_before_any_mail_and_the_sweep_covers_them() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let ours = connect(&store, OWNER);
+    connect(&store, "other@acme.example");
+    let enrollment = enrolled();
+    let service = service(&store, &classifier, &enrollment);
+
+    let found = service.enrolled_inboxes(4).await.unwrap();
+    assert_eq!(
+        found,
+        EnrolledInboxes {
+            enrolled: vec![ours.clone()],
+            unknown: 0,
+        }
+    );
+    // Nothing in the inbox holds Focus, yet the sweep now covers it.
+    assert!(store.focus_inboxes.lock().unwrap().is_empty());
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(report.inboxes, 1);
+    assert_eq!(*store.stale_reads.lock().unwrap(), vec![ours.link_id]);
+}
+
+#[tokio::test]
+async fn a_look_counts_owners_whose_rollout_is_unknown() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    connect(&store, OWNER);
+    let down = FakeEnrollment {
+        down: true,
+        ..enrolled()
+    };
+
+    let found = service(&store, &classifier, &down)
+        .enrolled_inboxes(4)
+        .await
+        .unwrap();
+    assert_eq!(
+        found,
+        EnrolledInboxes {
+            enrolled: Vec::new(),
+            unknown: 1,
+        }
+    );
+}
+
+#[tokio::test]
+async fn a_backfill_classifies_every_stale_thread_in_the_inbox() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let ids: Vec<_> = (0..7).map(|_| insert(&store, thread(OWNER))).collect();
+    set_stale(&store, &ids, noon());
+    let service = service(&store, &classifier, &enrolled());
+
+    let report = service
+        .backfill(
+            &FocusInboxOwner {
+                link_id: INBOX,
+                owner: owner(OWNER),
+            },
+            Duration::days(30),
+            3,
+            DueDates::Read,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (report.inboxes, report.candidates, report.classified),
+        (1, 7, 7)
+    );
+    assert_eq!(store.saved.lock().unwrap().len(), 7);
+    // The sweep may cover the inbox again once the backfill is done.
+    assert!(service.backfilling().is_empty());
+}
+
+#[tokio::test]
+async fn a_backfill_reads_no_mail_of_an_owner_outside_the_rollout() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    set_stale(&store, &[insert(&store, thread(OWNER))], noon());
+
+    let report = service(&store, &classifier, &FakeEnrollment::default())
+        .backfill(
+            &FocusInboxOwner {
+                link_id: INBOX,
+                owner: owner(OWNER),
+            },
+            Duration::days(30),
+            3,
+            DueDates::Read,
+        )
+        .await
+        .unwrap();
+    assert_eq!(report, SweepReport::default());
+    assert!(store.stale_reads.lock().unwrap().is_empty());
+    assert_eq!(*store.mail_reads.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn a_backfill_stops_when_the_classifier_is_down() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
+    let ids: Vec<_> = (0..20).map(|_| insert(&store, thread(OWNER))).collect();
+    set_stale(&store, &ids, noon());
+
+    let report = service(&store, &classifier, &enrolled())
+        .backfill(
+            &FocusInboxOwner {
+                link_id: INBOX,
+                owner: owner(OWNER),
+            },
+            Duration::days(30),
+            2,
+            DueDates::Read,
+        )
+        .await
+        .unwrap();
+    assert!(report.stopped_early);
+    // Only the threads already at the classifier when it said stop.
+    assert!(classifier.inputs.lock().unwrap().len() <= 2);
+}
+
+#[tokio::test]
+async fn the_sweep_leaves_an_inbox_being_backfilled_to_the_backfill() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    set_stale(&store, &[insert(&store, thread(OWNER))], noon());
+    let service = service(&store, &classifier, &enrolled());
+    service.backfilling().insert(INBOX);
+
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(report, SweepReport::default());
+    assert!(store.stale_reads.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_backfill_reads_due_dates_only_for_threads_active_since_its_cutoff() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
+    let old: Vec<_> = (0..3).map(|_| insert(&store, thread(OWNER))).collect();
+    set_stale(&store, &old, noon() - Duration::days(10));
+    // Mail arriving while the pass runs is newer than the cutoff.
+    let recent = insert(&store, thread(OWNER));
+    store.stale.lock().unwrap().insert(
+        0,
+        (
+            INBOX,
+            StaleThread {
+                thread_id: recent,
+                latest_at: noon(),
+            },
+        ),
+    );
+    let service = due_date_service(&store, &classifier, &due_dates, None);
+    let inbox = FocusInboxOwner {
+        link_id: INBOX,
+        owner: owner(OWNER),
+    };
+
+    let report = service
+        .backfill(
+            &inbox,
+            Duration::days(30),
+            3,
+            DueDates::ReadSince(noon() - Duration::days(3)),
+        )
+        .await
+        .unwrap();
+    assert_eq!(report.classified, 4);
+    assert_eq!(due_dates.inputs.lock().unwrap().len(), 1);
+    let saved = store.saved.lock().unwrap();
+    for record in saved.iter() {
+        let expected = (record.thread_id == recent).then(friday);
+        assert_eq!(record.due_on, expected, "{}", record.thread_id);
+    }
 }

@@ -1,0 +1,143 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH member AS MATERIALIZED (\n               SELECT team_role::text AS role,crm_access FROM team_user WHERE team_id=$1 AND user_id=$2\n           ), consent AS MATERIALIZED (\n               SELECT link_id,enabled,selected_enabled,mode,active_rule_revision,policy_version,\n                      consent_incarnation,xmin::text AS identity\n               FROM crm_email_consent WHERE team_id=$1 AND user_id=$2\n           ), mailbox AS MATERIALIZED (\n               SELECT id,email_address,macro_id,is_primary,deleting_at,disconnect_requested_at,needs_reauth,grant_id,grant_generation,fusionauth_user_id,provider::text AS provider FROM email_links\n               WHERE id=(SELECT link_id FROM consent) AND macro_id=$2\n               UNION ALL\n               SELECT id,email_address,macro_id,is_primary,deleting_at,disconnect_requested_at,needs_reauth,grant_id,grant_generation,fusionauth_user_id,provider::text AS provider FROM email_links\n               WHERE NOT EXISTS(SELECT 1 FROM consent) AND macro_id=$2 AND is_primary\n                   AND deleting_at IS NULL AND disconnect_requested_at IS NULL AND NOT needs_reauth\n           )\n           SELECT member.role,member.crm_access,consent.identity AS consent_identity,\n                  consent.consent_incarnation,consent.policy_version,\n                  consent.enabled,consent.selected_enabled,consent.mode,consent.active_rule_revision,\n                  mailbox.id AS link_id,mailbox.email_address,mailbox.macro_id,mailbox.is_primary,\n                  mailbox.deleting_at,mailbox.disconnect_requested_at,mailbox.needs_reauth,\n                  mailbox.grant_id,mailbox.grant_generation,mailbox.fusionauth_user_id,mailbox.provider,\n                  revision.definition\n           FROM member LEFT JOIN consent ON TRUE LEFT JOIN mailbox ON TRUE\n           LEFT JOIN LATERAL (\n               SELECT definition,link_id FROM crm_email_rule_revisions\n               WHERE consent.active_rule_revision IS NOT NULL\n                   AND (team_id,user_id,revision) BETWEEN\n                       ($1,$2,consent.active_rule_revision)\n                       AND ($1,$2,consent.active_rule_revision)\n               ORDER BY team_id,user_id,revision LIMIT 1 OFFSET 0\n           ) revision ON revision.link_id=mailbox.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "crm_access",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "consent_identity",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "consent_incarnation",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "policy_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "selected_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "mode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "active_rule_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "is_primary",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "deleting_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "disconnect_requested_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "needs_reauth",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
+        "name": "grant_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 18,
+        "name": "fusionauth_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "provider",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "definition",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "b6cdd415d186824eea23ee5c8f771822ede4717461c43a1465fa006dec0ed178"
+}

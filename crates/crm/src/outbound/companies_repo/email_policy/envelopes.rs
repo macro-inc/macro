@@ -211,7 +211,9 @@ impl EmailPolicyTransaction for PgEmailPolicyTransaction {
         Ok(Some(EmailPolicyPreview {
             preview_id: row.preview_id,
             generation: EmailPolicyGeneration {
-                consent_incarnation: row.consent_incarnation,
+                consent_incarnation: row
+                    .consent_incarnation
+                    .ok_or(CrmError::EmailPolicyConflict)?,
                 policy_version: row.policy_version,
             },
             context_id: row.context_id,

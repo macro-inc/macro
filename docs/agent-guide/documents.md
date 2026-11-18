@@ -880,9 +880,10 @@ Right-click inside the cell text editor retains the native text-editing menu.
 Opening a saved spreadsheet from Files/Drive (including a favorite) keeps the
 Drive navigation sidebar in place. Collapse it with the sidebar control; the
 spreadsheet header then shows the navigation toggle to reopen it. Opening a
-spreadsheet does not change the saved sidebar preference. The header keeps the
-Files location breadcrumbs before the sheet title; click a location breadcrumb
-to return to that file listing.
+spreadsheet does not change the saved sidebar preference. Opened from a Drive
+list, the header keeps that list's location breadcrumbs before the sheet title;
+click a location breadcrumb to return to that file listing. Opened from anywhere
+else, the title stands alone.
 
 ## Spreadsheet comments
 

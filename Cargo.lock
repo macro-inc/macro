@@ -454,6 +454,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
+ "httpdate",
  "lru 0.16.4",
  "macro_auth",
  "macro_db_client",
@@ -476,6 +477,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "url",
  "uuid",
  "workspace-hack",
@@ -780,6 +782,7 @@ dependencies = [
  "notification",
  "onboarding",
  "opentelemetry",
+ "opentelemetry_sdk",
  "pipedream_mcp",
  "png",
  "prompt",
@@ -826,6 +829,8 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "trigger_context",
  "unfurl_service",
  "universal_input",
@@ -4039,7 +4044,6 @@ dependencies = [
  "email_api_client",
  "email_db_client",
  "email_utils",
- "futures",
  "google_token",
  "macro_auth",
  "macro_authorization",
@@ -4672,6 +4676,7 @@ dependencies = [
  "code_mode_assets",
  "futures",
  "macro_tower_layers",
+ "nom 8.0.0",
  "opentelemetry",
  "reqwest 0.13.4",
  "rootcause",
@@ -4684,6 +4689,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
  "url",
  "uuid",
  "workspace-hack",
@@ -4882,6 +4888,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -5606,6 +5613,7 @@ dependencies = [
  "models_properties",
  "opentelemetry",
  "properties",
+ "psl",
  "rdkafka",
  "readonly_pool",
  "rootcause",
@@ -7609,6 +7617,7 @@ dependencies = [
  "email",
  "entity_access",
  "entity_access_management",
+ "feature_flags",
  "frecency",
  "gmail_emulator",
  "hex",
@@ -7617,6 +7626,7 @@ dependencies = [
  "macro_authorization",
  "macro_aws_config",
  "macro_db_migrator",
+ "macro_env",
  "macro_event_topics",
  "macro_user_id",
  "outlook_emulator",
@@ -7650,6 +7660,7 @@ dependencies = [
  "doppler-config",
  "email",
  "feature_flags",
+ "futures",
  "jev",
  "kafka_util",
  "macro_auth",
@@ -8434,8 +8445,10 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "sha1 0.10.6",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
  "wiremock",
  "workspace-hack",
 ]
@@ -9357,6 +9370,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "url",
  "uuid",
  "workspace-hack",
@@ -13287,7 +13301,10 @@ dependencies = [
  "ai_toolset",
  "anyhow",
  "futures",
+ "genai_telemetry",
  "macro_user_id",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "regex",
  "rmcp",
  "schemars 1.2.1",
@@ -13295,6 +13312,8 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -15018,6 +15037,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
@@ -16725,6 +16745,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "psl"
+version = "2.1.256"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39aa082f2912d769ed2960bb49d543d0d64402f9dd8a756745966cbea1684360"
+dependencies = [
+ "psl-types",
+]
+
+[[package]]
+name = "psl-types"
+version = "2.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33cb294fe86a74cbcf50d4445b37da762029549ebeea341421c7c70370f86cac"
+
+[[package]]
 name = "pxfm"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18390,6 +18425,8 @@ dependencies = [
  "models_search",
  "nom 8.0.0",
  "opensearch_client",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "pdfium-render",
  "projects",
  "properties",
@@ -18404,6 +18441,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "sqs_worker",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -18411,6 +18449,8 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",

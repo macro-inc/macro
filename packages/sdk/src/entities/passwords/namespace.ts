@@ -1,6 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import type { PasswordAgentCreateSecret } from '../../../generated/storage/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Team } from '../teams/team';
 import { type AgentWake, PasswordItem, vaultHeaders } from './item';
@@ -34,23 +34,28 @@ export class AgentVault {
     private readonly wake: AgentWake,
   ) {}
 
-  /** Items the agent may use or request, newest first, metadata only. */
-  search(query?: string): AsyncGenerator<PasswordItem> {
-    return paginate(async (cursor) => {
-      const page = unwrap(
-        await this.client.storage.passwordsAgentSearch({
-          path: { team: this.team.id },
-          headers: { 'X-Macro-Agent-Session-Id': this.wake.wake },
-          query: { q: query ?? null, cursor: cursor ?? null },
-        }),
-      );
-      return {
-        items: page.items.map((hit) =>
-          PasswordItem.fromHit(this.client, this.team, this.wake, hit),
-        ),
-        nextCursor: page.nextCursor,
-      };
-    });
+  /** Items the agent may use or request, newest first, metadata only; `maxItems` caps the total. */
+  search(
+    query?: string,
+    opts?: IterationOptions,
+  ): AsyncGenerator<PasswordItem> {
+    return iterate('passwords.search', opts, {}, () =>
+      paginate(async (cursor) => {
+        const page = unwrap(
+          await this.client.storage.passwordsAgentSearch({
+            path: { team: this.team.id },
+            headers: { 'X-Macro-Agent-Session-Id': this.wake.wake },
+            query: { q: query ?? null, cursor: cursor ?? null },
+          }),
+        );
+        return {
+          items: page.items.map((hit) =>
+            PasswordItem.fromHit(this.client, this.team, this.wake, hit),
+          ),
+          nextCursor: page.nextCursor,
+        };
+      }),
+    );
   }
 
   /**

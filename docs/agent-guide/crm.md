@@ -699,6 +699,18 @@ controls use the same team exclusions as the privacy dialog. Blocking or
 unblocking never archives or restores records. A partially failed multi-domain
 change retains successful blocks and offers **Retry failed domains**.
 
+Blocking a domain equal to or above an affected connected primary mailbox's
+domain is refused. Team exclusions protect every member's primary mailbox;
+personal exclusions protect your own. The reason appears below the input,
+which keeps the typed domain for correction. Company-domain reasons explain
+that colleagues on the mailbox's own domain are already excluded from CRM;
+personal-provider reasons explain only that the block would hide all of the
+mailbox's email. Existing matching entries show the same note beside the entry
+and retain **Remove** with its usual permissions. Nothing is removed automatically.
+Company email-sharing off and archive also refuse the same whole-mailbox exclusion.
+Verify both scopes, an exact and parent domain, an allowed child or unrelated
+domain, and removal of an existing warned entry at desktop and phone widths.
+
 Contacts without a company add no CRM thread-access grant. Archiving one
 suppresses its team's CRM-derived grant; independent ownership, delegation,
 sharing, and other eligible team grants still apply. Verify consent, withdrawal,

@@ -416,3 +416,50 @@ describe('Threads rail paging', () => {
     useSoupAstItemsQuery.mockReset();
   });
 });
+
+describe('channel list failures', () => {
+  const failedQuery = (entities: ChannelEntity[]) =>
+    ({
+      isEnabled: true,
+      isPending: false,
+      isLoading: false,
+      isFetching: false,
+      // Offline, the live query hides a network error behind its local cache
+      // projection, which is empty when the list was never loaded.
+      error: null,
+      fetchError: new Error('network'),
+      data: { entities },
+    }) as never;
+
+  it('reports a failed fetch when no conversations are listed', () => {
+    useSoupAstItemsQuery.mockImplementation(() => failedQuery([]));
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'direct_messages',
+        () => 'updated_at'
+      );
+      expect(sources.direct_messages.items()).toEqual([]);
+      expect(sources.direct_messages.error()).toBeInstanceOf(Error);
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+
+  it('keeps cached conversations listed through a failed fetch', () => {
+    useSoupAstItemsQuery.mockImplementation(() =>
+      failedQuery([channelEntity('eng')])
+    );
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'team_channels',
+        () => 'updated_at'
+      );
+      expect(sources.team_channels.items().map((c) => c.id)).toEqual(['eng']);
+      expect(sources.team_channels.error()).toBeUndefined();
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+});
