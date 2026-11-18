@@ -607,6 +607,24 @@ describe('destination adapters', () => {
     );
     expect(mocks.sendEmail.mock.calls[1][0].inboxId).toBe('work');
   });
+  it('keeps the draft when deleting it from its inbox fails', async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
+    mocks.deleteEmail.mockRejectedValueOnce(new Error('not deleted'));
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
+      await expect(actions.submit(submission)).rejects.toThrow('refused');
+      submission.fields.inboxId = 'work';
+      await expect(actions.submit(submission)).rejects.toThrow('not deleted');
+      submission.fields.inboxId = 'inbox';
+      await actions.submit(submission);
+    });
+    expect(mocks.saveEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(2);
+    expect(mocks.sendEmail.mock.calls[1][0].message).toMatchObject({
+      db_id: 'draft',
+      thread_db_id: 'thread',
+    });
+  });
   it('saves a later submission as a new draft', async () => {
     const submission = input('email');
     await withActions(submission, async (actions) => {
