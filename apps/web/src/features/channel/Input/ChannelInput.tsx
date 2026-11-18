@@ -850,7 +850,10 @@ export function ChannelInput(props: ChannelInputProps) {
                 <ComposerEditor
                   config={markdownEditor}
                   placeholder={props.input.placeholder}
-                  initialValue={inputState.view().value}
+                  // Another input on this draft (the channel in another
+                  // desktop tab) can change it; the shell shows that change
+                  // and does not report its own re-export back.
+                  value={inputState.view().value}
                   autofocus={!isTouchDevice() && (props.autofocus ?? true)}
                   class="text-base"
                   refFn={attach}
