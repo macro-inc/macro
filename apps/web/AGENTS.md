@@ -563,11 +563,21 @@ mentions) rank with `NAME_MATCH_RANKING` in `@core/util/freshSort`: names equal
 to the query first, then names starting with it, then other matches, with tight
 matches near the start scoring higher. Each menu's recency weights and type
 boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
-lift a row past a better name match. The one exception: Cmd+K then keeps Macro
-users and DMs ahead of CRM contacts across the people positions, whatever their
-match. Among equally good name matches Cmd+K lists Macro users and DMs before
-other rows. Personal contact rows keep the native window order among equally good
-name matches only, so a recent weaker match never takes a better match's slot.
+lift a row past a better name match. Cmd+K and mobile name search
+(`rankCommandSearchItems`) put relationship first among names with a word
+starting with each typed term (`startsWordsOf`, the native word-prefix rule),
+as people policy 6 does: the viewer's own results and the people they know
+(teammates, a DM row, or a person with an interaction time, which comes only
+from DMs) lead, ordered by match, and people the viewer never messaged, CRM
+contacts included, follow however exactly their name matches. Names that only
+contain the query come last, with strangers after the other rows of each tier.
+Among equally good matches Cmd+K lists teammates, then other people the viewer
+knows, before other rows. Within a run of adjacent people rows in one of those
+groups, Macro users and DMs lead CRM contacts whatever their match; no person
+moves past another result or into a better group to do it. Personal contact
+rows keep the native window order among people in the same group, matching
+equally well and equally close to the viewer, so a recent weaker match never
+takes a better match's slot.
 A row whose letters merely appear in order ranks below every row containing the
 typed words.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when
