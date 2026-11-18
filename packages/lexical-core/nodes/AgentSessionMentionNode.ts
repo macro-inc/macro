@@ -120,7 +120,8 @@ export class AgentSessionMentionNode extends DecoratorNode<
     const node = $createAgentSessionMentionNode({
       id: serializedNode.id,
       label: serializedNode.label,
-      mentionUuid: serializedNode.mentionUuid,
+      // Loro stores an absent uuid as null.
+      mentionUuid: serializedNode.mentionUuid ?? undefined,
       expanded: serializedNode.expanded,
     });
     $applyIdFromSerialized(node, serializedNode);

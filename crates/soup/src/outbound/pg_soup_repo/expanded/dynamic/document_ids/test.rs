@@ -1,7 +1,7 @@
 use super::DocumentIdArrays;
 use crate::domain::models::{DynamicSort, SoupSortDirection, grouping::ItemGroupingInfo};
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, MAX_NAMED_CANDIDATES,
+    DocumentGrants, ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, MAX_NAMED_CANDIDATES,
     build_document_filter, build_grouped_query, build_query, expanded_dynamic_cursor_soup,
     expanded_dynamic_cursor_soup_grouped, first_document_id_slot,
 };
@@ -194,17 +194,29 @@ fn arrays_follow_each_querys_fixed_binds() {
                 Expr::is_not(any_of(&absent(2, count))),
             ));
             let mut flat_ids = DocumentIdArrays::starting_at(flat_first);
-            let flat = build_query(&filter, false, sort, &mut flat_ids)
-                .sql()
-                .to_owned();
+            let flat = build_query(
+                &filter,
+                false,
+                sort,
+                DocumentGrants::Estimated,
+                &mut flat_ids,
+            )
+            .sql()
+            .to_owned();
             let grouping = GroupingConfig {
                 field: status(Some("TASK")),
                 group_key: None,
                 per_group_limit: None,
             };
             let mut grouped_ids = DocumentIdArrays::starting_at(grouped_first);
-            let (grouped, _) =
-                build_grouped_query(&filter, false, &grouping, sort, &mut grouped_ids);
+            let (grouped, _) = build_grouped_query(
+                &filter,
+                false,
+                &grouping,
+                sort,
+                DocumentGrants::Estimated,
+                &mut grouped_ids,
+            );
             (
                 flat,
                 flat_ids.into_binds().len(),
@@ -450,6 +462,7 @@ async fn grouped_pages_match_bound_id_sets(pool: PgPool) -> anyhow::Result<()> {
             false,
             &grouping,
             SimpleSortMethod::UpdatedAt.into(),
+            DocumentGrants::Estimated,
             &mut document_ids,
         );
         assert_eq!(document_ids.into_binds().len(), arrays, "{label}");

@@ -265,6 +265,53 @@ async fn recovery_claims_are_exclusive_and_completion_is_fenced(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = false)]
+async fn an_abandoned_operation_is_never_claimed_again(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PostgresRepository::new(pool.clone());
+    let p = repo.save_profile(owned()).await.unwrap();
+    let start = Utc::now() + Duration::days(2);
+    let mut original = booking(p.id, start);
+    original.booking.status = BookingStatus::Processing;
+    let mut operation = CalendarOperation::new(CalendarOperationKind::Create);
+    operation.retry_at = Utc::now() - Duration::seconds(1);
+    original.operation = Some(operation);
+    repo.reserve(original, None, start, start + Duration::days(1))
+        .await
+        .unwrap();
+    let mut claimed = repo.claim_recovery().await.unwrap().unwrap();
+    claimed.booking.status = BookingStatus::Failed;
+    let operation = claimed.operation.as_mut().unwrap();
+    operation.retry_at = Utc::now() - Duration::seconds(1);
+    operation.abandoned_at = Some(Utc::now());
+    let id = claimed.booking.id;
+    repo.update_booking(claimed, BookingStatus::Processing)
+        .await
+        .unwrap();
+    let row = sqlx::query!(
+        "SELECT status, recovery_at FROM scheduling_booking WHERE id = $1",
+        id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.status, "failed");
+    assert!(row.recovery_at.is_none());
+    assert!(repo.claim_recovery().await.unwrap().is_none());
+    let reservations = sqlx::query_scalar!(
+        "SELECT count(*) FROM scheduling_host_claim WHERE booking_id = $1",
+        id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        reservations,
+        Some(1),
+        "an abandoned booking keeps its reservation"
+    );
+}
+
+#[sqlx::test(migrations = false)]
 async fn public_budget_is_atomic_shared_and_resets_without_growing_rows(pool: PgPool) {
     setup(&pool).await;
     let repo = std::sync::Arc::new(PostgresRepository::new(pool.clone()));

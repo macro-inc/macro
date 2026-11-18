@@ -494,10 +494,19 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
-  // CRM privacy settings use the generated client.
+  // CRM privacy settings use the generated client; rule-management wrappers
+  // follow the flag-gated API in the SDK phase.
+  'cancelCrmEmailRulePreview',
+  'getCrmEmailPolicy',
   'getCrmEmailPrivacy',
+  'getCrmEmailRulePreview',
+  'getCrmEmailRuleRevision',
+  'listCrmEmailPolicyHistory',
   'listCrmExcludedEmailThreads',
+  'previewCrmEmailRules',
+  'updateCrmEmailPolicy',
   'updateCrmEmailPrivacy',
+  'validateCrmEmailRules',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [

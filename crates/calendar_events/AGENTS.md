@@ -390,7 +390,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   Retirements carry it per event (`RetiredCalendarEvent::team_ooo_changed`): only
   removing a source whose typed `event_type` is out of office raises it, since
   every sync of a removed meeting's attendees reaches their teammates' calendars
-  and the hint blanks their overlay.
+  and the hint blanks their overlay. An Outlook event's changes reach viewers
+  through its `calendar_projection_outbox` row, whatever wrote them: the row's
+  trigger raises the hint only when the event's typed `event_type` was or is
+  out of office, a revision still waiting keeps the hint of every change it
+  carries, and `CalendarProjectionRelay` sends it. Outlook discovery refreshes
+  viewers only when a calendar was added, removed or changed, and raises the
+  hint for the calendar changes Google's calendar list raises it for
+  (`upsert_calendar_tx`).
 - The Outlook sync (`src/domain/outlook.rs`) refreshes a page's events one
   at a time, first pending id first, and retries that id after any error, so
   one error blocks the calendar. An event the adapter cannot normalize is not
