@@ -1022,9 +1022,15 @@ blocking request as before; older clients keep using it.
 Code steps (written by AI through Draft it, CreateRoutine or the starter
 templates) open on the routine's Overview as a sentence of what they do,
 with each knob in place: values underlined, and what AI decides dotted with a
-sparkle. A choice opens a menu that saves the option picked; a number opens a
-field with − and +, its range, and Enter to save (Esc cancels); text or the
-question AI is asked open an editor with **Save**; on/off flips in place.
+sparkle. On/off flips in place; every other knob opens an editor (a choice's
+options as radios, a number's field with − and + and its range, a text field,
+or the question AI is asked) with **Clear**, **Cancel** and **Save**, on touch
+too. Only **Save** applies the change: Enter never saves, and **Cancel**, Esc
+or a click away drop it. **Clear** empties the field; a value that can't be
+empty (a choice, a number, the question) keeps **Save** disabled, with the
+reason, until one is entered.
+A text knob with no value shows a + and its label (**Not set** under
+**Settings**) with a dashed underline, and opens the same editor.
 Each change saves only that value, never the code. Knobs the sentence
 doesn't show are listed under **Settings**; a step without a sentence shows
 its summary. **Edit** in a code step's ⋯ menu opens **Change this step**

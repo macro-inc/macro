@@ -65,6 +65,29 @@ The app's Gradle packaging excludes the duplicate
 OSGi metadata is unused on Android. Keep the exclusion exact: broad `META-INF`
 exclusions can remove service-provider registrations used by OpenTelemetry.
 
+## Native certificate verification
+
+Native HTTP (reqwest) verifies certificates through `rustls-platform-verifier`,
+which calls Android's certificate checker through a Kotlin library (an AAR).
+`MainActivity` initializes it through `src-tauri/src/android_tls.rs` before
+networking starts.
+
+- `app/rustls-verifier.gradle.kts` reads the AAR's version from the resolved
+  `rustls-platform-verifier-android` crate and downloads it from upstream's Maven
+  repository on GitHub. `gradle/verification-metadata.xml` pins its SHA-256;
+  Gradle fails the build when the artifact differs or the version has no pin.
+  After a verifier upgrade, download the new AAR, check it against upstream's
+  published checksum, and add its SHA-256 there.
+- Certificates from CAs that no longer list an OCSP responder (Let's Encrypt,
+  Google Trust Services, SSL.com) are checked against the CA's revocation list,
+  which most CAs serve over plain HTTP. The AAR's merged
+  `network_security_config` allows plain HTTP to those CRL hosts only. Once a
+  network security config is present, Android ignores `usesCleartextTraffic`.
+- Debug builds replace that config with
+  `app/src/debug/res/xml/network_security_config.xml`, which allows plain HTTP
+  everywhere for the dev server and local services. Release builds keep the
+  library's config.
+
 ## Performance benchmark
 
 `just android-benchmark --serial <emulator>` (from `apps/web`) times cold start, view
