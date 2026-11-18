@@ -12,7 +12,9 @@ use crate::telemetry::GenAiContext;
 use crate::tool_adapter::{DynToolSetAdapter, provider_definition};
 use crate::tool_result_limit::ToolResultLimit;
 use ai_toolset::tool_search::{ToolMatch, tools_loaded_by};
-use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
+use ai_toolset::{
+    RequestContext, SearchableTool, ToolCallOrigin, ToolLoader, ToolSet as AiToolSet,
+};
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
 use rig_agent::tool::server::{ToolServer, ToolServerHandle};
@@ -53,6 +55,8 @@ pub struct AgentLoop {
     genai_telemetry: bool,
     /// See [`Self::with_streamed_tool_calls`].
     stream_tool_calls: bool,
+    /// See [`Self::with_tool_origin`].
+    tool_origin: ToolCallOrigin,
     /// The router this loop's model calls use instead of the shared one, when
     /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
     router: Option<ModelRouter<MeteredHttpClient>>,
@@ -81,6 +85,7 @@ impl AgentLoop {
             agent_name: None,
             genai_telemetry: true,
             stream_tool_calls: false,
+            tool_origin: ToolCallOrigin::default(),
             router: None,
         }
     }
@@ -178,6 +183,14 @@ impl AgentLoop {
     /// the usage context's feature (`chat`, `automation`, …).
     pub fn with_agent_name<S: Into<String>>(mut self, agent_name: S) -> Self {
         self.agent_name = Some(agent_name.into());
+        self
+    }
+
+    /// Say who this loop's tool calls come from, recorded on each
+    /// `execute_tool` span whether or not GenAI telemetry is on. Without a host
+    /// the loop's agent name stands in (see [`Self::with_agent_name`]).
+    pub fn with_tool_origin(mut self, origin: ToolCallOrigin) -> Self {
+        self.tool_origin = origin;
         self
     }
 
@@ -323,10 +336,15 @@ impl AgentLoop {
                 description: definition.description.clone(),
             })
             .collect();
+        let agent_name = self
+            .agent_name
+            .clone()
+            .unwrap_or_else(|| usage_ctx.feature.to_string());
         let request_context = RequestContext::new(usage_ctx.user.clone())
             .with_tool_search(catalog, loader)
             .with_advertised_tools(Arc::new(advertised))
-            .with_genai_telemetry(self.genai_telemetry);
+            .with_genai_telemetry(self.genai_telemetry)
+            .with_origin(self.tool_origin.clone().or_host(agent_name.clone()));
         // TODO this is cringe, make request context a RW lock newtype
         let request_context_rw = Arc::new(RwLock::new(request_context.clone()));
 
@@ -423,9 +441,7 @@ impl AgentLoop {
         // the content policy governs what is recorded (see `crate::telemetry`).
         let telemetry = GenAiContext::new(
             self.conversation_id.clone(),
-            self.agent_name
-                .clone()
-                .unwrap_or_else(|| usage_ctx.feature.to_string()),
+            agent_name,
             ContentPolicy::from_env(),
             self.genai_telemetry,
         );

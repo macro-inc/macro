@@ -28,7 +28,7 @@ use agent::{
 };
 use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
 use ai_tools::{DeferredToolSet, ToolServiceContext};
-use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
+use ai_toolset::{AsyncToolCollection, ToolCallOrigin, ToolMode, ToolSet as AiToolSet};
 use axum::extract::FromRef;
 use futures::{FutureExt as _, StreamExt as _};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -821,6 +821,11 @@ async fn drive_turn(
         .with_reasoning_effort(reasoning_effort)
         .with_speed(speed)?
         .with_genai_telemetry(false)
+        .with_tool_origin(
+            ToolCallOrigin::default()
+                .with_tool_mode(ToolMode::Code)
+                .with_turn_purpose(purpose.into()),
+        )
         .with_streamed_tool_calls()
         .with_tool_result_limit(tool_results.clone());
     // Only the loop's own model calls run on the agent's key, so only they are

@@ -178,6 +178,11 @@ fn a_turn_becomes_an_agent_span_with_a_tool_span_per_call() {
         Some("execute")
     );
     assert_eq!(
+        string_attribute(bash, attr::MACRO_TOOL_HOST).as_deref(),
+        Some("claude_code"),
+        "the harness is the caller"
+    );
+    assert_eq!(
         json_attribute(bash, attr::TOOL_CALL_ARGUMENTS),
         Some(json!({ "command": "ls examples" }))
     );

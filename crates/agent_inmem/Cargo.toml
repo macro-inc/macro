@@ -50,6 +50,7 @@ serde_json = { workspace = true }
 skills = { path = "../skills" }
 sqlx = { workspace = true }
 sse-stream = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt", "time", "macros"] }
 tokio-util = { workspace = true }
