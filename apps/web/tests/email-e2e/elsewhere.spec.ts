@@ -70,11 +70,11 @@ for (const provider of PROVIDERS) {
       saw('STX-303');
       await save.release();
       // Once it is sent, the universal input closes and opens the thread.
-      did('AX-307');
       await expect(universalInput(page)).toHaveCount(0);
       await expect(
         page.getByRole('heading', { name: 'Lunch moved', level: 1 })
       ).toBeVisible();
+      saw('STX-977');
 
       await expect
         .poll(
@@ -90,6 +90,8 @@ for (const provider of PROVIDERS) {
         .toEqual([{ to: [recipient], text: true }]);
       confirmed('F-166');
       await expect(page.getByText(request)).toBeVisible();
+      // What it sent was the draft it saved, so no draft is left.
+      await expect.poll(async () => await draftThreads(mailbox)).toEqual([]);
     });
 
     // When this fails, "Save as draft" in the universal input keeps no
@@ -114,11 +116,11 @@ for (const provider of PROVIDERS) {
       saw('STX-303');
       await save.release();
       // Once it is saved, the universal input closes and opens the draft.
-      did('AX-307');
       await expect(universalInput(page)).toHaveCount(0);
       await expect(page.getByPlaceholder(/subject/i)).toHaveValue(
         'Lunch moved'
       );
+      saw('STX-977');
       await expect(page.getByText(request)).toBeVisible();
       await expect
         .poll(async () =>

@@ -454,7 +454,6 @@ AX-302	The app layout no longer registers the mailto interceptor (registerMailto
 AX-304	on a phone, the Mail page's create button opens no new message
 AX-305	picking Email as the universal input's content type does not switch it to an email
 AX-306	the universal input's email ignores the From picked, the Cc/Bcc button and the recipients typed
-AX-307	The open of an email result in actions.ts returns without navigating, so once the save or send finishes the universal input closes and opens neither the draft nor the sent thread.
 AX-314	Home's registration of the entity action hotkeys in HomeList.tsx is switched off, so e no longer marks the focused Home row done (the row's context menu "Mark done" is the other way in and is not reached).
 AX-315	The desktop "Filter Home" dropdown in HomeFilters.tsx drops every change to its Type group, so "Select only Email" no longer filters Home.
 AX-316	Connect email under Welcome home opens no chooser
@@ -1114,3 +1113,4 @@ STX-973	The desktop Home view in home-view.tsx hides its list pane while a previ
 STX-974	The Home list's rows in HomeList.tsx keep every email row that has left the source, so a thread marked done stays listed on Home.
 STX-975	The activity row of a program step in CodeExecutionToolCall.tsx shows an empty title instead of the operation's label.
 STX-976	The review composer's disabled accessor in DraftComposer.tsx always returns false, so the fields of a sent review card stay editable.
+STX-977	The open of an email result in actions.ts returns without navigating, so once the save or send finishes the universal input closes and opens neither the draft nor the sent thread.

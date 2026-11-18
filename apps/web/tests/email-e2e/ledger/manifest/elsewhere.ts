@@ -209,12 +209,8 @@ export const elsewhere = {
       surface: 'SX-20',
       fn: ['F-166'],
       action: 'Universal input: open the saved draft or sent thread',
-      trigger:
-        'by itself once the save or send finishes: the host closes the universal input and runs the open of its result',
-      source: [
-        'src/features/universal-input/actions.ts',
-        'src/features/universal-input/universal-input.tsx',
-      ],
+      trigger: 'open action on the "Email draft saved" / "Email sent" result',
+      source: ['src/features/universal-input/actions.ts'],
       flag: 'enable-universal-input',
     },
     {
@@ -583,7 +579,7 @@ export const elsewhere = {
       trigger: 'save or send pending',
       source: ['src/features/universal-input/views/universal-composer.tsx'],
       flag: 'enable-universal-input',
-      note: 'the result line ("Email draft saved" / "Email sent" and its Open) is never on screen: every host closes the universal input in the step that sets it, and opens what was made (AX-307)',
+      note: 'the result line ("Email draft saved" / "Email sent" and its Open) is never on screen: every host closes the universal input in the step that sets it, and opens what was made (STX-977)',
     },
     {
       id: 'STX-034',
@@ -906,6 +902,19 @@ export const elsewhere = {
         'Review card of a drafted email after it is sent: status "Sent", its fields and "Send email" disabled',
       trigger: 'the user sent the draft from the card',
       source: ['src/features/agent-reviews/views/review-stack.tsx'],
+    },
+    {
+      id: 'STX-977',
+      surface: 'SX-20',
+      fn: ['F-166'],
+      state:
+        'result: the universal input closes, and the saved draft opens in the composer or the sent thread opens',
+      trigger: 'the save or send finished',
+      source: [
+        'src/features/universal-input/universal-input.tsx',
+        'src/features/universal-input/actions.ts',
+      ],
+      flag: 'enable-universal-input',
     },
   ],
 } as const satisfies Group;
