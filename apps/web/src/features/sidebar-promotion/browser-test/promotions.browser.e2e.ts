@@ -37,5 +37,5 @@ test('keeps every pitch to two lines at the default sidebar width', async ({
         )
       )
     );
-  expect(lines).toEqual([2, 2, 2]);
+  expect(lines).toEqual([2, 2, 2, 2]);
 });

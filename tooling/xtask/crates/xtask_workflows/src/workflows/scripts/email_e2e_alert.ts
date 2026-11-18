@@ -24,6 +24,15 @@
 // never runs, the next run does. A failed post records nothing, so the next
 // run posts again, as does a re-run of this job while no newer run has ended.
 //
+// A push that waited for the run before it and was replaced by a newer push
+// (the workflows queue as the dev deploys do) ends as a cancelled run with no
+// jobs, and a stream can hold several for each run that ended. Having no jobs,
+// it neither records nor passes, and the job reads past it without counting it
+// toward LOOK_BACK; the run after it tests the newer tree, and that run's
+// failure names the last pass before it, so the changes since span its
+// commit. A run is judged by its jobs, never by its conclusion: one whose job
+// ran out of time is cancelled too, yet ran this job.
+//
 // A failure names the commit, each failed job with the step it failed at, and
 // what the run's coverage report (downloaded to EMAIL_E2E_REPORTS) says
 // failed: gating tests, tests kept for known bugs that now pass, or the
@@ -42,8 +51,14 @@ import { appendFileSync, existsSync, readdirSync, readFileSync, writeFileSync } 
  */
 const RED = new Set(['failure', 'timed_out', 'cancelled']);
 
-/** The most runs of the stream the job reads. */
-const LOOK_BACK = 30;
+/** The most runs with jobs of the stream the job reads. */
+export const LOOK_BACK = 30;
+
+/**
+ * How many of the stream's newest runs the job lists, the most a page holds:
+ * runs replaced while they waited have no jobs, and are read past.
+ */
+const LISTED = 100;
 
 /** How many runs' jobs the job reads at once. */
 const BATCH = 5;
@@ -187,6 +202,34 @@ export function passed(entry: Entry, alertJob: string): boolean | null {
     return null;
   }
   return failedJobs(suite).length === 0;
+}
+
+/**
+ * Reads the stream's runs, newest first, a few at a time with `jobsOf`, until
+ * the decision `judge` makes of them would not change or, by the end of a
+ * batch, LOOK_BACK runs with jobs were read. A push replaced while it waited
+ * has none: it is read but not counted, so replaced pushes do not crowd out
+ * the runs that ended.
+ */
+export async function readStream(
+  stream: StreamRun[],
+  names: Names,
+  judge: (entries: Entry[]) => Decision,
+  jobsOf: (run: StreamRun) => Promise<Job[]>,
+): Promise<Decision> {
+  const entries: Entry[] = [];
+  const ran = () => entries.filter((entry) => entry.jobs.length > 0).length;
+  let decision = judge(entries);
+  for (
+    let start = 0;
+    start < stream.length && ran() < LOOK_BACK && readMore(decision, entries, names);
+    start += BATCH
+  ) {
+    const batch = stream.slice(start, start + BATCH);
+    entries.push(...(await Promise.all(batch.map(async (run) => ({ run, jobs: await jobsOf(run) })))));
+    decision = judge(entries);
+  }
+  return decision;
 }
 
 const short = (sha: string) => sha.slice(0, 7);
@@ -471,17 +514,15 @@ export async function main() {
   const [run, jobs] = await Promise.all([github(`/repos/${repo}/actions/runs/${id}`), jobsOf(repo, id, 'latest')]);
   const failed = failedJobs(jobs.filter((job) => job.name !== names.job));
 
-  // Newest first; read a few at a time, until the decision would not change.
-  const query = new URLSearchParams({ branch: run.head_branch, event: run.event, per_page: `${LOOK_BACK}` });
+  const query = new URLSearchParams({ branch: run.head_branch, event: run.event, per_page: `${LISTED}` });
   const stream: StreamRun[] = (await github(`/repos/${repo}/actions/workflows/${run.workflow_id}/runs?${query}`))
     .workflow_runs;
-  const entries: Entry[] = [];
-  let decision = decide({ run, red: failed.length > 0, entries, names });
-  for (let start = 0; start < stream.length && readMore(decision, entries, names); start += BATCH) {
-    const batch = stream.slice(start, start + BATCH);
-    entries.push(...(await Promise.all(batch.map(async (each) => ({ run: each, jobs: await jobsOf(repo, each.id, 'all') })))));
-    decision = decide({ run, red: failed.length > 0, entries, names });
-  }
+  const decision = await readStream(
+    stream,
+    names,
+    (entries) => decide({ run, red: failed.length > 0, entries, names }),
+    (each) => jobsOf(repo, each.id, 'all'),
+  );
 
   const context: Context = {
     runId: id,

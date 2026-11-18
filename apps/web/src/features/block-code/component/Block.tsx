@@ -8,11 +8,11 @@ import {
   blockTextSignal,
   blockUserAccessSignal,
 } from '@core/signal/load';
+import { lazy } from '@core/util/lazy';
 import {
   createEffect,
   createMemo,
   createSignal,
-  lazy,
   on,
   Show,
   Suspense,

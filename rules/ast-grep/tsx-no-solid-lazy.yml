@@ -1,0 +1,28 @@
+id: tsx-no-solid-lazy
+language: tsx
+severity: error
+message: Import lazy from '@core/util/lazy'. Solid's lazy() shares one load across every instance, owned by the first; unmounting that one mid-load leaves the others rendering nothing.
+files:
+  - apps/web/src/**
+rule:
+  any:
+    - kind: import_specifier
+      has:
+        field: name
+        regex: ^lazy$
+      inside:
+        kind: import_statement
+        stopBy: end
+        has:
+          field: source
+          regex: ^['"]solid-js['"]$
+    - kind: export_specifier
+      has:
+        field: name
+        regex: ^lazy$
+      inside:
+        kind: export_statement
+        stopBy: end
+        has:
+          field: source
+          regex: ^['"]solid-js['"]$

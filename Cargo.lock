@@ -7647,6 +7647,7 @@ dependencies = [
  "connection_gateway_client",
  "doppler-config",
  "email",
+ "feature_flags",
  "jev",
  "kafka_util",
  "macro_auth",
