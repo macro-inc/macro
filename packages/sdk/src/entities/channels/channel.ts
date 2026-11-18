@@ -1,5 +1,6 @@
 import type {
   ActivityType,
+  ApiChannelWithLatest,
   ChannelType,
   GetChannelAttachmentsResponses,
   GetChannelParticipantsResponses,
@@ -23,6 +24,7 @@ import {
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
+import { onlyType } from '../search/exclusions';
 import { entitySearch } from '../search/options';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
@@ -34,6 +36,17 @@ import { postToChannel } from './post';
 import type { Thread } from './thread';
 
 type ChannelDetail = GetChannelResponses[200];
+
+const channelTypes: readonly string[] = [
+  'public',
+  'private',
+  'direct_message',
+  'team',
+] satisfies ChannelType[];
+
+function isChannelType(value: string): value is ChannelType {
+  return channelTypes.includes(value);
+}
 
 /** A member of a channel, with their role and join time. */
 export type ChannelParticipant = GetChannelParticipantsResponses[200][number];
@@ -47,7 +60,8 @@ export type ChannelAttachment =
  */
 export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
-   * Start or join this channel's call, ringing members if a new call starts.
+   * Start or join this channel's call, ringing members if a new call starts;
+   * refused to an agent's program (ExecuteCode, a routine).
    *
    * @write
    * @mcp-exclude Returns a live call room credential; MCP calls carry JSON only.
@@ -173,6 +187,23 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return new Channel(client, id);
   }
 
+  /**
+   * A handle seeded from a `GET /comms/channels` record. The listed name is
+   * the stored one, which the detail shows as is except on direct messages and
+   * unnamed private channels; those are named after the members, so they load.
+   */
+  static fromListing(
+    client: MacroClient,
+    record: ApiChannelWithLatest,
+  ): Channel {
+    const named =
+      record.channel_type !== 'direct_message' && !!record.name?.trim();
+    return new Channel(client, record.id).withListed({
+      channel_type: record.channel_type,
+      ...(named ? { channel_name: record.name ?? undefined } : {}),
+    });
+  }
+
   /** Open (creating if needed) the DM channel with a user. */
   static async dm(client: MacroClient, recipient: User): Promise<Channel> {
     const { channel_id } = unwrap(
@@ -228,10 +259,13 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   readonly type = this.field('channel_type');
 
   /**
-   * Post a message. Plain text, or a rich body composed with `msg`.
+   * Post a message; pass `silent: true` for a routine update that should
+   * notify nobody. Plain text, or a rich body composed with `msg`.
    * `images` attaches static images, such as one from
    * `macro.images.generate()`, below the text; `documents` attaches Macro
    * documents as file chips, such as a file from `macro.documents.upload()`.
+   * `silent` sends no push, email or inbox entry to anyone, mentioned people
+   * included; the message still appears in the channel.
    *
    * Works with a channel webhook token as well as a normal one — see
    * {@link postToChannel} for which endpoint that picks and what it costs.
@@ -243,6 +277,11 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
    * await channel.send('Q3 numbers attached.', { documents: [file] });
    * ```
    *
+   * @example Post a routine status update without notifying anyone.
+   * ```js
+   * await channel.send('Nightly sync finished: 42 records.', { silent: true });
+   * ```
+   *
    * @write
    */
   async send(
@@ -251,6 +290,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
       thread?: Thread;
       images?: StaticImage[];
       documents?: Document[];
+      silent?: boolean;
     },
   ): Promise<Message> {
     const id = await postToChannel(
@@ -555,6 +595,12 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /** Search channels by content, most relevant first, auto-paginated. */
   static search = entitySearch({
     type: 'channel',
-    make: (client, hit) => new Channel(client, hit.channel_id),
+    filters: onlyType('channel'),
+    make: (client, hit) =>
+      new Channel(client, hit.channel_id).withListed(
+        isChannelType(hit.channel_type)
+          ? { channel_type: hit.channel_type }
+          : {},
+      ),
   });
 }

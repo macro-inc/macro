@@ -50,6 +50,11 @@ tools — hexagonal, heavily feature-gated.
   import, initialization, completion accounting and leases, metadata, attachments,
   sent contact seeding and CRM operations. Its `outbox` module owns durable
   initialization, completion and consent publication through transaction ports.
+  `worker/crm_policy.rs` retains the original consent incarnation/version and
+  durable job ID through every page and effect. Legacy CRM history cannot adopt
+  initialized consent. Mark new per-message hints `live_mail=true`; the legacy
+  history fan-out explicitly uses false. Modern publication retains a recovery
+  signal until exact-generation progress/completion; legacy publication deletes.
   Backfill and inbox sync share catalog reconciliation, contact parsing,
   CRM normalization and pending-label snapshot rules. Inbox sync and link manager
   share notification-recipient selection.
@@ -67,6 +72,9 @@ tools — hexagonal, heavily feature-gated.
   Reuse the existing Gmail history journal and backfill repository through its ports.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
   the AI email tools (feature `ai_tools`).
+- `src/outbound/email_pg_repo/dynamic/filters/address_queries.rs`: shared
+  address-index streams for owned and Team reads; Team selection queries live
+  beside `dynamic/query/team_scope.rs`.
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres
   adapters (feature `outbound`); `src/outbound/email_service_http.rs`: calls
   into `email_service`; `src/outbound/s3_draft_attachment_storage.rs`: staged
@@ -178,6 +186,25 @@ tools — hexagonal, heavily feature-gated.
   `test/owned_address_read.rs` compares every tuning's pages with the general
   builder; extend it when the read covers a new filter. A repeated inbox id
   reads as one in every builder (`distinct_links`).
+- Address supersets keep joined and indexed text branches. Use indexed sender
+  lookups in the initial capped probe and the sparse page it selects, in both
+  Team and Owned reads; the `OFFSET 0` keeps generic plans on
+  `idx_email_messages_from_contact_id` instead of scanning every message. Each
+  sender lookup stops one past the initial superset cap, so generic plans can
+  stop on that index instead of building a bitmap of all its messages; the
+  cap cannot truncate a page the probe proved sparse.
+  Indexed recipient lookups apply only to all-recipient-role groups. A rare
+  requested role can scan a dense domain before the cap finds a match, so
+  role-restricted recipient groups keep joined SQL. Dense underfill fallbacks
+  and larger Owned round probes also keep joined SQL; per-message probes can make those
+  large sets slower. Checked General branches keep their original joins so
+  mailbox-fact checks are planned with the messages. Optimized Team probes
+  and pages share a read-only repeatable-read snapshot, as Owned reads do,
+  so imports cannot outgrow the probe's cap between statements; privacy changes
+  committed mid-request apply to the next request. Resolve contribution modes
+  in that snapshot too. If none of the requested contributors uses selected
+  mode, keep the all-mail probe/page SQL without selected-rule work. General
+  reads keep their existing page transaction.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
@@ -186,7 +213,8 @@ tools — hexagonal, heavily feature-gated.
   display name is stored on the draft row (`from_name`), not only on the
   shared sender contact, which keeps an existing name and drops names for
   role addresses such as `support@`.
-- The send route refuses an agent's program (`refuse_program_send`, 403), and
+- The send route and `email_service`'s calendar invite forward refuse an
+  agent's program (`refuse_program_send`, 403), and
   the schedule route admits one only with a quoted `user_confirmation`: a
   program sends through a session review, the harness's confirmed send
   (`SendEmail`/`SendConfirmedEmail`), or a confirmed draft schedule. Keep any
@@ -214,8 +242,21 @@ tools — hexagonal, heavily feature-gated.
   `NEW_INVITES_STAY_OUT` in `domain/focus/rule.rs` is the switch for new invites.
   `stale_threads` restates `domain/focus/calendar.rs`'s test for a change in SQL;
   change both.
+- Focus classifies an inbox only while its owner is in the rollout
+  (`FocusEnrollment`, the worker's locally evaluated `enable-email-focus` flag). Check it
+  after `thread_inbox` and before any mail is read. `enrolled_inboxes` checks every
+  `syncing_inboxes` owner, so an owner who joins is found without mail, and
+  `backfill` fills one inbox several threads at a time. The sweep goes inbox by
+  inbox (`inboxes_with_focus` plus those seen enrolled) and leaves an inbox being
+  backfilled to the backfill, so no thread is classified twice at once; `stale_threads` reads one
+  inbox through its latest-inbound and latest-outbound indexes; keep its
+  `OFFSET 0` fence, or the per-thread calendar and contact checks run on every
+  thread in the window.
 - A Focus thread's `due_on` is read when new mail is classified, only for a thread
-  with `is_focus` or `awaiting_reply`, and never on the re-decide path: that path
+  with `is_focus` or `awaiting_reply`, never for a thread the backfill's second pass
+  finds last active before its last 3 days (`DueDates::ReadSince`, which bounds a
+  rollout step's extractor cost),
+  and never on the re-decide path: that path
   keeps the stored date and calls no model, so `save` writes back what
   `StoredClassification` read. A failed or timed-out read stores no date and never
   fails the classification. `input.rs` gives the extractor each of the latest
@@ -241,12 +282,25 @@ tools — hexagonal, heavily feature-gated.
   whole stream before the LIMIT, and keep the superset stream's lookup by id
   (`= ANY(ARRAY(…))`): as a semi-join the planner reads every thread of the
   inboxes. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
-  scans every company. `ALLOWED` restates `crm_email_thread_allowed`
+  scans every company. `push_allowed` restates `crm_email_thread_allowed`
   set-based, and the contributing inboxes in `dynamic/resolve.rs` restate its
   mailbox conditions (`allowed_restates_the_privacy_function` and
   `contributing_inboxes_restate_the_privacy_function` compare them); change
-  them together. Apply `crm_email_thread_excluded` to both the candidate and
-  competing copies; a copy stays only when no better copy passes the same checks,
+  them together. Selected mode also resolves the active policy's live targets
+  once per page, retaining bounded IDs for per-thread indexed probes. Its
+  positive-target probe runs before the record probe and
+  resolves live company domains once against each selected mailbox's
+  contacts. All-mail-only reads retain their existing candidate path.
+  Keep selected-policy contact resolution within the requested mailboxes;
+  record probes and sparse pages reuse the shared indexed sender/recipient
+  branches. Positive-target discovery probes participants by their IDs. Do not
+  add a redundant mailbox condition inside a sender lookup; contacts already
+  scope it, and the competing index can scan the entire mailbox. All statements share
+  the ten-second deadline. The three-way selected parity suite compares the
+  real scalar, ingestion SQL and inline rule, including whole-thread matches
+  and hidden/deleted live targets. Apply `crm_email_thread_excluded` to both the
+  candidate and competing copies; a copy stays only when no better copy passes
+  the same checks,
   so the representative never depends on the cursor; `test/crm_team_read.rs`
   compares every stream with the general builder page by page. The superset
   keeps only the read inboxes' own contacts, because a message lists only its
@@ -308,6 +362,15 @@ tools — hexagonal, heavily feature-gated.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
+- Deleting mail sends the Drive documents imported from it to the Trash: when
+  a statement removes a live document's `document_email` rows (a message,
+  thread or inbox delete, a purge batch, a replaced attachment, all through
+  cascades), the `document_email_release` trigger queues it in
+  `released_email_attachment_documents` (migration `20261116200143`), and
+  document storage trashes it if no link is left and its owner did not adopt
+  it. Moving a link (sent-identity adoption) inserts the new row before
+  deleting the old one, so the document is never without a link; keep that
+  order in any new path.
 - An attachment links to its document before the bytes reach storage, and a link
   stops sync from offering it again. `AttachmentReadService::document` stores the
   bytes again when a linked document is still awaiting its upload, and DSS signs a
@@ -392,6 +455,25 @@ tools — hexagonal, heavily feature-gated.
   Its `EffectFailure` names the effect (`outlook.effect`) and, for attachment
   uploads, the attachment (`outlook.attachment_id`); never return one without
   a cause.
+- `MailboxSyncService` reads through two gateways: `import_provider` for a
+  folder page claimed before the folder's first round completes and for
+  import reconciliation rows, `provider` for everything else. email-service
+  gives them the Microsoft gate's `Import` and `Live` budgets, so an import
+  cannot take the slot live mail and calendar need.
+- An import round's folder stream reads its next page only while its mailbox
+  has fewer than 200 import rows due (`IMPORT_QUEUED_AHEAD`, checked by
+  `pace_import` with a count capped there); otherwise it is put back for 10 s
+  unread and its enumerate span reads `outlook.outcome=paced`. Rows backed off
+  after their own failures don't count, so they never hold the walk. The count
+  reads the partial index `email_message_reconciliation_import_queued`; keep
+  its predicate and the query's identical, or a mailbox with fewer due rows
+  than the cap reads the whole table. Message claims are first in, first out
+  across mailboxes, so a walk that ran ahead would put every other mailbox's
+  import, and any message that waited for room, behind its whole backlog.
+  Gmail's backfill lists its next page behind the threads it queued for the
+  same reason. Live folder streams are never paced.
+  A message released after a failed read is due at once when a newer
+  revision arrived during the lease.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no
@@ -414,6 +496,10 @@ tools — hexagonal, heavily feature-gated.
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
   can suppress it without processing a self-custodian twice.
+- `email_links.fusionauth_user_id` is the holder of the credentials a link
+  syncs with, not the inbox's owner (`macro_id`): another participant's
+  connection or a custody transfer changes it. Never read it as ownership. A
+  deleted user gets an owner binding only for an inbox of their own account.
 - `email_mailbox_folders.total_item_count` is Graph's `totalItemCount` from the
   latest catalog discovery (every 5 minutes, from the listing discovery already
   makes), and the discover span sums it as `outlook.provider_item_count`. It

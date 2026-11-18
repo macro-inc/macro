@@ -1472,6 +1472,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
       searchInput = element;
     },
     focusResults: () => listRoot()?.focus({ preventScroll: true }),
+    // A conversation beside the rail can list its own rows (its calls).
+    hasResults: () => searchResults().length > 0,
     retry: retrySearch,
   };
 

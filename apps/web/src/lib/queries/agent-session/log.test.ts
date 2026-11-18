@@ -10,10 +10,6 @@ import type { OperationResult } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject, type Source } from 'wonka';
 
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: {},
-  isFeatureEnabled: () => true,
-}));
 const telemetry = vi.hoisted(() => ({ traceFollowResumed: vi.fn() }));
 vi.mock('@core/agent-session/load-telemetry', () => ({
   traceCacheWrite: () => undefined,

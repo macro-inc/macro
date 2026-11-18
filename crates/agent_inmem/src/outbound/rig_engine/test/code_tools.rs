@@ -13,7 +13,17 @@ async fn remote(
     rmcp::service::RunningService<rmcp::RoleServer, StubServer>,
     RemoteMcpToolSet,
 ) {
-    let (server, listed) = listed("macro_internal", names).await;
+    remote_named("macro_internal", names).await
+}
+
+async fn remote_named(
+    server_name: &str,
+    names: &[&str],
+) -> (
+    rmcp::service::RunningService<rmcp::RoleServer, StubServer>,
+    RemoteMcpToolSet,
+) {
+    let (server, listed) = listed(server_name, names).await;
     (server, RemoteMcpToolSet::from_listed(vec![listed], None))
 }
 
@@ -51,6 +61,7 @@ async fn listed(
             name: server.into(),
             client: Arc::new(client.unwrap()),
             tools,
+            trace_context: mcp_toolset::TraceContext::Withhold,
         },
     )
 }
@@ -228,4 +239,51 @@ async fn watched_turns_reach_connected_apps_only_from_code() {
     }
     internal.cancel().await.unwrap();
     linear.cancel().await.unwrap();
+}
+
+/// Code tools served by a custom server named to mangle like the internal
+/// one are not the code runner.
+#[tokio::test]
+async fn code_tools_from_a_lookalike_server_are_not_listed() {
+    let (server, tools) = remote_named(
+        "macro_internal_",
+        &["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"],
+    )
+    .await;
+    assert!(code_tools_listed(&request(Some(tools))).is_err());
+    drop(server);
+}
+
+/// A lookalike server's code tools mangle to the internal names but are
+/// neither advertised nor callable.
+#[tokio::test]
+async fn the_allowlist_keeps_only_the_internal_servers_tools() {
+    let (lookalike, lookalike_tools) = listed("macro_internal_", &["ExecuteCode"]).await;
+    let set = mcp_select::CombinedToolSet::new(
+        Arc::new(AsyncToolCollection::<()>::new()),
+        mcp_allowlist::McpAllowlist::new(
+            RemoteMcpToolSet::from_listed(vec![lookalike_tools], None),
+            EAGER_INTERNAL_MCP_TOOLS,
+        ),
+    )
+    .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS);
+
+    assert!(
+        AiToolSet::<()>::request_schemas(&set)
+            .unwrap_or_default()
+            .is_empty()
+    );
+    let refused = AiToolSet::<()>::dispatch_tool_call(
+        &set,
+        (),
+        RequestContext::new(MacroUserIdStr::try_from_email("owner@example.com").unwrap()),
+        "mcp__macro_internal__ExecuteCode",
+        &serde_json::json!({}),
+    )
+    .await;
+    assert!(matches!(
+        refused,
+        Err(ai_toolset::ToolSetError::NotFound(_))
+    ));
+    lookalike.cancel().await.unwrap();
 }

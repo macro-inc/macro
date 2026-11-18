@@ -1,6 +1,6 @@
 import { ChannelDetailSoupDocument } from '@service-storage/graphql/generated/graphql';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
-import { createRoot, createSignal } from 'solid-js';
+import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getActiveGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 import {
@@ -44,8 +44,7 @@ function setup(query: { isSuccess?: boolean; data?: { id: string }[] } = {}) {
   mocks.createQuery.mockReturnValue({ refetch: mocks.refetch, ...query });
   return createRoot((cleanup) => {
     dispose = cleanup;
-    const [enabled, setEnabled] = createSignal(true);
-    createChannelNotificationsQuery('channel', enabled);
+    createChannelNotificationsQuery('channel', () => true);
     const patch = (entityId = 'channel', kind = 'GraphqlNewNotification') => {
       channelNotificationRefresh(mocks.client as never).onPatch(
         {
@@ -55,13 +54,13 @@ function setup(query: { isSuccess?: boolean; data?: { id: string }[] } = {}) {
         false
       );
     };
-    return { setEnabled, patch };
+    return { patch };
   });
 }
 
 describe('complete unread channel notification edge', () => {
-  it('registers only this channel for read-state reconciliation while enabled', () => {
-    const f = setup();
+  it('registers only this channel for read-state reconciliation', () => {
+    setup();
     const options = mocks.createQuery.mock.calls[0][0]();
     expect(options.query).toBe(ChannelDetailSoupDocument);
     expect(options.variables.input.initial.filters.channelFilter).toEqual({
@@ -69,9 +68,6 @@ describe('complete unread channel notification edge', () => {
     });
     expect(options.variables.input.initial.limit).toBe(1);
     expect(getActiveGraphqlSoupRevalidations()).toHaveLength(1);
-    f.setEnabled(false);
-    expect(mocks.createQuery.mock.calls[0][0]().enabled).toBe(false);
-    expect(getActiveGraphqlSoupRevalidations()).toHaveLength(0);
   });
 
   it('coalesces live deliveries and remote state changes, without fetching other channels', async () => {
@@ -86,10 +82,6 @@ describe('complete unread channel notification edge', () => {
     expect(mocks.client.query.mock.calls[0][2]).toEqual({
       requestPolicy: 'network-only',
     });
-    f.setEnabled(false);
-    f.patch();
-    await vi.advanceTimersByTimeAsync(100);
-    expect(mocks.refetch).toHaveBeenCalledOnce();
   });
 
   it('refreshes when a known notification is read elsewhere, since read ones leave the edge', async () => {

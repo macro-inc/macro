@@ -684,6 +684,7 @@ async fn an_idle_session_of_another_runtime_forgets_its_queue_copy() {
             announced_message_id: None,
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         }],
     )
     .await

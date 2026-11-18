@@ -3,8 +3,15 @@ import type {
   SearchCachePage,
   SearchDocumentWire,
 } from '@graphql-cache/index';
+import { Telemetry } from '@macro-inc/observability';
+import { SpanStatusCode, trace } from '@opentelemetry/api';
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
 import { createRoot, createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createProjectedList,
   MAX_BROWSE_PAGES_PER_LOAD,
@@ -13,12 +20,38 @@ import {
 } from './projected-list';
 import { type Bucket, exclude } from './types';
 
+const exporter = new InMemorySpanExporter();
+trace.setGlobalTracerProvider(
+  new BasicTracerProvider({
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
+  })
+);
+beforeAll(() =>
+  Telemetry.init({
+    serviceName: 'test',
+    environment: 'test',
+    enabled: async () => true,
+  })
+);
+
 const cleanups: (() => void)[] = [];
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();
+  exporter.reset();
 });
+
+function searchSpanAttributes() {
+  return exporter
+    .getFinishedSpans()
+    .filter((span) => span.name === 'quick_access.search')
+    .map((span) => ({
+      status: span.status.code,
+      kind: span.attributes['search.failure_kind'],
+      phase: span.attributes['search.failure_phase'],
+    }));
+}
 
 function root<T>(fn: () => T): T {
   return createRoot((dispose) => {
@@ -1089,5 +1122,44 @@ describe('Quick Access local projection', () => {
     expect(list.isLoading()).toBe(false);
     expect(list.hasMore()).toBe(false);
     cleanups.splice(0).forEach((cleanup) => cleanup());
+  });
+
+  it('records why and where a search failed on its span, without the message', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const [revision, setRevision] = createSignal(0);
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockRejectedValueOnce(new Error('cache worker timeout: search'))
+      .mockResolvedValue(page(['seamus']));
+    const refused = Object.assign(
+      new Error('cache reads unavailable after owner handoff timeout'),
+      { errorCode: 'owner-handoff-blocked' }
+    );
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        materialize: vi.fn().mockRejectedValueOnce(refused),
+      })
+    );
+    await vi.waitFor(() => expect(searchSpanAttributes()).toHaveLength(1));
+    setRevision(1);
+    await vi.waitFor(() => expect(searchSpanAttributes()).toHaveLength(2));
+
+    expect(searchSpanAttributes()).toEqual([
+      { status: SpanStatusCode.ERROR, kind: 'timeout', phase: 'search_page' },
+      {
+        status: SpanStatusCode.ERROR,
+        kind: 'owner-handoff-blocked',
+        phase: 'materialize',
+      },
+    ]);
+    expect(list.error()).toBe(refused);
+    expect(
+      exporter
+        .getFinishedSpans()
+        .find((span) => span.name === 'quick_access.search')?.status.message
+    ).toBe('Quick Access cache search failed');
   });
 });

@@ -12,6 +12,7 @@ import {
   ChannelListSoupDocument,
   ChannelUnreadPresenceDocument,
   SoupDocument,
+  type SoupUpdatesSubscription,
 } from './graphql/generated/graphql';
 import { createChannelListUpdatesHandler } from './graphql-channel-list-updates';
 import type { GraphqlNotificationPatch } from './graphql-soup-websocket';
@@ -300,5 +301,46 @@ describe('channel unread edge revalidation', () => {
     disposeChannelNotificationRefresh(client);
     await vi.advanceTimersByTimeAsync(1000);
     expect(query).toHaveBeenCalledOnce();
+  });
+});
+
+describe('new channel pushes', () => {
+  const channelPush = (
+    overrides: { createdAt?: string; isParticipant?: boolean } = {}
+  ) =>
+    ({
+      __typename: 'SoupUpdated',
+      item: {
+        __typename: 'GraphqlSoupChannel',
+        id: 'new-dm',
+        channelType: 'direct_message',
+        isParticipant: true,
+        createdAt: new Date().toISOString(),
+        ...overrides,
+      },
+    }) as SoupUpdatesSubscription['soupUpdates'][number];
+
+  it('asks lists to wait for a channel the viewer was just added to', () => {
+    const { handler, coordinator } = setup();
+    const expectChannel = vi.spyOn(coordinator, 'expectChannel');
+
+    handler.onSoupUpdates([channelPush()]);
+
+    expect(expectChannel).toHaveBeenCalledExactlyOnceWith({
+      id: 'new-dm',
+      channelType: 'direct_message',
+    });
+  });
+
+  it('ignores older channels and channels the viewer is not in', () => {
+    const { handler, coordinator } = setup();
+    const expectChannel = vi.spyOn(coordinator, 'expectChannel');
+
+    handler.onSoupUpdates([
+      channelPush({ createdAt: '2026-01-01T00:00:00Z' }),
+      channelPush({ isParticipant: false }),
+    ]);
+
+    expect(expectChannel).not.toHaveBeenCalled();
   });
 });

@@ -95,8 +95,11 @@ export const bootstrapResponses = new Map<
   ['GET /cognition/mcp/servers', { body: [] }],
   ['GET /cognition/pipedream/mcp/connections', { body: [] }],
   ['GET /cognition/onboarding/prompts', { body: { dismissed: [] } }],
+  ['GET /cognition/import/state', { body: { runs: [], entities: [] } }],
+  ['POST /scheduled-action/suggestions/seen', { body: {} }],
   ['GET /scheduled-action/scheduled-actions', { body: [] }],
   ['GET /scheduled-action/scheduled-actions/catalog', { body: [] }],
+  ['GET /scheduled-action/scheduled-actions/draft-jobs', { body: [] }],
   [
     'GET /scheduled-action/scheduled-actions/suggestions',
     { body: { status: 'none', suggestions: [] } },

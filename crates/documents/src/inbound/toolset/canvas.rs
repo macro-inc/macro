@@ -89,8 +89,7 @@ where
             ctx.document_permission_jwt_secret.clone(),
             ctx.admission.clone(),
             ctx.recorder.clone(),
-        )
-        .with_artifacts((ctx.canvas_artifacts)(req.user_id.clone()).await);
+        );
         let actor = ctx.actor.into_storage_id();
         tokio::select! {
             biased;
@@ -149,8 +148,7 @@ where
             ctx.document_permission_jwt_secret.clone(),
             ctx.admission.clone(),
             ctx.recorder.clone(),
-        )
-        .with_artifacts((ctx.canvas_artifacts)(req.user_id.clone()).await);
+        );
         let actor = ctx.actor.into_storage_id();
         tokio::select! {
             biased;
@@ -190,8 +188,7 @@ where
             ctx.document_permission_jwt_secret.clone(),
             ctx.admission.clone(),
             ctx.recorder.clone(),
-        )
-        .with_artifacts((ctx.canvas_artifacts)(req.user_id.clone()).await);
+        );
         let actor = ctx.actor.into_storage_id();
         tokio::select! {
             biased;
@@ -252,8 +249,7 @@ where
             ctx.document_permission_jwt_secret.clone(),
             ctx.admission.clone(),
             ctx.recorder.clone(),
-        )
-        .with_artifacts((ctx.canvas_artifacts)(req.user_id.clone()).await);
+        );
         let actor = ctx.actor.into_storage_id();
         let request = CanvasRequest::Apply {
             expected_revision: self.expected_revision.clone(),

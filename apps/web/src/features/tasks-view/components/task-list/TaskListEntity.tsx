@@ -1,5 +1,4 @@
 import '@entity/composed/ListEntity.css';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SwipableRow,
   SwipableRowContext,
@@ -24,11 +23,7 @@ import {
 } from '@entity/composed/list-entity/shared';
 import type { EntityRowConfig } from '@entity/extractors-notification';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
-import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
-  enqueueDocumentWakeup,
-  isWakeableDocument,
-} from '@queries/preview';
+import { enqueueDocumentWakeup, isWakeableDocument } from '@queries/preview';
 import {
   getStreamState,
   subscribeToStreamState,
@@ -58,6 +53,8 @@ type TaskListEntityProps = Omit<BaseListEntityProps, 'entity'> & {
   referencePropertyIds?: readonly string[];
   /** Called when "filter by tag" is clicked on an entity row tag. */
   onFilterByTag?: (optionId: string) => void;
+  /** Called when "Filter by" is clicked in an assignee's hover card. */
+  onFilterByAssignee?: (userId: string) => void;
 };
 
 function MaybeEntityRow(props: {
@@ -88,10 +85,8 @@ function MaybeEntityRow(props: {
 export function TaskListEntity(props: TaskListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
-  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
   createEffect(() => {
-    if (!bulkWakeupEnabled().enabled) return;
     if (!isWakeableDocument(props.entity)) return;
 
     enqueueDocumentWakeup(props.entity);
@@ -136,6 +131,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
     showProject: props.showProject,
     referencePropertyIds: props.referencePropertyIds,
     onFilterByTag: props.onFilterByTag,
+    onFilterByAssignee: props.onFilterByAssignee,
   });
 
   const draggable = createEntityDraggable({

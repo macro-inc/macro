@@ -228,6 +228,9 @@ pub enum TeamAgentError {
     /// No agent with that id on the caller's team.
     #[error("no such agent on this team")]
     NotFound,
+    /// The caller may not do this.
+    #[error("{0}")]
+    Forbidden(&'static str),
     /// The caller is not on a team that can have agent teammates.
     #[error("agent teammates aren't available for this account yet")]
     NotEnabled,

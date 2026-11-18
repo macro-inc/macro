@@ -4,7 +4,7 @@ import {
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
 import { TasksCreateAction } from '@app/features/tasks-view/tasks-create-action';
-import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSearchParams } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -15,7 +15,6 @@ import {
 import {
   enableEntityAppearance,
   enableGantt,
-  enableProjects,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -55,12 +54,6 @@ import { createProjectSources } from './queries/project-sources';
 import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
 
-function createProjectReadGate() {
-  // Each source invokes this under its own owner, which can outlive this view.
-  const flag = useFeatureFlag(enableProjects);
-  return () => flag().enabled;
-}
-
 /** The production capabilities, for hosts outside the Projects view. */
 export function createProjectsContext() {
   const userId = useUserId();
@@ -68,17 +61,12 @@ export function createProjectsContext() {
     initiativeClient,
     { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
     queryClient,
-    userId,
-    createProjectReadGate
+    userId
   );
 }
 
 export function Projects(props: ParentProps) {
-  return (
-    <ShowFeatureFlag flag={enableProjects}>
-      <ProjectsContent>{props.children}</ProjectsContent>
-    </ShowFeatureFlag>
-  );
+  return <ProjectsContent>{props.children}</ProjectsContent>;
 }
 
 function ProjectsContent(props: ParentProps) {
@@ -181,7 +169,7 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
       <ProjectsCollection
         createAction={
           <Show when={!isTouchDevice()}>
-            <TasksCreateAction presentation="toolbar" projectsEnabled />
+            <TasksCreateAction presentation="toolbar" />
           </Show>
         }
         onOpen={open}

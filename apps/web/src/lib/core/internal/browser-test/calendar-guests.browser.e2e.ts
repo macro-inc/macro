@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
 
 for (const mode of ['edit', 'add']) {
-  test(`${mode} guests use replaceable windows and retain names and custom addresses`, async ({
+  test(`${mode} guests page in as the list scrolls and retain names and custom addresses`, async ({
     page,
-  }, info) => {
+  }) => {
     await page.goto(`/?calendar-guests=${mode}`);
     await expect(page.getByTestId('reads')).toHaveText('0');
     await page.getByRole('button', { name: 'Open guests' }).click();
@@ -25,19 +25,22 @@ for (const mode of ['edit', 'add']) {
     const tail = page
       .locator('[data-entity-index]')
       .filter({ hasText: mode === 'add' ? 'Person 000050' : 'Person 000049' });
+    const readsBefore = Number(await page.getByTestId('reads').textContent());
     await tail.scrollIntoViewIfNeeded();
     await expect(tail).toBeInViewport();
-    if (info.project.name === 'phone')
-      await page.getByRole('button', { name: 'Next options' }).tap();
-    else await input.press('PageDown');
+    // Reaching the end lists the next page below, with one read and no button.
     const nextName = mode === 'add' ? 'Person 000051' : 'Person 000050';
-    await expect(
-      page.locator('[data-entity-index]').filter({ hasText: nextName })
-    ).toBeInViewport();
-    await page
+    const next = page
       .locator('[data-entity-index]')
-      .filter({ hasText: nextName })
-      .click();
+      .filter({ hasText: nextName });
+    await expect(next).toHaveCount(1);
+    await expect(page.getByTestId('reads')).toHaveText(String(readsBefore + 1));
+    await expect(
+      page.getByRole('button', { name: 'Next options' })
+    ).toHaveCount(0);
+    await expect(tail).toBeInViewport();
+    await next.scrollIntoViewIfNeeded();
+    await next.click();
     await input.fill('late');
     await expect(
       page

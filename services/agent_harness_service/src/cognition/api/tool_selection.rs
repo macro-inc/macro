@@ -20,8 +20,8 @@ static DATABASE_TOOL_USE_PROMPT: LazyLock<String> = LazyLock::new(|| {
     )
 });
 
-/// Whether the request's session is a scoped hidden one (a generation, or a
-/// run that sends nothing) asking for tools. Its chats and completions take
+/// Whether the request's session is a scoped hidden one (a generation, a run
+/// that sends nothing, or a routine dry run) asking for tools. Its chats and completions take
 /// none: tools run here with the person's full access, past the scope its
 /// credential carries.
 pub(crate) fn tools_refused_to_current_session(selection: &ToolSet) -> bool {

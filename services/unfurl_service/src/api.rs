@@ -160,6 +160,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_proxy_responses_carry_the_image_proxy_headers() {
+        for uri in [
+            "/proxy?url=http://127.0.0.1/favicon.ico",
+            "/unfurl/proxy?url=http://127.0.0.1/favicon.ico",
+        ] {
+            let api = app_router(test_state(), test_unfurl_state());
+
+            let response = api
+                .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::FORBIDDEN, "{uri}");
+            assert_eq!(
+                response.headers()["x-content-type-options"],
+                "nosniff",
+                "{uri}"
+            );
+            assert_eq!(
+                response.headers()["content-security-policy"],
+                "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+                "{uri}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn test_gateway_prefixed_unfurl_path_is_reachable() {
         let api = app_router(test_state(), test_unfurl_state());
 

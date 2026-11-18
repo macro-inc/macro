@@ -57,7 +57,11 @@ export function Notifications() {
   const snoozedEntities = () =>
     mutedEntities().filter((item) => item.snoozed_until);
   const permanentlyMutedEntities = () =>
-    mutedEntities().filter((item) => !item.snoozed_until);
+    mutedEntities().filter(
+      (item) => !item.snoozed_until && !item.mentions_only
+    );
+  const mentionsOnlyEntities = () =>
+    mutedEntities().filter((item) => item.mentions_only);
 
   const isTypeEnabled = (type: string) => !disabledTypes().has(type);
 
@@ -242,6 +246,27 @@ export function Notifications() {
           </Show>
         </SettingsCard>
       </SettingsSection>
+
+      <Show when={mentionsOnlyEntities().length > 0}>
+        <SettingsSection
+          title="Mentions only"
+          description="These channels notify you only when someone @mentions you."
+        >
+          <SettingsCard>
+            <For each={mentionsOnlyEntities()}>
+              {(item) => (
+                <MutedItemRow
+                  item={item}
+                  onUnmute={() =>
+                    fireAndForget(unmuteEntity(item), 'notification-settings')
+                  }
+                  pending={unmuteItem.isPending}
+                />
+              )}
+            </For>
+          </SettingsCard>
+        </SettingsSection>
+      </Show>
 
       <SettingsSection
         title="Muted items"

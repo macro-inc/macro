@@ -15,7 +15,7 @@ pub(super) const CONNECTED_APPS_FROM_CODE_HINT: &str = "A connected app's tools 
 
 const EXECUTE_CODE: &str = "mcp__macro_internal__ExecuteCode";
 
-/// Only the `keep` tools of a session's MCP servers, advertised by the caller
+/// Only the `keep` tools of Macro's own MCP server, advertised by the caller
 /// as eager tools; a call to any other is refused as not found.
 pub(super) struct McpAllowlist {
     tools: RemoteMcpToolSet,
@@ -39,8 +39,11 @@ impl McpAllowlist {
         self
     }
 
+    /// Whether `tool_name` is kept: listed, and registered by Macro's own
+    /// server, never by one whose name mangles to the same prefix.
     fn kept(&self, tool_name: &str) -> bool {
         self.keep.contains(&tool_name)
+            && self.tools.server_of(tool_name) == Some(crate::domain::mcp::MACRO_INTERNAL_MCP_NAME)
     }
 }
 

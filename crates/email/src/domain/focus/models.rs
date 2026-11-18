@@ -337,6 +337,15 @@ impl FocusThread {
     }
 }
 
+/// An inbox and the person who holds it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FocusInboxOwner {
+    /// The inbox.
+    pub link_id: Uuid,
+    /// Its owner, whose place in the rollout decides whether it is classified.
+    pub owner: MacroUserIdStr<'static>,
+}
+
 /// An inbox thread whose stored classification may be out of date.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StaleThread {

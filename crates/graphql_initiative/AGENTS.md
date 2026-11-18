@@ -9,8 +9,9 @@ inbound adapter exposing initiative queries, mutations, and loaders.
 
 - `src/context.rs`: `InitiativeGraphqlContext` and `InitiativeAuthorizer` —
   how resolvers reach the `initiative` domain service.
-- `src/query.rs` / `src/mutation.rs`: `resolve_initiative`,
-  `InitiativeMutationRoot`.
+- `src/query.rs` / `src/mutation.rs`: `resolve_visible_initiative` (null for a
+  missing or hidden project), the deprecated `resolve_initiative` (`NOT_FOUND`
+  instead), `InitiativeMutationRoot`.
 - `src/loaders.rs`: `InitiativeLoader` — one batched initiative read per
   request for Soup and detail views. Detail and progress fields share its
   task-access walk; progress is summarized lazily from that read. Each batch

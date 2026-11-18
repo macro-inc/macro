@@ -85,7 +85,7 @@ async fn the_about_macro_guide_is_the_about_page() {
         assert!(
             response.guides[0]
                 .markdown
-                .contains("https://docs.macro.com/llms.txt")
+                .contains("https://macro.com/docs/llms.txt")
         );
     }
 }

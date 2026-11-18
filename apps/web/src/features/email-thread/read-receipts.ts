@@ -1,5 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableEmailReadReceipts } from '@core/constant/featureFlags';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useThreadReadReceiptsQuery } from '@queries/email/read-receipts';
 import { queryReadyGate } from '@queries/gate';
@@ -10,10 +8,8 @@ import type { ReadReceipt } from '../email-message/core/read-receipt';
 /** Looks up opens for the viewer's tracked messages. Never suspends: the
  * thread renders without receipts until they load. */
 export function createThreadReadReceipts(threadId: Accessor<string>) {
-  const flag = useFeatureFlag(enableEmailReadReceipts);
   const links = useEmailLinksQuery();
   const tracking = () =>
-    flag().enabled &&
     queryReadyGate(links) &&
     links.data.links.some(
       (link) => link.settings.read_receipts_enabled ?? true

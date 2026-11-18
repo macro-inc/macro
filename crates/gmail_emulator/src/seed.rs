@@ -113,6 +113,9 @@ pub struct SeedMailbox {
     /// User labels, besides Gmail's system labels.
     #[serde(default)]
     pub labels: Vec<SeedLabel>,
+    /// The HTML signature of the primary address; none when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
     /// Send-as aliases, besides the primary address.
     #[serde(default)]
     pub send_as: Vec<SeedSendAs>,

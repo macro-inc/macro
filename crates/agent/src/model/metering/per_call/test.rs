@@ -78,3 +78,34 @@ fn fast_claude_records_cache_writes_and_rejects_unknown_tiers() {
         }
     ));
 }
+
+#[test]
+fn priority_gpt_prices_either_reported_name_and_downgrades() {
+    let (pricing, recorder) = setup("openai/gpt-6.1-sol", ModelSpeed::Priority);
+    for (input, tier) in [
+        (10, "priority"),
+        (10, "fast"),
+        (300_000, "priority"),
+        (10, "default"),
+    ] {
+        pricing
+            .record(
+                UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(input, 10, 0, 0, 0)),
+                Some(tier),
+            )
+            .unwrap();
+    }
+    let events = recorder.0.lock().unwrap();
+    assert_eq!(
+        events.iter().map(|e| e.model.as_str()).collect::<Vec<_>>(),
+        [
+            "gpt-6.1-sol:priority",
+            "gpt-6.1-sol:priority",
+            "gpt-6.1-sol:priority:long",
+            "gpt-6.1-sol"
+        ]
+    );
+    let body = serde_json::json!({ "service_tier": "priority" });
+    let model = ProviderModel::new("openai", "gpt-6.1-sol").unwrap();
+    assert!(pricing.matches(&model, &body));
+}
