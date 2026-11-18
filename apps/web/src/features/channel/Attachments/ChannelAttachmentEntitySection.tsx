@@ -124,14 +124,17 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
   // is missing from it although its message still shows it. Such an attachment
   // keeps its row and shows as the message shows it.
   const rows = createMemo<AttachmentEntityListRow[]>(() => {
-    if (soupQuery.isLoading) return [];
-
-    const entityById = new Map(
-      (soupQuery.data?.entities ?? []).map((entity) => [entity.id, entity])
+    const attachments = [...attachmentByEntityId().values()].filter(
+      (attachment) => attachment.entity_type !== 'initiative'
     );
+    if (attachments.length === 0) return [];
 
-    return [...attachmentByEntityId().values()]
-      .filter((attachment) => attachment.entity_type !== 'initiative')
+    const entities = soupQuery.isPending
+      ? []
+      : (soupQuery.data?.entities ?? []);
+    const entityById = new Map(entities.map((entity) => [entity.id, entity]));
+
+    return attachments
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .map((attachment): AttachmentEntityListRow => {
         const entity = entityById.get(attachment.entity_id);

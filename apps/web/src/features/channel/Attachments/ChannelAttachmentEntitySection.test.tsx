@@ -51,7 +51,11 @@ vi.mock('./SectionHeader', () => ({
 import { ChannelAttachmentEntitySection } from './ChannelAttachmentEntitySection';
 
 beforeEach(() => {
-  fixture.soupQuery = { isLoading: false, data: { entities: [] } };
+  fixture.soupQuery = {
+    isPending: false,
+    isLoading: false,
+    data: { entities: [] },
+  };
 });
 afterEach(cleanup);
 it('retains cached project attachments after a background refetch failure without reading pending data', () => {
@@ -110,6 +114,9 @@ it.each([true, false])(
       fetchNextPage,
     };
     fixture.soupQuery = {
+      get isPending() {
+        return loading();
+      },
       get isLoading() {
         return loading();
       },
@@ -169,6 +176,7 @@ it('lists a trashed document beside live ones instead of saying there are none',
     hasNextPage: false,
   };
   fixture.soupQuery = {
+    isPending: false,
     isLoading: false,
     data: { entities: [{ id: 'Live notes' }] },
   };
@@ -201,4 +209,36 @@ it('keeps pagination available for a page containing only projects', () => {
   ));
   fireEvent.click(view.getByRole('button', { name: 'Load More' }));
   expect(fetchNextPage).toHaveBeenCalledOnce();
+});
+
+it('lists attachments from their messages while Soup is paused offline', () => {
+  fixture.query = {
+    isPending: false,
+    data: {
+      pages: [
+        {
+          items: [
+            {
+              entity_type: 'document',
+              entity_id: 'Offline notes',
+              created_at: '2026-11-18T08:01:00Z',
+            },
+          ],
+        },
+      ],
+    },
+    hasNextPage: false,
+  };
+  fixture.soupQuery = {
+    isPending: true,
+    isLoading: false,
+    get data() {
+      throw new Error('Paused Soup data must not be read');
+    },
+  };
+  const view = render(() => (
+    <ChannelAttachmentEntitySection channelId="channel" />
+  ));
+  expect(view.getByText('Chip Offline notes')).toBeTruthy();
+  expect(view.queryByText('No documents in this channel yet.')).toBeNull();
 });

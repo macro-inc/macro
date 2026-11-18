@@ -7,6 +7,8 @@ import { Match, Switch } from 'solid-js';
 /** How a message shows one of its non-media attachments. */
 export function AttachmentChip(props: {
   attachment: { entity_id: string; entity_type: string };
+  /** Class for the item preview chip, the fallback for most entity types. */
+  previewClass?: string;
 }) {
   return (
     <Switch
@@ -14,6 +16,7 @@ export function AttachmentChip(props: {
         <ItemPreview
           id={props.attachment.entity_id}
           type={stringToItemType(props.attachment.entity_type)}
+          class={props.previewClass}
         />
       }
     >
