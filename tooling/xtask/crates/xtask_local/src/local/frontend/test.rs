@@ -153,20 +153,23 @@ fn a_second_frontend_build_in_a_checkout_waits_for_the_first() {
 }
 
 #[test]
-fn proxy_ready_timeout_defaults_and_accepts_an_override() {
-    assert_eq!(proxy_ready_timeout(None).unwrap(), PROXY_READY_TIMEOUT);
+fn frontend_ready_timeout_defaults_and_accepts_an_override() {
     assert_eq!(
-        proxy_ready_timeout(Some("600")).unwrap(),
+        frontend_ready_timeout(None).unwrap(),
+        FRONTEND_READY_TIMEOUT
+    );
+    assert_eq!(
+        frontend_ready_timeout(Some("600")).unwrap(),
         Duration::from_secs(600)
     );
 }
 
 #[test]
-fn proxy_ready_timeout_rejects_values_that_are_not_positive_seconds() {
+fn frontend_ready_timeout_rejects_values_that_are_not_positive_seconds() {
     for raw in ["0", "-5", "ten", "", "1.5"] {
-        let error = proxy_ready_timeout(Some(raw)).unwrap_err().to_string();
+        let error = frontend_ready_timeout(Some(raw)).unwrap_err().to_string();
         assert!(
-            error.contains(PROXY_READY_TIMEOUT_ENV),
+            error.contains(FRONTEND_READY_TIMEOUT_ENV),
             "{raw:?} gave {error}"
         );
     }

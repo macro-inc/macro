@@ -513,11 +513,6 @@ never finish loading Vite's thousands of modules). Then pick up frontend edits w
 A failed `rebuild` leaves the old build running: the phase stays `ready`, and `job`
 records the failure. Run state and logs live in `infra/local/generated/<instance>/run`.
 
-Bring-up fails at **Checking frontend through HTTPS proxy** when the proxy cannot
-reach Vite within 300 seconds. A 502 that lasts that long usually means the host
-firewall drops Docker-to-host traffic on Vite's port. On a machine that is just
-slow, set `MACRO_LOCAL_FRONTEND_READY_SECS` to wait longer.
-
 ## Run More than One Stack
 
 Use named instances for several local stacks at once. This helps across worktrees:
@@ -609,9 +604,12 @@ Login fallback redirects, Pipedream origins, MCP callbacks, and file permalinks
 use that same HTTPS origin for attached local stacks.
 If your host firewall blocks Docker-to-host traffic, allow the instance's
 Docker network to reach the Vite port through `host.docker.internal`.
-Startup verifies `/app/` through the HTTPS proxy before printing “ready”;
-a listening Vite port alone is insufficient. Persistent 502s with proxy logs such
-as `dial tcp <host-gateway>:<vite-port>: i/o timeout` can indicate this firewall
+Startup waits up to 300 seconds for Vite to serve `/app/` on the host (a cold
+dev server optimizes its dependencies first; set `MACRO_LOCAL_FRONTEND_READY_SECS`
+to wait longer), then verifies `/app/` through the HTTPS proxy within 45 seconds
+before printing “ready”; a listening Vite port alone is insufficient. A failure
+at **Checking frontend through HTTPS proxy**, with proxy logs such as
+`dial tcp <host-gateway>:<vite-port>: i/o timeout`, can indicate this firewall
 path is blocked. Firewall rules must cover the current instance's Docker network
 and frontend port, which can differ between instances.
 
