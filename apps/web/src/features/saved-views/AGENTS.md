@@ -7,6 +7,7 @@ Reusable named view definitions. Consumers are main Tasks and Email; the generic
 ## Start here
 
 - `core/saved-view.ts`: resource vocabulary, without transport or UI types.
+- `core/saved-view-menu.ts`: permission-filtered Copy, Modify, and Delete groups for the shared saved-view menu.
 - `context/saved-views-source.ts`: independent list and detail read contracts.
 - `queries/saved-views.ts`: `useSavedViews` for cursor paging and `useSavedView` for one definition; compose them at the host.
 - `queries/saved-view-actions.ts`: independent create, update, delete, and reorder hooks using the shared GraphQL client, native mutation state, authoritative confirmation, and cursor reconciliation.

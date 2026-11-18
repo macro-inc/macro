@@ -1,3 +1,7 @@
+import {
+  groupMenuItems,
+  type MenuGroup,
+} from '../../../lib/core/menu/group-menu-items';
 import { canDeleteProject, canEditProject, type Project } from './project';
 
 /** Entries of a project row's context menu. */
@@ -13,11 +17,7 @@ export type ProjectMenuItem =
   | 'share'
   | 'delete';
 
-/**
- * The entries every target allows, in separator-delimited groups. Actions on
- * one project's identity drop out of a multi-project menu, and `surface`
- * removes entries the host cannot offer yet, such as unloaded properties.
- */
+/** The entries every target allows, grouped in semantic action order. */
 export function projectMenuGroups(
   projects: readonly Pick<Project, 'access'>[],
   surface: {
@@ -32,25 +32,24 @@ export function projectMenuGroups(
   if (projects.length === 0) return [];
   const single = projects.length === 1;
   const editable = projects.every(canEditProject);
-  const groups: ProjectMenuItem[][] = [
-    single
-      ? [
-          ...(surface.splits ? (['open-in-split'] as const) : []),
-          ...(surface.tabs ? (['open-in-tab'] as const) : []),
-        ]
-      : [],
-    editable
-      ? [
-          ...(single ? (['rename'] as const) : []),
-          ...(single && surface.appearance ? (['change-icon'] as const) : []),
-          ...(surface.status ? (['status'] as const) : []),
-          ...(surface.priority ? (['priority'] as const) : []),
-        ]
-      : [],
-    single
-      ? ['copy-link', 'copy-id', ...(surface.share ? (['share'] as const) : [])]
-      : [],
-    projects.every(canDeleteProject) ? ['delete'] : [],
+  const items: ProjectMenuItem[] = [
+    ...(single && surface.splits ? (['open-in-split'] as const) : []),
+    ...(single && surface.tabs ? (['open-in-tab'] as const) : []),
+    ...(single && surface.share ? (['share'] as const) : []),
+    ...(single ? (['copy-link', 'copy-id'] as const) : []),
+    ...(editable && single ? (['rename'] as const) : []),
+    ...(editable && single && surface.appearance
+      ? (['change-icon'] as const)
+      : []),
+    ...(editable && surface.status ? (['status'] as const) : []),
+    ...(editable && surface.priority ? (['priority'] as const) : []),
+    ...(projects.every(canDeleteProject) ? (['delete'] as const) : []),
   ];
-  return groups.filter((group) => group.length > 0);
+  return groupMenuItems(items, (item): MenuGroup => {
+    if (item === 'open-in-split' || item === 'open-in-tab') return 'open';
+    if (item === 'share') return 'most-used';
+    if (item === 'copy-link' || item === 'copy-id') return 'copy';
+    if (item === 'delete') return 'delete';
+    return 'modify';
+  }).map((group) => group.items);
 }
