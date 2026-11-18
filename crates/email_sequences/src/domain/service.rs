@@ -188,6 +188,15 @@ where
         })
     }
 
+    /// Refuse what would start sending for someone outside the rollout.
+    async fn require_rollout(&self, user_id: &str) -> Result<(), SequenceError> {
+        if self.access.rollout_includes(user_id).await {
+            Ok(())
+        } else {
+            Err(SequenceError::ActionUnavailable)
+        }
+    }
+
     /// The inbox a step may go out from now: the owner's own healthy Gmail.
     pub(super) async fn usable_inbox(
         &self,
@@ -489,8 +498,10 @@ where
                 Some(_) if row.status == EnrollmentStatus::Paused => {}
                 Some((_, next)) => {
                     row.status = EnrollmentStatus::Active;
+                    // From when it really went: a late delivery must not make
+                    // the next email due right behind it.
                     row.due_at = Some(timing::next_due(
-                        step.scheduled_at,
+                        step.scheduled_at.max(submitted_at.unwrap_or(sent.sent_at)),
                         next.delay_days,
                         row.clock,
                         now,
@@ -537,6 +548,7 @@ where
     }
 
     async fn create(&self, user_id: &str, input: NewSequence) -> Result<Sequence, SequenceError> {
+        self.require_rollout(user_id).await?;
         let owner = self.owner(user_id).await?;
         let input = NewSequence {
             name: render::clean_text(&input.name),
@@ -580,11 +592,14 @@ where
         id: Uuid,
         patch: SequencePatch,
     ) -> Result<Sequence, SequenceError> {
+        if patch.status == Some(SequenceStatus::Active) {
+            self.require_rollout(user_id).await?;
+        }
         let owner = self.owner(user_id).await?;
         let mut tx = self.repo.begin().await.map_err(internal)?;
         let mut sequence = self
             .repo
-            .lock_sequence(&mut tx, &owner, id, false)
+            .lock_sequence(&mut tx, &owner, id)
             .await
             .map_err(internal)?
             .ok_or(SequenceError::NotFound)?;
@@ -637,7 +652,7 @@ where
         let owner = self.owner(user_id).await?;
         let mut tx = self.repo.begin().await.map_err(internal)?;
         self.repo
-            .lock_sequence(&mut tx, &owner, id, false)
+            .lock_sequence(&mut tx, &owner, id)
             .await
             .map_err(internal)?
             .ok_or(SequenceError::NotFound)?;
@@ -665,6 +680,7 @@ where
         id: Uuid,
         request: EnrollRequest,
     ) -> Result<Vec<EnrollResult>, SequenceError> {
+        self.require_rollout(user_id).await?;
         let owner = self.owner(user_id).await?;
         if request.crm_contact_ids.len() > MAX_ENROLL {
             return Err(SequenceError::InvalidRequest("too many contacts"));
@@ -680,9 +696,10 @@ where
             .map_err(internal)?;
 
         let mut tx = self.repo.begin().await.map_err(internal)?;
+        // Held exclusively: concurrent batches must not share the room left.
         let sequence = self
             .repo
-            .lock_sequence(&mut tx, &owner, id, true)
+            .lock_sequence(&mut tx, &owner, id)
             .await
             .map_err(internal)?
             .ok_or(SequenceError::NotFound)?;
@@ -798,6 +815,9 @@ where
         id: Uuid,
         action: EnrollmentAction,
     ) -> Result<EnrollmentSummary, SequenceError> {
+        if matches!(action, EnrollmentAction::Resume) {
+            self.require_rollout(user_id).await?;
+        }
         let owner = self.owner(user_id).await?;
         let enrollment = self
             .repo

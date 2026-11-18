@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT max(h.scheduled_at) FROM email_sequence_steps h\n               JOIN email_sequence_enrollments e ON e.id = h.enrollment_id\n               WHERE e.link_id = $1 AND h.scheduled_at > $2",
+  "query": "SELECT max(send_time) FROM email_scheduled_messages\n             WHERE link_id = $1 AND source = $2 AND send_time > $3",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,7 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Text",
         "Timestamptz"
       ]
     },
@@ -19,5 +20,5 @@
       null
     ]
   },
-  "hash": "1b7e47ecfba4239151104508057eb2b68ee40c550455c691e4193045414a851a"
+  "hash": "ba26c851a18d3ca5cdf4c164b979ff02962203228431edef76f3c5682e295242"
 }

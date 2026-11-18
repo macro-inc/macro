@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, link_id, footer, status, steps AS \"steps: Json<Vec<Step>>\", created_at, updated_at\n                   FROM email_sequences WHERE id = $1 AND user_id = $2 AND team_id = $3 FOR SHARE",
+  "query": "SELECT id, name, link_id, footer, status, steps AS \"steps: Json<Vec<Step>>\", created_at, updated_at\n               FROM email_sequences WHERE id = $1 AND user_id = $2 AND team_id = $3 FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -62,5 +62,5 @@
       false
     ]
   },
-  "hash": "2de1fa3ac527f47ab965433b1447444c79da130a8fb7e6e4ae70d0a8edb93e3c"
+  "hash": "2aaf61c4635279fb187214c2d5e0dfa5ceabe885dc08c85d9435156be1321604"
 }

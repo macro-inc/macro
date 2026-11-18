@@ -13,7 +13,7 @@ use uuid::Uuid;
 use super::{
     models::{
         EnrollmentReason, EnrollmentRow, EnrollmentStatus, HistoryRow, Recipient, SequenceError,
-        SequenceStatus, StepStatus,
+        SequenceStatus, StepStatus, normalize_email,
     },
     ports::{DueEnrollment, OwnerAccess, ReplyCandidates, SentStep, SequenceRepo},
     render,
@@ -40,9 +40,9 @@ pub(super) enum Creation {
     /// Nothing can go from the inbox in this pass: its next slot isn't near or
     /// it can't send. Its enrollments stay due.
     InboxWaits(Uuid),
-    /// The owner can't use the enrollment's team's Customers now: they left
-    /// it, it is off, or their access was revoked. Their enrollments in that
-    /// team stay due.
+    /// The owner can't send to the enrollment's team now: they left it, its
+    /// Customers is off, their access was revoked, or the rollout excludes
+    /// them. Their enrollments in that team stay due.
     OwnerWaits,
 }
 
@@ -333,8 +333,8 @@ where
         now: DateTime<Utc>,
     ) -> Result<Option<DateTime<Utc>>, SequenceError> {
         let latest = self
-            .repo
-            .latest_slot(tx, link_id, now - SPACING)
+            .steps
+            .latest_slot(R::conn(tx), link_id, now - SPACING)
             .await
             .map_err(internal)?;
         let slot = latest.map_or(now + MIN_LEAD, |latest| {
@@ -359,7 +359,7 @@ where
             .customers_team(&due.owner_id)
             .await
             .map_err(internal)?;
-        if team != Some(due.team_id) {
+        if team != Some(due.team_id) || !self.access.rollout_includes(&due.owner_id).await {
             return Ok(Creation::OwnerWaits);
         }
         let Some(inbox) = self
@@ -428,7 +428,15 @@ where
         {
             return Ok(Creation::Skipped);
         }
-        if person.is_none() {
+        // The address must still be this person's: an old one may now reach
+        // somebody else.
+        let still_theirs = person.as_ref().is_some_and(|person| {
+            person
+                .emails
+                .iter()
+                .any(|email| normalize_email(email) == row.email)
+        });
+        if !still_theirs {
             return self
                 .stop_and_commit(tx, &mut row, EnrollmentReason::ContactRemoved)
                 .await;

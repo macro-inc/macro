@@ -100,7 +100,7 @@ export default {
     'An email bounced, so no more emails go out. Resume to try the next one.',
   reasonUnsubscribedDetail: 'They unsubscribed from your team’s sequences.',
   reasonContactRemovedDetail:
-    'You can no longer see this person in Customers. Resume once you can.',
+    'This person is gone from Customers or no longer has this address. Resume once they’re back.',
   needsAttentionDetail:
     'An email didn’t go out. Check it in Mail, then resume or stop.',
   stepProgress: '{{done}} of {{total}} sent',

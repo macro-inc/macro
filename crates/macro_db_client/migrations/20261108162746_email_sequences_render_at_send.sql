@@ -28,14 +28,17 @@ ALTER TABLE email_sequence_steps
     ADD PRIMARY KEY (enrollment_id, step_id),
     DROP COLUMN step;
 
+-- Off first: the old check requires a reason on the rows cleared below.
+ALTER TABLE email_sequence_enrollments
+    DROP CONSTRAINT email_sequence_enrollments_check,
+    DROP CONSTRAINT email_sequence_enrollments_reason_check;
+
 UPDATE email_sequence_enrollments
 SET status = 'active', reason = NULL, due_at = COALESCE(due_at, now())
 WHERE reason IN ('access_lost', 'inbox_unavailable');
 UPDATE email_sequence_enrollments SET reason = NULL WHERE status = 'needs_attention';
 
 ALTER TABLE email_sequence_enrollments
-    DROP CONSTRAINT email_sequence_enrollments_check,
-    DROP CONSTRAINT email_sequence_enrollments_reason_check,
     ADD CONSTRAINT email_sequence_enrollments_reason_check
         CHECK (reason IN ('manual', 'replied', 'bounced', 'unsubscribed', 'contact_removed')),
     ADD CONSTRAINT email_sequence_enrollments_check CHECK ((status = 'stopped') = (reason IS NOT NULL)),

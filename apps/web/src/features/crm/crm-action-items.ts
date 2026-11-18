@@ -6,6 +6,7 @@ import ArchiveIcon from '@icon/system/regular/archive.svg';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import CurrencyDollarIcon from '@icon/system/regular/currency-dollar.svg';
 import FlagIcon from '@icon/system/regular/flag.svg';
+import SequenceIcon from '@icon/system/regular/tree-structure.svg';
 import UserIcon from '@icon/system/regular/user.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { Component, JSX } from 'solid-js';
@@ -69,6 +70,7 @@ export function createCrmEntityActionItems() {
       crmItems.push({
         id: 'add-to-sequence',
         label: t('sequences.addToSequence'),
+        icon: SequenceIcon,
         onClick: () => openAddToSequence(entities),
       });
     }

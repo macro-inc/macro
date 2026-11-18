@@ -13,7 +13,8 @@ type AddRequest = { people: readonly Person[]; companyIds: readonly string[] };
 
 // Selection actions open the one dialog the app shell mounts on first use.
 const [request, setRequest] = createSignal<AddRequest>();
-const lock = useFocusLock('add-to-sequence');
+// Made on first use: importing the CRM's selection actions must stay inert.
+let lock: ReturnType<typeof useFocusLock> | undefined;
 
 /** Selected people and companies fit one batch. */
 export function canAddToSequence(entities: readonly EntityData[]) {
@@ -28,6 +29,7 @@ export function canAddToSequence(entities: readonly EntityData[]) {
 
 export function openAddToSequence(entities: readonly EntityData[]) {
   if (!canAddToSequence(entities)) return;
+  lock ??= useFocusLock('add-to-sequence');
   lock.acquire();
   setRequest({
     people: entities.filter(isCrmContactEntity),
@@ -38,7 +40,7 @@ export function openAddToSequence(entities: readonly EntityData[]) {
 export const addToSequenceDialog = {
   request,
   close() {
-    lock.release();
+    lock?.release();
     setRequest(undefined);
   },
 };

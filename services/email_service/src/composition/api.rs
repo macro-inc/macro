@@ -131,6 +131,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         db.clone(),
         crm_service,
         config.environment,
+        crate::composition::sequence_flags(&config)?,
     )?);
     let email_thread_state = EmailThreadRouterState {
         service: email_service.service(),

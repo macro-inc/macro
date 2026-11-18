@@ -20,8 +20,23 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PgSequenceSteps;
 
+/// A storage failure, safe to log: a database error's detail can quote the
+/// failing row, addresses included, so only its code and constraint are kept.
 fn storage(error: impl Into<anyhow::Error>) -> EmailErr {
-    EmailErr::RepoErr(error.into())
+    let error = error.into();
+    EmailErr::RepoErr(
+        match error
+            .downcast_ref::<sqlx::Error>()
+            .and_then(sqlx::Error::as_database_error)
+        {
+            Some(database) => anyhow::anyhow!(
+                "query failed: SQLSTATE {}, constraint {}",
+                database.code().as_deref().unwrap_or("unknown"),
+                database.constraint().unwrap_or("none"),
+            ),
+            None => error,
+        },
+    )
 }
 
 fn schedule_status(
@@ -57,6 +72,25 @@ fn header_pairs(headers: Option<serde_json::Value>) -> Vec<(String, String)> {
 impl SequenceStepStore for PgSequenceSteps {
     type Conn = PgConnection;
     type Err = EmailErr;
+
+    async fn latest_slot(
+        &self,
+        conn: &mut PgConnection,
+        link_id: Uuid,
+        since: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, EmailErr> {
+        let source: &'static str = ScheduledSendSource::Sequence.into();
+        sqlx::query_scalar!(
+            "SELECT max(send_time) FROM email_scheduled_messages
+             WHERE link_id = $1 AND source = $2 AND send_time > $3",
+            link_id,
+            source,
+            since,
+        )
+        .fetch_one(conn)
+        .await
+        .map_err(storage)
+    }
 
     async fn sending_inbox(
         &self,
@@ -140,7 +174,7 @@ impl SequenceStepStore for PgSequenceSteps {
                         provider_thread_id,
                     )
                     .await
-                    .map_err(EmailErr::RepoErr)?;
+                    .map_err(storage)?;
                 }
                 (parent_row.thread_id, parent_row.provider_thread_id)
             }
@@ -252,7 +286,7 @@ impl SequenceStepStore for PgSequenceSteps {
                 provider_thread_id,
             )
             .await
-            .map_err(EmailErr::RepoErr)?;
+            .map_err(storage)?;
         }
         let Some(locked) = sqlx::query!(
             "SELECT link_id, thread_id, is_sent FROM email_messages WHERE id = $1 FOR UPDATE",
@@ -320,10 +354,10 @@ impl SequenceStepStore for PgSequenceSteps {
         use email_db_client::threads;
         let emptied = !threads::delete::thread_has_messages(conn, locked.thread_id)
             .await
-            .map_err(EmailErr::RepoErr)?
+            .map_err(storage)?
             && threads::delete::delete_empty_thread(conn, locked.thread_id)
                 .await
-                .map_err(EmailErr::RepoErr)?
+                .map_err(storage)?
                 > 0;
         if !emptied {
             threads::update::recompute_thread_metadata(conn, locked.thread_id, locked.link_id)

@@ -19,6 +19,7 @@ inbound = [
 outbound = [
   "dep:crm",
   "dep:entity_access",
+  "dep:feature_flags",
   "dep:filter_ast",
   "dep:item_filters",
   "dep:sqlx",
@@ -32,6 +33,7 @@ chrono-tz = { workspace = true }
 crm = { path = "../crm", optional = true, default-features = false, features = ["ports"] }
 email = { path = "../email", default-features = false, features = ["ports"] }
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
+feature_flags = { path = "../feature_flags", optional = true }
 filter_ast = { path = "../filter_ast", optional = true }
 item_filters = { path = "../item_filters", optional = true, default-features = false }
 lazy-regex = { workspace = true }

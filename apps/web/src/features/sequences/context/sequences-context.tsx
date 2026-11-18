@@ -10,7 +10,13 @@ import type {
   UpdateSequenceRequest,
 } from '@service-email/generated/schemas';
 import type { Result } from 'neverthrow';
-import { type Accessor, createContext, useContext } from 'solid-js';
+import {
+  type Accessor,
+  type Component,
+  createContext,
+  useContext,
+} from 'solid-js';
+import type { SectionHeaderProps } from '../components/section-header';
 import type { SequenceFailure } from '../core/errors';
 
 type Outcome<T> = Promise<Result<T, SequenceFailure>>;
@@ -90,6 +96,8 @@ export type SequencesContext = {
   /** A teammate's display name, for the owner on a contact's card. */
   userName(userId: string): string;
   feedback: { success(message: string): void; failure(message: string): void };
+  /** The section header for this device; the app entry chooses it. */
+  SectionHeader: Component<SectionHeaderProps>;
 };
 
 const Context = createContext<SequencesContext>();

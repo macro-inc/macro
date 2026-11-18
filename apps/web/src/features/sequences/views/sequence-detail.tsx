@@ -16,7 +16,6 @@ import {
   Switch,
 } from 'solid-js';
 import { failureMessage } from '../components/failure';
-import { SectionHeader } from '../components/section-header';
 import { SequenceEditor } from '../components/sequence-editor';
 import { SequenceStatusBadge } from '../components/status';
 import {
@@ -90,7 +89,7 @@ function SequenceDetailContent(props: {
 
   return (
     <>
-      <SectionHeader
+      <context.SectionHeader
         title={
           <div class="flex min-w-0 flex-wrap items-center gap-2">
             {props.navigation}

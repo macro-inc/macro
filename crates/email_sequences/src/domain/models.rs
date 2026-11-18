@@ -319,8 +319,10 @@ pub struct CrmPerson {
     pub id: Uuid,
     /// Team owning the record.
     pub team_id: Uuid,
-    /// Address as the CRM stores it, if it has one.
+    /// Primary address as the CRM stores it, if it has one.
     pub email: Option<String>,
+    /// Every address the person is known by.
+    pub emails: Vec<String>,
     /// Display name.
     pub name: Option<String>,
 }

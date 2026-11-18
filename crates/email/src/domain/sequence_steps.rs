@@ -138,6 +138,15 @@ pub trait SequenceStepStore: Send + Sync + 'static {
     /// Adapter error.
     type Err: std::error::Error + Send + Sync + 'static;
 
+    /// The latest send time given to a step from the inbox after `since`,
+    /// sent or not. Read from the schedule, which outlives the sequence.
+    fn latest_slot(
+        &self,
+        conn: &mut Self::Conn,
+        link_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
+
     /// The inbox, if it exists.
     fn sending_inbox(
         &self,

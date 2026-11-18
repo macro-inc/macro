@@ -8,6 +8,7 @@ use entity_access::domain::{
     models::{AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
 };
+use feature_flags::FeatureFlags;
 use filter_ast::Expr;
 use item_filters::ast::crm_contact::CrmContactLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -15,17 +16,25 @@ use uuid::Uuid;
 
 use crate::domain::{models::CrmPerson, ports::OwnerAccess};
 
-/// [`OwnerAccess`] over entity access and the CRM service.
+/// The PostHog rollout, shared with the web app.
+pub const SEQUENCES_FLAG: &str = "enable-sequences";
+
+/// [`OwnerAccess`] over entity access, the CRM service and the rollout flag.
 #[derive(Clone)]
-pub struct CrmOwnerAccess<E, C> {
+pub struct CrmOwnerAccess<E, C, F> {
     entity_access: E,
     crm: C,
+    flags: Option<F>,
 }
 
-impl<E, C> CrmOwnerAccess<E, C> {
-    /// Compose from the two services.
-    pub fn new(entity_access: E, crm: C) -> Self {
-        Self { entity_access, crm }
+impl<E, C, F> CrmOwnerAccess<E, C, F> {
+    /// Compose from the services. Without `flags` the rollout includes nobody.
+    pub fn new(entity_access: E, crm: C, flags: Option<F>) -> Self {
+        Self {
+            entity_access,
+            crm,
+            flags,
+        }
     }
 }
 
@@ -43,10 +52,11 @@ pub enum OwnerAccessError {
     InvalidUser,
 }
 
-impl<E, C> OwnerAccess for CrmOwnerAccess<E, C>
+impl<E, C, F> OwnerAccess for CrmOwnerAccess<E, C, F>
 where
     E: EntityAccessService,
     C: CrmService,
+    F: FeatureFlags + Send + Sync + 'static,
 {
     type Err = OwnerAccessError;
 
@@ -73,6 +83,22 @@ where
             Ok(precheck) => Ok(precheck.crm_enabled.then_some(team.team_id)),
             Err(CrmError::AccessDenied) => Ok(None),
             Err(error) => Err(error.into()),
+        }
+    }
+
+    async fn rollout_includes(&self, user_id: &str) -> bool {
+        let Some(flags) = &self.flags else {
+            return false;
+        };
+        let Ok(user) = MacroUserIdStr::parse_from_str(user_id) else {
+            return false;
+        };
+        match flags.load(&user).await {
+            Ok(snapshot) => snapshot.is_enabled(SEQUENCES_FLAG),
+            Err(error) => {
+                tracing::warn!(error = %error, "could not read the sequences rollout");
+                false
+            }
         }
     }
 
@@ -106,6 +132,7 @@ where
                 id: listed.contact.id,
                 team_id: listed.team_id,
                 email: listed.contact.email,
+                emails: listed.contact.emails,
                 name: listed.contact.name,
             })
             .collect())

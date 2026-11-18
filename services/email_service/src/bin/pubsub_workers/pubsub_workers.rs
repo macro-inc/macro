@@ -419,6 +419,7 @@ async fn main() -> anyhow::Result<()> {
         db.clone(),
         crm_service.clone(),
         env,
+        email_service::composition::sequence_flags(&config)?,
     )?);
     worker_tracker.spawn(email_sequences::inbound::sweep_worker::run(
         sequences.clone(),

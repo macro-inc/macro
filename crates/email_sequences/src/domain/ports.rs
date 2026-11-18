@@ -146,14 +146,12 @@ pub trait SequenceRepo: Send + Sync + 'static {
         owner: &Owner,
         input: &NewSequence,
     ) -> impl Future<Output = Result<Sequence, Self::Err>> + Send;
-    /// Lock one of the owner's sequences: `FOR UPDATE`, or `FOR SHARE` when
-    /// `share`.
+    /// Lock one of the owner's sequences.
     fn lock_sequence(
         &self,
         tx: &mut Self::Tx,
         owner: &Owner,
         id: Uuid,
-        share: bool,
     ) -> impl Future<Output = Result<Option<Sequence>, Self::Err>> + Send;
     /// Write a sequence's fields and status.
     fn save_sequence(
@@ -318,14 +316,6 @@ pub trait SequenceRepo: Send + Sync + 'static {
         tx: &mut Self::Tx,
         link_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// The latest send time given to a step from the inbox after `since`,
-    /// sent or not. Call it under [`Self::lock_send_slot`].
-    fn latest_slot(
-        &self,
-        tx: &mut Self::Tx,
-        link_id: Uuid,
-        since: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
     /// Whether the inbox has any live enrollment.
     fn has_live_enrollments(
         &self,
@@ -349,6 +339,9 @@ pub trait OwnerAccess: Send + Sync + 'static {
         &self,
         user_id: &str,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+    /// Whether the rollout includes the user. Anything that starts sending
+    /// asks; stopping never does. False when the rollout can't be read.
+    fn rollout_includes(&self, user_id: &str) -> impl Future<Output = bool> + Send;
     /// The CRM people the user can see among `ids`.
     fn people(
         &self,
