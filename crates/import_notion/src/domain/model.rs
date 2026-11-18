@@ -336,6 +336,8 @@ pub enum RowsNext {
 /// Every row of a data source, drained, each once.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DrainedRows {
+    /// Number of rows returned across API pages, including overlap at result caps.
+    pub rows_read: usize,
     /// The rows, oldest first.
     pub rows: Vec<NotionPage>,
     /// Whether every row was listed; `false` when Notion's result cap

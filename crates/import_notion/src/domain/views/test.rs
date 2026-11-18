@@ -482,3 +482,36 @@ fn approximating_an_and_keeps_supported_clauses_and_drops_an_incomplete_or() {
         2
     );
 }
+
+#[test]
+fn negative_filters_on_collapsed_options_are_omitted_to_keep_source_rows() {
+    let view: NotionView = serde_json::from_value(json!({
+        "parent":{"database_id":"00000000-0000-4000-8000-000000000002"},
+        "id":"00000000-0000-4000-8000-000000000001", "name":"Except open", "type":"table",
+        "data_source_id":"00000000-0000-4000-8000-000000000003",
+        "filter":{"property":"stat", "select":{"does_not_equal":"Open"}}
+    }))
+    .unwrap();
+    let option = models_databases::OptionId::from_uuid(Uuid::from_u128(2));
+    let columns = vec![ViewColumnBinding {
+        property_id: "stat".into(),
+        property_name: "Status".into(),
+        column: ColumnId::from_uuid(Uuid::from_u128(1)),
+        kind: ColumnKind::Select { multi: false },
+        options: BTreeMap::from([("Open".into(), option), ("OPEN".into(), option)]),
+        snapshot: false,
+    }];
+    let translated = translate(&view, &columns);
+    assert!(
+        translated.view.query.filter.is_none(),
+        "the source's OPEN rows must survive a does-not-equal Open filter"
+    );
+    assert!(
+        translated
+            .losses
+            .iter()
+            .any(|loss| loss.kind == ViewLossKind::Filter)
+    );
+}
+
+mod whitespace;

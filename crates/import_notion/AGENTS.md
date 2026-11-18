@@ -81,6 +81,8 @@ maps a data source onto Macro database columns and cells
   Before planning columns, union `macro_cells::date_range_properties` from
   the source rows with stable property ids used by timeline views, then call
   `ColumnPlan::new_with_date_ranges` to preserve both date endpoints.
+- `inventory::all_rows` reports raw `rows_read` separately from deduplicated
+  rows, including overlap when restarting past the source result cap.
 - `NotionApi::list_views` returns paginated ids scoped by `ViewScope`; call
   `retrieve_view` for each full configuration. Listing by source includes
   linked views, whose `parent.database_id` may differ from the source owner.
@@ -89,7 +91,12 @@ maps a data source onto Macro database columns and cells
   imported date-range column. Unsupported settings, computed filters/sorts,
   people predicates without a complete account mapping, relative dates,
   timestamp sorts, and separate timeline end columns are
-  reported as losses. The writer owns saved-view ids and name uniqueness.
+  reported as losses. Text cells are trimmed: normalize positive text literals
+  and report changed literals; omit blank positive literals, text inequality and
+  nonempty predicates, changed negative-contains literals, and negative option
+  predicates whose source labels collapse onto one Macro option id. These losses
+  broaden results, never hide source rows. The writer owns saved-view ids and
+  name uniqueness.
 
 ## Related
 

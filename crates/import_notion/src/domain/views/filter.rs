@@ -100,8 +100,9 @@ fn node(
             }),
         );
     }
-    let translated = condition(value, columns);
-    if translated.is_none() {
+    let before = losses.len();
+    let translated = condition(value, columns, losses, path);
+    if translated.is_none() && losses.len() == before {
         loss(
             losses,
             ViewLossKind::Filter,
@@ -112,7 +113,12 @@ fn node(
     translated
 }
 
-fn condition(value: &Value, columns: &[ViewColumnBinding]) -> Option<FilterNode> {
+fn condition(
+    value: &Value,
+    columns: &[ViewColumnBinding],
+    losses: &mut Vec<ViewLoss>,
+    path: &str,
+) -> Option<FilterNode> {
     let object = value.as_object()?;
     if object.len() != 2 {
         return None;
@@ -142,6 +148,67 @@ fn condition(value: &Value, columns: &[ViewColumnBinding]) -> Option<FilterNode>
         return None;
     }
     let (operator, value) = predicate.iter().next()?;
+    let text = matches!(
+        kind.as_str(),
+        "title" | "rich_text" | "email" | "phone_number" | "url"
+    );
+    // Text import trims cell values and turns whitespace-only values into null.
+    // Inequality cannot distinguish values collapsed by that normalization.
+    if text
+        && (operator == "does_not_equal"
+            || operator == "is_not_empty" && value == &Value::Bool(true))
+    {
+        loss(
+            losses,
+            ViewLossKind::Filter,
+            path,
+            "Imported text is trimmed; inequality and nonempty tests may hide source values, so the predicate is omitted",
+        );
+        return None;
+    }
+    let positive_text = matches!(
+        operator.as_str(),
+        "equals" | "contains" | "starts_with" | "ends_with"
+    );
+    let normalized = if text && (positive_text || operator == "does_not_contain") {
+        let original = value.as_str()?;
+        let trimmed = original.trim();
+        if positive_text && trimmed.is_empty() || !positive_text && trimmed != original {
+            loss(
+                losses,
+                ViewLossKind::Filter,
+                path,
+                "Text literal cannot safely match trimmed imported values; predicate omitted; view may include additional rows",
+            );
+            return None;
+        }
+        if trimmed != original {
+            loss(
+                losses,
+                ViewLossKind::Filter,
+                path,
+                "Text literal trimmed to match imported values; view may include additional rows",
+            );
+        }
+        Some(Value::String(trimmed.to_string()))
+    } else {
+        None
+    };
+    let value = normalized.as_ref().unwrap_or(value);
+    // Imported option labels can collapse after case folding or truncation.
+    // A negative test on the shared id would also hide another source option.
+    if matches!(kind.as_str(), "select" | "status" | "multi_select")
+        && matches!(operator.as_str(), "does_not_equal" | "does_not_contain")
+        && let Some(option) = value.as_str().and_then(|label| binding.options.get(label))
+        && binding
+            .options
+            .values()
+            .filter(|known| *known == option)
+            .count()
+            > 1
+    {
+        return None;
+    }
     let test = match operator.as_str() {
         "is_empty" if value == &Value::Bool(true) => FilterTest::Presence {
             operator: PresenceOperator::IsEmpty,
