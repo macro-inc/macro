@@ -103,6 +103,10 @@ An independent cached read rejected across an authority change gets one fresh
 local read after confirming the current owner. Account replacement fences that
 recovery; cache-only reads never reach the network, and repeated rejection does
 not restart the mounted query through an unbounded refetch loop.
+Direct contact suggestions use the same bounded local recovery: a stale identity
+or people read restarts the entire window once, without requesting CRM proof.
+Account replacement, cancellation, host retirement and storage reset stop that
+recovery; no identity or people result from the rejected attempt is reused.
 Personal Soup mail, Work Feed, bookmark metadata
 and independently scoped database views retain their cached offline reads when
 the permission endpoint is unavailable. Thread-by-ID reads first select only

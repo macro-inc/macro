@@ -974,6 +974,9 @@ input, personal suggestions are recent-first rather than domain/brevity-weighted
 A chip shows the name followed by the address in muted ink.
 Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
 local windows rather than retaining the address book or searching the server.
+Open a composer immediately after sign-in with CRM verification delayed or
+unavailable: personal recipient suggestions must still load. Switching accounts
+while they load must not show the previous account's suggestions.
 Partial synchronization remains visibly incomplete. Each field owns its query;
 scrolling to the end of the suggestions (or PageDown) lists the next page below. Scoped thread addresses remain
 available, but the same address must not appear twice when the directory also

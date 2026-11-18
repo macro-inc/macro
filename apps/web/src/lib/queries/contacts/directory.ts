@@ -1,4 +1,8 @@
 import type { IUser } from '@core/user/types';
+import {
+  type CacheAuthority,
+  StaleCacheAuthorityError,
+} from '@graphql-cache/authority';
 import type { CacheHost } from '@graphql-cache/host/types';
 import {
   PEOPLE_MIN_POLICY_VERSION,
@@ -78,7 +82,9 @@ export type ContactDirectoryHost = Pick<
   | 'currentStorageGeneration'
   | 'readQuery'
   | 'readRecordsByKeys'
->;
+  | 'authority'
+> &
+  Partial<Pick<CacheHost, 'onCacheGenerationChanged'>>;
 
 /** Already-resolved scalar labels, not entries in the global display-name store. */
 export function contactToUser(contact: ContactDirectoryFieldsFragment): IUser {
@@ -186,10 +192,65 @@ type WindowInput = {
   span: Span;
 };
 
+/** Direct contact reads do not pass through the exchange's stale-read recovery.
+ * Retry the complete window once so first binding cannot strand a picker, but
+ * never reuse its rejected identity, generation, or people result. */
+async function readLocalWindow(
+  host: ContactDirectoryHost | undefined,
+  input: WindowInput
+): Promise<ContactDirectoryPage | undefined> {
+  const authority = host?.authority;
+  if (!host || !authority) return readLocalWindowOnce(host, input);
+
+  let account = authority.snapshot()?.account ?? null;
+  let invalidated = account !== null && account !== input.viewer;
+  const observe = (next: CacheAuthority) => {
+    const nextAccount = next.account ?? null;
+    if (
+      nextAccount !== account &&
+      (account !== null || nextAccount !== input.viewer)
+    )
+      invalidated = true;
+    account = nextAccount;
+  };
+  const stopAuthority = authority.onChanged(observe);
+  const stopGeneration = host.onCacheGenerationChanged?.(() => {
+    invalidated = true;
+  });
+  const assertRecovery = (error: StaleCacheAuthorityError) => {
+    input.signal.throwIfAborted();
+    if (invalidated || host.disabled || host.authority !== authority)
+      throw error;
+  };
+  try {
+    return await readLocalWindowOnce(host, input);
+  } catch (error) {
+    if (!(error instanceof StaleCacheAuthorityError)) throw error;
+    assertRecovery(error);
+    return await input.span.span(
+      'contacts.retry_local_window',
+      async (span) => {
+        span.setAttr('cache.retry.reason', 'authority-change');
+        span.setAttr('cache.retry.count', 1);
+        observe(await authority.current());
+        assertRecovery(error);
+        if (authority.snapshot()?.account !== input.viewer) throw error;
+        const page = await readLocalWindowOnce(host, { ...input, span });
+        assertRecovery(error);
+        if (authority.snapshot()?.account !== input.viewer) throw error;
+        return page;
+      }
+    );
+  } finally {
+    stopGeneration?.();
+    stopAuthority();
+  }
+}
+
 /** Reads the local ranked projection. Returns undefined when this tab has no
  * usable cache for the viewer: no host, a retired or unsupported host, an
  * unbound viewer, a pending context, or an older people policy. */
-async function readLocalWindow(
+async function readLocalWindowOnce(
   host: ContactDirectoryHost | undefined,
   {
     viewer,

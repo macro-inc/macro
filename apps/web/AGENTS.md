@@ -118,7 +118,7 @@ shares Soup's leader, rollout and generation lifecycle; do not add another leade
 The bounded directory window accepts external search/policy inputs. Bind continuations
 to each input transition, not just equal query strings; returning to an earlier input
 must start at page one. Person hydration wakes an initially unavailable offline
-window, never an authorization error. Interactive contact suggestions read locally:
+window, never an authorization error. Retry a stale direct contact window once from its identity read under the same account, discarding all intermediate results; cancellation, account replacement, host retirement and storage reset stop recovery without requesting CRM proof. Interactive contact suggestions read locally:
 partial sync returns partial local results. Only a tab with no usable local cache
 (none, retired, unsupported, unbound or older host) reads bounded server
 `ContactDirectoryPage` pages, and only online; a server continuation keeps paging the
