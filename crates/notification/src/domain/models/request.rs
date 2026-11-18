@@ -87,6 +87,7 @@ where
             build_email: None,
             send_conn_gateway: false,
             mobile_push_exclusions: MobilePushRecipients::default(),
+            mention_fallback_recipient_ids: HashSet::new(),
         }
     }
 }
@@ -115,6 +116,11 @@ pub struct SendNotificationRequest<'a, T, U> {
     /// Platforms already handled by another delivery path for these recipients.
     #[serde(default)]
     pub(crate) mobile_push_exclusions: MobilePushRecipients,
+    /// Users this message @mentions, who received a mention notification
+    /// instead of this one. Ingress adds back each one who turned mentions off
+    /// for the channel, so they still hear about the message.
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    pub(crate) mention_fallback_recipient_ids: HashSet<MacroUserIdStr<'a>>,
 }
 
 impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
@@ -127,6 +133,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             uuid_to_write,
             send_conn_gateway,
             mobile_push_exclusions,
+            mention_fallback_recipient_ids,
         } = self;
 
         let sender = req.sender_id.clone().map(CowLike::into_owned);
@@ -158,6 +165,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             build_email,
             send_conn_gateway,
             mobile_push_exclusions,
+            mention_fallback_recipient_ids,
         }
     }
 }
@@ -206,11 +214,20 @@ impl<'a, T, U> SendNotificationRequest<'a, T, U> {
         self
     }
 
+    /// Name the users this message @mentions who were left out of this
+    /// notification because they get a mention notification. See
+    /// [`SendNotificationRequest::mention_fallback_recipient_ids`].
+    pub fn with_mention_fallback(mut self, recipients: HashSet<MacroUserIdStr<'a>>) -> Self {
+        self.mention_fallback_recipient_ids = recipients;
+        self
+    }
+
     pub(crate) fn update_recipients(
         mut self,
         muted_users: HashSet<MacroUserIdStr<'a>>,
         unsubscribed_users: HashSet<MacroUserIdStr<'a>>,
         type_disabled_users: HashSet<MacroUserIdStr<'a>>,
+        channel_kind_disabled_users: HashSet<MacroUserIdStr<'a>>,
     ) -> (Self, Vec<RecipientExclusion<'a>>) {
         let recipient_is_sender = |id: FilteredRecipient<'a>| match (id, &self.req.sender_id) {
             (FilteredRecipient::Allowed(macro_user_id_str), Some(sender))
@@ -260,6 +277,18 @@ impl<'a, T, U> SendNotificationRequest<'a, T, U> {
             x => x,
         };
 
+        let user_disabled_channel_kind = |id: FilteredRecipient<'a>| match id {
+            FilteredRecipient::Allowed(macro_user_id_str)
+                if channel_kind_disabled_users.contains(&macro_user_id_str) =>
+            {
+                FilteredRecipient::Excluded(RecipientExclusion {
+                    user_id: macro_user_id_str,
+                    reason: ExclusionReason::DisabledForChannel,
+                })
+            }
+            x => x,
+        };
+
         let recipients = std::mem::take(&mut self.req.recipient_ids);
 
         let (allowed, excluded): (HashSet<_>, Vec<_>) = recipients
@@ -269,6 +298,7 @@ impl<'a, T, U> SendNotificationRequest<'a, T, U> {
             .map(user_muted_notifs)
             .map(notif_type_is_ignored)
             .map(user_disabled_type)
+            .map(user_disabled_channel_kind)
             .partition_map(|r| match r {
                 FilteredRecipient::Allowed(a) => itertools::Either::Left(a),
                 FilteredRecipient::Excluded(b) => itertools::Either::Right(b),

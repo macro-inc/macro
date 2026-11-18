@@ -2,9 +2,11 @@
 
 mod access_request_delivery;
 mod android;
+mod channel_settings;
 mod ios_navigation;
 mod status_updates;
 
+use crate::domain::channel_settings::ChannelNotificationSettings;
 use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
@@ -109,6 +111,7 @@ struct MockRepository {
     muted_users: HashSet<MacroUserIdStr<'static>>,
     unsubscribed_users: HashSet<MacroUserIdStr<'static>>,
     type_disabled_users: HashSet<MacroUserIdStr<'static>>,
+    channel_settings: HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>,
     device_endpoints: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>,
     created_notifications: Mutex<Vec<Uuid>>,
     stored_collapse_keys: Mutex<Vec<(Uuid, Option<String>)>>,
@@ -133,6 +136,7 @@ impl MockRepository {
             muted_users: HashSet::new(),
             unsubscribed_users: HashSet::new(),
             type_disabled_users: HashSet::new(),
+            channel_settings: HashMap::new(),
             device_endpoints: HashMap::new(),
             created_notifications: Mutex::new(Vec::new()),
             stored_collapse_keys: Mutex::new(Vec::new()),
@@ -204,6 +208,15 @@ impl MockRepository {
         self
     }
 
+    fn with_channel_settings(
+        mut self,
+        user_id: MacroUserIdStr<'static>,
+        settings: ChannelNotificationSettings,
+    ) -> Self {
+        self.channel_settings.insert(user_id, settings);
+        self
+    }
+
     fn with_device_endpoint(
         mut self,
         user_id: MacroUserIdStr<'static>,
@@ -271,6 +284,19 @@ impl NotificationRepository for MockRepository {
         _user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         Ok(self.unsubscribed_users.clone())
+    }
+
+    async fn get_channel_notification_settings<'a>(
+        &self,
+        _channel_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report> {
+        Ok(self
+            .channel_settings
+            .iter()
+            .filter(|(user_id, _)| user_ids.contains(user_id))
+            .map(|(user_id, settings)| (user_id.clone(), settings.clone()))
+            .collect())
     }
 
     async fn create_notification<'a, T: Serialize + Send + Sync>(
@@ -615,6 +641,16 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         (**self)
             .get_unsubscribed_users(item_id, is_direct_mention, user_ids)
+            .await
+    }
+
+    async fn get_channel_notification_settings<'a>(
+        &self,
+        channel_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report> {
+        (**self)
+            .get_channel_notification_settings(channel_id, user_ids)
             .await
     }
 

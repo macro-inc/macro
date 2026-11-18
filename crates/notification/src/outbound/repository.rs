@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+use crate::domain::channel_settings::ChannelNotificationSettings;
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::request::{
     NotificationCategory, NotificationListFilters, NotificationStatus,
@@ -12,6 +13,7 @@ use crate::domain::models::{
     SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
 };
 use crate::domain::ports::NotificationRepository;
+use crate::outbound::channel_settings::settings_for_recipients;
 use crate::outbound::device_registration::DeviceRegistrationDbOps;
 use chrono::{DateTime, Utc};
 use macro_user_id::cowlike::CowLike;
@@ -349,6 +351,15 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl std::future::Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 
+    /// Each of these users' own settings for a channel.
+    fn get_channel_notification_settings<'a>(
+        &self,
+        channel_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl std::future::Future<
+        Output = Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report>,
+    > + Send;
+
     /// Get device endpoints for the given users.
     fn get_device_endpoints<'a>(
         &self,
@@ -592,6 +603,14 @@ impl NotificationDbOps for PgPool {
             .collect();
 
         Ok(result)
+    }
+
+    async fn get_channel_notification_settings<'a>(
+        &self,
+        channel_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report> {
+        settings_for_recipients(self, channel_id, user_ids).await
     }
 
     async fn get_device_endpoints<'a>(
@@ -1582,6 +1601,16 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         self.db
             .get_unsubscribed_users(item_id, is_direct_mention, user_ids)
+            .await
+    }
+
+    async fn get_channel_notification_settings<'a>(
+        &self,
+        channel_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report> {
+        self.db
+            .get_channel_notification_settings(channel_id, user_ids)
             .await
     }
 

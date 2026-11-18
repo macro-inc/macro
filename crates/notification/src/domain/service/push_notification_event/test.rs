@@ -78,6 +78,19 @@ impl NotificationRepository for MockNotifRepo {
     {
         unimplemented!()
     }
+    async fn get_channel_notification_settings<'a>(
+        &self,
+        _: uuid::Uuid,
+        _: &[macro_user_id::user_id::MacroUserIdStr<'a>],
+    ) -> Result<
+        std::collections::HashMap<
+            macro_user_id::user_id::MacroUserIdStr<'static>,
+            crate::domain::channel_settings::ChannelNotificationSettings,
+        >,
+        Report,
+    > {
+        unimplemented!()
+    }
     async fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
         _: crate::domain::models::SendNotificationRequestBuilder<

@@ -16,6 +16,7 @@ use uuid::Uuid;
 use model_entity::Entity;
 use models_pagination::{CreatedAt, Query};
 
+use crate::domain::channel_settings::ChannelNotificationSettings;
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::{NotificationStatusPayload, TaggedContent};
 
@@ -72,6 +73,16 @@ pub trait NotificationRepository: Send + Sync + 'static {
         is_direct_mention: bool,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Each of these users' own settings for a channel. Users without any
+    /// are omitted.
+    fn get_channel_notification_settings<'a>(
+        &self,
+        channel_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl Future<
+        Output = Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report>,
+    > + Send;
 
     /// Create a notification and user notification records.
     ///

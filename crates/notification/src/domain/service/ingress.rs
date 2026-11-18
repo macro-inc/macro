@@ -3,6 +3,7 @@
 //! This service handles the caller-facing side of notifications:
 //! filtering recipients, persisting to DB, and publishing to the queue.
 
+use crate::domain::channel_settings::ChannelNotificationKind;
 use crate::domain::item_preferences::is_direct_mention;
 use crate::domain::models::apple::{APNSPushNotification, Aps};
 use crate::domain::models::device::DeviceType;
@@ -19,7 +20,7 @@ use crate::domain::models::request::{
     UpdateNotificationsRequest,
 };
 use crate::domain::models::{
-    DeviceEndpoint, DisabledNotificationType, MobilePushRecipients, Notification,
+    DeviceEndpoint, DisabledNotificationType, ExclusionReason, MobilePushRecipients, Notification,
     NotificationResult, NotificationStatusPayload, NotificationTypeName, PatchDelete,
     UserNotificationRow,
 };
@@ -31,7 +32,7 @@ use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
+use model_entity::{Entity, EntityType};
 use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
@@ -328,27 +329,98 @@ where
     /// - Sender (sender cannot receive their own notification)
     /// - Muted notifications
     /// - Unsubscribed from item (a mentions-only preference lets direct mentions through)
+    /// - Notification type disabled, globally or for the notification's channel
+    ///
+    /// A channel message or reply also reaches the users it @mentions who
+    /// turned mentions off for that channel: their mention notification is
+    /// dropped, so this one tells them instead.
+    #[tracing::instrument(
+        name = "notification.filter_recipients",
+        skip_all,
+        fields(
+            notification.event_type = req.req.notification.tag.as_ref(),
+            recipient_count = req.req.recipient_ids.len(),
+            mention_fallback_count = tracing::field::Empty,
+            excluded_count = tracing::field::Empty,
+            channel_settings_excluded_count = tracing::field::Empty,
+        ),
+        err
+    )]
     async fn filter_recipients<'a, T, U>(
         &self,
-        req: SendNotificationRequest<'a, T, U>,
+        mut req: SendNotificationRequest<'a, T, U>,
     ) -> Result<SendNotificationRequest<'a, T, U>, Report> {
-        let recipient_ids: Vec<_> = req.req.recipient_ids.iter().map(CowLike::copied).collect();
-        let notification_type = req.req.notification.tag.as_ref();
+        let notification_type = req.req.notification.tag.as_ref().to_owned();
+        let channel_kind =
+            channel_settings_target(&req.req.notification_entity, &notification_type);
+        let mention_fallback = std::mem::take(&mut req.mention_fallback_recipient_ids);
+        let lookup_ids: Vec<_> = req
+            .req
+            .recipient_ids
+            .iter()
+            .chain(mention_fallback.iter())
+            .map(CowLike::copied)
+            .collect();
 
-        // Fetch all filter data upfront
-        let (muted_users, unsubscribed_users, type_disabled_users) = tokio::try_join!(
-            self.repository.get_muted_users(&recipient_ids),
+        // Fetch all filter data upfront, for the fallback users too.
+        let (muted_users, unsubscribed_users, type_disabled_users, channel_settings) = tokio::try_join!(
+            self.repository.get_muted_users(&lookup_ids),
             self.repository.get_unsubscribed_users(
                 &req.req.notification_entity.entity_id,
-                is_direct_mention(notification_type),
-                &recipient_ids
+                is_direct_mention(&notification_type),
+                &lookup_ids
             ),
             self.repository
-                .get_users_with_type_disabled(notification_type, &recipient_ids),
+                .get_users_with_type_disabled(&notification_type, &lookup_ids),
+            async {
+                match channel_kind {
+                    Some((channel_id, _)) => {
+                        self.repository
+                            .get_channel_notification_settings(channel_id, &lookup_ids)
+                            .await
+                    }
+                    None => Ok(HashMap::new()),
+                }
+            },
         )?;
 
-        let (out, _excluded) =
-            req.update_recipients(muted_users, unsubscribed_users, type_disabled_users);
+        let fallback_recipients: Vec<_> = mention_fallback
+            .into_iter()
+            .filter(|user_id| {
+                channel_settings.get(user_id).is_some_and(|settings| {
+                    settings
+                        .disabled
+                        .contains(&ChannelNotificationKind::Mention)
+                })
+            })
+            .collect();
+        tracing::Span::current().record("mention_fallback_count", fallback_recipients.len());
+        req.req.recipient_ids.extend(fallback_recipients);
+
+        let channel_kind_disabled_users = match channel_kind {
+            Some((_, kind)) => channel_settings
+                .into_iter()
+                .filter(|(_, settings)| settings.disabled.contains(&kind))
+                .map(|(user_id, _)| user_id)
+                .collect(),
+            None => HashSet::new(),
+        };
+
+        let (out, excluded) = req.update_recipients(
+            muted_users,
+            unsubscribed_users,
+            type_disabled_users,
+            channel_kind_disabled_users,
+        );
+
+        let channel_settings_excluded = excluded
+            .iter()
+            .filter(|exclusion| exclusion.reason == ExclusionReason::DisabledForChannel)
+            .count();
+        let span = tracing::Span::current();
+        span.record("excluded_count", excluded.len());
+        span.record("channel_settings_excluded_count", channel_settings_excluded);
+
         Ok(out)
     }
 
@@ -435,6 +507,21 @@ where
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
         self.send_notification_impl(request).await
     }
+}
+
+/// The channel and the kind of notification its per-channel settings decide,
+/// when this notification is one a user can turn off for its channel.
+fn channel_settings_target(
+    entity: &Entity<'_>,
+    event_type: &str,
+) -> Option<(Uuid, ChannelNotificationKind)> {
+    if entity.entity_type != EntityType::Channel {
+        return None;
+    }
+
+    let kind = event_type.parse().ok()?;
+    let channel_id = entity.entity_id.parse().ok()?;
+    Some((channel_id, kind))
 }
 
 /// A lightweight [`NotificationIngress`] implementation that serializes

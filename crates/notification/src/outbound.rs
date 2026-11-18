@@ -7,6 +7,8 @@
 pub mod active_notification_ids;
 /// PostgreSQL storage for bulk actions and their ledgers.
 pub mod bulk_action;
+/// PostgreSQL storage for users' per-channel notification settings.
+pub mod channel_settings;
 pub mod device_registration;
 pub mod digest_batcher;
 pub mod email;
