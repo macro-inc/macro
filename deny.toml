@@ -140,6 +140,9 @@ confidence-threshold = 0.8
 exceptions = [
   # JSON Schema URI parsing; the published license is MIT No Attribution.
   { allow = ["MIT-0"], crate = "borrow-or-share@0.2.4" },
+  # CBOR codec of the AWS SDK's CloudWatch client; Blue Oak is a permissive,
+  # OSI-approved license.
+  { allow = ["BlueOak-1.0.0"], crate = "minicbor" },
   # Signal's libsignal, used by whatsmeow_signal; AGPL like this repository.
   { allow = ["AGPL-3.0-only"], crate = "libsignal-core" },
   { allow = ["AGPL-3.0-only"], crate = "libsignal-debug" },
