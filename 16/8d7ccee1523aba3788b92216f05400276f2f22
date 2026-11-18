@@ -1,0 +1,77 @@
+crates/agent_code_mode/src/inbound/toolset/test/ocaml.rs
+  s_a79cb5c5d752a9::t_aaf58722e21b5a 183
+crates/agent_permissions/Cargo.toml
+  s_a79cb5c5d752a9::t_be175a809d9cac 21
+crates/agent_permissions/src/domain.rs
+  s_a79cb5c5d752a9::t_cc41691fccc8fa 4
+crates/agent_code_mode/src/domain/connected_apps/test.rs
+  s_a79cb5c5d752a9::t_aaf58722e21b5a 163,229,278,316
+crates/agent_permission_registry/src/lib.rs
+  s_a79cb5c5d752a9::t_be175a809d9cac 23
+crates/agent_permission_registry/Cargo.toml
+  s_a79cb5c5d752a9::t_be175a809d9cac 9-11,14
+crates/agent_code_mode/Cargo.toml
+  s_a79cb5c5d752a9::t_698f0f9d89eb80 8
+  s_a79cb5c5d752a9::t_97abc1629e7777 52
+crates/agent_code_mode/src/domain/reviews/test.rs
+  s_a79cb5c5d752a9::t_aaf58722e21b5a 118
+crates/agent_code_mode/src/domain/service/test.rs
+  s_a79cb5c5d752a9::t_a5863ae9aedfc4 817-929
+  s_a79cb5c5d752a9::t_aaf58722e21b5a 298,503,704
+  s_a79cb5c5d752a9::t_1a840e581b0799 930-932
+crates/agent_permissions/src/domain/admission/test.rs
+  s_a79cb5c5d752a9::t_adb032e80c71ed 1-77
+  s_a79cb5c5d752a9::t_6c427f2118cc9b 78-80
+crates/agent_code_mode/src/domain/service.rs
+  s_a79cb5c5d752a9::t_ca44f7b7834f8a 169-179,182-189,551
+  s_a79cb5c5d752a9::t_5e4bd64c192920 36-41,50-52,610-620,622-623
+  s_a79cb5c5d752a9::t_698f0f9d89eb80 127,180-181,190-195
+  s_a79cb5c5d752a9::t_f16ef5a4909ad7 621
+  s_a79cb5c5d752a9::t_ce2ca8c71765fb 624-626
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_a79cb5c5d752a9::t_5e4bd64c192920 52-63,68,70-73,279-310,312
+  s_a79cb5c5d752a9::t_4396fbe0d99ddb 311,313
+crates/agent_code_mode/src/domain/models.rs
+  s_a79cb5c5d752a9::t_698f0f9d89eb80 1
+  s_a79cb5c5d752a9::t_f6fbff74d29d22 189-193,211-226,263-266
+crates/agent_code_mode/src/inbound/toolset/session/ocaml_permissions.md
+  s_a79cb5c5d752a9::t_516ca8acee98d4 1
+crates/agent_code_mode/src/domain/ui_commands/test.rs
+  s_a79cb5c5d752a9::t_aaf58722e21b5a 170
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_a79cb5c5d752a9::t_aaf58722e21b5a 332
+  s_6966afebcdde0a::t_cd8c0f01fbbacf 288-306,310,347-349,364,367,373-378
+crates/agent_code_mode/src/outbound/postgres/test.rs
+  s_a79cb5c5d752a9::t_aaf58722e21b5a 26,87
+crates/agent_code_mode/src/outbound/reviews/test.rs
+  s_a79cb5c5d752a9::t_aaf58722e21b5a 33
+crates/agent_permissions/src/domain/model.rs
+  s_a79cb5c5d752a9::t_be175a809d9cac 26,306-308,490-556
+  s_a79cb5c5d752a9::t_b50601065c156f 557-558
+crates/agent_permissions/src/domain/admission.rs
+  s_a79cb5c5d752a9::t_cc41691fccc8fa 1-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "168d7ccee1523aba3788b92216f05400276f2f22",
+  "prompts": {},
+  "sessions": {
+    "s_6966afebcdde0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13694447-aca1-404a-8fbf-c900186fe6c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_a79cb5c5d752a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8bf8f92a-181b-4d3a-aaa6-3d5c01f60534",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
