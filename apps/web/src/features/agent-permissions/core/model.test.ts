@@ -31,14 +31,14 @@ describe('toolState', () => {
 
 describe('changeForTool', () => {
   it('clears the rule when the tool is set to its action state', () => {
-    expect(changeForTool(emailSend(), FORWARD, 'ask')).toEqual({
+    expect(changeForTool(emailSend().state, FORWARD, 'ask')).toEqual({
       target: { kind: 'tool', service: 'email', operation: 'forward_event' },
       state: null,
     });
   });
 
   it('saves a rule when the tool differs from its action', () => {
-    expect(changeForTool(emailSend(), SEND_MESSAGE, 'never')).toEqual({
+    expect(changeForTool(emailSend().state, SEND_MESSAGE, 'never')).toEqual({
       target: { kind: 'tool', service: 'email', operation: 'send_message' },
       state: 'never',
     });
@@ -96,7 +96,8 @@ describe('counts', () => {
   });
 
   it('counts restricted actions and differing tools', () => {
-    expect(restrictionCount(VIEW)).toBe(2);
+    // Forward calendar event is allowed under Send's Ask: not a restriction.
+    expect(restrictionCount(VIEW)).toBe(1);
     expect(restrictions(CATALOG, VIEW)).toEqual([
       { group: 'email', action: 'send', state: 'ask' },
     ]);

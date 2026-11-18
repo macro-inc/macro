@@ -98,6 +98,7 @@ export default {
   },
   resetBodyEnd:
     "Limits {{agent}} set for a single session stay until that session ends. This can't be undone.",
+  resetConfirm: 'Reset',
   cancel: 'Cancel',
 
   sectionDescription:

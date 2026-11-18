@@ -30,8 +30,11 @@ export function AgentPermissionsSection(props: {
   const viewQuery = useAgentToolPermissionsQuery(() => props.agentId);
 
   const pending = () => catalogQuery.isPending || viewQuery.isPending;
+  // A failed refetch keeps the cached summary on screen (FE-48).
   const failed = () =>
-    !pending() && (catalogQuery.isError || viewQuery.isError);
+    !pending() &&
+    ((catalogQuery.isError && catalogQuery.data === undefined) ||
+      (viewQuery.isError && viewQuery.data === undefined));
   const loaded = () => {
     if (pending() || failed()) return undefined;
     const catalog = catalogQuery.data;

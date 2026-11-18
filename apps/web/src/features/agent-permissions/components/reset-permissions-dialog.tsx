@@ -18,7 +18,7 @@ export function ResetPermissionsDialog(props: {
       tone="danger"
       pending={props.pending}
       title={t('agentPermissions.resetTitle', { agent: props.agent })}
-      confirmLabel={t('agentPermissions.reset')}
+      confirmLabel={t('agentPermissions.resetConfirm')}
       cancelLabel={t('agentPermissions.cancel')}
       onConfirm={props.onConfirm}
       body={

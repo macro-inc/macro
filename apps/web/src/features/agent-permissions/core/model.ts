@@ -74,17 +74,18 @@ export function ruleFor(
 }
 
 /**
- * The change that sets a tool to `state`. Setting it to its action's state
+ * The change that sets a tool to `state`, given its action's state (the one
+ * being saved, if the action is changing too). Setting it to that state
  * clears its own rule (`null`), so a saved tool rule always means "differs".
  */
 export function changeForTool(
-  action: ToolPermissionAction,
+  actionState: ToolPermissionState,
   tool: ToolRef,
   state: ToolPermissionState
 ): ToolPermissionChange {
   return {
     target: toolTarget(tool),
-    state: state === action.state ? null : state,
+    state: state === actionState ? null : state,
   };
 }
 
@@ -198,7 +199,7 @@ export function restrictions(
   });
 }
 
-/** Restrictions plus individual tools that differ from their action. */
+/** Restricted group actions plus individual tools restricted on their own. */
 export function restrictionCount(view: AgentToolPermissions): number {
   return view.groups.reduce(
     (count, group) =>
@@ -207,7 +208,9 @@ export function restrictionCount(view: AgentToolPermissions): number {
         (actionCount, action) =>
           actionCount +
           (action.state === 'always' ? 0 : 1) +
-          action.overrides.length,
+          // A tool allowed under a stricter action loosens, not restricts.
+          action.overrides.filter((override) => override.state !== 'always')
+            .length,
         0
       ),
     0

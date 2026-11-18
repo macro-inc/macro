@@ -476,7 +476,7 @@ pub enum PermissionError {
     #[error("not found")]
     NotFound,
     /// The caller may not do this.
-    #[error("you can't change this agent's permissions")]
+    #[error("you don't have access to this agent's permissions")]
     Forbidden,
     /// Loosening and reset need a person's own session.
     #[error("Only a person signed in to Macro can loosen or reset an agent's permissions.")]

@@ -124,6 +124,36 @@ describe('AgentPermissionsPage', () => {
     );
   });
 
+  it('saves a tool against its action state while that action saves', async () => {
+    // The Send change is still in flight when the tool is set.
+    let finishSend: (value: unknown) => void = () => {};
+    client.set.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishSend = resolve;
+      })
+    );
+    renderPage();
+    await openGroup('Email');
+    fireEvent.click(option('Email: Send', 'Never'));
+    // Ask was Send's saved state, but no longer its state.
+    fireEvent.click(option('Forward calendar event', 'Ask'));
+    finishSend(ok(VIEW));
+
+    await waitFor(() => expect(client.set).toHaveBeenCalledTimes(2));
+    expect(client.set.mock.calls[1]?.[1]).toEqual({
+      changes: [
+        {
+          target: {
+            kind: 'tool',
+            service: 'email',
+            operation: 'forward_event',
+          },
+          state: 'ask',
+        },
+      ],
+    });
+  });
+
   it('clears a tool rule from its reset button', async () => {
     renderPage();
     await openGroup('Email');
@@ -187,9 +217,7 @@ describe('AgentPermissionsPage', () => {
     fireEvent.click(pageButton);
     const confirm = (await screen.findAllByRole('dialog')).at(-1);
     if (!confirm) throw new Error('the confirmation reopened');
-    fireEvent.click(
-      within(confirm).getByRole('button', { name: 'Reset permissions' })
-    );
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Reset' }));
     await waitFor(() =>
       expect(toasts.success).toHaveBeenCalledWith('Permissions reset')
     );
