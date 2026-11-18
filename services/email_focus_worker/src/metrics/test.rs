@@ -66,8 +66,10 @@ impl MetricSink for Channel {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_batch_goes_out_each_minute_and_the_last_one_at_shutdown() {
+async fn a_batch_goes_out_at_start_each_minute_and_the_last_one_at_shutdown() {
     let metrics = FocusMetrics::default();
+    // Recorded before the publisher starts, as `main` does.
+    metrics.add(Metric::WorkerStarts, 1.0);
     let (sender, mut published) = mpsc::unbounded_channel();
     let shutdown = CancellationToken::new();
     let publisher = tokio::spawn(run_publisher(
@@ -76,8 +78,7 @@ async fn a_batch_goes_out_each_minute_and_the_last_one_at_shutdown() {
         shutdown.clone(),
     ));
 
-    metrics.add(Metric::WorkerStarts, 1.0);
-    tokio::time::advance(PUBLISH_INTERVAL).await;
+    // The start goes out without waiting a minute.
     let first = published.recv().await.unwrap();
     assert_eq!(first.sums[&Metric::WorkerStarts], 1.0);
 

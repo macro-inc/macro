@@ -203,8 +203,9 @@ pub trait MetricSink: Send + Sync + 'static {
     fn publish(&self, batch: &Batch) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
-/// Publish what `metrics` gathered to `sink` every [`PUBLISH_INTERVAL`], and
-/// once more at `shutdown`.
+/// Publish what `metrics` gathered to `sink` at once, then every
+/// [`PUBLISH_INTERVAL`], and once more at `shutdown`: the first batch carries
+/// the start, so a worker that crashes within a minute still counts it.
 pub async fn run_publisher<K: MetricSink>(
     metrics: FocusMetrics,
     sink: K,
@@ -212,8 +213,6 @@ pub async fn run_publisher<K: MetricSink>(
 ) {
     let mut ticker = tokio::time::interval(PUBLISH_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    // The first tick is immediate; nothing has been recorded yet.
-    ticker.tick().await;
     loop {
         let stopping = tokio::select! {
             biased;
