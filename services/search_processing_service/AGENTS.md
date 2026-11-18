@@ -52,6 +52,11 @@ OpenSearch, and exposes backfill HTTP routes for each.
   every topic. `coalescible_reread_key` skips agent-session events while a
   reread for that session is queued; only add an event kind there if handling
   it rereads the entity's whole current state.
+- Every topic shares librdkafka's one prefetch queue; the group's `PREFETCH`
+  bound keeps other topics from waiting behind an email backlog (README "Kafka
+  Delivery Contract"). Email throughput comes from the workers, not the
+  prefetch, so raising the bound only drains quick events faster, at the cost
+  of that wait.
 - `changes_search_index` commits events that change nothing indexed before
   any reread claim; an event filtered later, in a worker, would hold the claim
   and absorb a later event that does change something.

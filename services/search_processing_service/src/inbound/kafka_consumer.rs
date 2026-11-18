@@ -55,7 +55,9 @@ use ::email::domain::events::EmailMacroEvent;
 use calendar_events::domain::events::CalendarMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
-use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
+use kafka_util::{
+    GroupName, InitialOffset, KafkaEventConsumer, Prefetch, consumer_span, record_span_error,
+};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection, MacroEventConsumerService,
 };
@@ -96,6 +98,13 @@ impl GroupName for SearchProcessingConsumerGroup {
     // `macro.messages` joined this group's subscription with no committed
     // offset; starting at its head avoids replaying the topic's retention.
     const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
+    // Every topic reaches the poll loop through one queue, so with librdkafka's
+    // defaults a document or message waited behind up to 100,000 prefetched
+    // email records, about an hour of an email backlog at production's pace.
+    const PREFETCH: Prefetch = Prefetch::Bounded {
+        records: 10,
+        partition_bytes: 8 * 1024,
+    };
 }
 
 type SearchProcessingKafkaAdapter =
