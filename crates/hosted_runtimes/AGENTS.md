@@ -123,7 +123,8 @@ read it before changing behaviour.
   proration) and `Effect::UndoAgentInvite` (agents worker), and notifies
   `SetupOutcome::Released`.
 - The agents worker (`ComputerService::run_agent_effects`, run by
-  authentication_service with team_agents as `ports::AgentInvites`) retries
+  authentication_service with team_agents as `ports::AgentInvites`, only with
+  `COMPUTERS_AGENT_EFFECTS=true`) retries
   with `BILLING_BACKOFF` and gives up after `MAX_AGENT_ATTEMPTS` with the error
   log `agent invite undo abandoned`; a refund that exhausts its attempts logs
   `computer purchase refund abandoned`, and one that finds no paid purchase for

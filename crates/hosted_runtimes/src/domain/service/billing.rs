@@ -627,7 +627,7 @@ impl<
                     tracing::info!(effect_id = pending.id,
                         "another subscription change is in flight; billing effect deferred");
                     self.repo
-                        .defer_effect(pending.id, now + CHANGE_IN_FLIGHT_RETRY)
+                        .defer_effect(pending.id, self.clock.now() + CHANGE_IN_FLIGHT_RETRY)
                         .await
                         .map_err(internal)
                 }
@@ -896,18 +896,20 @@ impl<
         team_id: Uuid,
         computer_id: ComputerId,
     ) -> Result<(), ComputerError> {
-        let refund = match self
+        let (refund, subscription_gone) = match self
             .billing
             .refund_computer_purchase(team_id, computer_id, &refund_key(computer_id))
             .await
         {
-            Ok(refund) => refund,
+            Ok(refund) => (refund, false),
             // A subscription that is gone was canceled with its team.
-            Err(BillingError::NoSubscription) => None,
+            Err(BillingError::NoSubscription) => (None, true),
             Err(error) => return Err(error.into()),
         };
         tracing::Span::current().record("refunded", refund.is_some());
-        if refund.is_none() {
+        if subscription_gone {
+            tracing::info!(%computer_id, "computer purchase refund skipped: the team's subscription is gone");
+        } else if refund.is_none() {
             // The computer was billed on an item, so a purchase invoice
             // should exist: it may still be open, or older than the invoices
             // searched. Alerting keys on this event; see the crate's AGENTS.md.
