@@ -137,7 +137,7 @@ api_level() { # api_level <field> <file>: the field as a whole number, 0 if abse
   FIELD=$1 bun -e '
     const value = JSON.parse(await Bun.stdin.text())[process.env.FIELD];
     if (value === undefined) console.log(0);
-    else if (Number.isInteger(value) && value >= 0) console.log(value);
+    else if (Number.isSafeInteger(value) && value >= 0) console.log(value);
     else process.exit(3);
   ' <"$2"
 }

@@ -222,4 +222,13 @@ needs_muppet '"two"'
 MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
 check 'B10 a need that is not a whole number exits 78 and says so' bash -c "[[ $code == 78 ]] && grep -q 'muppetApi must be a whole number' '$root/case/stderr'"
 
+fresh
+start
+needs_muppet 9223372036854775808
+image_muppet 1
+: >"$root/bun.ran"
+MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
+check 'B10 a need too large to compare exits 78 and says so' bash -c "[[ $code == 78 ]] && grep -q 'muppetApi must be a whole number' '$root/case/stderr'"
+check 'B10 and the runtime did not run' bash -c "[[ ! -s '$root/bun.ran' ]]"
+
 exit "$failed"
