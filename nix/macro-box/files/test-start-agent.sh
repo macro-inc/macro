@@ -245,6 +245,18 @@ echo 0 >"$root/case/state/failures"
 stopped 78
 check 'B10 and that boot counts toward the rollback' bash -c "[[ \$(cat '$root/case/state/failures') == 1 ]]"
 
+# After an image rollback last-good needs more than the image too: rolling
+# back can't help, so it stops (79) instead of looping through rollbacks.
+fresh
+start
+needs_muppet 2
+echo "$(ws rev-parse HEAD)" >"$root/case/state/last-good"
+echo 'lock v2' >"$root/case/runtime/bun.lock" # the older image adopts its own lock, a new head
+image_muppet 1
+: >"$root/bun.ran"
+MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
+check 'B10 a land on a last-good that also needs more stops with 79, not a rollback loop' bash -c "[[ $code == 79 ]]"
+
 # An image whose muppet package.json has no apiLevel, or a garbled one.
 fresh
 start

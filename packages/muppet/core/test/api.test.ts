@@ -82,6 +82,12 @@ test("the library's API is the one its apiLevel records, and every level only gr
   const level = packageJson.apiLevel;
   const now = surface();
   if (updating) {
+    // A released level's entry never changes: a different API is a new level.
+    const released = recorded[level];
+    if (released !== undefined && !Bun.deepEquals(released, now))
+      throw new Error(
+        `level ${level} is released and the API differs from it: raise apiLevel in package.json, then run this again`
+      );
     await Bun.write(
       apiFile,
       `${JSON.stringify({ ...recorded, [level]: now }, null, 2)}\n`
