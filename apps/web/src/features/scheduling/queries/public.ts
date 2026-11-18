@@ -153,11 +153,12 @@ export function createBookingReceiptSource(
 ) {
   const receipt = useQuery(() => receiptQueryOptions(id(), token()));
   const client = useQueryClient();
-  // Show the changed booking even if the refresh that follows fails.
-  const keep = (booking: Booking) =>
-    client.setQueryData(
-      receiptQueryOptions(id(), token()).queryKey,
-      (current) => (current ? { ...current, booking } : current)
+  const receiptKey = () => receiptQueryOptions(id(), token()).queryKey;
+  // Show the changed booking even if the refresh that follows fails. The key
+  // is read before the request, so a route change cannot redirect the write.
+  const keep = (key: ReturnType<typeof receiptKey>, booking: Booking) =>
+    client.setQueryData(key, (current) =>
+      current ? { ...current, booking } : current
     );
   const cancel = useMutation(() => ({
     mutationFn: () =>
@@ -187,14 +188,25 @@ export function createBookingReceiptSource(
   return {
     receipt,
     cancel: async () => {
-      const { booking } = await cancel.mutateAsync();
-      keep(booking);
+      const key = receiptKey();
+      const { booking } = await cancel.mutateAsync().catch(async (error) => {
+        // A lost response may hide a change that landed: read it back once.
+        await receipt.refetch();
+        throw error;
+      });
+      keep(key, booking);
       await receipt.refetch();
       return booking;
     },
     reschedule: async (startsAt: string) => {
-      const moved = await reschedule.mutateAsync(startsAt);
-      keep(moved.booking);
+      const key = receiptKey();
+      const moved = await reschedule
+        .mutateAsync(startsAt)
+        .catch(async (error) => {
+          await receipt.refetch();
+          throw error;
+        });
+      keep(key, moved.booking);
       await receipt.refetch();
     },
     replacementSlots: (date: string, timeZone: string) =>

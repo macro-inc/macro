@@ -110,9 +110,9 @@ export class Booking extends MacroEntity<BookingRecord> {
    * Cancel the meeting; only on the user's go-ahead, since the guest and
    * hosts are notified. The booking link stays as it is. Returns the saved
    * booking. `cancelled` means its time is released. `failed` means the
-   * calendar has not confirmed the cancellation: with `abandonedAt` set the
-   * calendar refused it and the reservation stays held; otherwise Macro keeps
-   * retrying.
+   * calendar has not confirmed the cancellation: with `abandonedAt` set Macro
+   * stopped retrying and the reservation stays held; otherwise Macro keeps
+   * retrying. Treat the time as released only once the booking is `cancelled`.
    *
    * @destructive
    * @openworld

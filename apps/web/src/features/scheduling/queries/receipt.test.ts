@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { schedulingClient } from '@service-email/scheduling';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -124,10 +125,10 @@ it.each([
       err([{ code: 'HTTP_ERROR', message: `HTTP error! status: ${status}` }])
     );
     try {
-      const error = await source
-        .reschedule('2026-10-19T17:00:00Z')
-        .catch((e: unknown) => e);
-      expect(error instanceof RescheduleRefusedError).toBe(refused);
+      const outcome = source.reschedule('2026-10-19T17:00:00Z');
+      await expect(outcome).rejects.toBeInstanceOf(
+        refused ? RescheduleRefusedError : ThrownResultError
+      );
     } finally {
       done();
     }
@@ -151,6 +152,35 @@ it('keeps a cancellation on the receipt when the refresh after it fails', async 
     failing = true;
     await source.cancel();
     expect(source.receipt.isError).toBe(true);
+    expect(source.receipt.data?.booking.status).toBe('cancelled');
+  } finally {
+    vi.mocked(schedulingClient.receipt).mockImplementation(async () =>
+      err([{ code: 'NOT_FOUND', message: 'Not found' }])
+    );
+    done();
+  }
+});
+
+it('reads the receipt back when a cancellation’s response is lost', async () => {
+  let landed = false;
+  vi.mocked(schedulingClient.receipt).mockImplementation(async () =>
+    ok(
+      landed
+        ? {
+            ...confirmed,
+            booking: { ...confirmed.booking, status: 'cancelled' },
+          }
+        : confirmed
+    )
+  );
+  vi.mocked(schedulingClient.cancelPublic).mockImplementationOnce(async () => {
+    landed = true;
+    return err([{ code: 'HTTP_ERROR', message: 'HTTP error! status: 504' }]);
+  });
+  const { source, done } = mountSource();
+  try {
+    await source.receipt.refetch();
+    await expect(source.cancel()).rejects.toBeInstanceOf(ThrownResultError);
     expect(source.receipt.data?.booking.status).toBe('cancelled');
   } finally {
     vi.mocked(schedulingClient.receipt).mockImplementation(async () =>
