@@ -53,6 +53,8 @@ export type GreeterPorts = {
   /** Whether the team's vault is on for the agent. */
   readonly vaultOn: () => Promise<boolean>;
   readonly sleep: (ms: number) => Promise<void>;
+  /** Calls `run` after `ms`, unless cancelled: an attempt's deadline. */
+  readonly after: (ms: number, run: () => void) => () => void;
   readonly trace: Trace;
   readonly sinceStartMs: () => number;
 };
@@ -90,6 +92,7 @@ export const greeterOf = ({
   typing,
   vaultOn,
   sleep,
+  after,
   trace,
   sinceStartMs,
 }: GreeterPorts): Greeter => {
@@ -142,6 +145,7 @@ export const greeterOf = ({
       context.disk.write(marker, `${isoText(context.clock.now())}\n`),
     failures: failed,
     sleep,
+    after,
     recordFailure: async (kind: FailureKind) => {
       const now = await failed();
       await context.disk.write(
@@ -246,6 +250,10 @@ export const identityContext = (
         typing,
         vaultOn: () => vaultAnswers(vault, (ms) => base.clock.sleep(ms)),
         sleep: (ms) => base.clock.sleep(ms),
+        after: (ms, run) => {
+          const timer = setTimeout(run, ms);
+          return () => clearTimeout(timer);
+        },
         trace,
         sinceStartMs: () => process.uptime() * 1000,
       }),

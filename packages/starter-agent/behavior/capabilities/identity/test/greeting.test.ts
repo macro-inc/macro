@@ -120,6 +120,7 @@ const wiring = (hosted: boolean, vault = true) => {
     typing: { start: () => async () => {} },
     vaultOn: async () => vault,
     sleep: async () => {},
+    after: () => () => {},
     trace: passthrough,
     sinceStartMs: () => 0,
   });
