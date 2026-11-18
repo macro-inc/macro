@@ -16,7 +16,13 @@ Per run (one JSON line in <out>/e2e-<label>.jsonl, devbox epoch seconds):
   t_released      release answered
   trace           computer.setup span tree from Tempo (start/end in epoch s)
   host_computer   the Firecracker host agent's computer JSON (lastLaunch phases)
-  clock_offset    host clock minus control-plane clock
+  clock_offset    host clock minus this machine's clock
+  client_load     /proc/loadavg where e2e.py runs (not the control plane's)
+
+With --agent it invites an agent teammate instead (see agent_run). Against a
+deployed environment, pass every service URL (--auth-url, --harness-url,
+--storage-url) instead of --stack; --host-cmd and Tempo are optional there
+(--tempo-url none skips the span lookup).
 """
 
 import argparse
@@ -370,7 +376,8 @@ def agent_run(args, auth: "Api", storage: "Api", run: int) -> dict:
         record["error"] = str(error)
     finally:
         try:
-            record["spans"] = first_spans(args.tempo_url, AGENT_SPANS, record["t_buy"], time.time())
+            if args.tempo_url != "none":
+                record["spans"] = first_spans(args.tempo_url, AGENT_SPANS, record["t_buy"], time.time())
         except Exception as error:
             record["spans_error"] = str(error)
         if agent_id and not args.keep:
@@ -388,11 +395,11 @@ def agent_run(args, auth: "Api", storage: "Api", run: int) -> dict:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stack", required=True, help="local stack instance name")
+    parser.add_argument("--stack", help="local stack instance name; service URLs default from its portmap")
     parser.add_argument("--token-file", required=True)
     parser.add_argument("--auth-url", help="authentication_service base; default from portmap")
     parser.add_argument("--harness-url", help="agent_harness_service base; default from portmap")
-    parser.add_argument("--tempo-url", default="http://localhost:3200")
+    parser.add_argument("--tempo-url", default="http://localhost:3200", help="'none' skips span lookups (--agent)")
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--size", default="standard")
     parser.add_argument("--label", required=True)
@@ -416,10 +423,21 @@ def main():
     parser.add_argument("--storage-url", help="document_storage_service base, for --agent's DM")
     parser.add_argument("--out", required=True)
     parser.add_argument(
-        "--host-cmd", required=True, help="command that runs its argument on the fleet host, e.g. 'ssh bench'"
+        "--host-cmd",
+        help="command that runs its argument on the fleet host, e.g. 'ssh bench'; optional with --agent",
     )
     args = parser.parse_args()
-    HOST_CMD[:] = args.host_cmd.split()
+    if not args.host_cmd and not args.agent:
+        parser.error("--host-cmd is required without --agent")
+    if not args.stack and not (args.auth_url and args.harness_url):
+        parser.error("pass --stack, or --auth-url and --harness-url")
+    if args.agent and not args.storage_url:
+        parser.error("--agent needs --storage-url")
+    if args.host_cmd:
+        HOST_CMD[:] = args.host_cmd.split()
+
+    def host_load() -> list[str] | None:
+        return host("cat /proc/loadavg").split()[:3] if args.host_cmd else None
 
     token = pathlib.Path(args.token_file).read_text().strip()
     auth = Api(
@@ -432,16 +450,16 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     with (out / f"e2e-{args.label}.jsonl").open("a") as file:
         for run in range(1, args.runs + 1):
-            load_before = host("cat /proc/loadavg").split()[:3]
+            load_before = host_load()
             if args.agent:
                 record = agent_run(args, auth, Api(args.storage_url, token), run)
             else:
                 record = one_run(args, auth, harness, args.tempo_url, run)
             record["host_load_before"] = load_before
-            record["host_load_after"] = host("cat /proc/loadavg").split()[:3]
+            record["host_load_after"] = host_load()
             record["control_plane"] = args.control_plane
-            record["control_plane_load"] = open("/proc/loadavg").read().split()[:3]
-            record["clock_offset"] = clock_offset()
+            record["client_load"] = open("/proc/loadavg").read().split()[:3]
+            record["clock_offset"] = clock_offset() if args.host_cmd else None
             file.write(json.dumps(record) + "\n")
             file.flush()
             summary = {k: round(v - record["t_buy"], 2) for k, v in record.items() if k.startswith("t_")}
