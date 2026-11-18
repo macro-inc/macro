@@ -382,10 +382,14 @@ It refuses (cannot analyze) what can reach an operation without naming it:
 standard library, programs compiled with `-unsafe`, a `Request.t` built or
 updated by hand, and any value outside the table whose type can hand out a
 request. It also refuses any reference to a unit outside the standard
-library, the SDK, its transport and the libraries their interfaces expose
+library, the SDK, its transports (`Macro_sdk_eio`, code mode's
+`Macro_sdk_fetch`), `Code_mode` and the libraries their interfaces expose
 (`Analyze.default_libraries`; add more with `--allow-library UNIT`): another
-unit of the program, `Dynlink` or a third-party library could call the SDK
-where the analysis cannot see. Those libraries are trusted, not analyzed.
+unit of the program, `Dynlink`, `Js_of_ocaml` or a third-party library could
+call the SDK where the analysis cannot see. Those libraries are trusted, not
+analyzed; `test_trusted` checks that code mode's runtime never names the
+generated SDK or builds a request, so a code-mode program's list is exactly
+what the program itself names.
 
 The list is the SDK operations the program may call, not a permission
 boundary: a program holds its credential (`Config.t` is readable) and can
@@ -395,6 +399,21 @@ send raw HTTP through another client, which this tool does not report.
 expected answer on its first line; `test_coverage` checks that the table
 matches the specs and the compiled interfaces, and that a program naming
 all 913 operations is analyzed to all of them.
+Code-mode programs in the corpus (`code_mode_*.ml`) type-check against
+copies of `fetch/` and `code_mode/`'s interfaces
+(`analyzer/test/code_mode_interfaces`), since those libraries build only in
+the wasm profile.
+
+### Permission classification
+
+Agent permissions classify every operation by a group (Email, Documents &
+projects, ...) and an action (create, read, update, destroy, send) in
+`crates/agent_permission_registry/registry.json`, keyed by service and
+operationId like the analyzer's output. `analyzer/test/test_registry.ml`
+fails `dune test` (CI: `OCaml SDK Check`) when an operation in `generated/`
+is not classified or the registry names one that no longer exists: after
+`just generate` adds an operation, classify it there (that crate's
+`AGENTS.md` says how).
 
 ## Regenerate
 
