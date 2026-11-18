@@ -237,11 +237,11 @@ export function createInputActions(
     if (input.intent === 'ai' && selectedAgent()?.unavailableReason)
       return selectedAgent()?.unavailableReason;
   };
-  const emailDrafts = new Map<string, { draftId: string; threadId?: string }>();
+  const emailDrafts = new Map<string, SubmissionDraft>();
   // Drafts are saved under an id the client mints. One submission keeps its
   // id until it succeeds, so a retry after a lost response or a failed send
   // saves the same draft rather than a second one.
-  const submissionDraft = (input: Submission) => {
+  const submissionDraft = (input: Submission): SubmissionDraft => {
     const known = emailDrafts.get(input.id);
     if (known) return known;
     const minted = { draftId: uuidv7() };
@@ -385,13 +385,18 @@ export function createInputActions(
         const message = emailMessage(input);
         const saved = await email.drafts.saveDraft({ draft: message, inboxId });
         assertQueryAccount(account);
-        emailDrafts.set(input.id, saved);
+        // A failed send is retried with the draft this save made.
+        const draft = {
+          draftId: saved.draftId ?? message.db_id,
+          threadId: saved.threadId ?? message.thread_db_id,
+        };
+        emailDrafts.set(input.id, draft);
         const sent = await email.delivery.sendMessage({
           inboxId,
           message: {
             ...message,
-            db_id: saved.draftId,
-            thread_db_id: saved.threadId,
+            db_id: draft.draftId,
+            thread_db_id: draft.threadId,
           },
         });
         emailDrafts.delete(input.id);
@@ -518,3 +523,6 @@ export function createInputActions(
   };
 }
 export type InputActions = ReturnType<typeof createInputActions>;
+
+/** The draft a universal input email submission saves into. */
+type SubmissionDraft = { draftId: string; threadId?: string };
