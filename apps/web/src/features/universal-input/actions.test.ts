@@ -9,6 +9,7 @@ import {
 } from 'lexical';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { composeDraftInput } from '@queries/email/graphql/compose';
 import { decodeBase64Utf8 } from '../email-compose/core/decode-base64';
 import { createInputActions } from './actions';
 import { fieldsSchema, type Submission } from './core/input';
@@ -236,6 +237,30 @@ function input(intent: Submission['intent'], values = {}): Submission {
       ...values,
     }),
   };
+}
+const UUID_V7 = /^[\da-f]{8}-[\da-f]{4}-7[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/;
+async function withActions<T>(
+  snapshot: Submission,
+  run: (
+    actions: ReturnType<typeof createInputActions>,
+    snapshot: Submission
+  ) => Promise<T>
+) {
+  return await createRoot(async (dispose) => {
+    try {
+      const actions = createInputActions(
+        () => snapshot.fields,
+        'macro|me@example.com',
+        {
+          navigate: (next) => mocks.replace({ next }),
+          intent: () => snapshot.intent,
+        }
+      );
+      return await run(actions, snapshot);
+    } finally {
+      dispose();
+    }
+  });
 }
 async function execute(snapshot: Submission) {
   return await createRoot(async (dispose) => {
@@ -493,6 +518,56 @@ describe('destination adapters', () => {
         }),
       })
     );
+  });
+  it('saves a new email under a draft id the save accepts', async () => {
+    await execute(input('email'));
+    const { draft, inboxId } = mocks.saveEmail.mock.calls[0][0];
+    expect(draft.db_id).toMatch(UUID_V7);
+    // The real save maps the draft; it refuses one without an id.
+    expect(composeDraftInput(draft, inboxId).draftId).toBe(draft.db_id);
+  });
+  it('saves a new draft under a draft id the save accepts', async () => {
+    await withActions(input('email'), (actions, submission) =>
+      actions.saveEmailDraft(submission)
+    );
+    const { draft, inboxId } = mocks.saveEmail.mock.calls[0][0];
+    expect(draft.db_id).toMatch(UUID_V7);
+    expect(composeDraftInput(draft, inboxId).draftId).toBe(draft.db_id);
+  });
+  it('retries a failed save under the same draft id', async () => {
+    mocks.saveEmail.mockRejectedValueOnce(new Error('offline'));
+    await withActions(input('email'), async (actions, submission) => {
+      await expect(actions.submit(submission)).rejects.toThrow('offline');
+      await actions.submit(submission);
+    });
+    const [first, second] = mocks.saveEmail.mock.calls.map(
+      ([call]) => call.draft.db_id
+    );
+    expect(first).toMatch(UUID_V7);
+    expect(second).toBe(first);
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+  });
+  it('retries a failed send with the draft it saved', async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
+    await withActions(input('email'), async (actions, submission) => {
+      await expect(actions.submit(submission)).rejects.toThrow('refused');
+      await actions.submit(submission);
+    });
+    expect(mocks.saveEmail.mock.calls[1][0].draft).toMatchObject({
+      db_id: 'draft',
+      thread_db_id: 'thread',
+    });
+  });
+  it('saves a later submission as a new draft', async () => {
+    await withActions(input('email'), async (actions, submission) => {
+      await actions.submit(submission);
+      await actions.submit({ ...submission, id: 'next-id' });
+    });
+    const [first, second] = mocks.saveEmail.mock.calls.map(
+      ([call]) => call.draft.db_id
+    );
+    expect(second).toMatch(UUID_V7);
+    expect(second).not.toBe(first);
   });
   it('explicitly saves an unfinished email through the shared draft adapter without delivery', async () => {
     await createRoot(async (dispose) => {

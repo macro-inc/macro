@@ -45,6 +45,7 @@ import { useSendMessageMutation } from '@queries/messages/mutations';
 import type { LexicalEditor } from 'lexical';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
+import { v7 as uuidv7 } from 'uuid';
 import type { RosterAgent } from '../agents-view/core/roster';
 import {
   exportCalendarDescription,
@@ -236,16 +237,23 @@ export function createInputActions(
     if (input.intent === 'ai' && selectedAgent()?.unavailableReason)
       return selectedAgent()?.unavailableReason;
   };
-  const emailDrafts = new Map<
-    string,
-    { draftId?: string; threadId?: string }
-  >();
+  const emailDrafts = new Map<string, { draftId: string; threadId?: string }>();
+  // Drafts are saved under an id the client mints. One submission keeps its
+  // id until it succeeds, so a retry after a lost response or a failed send
+  // saves the same draft rather than a second one.
+  const submissionDraft = (input: Submission) => {
+    const known = emailDrafts.get(input.id);
+    if (known) return known;
+    const minted = { draftId: uuidv7() };
+    emailDrafts.set(input.id, minted);
+    return minted;
+  };
   let emailEditor: LexicalEditor | undefined;
   let calendarEditor: LexicalEditor | undefined;
   let messageMentions: (() => ItemMention[]) | undefined;
   const emailMessage = (input: Submission) => {
     const body = prepareEmailBody(emailEditor);
-    const prior = emailDrafts.get(input.id);
+    const prior = submissionDraft(input);
     return {
       subject: input.fields.subject,
       to: recipients(input.fields).recipients.map((p) => ({
@@ -263,8 +271,8 @@ export function createInputActions(
         body?.bodyHtml ??
         encodeBase64UrlUtf8(plainTextToHtml(input.fields.body)),
       body_macro: input.fields.body,
-      db_id: prior?.draftId,
-      thread_db_id: prior?.threadId,
+      db_id: prior.draftId,
+      thread_db_id: prior.threadId,
     };
   };
   const saveEmailDraft: InputCapabilities['saveEmailDraft'] = async (input) => {
