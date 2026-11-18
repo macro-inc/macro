@@ -66,6 +66,7 @@ export function watchSentThread(
 ): () => void {
   let departing = false;
   let finished = false;
+  let latestRead = 0;
   const finish = (threadId?: string | null) => {
     if (finished) return;
     finished = true;
@@ -73,10 +74,13 @@ export function watchSentThread(
     if (threadId) found(threadId);
   };
   const read = async () => {
+    if (finished || departing) return;
+    // Only the newest read may act: an older one can predate a cancellation.
+    const readNumber = ++latestRead;
     const intent = (await readEmailSendIntents()).find(
       (row) => row.uuid === send.sendAttemptId
     );
-    if (finished || departing) return;
+    if (finished || departing || readNumber !== latestRead) return;
     if (intent) {
       // A requested cancellation owns the outcome until delivery overrides it.
       const delivered = settledSendAttempt(intent)?.status === 'SENT';

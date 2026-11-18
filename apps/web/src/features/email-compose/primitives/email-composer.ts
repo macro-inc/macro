@@ -836,13 +836,6 @@ export function createEmailComposer(props: EmailComposerOptions) {
     props.host?.showDraft?.(draftId);
   };
 
-  const showSentThread = (threadId: string) => {
-    try {
-      props.host?.showThread?.(threadId);
-    } catch (error) {
-      props.notices.reportError(error);
-    }
-  };
   let stopWatchingSend: (() => void) | undefined;
   let disposed = false;
   const stopFollowingSend = () => {
@@ -853,6 +846,15 @@ export function createEmailComposer(props: EmailComposerOptions) {
     disposed = true;
     stopFollowingSend();
   });
+  // A send that settles after its composer closed leaves the user where they went.
+  const showSentThread = (threadId: string) => {
+    if (disposed) return;
+    try {
+      props.host?.showThread?.(threadId);
+    } catch (error) {
+      props.notices.reportError(error);
+    }
+  };
   // A thread minted with a new draft has no server row to open until the
   // server accepts the send and names it.
   const followSentThread = (send: QueuedSend) => {
