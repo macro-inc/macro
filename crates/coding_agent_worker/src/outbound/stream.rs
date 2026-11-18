@@ -11,7 +11,7 @@
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use eventsource_stream::{Event, EventStreamError, Eventsource as _};
 use futures::{Stream, StreamExt as _};
@@ -40,6 +40,17 @@ pub fn stream_scope(harness: &Harness) -> WebhookScope {
     }
 }
 
+/// The agents bound to a harness, as one read found them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundAgents {
+    /// Sorted, unique bot ids, the shape the stream filter carries.
+    pub bot_ids: Vec<String>,
+    /// A time on the service's clock no later than the read: comparable with
+    /// the event ids it mints, whatever this machine's clock says. `None`
+    /// when the service sent no `Date`.
+    pub read_by: Option<SystemTime>,
+}
+
 /// Client for the storage service's live event stream, acting as one harness.
 pub struct EventStreamClient {
     http: reqwest::Client,
@@ -66,6 +77,16 @@ impl EventStreamClient {
         what: &'static str,
         request: reqwest::RequestBuilder,
     ) -> rootcause::Result<T> {
+        Ok(self.read_dated(what, request).await?.0)
+    }
+
+    /// [`Self::read`], with the service's clock when it answered (its
+    /// `Date` header), when it sent one.
+    async fn read_dated<T: DeserializeOwned>(
+        &self,
+        what: &'static str,
+        request: reqwest::RequestBuilder,
+    ) -> rootcause::Result<(T, Option<SystemTime>)> {
         let response = self
             .credentialed(request)
             .send()
@@ -82,10 +103,17 @@ impl EventStreamClient {
             let message = response.text().await.unwrap_or_default();
             rootcause::bail!("the service answered {status} to {what}: {message}");
         }
-        Ok(response
+        let answered_at = response
+            .headers()
+            .get(reqwest::header::DATE)
+            .and_then(|date| date.to_str().ok())
+            .and_then(|date| chrono::DateTime::parse_from_rfc2822(date).ok())
+            .map(SystemTime::from);
+        let body = response
             .json()
             .await
-            .context(format!("could not read the service's answer to {what}"))?)
+            .context(format!("could not read the service's answer to {what}"))?;
+        Ok((body, answered_at))
     }
 
     /// The workspace scope of this harness's current team grants, read from the server on
@@ -116,11 +144,11 @@ impl EventStreamClient {
         Ok(harness.connected)
     }
 
-    /// The agents currently bound to this harness, as sorted bot-id strings —
-    /// the shape the stream filter carries.
-    pub async fn bound_bot_ids(&self) -> rootcause::Result<Vec<String>> {
-        let agents: Vec<HarnessAgent> = self
-            .read(
+    /// The agents currently bound to this harness, and when, on the
+    /// service's clock, the answer was true.
+    pub async fn bound_agents(&self) -> rootcause::Result<BoundAgents> {
+        let (agents, answered_at): (Vec<HarnessAgent>, _) = self
+            .read_dated(
                 "list this harness's agents",
                 self.http.get(format!("{}/harnesses/me/agents", self.base)),
             )
@@ -129,7 +157,12 @@ impl EventStreamClient {
             .into_iter()
             .map(|agent| agent.bot_id.to_string())
             .collect();
-        Ok(ids.into_iter().collect())
+        Ok(BoundAgents {
+            bot_ids: ids.into_iter().collect(),
+            // `Date` has whole seconds, and the agents were read just before
+            // it was stamped: a second earlier is safely before that read.
+            read_by: answered_at.map(|at| at - Duration::from_secs(1)),
+        })
     }
 
     /// Open `GET /webhook/events/stream` and start reading envelopes of

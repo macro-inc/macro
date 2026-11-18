@@ -358,11 +358,13 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
     position: &mut StreamPosition,
 ) -> ServeOutcome {
     let read_at = std::time::SystemTime::now();
-    let bots = match client.bound_bot_ids().await {
-        Ok(bots) => bots,
+    let bots = match client.bound_agents().await {
+        Ok(agents) => {
+            position.agents_read(&agents.bot_ids, agents.read_by.unwrap_or(read_at));
+            agents.bot_ids
+        }
         Err(error) => return ServeOutcome::Ended(error),
     };
-    position.agents_read(&bots, read_at);
     if bots.is_empty() {
         tracing::info!("no agents are bound; waiting for one before opening the event stream");
         tokio::select! {
@@ -381,6 +383,7 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         Ok(stream) => stream,
         Err(error) => return ServeOutcome::Ended(error),
     };
+    position.opened();
     tracing::info!(
         bound_agents = bots.len(),
         "connected to the agent-trigger event stream"
@@ -429,9 +432,9 @@ async fn bound_agents_changed(
     position: &mut StreamPosition,
 ) -> Option<ServeOutcome> {
     let read_at = std::time::SystemTime::now();
-    match client.bound_bot_ids().await {
-        Ok(latest) if latest == bots => {
-            position.agents_read(&latest, read_at);
+    match client.bound_agents().await {
+        Ok(latest) if latest.bot_ids == bots => {
+            position.agents_read(&latest.bot_ids, latest.read_by.unwrap_or(read_at));
             None
         }
         Ok(_) => {

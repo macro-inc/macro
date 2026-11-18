@@ -66,8 +66,14 @@ fn the_cursor_starts_when_the_daemon_did_and_follows_deliveries() {
     assert_eq!(position.cursor(), cursor_at(now));
     assert_eq!(position.resume_cursor(), cursor_at(now));
 
-    position.delivered("01a1ebf5-48e2-7571-ac38-1ff8c64b2cc3");
-    assert_eq!(position.cursor(), "01a1ebf5-48e2-7571-ac38-1ff8c64b2cc3");
+    let later = request(BotId::TEST_A, now + Duration::from_secs(1))
+        .event_id
+        .to_string();
+    position.delivered(&later);
+    assert_eq!(position.cursor(), later);
+    // An event minted before the cursor, from a rewound replay, leaves it.
+    position.delivered(&cursor_at(now));
+    assert_eq!(position.cursor(), later);
 }
 
 /// An agent re-bound here from another runtime: events for it minted before
@@ -137,6 +143,7 @@ fn a_newly_bound_agent_rewinds_the_next_stream_to_its_binding() {
     let mut position = StreamPosition::new(started);
     position.agents_read(&[BotId::TEST_B.to_string()], started);
     assert_eq!(position.resume_cursor(), cursor_at(started));
+    position.opened();
 
     let first_read = started + Duration::from_secs(10);
     position.agents_read(&[BotId::TEST_B.to_string()], first_read);
@@ -149,7 +156,12 @@ fn a_newly_bound_agent_rewinds_the_next_stream_to_its_binding() {
     );
 
     assert_eq!(position.resume_cursor(), cursor_at(first_read));
+    // A stream that failed to open leaves the rewind for the next attempt.
+    assert_eq!(position.resume_cursor(), cursor_at(first_read));
+    position.opened();
     assert!(!position.admits(&handled));
+    // The rewound stream delivers older events again; the cursor stays put.
+    position.delivered(&request(BotId::TEST_A, first_read).event_id.to_string());
     // Once open, later streams resume after the last event again.
     assert_eq!(position.resume_cursor(), handled.event_id.to_string());
 }

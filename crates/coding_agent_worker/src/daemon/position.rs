@@ -74,23 +74,26 @@ impl StreamPosition {
 
     /// Where the next stream resumes: after the last event delivered, or
     /// earlier when agents were bound since, from when they were bound.
-    pub(super) fn resume_cursor(&mut self) -> String {
-        let delivered = macro_uuid::Uuid::parse_str(&self.cursor)
-            .ok()
-            .and_then(|id| id.get_timestamp())
-            .map(|timestamp| {
-                let (seconds, nanos) = timestamp.to_unix();
-                UNIX_EPOCH + Duration::new(seconds, nanos)
-            });
-        match (self.rewind_to.take(), delivered) {
+    pub(super) fn resume_cursor(&self) -> String {
+        match (self.rewind_to, minted_at(&self.cursor)) {
             (Some(rewind), Some(delivered)) if rewind < delivered => cursor_at(rewind),
             _ => self.cursor.clone(),
         }
     }
 
-    /// Advance past an event the stream delivered.
+    /// A stream opened from [`Self::resume_cursor`]; it covers the agents
+    /// bound since, so later ones need not rewind for them. Until a stream
+    /// opens, every attempt rewinds.
+    pub(super) fn opened(&mut self) {
+        self.rewind_to = None;
+    }
+
+    /// Advance past an event the stream delivered. A rewound stream
+    /// delivers older events again; those never move the cursor back.
     pub(super) fn delivered(&mut self, id: &str) {
-        id.clone_into(&mut self.cursor);
+        if minted_at(id) >= minted_at(&self.cursor) {
+            id.clone_into(&mut self.cursor);
+        }
     }
 
     /// Whether to act on `event`: not one already handled, nor one minted
@@ -112,10 +115,7 @@ impl StreamPosition {
             .event
             .bot_id()
             .and_then(|bot| self.bound_since.get(&bot.to_string()));
-        let minted = event.event_id.get_timestamp().map(|timestamp| {
-            let (seconds, nanos) = timestamp.to_unix();
-            UNIX_EPOCH + Duration::new(seconds, nanos)
-        });
+        let minted = minted_at(&event.event_id.to_string());
         if let (Some(since), Some(minted)) = (bound_since, minted)
             && minted < *since
         {
@@ -127,4 +127,11 @@ impl StreamPosition {
         }
         true
     }
+}
+
+/// When the UUIDv7 `id` was minted.
+fn minted_at(id: &str) -> Option<SystemTime> {
+    let timestamp = macro_uuid::Uuid::parse_str(id).ok()?.get_timestamp()?;
+    let (seconds, nanos) = timestamp.to_unix();
+    Some(UNIX_EPOCH + Duration::new(seconds, nanos))
 }

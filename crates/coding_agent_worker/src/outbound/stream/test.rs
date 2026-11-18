@@ -183,23 +183,27 @@ async fn connect_refuses_a_non_2xx_answer() {
 }
 
 #[tokio::test]
-async fn bound_bot_ids_are_sorted_and_unique() {
+async fn bound_agents_are_sorted_unique_and_dated_by_the_service() {
     let (url, _) = serve(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\
+         Date: Tue, 17 Nov 2026 22:00:05 GMT\r\n\r\n\
          [{\"bot_id\":\"00000000-0000-0000-0000-000000000002\",\"name\":\"b\",\"handle\":\"b\"},\
           {\"bot_id\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"a\",\"handle\":\"a\"},\
           {\"bot_id\":\"00000000-0000-0000-0000-000000000002\",\"name\":\"b2\",\"handle\":\"b2\"}]",
     ])
     .await;
     let client = test_client(&url);
-    let ids = client.bound_bot_ids().await.expect("list agents");
+    let agents = client.bound_agents().await.expect("list agents");
     assert_eq!(
-        ids,
+        agents.bot_ids,
         vec![
             "00000000-0000-0000-0000-000000000001".to_owned(),
             "00000000-0000-0000-0000-000000000002".to_owned()
         ]
     );
+    // A second before the service's `Date`, which has whole seconds.
+    let date = chrono::DateTime::parse_from_rfc2822("Tue, 17 Nov 2026 22:00:04 GMT").unwrap();
+    assert_eq!(agents.read_by, Some(std::time::SystemTime::from(date)));
 }
 
 /// Answer one connection per response, in order, recording each request line.

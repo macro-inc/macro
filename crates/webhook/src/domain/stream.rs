@@ -73,7 +73,7 @@ impl StreamCursor {
         let id = Uuid::parse_str(last_event_id.trim()).map_err(|_| {
             WebhookStreamError::BadRequest("`Last-Event-ID` must be an event id".to_string())
         })?;
-        if id.get_timestamp().is_none() {
+        if id.get_version_num() != 7 {
             return Err(WebhookStreamError::BadRequest(
                 "`Last-Event-ID` must be a UUIDv7 event id".to_string(),
             ));
