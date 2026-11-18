@@ -9,7 +9,10 @@ import type {
   InputData,
   InputSnapshot,
 } from './types';
-import { hasSendableInputContent } from './utils/sendable-content';
+import {
+  hasSendableInputContent,
+  sendableSnapshot,
+} from './utils/sendable-content';
 
 type CreateInputCommandsDeps = {
   view: Accessor<InputData>;
@@ -46,7 +49,7 @@ export function createInputCommands(
       const onSend = deps.callbacks?.onSend;
       if (!onSend) return false;
 
-      const current = deps.snapshot();
+      const current = sendableSnapshot(deps.snapshot());
       if (!hasSendableInputContent(current)) return false;
       return Telemetry.span('message.composer_send', async (span) => {
         span.setAttr('composer.mode', deps.view().mode);

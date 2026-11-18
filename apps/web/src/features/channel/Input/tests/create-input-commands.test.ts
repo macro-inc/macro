@@ -110,6 +110,30 @@ describe('createInputCommands', () => {
     expect(value).toBe('Hello agent');
   });
 
+  it.each([
+    ['a list left with Enter', '1. one\n2. two\n\n \n', '1. one\n2. two'],
+    ['several empty paragraphs', 'hello\n\n \n\n \n', 'hello'],
+    ['blank lines between paragraphs', 'one\n\n \n\ntwo', 'one\n\n \n\ntwo'],
+  ])('sends %s without blank lines at its end', async (_name, value, sent) => {
+    const onSend = vi.fn();
+    const commands = createInputCommands({
+      view: () => ({ mode: 'channel', hasPendingAttachments: false }),
+      snapshot: () => ({ value, mentions: [], attachments: [] }),
+      setIsSending: vi.fn(),
+      setShowFormatRibbon: vi.fn(),
+      reset: vi.fn(),
+      removeTrackedAttachment: vi.fn(),
+      callbacks: { onSend },
+    });
+
+    await expect(commands.send()).resolves.toBe(true);
+    expect(onSend).toHaveBeenCalledExactlyOnceWith({
+      value: sent,
+      mentions: [],
+      attachments: [],
+    });
+  });
+
   it('resets before invoking onClose', () => {
     const events: string[] = [];
     const snapshot: InputSnapshot = {
