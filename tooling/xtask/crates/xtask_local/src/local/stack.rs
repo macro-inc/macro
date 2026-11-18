@@ -269,7 +269,7 @@ fn up_allocated(
         start: Start::Fresh,
         // Off unless asked: headless stacks serve agents and CI, which should
         // not pay for building the computer image.
-        computers: args.run.computers.fleet(Fleet::Off),
+        computers: args.run.computers.fleet(),
     };
     let stack_up = super::bring_up(stage, mode, &mut instance, &args.run, &plan)?;
     if !args.infra_only {

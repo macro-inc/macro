@@ -1157,7 +1157,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   conversation, including an empty unread result after a read on another
   device. Include off-page favorites in unread presence without adding them to
   section counts; mention counts include thread replies, the unread dot does not.
-- Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
+- Decide channel detail access from completed server results: only a refusal (HTTP 401/403 or an access-coded error, `isAccessRequestError`) means denied, and a GraphQL server fault (`isGraphqlServerFault`) keeps the open channel and retries with backoff; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
   folder open in Drive, including a team folder, is always in the list. Keep
@@ -1242,6 +1242,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   flags alongside fallback previews; retained rows and legacy hosts still need
   mutation revalidation. Merge continuation pages through the indexed cursor.
   Never restore explicitly invalidated membership from an older view's snapshot.
+- Sender filter writes and Undo return no per-thread classification. Refresh
+  active GraphQL Soup readers with an email Importance predicate so their
+  server pages reconcile Signal and Noise membership.
 - Render user-visible text in new UI, and every menu and navigation label,
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills

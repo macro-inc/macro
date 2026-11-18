@@ -18,6 +18,7 @@ import { notice } from './harness/send';
 import {
   backfilled,
   deleteElsewhere,
+  failRequestsLater,
   holdOperation,
   holdRequests,
   makeDue,
@@ -198,11 +199,15 @@ test('a save refused because the scheduled email went out says the composer was 
   page,
   mailbox,
 }) => {
+  const failReads = await failRequestsLater(page, DRAFT_READ);
   const draft = await savedNew(page, mailbox, 'Final numbers');
   // The composer's reads of its draft fail from here on, so it learns of the
-  // send only from the refused save. Its timer would otherwise read the
-  // draft as scheduled or sent first now and then, and no save is refused.
-  await page.route(DRAFT_READ, (route) => route.abort('connectionfailed'));
+  // send only from the refused save. Its timer, focus or a relayed change
+  // would otherwise read the draft as scheduled or sent first now and then,
+  // and no save is refused. A read already let through as the draft is saved
+  // is answered before the schedule below: answered after it, it reads the
+  // draft as scheduled or sent, and again no save is refused.
+  await failReads();
   await scheduleElsewhere(mailbox, draft, morningIn(1));
   await makeDue(mailbox, draft);
   await mailbox.stack.runScheduledSweep();

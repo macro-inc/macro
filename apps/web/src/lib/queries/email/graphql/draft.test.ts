@@ -385,7 +385,7 @@ it('editing an older draft keeps the later received preview and discarding resto
   expect(edited.mailSentPreview).toEqual(sent);
   expect(edited.isRead).toBe(false);
   expect(edited.isSignal).toBe(true);
-  const removed = removeDraftFromThread(edited, draft.id)!;
+  const removed = removeDraftFromThread(edited, [draft.id])!;
   expect(removed).toMatchObject({
     inboxVisible: false,
     isSignal: false,
@@ -480,7 +480,7 @@ it.each([false, true])(
     );
     expect(first.isRead).toBe(isRead);
     expect(second.isRead).toBe(isRead);
-    expect(removeDraftFromThread(second, draft.id)?.isRead).toBe(isRead);
+    expect(removeDraftFromThread(second, [draft.id])?.isRead).toBe(isRead);
   }
 );
 
@@ -491,7 +491,7 @@ it('marks a conversation read when its only unread draft is edited or discarded'
   state.drafts[0].facts.isRead = false;
   thread.isRead = false;
   expect(updateDraftThread(thread, draft, true).isRead).toBe(true);
-  expect(removeDraftFromThread(thread, draft.id)?.isRead).toBe(true);
+  expect(removeDraftFromThread(thread, [draft.id])?.isRead).toBe(true);
 });
 
 it('discarding a local draft does not bring a junk provider draft into All Mail', async () => {
@@ -508,7 +508,7 @@ it('discarding a local draft does not bring a junk provider draft into All Mail'
     },
   };
   state.drafts.push(junk);
-  const result = removeDraftFromThread(thread, draft.id)!;
+  const result = removeDraftFromThread(thread, [draft.id])!;
   expect(result.mailAllPreview).toBeNull();
   expect(result.mailDraftPreview?.id).toBe('junk-draft');
   expect(draftThreadIsEmpty(result)).toBe(false);

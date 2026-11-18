@@ -163,6 +163,10 @@ or a soup view) that carry the Draft badge. The thread keeps its row and its
 place, even though its sort time falls back to the last real message, until
 the tab, filters, or sort change; only the badge and preview change back to
 that message. Check it on a reply draft in All: the row must not move.
+From the list and from the composer alike, a discarded draft leaves Drafts (or
+drops its badge elsewhere) as the delete is queued, before the server answers;
+check it with a draft written on this device, whose client handle differs from
+its server ID.
 
 Star and mute feedback reports what happened to the write. A star queued
 while offline toasts that it is waiting to sync (for example `Added to favorites,
@@ -508,7 +512,7 @@ skip REST/TanStack email invalidations as well, including Done/Undo batches and
 thread archive replay. Committed writes and failed non-queued batches still
 reconcile. Permanent failures roll back the failed intent.
 Mark Done and Mark Not Done on a selection, even of one row, send one
-`setEmailThreadsArchived` per 100 threads (REST: `PATCH /email/threads/archived`).
+`setEmailThreadsArchived` per 100 threads.
 The server sends Gmail one label write per inbox, for only the messages whose
 labels change, and lists the threads it could not change; those settle as
 rejected, with their unchanged state reloaded, while their siblings stay done.
@@ -819,8 +823,10 @@ device archives it), they step from its former neighbours. Mark done advances in
 that list. In a list, the Mark done, Mark as not done and Delete keys act once per
 press: a held key auto-repeats, and those repeats are ignored. Mark as unread (in
 the header or title menu) returns to the originating list with its tab, inbox, and
-filters preserved. Mark as not done and Mark as read
-stay on the current thread.
+filters preserved. Pressing `u` with focus in the desktop reading pane keeps
+the thread open. Its envelope then offers **Mark as read**, including after
+the unread write reaches the mailbox. Mark as not done and Mark as read stay
+on the current thread.
 Opening a saved draft from **Drafts** shows the title menu beside Back, since
 the composer has no subject line above it, and keeps the applicable header
 controls. Verify these remain
@@ -841,6 +847,8 @@ filtered list. Its toast offers **Undo** to restore the email.
 **Sender → Signal**, **Sender → Noise** and **Block Sender**, and the sender
 commands in the command menu, appear only when the thread has a sender other
 than you. A thread you sent alone omits them.
+In Noise, choose **Sender → Signal** for a thread in the list. The thread
+leaves Noise, and switching to Signal shows it without reloading Mail.
 With an email row focused or selected, open Command-K and search **Block Sender**
 to block its sender. The success toast offers **Undo**. Multiple selected email
 rows apply the action to each sender in its linked inbox; mixed selections and
@@ -1235,8 +1243,13 @@ does not.
 
 After a send is queued, its notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
-a slow background refresh must not keep the restored editor disabled. A rejected
-send reports failure and restores its original reply editor if it is still mounted.
+a slow background refresh must not keep the restored editor disabled. Write a
+second reply to the same message during the undo window, then undo the first
+send before the second reply's initial save reaches the service. The editor keeps
+the second reply and says it was kept. Verify both drafts were saved and reload
+the thread to check that it opens the newer reply.
+A rejected send reports failure and restores its original reply editor if it is
+still mounted.
 A failure from an older, unmounted editor must not overwrite a newer edited reply.
 A presentation or refresh error after successful delivery is not a reason to send
 again. After the undo window and provider acceptance, send finalization supplies
@@ -1799,10 +1812,11 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   the unavailable state, never all mail. Email views are private, so their
   menus have no Copy link.
 - **Order and unread.** Desktop rows drag to reorder (a 4px move starts the
-  drag, so a click still opens the view); their menus have no Move items. In
-  the mobile picker, which has no drag, each row's menu has Move up/Move down.
-  The order is personal and follows the account. A dot marks a view whose first
-  unread page has unread mail.
+  drag, so a click still opens the view). On phones and tablets, tap a row's
+  menu in the sidebar sheet and choose **Move up** or **Move down**. Each
+  action appears when there's a view in that direction. The order is personal
+  and follows the account. A dot marks a view whose first unread page has
+  unread mail.
 - **Touch.** Views are listed and managed in the sidebar sheet opened by
   **Show sidebar**; the list header has no saved-view pill. The filter drawer shows "Save these filters as a view" with Save view
   and Revert above its footer, and Save changes/Reset in the footer while a view

@@ -646,7 +646,15 @@ async fn process_event(
             process_message_event(db, opensearch_client, event, partition, offset).await
         }
         DeclaredMacroEvent::EmailMacroEvent(event) => {
-            process_email_event(db, opensearch_client, event, partition, offset).await
+            process_email_event(
+                db,
+                opensearch_client,
+                &context.mailbox_deletes,
+                event,
+                partition,
+                offset,
+            )
+            .await
         }
         DeclaredMacroEvent::ProjectMacroEvent(event) => {
             process_project_event(db, opensearch_client, event, partition, offset).await
