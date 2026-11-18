@@ -4667,6 +4667,10 @@
       "crates/computer_id",
       "crates/workspace-hack"
     ],
+    "computer_types": [
+      "crates/computer_types",
+      "crates/workspace-hack"
+    ],
     "connect_client": [
       "crates/connect_client",
       "crates/macro_tower_layers",
@@ -7720,6 +7724,38 @@
     ],
     "filter_ast": [
       "crates/filter_ast"
+    ],
+    "firecracker_guest_agent": [
+      "crates/computer_id",
+      "crates/computer_types",
+      "crates/firecracker_host_api",
+      "crates/macro_tower_layers",
+      "crates/pairing_id",
+      "crates/pinned_tls",
+      "crates/workspace-hack",
+      "services/firecracker_guest_agent"
+    ],
+    "firecracker_host": [
+      "crates/computer_id",
+      "crates/computer_types",
+      "crates/firecracker_host_api",
+      "crates/macro_entrypoint",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_tower_layers",
+      "crates/pairing_id",
+      "crates/pinned_tls",
+      "crates/workspace-hack",
+      "services/firecracker_host"
+    ],
+    "firecracker_host_api": [
+      "crates/computer_id",
+      "crates/computer_types",
+      "crates/firecracker_host_api",
+      "crates/macro_tower_layers",
+      "crates/pairing_id",
+      "crates/pinned_tls",
+      "crates/workspace-hack"
     ],
     "foreign_entity": [
       "crates/agent",
@@ -13180,6 +13216,10 @@
       "crates/single_flight",
       "crates/system_properties",
       "crates/user_quota",
+      "crates/workspace-hack"
+    ],
+    "pinned_tls": [
+      "crates/pinned_tls",
       "crates/workspace-hack"
     ],
     "pipedream_mcp": [

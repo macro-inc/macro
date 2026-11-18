@@ -313,6 +313,12 @@
         package = "harnessd";
       };
 
+      # The agent of Firecracker hosts (nix/hosts/_nixos/firecracker-host.nix).
+      firecrackerHostBinary = workspaceBinary {
+        pname = "firecracker-host";
+        package = "firecracker_host";
+      };
+
       # Tauri sidecar sources carry the target triple in the file name; the
       # bundler strips it when placing the binary next to the app executable.
       rustHostTriple = pkgs.stdenv.hostPlatform.rust.rustcTarget;
@@ -1509,6 +1515,7 @@
         js-node-modules = nodeModules;
         macrod = macrodBinary;
         harnessd = harnessdBinary;
+        firecracker-host = firecrackerHostBinary;
       }
       // lib.optionalAttrs isLinux {
         tauri-frontend = frontend;
