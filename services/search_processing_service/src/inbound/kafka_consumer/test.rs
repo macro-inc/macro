@@ -2299,6 +2299,85 @@ async fn queued_agent_session_reread_absorbs_later_hints_without_blocking() {
     ));
 }
 
+#[tokio::test(start_paused = true)]
+async fn agent_session_flood_does_not_delay_email_events_on_other_partitions() {
+    const AGENT_PARTITION: i32 = 1;
+    const EMAIL_PARTITION: i32 = 4;
+    const SESSION_EVENTS: i64 = 2_000;
+    const EMAIL_EVENTS: u128 = 60;
+
+    let (pool, receivers) = test_pool(WORKER_COUNT, WORKER_CHANNEL_CAPACITY);
+    let hot_worker = pool.shard_index(&AGENT_SESSION_ID.to_string());
+    let email_threads: Vec<Uuid> = (0..EMAIL_EVENTS)
+        .map(|index| Uuid::from_u128(50_000 + index))
+        .collect();
+    let emails_behind_hot_worker = email_threads
+        .iter()
+        .filter(|thread| pool.shard_index(&thread.to_string()) == hot_worker)
+        .count();
+    assert!(
+        emails_behind_hot_worker < WORKER_CHANNEL_CAPACITY - 1,
+        "fixture must not fill the stuck worker with email events alone"
+    );
+
+    // The session's worker is stuck in a reconcile; every other worker drains.
+    let mut stuck = None;
+    let mut drained = Vec::new();
+    for (index, mut receiver) in receivers.into_iter().enumerate() {
+        if index == hot_worker {
+            stuck = Some(receiver);
+            continue;
+        }
+        drained.push(tokio::spawn(async move {
+            let mut emails = 0;
+            while let Some(event) = receiver.recv().await {
+                assert_eq!(event.partition, EMAIL_PARTITION);
+                emails += 1;
+            }
+            emails
+        }));
+    }
+
+    let mut email_threads = email_threads.into_iter();
+    let flood = async {
+        for offset in 0..SESSION_EVENTS {
+            let mut session_event = received_agent_session_event(AGENT_SESSION_ID, offset);
+            session_event.partition = AGENT_PARTITION;
+            let _ = pool.handoff(Ok::<_, EventBrokerError>(session_event)).await;
+            if offset % 30 == 0
+                && let Some(thread) = email_threads.next()
+            {
+                let mut email_event = received_thread_backfilled_event(thread, offset);
+                email_event.partition = EMAIL_PARTITION;
+                assert!(matches!(
+                    pool.handoff(Ok::<_, EventBrokerError>(email_event)).await,
+                    HandoffOutcome::HandedOff
+                ));
+            }
+        }
+    };
+    tokio::time::timeout(BLOCKED_HANDOFF_TIMEOUT, flood)
+        .await
+        .expect("one session's flood must not hold handoff for other events");
+    drop(pool);
+
+    let mut stuck = stuck.expect("hot worker channel");
+    let mut queued_rereads = 0;
+    let mut queued_emails = 0;
+    while let Some(event) = stuck.recv().await {
+        match event.partition {
+            AGENT_PARTITION => queued_rereads += 1,
+            _ => queued_emails += 1,
+        }
+    }
+    let mut delivered_emails = queued_emails;
+    for worker in drained {
+        delivered_emails += worker.await.expect("draining worker did not panic");
+    }
+    assert_eq!(queued_rereads, 1, "one queued reread covers the whole flood");
+    assert_eq!(delivered_emails, EMAIL_EVENTS as usize);
+}
+
 #[tokio::test]
 async fn hint_after_its_reread_starts_queues_the_next_reread() {
     let (pool, mut receivers) = test_pool(1, 4);
