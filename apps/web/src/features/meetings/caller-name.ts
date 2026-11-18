@@ -1,13 +1,24 @@
+import { tryMacroId } from '@core/user';
 import { idToDisplayName } from '@core/user/util';
-import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
+import { userNameCache } from '@queries/auth/user-name-cache-runtime';
+import { raceTimeout, until } from '@solid-primitives/promise';
+
+const NAME_LOAD_TIMEOUT_MS = 1000;
 
 /**
- * The name an incoming call shows for its caller, the same as channel call
- * banners and the Chat sidebar: the full name, else the address's local part.
- * Waits (bounded) for the name to load first, since an invitation keeps the
- * name it was given.
+ * The caller's name for a one-shot surface such as the OS notification: the
+ * full name, else the address's local part, like channel call banners. Waits
+ * (bounded) until the name cache has finished loading the caller, because the
+ * display name reads as the address while it loads. In-app banners read
+ * `idToDisplayName` reactively instead, so they update when the name arrives.
  */
 export async function callerDisplayName(userId: string) {
-  await DefaultUserNameResolver(userId);
+  const id = tryMacroId(userId);
+  if (id) {
+    await raceTimeout(
+      until(() => !userNameCache().read(id).loading),
+      NAME_LOAD_TIMEOUT_MS
+    );
+  }
   return idToDisplayName(userId) || undefined;
 }

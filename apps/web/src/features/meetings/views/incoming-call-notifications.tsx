@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
+import { idToDisplayName } from '@core/user/util';
 import { hasOverlayTitleBar } from '@core/util/platform';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
@@ -22,11 +23,24 @@ export function IncomingCallNotifications() {
   const hasCalls = () =>
     channelCalls.calls().length > 0 || incoming.invitations().length > 0;
 
-  const callerNames = () => [
-    ...channelCalls
-      .calls()
-      .map((call) => call.callerName || t('calls.someone')),
-    ...incoming.invitations().map((invitation) => invitation.callerName),
+  // Read reactively, like channel callers, so a name that loads after the
+  // ring starts replaces the address local part.
+  const invitationCallerName = (invitation: {
+    createdBy: string;
+    callerName: string;
+  }) => idToDisplayName(invitation.createdBy) || invitation.callerName;
+
+  // Keyed by call, so a name that loads late updates its line instead of
+  // adding a second announcement.
+  const announcements = () => [
+    ...channelCalls.calls().map((call) => ({
+      key: `call:${call.callId}`,
+      name: () => call.callerName || t('calls.someone'),
+    })),
+    ...incoming.invitations().map((invitation) => ({
+      key: `meeting:${invitation.meetingId}`,
+      name: () => invitationCallerName(invitation),
+    })),
   ];
 
   return (
@@ -34,8 +48,14 @@ export function IncomingCallNotifications() {
       {/* Always mounted, so screen readers announce each call as it rings;
           a live region added together with its content is not announced. */}
       <div class="sr-only" aria-live="polite">
-        <For each={callerNames()}>
-          {(name) => <p>{t('calls.incomingCallFrom', { name })}</p>}
+        <For each={announcements().map((item) => item.key)}>
+          {(key) => {
+            const name = () =>
+              announcements()
+                .find((item) => item.key === key)
+                ?.name() ?? '';
+            return <p>{t('calls.incomingCallFrom', { name: name() })}</p>;
+          }}
         </For>
       </div>
       <Show when={hasCalls()}>
@@ -46,7 +66,7 @@ export function IncomingCallNotifications() {
             class={cn(
               // Scrolls when many calls ring on a short screen; the padding
               // keeps the cards' shadows inside the scroll box.
-              'pointer-events-none fixed left-(--safe-left) right-(--safe-right) z-toast-region mx-auto flex max-w-[32rem] flex-col gap-3 overflow-y-auto overscroll-contain px-4 pt-2 pb-6',
+              'pointer-events-none fixed left-(--safe-left) right-(--safe-right) z-toast-region mx-auto flex max-w-[32rem] flex-col gap-3 overflow-y-auto overscroll-contain px-4 pt-3 pb-6',
               // The macOS app's title bar overlays the page's top 40px.
               hasOverlayTitleBar()
                 ? 'top-10 max-h-[calc(100dvh-2.5rem)]'
@@ -79,14 +99,14 @@ export function IncomingCallNotifications() {
                         avatar={
                           <UserIcon
                             id={current().createdBy}
-                            name={current().callerName}
+                            name={invitationCallerName(current())}
                             size="lg"
                             class="size-12"
                             suppressClick
                             showTooltip={false}
                           />
                         }
-                        callerName={current().callerName}
+                        callerName={invitationCallerName(current())}
                         detail={
                           current().title
                             ? t('calls.callingYouAbout', {
