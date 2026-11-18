@@ -171,7 +171,10 @@ vi.mock('@core/util/create', () => ({
 vi.mock('@app/features/email-compose/compose-adapter', () => ({
   createEmailComposeContext: () => ({
     accounts: {
-      inboxes: () => [{ id: 'inbox', email_address: 'me@example.com' }],
+      inboxes: () => [
+        { id: 'inbox', email_address: 'me@example.com' },
+        { id: 'work', email_address: 'me@work.example.com' },
+      ],
       primaryId: () => 'inbox',
       loading: () => false,
     },
@@ -520,29 +523,42 @@ describe('destination adapters', () => {
       })
     );
   });
-  it('saves a new email under a draft id the save accepts', async () => {
+  it('saves a new email under a draft handle the save accepts', async () => {
     await execute(input('email'));
-    const { draft, inboxId } = mocks.saveEmail.mock.calls[0][0];
-    expect(draft.db_id).toMatch(UUID_V7);
-    // The real save maps the draft; it refuses one without an id.
-    expect(composeDraftInput(draft, inboxId).draftId).toBe(draft.db_id);
+    const { draft, clientHandles, inboxId } = mocks.saveEmail.mock.calls[0][0];
+    // A minted id is a client handle; `db_id` holds only server ids.
+    expect(clientHandles.draftId).toMatch(UUID_V7);
+    expect(draft.db_id).toBeUndefined();
+    // The real save maps the handle; it refuses a draft without one.
+    expect(composeDraftInput(draft, inboxId, clientHandles).draftId).toBe(
+      clientHandles.draftId
+    );
   });
-  it('saves a new draft under a draft id the save accepts', async () => {
+  it('sends the draft under the ids its save returned', async () => {
+    await execute(input('email'));
+    const { message, clientHandles } = mocks.sendEmail.mock.calls[0][0];
+    expect(message).toMatchObject({ db_id: 'draft', thread_db_id: 'thread' });
+    expect(clientHandles).toBeUndefined();
+  });
+  it('saves a new draft under a draft handle the save accepts', async () => {
     await withActions(input('email'), (actions, submission) =>
       actions.saveEmailDraft(submission)
     );
-    const { draft, inboxId } = mocks.saveEmail.mock.calls[0][0];
-    expect(draft.db_id).toMatch(UUID_V7);
-    expect(composeDraftInput(draft, inboxId).draftId).toBe(draft.db_id);
+    const { draft, clientHandles, inboxId } = mocks.saveEmail.mock.calls[0][0];
+    expect(clientHandles.draftId).toMatch(UUID_V7);
+    expect(draft.db_id).toBeUndefined();
+    expect(composeDraftInput(draft, inboxId, clientHandles).draftId).toBe(
+      clientHandles.draftId
+    );
   });
-  it('retries a failed save under the same draft id', async () => {
+  it('retries a failed save under the same draft handle', async () => {
     mocks.saveEmail.mockRejectedValueOnce(new Error('offline'));
     await withActions(input('email'), async (actions, submission) => {
       await expect(actions.submit(submission)).rejects.toThrow('offline');
       await actions.submit(submission);
     });
     const [first, second] = mocks.saveEmail.mock.calls.map(
-      ([call]) => call.draft.db_id
+      ([call]) => call.clientHandles?.draftId
     );
     expect(first).toMatch(UUID_V7);
     expect(second).toBe(first);
@@ -554,10 +570,28 @@ describe('destination adapters', () => {
       await expect(actions.submit(submission)).rejects.toThrow('refused');
       await actions.submit(submission);
     });
-    expect(mocks.saveEmail.mock.calls[1][0].draft).toMatchObject({
+    const retry = mocks.saveEmail.mock.calls[1][0];
+    expect(retry.draft).toMatchObject({
       db_id: 'draft',
       thread_db_id: 'thread',
     });
+    expect(retry.clientHandles).toBeUndefined();
+  });
+  it('starts a new draft when a retry is sent from another inbox', async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
+    await withActions(input('email'), async (actions, submission) => {
+      await expect(actions.submit(submission)).rejects.toThrow('refused');
+      // A draft stays in its inbox: the retry from another one saves anew.
+      submission.fields.inboxId = 'work';
+      await actions.submit(submission);
+    });
+    const retry = mocks.saveEmail.mock.calls[1][0];
+    expect(retry.inboxId).toBe('work');
+    expect(retry.draft.db_id).toBeUndefined();
+    expect(retry.clientHandles.draftId).toMatch(UUID_V7);
+    expect(retry.clientHandles.draftId).not.toBe(
+      mocks.saveEmail.mock.calls[0][0].clientHandles.draftId
+    );
   });
   it('saves a later submission as a new draft', async () => {
     await withActions(input('email'), async (actions, submission) => {
@@ -565,7 +599,7 @@ describe('destination adapters', () => {
       await actions.submit({ ...submission, id: 'next-id' });
     });
     const [first, second] = mocks.saveEmail.mock.calls.map(
-      ([call]) => call.draft.db_id
+      ([call]) => call.clientHandles?.draftId
     );
     expect(second).toMatch(UUID_V7);
     expect(second).not.toBe(first);
