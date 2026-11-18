@@ -472,7 +472,11 @@ export function ComputerSetupSteps(props: {
             header={header()}
             title={t('computers.signInToClaude')}
             onSignedIn={() => fireAndForget(signedIn(), 'computer-setup')}
-            onUseCredits={useCreditsInstead}
+            footnote={t('computers.claudeSharedAccount')}
+            secondary={{
+              label: t('computers.claudeUseCreditsInstead'),
+              onClick: useCreditsInstead,
+            }}
           />
         )}
       </Match>

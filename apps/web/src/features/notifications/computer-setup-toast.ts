@@ -40,7 +40,7 @@ export function openAgentDirectMessage(agentUserId: string) {
   );
 }
 
-/** Bring your AI for an agent teammate, on its row in Settings → Members. */
+/** Connect Claude plan for an agent teammate, on its row in Settings → Members. */
 export function openAgentClaude(agentUserId: string) {
   requestAgentClaude(agentUserId);
   const layout = globalSplitManager();
@@ -81,11 +81,13 @@ async function showAgentSetupToast(
   notice: ComputerSetupNotice,
   agent: SetupAgent
 ) {
-  const canBringAi =
+  const canConnectClaude =
     notice.outcome.kind === 'ready' && (await ownsHarness(notice.harnessId));
   showTeamAgentSetupNotice(notice, agent, {
     message: () => openAgentDirectMessage(agent.userId),
-    bringAi: canBringAi ? () => openAgentClaude(agent.userId) : undefined,
+    connectClaude: canConnectClaude
+      ? () => openAgentClaude(agent.userId)
+      : undefined,
     retry: () =>
       fireAndForget(retryAgentSetup(notice.computerId, agent), 'notifications'),
   });

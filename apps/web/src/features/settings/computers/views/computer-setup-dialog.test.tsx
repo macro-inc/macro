@@ -260,15 +260,13 @@ it('drops the shared sign-in note from Bring your AI once setup has failed', () 
 
   const waiting = setup(settingUp);
   expect(
-    screen.getByText(/Everyone using this computer can use this Claude sign-in/)
+    screen.getByText(/Everyone using this computer can use this sign-in/)
   ).toBeTruthy();
   waiting.unmount();
 
   setup({ ...settingUp, status: 'failed' });
   expect(
-    screen.queryByText(
-      /Everyone using this computer can use this Claude sign-in/
-    )
+    screen.queryByText(/Everyone using this computer can use this sign-in/)
   ).toBeNull();
   expect(
     screen.queryByRole('button', { name: 'Use Macro credits instead' })

@@ -455,8 +455,9 @@ Discussion link scrolling has a backend-free browser regression:
 Inviting an agent teammate from Team → Members (People | Agent in Invite to
 Team, behind `enable-agent-teammates`): the dialog closing with its notice, a
 refused invite's error in view, its row's Setting up step → Running and failed
-Retry, the ready and failed notifications (Message, Bring your AI for admins
-only, Retry), Bring your AI with Close, its row's Claude sign-in and switch
+Retry, the ready and failed notifications (Message, Connect Claude plan for
+admins only, Retry), Connect Claude plan's one-screen sign-in with its
+expired, rejected and unreachable states, its row's Claude sign-in and switch
 back to credits, the DM status banner, and its removal have a backend-free
 browser regression at desktop 1440 and phone 390 over a scripted auth
 service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It launches Chromium with
@@ -1763,9 +1764,12 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 Computer rows show the Claude mode (`Signed in with Claude` on the computer's
 own account, never its email) from `claude-mode` for managers, and the harness list's derived
 `claude_mode` for other members. Sign-in is a dialog
-(`claude-sign-in-flow.tsx`) that starts the sign-in on open, so its Open
-claude.ai control stays a plain `target="_blank"` link; never open it after an
-await. The backend also requires management rights for Claude account changes.
+(`claude-sign-in-flow.tsx`) that starts the sign-in on open. Once the link
+has arrived, Open claude.ai is a plain `target="_blank"` link; never open it
+after an await. Until then it is a button: a browser opens a blank tab within
+the click (`reserveOauthPopup`) and points it at claude.ai when the link
+arrives, while the desktop and phone apps, where that tab would land blank in
+the system browser, open the link once it arrives. The backend also requires management rights for Claude account changes.
 Focused tests: `bun run test src/features/settings/computers`.
 
 Guided purchase (the Buy computer → Configure agent → Bring your AI → Create
