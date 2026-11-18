@@ -50,6 +50,43 @@ fn team_share() -> UpdateSharePermissionRequestV2 {
 pub(crate) fn notion_markdown(markdown: &str, links: &NotionLinks) -> NotionMarkdown {
     NotionMarkdown {
         markdown: markdown.to_string(),
+        databases: links
+            .databases
+            .iter()
+            .map(|occurrence| {
+                use documents::domain::notion_markdown::{
+                    NotionDatabaseFallback as Fallback, NotionDatabaseOccurrence,
+                    NotionDatabaseTarget as Target,
+                };
+                use import::domain::ports::{
+                    NotionDatabaseFallback as Reason, NotionDatabaseTarget as Source,
+                };
+                let target = match &occurrence.target {
+                    Source::Resolved {
+                        database_id,
+                        table_id,
+                        view_id,
+                    } => Target::Resolved {
+                        database_id: *database_id,
+                        table_id: table_id.into_uuid(),
+                        view_id: view_id.map(|id| id.into_uuid()),
+                    },
+                    Source::Fallback(reason) => Target::Fallback {
+                        reason: match reason {
+                            Reason::NoAccess => Fallback::NoAccess,
+                            Reason::NotFound => Fallback::NotFound,
+                            Reason::NotImported => Fallback::NotImported,
+                            Reason::Unresolved => Fallback::Unresolved,
+                        },
+                    },
+                };
+                NotionDatabaseOccurrence {
+                    container_id: occurrence.container_id.to_string(),
+                    ordinal: occurrence.ordinal,
+                    target,
+                }
+            })
+            .collect(),
         pages: links
             .pages
             .iter()

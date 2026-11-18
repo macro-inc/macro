@@ -229,7 +229,11 @@ pub(super) fn notion_links(
             Some((id.clone(), link))
         })
         .collect();
-    NotionLinks { pages, users }
+    NotionLinks {
+        pages,
+        users,
+        databases: Vec::new(),
+    }
 }
 
 /// The document plan row `import_id` becomes, the same on every attempt.

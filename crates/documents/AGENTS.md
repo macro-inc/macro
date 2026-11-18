@@ -264,3 +264,8 @@ one as they do a document released today.
   Skill: `collab-surface-core`
 
 - Signed document grants carry agent correlation into Sync; editor deduplication and activity debounce include the invocation ID.
+
+Notion markdown initialization carries page-local database occurrence targets
+through `domain/notion_markdown.rs` to lexical-service. Keep UUIDs typed inside
+this domain and stringify them only at the outbound HTTP boundary; database
+sharing is independent of a document containing a card.

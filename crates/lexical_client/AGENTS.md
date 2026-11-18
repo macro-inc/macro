@@ -15,7 +15,10 @@ to read or render document content.
 - `src/types.rs`: the Lexical node/document types shared with the service.
 - `src/notion.rs`: `notion_to_loro_snapshot` (`POST /snapshot/notion`) and its
   hand-copied request types; keep them in step with
-  `services/lexical-service/src/endpoints/notion-snapshot.ts`.
+  `services/lexical-service/src/endpoints/notion-snapshot.ts`. The optional
+  database occurrence array uses pathname container ids and per-container
+  ordinals, with a resolved database/table/view target or a typed fallback;
+  empty arrays stay omitted for existing callers.
 
 ## Scope
 

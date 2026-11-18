@@ -484,10 +484,52 @@ pub enum ImportedDocumentPropertyValue {
 /// with live mentions instead of links back to Notion.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct NotionLinks {
+    /// Page-local database placements, counted per container.
+    pub databases: Vec<NotionDatabaseOccurrence>,
     /// Notion page → the Macro document it becomes.
     pub pages: HashMap<NotionId, NotionPageLink>,
     /// Notion person → the Macro user they are.
     pub users: HashMap<NotionId, NotionUserLink>,
+}
+
+/// A resolved or unavailable database placement in one body.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NotionDatabaseOccurrence {
+    /// Container id from the URL pathname.
+    pub container_id: NotionId,
+    /// Zero-based ordinal for that container in this body.
+    pub ordinal: usize,
+    /// The destination or explicit fallback.
+    pub target: NotionDatabaseTarget,
+}
+
+/// Database cards require an existing destination and a translated selected view.
+#[derive(Debug, Clone, PartialEq)]
+pub enum NotionDatabaseTarget {
+    /// An editable database card.
+    Resolved {
+        /// Destination database.
+        database_id: Uuid,
+        /// Destination table.
+        table_id: models_databases::TableId,
+        /// Translated saved view, when available.
+        view_id: Option<models_databases::views::ViewId>,
+    },
+    /// A named source link with a typed reason.
+    Fallback(NotionDatabaseFallback),
+}
+
+/// Why a placement cannot become a card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotionDatabaseFallback {
+    /// Connection lacks permission.
+    NoAccess,
+    /// Source or container does not exist.
+    NotFound,
+    /// Review excluded the source or selected another representation.
+    NotImported,
+    /// Identity or selected view cannot be resolved.
+    Unresolved,
 }
 
 /// The Macro document a Notion page becomes.
