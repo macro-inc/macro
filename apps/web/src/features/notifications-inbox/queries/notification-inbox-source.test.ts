@@ -382,6 +382,35 @@ describe('createNotificationInboxSource', () => {
     expect(rowIds()).toContain('document:doc-a#task');
   });
 
+  it('hides a row listed under a cleared kind besides its own', async () => {
+    vi.useFakeTimers();
+    const mentioned = inboxEntry({
+      docId: 'doc-m',
+      sortAt: '2026-02-01T10:10:00Z',
+      rows: [
+        {
+          id: 'document:doc-m#top_level',
+          rowType: 'DISCUSSION_MENTION',
+          alsoListedAs: ['DISCUSSION_MESSAGES'],
+          latestAt: '2026-02-01T10:10:00Z',
+        },
+      ],
+    });
+    const { fake, feed, rowIds } = setup({
+      ClearNotificationInbox: {
+        clearNotificationInbox: { clear: wireClear('DONE') },
+      },
+    });
+    await flush();
+    fake.queries[0].resolve(inboxPage([mentioned, docA]));
+    await flush();
+
+    await feed.clear({ rowTypes: ['discussion_messages'], unreadOnly: false });
+
+    // Comments that mention you are comments too.
+    expect(rowIds()).toEqual(['document:doc-a#task']);
+  });
+
   it('keeps hiding what a clear still at work takes, and announces its end', async () => {
     vi.useFakeTimers();
     const { fake, feed, rowIds } = await loaded({

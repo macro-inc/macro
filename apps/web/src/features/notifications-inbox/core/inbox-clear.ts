@@ -1,5 +1,8 @@
-import { clearIncludes, type InboxClear } from './inbox-filters';
-import type { InboxRowType } from './inbox-row';
+import {
+  type ClearableRow,
+  clearIncludes,
+  type InboxClear,
+} from './inbox-filters';
 
 /**
  * Where a clear is in its life on the server. A status this build doesn't
@@ -39,10 +42,7 @@ export const isClearRunning = (status: InboxClearStatus): boolean =>
  * notification had arrived when it started. Its rows are hidden at once,
  * on every device, rather than as the server reaches each.
  */
-export function clearHides(
-  clear: InboxClearState,
-  row: { type: InboxRowType | 'other'; unseen: boolean; latestAt: number }
-): boolean {
+export function clearHides(clear: InboxClearState, row: ClearableRow): boolean {
   return (
     clear.status === 'applying' &&
     row.latestAt <= clear.asOf &&

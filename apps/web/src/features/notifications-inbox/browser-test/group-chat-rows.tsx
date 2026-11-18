@@ -87,6 +87,7 @@ const channelRow = (
   return {
     id,
     type: 'channel_messages',
+    alsoListedAs: [],
     revision: 'rev',
     latestAt: Date.parse('2026-11-12T09:00:00Z'),
     actor: { kind: 'user', id: idOf(senders[0] ?? '') },
@@ -141,6 +142,7 @@ const teamNotification: UnifiedNotification = {
 const teamRow: NotificationInboxRow = {
   id: 'vault-request',
   type: 'access_requested',
+  alsoListedAs: [],
   revision: 'rev-1',
   latestAt: Date.parse(teamNotification.created_at),
   unseen: true,

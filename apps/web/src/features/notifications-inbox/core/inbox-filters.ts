@@ -1,5 +1,5 @@
 import { match } from 'ts-pattern';
-import type { InboxRowType } from './inbox-row';
+import type { InboxRow, InboxRowType } from './inbox-row';
 
 /** Every row type this build knows. */
 export const ALL_INBOX_ROW_TYPES: readonly InboxRowType[] = [
@@ -136,14 +136,21 @@ export function clearFor(
     .exhaustive();
 }
 
-/** Whether a clear takes a row. */
-export function clearIncludes(
-  clear: InboxClear,
-  row: { type: InboxRowType | 'other'; unseen: boolean; latestAt: number }
-): boolean {
+/** What a clear reads of a row. */
+export type ClearableRow = Pick<
+  InboxRow<unknown>,
+  'type' | 'alsoListedAs' | 'unseen' | 'latestAt'
+>;
+
+/**
+ * Whether a clear takes a row: one of its kinds, its own or another it is
+ * listed under, is cleared, as the server decides.
+ */
+export function clearIncludes(clear: InboxClear, row: ClearableRow): boolean {
+  const kinds =
+    row.type === 'other' ? row.alsoListedAs : [row.type, ...row.alsoListedAs];
   return (
-    row.type !== 'other' &&
-    clear.rowTypes.includes(row.type) &&
+    kinds.some((kind) => clear.rowTypes.includes(kind)) &&
     (!clear.unreadOnly || row.unseen) &&
     (clear.since === undefined || row.latestAt >= clear.since)
   );

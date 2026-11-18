@@ -10,6 +10,7 @@ import {
 const row = (id: string, revision = 'r1'): NotificationInboxRow => ({
   id,
   type: 'task',
+  alsoListedAs: [],
   revision,
   latestAt: 1,
   actions: [],
