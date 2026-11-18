@@ -206,8 +206,8 @@ where
         }
         // Only received mail that was in Spam goes back to the inbox: Not spam
         // on a thread that is not spam leaves an archived thread archived, and
-        // a thread of the user's own sent mail stays out of the inbox, as Move
-        // to inbox keeps it out.
+        // the user's own sent mail in Spam, even addressed to themselves,
+        // only leaves Spam. (Move to inbox also takes a note to self.)
         if present().any(|message| message.in_junk && !message.is_draft && !message.is_sent) {
             self.set_thread_inbox(link, thread_id, actor.clone(), true)
                 .await?;

@@ -573,9 +573,10 @@ action appears in the selection toolbar for bulk restores, including on mobile.
 Outlook restores received mail to Inbox and provider drafts to Drafts. Gmail Restore
 removes the Trash label and preserves the remaining labels; it does not add Inbox.
 Gmail Not spam moves the thread from Spam to the inbox, as Gmail's own button does:
-it adds Inbox (not to a thread of only the user's own sent mail), then removes
-Spam. Report spam on Gmail files the thread under Spam, then takes it out of the
-inbox. The assistant adding or removing the SPAM label does the same.
+it adds Inbox when received mail in the thread is in Spam (the user's own sent
+mail, even addressed to themselves, only leaves Spam), then removes Spam. Report
+spam on Gmail files the thread under Spam, then takes it out of the inbox. The
+assistant adding or removing the SPAM label does the same.
 Gmail restores update the canonical preview and ordering immediately, before the
 queued provider write completes.
 Outlook uses pending mailbox operations, and the thread's operation notice shows
