@@ -53,9 +53,10 @@ const FOCUS_WORKER_GROUP: &str = "email-focus";
 /// What that worker logs once it has subscribed to the mail events.
 const FOCUS_WORKER_MARKER: &str = "email focus consumer listening";
 /// How that worker logs, at debug, that it left a thread unclassified, and
-/// the outcome it names when the owner does not have the Focus flag.
+/// the outcome it names when the owner does not have the Focus flag. Its
+/// log is coloured, so each is looked for on its own.
 const FOCUS_SKIPPED: &str = "focus skipped";
-const FOCUS_NOT_ENABLED: &str = "outcome: NotEnabled";
+const FOCUS_NOT_ENABLED: &str = "NotEnabled";
 /// The setting that names the Kafka brokers.
 const KAFKA_BROKERS: &str = "KAFKA_BROKERS";
 /// Where that service answers GraphQL.
@@ -523,10 +524,9 @@ impl Stack {
     /// else the worker does shows that, so the stack has it log the threads
     /// it leaves at debug.
     pub fn focus_skipped_without_flag(&self, thread_id: &str) -> bool {
-        let thread = format!("thread_id: {thread_id},");
         self.focus_worker_log().lines().any(|line| {
             line.contains(FOCUS_SKIPPED)
-                && line.contains(&thread)
+                && line.contains(thread_id)
                 && line.contains(FOCUS_NOT_ENABLED)
         })
     }
