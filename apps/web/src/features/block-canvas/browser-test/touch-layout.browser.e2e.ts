@@ -640,3 +640,88 @@ test('with the Text tool a pen keeps its press whichever of pen and palm lands f
   const stillThePensText = await textBeingEdited(page);
   expect(stillThePensText).toEqual(afterPalmFirst);
 });
+
+test('a long press on an item in a group offers to select it alone', async ({
+  page,
+}) => {
+  await page.clock.install();
+  const cdp = await page.context().newCDPSession(page);
+  // Group the fixture's two shapes, then let go of the group.
+  const group = await page.evaluate(() => {
+    const { editor, state } = window.canvasTouchFixture;
+    editor.selectMany(['filled', 'outline']);
+    state.group();
+    const [id] = editor.getSession().selectedIds;
+    editor.selectMany([]);
+    return id;
+  });
+  const shape = await filledShape(page);
+  const sheet = page.getByRole('dialog', { name: 'Canvas actions' });
+
+  await touch(cdp, 'touchStart', [shape]);
+  await page.clock.runFor(600);
+  await touch(cdp, 'touchEnd', []);
+  // The press selects the group, as a tap does.
+  expect((await canvas(page)).selectedIds).toEqual([group]);
+  await sheet.getByRole('button', { name: 'Select inside group' }).tap();
+
+  await expect(sheet).toBeHidden();
+  expect((await canvas(page)).selectedIds).toEqual(['filled']);
+
+  // More has no place the finger pressed, so it does not offer it.
+  await page.getByRole('button', { name: 'More actions' }).tap();
+  await expect(sheet).toBeVisible();
+  await expect(
+    sheet.getByRole('button', { name: 'Select inside group' })
+  ).toHaveCount(0);
+  // The sheet slides up on the page's clock; a tap during the slide is not
+  // yet a dismissal.
+  await page.clock.runFor(800);
+  await settle(sheet);
+  await page.touchscreen.tap(shape.x + 180, 40);
+  await page.clock.runFor(800);
+  await expect(sheet).toBeHidden();
+
+  // A second long press on the item is about the item, not its group again.
+  await touch(cdp, 'touchStart', [shape]);
+  await page.clock.runFor(600);
+  await touch(cdp, 'touchEnd', []);
+  await expect(sheet).toBeVisible();
+  expect((await canvas(page)).selectedIds).toEqual(['filled']);
+});
+
+test('with the tool kept, one choice of Rectangle draws several', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const rectangle = page.getByRole('button', { name: 'Rectangle tool' });
+  const before = (await canvas(page)).items;
+  /** One finger dragged across empty canvas, to the right of the fixture's shapes. */
+  const draw = async (y: number) => {
+    await touch(cdp, 'touchStart', [{ x: 250, y }]);
+    await touch(cdp, 'touchMove', [{ x: 300, y: y + 30 }]);
+    await touch(cdp, 'touchMove', [{ x: 350, y: y + 60 }]);
+    await touch(cdp, 'touchEnd', []);
+  };
+
+  // As it comes: one shape, and Select is back.
+  await rectangle.tap();
+  await draw(120);
+  await expect(rectangle).toHaveAttribute('aria-pressed', 'false');
+  expect((await canvas(page)).items).toBe(before + 1);
+
+  await page.getByRole('button', { name: 'Zoom options' }).tap();
+  const keep = page
+    .getByRole('dialog', { name: 'View' })
+    .getByRole('menuitemcheckbox', { name: 'Keep tool after drawing' });
+  await keep.tap();
+  await expect(keep).toHaveAttribute('aria-checked', 'true');
+  await page.touchscreen.tap(380, 40);
+  await expect(page.getByRole('dialog', { name: 'View' })).toBeHidden();
+
+  await rectangle.tap();
+  await draw(240);
+  await draw(360);
+  await expect(rectangle).toHaveAttribute('aria-pressed', 'true');
+  expect((await canvas(page)).items).toBe(before + 3);
+});

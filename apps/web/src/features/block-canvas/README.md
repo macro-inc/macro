@@ -136,7 +136,12 @@ app's bottom chrome (a public link opened signed out) there is no float region,
 and the same islands sit at the bottom of the canvas instead.
 
 The zoom button opens a sheet with what the desktop zoom menu holds: fit, zoom
-to selection, zoom levels, the dot grid and snapping. More, and a long press on
+to selection, zoom levels, the dot grid and snapping. It also holds **Keep tool
+after drawing** (`toolLocked` in the canvas state): a drawing tool normally hands
+back to Select after one shape, line or text, which costs a finger a trip to the
+toolbar for every further one; kept, it stays and nothing is selected. The lock
+acts only while a drawing tool is chosen (`keepsTool`): under Select, a text
+edited or a connector's end dragged stays selected. More, and a long press on
 the canvas with Select or Hand, open a sheet with every context-menu action:
 clipboard, duplicate, select all, group, layer order and delete. Copy leaves the
 sheet open and confirms with a check, as copy actions do in other menus. A long press
@@ -145,6 +150,9 @@ whatever the press had started; `longPress` on the graphics input reports it,
 half a second in, if the finger has drifted no more than 10px. The sheet opens
 under the finger, and a browser clicks whatever is under a finger as it lifts,
 so the graphics input swallows that lift's click: letting go presses no row.
+When the press
+landed on an item inside the group it selected, the sheet adds Select inside
+group, which selects that item alone: a finger has no Cmd/Ctrl-click.
 
 On a phone Style opens the inspector in a sheet over the lower half of the
 screen. Its scrim is clear, so the shape stays visible and a change shows as it
