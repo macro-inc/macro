@@ -1033,6 +1033,7 @@ STL-986	The Reminders row's clock label in email-row-schedule.tsx keeps the firs
 STL-987	The mail list's rows while searching (`rawEntities` in use-email-query.ts) leave out what the search service found, so the list shows none of the threads the search matched.
 STL-988	The event composer opened from a thread with b gets an empty subject instead of the thread's title, in EmailThreadHostView.tsx.
 STL-989	The touch list header in email-view.tsx shows an empty name outside the Inbox, so it does not name All once All is open.
+STL-991	The mutation queue runner in mutation-queue-runner.ts never releases the lease a reloaded page left on the queue head, so Mark done after a reload that cut off a mark read waits behind it and the provider keeps the thread in the inbox.
 STX-001	the text of "Loading accounts…" in the Read receipts list is changed in src/features/settings/email-settings.tsx
 STX-002	The Read receipts section's load error says "Accounts unavailable" instead of "Couldn't load accounts" in email-settings.tsx.
 STX-003	not shown as the row says ("Loading signatures…" / "Loading signature…"): its rendering is switched off or changed in src/features/settings/email-settings.tsx

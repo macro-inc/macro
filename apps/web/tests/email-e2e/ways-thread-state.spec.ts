@@ -20,7 +20,7 @@ import {
   senderFilters,
 } from './harness/ways-thread';
 import { keyboardInThread } from './harness/ways-thread-more';
-import { did } from './ledger/record';
+import { did, saw } from './ledger/record';
 
 for (const provider of PROVIDERS) {
   test.describe(`the keys of an open thread in ${anInbox(provider)}`, () => {
@@ -187,21 +187,20 @@ for (const provider of PROVIDERS) {
   });
 }
 
-// Seen every time in an Outlook inbox, and in a Gmail inbox after the list's e.
 test.describe('a reload just after a thread was opened, in an Outlook inbox', () => {
   test.use({ provider: 'OUTLOOK' });
   test.beforeEach(({ page }) => loadAppSteadily(page));
 
-  // When this fails, the page reloaded while opening a thread was still
-  // marking it read, and the next action waits behind that cut-off write:
-  // Mark done takes the row out of Macro's list, but the provider keeps the
-  // thread in the inbox (handoff mutation-queue-lease-after-reload). Waiting
-  // for the read to reach the provider before the reload avoids it. The
-  // read sometimes finishes before the reload on a faster machine, and the
-  // test then passes: `@sometimes`, one pass does not say the bug is gone.
-  test('known bug: mutation-queue-lease-after-reload: Mark done after a reload reaches the provider @known-bug', {
-    tag: ['@known-bug', '@sometimes'],
-  }, async ({ page, mailbox }) => {
+  // When this fails, the reload cut off the mark read of the thread just
+  // opened, and its claim on the mutation queue outlived the page: Mark done
+  // takes the row out of Macro's list, but waits behind that claim, so the
+  // provider keeps the thread in the inbox. Outlook's slower mark read is
+  // still on its way at the reload in most runs; when it lands first, the
+  // test passes without reaching the case.
+  test('Mark done after a reload reaches the provider', async ({
+    page,
+    mailbox,
+  }) => {
     const ids = await deliverEach(mailbox, ['Later', 'Done', 'Stays']);
     await mailbox.open();
     await openFromList(page, ids.Later, 'About Later.');
@@ -226,5 +225,6 @@ test.describe('a reload just after a thread was opened, in an Outlook inbox', ()
     await expect
       .poll(async () => (await held(mailbox, 'Done'))?.inInbox)
       .toBe(false);
+    saw('STL-991');
   });
 });
