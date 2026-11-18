@@ -127,6 +127,7 @@ async function checkPhoton() {
   if (!WebAssembly.validate(photonBytes))
     throw new Error('photon.wasm is not valid WebAssembly');
   new WebAssembly.Module(photonBytes);
+  const hadDeno = 'Deno' in globalThis;
   const deno = (globalThis as { Deno?: unknown }).Deno;
   (globalThis as { Deno?: unknown }).Deno = {
     readFile: (url: URL) => Bun.file(url).bytes(),
@@ -146,7 +147,8 @@ async function checkPhoton() {
       );
     if (jpeg.length === 0) throw new Error('photon JPEG encode gave no bytes');
   } finally {
-    (globalThis as { Deno?: unknown }).Deno = deno;
+    if (hadDeno) (globalThis as { Deno?: unknown }).Deno = deno;
+    else delete (globalThis as { Deno?: unknown }).Deno;
   }
 }
 
