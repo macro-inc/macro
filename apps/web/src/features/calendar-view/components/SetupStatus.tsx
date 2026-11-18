@@ -2,6 +2,7 @@ import { useCalendarPager } from '@app/features/calendar/components/CalendarPage
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
+import { calendarStoppedSyncing } from '@core/email-link/consent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -44,22 +45,6 @@ function isWorkingCalendar(link: EmailLink) {
   );
 }
 
-/**
- * An inbox whose calendar used to sync but lost calendar access without the
- * user turning it off, such as a grant from before Macro narrowed its
- * calendar scopes. Its events are gone, so it is named even while another
- * inbox's calendar works.
- */
-function isStoppedCalendar(link: EmailLink) {
-  return (
-    link.is_sync_active &&
-    link.needs_calendar_permission &&
-    link.has_calendar_data &&
-    !link.calendar_disabled &&
-    !link.needs_reauth
-  );
-}
-
 /** Displays account setup actions above the complete calendar pager. */
 export function SetupStatus() {
   const calendarPager = useCalendarPager();
@@ -97,7 +82,7 @@ export function SetupStatus() {
   // Existing events are not evidence that setup is complete: a revoked grant
   // or delegated inbox can leave events visible without a working calendar
   // connection belonging to the current user.
-  const stoppedLink = () => ownLinks().find(isStoppedCalendar);
+  const stoppedLink = () => ownLinks().find(calendarStoppedSyncing);
 
   const setupState = createMemo<
     'connect' | 'permission' | 'reauth' | 'disabled' | 'stopped' | undefined
@@ -117,7 +102,7 @@ export function SetupStatus() {
     const links = ownLinks();
     if (links.length === 0) return 'connect';
 
-    if (links.some(isStoppedCalendar)) return 'stopped';
+    if (links.some(calendarStoppedSyncing)) return 'stopped';
     if (links.some(isWorkingCalendar)) return undefined;
     if (links.some((link) => link.needs_reauth)) return 'reauth';
     if (links.some((link) => link.needs_calendar_permission)) {
