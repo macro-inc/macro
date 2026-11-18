@@ -6,6 +6,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 mod import_pacing;
 mod import_reads;
 mod live_pass;
+mod outlook_import;
 mod retries;
 
 pub(super) async fn fixture(db: &PgPool) -> (PgMailboxSync, Uuid) {
