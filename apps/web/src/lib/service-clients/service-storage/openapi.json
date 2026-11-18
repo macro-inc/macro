@@ -36032,6 +36032,13 @@
             "type": "string",
             "format": "uuid",
             "description": "The id of the deleted channel."
+          },
+          "participant_user_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "Active participants just before the delete. The channel and its\nmemberships are gone by the time this is consumed, so consumers that\ntell members about the delete cannot look them up."
           }
         }
       },

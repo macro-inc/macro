@@ -25,7 +25,7 @@ import type { NotificationInboxGroup } from './notification-inbox-groups';
 type WireRow = NotificationInboxEntryFieldsFragment['rows'][number];
 
 /** The server's row types only grow; a newer one shows as a generic row. */
-const toRowType = (
+export const toRowType = (
   type: NotificationInboxRowType
 ): NotificationInboxRow['type'] =>
   match<NotificationInboxRowType, NotificationInboxRow['type']>(type)
