@@ -10,6 +10,7 @@ export interface EditorMenuItem {
   shortcut?: string;
   checked?: boolean;
   disabled?: boolean;
+  destructive?: boolean;
   icon?: JSX.Element;
   onSelect: () => void;
   testId?: string;
@@ -32,6 +33,7 @@ function MenuItem(props: { item: EditorMenuItem | 'divider' }) {
       disabled={item.disabled}
       data-testid={item.testId}
       class="flex h-6 items-center gap-2 rounded-md px-2 outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-accent data-[highlighted]:text-accent-contrast"
+      classList={{ 'text-failure-ink': item.destructive }}
       onSelect={item.onSelect}
     >
       <span class="flex size-4 shrink-0 items-center justify-center">

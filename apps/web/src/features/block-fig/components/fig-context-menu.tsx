@@ -70,7 +70,11 @@ export function FigContextMenu(props: {
                   <MenuSeparator />
                 ) : (
                   <DropdownMenu.Item
-                    class={cn(MENU_ITEM_CLASS, 'gap-2 px-2 py-1 text-xs')}
+                    class={cn(
+                      MENU_ITEM_CLASS,
+                      'gap-2 px-2 py-1 text-xs',
+                      entry.action === 'delete' && 'text-failure-ink'
+                    )}
                     disabled={entry.disabled}
                     data-testid={`fig-menu-${entry.action}`}
                     onSelect={() => props.onSelect(entry.action)}

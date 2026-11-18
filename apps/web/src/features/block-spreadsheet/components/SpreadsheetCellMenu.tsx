@@ -98,8 +98,9 @@ export function SpreadsheetCellMenu(props: {
             });
           }}
         >
-          {item('Cut', 'cut', Scissors)}
           {item('Copy', 'copy', Copy, false)}
+          <ContextMenu.Separator class="my-1 border-t border-edge-muted" />
+          {item('Cut', 'cut', Scissors)}
           {item('Paste', 'paste', Clipboard)}
           {item('Paste values only', 'paste-values', Clipboard)}
           <ContextMenu.Separator class="my-1 border-t border-edge-muted" />

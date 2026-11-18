@@ -136,6 +136,24 @@ export function TableColumnMenu(props: {
               </Dropdown.SubContent>
             </Dropdown.Sub>
           </Dropdown.Group>
+          <Show when={props.canChangeStructure}>
+            <Dropdown.Group>
+              <Dropdown.Item
+                closeOnSelect
+                onSelect={() => props.onStructure('insert-before')}
+              >
+                <ArrowLineLeft class="size-4" />
+                Insert column left
+              </Dropdown.Item>
+              <Dropdown.Item
+                closeOnSelect
+                onSelect={() => props.onStructure('insert-after')}
+              >
+                <ArrowLineRight class="size-4" />
+                Insert column right
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Show>
           <Dropdown.Group>
             <Dropdown.Item closeOnSelect onSelect={() => props.onSort(false)}>
               <SortAscending class="size-4" />
@@ -179,20 +197,6 @@ export function TableColumnMenu(props: {
           </Dropdown.Group>
           <Show when={props.canChangeStructure}>
             <Dropdown.Group>
-              <Dropdown.Item
-                closeOnSelect
-                onSelect={() => props.onStructure('insert-before')}
-              >
-                <ArrowLineLeft class="size-4" />
-                Insert column left
-              </Dropdown.Item>
-              <Dropdown.Item
-                closeOnSelect
-                onSelect={() => props.onStructure('insert-after')}
-              >
-                <ArrowLineRight class="size-4" />
-                Insert column right
-              </Dropdown.Item>
               <Dropdown.Item
                 closeOnSelect
                 class="text-failure-ink"

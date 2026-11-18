@@ -51,6 +51,7 @@ export function MainMenu(props: {
     const keys = !IS_MAC && action?.otherKeys ? action.otherKeys : action?.keys;
     return {
       label: label ?? action?.label ?? id,
+      destructive: id === 'delete',
       shortcut: keys
         ?.map((key) => (key === 'mod' ? (IS_MAC ? '⌘' : 'Ctrl') : key))
         .join(IS_MAC ? '' : '+'),
@@ -96,10 +97,13 @@ export function MainMenu(props: {
           label: 'Edit',
           testId: 'fig-main-edit',
           items: [
-            menuAction('undo'),
-            menuAction('redo'),
+            menuAction('select-all'),
+            menuAction('find'),
             'divider',
             menuAction('copy'),
+            'divider',
+            menuAction('undo'),
+            menuAction('redo'),
             menuAction('cut'),
             {
               ...menuAction('paste', 'Paste'),
@@ -108,10 +112,8 @@ export function MainMenu(props: {
             menuAction('paste-replace'),
             'divider',
             menuAction('duplicate'),
-            menuAction('delete'),
             'divider',
-            menuAction('select-all'),
-            menuAction('find'),
+            menuAction('delete'),
           ],
         },
         {
@@ -129,6 +131,7 @@ export function MainMenu(props: {
           label: 'Object',
           testId: 'fig-main-object',
           items: [
+            menuAction('rename'),
             menuAction('group', 'Group selection'),
             menuAction('ungroup'),
             menuAction('frame-selection'),
@@ -141,7 +144,6 @@ export function MainMenu(props: {
             'divider',
             menuAction('toggle-visible', 'Show/hide selection'),
             menuAction('toggle-locked', 'Lock/unlock selection'),
-            menuAction('rename'),
           ],
         },
         {
