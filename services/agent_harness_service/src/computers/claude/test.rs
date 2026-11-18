@@ -350,6 +350,83 @@ async fn computer_invalid_code_is_a_typed_retryable_response() {
     );
 }
 
+/// Status and body `code` of a route error, as the web client reads them.
+async fn status_and_code(
+    error: super::ComputerRouteError,
+) -> (axum::http::StatusCode, Option<String>) {
+    use axum::response::IntoResponse as _;
+    let response = error.into_response();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    (status, body["code"].as_str().map(str::to_owned))
+}
+
+fn harnessd_error(kind: &str) -> super::ComputerRouteError {
+    super::ComputerRouteError::from_answer(
+        serde_json::from_value(
+            serde_json::json!({"result": "error", "agent": "claude", "kind": kind}),
+        )
+        .unwrap(),
+    )
+}
+
+/// A sign-in that is gone (too old, replaced, cancelled, harnessd restarted)
+/// is told apart from a busy or unreachable computer, so the dialog offers a
+/// new link instead of "try again shortly" forever.
+#[tokio::test]
+async fn sign_in_failures_carry_the_code_that_says_how_to_recover() {
+    use axum::http::StatusCode;
+    let expired = (StatusCode::GONE, Some("sign_in_expired".to_owned()));
+    assert_eq!(
+        status_and_code(harnessd_error("no_pending_sign_in")).await,
+        expired
+    );
+    assert_eq!(status_and_code(harnessd_error("cancelled")).await, expired);
+    assert_eq!(
+        status_and_code(harnessd_error("malformed_code")).await,
+        (StatusCode::BAD_REQUEST, Some("malformed_code".to_owned()))
+    );
+    assert_eq!(
+        status_and_code(harnessd_error("unavailable")).await,
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Some("computer_unreachable".to_owned())
+        )
+    );
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::from(
+            super::super::harnessd::HarnessdError::Unreachable("refused".to_owned())
+        ))
+        .await,
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Some("computer_unreachable".to_owned())
+        )
+    );
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::from(
+            super::super::harnessd::HarnessdError::Busy
+        ))
+        .await,
+        (StatusCode::CONFLICT, Some("computer_busy".to_owned()))
+    );
+    // A throttled computer is as busy as a held one: retry, not start over.
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::from(
+            harnesses::domain::ports::HarnessError::Throttled
+        ))
+        .await,
+        (StatusCode::CONFLICT, Some("computer_busy".to_owned()))
+    );
+    assert_eq!(
+        status_and_code(harnessd_error("timeout")).await,
+        (StatusCode::GATEWAY_TIMEOUT, None)
+    );
+}
+
 #[tokio::test]
 async fn a_completion_whose_caller_left_still_records_its_signer() {
     use harness_id::HarnessId;
