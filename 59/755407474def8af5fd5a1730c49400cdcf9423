@@ -1,0 +1,30 @@
+apps/web/tests/native/driver.ts
+  s_1d3cb1a20cf994::t_f19ca69ddfeda5 164-186
+apps/web/src/lib/queries/auth/user-name-cache.test.ts
+  s_1d3cb1a20cf994::t_6fd8daea1787bd 5,414,416-437
+  s_1d3cb1a20cf994::t_5fef83449d6f77 415
+  s_1d3cb1a20cf994::t_c255f0a87b49de 438
+apps/web/tests/native/runner.ts
+  s_1d3cb1a20cf994::t_f19ca69ddfeda5 9,218,352-355
+apps/web/src/lib/queries/auth/user-name-cache.ts
+  s_1d3cb1a20cf994::t_705f047add20e8 507-508,514-536
+  s_1d3cb1a20cf994::t_64a12ece2fff09 537
+apps/web/tests/native/README.md
+  s_1d3cb1a20cf994::t_31e417671489e0 39-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "59755407474def8af5fd5a1730c49400cdcf9423",
+  "prompts": {},
+  "sessions": {
+    "s_1d3cb1a20cf994": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "437c543b-634b-487a-a7ad-901e5f75d385",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
