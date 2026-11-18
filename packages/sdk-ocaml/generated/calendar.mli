@@ -94,6 +94,10 @@ val booking_status_of_yojson : Yojson.Safe.t -> booking_status
 val yojson_of_booking_status : booking_status -> Yojson.Safe.t
 
 type nonrec booking = {
+  abandoned_at : string option;
+      (** When Macro stopped trying to update the host's calendar for the
+booking's latest change. A failed booking with this set is not being
+retried, and cancelling it is the way to release its time. *)
   answers : (string * string) list;  (** Answers keyed by question identity. *)
   attendance : booking_attendance option;
       (** Explicit attendance outcome; existing booking records default to unknown. *)
@@ -121,6 +125,7 @@ val booking_of_yojson : Yojson.Safe.t -> booking
 val yojson_of_booking : booking -> Yojson.Safe.t
 
 val make_booking :
+  ?abandoned_at:string ->
   answers:(string * string) list ->
   ?attendance:booking_attendance ->
   email:string ->
@@ -371,7 +376,7 @@ type nonrec booking_link_event = {
   macro_call : bool option;
       (** Attach a Macro call when someone books. A join link is created for that
 booking and written onto the calendar invitation. Mutually exclusive
-with [googleMeet]. Prefer this for a Macro booking; omit or false when
+with [googleMeet]. Set it when the user wants a Macro call; omit or false when
 the link should use Google Meet or no video. False is omitted so drafts
 saved before this field still round-trip unchanged. *)
   mode : scheduling_mode;  (** Host assignment policy. *)

@@ -7996,6 +7996,29 @@ let make_attachment_change_replace ~(value : new_attachment list) () =
 let make_attachment_change_delta ~(value : attachment_change_delta_value) () =
   (Delta { value } : attachment_change)
 
+(** A kind of attachment a thread's messages carry, by MIME type. *)
+type nonrec attachment_kind =
+  | Pdf
+  | Image
+  | Document
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let attachment_kind_of_yojson : Yojson.Safe.t -> attachment_kind =
+ fun json ->
+  match Json.string json with
+  | "pdf" -> Pdf
+  | "image" -> Image
+  | "document" -> Document
+  | other -> Json.unknown "attachment_kind" json (Unknown other)
+
+and yojson_of_attachment_kind : attachment_kind -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Pdf -> `String "pdf"
+  | Image -> `String "image"
+  | Document -> `String "document"
+  | Unknown other -> `String other
+
 (** RSVP state for an attendee. *)
 type nonrec attendee_response_status =
   | Needs_action
@@ -13254,21 +13277,64 @@ let make_channel_topic_event_channel_access_requested
     ~(metadata : channel_access_requested_metadata) () =
   (Channel_access_requested { metadata } : channel_topic_event)
 
-type nonrec channel_webhook_request = { content : string  (** Message body. *) }
+(** Who hears about a posted message. A caller may choose it for its own
+channel message, since every choice only narrows who is notified. *)
+type nonrec post_message_notification_policy =
+  | Default
+  | Mentions_only
+  | Silent
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let post_message_notification_policy_of_yojson :
+    Yojson.Safe.t -> post_message_notification_policy =
+ fun json ->
+  match Json.string json with
+  | "Default" -> Default
+  | "MentionsOnly" -> Mentions_only
+  | "Silent" -> Silent
+  | other ->
+      Json.unknown "post_message_notification_policy" json (Unknown other)
+
+and yojson_of_post_message_notification_policy :
+    post_message_notification_policy -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Default -> `String "Default"
+  | Mentions_only -> `String "MentionsOnly"
+  | Silent -> `String "Silent"
+  | Unknown other -> `String other
+
+type nonrec channel_webhook_request = {
+  content : string;  (** Message body. *)
+  notification_policy : post_message_notification_policy option;
+      (** Who hears about the message; [Silent] notifies no one. *)
+}
 (** Request to post a channel webhook message. *)
 
 let channel_webhook_request_of_yojson : Yojson.Safe.t -> channel_webhook_request
     =
  fun json ->
   let fields = Json.obj json in
-  { content = Json.required fields "content" Json.string }
+  {
+    content = Json.required fields "content" Json.string;
+    notification_policy =
+      Json.optional fields "notification_policy"
+        post_message_notification_policy_of_yojson;
+  }
 
 and yojson_of_channel_webhook_request : channel_webhook_request -> Yojson.Safe.t
     =
- fun value -> Json.record [ ("content", Some (Json.of_string value.content)) ]
+ fun value ->
+  Json.record
+    [
+      ("content", Some (Json.of_string value.content));
+      ( "notification_policy",
+        Option.map yojson_of_post_message_notification_policy
+          value.notification_policy );
+    ]
 
-let make_channel_webhook_request ~(content : string) () =
-  ({ content } : channel_webhook_request)
+let make_channel_webhook_request ~(content : string) ?notification_policy () =
+  ({ content; notification_policy } : channel_webhook_request)
 
 type nonrec channel_webhook_response = {
   message_id : string;  (** Created message id. *)
@@ -28700,6 +28766,62 @@ and yojson_of_email_block_scope : email_block_scope -> Yojson.Safe.t =
   | Personal -> `String "personal"
   | Unknown other -> `String other
 
+type nonrec email_contribution_consent = {
+  enabled : bool;
+      (** Whether this exact mailbox has explicit contribution consent. *)
+  mailbox_email : string option;
+      (** The primary mailbox that would contribute, if connected. *)
+  mailbox_link_id : string option;
+      (** Exact current primary mailbox connection. *)
+}
+(** Current mailbox consent without loading domain exclusion lists. *)
+
+let email_contribution_consent_of_yojson :
+    Yojson.Safe.t -> email_contribution_consent =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    enabled = Json.required fields "enabled" Json.bool;
+    mailbox_email = Json.optional fields "mailbox_email" Json.string;
+    mailbox_link_id = Json.optional fields "mailbox_link_id" Json.string;
+  }
+
+and yojson_of_email_contribution_consent :
+    email_contribution_consent -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("enabled", Some (Json.of_bool value.enabled));
+      ("mailbox_email", Option.map Json.of_string value.mailbox_email);
+      ("mailbox_link_id", Option.map Json.of_string value.mailbox_link_id);
+    ]
+
+let make_email_contribution_consent ~(enabled : bool) ?mailbox_email
+    ?mailbox_link_id () =
+  ({ enabled; mailbox_email; mailbox_link_id } : email_contribution_consent)
+
+(** The scope of an explicitly granted mailbox contribution. *)
+type nonrec email_contribution_mode =
+  | All
+  | Selected
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let email_contribution_mode_of_yojson : Yojson.Safe.t -> email_contribution_mode
+    =
+ fun json ->
+  match Json.string json with
+  | "all" -> All
+  | "selected" -> Selected
+  | other -> Json.unknown "email_contribution_mode" json (Unknown other)
+
+and yojson_of_email_contribution_mode : email_contribution_mode -> Yojson.Safe.t
+    =
+ fun value ->
+  match value with
+  | All -> `String "all"
+  | Selected -> `String "selected"
+  | Unknown other -> `String other
+
 (** Controls whether shared email threads are included in results. *)
 type nonrec shared_email_filter =
   | Exclude
@@ -28723,7 +28845,30 @@ and yojson_of_shared_email_filter : shared_email_filter -> Yojson.Safe.t =
   | Only -> `String "only"
   | Unknown other -> `String other
 
+(** A mailbox view the Email list scopes a search to, as its tabs do. *)
+type nonrec email_search_view =
+  | Sent
+  | Drafts
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let email_search_view_of_yojson : Yojson.Safe.t -> email_search_view =
+ fun json ->
+  match Json.string json with
+  | "sent" -> Sent
+  | "drafts" -> Drafts
+  | other -> Json.unknown "email_search_view" json (Unknown other)
+
+and yojson_of_email_search_view : email_search_view -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Sent -> `String "sent"
+  | Drafts -> `String "drafts"
+  | Unknown other -> `String other
+
 type nonrec email_filters = {
+  attachments : attachment_kind list option;
+      (** Only threads with at least one attachment of one of these kinds, by
+MIME type, on any of their messages. Empty applies no constraint. *)
   bcc : string list option;
       (** Email BCC addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by BCC. *)
   calendar_only : bool option;
@@ -28738,14 +28883,20 @@ teammate's mailbox and restricts to threads involving any of these
 fully-qualified addresses. Each address is authorized against
 [crm_contacts] + [crm_companies] (contact must not be hidden, company
 must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_domains]. *)
+Mutually exclusive with [crm_domains]. Listing email only: search
+rejects a request that sets it with a 400. *)
   crm_domains : string list option;
       (** CRM-scoped domain filter. When non-empty, expands visibility to every
 teammate's mailbox and restricts to threads involving any of these
 domains (in any of sender/cc/bcc/recipient). Each domain is authorized
 against [crm_domains] + [crm_companies] (must exist for the caller's
 team, company must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_addresses]. *)
+Mutually exclusive with [crm_addresses]. Listing email only: search
+rejects a request that sets it with a 400. *)
+  done_ : bool option;
+      (** Filter by whether the thread is done: true for threads out of the
+inbox (archived), false for threads still in it. This is the mailbox
+state the Email view's Done filter uses, independent of notifications. *)
   email_thread_ids : string list option;
       (** Email thread IDs to filter by. Examples: \['thread-uuid-1'\]. Empty to search all threads. *)
   exclude_labels : string list option;
@@ -28766,7 +28917,14 @@ caller can access" (soup expands to the full set at the router edge). *)
   notification_filters : notification_filters option;
       (** Filter by email notification state. *)
   project_ids : string list option;
-      (** A list of project ids to search within. Empty to ignore project filtering. *)
+      (** Drive folder (project) ids to search within: threads filed in any of
+these folders. Besides the caller's own threads, it reaches every
+thread in a folder shared with the caller, whoever's inbox holds it,
+as the folder's list does. Search takes at most 50 folders and
+rejects more with a 400, and matches the query against at most 10,000
+of their threads in all; threads past that are not searched, unless
+[email_thread_ids] names them, and at most 10,000 named threads are
+searched in all. Empty to ignore project filtering. *)
   recipients : string list option;
       (** Email Recipient addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by Recipient. *)
   senders : string list option;
@@ -28774,6 +28932,7 @@ caller can access" (soup expands to the full set at the router edge). *)
   shared : shared_email_filter option;
       (** Controls whether shared email threads are included in results.
 Defaults to "exclude" (only the user's own threads). *)
+  view : email_search_view option;
 }
 (** The email filters used to filter down what emails you search over. *)
 
@@ -28781,11 +28940,14 @@ let email_filters_of_yojson : Yojson.Safe.t -> email_filters =
  fun json ->
   let fields = Json.obj json in
   {
+    attachments =
+      Json.optional fields "attachments" (Json.list attachment_kind_of_yojson);
     bcc = Json.optional fields "bcc" (Json.list Json.string);
     calendar_only = Json.optional fields "calendar_only" Json.bool;
     cc = Json.optional fields "cc" (Json.list Json.string);
     crm_addresses = Json.optional fields "crm_addresses" (Json.list Json.string);
     crm_domains = Json.optional fields "crm_domains" (Json.list Json.string);
+    done_ = Json.optional fields "done" Json.bool;
     email_thread_ids =
       Json.optional fields "email_thread_ids" (Json.list Json.string);
     exclude_labels =
@@ -28801,18 +28963,22 @@ let email_filters_of_yojson : Yojson.Safe.t -> email_filters =
     recipients = Json.optional fields "recipients" (Json.list Json.string);
     senders = Json.optional fields "senders" (Json.list Json.string);
     shared = Json.optional fields "shared" shared_email_filter_of_yojson;
+    view = Json.optional fields "view" email_search_view_of_yojson;
   }
 
 and yojson_of_email_filters : email_filters -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
+      ( "attachments",
+        Option.map (Json.of_list yojson_of_attachment_kind) value.attachments );
       ("bcc", Option.map (Json.of_list Json.of_string) value.bcc);
       ("calendar_only", Option.map Json.of_bool value.calendar_only);
       ("cc", Option.map (Json.of_list Json.of_string) value.cc);
       ( "crm_addresses",
         Option.map (Json.of_list Json.of_string) value.crm_addresses );
       ("crm_domains", Option.map (Json.of_list Json.of_string) value.crm_domains);
+      ("done", Option.map Json.of_bool value.done_);
       ( "email_thread_ids",
         Option.map (Json.of_list Json.of_string) value.email_thread_ids );
       ( "exclude_labels",
@@ -28828,18 +28994,21 @@ and yojson_of_email_filters : email_filters -> Yojson.Safe.t =
       ("recipients", Option.map (Json.of_list Json.of_string) value.recipients);
       ("senders", Option.map (Json.of_list Json.of_string) value.senders);
       ("shared", Option.map yojson_of_shared_email_filter value.shared);
+      ("view", Option.map yojson_of_email_search_view value.view);
     ]
 
-let make_email_filters ?bcc ?calendar_only ?cc ?crm_addresses ?crm_domains
-    ?email_thread_ids ?exclude_labels ?importance ?include_labels ?is_read
-    ?link_ids ?notification_filters ?project_ids ?recipients ?senders ?shared ()
-    =
+let make_email_filters ?attachments ?bcc ?calendar_only ?cc ?crm_addresses
+    ?crm_domains ?done_ ?email_thread_ids ?exclude_labels ?importance
+    ?include_labels ?is_read ?link_ids ?notification_filters ?project_ids
+    ?recipients ?senders ?shared ?view () =
   ({
+     attachments;
      bcc;
      calendar_only;
      cc;
      crm_addresses;
      crm_domains;
+     done_;
      email_thread_ids;
      exclude_labels;
      importance;
@@ -28851,6 +29020,7 @@ let make_email_filters ?bcc ?calendar_only ?cc ?crm_addresses ?crm_domains
      recipients;
      senders;
      shared;
+     view;
    }
     : email_filters)
 
@@ -29050,6 +29220,760 @@ and yojson_of_email_followup_response : email_followup_response -> Yojson.Safe.t
 let make_email_followup_response ?followup () =
   ({ followup } : email_followup_response)
 
+(** One positive whole-thread selector; denials always take precedence. *)
+type nonrec email_inclusion_rule =
+  | Thread of {
+      thread_id : string;  (** Internal thread ID, never a provider thread ID. *)
+    }  (** A mailbox-local thread owned by the contributor. *)
+  | Address of {
+      address : string;
+          (** Address to normalize and validate before activation. *)
+    }  (** An exact sender or recipient address, without alias inference. *)
+  | Contact of {
+      contact_id : string;
+          (** Stable contact ID, resolved live rather than expanded on activation. *)
+    }  (** All current addresses of an authorized contact in the same team. *)
+  | Domain of {
+      domain : string;
+          (** Bare domain to normalize and validate before activation. *)
+    }  (** A domain and its dot-boundary subdomains. *)
+  | Company of {
+      company_id : string;
+          (** Stable company ID, resolved live rather than expanded on activation. *)
+    }  (** All current domains of an authorized company in the same team. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let email_inclusion_rule_of_yojson : Yojson.Safe.t -> email_inclusion_rule =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "kind" with
+  | "thread" ->
+      Thread { thread_id = Json.required fields "thread_id" Json.string }
+  | "address" ->
+      Address { address = Json.required fields "address" Json.string }
+  | "contact" ->
+      Contact { contact_id = Json.required fields "contact_id" Json.string }
+  | "domain" -> Domain { domain = Json.required fields "domain" Json.string }
+  | "company" ->
+      Company { company_id = Json.required fields "company_id" Json.string }
+  | _ -> Json.unknown "email_inclusion_rule" json (Unknown json)
+
+and yojson_of_email_inclusion_rule : email_inclusion_rule -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Thread case ->
+      Json.record
+        [
+          ("kind", Some (`String "thread"));
+          ("thread_id", Some (Json.of_string case.thread_id));
+        ]
+  | Address case ->
+      Json.record
+        [
+          ("kind", Some (`String "address"));
+          ("address", Some (Json.of_string case.address));
+        ]
+  | Contact case ->
+      Json.record
+        [
+          ("kind", Some (`String "contact"));
+          ("contact_id", Some (Json.of_string case.contact_id));
+        ]
+  | Domain case ->
+      Json.record
+        [
+          ("kind", Some (`String "domain"));
+          ("domain", Some (Json.of_string case.domain));
+        ]
+  | Company case ->
+      Json.record
+        [
+          ("kind", Some (`String "company"));
+          ("company_id", Some (Json.of_string case.company_id));
+        ]
+  | Unknown json -> json
+
+let make_email_inclusion_rule_thread ~(thread_id : string) () =
+  (Thread { thread_id } : email_inclusion_rule)
+
+let make_email_inclusion_rule_address ~(address : string) () =
+  (Address { address } : email_inclusion_rule)
+
+let make_email_inclusion_rule_contact ~(contact_id : string) () =
+  (Contact { contact_id } : email_inclusion_rule)
+
+let make_email_inclusion_rule_domain ~(domain : string) () =
+  (Domain { domain } : email_inclusion_rule)
+
+let make_email_inclusion_rule_company ~(company_id : string) () =
+  (Company { company_id } : email_inclusion_rule)
+
+(** Provenance established by authenticated credentials, never a request field. *)
+type nonrec email_policy_actor_kind =
+  | Member
+  | Agent
+  | Api
+  | System
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let email_policy_actor_kind_of_yojson : Yojson.Safe.t -> email_policy_actor_kind
+    =
+ fun json ->
+  match Json.string json with
+  | "member" -> Member
+  | "agent" -> Agent
+  | "api" -> Api
+  | "system" -> System
+  | other -> Json.unknown "email_policy_actor_kind" json (Unknown other)
+
+and yojson_of_email_policy_actor_kind : email_policy_actor_kind -> Yojson.Safe.t
+    =
+ fun value ->
+  match value with
+  | Member -> `String "member"
+  | Agent -> `String "agent"
+  | Api -> `String "api"
+  | System -> `String "system"
+  | Unknown other -> `String other
+
+(** Events in the member-only policy history; records never contain mail content. *)
+type nonrec email_policy_audit_action =
+  | Rules_activated
+  | All_mail_enabled
+  | Withdrawn
+  | Mailbox_revoked
+  | Live_targets_changed
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let email_policy_audit_action_of_yojson :
+    Yojson.Safe.t -> email_policy_audit_action =
+ fun json ->
+  match Json.string json with
+  | "rules_activated" -> Rules_activated
+  | "all_mail_enabled" -> All_mail_enabled
+  | "withdrawn" -> Withdrawn
+  | "mailbox_revoked" -> Mailbox_revoked
+  | "live_targets_changed" -> Live_targets_changed
+  | other -> Json.unknown "email_policy_audit_action" json (Unknown other)
+
+and yojson_of_email_policy_audit_action :
+    email_policy_audit_action -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Rules_activated -> `String "rules_activated"
+  | All_mail_enabled -> `String "all_mail_enabled"
+  | Withdrawn -> `String "withdrawn"
+  | Mailbox_revoked -> `String "mailbox_revoked"
+  | Live_targets_changed -> `String "live_targets_changed"
+  | Unknown other -> `String other
+
+type nonrec new_email_policy_audit = {
+  action : email_policy_audit_action;  (** The operation that committed. *)
+  actor_kind : email_policy_actor_kind;
+      (** Provenance derived from authenticated credentials. *)
+  agent_id : string option;  (** Verified agent identity, if available. *)
+  agent_session_id : string option;
+      (** Verified session identity, if available; never inferred from a request. *)
+  details : Yojson.Safe.t;
+      (** Bounded metadata, never email IDs, addresses, subjects or bodies. *)
+  event_id : string;
+      (** Server-generated UUIDv7, stable for a retried system event. *)
+  next_revision : int64 option;  (** New immutable definition. *)
+  previous_revision : int64 option;  (** Previous immutable definition. *)
+}
+(** Audit data supplied by the authorized use case, without mail content. *)
+
+let new_email_policy_audit_of_yojson : Yojson.Safe.t -> new_email_policy_audit =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    action = Json.required fields "action" email_policy_audit_action_of_yojson;
+    actor_kind =
+      Json.required fields "actor_kind" email_policy_actor_kind_of_yojson;
+    agent_id = Json.optional fields "agent_id" Json.string;
+    agent_session_id = Json.optional fields "agent_session_id" Json.string;
+    details = Json.required fields "details" Json.json;
+    event_id = Json.required fields "event_id" Json.string;
+    next_revision = Json.optional fields "next_revision" Json.int64;
+    previous_revision = Json.optional fields "previous_revision" Json.int64;
+  }
+
+and yojson_of_new_email_policy_audit : new_email_policy_audit -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("action", Some (yojson_of_email_policy_audit_action value.action));
+      ("actor_kind", Some (yojson_of_email_policy_actor_kind value.actor_kind));
+      ("agent_id", Option.map Json.of_string value.agent_id);
+      ("agent_session_id", Option.map Json.of_string value.agent_session_id);
+      ("details", Some (Json.of_json value.details));
+      ("event_id", Some (Json.of_string value.event_id));
+      ("next_revision", Option.map Json.of_int64 value.next_revision);
+      ("previous_revision", Option.map Json.of_int64 value.previous_revision);
+    ]
+
+let make_new_email_policy_audit ~(action : email_policy_audit_action)
+    ~(actor_kind : email_policy_actor_kind) ?agent_id ?agent_session_id
+    ~(details : Yojson.Safe.t) ~(event_id : string) ?next_revision
+    ?previous_revision () =
+  ({
+     action;
+     actor_kind;
+     agent_id;
+     agent_session_id;
+     details;
+     event_id;
+     next_revision;
+     previous_revision;
+   }
+    : new_email_policy_audit)
+
+type nonrec email_policy_audit = {
+  consent_incarnation : string option;
+      (** Absent only for a legacy audit row. *)
+  created_at : string;  (** Database commit transaction's creation time. *)
+  entry : new_email_policy_audit;  (** Stored event and provenance. *)
+  link_id : string;  (** Exact mailbox at the time of the event. *)
+  policy_version : int64;
+      (** Committed policy version within the recorded lifetime. *)
+}
+(** An audit record may predate incarnation-aware writers. *)
+
+let email_policy_audit_of_yojson : Yojson.Safe.t -> email_policy_audit =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    consent_incarnation = Json.optional fields "consent_incarnation" Json.string;
+    created_at = Json.required fields "created_at" Json.string;
+    entry = Json.required fields "entry" new_email_policy_audit_of_yojson;
+    link_id = Json.required fields "link_id" Json.string;
+    policy_version = Json.required fields "policy_version" Json.int64;
+  }
+
+and yojson_of_email_policy_audit : email_policy_audit -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "consent_incarnation",
+        Option.map Json.of_string value.consent_incarnation );
+      ("created_at", Some (Json.of_string value.created_at));
+      ("entry", Some (yojson_of_new_email_policy_audit value.entry));
+      ("link_id", Some (Json.of_string value.link_id));
+      ("policy_version", Some (Json.of_int64 value.policy_version));
+    ]
+
+let make_email_policy_audit ?consent_incarnation ~(created_at : string)
+    ~(entry : new_email_policy_audit) ~(link_id : string)
+    ~(policy_version : int64) () =
+  ({ consent_incarnation; created_at; entry; link_id; policy_version }
+    : email_policy_audit)
+
+type nonrec email_rule_set = {
+  include_ : email_inclusion_rule list;
+      (** OR-combined positive selectors over all non-draft thread participants. *)
+  schema_version : int;
+      (** Wire-format version, not a contribution grant or revision number. *)
+}
+(** A complete replacement definition; an empty list selects no mail.
+Contact/company edits affect matching without rewriting this definition. *)
+
+let email_rule_set_of_yojson : Yojson.Safe.t -> email_rule_set =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    include_ =
+      Json.required fields "include" (Json.list email_inclusion_rule_of_yojson);
+    schema_version = Json.required fields "schema_version" Json.int;
+  }
+
+and yojson_of_email_rule_set : email_rule_set -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "include",
+        Some ((Json.of_list yojson_of_email_inclusion_rule) value.include_) );
+      ("schema_version", Some (Json.of_int value.schema_version));
+    ]
+
+let make_email_rule_set ~(include_ : email_inclusion_rule list)
+    ~(schema_version : int) () =
+  ({ include_; schema_version } : email_rule_set)
+
+(** One explicit sharing command; member and team never come from the body. *)
+type nonrec email_policy_change =
+  | Replace_rules of {
+      rules : email_rule_set;
+          (** Positive selectors for eligible past and future whole threads. *)
+    }
+      (** Directly activate a full replacement, including an empty rule list. *)
+  | Enable_all  (** Explicitly share all eligible past and future mail. *)
+  | Withdraw
+      (** Withdraw contribution, retaining CRM records and interaction dates. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let email_policy_change_of_yojson : Yojson.Safe.t -> email_policy_change =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "action" with
+  | "replace_rules" ->
+      Replace_rules
+        { rules = Json.required fields "rules" email_rule_set_of_yojson }
+  | "enable_all" -> Enable_all
+  | "withdraw" -> Withdraw
+  | _ -> Json.unknown "email_policy_change" json (Unknown json)
+
+and yojson_of_email_policy_change : email_policy_change -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Replace_rules case ->
+      Json.record
+        [
+          ("action", Some (`String "replace_rules"));
+          ("rules", Some (yojson_of_email_rule_set case.rules));
+        ]
+  | Enable_all -> Json.record [ ("action", Some (`String "enable_all")) ]
+  | Withdraw -> Json.record [ ("action", Some (`String "withdraw")) ]
+  | Unknown json -> json
+
+let make_email_policy_change_replace_rules ~(rules : email_rule_set) () =
+  (Replace_rules { rules } : email_policy_change)
+
+(** An observed consent state, not an authorization credential. Never refresh
+this token automatically after a conflict and replay a sharing command. *)
+type nonrec email_policy_token =
+  | Legacy of {
+      fingerprint : string;
+          (** Opaque observation; the first write compares it before initialization. *)
+    }  (** A read-only fingerprint of legacy consent, mailbox and membership. *)
+  | Policy of {
+      authority_fingerprint : string;
+          (** Explicit mailbox and membership authority, excluding sync state. *)
+      consent_incarnation : string;
+          (** Never reused after deletion and recreation of consent. *)
+      policy_version : int64;
+          (** Database-owned version observed by the caller. *)
+    }  (** Identity and version of an initialized consent lifetime. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let email_policy_token_of_yojson : Yojson.Safe.t -> email_policy_token =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "kind" with
+  | "legacy" ->
+      Legacy { fingerprint = Json.required fields "fingerprint" Json.string }
+  | "policy" ->
+      Policy
+        {
+          authority_fingerprint =
+            Json.required fields "authority_fingerprint" Json.string;
+          consent_incarnation =
+            Json.required fields "consent_incarnation" Json.string;
+          policy_version = Json.required fields "policy_version" Json.int64;
+        }
+  | _ -> Json.unknown "email_policy_token" json (Unknown json)
+
+and yojson_of_email_policy_token : email_policy_token -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Legacy case ->
+      Json.record
+        [
+          ("kind", Some (`String "legacy"));
+          ("fingerprint", Some (Json.of_string case.fingerprint));
+        ]
+  | Policy case ->
+      Json.record
+        [
+          ("kind", Some (`String "policy"));
+          ( "authority_fingerprint",
+            Some (Json.of_string case.authority_fingerprint) );
+          ("consent_incarnation", Some (Json.of_string case.consent_incarnation));
+          ("policy_version", Some (Json.of_int64 case.policy_version));
+        ]
+  | Unknown json -> json
+
+let make_email_policy_token_legacy ~(fingerprint : string) () =
+  (Legacy { fingerprint } : email_policy_token)
+
+let make_email_policy_token_policy ~(authority_fingerprint : string)
+    ~(consent_incarnation : string) ~(policy_version : int64) () =
+  (Policy { authority_fingerprint; consent_incarnation; policy_version }
+    : email_policy_token)
+
+type nonrec email_policy_command = {
+  change : email_policy_change;  (** The explicit sharing operation. *)
+  if_policy : email_policy_token;
+      (** State returned by inspection; stale tokens produce a conflict. *)
+  request_id : string;
+      (** One UUID per intended operation, reused only for its retries. *)
+}
+(** Retry-safe command with the exact state observed by the caller. *)
+
+let email_policy_command_of_yojson : Yojson.Safe.t -> email_policy_command =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    change = Json.required fields "change" email_policy_change_of_yojson;
+    if_policy = Json.required fields "if_policy" email_policy_token_of_yojson;
+    request_id = Json.required fields "request_id" Json.string;
+  }
+
+and yojson_of_email_policy_command : email_policy_command -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("change", Some (yojson_of_email_policy_change value.change));
+      ("if_policy", Some (yojson_of_email_policy_token value.if_policy));
+      ("request_id", Some (Json.of_string value.request_id));
+    ]
+
+let make_email_policy_command ~(change : email_policy_change)
+    ~(if_policy : email_policy_token) ~(request_id : string) () =
+  ({ change; if_policy; request_id } : email_policy_command)
+
+type nonrec email_policy_history = {
+  events : email_policy_audit list;
+      (** Audit entries without mailbox contents or expanded source identities. *)
+  next_cursor : string option;  (** Exclusive UUID cursor for the next page. *)
+}
+(** Owner history has a fixed fifty-event page. *)
+
+let email_policy_history_of_yojson : Yojson.Safe.t -> email_policy_history =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    events =
+      Json.required fields "events" (Json.list email_policy_audit_of_yojson);
+    next_cursor = Json.optional fields "next_cursor" Json.string;
+  }
+
+and yojson_of_email_policy_history : email_policy_history -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("events", Some ((Json.of_list yojson_of_email_policy_audit) value.events));
+      ("next_cursor", Option.map Json.of_string value.next_cursor);
+    ]
+
+let make_email_policy_history ~(events : email_policy_audit list) ?next_cursor
+    () =
+  ({ events; next_cursor } : email_policy_history)
+
+type nonrec email_policy_outcome = {
+  audit_event_id : string;
+      (** Owner history entry identifying this operation. *)
+  effect_ : string;
+      (** Sharing and retention effects of the committed operation. *)
+  enabled : bool;  (** Whether this commit granted contribution. *)
+  mode : email_contribution_mode;  (** Committed scope. *)
+  replayed : bool;
+      (** True means the stored result was returned without repeating any effects. *)
+  revision : int64 option;  (** Committed definition revision, if selected. *)
+  token : email_policy_token;  (** State token produced by this commit. *)
+}
+(** Recorded outcome. A replay describes the original commit, not current state. *)
+
+let email_policy_outcome_of_yojson : Yojson.Safe.t -> email_policy_outcome =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    audit_event_id = Json.required fields "audit_event_id" Json.string;
+    effect_ = Json.required fields "effect" Json.string;
+    enabled = Json.required fields "enabled" Json.bool;
+    mode = Json.required fields "mode" email_contribution_mode_of_yojson;
+    replayed = Json.required fields "replayed" Json.bool;
+    revision = Json.optional fields "revision" Json.int64;
+    token = Json.required fields "token" email_policy_token_of_yojson;
+  }
+
+and yojson_of_email_policy_outcome : email_policy_outcome -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("audit_event_id", Some (Json.of_string value.audit_event_id));
+      ("effect", Some (Json.of_string value.effect_));
+      ("enabled", Some (Json.of_bool value.enabled));
+      ("mode", Some (yojson_of_email_contribution_mode value.mode));
+      ("replayed", Some (Json.of_bool value.replayed));
+      ("revision", Option.map Json.of_int64 value.revision);
+      ("token", Some (yojson_of_email_policy_token value.token));
+    ]
+
+let make_email_policy_outcome ~(audit_event_id : string) ~(effect_ : string)
+    ~(enabled : bool) ~(mode : email_contribution_mode) ~(replayed : bool)
+    ?revision ~(token : email_policy_token) () =
+  ({ audit_event_id; effect_; enabled; mode; replayed; revision; token }
+    : email_policy_outcome)
+
+type nonrec email_policy_preview_counts = {
+  added : int64 option;  (** Threads newly included by the proposal. *)
+  current : int64 option;  (** Currently included threads encountered so far. *)
+  denied : int64 option;
+      (** Matching threads vetoed by other privacy settings. *)
+  proposed : int64 option;  (** Proposed included threads encountered so far. *)
+  removed : int64 option;  (** Threads held back by the proposal. *)
+  retained : int64 option;  (** Threads included by both policies. *)
+}
+(** Count-only preview output; no mailbox contents or target identities. *)
+
+let email_policy_preview_counts_of_yojson :
+    Yojson.Safe.t -> email_policy_preview_counts =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    added = Json.optional fields "added" Json.int64;
+    current = Json.optional fields "current" Json.int64;
+    denied = Json.optional fields "denied" Json.int64;
+    proposed = Json.optional fields "proposed" Json.int64;
+    removed = Json.optional fields "removed" Json.int64;
+    retained = Json.optional fields "retained" Json.int64;
+  }
+
+and yojson_of_email_policy_preview_counts :
+    email_policy_preview_counts -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("added", Option.map Json.of_int64 value.added);
+      ("current", Option.map Json.of_int64 value.current);
+      ("denied", Option.map Json.of_int64 value.denied);
+      ("proposed", Option.map Json.of_int64 value.proposed);
+      ("removed", Option.map Json.of_int64 value.removed);
+      ("retained", Option.map Json.of_int64 value.retained);
+    ]
+
+let make_email_policy_preview_counts ?added ?current ?denied ?proposed ?removed
+    ?retained () =
+  ({ added; current; denied; proposed; removed; retained }
+    : email_policy_preview_counts)
+
+(** Preview state is independent of the contribution grant. *)
+type nonrec email_policy_preview_status =
+  | Pending
+  | Running
+  | Complete
+  | Partial
+  | Cancelled
+  | Stale
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let email_policy_preview_status_of_yojson :
+    Yojson.Safe.t -> email_policy_preview_status =
+ fun json ->
+  match Json.string json with
+  | "pending" -> Pending
+  | "running" -> Running
+  | "complete" -> Complete
+  | "partial" -> Partial
+  | "cancelled" -> Cancelled
+  | "stale" -> Stale
+  | other -> Json.unknown "email_policy_preview_status" json (Unknown other)
+
+and yojson_of_email_policy_preview_status :
+    email_policy_preview_status -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Pending -> `String "pending"
+  | Running -> `String "running"
+  | Complete -> `String "complete"
+  | Partial -> `String "partial"
+  | Cancelled -> `String "cancelled"
+  | Stale -> `String "stale"
+  | Unknown other -> `String other
+
+type nonrec email_policy_revision = {
+  created_at : string;  (** Time this definition was committed. *)
+  link_id : string;  (** Mailbox the saved definition refers to. *)
+  revision : int64;  (** Revision in this member's rule history. *)
+  rules : email_rule_set;
+      (** Stored selectors; no expanded contact details or mail content. *)
+}
+(** One immutable owner-only definition, fetched separately from history pages. *)
+
+let email_policy_revision_of_yojson : Yojson.Safe.t -> email_policy_revision =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    created_at = Json.required fields "created_at" Json.string;
+    link_id = Json.required fields "link_id" Json.string;
+    revision = Json.required fields "revision" Json.int64;
+    rules = Json.required fields "rules" email_rule_set_of_yojson;
+  }
+
+and yojson_of_email_policy_revision : email_policy_revision -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("created_at", Some (Json.of_string value.created_at));
+      ("link_id", Some (Json.of_string value.link_id));
+      ("revision", Some (Json.of_int64 value.revision));
+      ("rules", Some (yojson_of_email_rule_set value.rules));
+    ]
+
+let make_email_policy_revision ~(created_at : string) ~(link_id : string)
+    ~(revision : int64) ~(rules : email_rule_set) () =
+  ({ created_at; link_id; revision; rules } : email_policy_revision)
+
+type nonrec email_policy_view = {
+  authoring_available : bool;
+      (** Whether new rule authoring is available for this caller. *)
+  effect_ : string;
+      (** Explain whole-thread sharing, live targets and overriding exclusions. *)
+  enabled : bool;  (** Current effective grant. *)
+  link_id : string option;
+      (** Exact mailbox represented by the consent or prospective first grant. *)
+  mailbox_email : string option;  (** The caller's mailbox address. *)
+  mode : email_contribution_mode;  (** Current scope of contribution. *)
+  revision : int64 option;  (** Active immutable definition revision. *)
+  rules : email_rule_set option;
+  token : email_policy_token option;
+}
+(** Owner-only view. GET never initializes identity or transfers historical work. *)
+
+let email_policy_view_of_yojson : Yojson.Safe.t -> email_policy_view =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    authoring_available = Json.required fields "authoring_available" Json.bool;
+    effect_ = Json.required fields "effect" Json.string;
+    enabled = Json.required fields "enabled" Json.bool;
+    link_id = Json.optional fields "link_id" Json.string;
+    mailbox_email = Json.optional fields "mailbox_email" Json.string;
+    mode = Json.required fields "mode" email_contribution_mode_of_yojson;
+    revision = Json.optional fields "revision" Json.int64;
+    rules = Json.optional fields "rules" email_rule_set_of_yojson;
+    token = Json.optional fields "token" email_policy_token_of_yojson;
+  }
+
+and yojson_of_email_policy_view : email_policy_view -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("authoring_available", Some (Json.of_bool value.authoring_available));
+      ("effect", Some (Json.of_string value.effect_));
+      ("enabled", Some (Json.of_bool value.enabled));
+      ("link_id", Option.map Json.of_string value.link_id);
+      ("mailbox_email", Option.map Json.of_string value.mailbox_email);
+      ("mode", Some (yojson_of_email_contribution_mode value.mode));
+      ("revision", Option.map Json.of_int64 value.revision);
+      ("rules", Option.map yojson_of_email_rule_set value.rules);
+      ("token", Option.map yojson_of_email_policy_token value.token);
+    ]
+
+let make_email_policy_view ~(authoring_available : bool) ~(effect_ : string)
+    ~(enabled : bool) ?link_id ?mailbox_email ~(mode : email_contribution_mode)
+    ?revision ?rules ?token () =
+  ({
+     authoring_available;
+     effect_;
+     enabled;
+     link_id;
+     mailbox_email;
+     mode;
+     revision;
+     rules;
+     token;
+   }
+    : email_policy_view)
+
+type nonrec email_preview_request = {
+  if_policy : email_policy_token;
+      (** Observed sharing state; never refreshed automatically after a conflict. *)
+  if_preview_id : string option;
+      (** Current preview ID from inspection, or null before the first preview. *)
+  rules : email_rule_set;
+      (** Hypothetical selected contribution; validation never activates it. *)
+}
+(** A bounded preview request. The slot token fences delayed starts after replacement. *)
+
+let email_preview_request_of_yojson : Yojson.Safe.t -> email_preview_request =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    if_policy = Json.required fields "if_policy" email_policy_token_of_yojson;
+    if_preview_id = Json.optional fields "if_preview_id" Json.string;
+    rules = Json.required fields "rules" email_rule_set_of_yojson;
+  }
+
+and yojson_of_email_preview_request : email_preview_request -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("if_policy", Some (yojson_of_email_policy_token value.if_policy));
+      ("if_preview_id", Option.map Json.of_string value.if_preview_id);
+      ("rules", Some (yojson_of_email_rule_set value.rules));
+    ]
+
+let make_email_preview_request ~(if_policy : email_policy_token) ?if_preview_id
+    ~(rules : email_rule_set) () =
+  ({ if_policy; if_preview_id; rules } : email_preview_request)
+
+type nonrec email_preview_view = {
+  as_of : string option;
+      (** Time of the stable read snapshot, once a worker starts. *)
+  context_id : string;
+      (** A new worker attempt gets a new context; old completions cannot overwrite it. *)
+  counts : email_policy_preview_counts;
+      (** Distinct counts of this member's mailbox-local threads, never team conversations. *)
+  created_at : string;  (** Enqueue time, used to explain queue delay. *)
+  expires_at : string;
+      (** Five-minute work deadline; results remain inspectable after the deadline. *)
+  preview_id : string;  (** The member's current preview slot occupant. *)
+  scanned_threads : int64;
+      (** Progress counts contain no identities, subjects, participants or bodies. *)
+  status : email_policy_preview_status;
+      (** Pending, running, complete, partial, cancelled or stale. *)
+}
+(** Count-only result. Complete counts describe one stable snapshot; every other
+status is incomplete and must not be presented as the total mailbox count. *)
+
+let email_preview_view_of_yojson : Yojson.Safe.t -> email_preview_view =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    as_of = Json.optional fields "as_of" Json.string;
+    context_id = Json.required fields "context_id" Json.string;
+    counts = Json.required fields "counts" email_policy_preview_counts_of_yojson;
+    created_at = Json.required fields "created_at" Json.string;
+    expires_at = Json.required fields "expires_at" Json.string;
+    preview_id = Json.required fields "preview_id" Json.string;
+    scanned_threads = Json.required fields "scanned_threads" Json.int64;
+    status = Json.required fields "status" email_policy_preview_status_of_yojson;
+  }
+
+and yojson_of_email_preview_view : email_preview_view -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("as_of", Option.map Json.of_string value.as_of);
+      ("context_id", Some (Json.of_string value.context_id));
+      ("counts", Some (yojson_of_email_policy_preview_counts value.counts));
+      ("created_at", Some (Json.of_string value.created_at));
+      ("expires_at", Some (Json.of_string value.expires_at));
+      ("preview_id", Some (Json.of_string value.preview_id));
+      ("scanned_threads", Some (Json.of_int64 value.scanned_threads));
+      ("status", Some (yojson_of_email_policy_preview_status value.status));
+    ]
+
+let make_email_preview_view ?as_of ~(context_id : string)
+    ~(counts : email_policy_preview_counts) ~(created_at : string)
+    ~(expires_at : string) ~(preview_id : string) ~(scanned_threads : int64)
+    ~(status : email_policy_preview_status) () =
+  ({
+     as_of;
+     context_id;
+     counts;
+     created_at;
+     expires_at;
+     preview_id;
+     scanned_threads;
+     status;
+   }
+    : email_preview_view)
+
 (** One explicit privacy change, avoiding lost updates to whole blocklists. *)
 type nonrec email_privacy_change =
   | Set_thread_exclusion of {
@@ -29155,6 +30079,28 @@ let make_email_privacy_change_remove_domain ~(domain : string)
     ~(scope : email_block_scope) () =
   (Remove_domain { domain; scope } : email_privacy_change)
 
+(** Why a domain exclusion would hide an affected mailbox's entire history. *)
+type nonrec mailbox_domain_conflict =
+  | Company
+  | Personal_provider
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let mailbox_domain_conflict_of_yojson : Yojson.Safe.t -> mailbox_domain_conflict
+    =
+ fun json ->
+  match Json.string json with
+  | "company" -> Company
+  | "personal_provider" -> Personal_provider
+  | other -> Json.unknown "mailbox_domain_conflict" json (Unknown other)
+
+and yojson_of_mailbox_domain_conflict : mailbox_domain_conflict -> Yojson.Safe.t
+    =
+ fun value ->
+  match value with
+  | Company -> `String "company"
+  | Personal_provider -> `String "personal_provider"
+  | Unknown other -> `String other
+
 type nonrec email_privacy_settings = {
   can_remove_team_domains : bool;
       (** Whether the caller can remove a team exclusion. *)
@@ -29164,8 +30110,12 @@ type nonrec email_privacy_settings = {
       (** The primary mailbox that would contribute; absent before email connection. *)
   mailbox_link_id : string option;
       (** Exact current primary connection; clients bind opt-in to this identifier. *)
+  personal_domain_warnings : (string * mailbox_domain_conflict) list;
+      (** Existing personal exclusions that cover the caller's whole mailbox. *)
   personal_domains : string list;
       (** Domains excluded only for the caller's contributions. *)
+  team_domain_warnings : (string * mailbox_domain_conflict) list;
+      (** Existing team exclusions that cover a connected member's whole mailbox. *)
   team_domains : string list;
       (** Domains excluded across the team, including legacy company exclusions. *)
 }
@@ -29180,8 +30130,14 @@ let email_privacy_settings_of_yojson : Yojson.Safe.t -> email_privacy_settings =
     enabled = Json.required fields "enabled" Json.bool;
     mailbox_email = Json.optional fields "mailbox_email" Json.string;
     mailbox_link_id = Json.optional fields "mailbox_link_id" Json.string;
+    personal_domain_warnings =
+      Json.required fields "personal_domain_warnings"
+        (Json.map mailbox_domain_conflict_of_yojson);
     personal_domains =
       Json.required fields "personal_domains" (Json.list Json.string);
+    team_domain_warnings =
+      Json.required fields "team_domain_warnings"
+        (Json.map mailbox_domain_conflict_of_yojson);
     team_domains = Json.required fields "team_domains" (Json.list Json.string);
   }
 
@@ -29194,23 +30150,68 @@ and yojson_of_email_privacy_settings : email_privacy_settings -> Yojson.Safe.t =
       ("enabled", Some (Json.of_bool value.enabled));
       ("mailbox_email", Option.map Json.of_string value.mailbox_email);
       ("mailbox_link_id", Option.map Json.of_string value.mailbox_link_id);
+      ( "personal_domain_warnings",
+        Some
+          ((Json.of_map yojson_of_mailbox_domain_conflict)
+             value.personal_domain_warnings) );
       ( "personal_domains",
         Some ((Json.of_list Json.of_string) value.personal_domains) );
+      ( "team_domain_warnings",
+        Some
+          ((Json.of_map yojson_of_mailbox_domain_conflict)
+             value.team_domain_warnings) );
       ("team_domains", Some ((Json.of_list Json.of_string) value.team_domains));
     ]
 
 let make_email_privacy_settings ~(can_remove_team_domains : bool)
     ~(enabled : bool) ?mailbox_email ?mailbox_link_id
-    ~(personal_domains : string list) ~(team_domains : string list) () =
+    ~(personal_domain_warnings : (string * mailbox_domain_conflict) list)
+    ~(personal_domains : string list)
+    ~(team_domain_warnings : (string * mailbox_domain_conflict) list)
+    ~(team_domains : string list) () =
   ({
      can_remove_team_domains;
      enabled;
      mailbox_email;
      mailbox_link_id;
+     personal_domain_warnings;
      personal_domains;
+     team_domain_warnings;
      team_domains;
    }
     : email_privacy_settings)
+
+(** Full settings by default, or mailbox consent when explicitly requested. *)
+type nonrec email_privacy_response =
+  | Email_privacy_settings of email_privacy_settings
+      (** The default settings-page response. *)
+  | Email_contribution_consent of email_contribution_consent
+      (** The thread header's lightweight consent projection. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let email_privacy_response_of_yojson : Yojson.Safe.t -> email_privacy_response =
+ fun json ->
+  match
+    Json.first_ok
+      [
+        (fun json ->
+          Email_privacy_settings (email_privacy_settings_of_yojson json));
+        (fun json ->
+          Email_contribution_consent (email_contribution_consent_of_yojson json));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "email_privacy_response" json (Unknown json)
+
+and yojson_of_email_privacy_response : email_privacy_response -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Email_privacy_settings inner -> yojson_of_email_privacy_settings inner
+  | Email_contribution_consent inner ->
+      yojson_of_email_contribution_consent inner
+  | Unknown json -> json
 
 type nonrec email_reminder_summary = {
   followup : email_followup;
@@ -29269,6 +30270,48 @@ and yojson_of_email_reminder_page : email_reminder_page -> Yojson.Safe.t =
 let make_email_reminder_page ~(items : email_reminder_summary list) ?next_cursor
     () =
   ({ items; next_cursor } : email_reminder_page)
+
+type nonrec email_rule_validation = {
+  broad_rule_indices : int list;
+      (** Indices that may select most mail because they match the owner or domain. *)
+  effect_ : string;
+      (** Human-readable effect to show before an agent changes sharing. *)
+  inactive_rule_indices : int list;
+      (** Indices into the canonical list that currently have no live targets. *)
+  rules : email_rule_set;
+      (** Normalized, sorted and deduplicated, without expanding live references. *)
+}
+(** Canonical rules and bounded warnings; validation does not grant contribution. *)
+
+let email_rule_validation_of_yojson : Yojson.Safe.t -> email_rule_validation =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    broad_rule_indices =
+      Json.required fields "broad_rule_indices" (Json.list Json.int);
+    effect_ = Json.required fields "effect" Json.string;
+    inactive_rule_indices =
+      Json.required fields "inactive_rule_indices" (Json.list Json.int);
+    rules = Json.required fields "rules" email_rule_set_of_yojson;
+  }
+
+and yojson_of_email_rule_validation : email_rule_validation -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "broad_rule_indices",
+        Some ((Json.of_list Json.of_int) value.broad_rule_indices) );
+      ("effect", Some (Json.of_string value.effect_));
+      ( "inactive_rule_indices",
+        Some ((Json.of_list Json.of_int) value.inactive_rule_indices) );
+      ("rules", Some (yojson_of_email_rule_set value.rules));
+    ]
+
+let make_email_rule_validation ~(broad_rule_indices : int list)
+    ~(effect_ : string) ~(inactive_rule_indices : int list)
+    ~(rules : email_rule_set) () =
+  ({ broad_rule_indices; effect_; inactive_rule_indices; rules }
+    : email_rule_validation)
 
 type nonrec empty_response = Yojson.Safe.t
 (** Empty response is required due to custom fetch forcing [response.json()] *)
@@ -31781,6 +32824,11 @@ type nonrec external_chat_send_reply = {
       (** Stable client intent key. A changed payload with this key is a conflict. *)
   message : external_chat_reply_content;  (** Content. *)
   reply_to : string option;  (** Message being quoted, within this chat. *)
+  user_confirmation : string option;
+      (** The user's own reply approving this send, quoted verbatim. Required
+from an agent's program; never the request that asked for the message.
+Not part of the send's intent: it is neither stored nor compared on a
+retry. *)
 }
 (** Explicit send action from a person. Only deliberate sends reach WhatsApp. *)
 
@@ -31793,6 +32841,7 @@ let external_chat_send_reply_of_yojson :
     message =
       Json.required fields "message" external_chat_reply_content_of_yojson;
     reply_to = Json.optional fields "replyTo" Json.string;
+    user_confirmation = Json.optional fields "userConfirmation" Json.string;
   }
 
 and yojson_of_external_chat_send_reply :
@@ -31803,11 +32852,13 @@ and yojson_of_external_chat_send_reply :
       ("idempotencyKey", Some (Json.of_string value.idempotency_key));
       ("message", Some (yojson_of_external_chat_reply_content value.message));
       ("replyTo", Option.map Json.of_string value.reply_to);
+      ("userConfirmation", Option.map Json.of_string value.user_confirmation);
     ]
 
 let make_external_chat_send_reply ~(idempotency_key : string)
-    ~(message : external_chat_reply_content) ?reply_to () =
-  ({ idempotency_key; message; reply_to } : external_chat_send_reply)
+    ~(message : external_chat_reply_content) ?reply_to ?user_confirmation () =
+  ({ idempotency_key; message; reply_to; user_confirmation }
+    : external_chat_send_reply)
 
 type nonrec external_chat_send_progress = {
   chat_id : string;  (** External chat. *)
@@ -39944,7 +40995,7 @@ let make_initiative_activity_page ?next_cursor
 
 type nonrec initiative_description = {
   markdown : string;
-      (** GitHub-flavored markdown; empty while no one has opened or written it. *)
+      (** Internal markdown, chips as XML tags such as [<m-user-mention>]; empty while no one has opened or written it. *)
 }
 (** An initiative's description. *)
 
@@ -41298,32 +42349,6 @@ let make_message_attachment_removed_metadata ~(actor : channel_sender)
     ~(parent : message_parent) ~(root_id : string) ?thread_id () =
   ({ actor; attachments; message_id; parent; root_id; thread_id }
     : message_attachment_removed_metadata)
-
-(** Internal notification behavior for a posted channel message. *)
-type nonrec post_message_notification_policy =
-  | Default
-  | Mentions_only
-  | Silent
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-let post_message_notification_policy_of_yojson :
-    Yojson.Safe.t -> post_message_notification_policy =
- fun json ->
-  match Json.string json with
-  | "Default" -> Default
-  | "MentionsOnly" -> Mentions_only
-  | "Silent" -> Silent
-  | other ->
-      Json.unknown "post_message_notification_policy" json (Unknown other)
-
-and yojson_of_post_message_notification_policy :
-    post_message_notification_policy -> Yojson.Safe.t =
- fun value ->
-  match value with
-  | Default -> `String "Default"
-  | Mentions_only -> `String "MentionsOnly"
-  | Silent -> `String "Silent"
-  | Unknown other -> `String other
 
 (** Internal notification behavior for a patched channel message. *)
 type nonrec patch_message_notification_policy =
@@ -46509,6 +47534,10 @@ type nonrec post_message = {
 already carries its final id; the server mints one when absent. *)
   mentions : simple_mention list option;  (** Mentions tracked by the editor. *)
   nonce : string option;  (** Client nonce for optimistic reconciliation. *)
+  notification_policy : post_message_notification_policy option;
+      (** Who hears about this post. [Silent] still delivers and shows the
+message, but sends no notification of any kind, mentions included.
+Channel messages only; other parents accept only [Default]. *)
   thread_id : string option;  (** Root to reply to, if this is a reply. *)
 }
 (** Create a root or reply. Thread state may only be supplied on a root. *)
@@ -46525,6 +47554,9 @@ let post_message_of_yojson : Yojson.Safe.t -> post_message =
     mentions =
       Json.optional fields "mentions" (Json.list simple_mention_of_yojson);
     nonce = Json.optional fields "nonce" Json.string;
+    notification_policy =
+      Json.optional fields "notification_policy"
+        post_message_notification_policy_of_yojson;
     thread_id = Json.optional fields "thread_id" Json.string;
   }
 
@@ -46540,12 +47572,24 @@ and yojson_of_post_message : post_message -> Yojson.Safe.t =
       ( "mentions",
         Option.map (Json.of_list yojson_of_simple_mention) value.mentions );
       ("nonce", Option.map Json.of_string value.nonce);
+      ( "notification_policy",
+        Option.map yojson_of_post_message_notification_policy
+          value.notification_policy );
       ("thread_id", Option.map Json.of_string value.thread_id);
     ]
 
 let make_post_message ?anchor ?attachments ~(content : string) ?id ?mentions
-    ?nonce ?thread_id () =
-  ({ anchor; attachments; content; id; mentions; nonce; thread_id }
+    ?nonce ?notification_policy ?thread_id () =
+  ({
+     anchor;
+     attachments;
+     content;
+     id;
+     mentions;
+     nonce;
+     notification_policy;
+     thread_id;
+   }
     : post_message)
 
 type nonrec post_soup_ast_request = {
@@ -58165,7 +59209,7 @@ let share_with_channel ~(channel_id : string) ~(entity_id : string)
 
 Handler for [POST /channels/{channel_id}/webhook]. *)
 let post_channel_bot_webhook ~(channel_id : string) ~(content : string)
-    ?x_macro_bot_token ?x_macro_channel_bot_token () =
+    ?x_macro_bot_token ?x_macro_channel_bot_token ?notification_policy () =
   ({
      Request.service = "storage";
      operation = "post_channel_bot_webhook";
@@ -58195,7 +59239,7 @@ let post_channel_bot_webhook ~(channel_id : string) ~(content : string)
        Some
          (Request.Json
             (yojson_of_channel_webhook_request
-               ({ content } : channel_webhook_request)));
+               ({ content; notification_policy } : channel_webhook_request)));
      decode_reply = Request.json channel_webhook_response_of_yojson;
      decode_error =
        Request.error_json [ 400; 401; 403; 404; 500 ] error_response_of_yojson;
@@ -58369,9 +59413,9 @@ let list_crm_blocked_domains () =
 
 (** [PUT /crm/blocked-domains/{domain}]
 
-Block a domain: email sync stops creating or updating CRM records for
-it, and the company and contacts the CRM holds for it are hidden.
-Idempotent. Requires an admin/owner team role (403). *)
+Block a domain and its subdomains from email contributions, preserving records.
+Refuses a domain covering any member's connected primary mailbox (400).
+Idempotent for permitted domains. Requires an admin/owner team role (403). *)
 let block_crm_domain ~(domain : string) () =
   ({
      Request.service = "storage";
@@ -58397,8 +59441,8 @@ let block_crm_domain ~(domain : string) () =
 
 (** [DELETE /crm/blocked-domains/{domain}]
 
-Unblock a domain: email sync resumes for it, and what blocking hid is
-shown again. Idempotent. Requires an admin/owner team role (403). *)
+Remove a team domain exclusion and schedule eligible email backfill,
+preserving record visibility. Idempotent. Requires an admin/owner role (403). *)
 let unblock_crm_domain ~(domain : string) () =
   ({
      Request.service = "storage";
@@ -59096,22 +60140,30 @@ let set_crm_contact_name ~(contact_id : string) ~(name : string) () =
 (** [GET /crm/email-privacy]
 
 Read the caller's mailbox consent and both exclusion lists. *)
-let get_crm_email_privacy () =
+let get_crm_email_privacy ?consent_only () =
   ({
      Request.service = "storage";
      operation = "get_crm_email_privacy";
      meth = `GET;
      path = "/crm/email-privacy";
-     query = List.filter (fun (_, values) -> values <> []) [];
+     query =
+       List.filter
+         (fun (_, values) -> values <> [])
+         [
+           ( "consent_only",
+             match consent_only with
+             | None -> []
+             | Some value -> [ string_of_bool value ] );
+         ];
      headers =
        List.concat_map
          (fun (name, values) -> List.map (fun v -> (name, v)) values)
          [];
      body = None;
-     decode_reply = Request.json email_privacy_settings_of_yojson;
+     decode_reply = Request.json email_privacy_response_of_yojson;
      decode_error = Request.no_error;
    }
-    : ( email_privacy_settings,
+    : ( email_privacy_response,
         Macro_sdk_runtime.Request.no_error )
       Macro_sdk_runtime.Request.t)
 
@@ -59137,10 +60189,217 @@ let update_crm_email_privacy ~(body : email_privacy_change) () =
         Macro_sdk_runtime.Request.no_error )
       Macro_sdk_runtime.Request.t)
 
+(** [GET /crm/email-privacy/policy]
+
+Read sharing state without initializing consent or scheduling work. *)
+let get_crm_email_policy () =
+  ({
+     Request.service = "storage";
+     operation = "get_crm_email_policy";
+     meth = `GET;
+     path = "/crm/email-privacy/policy";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json email_policy_view_of_yojson;
+     decode_error = Request.no_error;
+   }
+    : ( email_policy_view,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [PUT /crm/email-privacy/policy]
+
+Direct member/agent activation with CAS, idempotency and verified audit. *)
+let update_crm_email_policy ~(change : email_policy_change)
+    ~(if_policy : email_policy_token) ~(request_id : string) () =
+  ({
+     Request.service = "storage";
+     operation = "update_crm_email_policy";
+     meth = `PUT;
+     path = "/crm/email-privacy/policy";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_email_policy_command
+               ({ change; if_policy; request_id } : email_policy_command)));
+     decode_reply = Request.json email_policy_outcome_of_yojson;
+     decode_error = Request.no_error;
+   }
+    : ( email_policy_outcome,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [GET /crm/email-privacy/policy/history]
+
+Read only the acting member's audit history. *)
+let list_crm_email_policy_history ?before () =
+  ({
+     Request.service = "storage";
+     operation = "list_crm_email_policy_history";
+     meth = `GET;
+     path = "/crm/email-privacy/policy/history";
+     query =
+       List.filter
+         (fun (_, values) -> values <> [])
+         [
+           ( "before",
+             match before with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+         ];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json email_policy_history_of_yojson;
+     decode_error = Request.no_error;
+   }
+    : ( email_policy_history,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [GET /crm/email-privacy/policy/preview]
+
+Inspect the owner's current count preview; no email content is returned. *)
+let get_crm_email_rule_preview () =
+  ({
+     Request.service = "storage";
+     operation = "get_crm_email_rule_preview";
+     meth = `GET;
+     path = "/crm/email-privacy/policy/preview";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json (Json.option email_preview_view_of_yojson);
+     decode_error = Request.no_error;
+   }
+    : ( email_preview_view option,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [POST /crm/email-privacy/policy/preview]
+
+Start optional count-only work; this never initializes or activates consent. *)
+let preview_crm_email_rules ~(if_policy : email_policy_token)
+    ~(rules : email_rule_set) ?if_preview_id () =
+  ({
+     Request.service = "storage";
+     operation = "preview_crm_email_rules";
+     meth = `POST;
+     path = "/crm/email-privacy/policy/preview";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_email_preview_request
+               ({ if_policy; if_preview_id; rules } : email_preview_request)));
+     decode_reply = Request.json email_preview_view_of_yojson;
+     decode_error = Request.no_error;
+   }
+    : ( email_preview_view,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [DELETE /crm/email-privacy/policy/preview/{preview_id}]
+
+Cancel the owner's current named preview, including while rollout is off. *)
+let cancel_crm_email_rule_preview ~(preview_id : string) () =
+  ({
+     Request.service = "storage";
+     operation = "cancel_crm_email_rule_preview";
+     meth = `DELETE;
+     path =
+       String.concat ""
+         [
+           "/crm/email-privacy/policy/preview/";
+           Request.segment ((fun value -> value) preview_id);
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.unit;
+     decode_error = Request.no_error;
+   }
+    : (unit, Macro_sdk_runtime.Request.no_error) Macro_sdk_runtime.Request.t)
+
+(** [GET /crm/email-privacy/policy/revisions/{revision}]
+
+Fetch one saved definition, independently of live CRM viewing permission. *)
+let get_crm_email_rule_revision ~(revision : int64) () =
+  ({
+     Request.service = "storage";
+     operation = "get_crm_email_rule_revision";
+     meth = `GET;
+     path =
+       String.concat ""
+         [
+           "/crm/email-privacy/policy/revisions/";
+           Request.segment (Int64.to_string revision);
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json (Json.option email_policy_revision_of_yojson);
+     decode_error = Request.no_error;
+   }
+    : ( email_policy_revision option,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [POST /crm/email-privacy/policy/validate]
+
+Canonicalize and authorize a definition without sharing mail. *)
+let validate_crm_email_rules ~(include_ : email_inclusion_rule list)
+    ~(schema_version : int) () =
+  ({
+     Request.service = "storage";
+     operation = "validate_crm_email_rules";
+     meth = `POST;
+     path = "/crm/email-privacy/policy/validate";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_email_rule_set
+               ({ include_; schema_version } : email_rule_set)));
+     decode_reply = Request.json email_rule_validation_of_yojson;
+     decode_error = Request.no_error;
+   }
+    : ( email_rule_validation,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
 (** [GET /crm/email-privacy/threads]
 
 List only the authenticated member's thread exclusions. *)
-let list_crm_excluded_email_threads ?after () =
+let list_crm_excluded_email_threads ?after ?thread_id () =
   ({
      Request.service = "storage";
      operation = "list_crm_excluded_email_threads";
@@ -59152,6 +60411,10 @@ let list_crm_excluded_email_threads ?after () =
          [
            ( "after",
              match after with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+           ( "thread_id",
+             match thread_id with
              | None -> []
              | Some value -> [ (fun value -> value) value ] );
          ];
@@ -63820,7 +65083,7 @@ let external_chat_sends ~(chat_id : string) () =
 
 Send to the chat from the caller's own provider account (one request per second per user). *)
 let external_chat_send ~(chat_id : string) ~(idempotency_key : string)
-    ~(message : external_chat_reply_content) ?reply_to () =
+    ~(message : external_chat_reply_content) ?reply_to ?user_confirmation () =
   ({
      Request.service = "storage";
      operation = "external_chat_send";
@@ -63841,7 +65104,7 @@ let external_chat_send ~(chat_id : string) ~(idempotency_key : string)
        Some
          (Request.Json
             (yojson_of_external_chat_send_reply
-               ({ idempotency_key; message; reply_to }
+               ({ idempotency_key; message; reply_to; user_confirmation }
                  : external_chat_send_reply)));
      decode_reply = Request.json external_chat_send_progress_of_yojson;
      decode_error = Request.no_error;
@@ -65658,8 +66921,8 @@ let message_timeline ~(parent_type : string) ~(parent_id : string) ?selection ()
 
 Create a root message or reply. *)
 let entity_message_create ~(parent_type : string) ~(parent_id : string)
-    ~(content : string) ?anchor ?attachments ?id ?mentions ?nonce ?thread_id ()
-    =
+    ~(content : string) ?anchor ?attachments ?id ?mentions ?nonce
+    ?notification_policy ?thread_id () =
   ({
      Request.service = "storage";
      operation = "entity_message_create";
@@ -65681,7 +66944,16 @@ let entity_message_create ~(parent_type : string) ~(parent_id : string)
        Some
          (Request.Json
             (yojson_of_post_message
-               ({ anchor; attachments; content; id; mentions; nonce; thread_id }
+               ({
+                  anchor;
+                  attachments;
+                  content;
+                  id;
+                  mentions;
+                  nonce;
+                  notification_policy;
+                  thread_id;
+                }
                  : post_message)));
      decode_reply = Request.json message_of_yojson;
      decode_error = Request.no_error;

@@ -80,6 +80,7 @@ storage.json #/components/schemas/EmptyResponse: a free-form object
 storage.json #/components/schemas/ForeignEntity/properties/metadata: the spec gives no type (serde_json::Value)
 storage.json #/components/schemas/GenericResponse/properties/data: the spec gives no type (serde_json::Value)
 storage.json #/components/schemas/InitiativeActivityRecord/properties/actionPayload: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/NewEmailPolicyAudit/properties/details: the spec gives no type (serde_json::Value)
 storage.json #/components/schemas/PdfPlaceableCommentAnchor/properties/allowableEdits: the spec gives no type (serde_json::Value)
 storage.json #/components/schemas/SaveDocumentRequest/properties/modificationData: the spec gives no type (serde_json::Value)
 storage.json #/components/schemas/SavedViewDefinition/properties/config: a free-form object

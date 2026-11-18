@@ -2812,6 +2812,10 @@ type nonrec computer_setup_outcome =
   | Failed of {
       failure_reason : string;
           (** Why, in the words the computer's status shows. *)
+      released : bool option;
+          (** Setup gave up a second time, so the computer was released and its
+purchase refunded (and an agent teammate taken back): there is
+nothing to retry. *)
     }  (** Setup gave up before the computer was ready. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
@@ -2823,7 +2827,10 @@ let computer_setup_outcome_of_yojson : Yojson.Safe.t -> computer_setup_outcome =
   | "ready" -> Ready
   | "failed" ->
       Failed
-        { failure_reason = Json.required fields "failureReason" Json.string }
+        {
+          failure_reason = Json.required fields "failureReason" Json.string;
+          released = Json.optional fields "released" Json.bool;
+        }
   | _ -> Json.unknown "computer_setup_outcome" json (Unknown json)
 
 and yojson_of_computer_setup_outcome : computer_setup_outcome -> Yojson.Safe.t =
@@ -2835,11 +2842,12 @@ and yojson_of_computer_setup_outcome : computer_setup_outcome -> Yojson.Safe.t =
         [
           ("kind", Some (`String "failed"));
           ("failureReason", Some (Json.of_string case.failure_reason));
+          ("released", Option.map Json.of_bool case.released);
         ]
   | Unknown json -> json
 
-let make_computer_setup_outcome_failed ~(failure_reason : string) () =
-  (Failed { failure_reason } : computer_setup_outcome)
+let make_computer_setup_outcome_failed ~(failure_reason : string) ?released () =
+  (Failed { failure_reason; released } : computer_setup_outcome)
 
 type nonrec computer_setup_metadata = {
   agent : computer_setup_agent option;
@@ -4620,6 +4628,8 @@ let make_unsubscribe_item_path_params ~(item_id : string)
 type nonrec user_unsubscribe = {
   item_id : string;  (** The item id *)
   item_type : string;  (** The item type *)
+  mentions_only : bool option;
+      (** The item still notifies the user when a message \@mentions them directly. *)
   snoozed_until : string option;
       (** None for permanent mutes; notifications resume automatically at this deadline. *)
 }
@@ -4630,6 +4640,7 @@ let user_unsubscribe_of_yojson : Yojson.Safe.t -> user_unsubscribe =
   {
     item_id = Json.required fields "item_id" Json.string;
     item_type = Json.required fields "item_type" Json.string;
+    mentions_only = Json.optional fields "mentions_only" Json.bool;
     snoozed_until = Json.optional fields "snoozed_until" Json.string;
   }
 
@@ -4639,12 +4650,13 @@ and yojson_of_user_unsubscribe : user_unsubscribe -> Yojson.Safe.t =
     [
       ("item_id", Some (Json.of_string value.item_id));
       ("item_type", Some (Json.of_string value.item_type));
+      ("mentions_only", Option.map Json.of_bool value.mentions_only);
       ("snoozed_until", Option.map Json.of_string value.snoozed_until);
     ]
 
 let make_user_unsubscribe ~(item_id : string) ~(item_type : string)
-    ?snoozed_until () =
-  ({ item_id; item_type; snoozed_until } : user_unsubscribe)
+    ?mentions_only ?snoozed_until () =
+  ({ item_id; item_type; mentions_only; snoozed_until } : user_unsubscribe)
 
 (** [GET /health]
 
@@ -4710,9 +4722,10 @@ let unsubscribe_email () =
 
 (** [POST /unsubscribe/item/{item_type}/{item_id}]
 
-Unsubscribes a user from a given item for notifications. *)
+Unsubscribes a user from a given item for notifications, or, with
+[mentions_only], from everything on a channel but their direct mentions. *)
 let unsubscribe_item ~(item_type : entity_type) ~(item_id : string)
-    ?snoozed_until () =
+    ?snoozed_until ?mentions_only () =
   ({
      Request.service = "notification";
      operation = "unsubscribe_item";
@@ -4735,6 +4748,10 @@ let unsubscribe_item ~(item_type : entity_type) ~(item_id : string)
              match snoozed_until with
              | None -> []
              | Some value -> [ (fun value -> value) value ] );
+           ( "mentions_only",
+             match mentions_only with
+             | None -> []
+             | Some value -> [ string_of_bool value ] );
          ];
      headers =
        List.concat_map

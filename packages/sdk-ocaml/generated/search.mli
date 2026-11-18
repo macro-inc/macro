@@ -130,6 +130,16 @@ val make_agent_session_search_response_item :
   agent_session_search_response_item
 (** One accessible agent session, grouped with its matching folded messages. *)
 
+(** A kind of attachment a thread's messages carry, by MIME type. *)
+type nonrec attachment_kind =
+  | Pdf
+  | Image
+  | Document
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val attachment_kind_of_yojson : Yojson.Safe.t -> attachment_kind
+val yojson_of_attachment_kind : attachment_kind -> Yojson.Safe.t
+
 type nonrec calendar_event_filters = {
   attendees : string list option;  (** Attendee email addresses. *)
   calendar_event_ids : string list option;  (** Canonical event ids. *)
@@ -1812,7 +1822,19 @@ type nonrec shared_email_filter =
 val shared_email_filter_of_yojson : Yojson.Safe.t -> shared_email_filter
 val yojson_of_shared_email_filter : shared_email_filter -> Yojson.Safe.t
 
+(** A mailbox view the Email list scopes a search to, as its tabs do. *)
+type nonrec email_search_view =
+  | Sent
+  | Drafts
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val email_search_view_of_yojson : Yojson.Safe.t -> email_search_view
+val yojson_of_email_search_view : email_search_view -> Yojson.Safe.t
+
 type nonrec email_filters = {
+  attachments : attachment_kind list option;
+      (** Only threads with at least one attachment of one of these kinds, by
+MIME type, on any of their messages. Empty applies no constraint. *)
   bcc : string list option;
       (** Email BCC addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by BCC. *)
   calendar_only : bool option;
@@ -1827,14 +1849,20 @@ teammate's mailbox and restricts to threads involving any of these
 fully-qualified addresses. Each address is authorized against
 [crm_contacts] + [crm_companies] (contact must not be hidden, company
 must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_domains]. *)
+Mutually exclusive with [crm_domains]. Listing email only: search
+rejects a request that sets it with a 400. *)
   crm_domains : string list option;
       (** CRM-scoped domain filter. When non-empty, expands visibility to every
 teammate's mailbox and restricts to threads involving any of these
 domains (in any of sender/cc/bcc/recipient). Each domain is authorized
 against [crm_domains] + [crm_companies] (must exist for the caller's
 team, company must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_addresses]. *)
+Mutually exclusive with [crm_addresses]. Listing email only: search
+rejects a request that sets it with a 400. *)
+  done_ : bool option;
+      (** Filter by whether the thread is done: true for threads out of the
+inbox (archived), false for threads still in it. This is the mailbox
+state the Email view's Done filter uses, independent of notifications. *)
   email_thread_ids : string list option;
       (** Email thread IDs to filter by. Examples: \['thread-uuid-1'\]. Empty to search all threads. *)
   exclude_labels : string list option;
@@ -1855,7 +1883,14 @@ caller can access" (soup expands to the full set at the router edge). *)
   notification_filters : notification_filters option;
       (** Filter by email notification state. *)
   project_ids : string list option;
-      (** A list of project ids to search within. Empty to ignore project filtering. *)
+      (** Drive folder (project) ids to search within: threads filed in any of
+these folders. Besides the caller's own threads, it reaches every
+thread in a folder shared with the caller, whoever's inbox holds it,
+as the folder's list does. Search takes at most 50 folders and
+rejects more with a 400, and matches the query against at most 10,000
+of their threads in all; threads past that are not searched, unless
+[email_thread_ids] names them, and at most 10,000 named threads are
+searched in all. Empty to ignore project filtering. *)
   recipients : string list option;
       (** Email Recipient addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by Recipient. *)
   senders : string list option;
@@ -1863,6 +1898,7 @@ caller can access" (soup expands to the full set at the router edge). *)
   shared : shared_email_filter option;
       (** Controls whether shared email threads are included in results.
 Defaults to "exclude" (only the user's own threads). *)
+  view : email_search_view option;
 }
 (** The email filters used to filter down what emails you search over. *)
 
@@ -1870,11 +1906,13 @@ val email_filters_of_yojson : Yojson.Safe.t -> email_filters
 val yojson_of_email_filters : email_filters -> Yojson.Safe.t
 
 val make_email_filters :
+  ?attachments:attachment_kind list ->
   ?bcc:string list ->
   ?calendar_only:bool ->
   ?cc:string list ->
   ?crm_addresses:string list ->
   ?crm_domains:string list ->
+  ?done_:bool ->
   ?email_thread_ids:string list ->
   ?exclude_labels:string list ->
   ?importance:bool ->
@@ -1886,6 +1924,7 @@ val make_email_filters :
   ?recipients:string list ->
   ?senders:string list ->
   ?shared:shared_email_filter ->
+  ?view:email_search_view ->
   unit ->
   email_filters
 (** The email filters used to filter down what emails you search over. *)
@@ -1904,6 +1943,9 @@ val make_email_search_participant :
 (** A participant (sender) in an email thread *)
 
 type nonrec email_search_request = {
+  attachments : attachment_kind list option;
+      (** Only threads with at least one attachment of one of these kinds, by
+MIME type, on any of their messages. Empty applies no constraint. *)
   bcc : string list option;
       (** Email BCC addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by BCC. *)
   calendar_only : bool option;
@@ -1918,14 +1960,20 @@ teammate's mailbox and restricts to threads involving any of these
 fully-qualified addresses. Each address is authorized against
 [crm_contacts] + [crm_companies] (contact must not be hidden, company
 must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_domains]. *)
+Mutually exclusive with [crm_domains]. Listing email only: search
+rejects a request that sets it with a 400. *)
   crm_domains : string list option;
       (** CRM-scoped domain filter. When non-empty, expands visibility to every
 teammate's mailbox and restricts to threads involving any of these
 domains (in any of sender/cc/bcc/recipient). Each domain is authorized
 against [crm_domains] + [crm_companies] (must exist for the caller's
 team, company must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_addresses]. *)
+Mutually exclusive with [crm_addresses]. Listing email only: search
+rejects a request that sets it with a 400. *)
+  done_ : bool option;
+      (** Filter by whether the thread is done: true for threads out of the
+inbox (archived), false for threads still in it. This is the mailbox
+state the Email view's Done filter uses, independent of notifications. *)
   email_thread_ids : string list option;
       (** Email thread IDs to filter by. Examples: \['thread-uuid-1'\]. Empty to search all threads. *)
   exclude_labels : string list option;
@@ -1946,7 +1994,14 @@ caller can access" (soup expands to the full set at the router edge). *)
   notification_filters : notification_filters option;
       (** Filter by email notification state. *)
   project_ids : string list option;
-      (** A list of project ids to search within. Empty to ignore project filtering. *)
+      (** Drive folder (project) ids to search within: threads filed in any of
+these folders. Besides the caller's own threads, it reaches every
+thread in a folder shared with the caller, whoever's inbox holds it,
+as the folder's list does. Search takes at most 50 folders and
+rejects more with a 400, and matches the query against at most 10,000
+of their threads in all; threads past that are not searched, unless
+[email_thread_ids] names them, and at most 10,000 named threads are
+searched in all. Empty to ignore project filtering. *)
   recipients : string list option;
       (** Email Recipient addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by Recipient. *)
   senders : string list option;
@@ -1954,6 +2009,7 @@ caller can access" (soup expands to the full set at the router edge). *)
   shared : shared_email_filter option;
       (** Controls whether shared email threads are included in results.
 Defaults to "exclude" (only the user's own threads). *)
+  view : email_search_view option;
   collapse : bool option;
       (** If true, returns only 1 result per entity. False by default. *)
   match_type : match_type;  (** The match type to use when searching *)
@@ -1967,11 +2023,13 @@ val email_search_request_of_yojson : Yojson.Safe.t -> email_search_request
 val yojson_of_email_search_request : email_search_request -> Yojson.Safe.t
 
 val make_email_search_request :
+  ?attachments:attachment_kind list ->
   ?bcc:string list ->
   ?calendar_only:bool ->
   ?cc:string list ->
   ?crm_addresses:string list ->
   ?crm_domains:string list ->
+  ?done_:bool ->
   ?email_thread_ids:string list ->
   ?exclude_labels:string list ->
   ?importance:bool ->
@@ -1983,6 +2041,7 @@ val make_email_search_request :
   ?recipients:string list ->
   ?senders:string list ->
   ?shared:shared_email_filter ->
+  ?view:email_search_view ->
   ?collapse:bool ->
   match_type:match_type ->
   ?query:string ->

@@ -1806,6 +1806,7 @@ type nonrec forward_calendar_event_error_code =
   | Invalid_recipients
   | Inbox_unavailable
   | Send_failed
+  | Confirmation_required
   | Unknown of string  (** A value this SDK version does not know. *)
 
 val forward_calendar_event_error_code_of_yojson :

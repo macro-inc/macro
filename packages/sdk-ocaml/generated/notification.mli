@@ -1552,6 +1552,10 @@ type nonrec computer_setup_outcome =
   | Failed of {
       failure_reason : string;
           (** Why, in the words the computer's status shows. *)
+      released : bool option;
+          (** Setup gave up a second time, so the computer was released and its
+purchase refunded (and an agent teammate taken back): there is
+nothing to retry. *)
     }  (** Setup gave up before the computer was ready. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
@@ -1560,7 +1564,7 @@ val computer_setup_outcome_of_yojson : Yojson.Safe.t -> computer_setup_outcome
 val yojson_of_computer_setup_outcome : computer_setup_outcome -> Yojson.Safe.t
 
 val make_computer_setup_outcome_failed :
-  failure_reason:string -> unit -> computer_setup_outcome
+  failure_reason:string -> ?released:bool -> unit -> computer_setup_outcome
 (** Setup gave up before the computer was ready. *)
 
 type nonrec computer_setup_metadata = {
@@ -2469,6 +2473,8 @@ val make_unsubscribe_item_path_params :
 type nonrec user_unsubscribe = {
   item_id : string;  (** The item id *)
   item_type : string;  (** The item type *)
+  mentions_only : bool option;
+      (** The item still notifies the user when a message \@mentions them directly. *)
   snoozed_until : string option;
       (** None for permanent mutes; notifications resume automatically at this deadline. *)
 }
@@ -2479,6 +2485,7 @@ val yojson_of_user_unsubscribe : user_unsubscribe -> Yojson.Safe.t
 val make_user_unsubscribe :
   item_id:string ->
   item_type:string ->
+  ?mentions_only:bool ->
   ?snoozed_until:string ->
   unit ->
   user_unsubscribe
@@ -2508,11 +2515,13 @@ val unsubscribe_item :
   item_type:entity_type ->
   item_id:string ->
   ?snoozed_until:string ->
+  ?mentions_only:bool ->
   unit ->
   (empty_response, error_response) Macro_sdk_runtime.Request.t
 (** [POST /unsubscribe/item/{item_type}/{item_id}]
 
-Unsubscribes a user from a given item for notifications. *)
+Unsubscribes a user from a given item for notifications, or, with
+[mentions_only], from everything on a channel but their direct mentions. *)
 
 val remove_unsubscribe_item :
   item_type:entity_type ->

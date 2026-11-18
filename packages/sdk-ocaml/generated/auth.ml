@@ -672,6 +672,22 @@ let make_codex_login_start ~(attempt_id : string) ~(expires_at : string)
    }
     : codex_login_start)
 
+type nonrec computer_rollout = {
+  enabled : bool;  (** The computer UI and purchases are on for this user. *)
+}
+(** Whether computers are rolled out to the caller. *)
+
+let computer_rollout_of_yojson : Yojson.Safe.t -> computer_rollout =
+ fun json ->
+  let fields = Json.obj json in
+  { enabled = Json.required fields "enabled" Json.bool }
+
+and yojson_of_computer_rollout : computer_rollout -> Yojson.Safe.t =
+ fun value -> Json.record [ ("enabled", Some (Json.of_bool value.enabled)) ]
+
+let make_computer_rollout ~(enabled : bool) () =
+  ({ enabled } : computer_rollout)
+
 (** A size a team can buy. *)
 type nonrec computer_size =
   | Standard
@@ -1106,10 +1122,11 @@ let make_create_profile_picture_upload_request ~(content_type : string)
 type nonrec create_team_agent = {
   avatar_url : string option;
       (** Profile picture URL (a static file the caller uploaded). *)
-  job_description : string;
-      (** What the agent is responsible for. Seeds its workspace. *)
+  job_description : string option;
+      (** What the agent is responsible for. Seeds its workspace; when this and
+[personality] are empty the agent asks its owner what to take on. *)
   name : string;  (** Display name. *)
-  personality : string;
+  personality : string option;
       (** How the agent behaves and talks. Seeds its workspace. *)
   purchase_key : string;
       (** One key per Invite dialog, reused when the invite is retried, so a
@@ -1126,9 +1143,9 @@ let create_team_agent_of_yojson : Yojson.Safe.t -> create_team_agent =
   let fields = Json.obj json in
   {
     avatar_url = Json.optional fields "avatarUrl" Json.string;
-    job_description = Json.required fields "jobDescription" Json.string;
+    job_description = Json.optional fields "jobDescription" Json.string;
     name = Json.required fields "name" Json.string;
-    personality = Json.required fields "personality" Json.string;
+    personality = Json.optional fields "personality" Json.string;
     purchase_key = Json.required fields "purchaseKey" Json.string;
     size = Json.required fields "size" Json.string;
     voice = Json.optional fields "voice" Json.string;
@@ -1139,17 +1156,16 @@ and yojson_of_create_team_agent : create_team_agent -> Yojson.Safe.t =
   Json.record
     [
       ("avatarUrl", Option.map Json.of_string value.avatar_url);
-      ("jobDescription", Some (Json.of_string value.job_description));
+      ("jobDescription", Option.map Json.of_string value.job_description);
       ("name", Some (Json.of_string value.name));
-      ("personality", Some (Json.of_string value.personality));
+      ("personality", Option.map Json.of_string value.personality);
       ("purchaseKey", Some (Json.of_string value.purchase_key));
       ("size", Some (Json.of_string value.size));
       ("voice", Option.map Json.of_string value.voice);
     ]
 
-let make_create_team_agent ?avatar_url ~(job_description : string)
-    ~(name : string) ~(personality : string) ~(purchase_key : string)
-    ~(size : string) ?voice () =
+let make_create_team_agent ?avatar_url ?job_description ~(name : string)
+    ?personality ~(purchase_key : string) ~(size : string) ?voice () =
   ({ avatar_url; job_description; name; personality; purchase_key; size; voice }
     : create_team_agent)
 
@@ -4068,6 +4084,34 @@ let make_purchase_body ?name ~(purchase_key : string) ~(size : computer_size) ()
     =
   ({ name; purchase_key; size } : purchase_body)
 
+(** Why a purchase was refused, as a stable code the buy and add-agent dialogs
+show their own way. One vocabulary for [/team/computers] and
+[/team_agents]. *)
+type nonrec purchase_refusal_code =
+  | Team_on_trial
+  | Payment_declined
+  | No_room
+  | Invite_in_progress
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let purchase_refusal_code_of_yojson : Yojson.Safe.t -> purchase_refusal_code =
+ fun json ->
+  match Json.string json with
+  | "team_on_trial" -> Team_on_trial
+  | "payment_declined" -> Payment_declined
+  | "no_room" -> No_room
+  | "invite_in_progress" -> Invite_in_progress
+  | other -> Json.unknown "purchase_refusal_code" json (Unknown other)
+
+and yojson_of_purchase_refusal_code : purchase_refusal_code -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Team_on_trial -> `String "team_on_trial"
+  | Payment_declined -> `String "payment_declined"
+  | No_room -> `String "no_room"
+  | Invite_in_progress -> `String "invite_in_progress"
+  | Unknown other -> `String other
+
 (** Where a purchase stands when its request returns. *)
 type nonrec purchase_state =
   | Ready
@@ -5015,6 +5059,7 @@ let make_team ~(allow_non_admin_invites : bool) ?auto_join_domain
 (** Where an agent teammate is, from its computer. *)
 type nonrec team_agent_status =
   | Provisioning
+  | Starting
   | Running
   | Paused
   | Failed
@@ -5025,6 +5070,7 @@ let team_agent_status_of_yojson : Yojson.Safe.t -> team_agent_status =
  fun json ->
   match Json.string json with
   | "provisioning" -> Provisioning
+  | "starting" -> Starting
   | "running" -> Running
   | "paused" -> Paused
   | "failed" -> Failed
@@ -5035,6 +5081,7 @@ and yojson_of_team_agent_status : team_agent_status -> Yojson.Safe.t =
  fun value ->
   match value with
   | Provisioning -> `String "provisioning"
+  | Starting -> `String "starting"
   | Running -> `String "running"
   | Paused -> `String "paused"
   | Failed -> `String "failed"
@@ -5100,6 +5147,35 @@ let make_team_agent ?computer_id ~(created_at : string) ?created_by
      user_id;
    }
     : team_agent)
+
+type nonrec team_agent_error_body = {
+  code : purchase_refusal_code option;
+  message : string;  (** Human-readable message. *)
+  size : computer_size option;
+}
+(** \[[ErrorResponse]\] plus a stable code for refusals the invite dialog shows
+its own way rather than as a message. *)
+
+let team_agent_error_body_of_yojson : Yojson.Safe.t -> team_agent_error_body =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    code = Json.optional fields "code" purchase_refusal_code_of_yojson;
+    message = Json.required fields "message" Json.string;
+    size = Json.optional fields "size" computer_size_of_yojson;
+  }
+
+and yojson_of_team_agent_error_body : team_agent_error_body -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("code", Option.map yojson_of_purchase_refusal_code value.code);
+      ("message", Some (Json.of_string value.message));
+      ("size", Option.map yojson_of_computer_size value.size);
+    ]
+
+let make_team_agent_error_body ?code ~(message : string) ?size () =
+  ({ code; message; size } : team_agent_error_body)
 
 type nonrec team_agents = {
   agents : team_agent list;  (** The agents, oldest first. *)
@@ -5819,6 +5895,15 @@ and passwordless_login_reply =
 and get_team_reply =
   | Ok_ of team_with_members  (** HTTP 200. *)
   | No_content  (** HTTP 204. *)
+
+and create_team_agent_error =
+  | Bad_request of error_response  (** HTTP 400. *)
+  | Unauthorized of error_response  (** HTTP 401. *)
+  | Payment_required of team_agent_error_body  (** HTTP 402. *)
+  | Forbidden of error_response  (** HTTP 403. *)
+  | Conflict of team_agent_error_body  (** HTTP 409. *)
+  | Internal_server_error of error_response  (** HTTP 500. *)
+  | Bad_gateway of error_response  (** HTTP 502. *)
 
 and get_user_organization_reply =
   | Ok_ of user_organization_response  (** HTTP 200. *)
@@ -8030,6 +8115,29 @@ let list_team_computer_offers () =
    }
     : (size_offer list, error_response) Macro_sdk_runtime.Request.t)
 
+(** [GET /team/computers/rollout]
+
+Whether the caller sees computers: the same rollout check purchases and
+offers make, so the web never shows computers the backend would refuse. *)
+let get_team_computer_rollout () =
+  ({
+     Request.service = "auth";
+     operation = "get_team_computer_rollout";
+     meth = `GET;
+     path = "/team/computers/rollout";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json computer_rollout_of_yojson;
+     decode_error = Request.no_error;
+   }
+    : ( computer_rollout,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
 (** [POST /team/computers/{computer_id}/cancel]
 
 Stop billing at the end of the current period. *)
@@ -8679,9 +8787,8 @@ let list_team_agents () =
 
 Invite an agent teammate and buy its computer. Requires a team admin or
 owner using their own credential. The agent comes back [provisioning]. *)
-let create_team_agent ~(job_description : string) ~(name : string)
-    ~(personality : string) ~(purchase_key : string) ~(size : string)
-    ?avatar_url ?voice () =
+let create_team_agent ~(name : string) ~(purchase_key : string) ~(size : string)
+    ?avatar_url ?job_description ?personality ?voice () =
   ({
      Request.service = "auth";
      operation = "create_team_agent";
@@ -8708,11 +8815,72 @@ let create_team_agent ~(job_description : string) ~(name : string)
                  : create_team_agent)));
      decode_reply = Request.json team_agent_of_yojson;
      decode_error =
-       Request.error_json
-         [ 400; 401; 403; 409; 500; 502 ]
-         error_response_of_yojson;
+       (fun ~status body ->
+         match status with
+         | 400 ->
+             Some
+               (Bad_request
+                  (error_response_of_yojson (Yojson.Safe.from_string body))
+                 : create_team_agent_error)
+         | 401 ->
+             Some
+               (Unauthorized
+                  (error_response_of_yojson (Yojson.Safe.from_string body))
+                 : create_team_agent_error)
+         | 402 ->
+             Some
+               (Payment_required
+                  (team_agent_error_body_of_yojson
+                     (Yojson.Safe.from_string body))
+                 : create_team_agent_error)
+         | 403 ->
+             Some
+               (Forbidden
+                  (error_response_of_yojson (Yojson.Safe.from_string body))
+                 : create_team_agent_error)
+         | 409 ->
+             Some
+               (Conflict
+                  (team_agent_error_body_of_yojson
+                     (Yojson.Safe.from_string body))
+                 : create_team_agent_error)
+         | 500 ->
+             Some
+               (Internal_server_error
+                  (error_response_of_yojson (Yojson.Safe.from_string body))
+                 : create_team_agent_error)
+         | 502 ->
+             Some
+               (Bad_gateway
+                  (error_response_of_yojson (Yojson.Safe.from_string body))
+                 : create_team_agent_error)
+         | _ -> None);
    }
-    : (team_agent, error_response) Macro_sdk_runtime.Request.t)
+    : (team_agent, create_team_agent_error) Macro_sdk_runtime.Request.t)
+
+(** [POST /team_agents/me/online]
+
+The calling agent reports that it is online, with its own credential.
+The first report makes it [running] and tells its inviter it is ready;
+later ones change nothing. 404 for an account that isn't an agent of its
+team. *)
+let report_team_agent_online () =
+  ({
+     Request.service = "auth";
+     operation = "report_team_agent_online";
+     meth = `POST;
+     path = "/team_agents/me/online";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.unit;
+     decode_error =
+       Request.error_json [ 401; 403; 404; 500 ] error_response_of_yojson;
+   }
+    : (unit, error_response) Macro_sdk_runtime.Request.t)
 
 (** [DELETE /team_agents/{agent_user_id}]
 

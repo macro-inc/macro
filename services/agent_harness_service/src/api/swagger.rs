@@ -20,6 +20,10 @@ use agent_harness::inbound::tool_approvals::{
     self, AnswerToolApprovalRequest, AnswerToolApprovalResponse, ToolApprovalAnswerDto,
     ToolApprovalStatusDto,
 };
+use agent_permissions::domain::model::{PermissionsView, Tightened, ToolPermissionCatalog};
+use agent_permissions::inbound::axum_router::{
+    self as tool_permissions_router, ToolPermissionChanges, ToolPermissionError,
+};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::coding_agents::CodingAgent;
 use agent_session::domain::model::{ArchiveCause, SandboxSize, SessionBot};
@@ -135,6 +139,12 @@ impl Modify for SecurityAddon {
         changes_router::get_agent_session_changes_patch_handler,
         changes_router::refresh_agent_session_changes_handler,
         tool_approvals::answer_tool_approval_handler,
+        tool_permissions_router::get_catalog_handler,
+        tool_permissions_router::get_agent_handler,
+        tool_permissions_router::get_session_handler,
+        tool_permissions_router::set_handler,
+        tool_permissions_router::tighten_handler,
+        tool_permissions_router::reset_handler,
         app_connections::app_connected_handler,
         crate::computers::claude::claude_sign_in_handler,
         crate::computers::claude::claude_sign_in_complete_handler,
@@ -220,6 +230,11 @@ impl Modify for SecurityAddon {
         AnswerToolApprovalResponse,
         ToolApprovalAnswerDto,
         ToolApprovalStatusDto,
+        ToolPermissionChanges,
+        ToolPermissionError,
+        ToolPermissionCatalog,
+        PermissionsView,
+        Tightened,
         crate::computers::claude::ClaudeSignInStarted,
         crate::computers::claude::ClaudeSignInComplete,
         crate::computers::claude::ClaudeSignedIn,
@@ -232,7 +247,8 @@ impl Modify for SecurityAddon {
         (name = "agent-repositories", description = "Repositories a coding session can work on"),
         (name = "agent-mode-choice", description = "Whether a composer prompt goes to a chat or a coding agent"),
         (name = "computers", description = "Claude sign-in on Macro computers"),
-        (name = "voices", description = "Voices agent teammates speak with on calls")
+        (name = "voices", description = "Voices agent teammates speak with on calls"),
+        (name = "agent-tool-permissions", description = "Which SDK operations an agent's code may call: always, after asking, or never")
     )
 )]
 pub struct ApiDoc;

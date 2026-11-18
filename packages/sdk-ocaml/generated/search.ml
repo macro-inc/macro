@@ -219,6 +219,29 @@ let make_agent_session_search_response_item
    }
     : agent_session_search_response_item)
 
+(** A kind of attachment a thread's messages carry, by MIME type. *)
+type nonrec attachment_kind =
+  | Pdf
+  | Image
+  | Document
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let attachment_kind_of_yojson : Yojson.Safe.t -> attachment_kind =
+ fun json ->
+  match Json.string json with
+  | "pdf" -> Pdf
+  | "image" -> Image
+  | "document" -> Document
+  | other -> Json.unknown "attachment_kind" json (Unknown other)
+
+and yojson_of_attachment_kind : attachment_kind -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Pdf -> `String "pdf"
+  | Image -> `String "image"
+  | Document -> `String "document"
+  | Unknown other -> `String other
+
 type nonrec calendar_event_filters = {
   attendees : string list option;  (** Attendee email addresses. *)
   calendar_event_ids : string list option;  (** Canonical event ids. *)
@@ -3198,7 +3221,30 @@ and yojson_of_shared_email_filter : shared_email_filter -> Yojson.Safe.t =
   | Only -> `String "only"
   | Unknown other -> `String other
 
+(** A mailbox view the Email list scopes a search to, as its tabs do. *)
+type nonrec email_search_view =
+  | Sent
+  | Drafts
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let email_search_view_of_yojson : Yojson.Safe.t -> email_search_view =
+ fun json ->
+  match Json.string json with
+  | "sent" -> Sent
+  | "drafts" -> Drafts
+  | other -> Json.unknown "email_search_view" json (Unknown other)
+
+and yojson_of_email_search_view : email_search_view -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Sent -> `String "sent"
+  | Drafts -> `String "drafts"
+  | Unknown other -> `String other
+
 type nonrec email_filters = {
+  attachments : attachment_kind list option;
+      (** Only threads with at least one attachment of one of these kinds, by
+MIME type, on any of their messages. Empty applies no constraint. *)
   bcc : string list option;
       (** Email BCC addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by BCC. *)
   calendar_only : bool option;
@@ -3213,14 +3259,20 @@ teammate's mailbox and restricts to threads involving any of these
 fully-qualified addresses. Each address is authorized against
 [crm_contacts] + [crm_companies] (contact must not be hidden, company
 must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_domains]. *)
+Mutually exclusive with [crm_domains]. Listing email only: search
+rejects a request that sets it with a 400. *)
   crm_domains : string list option;
       (** CRM-scoped domain filter. When non-empty, expands visibility to every
 teammate's mailbox and restricts to threads involving any of these
 domains (in any of sender/cc/bcc/recipient). Each domain is authorized
 against [crm_domains] + [crm_companies] (must exist for the caller's
 team, company must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_addresses]. *)
+Mutually exclusive with [crm_addresses]. Listing email only: search
+rejects a request that sets it with a 400. *)
+  done_ : bool option;
+      (** Filter by whether the thread is done: true for threads out of the
+inbox (archived), false for threads still in it. This is the mailbox
+state the Email view's Done filter uses, independent of notifications. *)
   email_thread_ids : string list option;
       (** Email thread IDs to filter by. Examples: \['thread-uuid-1'\]. Empty to search all threads. *)
   exclude_labels : string list option;
@@ -3241,7 +3293,14 @@ caller can access" (soup expands to the full set at the router edge). *)
   notification_filters : notification_filters option;
       (** Filter by email notification state. *)
   project_ids : string list option;
-      (** A list of project ids to search within. Empty to ignore project filtering. *)
+      (** Drive folder (project) ids to search within: threads filed in any of
+these folders. Besides the caller's own threads, it reaches every
+thread in a folder shared with the caller, whoever's inbox holds it,
+as the folder's list does. Search takes at most 50 folders and
+rejects more with a 400, and matches the query against at most 10,000
+of their threads in all; threads past that are not searched, unless
+[email_thread_ids] names them, and at most 10,000 named threads are
+searched in all. Empty to ignore project filtering. *)
   recipients : string list option;
       (** Email Recipient addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by Recipient. *)
   senders : string list option;
@@ -3249,6 +3308,7 @@ caller can access" (soup expands to the full set at the router edge). *)
   shared : shared_email_filter option;
       (** Controls whether shared email threads are included in results.
 Defaults to "exclude" (only the user's own threads). *)
+  view : email_search_view option;
 }
 (** The email filters used to filter down what emails you search over. *)
 
@@ -3256,11 +3316,14 @@ let email_filters_of_yojson : Yojson.Safe.t -> email_filters =
  fun json ->
   let fields = Json.obj json in
   {
+    attachments =
+      Json.optional fields "attachments" (Json.list attachment_kind_of_yojson);
     bcc = Json.optional fields "bcc" (Json.list Json.string);
     calendar_only = Json.optional fields "calendar_only" Json.bool;
     cc = Json.optional fields "cc" (Json.list Json.string);
     crm_addresses = Json.optional fields "crm_addresses" (Json.list Json.string);
     crm_domains = Json.optional fields "crm_domains" (Json.list Json.string);
+    done_ = Json.optional fields "done" Json.bool;
     email_thread_ids =
       Json.optional fields "email_thread_ids" (Json.list Json.string);
     exclude_labels =
@@ -3276,18 +3339,22 @@ let email_filters_of_yojson : Yojson.Safe.t -> email_filters =
     recipients = Json.optional fields "recipients" (Json.list Json.string);
     senders = Json.optional fields "senders" (Json.list Json.string);
     shared = Json.optional fields "shared" shared_email_filter_of_yojson;
+    view = Json.optional fields "view" email_search_view_of_yojson;
   }
 
 and yojson_of_email_filters : email_filters -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
+      ( "attachments",
+        Option.map (Json.of_list yojson_of_attachment_kind) value.attachments );
       ("bcc", Option.map (Json.of_list Json.of_string) value.bcc);
       ("calendar_only", Option.map Json.of_bool value.calendar_only);
       ("cc", Option.map (Json.of_list Json.of_string) value.cc);
       ( "crm_addresses",
         Option.map (Json.of_list Json.of_string) value.crm_addresses );
       ("crm_domains", Option.map (Json.of_list Json.of_string) value.crm_domains);
+      ("done", Option.map Json.of_bool value.done_);
       ( "email_thread_ids",
         Option.map (Json.of_list Json.of_string) value.email_thread_ids );
       ( "exclude_labels",
@@ -3303,18 +3370,21 @@ and yojson_of_email_filters : email_filters -> Yojson.Safe.t =
       ("recipients", Option.map (Json.of_list Json.of_string) value.recipients);
       ("senders", Option.map (Json.of_list Json.of_string) value.senders);
       ("shared", Option.map yojson_of_shared_email_filter value.shared);
+      ("view", Option.map yojson_of_email_search_view value.view);
     ]
 
-let make_email_filters ?bcc ?calendar_only ?cc ?crm_addresses ?crm_domains
-    ?email_thread_ids ?exclude_labels ?importance ?include_labels ?is_read
-    ?link_ids ?notification_filters ?project_ids ?recipients ?senders ?shared ()
-    =
+let make_email_filters ?attachments ?bcc ?calendar_only ?cc ?crm_addresses
+    ?crm_domains ?done_ ?email_thread_ids ?exclude_labels ?importance
+    ?include_labels ?is_read ?link_ids ?notification_filters ?project_ids
+    ?recipients ?senders ?shared ?view () =
   ({
+     attachments;
      bcc;
      calendar_only;
      cc;
      crm_addresses;
      crm_domains;
+     done_;
      email_thread_ids;
      exclude_labels;
      importance;
@@ -3326,6 +3396,7 @@ let make_email_filters ?bcc ?calendar_only ?cc ?crm_addresses ?crm_domains
      recipients;
      senders;
      shared;
+     view;
    }
     : email_filters)
 
@@ -3354,6 +3425,9 @@ let make_email_search_participant ~(email : string) ?name () =
   ({ email; name } : email_search_participant)
 
 type nonrec email_search_request = {
+  attachments : attachment_kind list option;
+      (** Only threads with at least one attachment of one of these kinds, by
+MIME type, on any of their messages. Empty applies no constraint. *)
   bcc : string list option;
       (** Email BCC addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by BCC. *)
   calendar_only : bool option;
@@ -3368,14 +3442,20 @@ teammate's mailbox and restricts to threads involving any of these
 fully-qualified addresses. Each address is authorized against
 [crm_contacts] + [crm_companies] (contact must not be hidden, company
 must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_domains]. *)
+Mutually exclusive with [crm_domains]. Listing email only: search
+rejects a request that sets it with a 400. *)
   crm_domains : string list option;
       (** CRM-scoped domain filter. When non-empty, expands visibility to every
 teammate's mailbox and restricts to threads involving any of these
 domains (in any of sender/cc/bcc/recipient). Each domain is authorized
 against [crm_domains] + [crm_companies] (must exist for the caller's
 team, company must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_addresses]. *)
+Mutually exclusive with [crm_addresses]. Listing email only: search
+rejects a request that sets it with a 400. *)
+  done_ : bool option;
+      (** Filter by whether the thread is done: true for threads out of the
+inbox (archived), false for threads still in it. This is the mailbox
+state the Email view's Done filter uses, independent of notifications. *)
   email_thread_ids : string list option;
       (** Email thread IDs to filter by. Examples: \['thread-uuid-1'\]. Empty to search all threads. *)
   exclude_labels : string list option;
@@ -3396,7 +3476,14 @@ caller can access" (soup expands to the full set at the router edge). *)
   notification_filters : notification_filters option;
       (** Filter by email notification state. *)
   project_ids : string list option;
-      (** A list of project ids to search within. Empty to ignore project filtering. *)
+      (** Drive folder (project) ids to search within: threads filed in any of
+these folders. Besides the caller's own threads, it reaches every
+thread in a folder shared with the caller, whoever's inbox holds it,
+as the folder's list does. Search takes at most 50 folders and
+rejects more with a 400, and matches the query against at most 10,000
+of their threads in all; threads past that are not searched, unless
+[email_thread_ids] names them, and at most 10,000 named threads are
+searched in all. Empty to ignore project filtering. *)
   recipients : string list option;
       (** Email Recipient addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by Recipient. *)
   senders : string list option;
@@ -3404,6 +3491,7 @@ caller can access" (soup expands to the full set at the router edge). *)
   shared : shared_email_filter option;
       (** Controls whether shared email threads are included in results.
 Defaults to "exclude" (only the user's own threads). *)
+  view : email_search_view option;
   collapse : bool option;
       (** If true, returns only 1 result per entity. False by default. *)
   match_type : match_type;  (** The match type to use when searching *)
@@ -3417,11 +3505,14 @@ let email_search_request_of_yojson : Yojson.Safe.t -> email_search_request =
  fun json ->
   let fields = Json.obj json in
   {
+    attachments =
+      Json.optional fields "attachments" (Json.list attachment_kind_of_yojson);
     bcc = Json.optional fields "bcc" (Json.list Json.string);
     calendar_only = Json.optional fields "calendar_only" Json.bool;
     cc = Json.optional fields "cc" (Json.list Json.string);
     crm_addresses = Json.optional fields "crm_addresses" (Json.list Json.string);
     crm_domains = Json.optional fields "crm_domains" (Json.list Json.string);
+    done_ = Json.optional fields "done" Json.bool;
     email_thread_ids =
       Json.optional fields "email_thread_ids" (Json.list Json.string);
     exclude_labels =
@@ -3437,6 +3528,7 @@ let email_search_request_of_yojson : Yojson.Safe.t -> email_search_request =
     recipients = Json.optional fields "recipients" (Json.list Json.string);
     senders = Json.optional fields "senders" (Json.list Json.string);
     shared = Json.optional fields "shared" shared_email_filter_of_yojson;
+    view = Json.optional fields "view" email_search_view_of_yojson;
     collapse = Json.optional fields "collapse" Json.bool;
     match_type = Json.required fields "match_type" match_type_of_yojson;
     query = Json.optional fields "query" Json.string;
@@ -3448,12 +3540,15 @@ and yojson_of_email_search_request : email_search_request -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
+      ( "attachments",
+        Option.map (Json.of_list yojson_of_attachment_kind) value.attachments );
       ("bcc", Option.map (Json.of_list Json.of_string) value.bcc);
       ("calendar_only", Option.map Json.of_bool value.calendar_only);
       ("cc", Option.map (Json.of_list Json.of_string) value.cc);
       ( "crm_addresses",
         Option.map (Json.of_list Json.of_string) value.crm_addresses );
       ("crm_domains", Option.map (Json.of_list Json.of_string) value.crm_domains);
+      ("done", Option.map Json.of_bool value.done_);
       ( "email_thread_ids",
         Option.map (Json.of_list Json.of_string) value.email_thread_ids );
       ( "exclude_labels",
@@ -3469,6 +3564,7 @@ and yojson_of_email_search_request : email_search_request -> Yojson.Safe.t =
       ("recipients", Option.map (Json.of_list Json.of_string) value.recipients);
       ("senders", Option.map (Json.of_list Json.of_string) value.senders);
       ("shared", Option.map yojson_of_shared_email_filter value.shared);
+      ("view", Option.map yojson_of_email_search_view value.view);
       ("collapse", Option.map Json.of_bool value.collapse);
       ("match_type", Some (yojson_of_match_type value.match_type));
       ("query", Option.map Json.of_string value.query);
@@ -3476,16 +3572,19 @@ and yojson_of_email_search_request : email_search_request -> Yojson.Safe.t =
       ("terms", Option.map (Json.of_list Json.of_string) value.terms);
     ]
 
-let make_email_search_request ?bcc ?calendar_only ?cc ?crm_addresses
-    ?crm_domains ?email_thread_ids ?exclude_labels ?importance ?include_labels
-    ?is_read ?link_ids ?notification_filters ?project_ids ?recipients ?senders
-    ?shared ?collapse ~(match_type : match_type) ?query ?search_on ?terms () =
+let make_email_search_request ?attachments ?bcc ?calendar_only ?cc
+    ?crm_addresses ?crm_domains ?done_ ?email_thread_ids ?exclude_labels
+    ?importance ?include_labels ?is_read ?link_ids ?notification_filters
+    ?project_ids ?recipients ?senders ?shared ?view ?collapse
+    ~(match_type : match_type) ?query ?search_on ?terms () =
   ({
+     attachments;
      bcc;
      calendar_only;
      cc;
      crm_addresses;
      crm_domains;
+     done_;
      email_thread_ids;
      exclude_labels;
      importance;
@@ -3497,6 +3596,7 @@ let make_email_search_request ?bcc ?calendar_only ?cc ?crm_addresses
      recipients;
      senders;
      shared;
+     view;
      collapse;
      match_type;
      query;

@@ -4188,6 +4188,16 @@ val make_attachment_change_delta :
   value:attachment_change_delta_value -> unit -> attachment_change
 (** Remove stored attachment identities and append new references. *)
 
+(** A kind of attachment a thread's messages carry, by MIME type. *)
+type nonrec attachment_kind =
+  | Pdf
+  | Image
+  | Document
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val attachment_kind_of_yojson : Yojson.Safe.t -> attachment_kind
+val yojson_of_attachment_kind : attachment_kind -> Yojson.Safe.t
+
 (** RSVP state for an attendee. *)
 type nonrec attendee_response_status =
   | Needs_action
@@ -7049,14 +7059,35 @@ val make_channel_topic_event_channel_access_requested :
   metadata:channel_access_requested_metadata -> unit -> channel_topic_event
 (** Someone outside a channel asked to join it. *)
 
-type nonrec channel_webhook_request = { content : string  (** Message body. *) }
+(** Who hears about a posted message. A caller may choose it for its own
+channel message, since every choice only narrows who is notified. *)
+type nonrec post_message_notification_policy =
+  | Default
+  | Mentions_only
+  | Silent
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val post_message_notification_policy_of_yojson :
+  Yojson.Safe.t -> post_message_notification_policy
+
+val yojson_of_post_message_notification_policy :
+  post_message_notification_policy -> Yojson.Safe.t
+
+type nonrec channel_webhook_request = {
+  content : string;  (** Message body. *)
+  notification_policy : post_message_notification_policy option;
+      (** Who hears about the message; [Silent] notifies no one. *)
+}
 (** Request to post a channel webhook message. *)
 
 val channel_webhook_request_of_yojson : Yojson.Safe.t -> channel_webhook_request
 val yojson_of_channel_webhook_request : channel_webhook_request -> Yojson.Safe.t
 
 val make_channel_webhook_request :
-  content:string -> unit -> channel_webhook_request
+  content:string ->
+  ?notification_policy:post_message_notification_policy ->
+  unit ->
+  channel_webhook_request
 (** Request to post a channel webhook message. *)
 
 type nonrec channel_webhook_response = {
@@ -15366,6 +15397,39 @@ type nonrec email_block_scope =
 val email_block_scope_of_yojson : Yojson.Safe.t -> email_block_scope
 val yojson_of_email_block_scope : email_block_scope -> Yojson.Safe.t
 
+type nonrec email_contribution_consent = {
+  enabled : bool;
+      (** Whether this exact mailbox has explicit contribution consent. *)
+  mailbox_email : string option;
+      (** The primary mailbox that would contribute, if connected. *)
+  mailbox_link_id : string option;
+      (** Exact current primary mailbox connection. *)
+}
+(** Current mailbox consent without loading domain exclusion lists. *)
+
+val email_contribution_consent_of_yojson :
+  Yojson.Safe.t -> email_contribution_consent
+
+val yojson_of_email_contribution_consent :
+  email_contribution_consent -> Yojson.Safe.t
+
+val make_email_contribution_consent :
+  enabled:bool ->
+  ?mailbox_email:string ->
+  ?mailbox_link_id:string ->
+  unit ->
+  email_contribution_consent
+(** Current mailbox consent without loading domain exclusion lists. *)
+
+(** The scope of an explicitly granted mailbox contribution. *)
+type nonrec email_contribution_mode =
+  | All
+  | Selected
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val email_contribution_mode_of_yojson : Yojson.Safe.t -> email_contribution_mode
+val yojson_of_email_contribution_mode : email_contribution_mode -> Yojson.Safe.t
+
 (** Controls whether shared email threads are included in results. *)
 type nonrec shared_email_filter =
   | Exclude
@@ -15376,7 +15440,19 @@ type nonrec shared_email_filter =
 val shared_email_filter_of_yojson : Yojson.Safe.t -> shared_email_filter
 val yojson_of_shared_email_filter : shared_email_filter -> Yojson.Safe.t
 
+(** A mailbox view the Email list scopes a search to, as its tabs do. *)
+type nonrec email_search_view =
+  | Sent
+  | Drafts
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val email_search_view_of_yojson : Yojson.Safe.t -> email_search_view
+val yojson_of_email_search_view : email_search_view -> Yojson.Safe.t
+
 type nonrec email_filters = {
+  attachments : attachment_kind list option;
+      (** Only threads with at least one attachment of one of these kinds, by
+MIME type, on any of their messages. Empty applies no constraint. *)
   bcc : string list option;
       (** Email BCC addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by BCC. *)
   calendar_only : bool option;
@@ -15391,14 +15467,20 @@ teammate's mailbox and restricts to threads involving any of these
 fully-qualified addresses. Each address is authorized against
 [crm_contacts] + [crm_companies] (contact must not be hidden, company
 must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_domains]. *)
+Mutually exclusive with [crm_domains]. Listing email only: search
+rejects a request that sets it with a 400. *)
   crm_domains : string list option;
       (** CRM-scoped domain filter. When non-empty, expands visibility to every
 teammate's mailbox and restricts to threads involving any of these
 domains (in any of sender/cc/bcc/recipient). Each domain is authorized
 against [crm_domains] + [crm_companies] (must exist for the caller's
 team, company must not be hidden, [email_sync] must be true).
-Mutually exclusive with [crm_addresses]. *)
+Mutually exclusive with [crm_addresses]. Listing email only: search
+rejects a request that sets it with a 400. *)
+  done_ : bool option;
+      (** Filter by whether the thread is done: true for threads out of the
+inbox (archived), false for threads still in it. This is the mailbox
+state the Email view's Done filter uses, independent of notifications. *)
   email_thread_ids : string list option;
       (** Email thread IDs to filter by. Examples: \['thread-uuid-1'\]. Empty to search all threads. *)
   exclude_labels : string list option;
@@ -15419,7 +15501,14 @@ caller can access" (soup expands to the full set at the router edge). *)
   notification_filters : notification_filters option;
       (** Filter by email notification state. *)
   project_ids : string list option;
-      (** A list of project ids to search within. Empty to ignore project filtering. *)
+      (** Drive folder (project) ids to search within: threads filed in any of
+these folders. Besides the caller's own threads, it reaches every
+thread in a folder shared with the caller, whoever's inbox holds it,
+as the folder's list does. Search takes at most 50 folders and
+rejects more with a 400, and matches the query against at most 10,000
+of their threads in all; threads past that are not searched, unless
+[email_thread_ids] names them, and at most 10,000 named threads are
+searched in all. Empty to ignore project filtering. *)
   recipients : string list option;
       (** Email Recipient addresses to filter by. Examples: \['user\@example.com'\]. Empty if not filtering by Recipient. *)
   senders : string list option;
@@ -15427,6 +15516,7 @@ caller can access" (soup expands to the full set at the router edge). *)
   shared : shared_email_filter option;
       (** Controls whether shared email threads are included in results.
 Defaults to "exclude" (only the user's own threads). *)
+  view : email_search_view option;
 }
 (** The email filters used to filter down what emails you search over. *)
 
@@ -15434,11 +15524,13 @@ val email_filters_of_yojson : Yojson.Safe.t -> email_filters
 val yojson_of_email_filters : email_filters -> Yojson.Safe.t
 
 val make_email_filters :
+  ?attachments:attachment_kind list ->
   ?bcc:string list ->
   ?calendar_only:bool ->
   ?cc:string list ->
   ?crm_addresses:string list ->
   ?crm_domains:string list ->
+  ?done_:bool ->
   ?email_thread_ids:string list ->
   ?exclude_labels:string list ->
   ?importance:bool ->
@@ -15450,6 +15542,7 @@ val make_email_filters :
   ?recipients:string list ->
   ?senders:string list ->
   ?shared:shared_email_filter ->
+  ?view:email_search_view ->
   unit ->
   email_filters
 (** The email filters used to filter down what emails you search over. *)
@@ -15560,6 +15653,429 @@ val make_email_followup_response :
   ?followup:email_followup -> unit -> email_followup_response
 (** Lookup response, including an email with no follow-up yet. *)
 
+(** One positive whole-thread selector; denials always take precedence. *)
+type nonrec email_inclusion_rule =
+  | Thread of {
+      thread_id : string;  (** Internal thread ID, never a provider thread ID. *)
+    }  (** A mailbox-local thread owned by the contributor. *)
+  | Address of {
+      address : string;
+          (** Address to normalize and validate before activation. *)
+    }  (** An exact sender or recipient address, without alias inference. *)
+  | Contact of {
+      contact_id : string;
+          (** Stable contact ID, resolved live rather than expanded on activation. *)
+    }  (** All current addresses of an authorized contact in the same team. *)
+  | Domain of {
+      domain : string;
+          (** Bare domain to normalize and validate before activation. *)
+    }  (** A domain and its dot-boundary subdomains. *)
+  | Company of {
+      company_id : string;
+          (** Stable company ID, resolved live rather than expanded on activation. *)
+    }  (** All current domains of an authorized company in the same team. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val email_inclusion_rule_of_yojson : Yojson.Safe.t -> email_inclusion_rule
+val yojson_of_email_inclusion_rule : email_inclusion_rule -> Yojson.Safe.t
+
+val make_email_inclusion_rule_thread :
+  thread_id:string -> unit -> email_inclusion_rule
+(** A mailbox-local thread owned by the contributor. *)
+
+val make_email_inclusion_rule_address :
+  address:string -> unit -> email_inclusion_rule
+(** An exact sender or recipient address, without alias inference. *)
+
+val make_email_inclusion_rule_contact :
+  contact_id:string -> unit -> email_inclusion_rule
+(** All current addresses of an authorized contact in the same team. *)
+
+val make_email_inclusion_rule_domain :
+  domain:string -> unit -> email_inclusion_rule
+(** A domain and its dot-boundary subdomains. *)
+
+val make_email_inclusion_rule_company :
+  company_id:string -> unit -> email_inclusion_rule
+(** All current domains of an authorized company in the same team. *)
+
+(** Provenance established by authenticated credentials, never a request field. *)
+type nonrec email_policy_actor_kind =
+  | Member
+  | Agent
+  | Api
+  | System
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val email_policy_actor_kind_of_yojson : Yojson.Safe.t -> email_policy_actor_kind
+val yojson_of_email_policy_actor_kind : email_policy_actor_kind -> Yojson.Safe.t
+
+(** Events in the member-only policy history; records never contain mail content. *)
+type nonrec email_policy_audit_action =
+  | Rules_activated
+  | All_mail_enabled
+  | Withdrawn
+  | Mailbox_revoked
+  | Live_targets_changed
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val email_policy_audit_action_of_yojson :
+  Yojson.Safe.t -> email_policy_audit_action
+
+val yojson_of_email_policy_audit_action :
+  email_policy_audit_action -> Yojson.Safe.t
+
+type nonrec new_email_policy_audit = {
+  action : email_policy_audit_action;  (** The operation that committed. *)
+  actor_kind : email_policy_actor_kind;
+      (** Provenance derived from authenticated credentials. *)
+  agent_id : string option;  (** Verified agent identity, if available. *)
+  agent_session_id : string option;
+      (** Verified session identity, if available; never inferred from a request. *)
+  details : Yojson.Safe.t;
+      (** Bounded metadata, never email IDs, addresses, subjects or bodies. *)
+  event_id : string;
+      (** Server-generated UUIDv7, stable for a retried system event. *)
+  next_revision : int64 option;  (** New immutable definition. *)
+  previous_revision : int64 option;  (** Previous immutable definition. *)
+}
+(** Audit data supplied by the authorized use case, without mail content. *)
+
+val new_email_policy_audit_of_yojson : Yojson.Safe.t -> new_email_policy_audit
+val yojson_of_new_email_policy_audit : new_email_policy_audit -> Yojson.Safe.t
+
+val make_new_email_policy_audit :
+  action:email_policy_audit_action ->
+  actor_kind:email_policy_actor_kind ->
+  ?agent_id:string ->
+  ?agent_session_id:string ->
+  details:Yojson.Safe.t ->
+  event_id:string ->
+  ?next_revision:int64 ->
+  ?previous_revision:int64 ->
+  unit ->
+  new_email_policy_audit
+(** Audit data supplied by the authorized use case, without mail content. *)
+
+type nonrec email_policy_audit = {
+  consent_incarnation : string option;
+      (** Absent only for a legacy audit row. *)
+  created_at : string;  (** Database commit transaction's creation time. *)
+  entry : new_email_policy_audit;  (** Stored event and provenance. *)
+  link_id : string;  (** Exact mailbox at the time of the event. *)
+  policy_version : int64;
+      (** Committed policy version within the recorded lifetime. *)
+}
+(** An audit record may predate incarnation-aware writers. *)
+
+val email_policy_audit_of_yojson : Yojson.Safe.t -> email_policy_audit
+val yojson_of_email_policy_audit : email_policy_audit -> Yojson.Safe.t
+
+val make_email_policy_audit :
+  ?consent_incarnation:string ->
+  created_at:string ->
+  entry:new_email_policy_audit ->
+  link_id:string ->
+  policy_version:int64 ->
+  unit ->
+  email_policy_audit
+(** An audit record may predate incarnation-aware writers. *)
+
+type nonrec email_rule_set = {
+  include_ : email_inclusion_rule list;
+      (** OR-combined positive selectors over all non-draft thread participants. *)
+  schema_version : int;
+      (** Wire-format version, not a contribution grant or revision number. *)
+}
+(** A complete replacement definition; an empty list selects no mail.
+Contact/company edits affect matching without rewriting this definition. *)
+
+val email_rule_set_of_yojson : Yojson.Safe.t -> email_rule_set
+val yojson_of_email_rule_set : email_rule_set -> Yojson.Safe.t
+
+val make_email_rule_set :
+  include_:email_inclusion_rule list ->
+  schema_version:int ->
+  unit ->
+  email_rule_set
+(** A complete replacement definition; an empty list selects no mail.
+Contact/company edits affect matching without rewriting this definition. *)
+
+(** One explicit sharing command; member and team never come from the body. *)
+type nonrec email_policy_change =
+  | Replace_rules of {
+      rules : email_rule_set;
+          (** Positive selectors for eligible past and future whole threads. *)
+    }
+      (** Directly activate a full replacement, including an empty rule list. *)
+  | Enable_all  (** Explicitly share all eligible past and future mail. *)
+  | Withdraw
+      (** Withdraw contribution, retaining CRM records and interaction dates. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val email_policy_change_of_yojson : Yojson.Safe.t -> email_policy_change
+val yojson_of_email_policy_change : email_policy_change -> Yojson.Safe.t
+
+val make_email_policy_change_replace_rules :
+  rules:email_rule_set -> unit -> email_policy_change
+(** Directly activate a full replacement, including an empty rule list. *)
+
+(** An observed consent state, not an authorization credential. Never refresh
+this token automatically after a conflict and replay a sharing command. *)
+type nonrec email_policy_token =
+  | Legacy of {
+      fingerprint : string;
+          (** Opaque observation; the first write compares it before initialization. *)
+    }  (** A read-only fingerprint of legacy consent, mailbox and membership. *)
+  | Policy of {
+      authority_fingerprint : string;
+          (** Explicit mailbox and membership authority, excluding sync state. *)
+      consent_incarnation : string;
+          (** Never reused after deletion and recreation of consent. *)
+      policy_version : int64;
+          (** Database-owned version observed by the caller. *)
+    }  (** Identity and version of an initialized consent lifetime. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val email_policy_token_of_yojson : Yojson.Safe.t -> email_policy_token
+val yojson_of_email_policy_token : email_policy_token -> Yojson.Safe.t
+
+val make_email_policy_token_legacy :
+  fingerprint:string -> unit -> email_policy_token
+(** A read-only fingerprint of legacy consent, mailbox and membership. *)
+
+val make_email_policy_token_policy :
+  authority_fingerprint:string ->
+  consent_incarnation:string ->
+  policy_version:int64 ->
+  unit ->
+  email_policy_token
+(** Identity and version of an initialized consent lifetime. *)
+
+type nonrec email_policy_command = {
+  change : email_policy_change;  (** The explicit sharing operation. *)
+  if_policy : email_policy_token;
+      (** State returned by inspection; stale tokens produce a conflict. *)
+  request_id : string;
+      (** One UUID per intended operation, reused only for its retries. *)
+}
+(** Retry-safe command with the exact state observed by the caller. *)
+
+val email_policy_command_of_yojson : Yojson.Safe.t -> email_policy_command
+val yojson_of_email_policy_command : email_policy_command -> Yojson.Safe.t
+
+val make_email_policy_command :
+  change:email_policy_change ->
+  if_policy:email_policy_token ->
+  request_id:string ->
+  unit ->
+  email_policy_command
+(** Retry-safe command with the exact state observed by the caller. *)
+
+type nonrec email_policy_history = {
+  events : email_policy_audit list;
+      (** Audit entries without mailbox contents or expanded source identities. *)
+  next_cursor : string option;  (** Exclusive UUID cursor for the next page. *)
+}
+(** Owner history has a fixed fifty-event page. *)
+
+val email_policy_history_of_yojson : Yojson.Safe.t -> email_policy_history
+val yojson_of_email_policy_history : email_policy_history -> Yojson.Safe.t
+
+val make_email_policy_history :
+  events:email_policy_audit list ->
+  ?next_cursor:string ->
+  unit ->
+  email_policy_history
+(** Owner history has a fixed fifty-event page. *)
+
+type nonrec email_policy_outcome = {
+  audit_event_id : string;
+      (** Owner history entry identifying this operation. *)
+  effect_ : string;
+      (** Sharing and retention effects of the committed operation. *)
+  enabled : bool;  (** Whether this commit granted contribution. *)
+  mode : email_contribution_mode;  (** Committed scope. *)
+  replayed : bool;
+      (** True means the stored result was returned without repeating any effects. *)
+  revision : int64 option;  (** Committed definition revision, if selected. *)
+  token : email_policy_token;  (** State token produced by this commit. *)
+}
+(** Recorded outcome. A replay describes the original commit, not current state. *)
+
+val email_policy_outcome_of_yojson : Yojson.Safe.t -> email_policy_outcome
+val yojson_of_email_policy_outcome : email_policy_outcome -> Yojson.Safe.t
+
+val make_email_policy_outcome :
+  audit_event_id:string ->
+  effect_:string ->
+  enabled:bool ->
+  mode:email_contribution_mode ->
+  replayed:bool ->
+  ?revision:int64 ->
+  token:email_policy_token ->
+  unit ->
+  email_policy_outcome
+(** Recorded outcome. A replay describes the original commit, not current state. *)
+
+type nonrec email_policy_preview_counts = {
+  added : int64 option;  (** Threads newly included by the proposal. *)
+  current : int64 option;  (** Currently included threads encountered so far. *)
+  denied : int64 option;
+      (** Matching threads vetoed by other privacy settings. *)
+  proposed : int64 option;  (** Proposed included threads encountered so far. *)
+  removed : int64 option;  (** Threads held back by the proposal. *)
+  retained : int64 option;  (** Threads included by both policies. *)
+}
+(** Count-only preview output; no mailbox contents or target identities. *)
+
+val email_policy_preview_counts_of_yojson :
+  Yojson.Safe.t -> email_policy_preview_counts
+
+val yojson_of_email_policy_preview_counts :
+  email_policy_preview_counts -> Yojson.Safe.t
+
+val make_email_policy_preview_counts :
+  ?added:int64 ->
+  ?current:int64 ->
+  ?denied:int64 ->
+  ?proposed:int64 ->
+  ?removed:int64 ->
+  ?retained:int64 ->
+  unit ->
+  email_policy_preview_counts
+(** Count-only preview output; no mailbox contents or target identities. *)
+
+(** Preview state is independent of the contribution grant. *)
+type nonrec email_policy_preview_status =
+  | Pending
+  | Running
+  | Complete
+  | Partial
+  | Cancelled
+  | Stale
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val email_policy_preview_status_of_yojson :
+  Yojson.Safe.t -> email_policy_preview_status
+
+val yojson_of_email_policy_preview_status :
+  email_policy_preview_status -> Yojson.Safe.t
+
+type nonrec email_policy_revision = {
+  created_at : string;  (** Time this definition was committed. *)
+  link_id : string;  (** Mailbox the saved definition refers to. *)
+  revision : int64;  (** Revision in this member's rule history. *)
+  rules : email_rule_set;
+      (** Stored selectors; no expanded contact details or mail content. *)
+}
+(** One immutable owner-only definition, fetched separately from history pages. *)
+
+val email_policy_revision_of_yojson : Yojson.Safe.t -> email_policy_revision
+val yojson_of_email_policy_revision : email_policy_revision -> Yojson.Safe.t
+
+val make_email_policy_revision :
+  created_at:string ->
+  link_id:string ->
+  revision:int64 ->
+  rules:email_rule_set ->
+  unit ->
+  email_policy_revision
+(** One immutable owner-only definition, fetched separately from history pages. *)
+
+type nonrec email_policy_view = {
+  authoring_available : bool;
+      (** Whether new rule authoring is available for this caller. *)
+  effect_ : string;
+      (** Explain whole-thread sharing, live targets and overriding exclusions. *)
+  enabled : bool;  (** Current effective grant. *)
+  link_id : string option;
+      (** Exact mailbox represented by the consent or prospective first grant. *)
+  mailbox_email : string option;  (** The caller's mailbox address. *)
+  mode : email_contribution_mode;  (** Current scope of contribution. *)
+  revision : int64 option;  (** Active immutable definition revision. *)
+  rules : email_rule_set option;
+  token : email_policy_token option;
+}
+(** Owner-only view. GET never initializes identity or transfers historical work. *)
+
+val email_policy_view_of_yojson : Yojson.Safe.t -> email_policy_view
+val yojson_of_email_policy_view : email_policy_view -> Yojson.Safe.t
+
+val make_email_policy_view :
+  authoring_available:bool ->
+  effect_:string ->
+  enabled:bool ->
+  ?link_id:string ->
+  ?mailbox_email:string ->
+  mode:email_contribution_mode ->
+  ?revision:int64 ->
+  ?rules:email_rule_set ->
+  ?token:email_policy_token ->
+  unit ->
+  email_policy_view
+(** Owner-only view. GET never initializes identity or transfers historical work. *)
+
+type nonrec email_preview_request = {
+  if_policy : email_policy_token;
+      (** Observed sharing state; never refreshed automatically after a conflict. *)
+  if_preview_id : string option;
+      (** Current preview ID from inspection, or null before the first preview. *)
+  rules : email_rule_set;
+      (** Hypothetical selected contribution; validation never activates it. *)
+}
+(** A bounded preview request. The slot token fences delayed starts after replacement. *)
+
+val email_preview_request_of_yojson : Yojson.Safe.t -> email_preview_request
+val yojson_of_email_preview_request : email_preview_request -> Yojson.Safe.t
+
+val make_email_preview_request :
+  if_policy:email_policy_token ->
+  ?if_preview_id:string ->
+  rules:email_rule_set ->
+  unit ->
+  email_preview_request
+(** A bounded preview request. The slot token fences delayed starts after replacement. *)
+
+type nonrec email_preview_view = {
+  as_of : string option;
+      (** Time of the stable read snapshot, once a worker starts. *)
+  context_id : string;
+      (** A new worker attempt gets a new context; old completions cannot overwrite it. *)
+  counts : email_policy_preview_counts;
+      (** Distinct counts of this member's mailbox-local threads, never team conversations. *)
+  created_at : string;  (** Enqueue time, used to explain queue delay. *)
+  expires_at : string;
+      (** Five-minute work deadline; results remain inspectable after the deadline. *)
+  preview_id : string;  (** The member's current preview slot occupant. *)
+  scanned_threads : int64;
+      (** Progress counts contain no identities, subjects, participants or bodies. *)
+  status : email_policy_preview_status;
+      (** Pending, running, complete, partial, cancelled or stale. *)
+}
+(** Count-only result. Complete counts describe one stable snapshot; every other
+status is incomplete and must not be presented as the total mailbox count. *)
+
+val email_preview_view_of_yojson : Yojson.Safe.t -> email_preview_view
+val yojson_of_email_preview_view : email_preview_view -> Yojson.Safe.t
+
+val make_email_preview_view :
+  ?as_of:string ->
+  context_id:string ->
+  counts:email_policy_preview_counts ->
+  created_at:string ->
+  expires_at:string ->
+  preview_id:string ->
+  scanned_threads:int64 ->
+  status:email_policy_preview_status ->
+  unit ->
+  email_preview_view
+(** Count-only result. Complete counts describe one stable snapshot; every other
+status is incomplete and must not be presented as the total mailbox count. *)
+
 (** One explicit privacy change, avoiding lost updates to whole blocklists. *)
 type nonrec email_privacy_change =
   | Set_thread_exclusion of {
@@ -15606,6 +16122,15 @@ val make_email_privacy_change_remove_domain :
   domain:string -> scope:email_block_scope -> unit -> email_privacy_change
 (** Remove an exclusion; other exclusions still apply. *)
 
+(** Why a domain exclusion would hide an affected mailbox's entire history. *)
+type nonrec mailbox_domain_conflict =
+  | Company
+  | Personal_provider
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val mailbox_domain_conflict_of_yojson : Yojson.Safe.t -> mailbox_domain_conflict
+val yojson_of_mailbox_domain_conflict : mailbox_domain_conflict -> Yojson.Safe.t
+
 type nonrec email_privacy_settings = {
   can_remove_team_domains : bool;
       (** Whether the caller can remove a team exclusion. *)
@@ -15615,8 +16140,12 @@ type nonrec email_privacy_settings = {
       (** The primary mailbox that would contribute; absent before email connection. *)
   mailbox_link_id : string option;
       (** Exact current primary connection; clients bind opt-in to this identifier. *)
+  personal_domain_warnings : (string * mailbox_domain_conflict) list;
+      (** Existing personal exclusions that cover the caller's whole mailbox. *)
   personal_domains : string list;
       (** Domains excluded only for the caller's contributions. *)
+  team_domain_warnings : (string * mailbox_domain_conflict) list;
+      (** Existing team exclusions that cover a connected member's whole mailbox. *)
   team_domains : string list;
       (** Domains excluded across the team, including legacy company exclusions. *)
 }
@@ -15630,11 +16159,25 @@ val make_email_privacy_settings :
   enabled:bool ->
   ?mailbox_email:string ->
   ?mailbox_link_id:string ->
+  personal_domain_warnings:(string * mailbox_domain_conflict) list ->
   personal_domains:string list ->
+  team_domain_warnings:(string * mailbox_domain_conflict) list ->
   team_domains:string list ->
   unit ->
   email_privacy_settings
 (** Current consent and exclusions, readable by any team member. *)
+
+(** Full settings by default, or mailbox consent when explicitly requested. *)
+type nonrec email_privacy_response =
+  | Email_privacy_settings of email_privacy_settings
+      (** The default settings-page response. *)
+  | Email_contribution_consent of email_contribution_consent
+      (** The thread header's lightweight consent projection. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val email_privacy_response_of_yojson : Yojson.Safe.t -> email_privacy_response
+val yojson_of_email_privacy_response : email_privacy_response -> Yojson.Safe.t
 
 type nonrec email_reminder_summary = {
   followup : email_followup;
@@ -15668,6 +16211,30 @@ val make_email_reminder_page :
   unit ->
   email_reminder_page
 (** A page of original-email identities and private reminder metadata. *)
+
+type nonrec email_rule_validation = {
+  broad_rule_indices : int list;
+      (** Indices that may select most mail because they match the owner or domain. *)
+  effect_ : string;
+      (** Human-readable effect to show before an agent changes sharing. *)
+  inactive_rule_indices : int list;
+      (** Indices into the canonical list that currently have no live targets. *)
+  rules : email_rule_set;
+      (** Normalized, sorted and deduplicated, without expanding live references. *)
+}
+(** Canonical rules and bounded warnings; validation does not grant contribution. *)
+
+val email_rule_validation_of_yojson : Yojson.Safe.t -> email_rule_validation
+val yojson_of_email_rule_validation : email_rule_validation -> Yojson.Safe.t
+
+val make_email_rule_validation :
+  broad_rule_indices:int list ->
+  effect_:string ->
+  inactive_rule_indices:int list ->
+  rules:email_rule_set ->
+  unit ->
+  email_rule_validation
+(** Canonical rules and bounded warnings; validation does not grant contribution. *)
 
 type nonrec empty_response = Yojson.Safe.t
 (** Empty response is required due to custom fetch forcing [response.json()] *)
@@ -17025,6 +17592,11 @@ type nonrec external_chat_send_reply = {
       (** Stable client intent key. A changed payload with this key is a conflict. *)
   message : external_chat_reply_content;  (** Content. *)
   reply_to : string option;  (** Message being quoted, within this chat. *)
+  user_confirmation : string option;
+      (** The user's own reply approving this send, quoted verbatim. Required
+from an agent's program; never the request that asked for the message.
+Not part of the send's intent: it is neither stored nor compared on a
+retry. *)
 }
 (** Explicit send action from a person. Only deliberate sends reach WhatsApp. *)
 
@@ -17038,6 +17610,7 @@ val make_external_chat_send_reply :
   idempotency_key:string ->
   message:external_chat_reply_content ->
   ?reply_to:string ->
+  ?user_confirmation:string ->
   unit ->
   external_chat_send_reply
 (** Explicit send action from a person. Only deliberate sends reach WhatsApp. *)
@@ -21479,7 +22052,7 @@ val make_initiative_activity_page :
 
 type nonrec initiative_description = {
   markdown : string;
-      (** GitHub-flavored markdown; empty while no one has opened or written it. *)
+      (** Internal markdown, chips as XML tags such as [<m-user-mention>]; empty while no one has opened or written it. *)
 }
 (** An initiative's description. *)
 
@@ -22243,19 +22816,6 @@ val make_message_attachment_removed_metadata :
   unit ->
   message_attachment_removed_metadata
 (** Attachments removed from a message by an edit. *)
-
-(** Internal notification behavior for a posted channel message. *)
-type nonrec post_message_notification_policy =
-  | Default
-  | Mentions_only
-  | Silent
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-val post_message_notification_policy_of_yojson :
-  Yojson.Safe.t -> post_message_notification_policy
-
-val yojson_of_post_message_notification_policy :
-  post_message_notification_policy -> Yojson.Safe.t
 
 (** Internal notification behavior for a patched channel message. *)
 type nonrec patch_message_notification_policy =
@@ -25154,6 +25714,10 @@ type nonrec post_message = {
 already carries its final id; the server mints one when absent. *)
   mentions : simple_mention list option;  (** Mentions tracked by the editor. *)
   nonce : string option;  (** Client nonce for optimistic reconciliation. *)
+  notification_policy : post_message_notification_policy option;
+      (** Who hears about this post. [Silent] still delivers and shows the
+message, but sends no notification of any kind, mentions included.
+Channel messages only; other parents accept only [Default]. *)
   thread_id : string option;  (** Root to reply to, if this is a reply. *)
 }
 (** Create a root or reply. Thread state may only be supplied on a root. *)
@@ -25168,6 +25732,7 @@ val make_post_message :
   ?id:string ->
   ?mentions:simple_mention list ->
   ?nonce:string ->
+  ?notification_policy:post_message_notification_policy ->
   ?thread_id:string ->
   unit ->
   post_message
@@ -30958,6 +31523,7 @@ val post_channel_bot_webhook :
   content:string ->
   ?x_macro_bot_token:string ->
   ?x_macro_channel_bot_token:string ->
+  ?notification_policy:post_message_notification_policy ->
   unit ->
   (channel_webhook_response, error_response) Macro_sdk_runtime.Request.t
 (** [POST /channels/{channel_id}/webhook]
@@ -31020,16 +31586,16 @@ val block_crm_domain :
   domain:string -> unit -> (unit, error_response) Macro_sdk_runtime.Request.t
 (** [PUT /crm/blocked-domains/{domain}]
 
-Block a domain: email sync stops creating or updating CRM records for
-it, and the company and contacts the CRM holds for it are hidden.
-Idempotent. Requires an admin/owner team role (403). *)
+Block a domain and its subdomains from email contributions, preserving records.
+Refuses a domain covering any member's connected primary mailbox (400).
+Idempotent for permitted domains. Requires an admin/owner team role (403). *)
 
 val unblock_crm_domain :
   domain:string -> unit -> (unit, error_response) Macro_sdk_runtime.Request.t
 (** [DELETE /crm/blocked-domains/{domain}]
 
-Unblock a domain: email sync resumes for it, and what blocking hid is
-shown again. Idempotent. Requires an admin/owner team role (403). *)
+Remove a team domain exclusion and schedule eligible email backfill,
+preserving record visibility. Idempotent. Requires an admin/owner role (403). *)
 
 val create_crm_company :
   name:string ->
@@ -31270,8 +31836,9 @@ admin/owner only). The name overwrites the team-scoped
 [crm_contacts.name] column. *)
 
 val get_crm_email_privacy :
+  ?consent_only:bool ->
   unit ->
-  ( email_privacy_settings,
+  ( email_privacy_response,
     Macro_sdk_runtime.Request.no_error )
   Macro_sdk_runtime.Request.t
 (** [GET /crm/email-privacy]
@@ -31288,8 +31855,90 @@ val update_crm_email_privacy :
 
 Apply one consent, domain, or thread exclusion change as the member. *)
 
+val get_crm_email_policy :
+  unit ->
+  ( email_policy_view,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [GET /crm/email-privacy/policy]
+
+Read sharing state without initializing consent or scheduling work. *)
+
+val update_crm_email_policy :
+  change:email_policy_change ->
+  if_policy:email_policy_token ->
+  request_id:string ->
+  unit ->
+  ( email_policy_outcome,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [PUT /crm/email-privacy/policy]
+
+Direct member/agent activation with CAS, idempotency and verified audit. *)
+
+val list_crm_email_policy_history :
+  ?before:string ->
+  unit ->
+  ( email_policy_history,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [GET /crm/email-privacy/policy/history]
+
+Read only the acting member's audit history. *)
+
+val get_crm_email_rule_preview :
+  unit ->
+  ( email_preview_view option,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [GET /crm/email-privacy/policy/preview]
+
+Inspect the owner's current count preview; no email content is returned. *)
+
+val preview_crm_email_rules :
+  if_policy:email_policy_token ->
+  rules:email_rule_set ->
+  ?if_preview_id:string ->
+  unit ->
+  ( email_preview_view,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [POST /crm/email-privacy/policy/preview]
+
+Start optional count-only work; this never initializes or activates consent. *)
+
+val cancel_crm_email_rule_preview :
+  preview_id:string ->
+  unit ->
+  (unit, Macro_sdk_runtime.Request.no_error) Macro_sdk_runtime.Request.t
+(** [DELETE /crm/email-privacy/policy/preview/{preview_id}]
+
+Cancel the owner's current named preview, including while rollout is off. *)
+
+val get_crm_email_rule_revision :
+  revision:int64 ->
+  unit ->
+  ( email_policy_revision option,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [GET /crm/email-privacy/policy/revisions/{revision}]
+
+Fetch one saved definition, independently of live CRM viewing permission. *)
+
+val validate_crm_email_rules :
+  include_:email_inclusion_rule list ->
+  schema_version:int ->
+  unit ->
+  ( email_rule_validation,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [POST /crm/email-privacy/policy/validate]
+
+Canonicalize and authorize a definition without sharing mail. *)
+
 val list_crm_excluded_email_threads :
   ?after:string ->
+  ?thread_id:string ->
   unit ->
   ( excluded_email_threads,
     Macro_sdk_runtime.Request.no_error )
@@ -32866,6 +33515,7 @@ val external_chat_send :
   idempotency_key:string ->
   message:external_chat_reply_content ->
   ?reply_to:string ->
+  ?user_confirmation:string ->
   unit ->
   ( external_chat_send_progress,
     Macro_sdk_runtime.Request.no_error )
@@ -33488,6 +34138,7 @@ val entity_message_create :
   ?id:string ->
   ?mentions:simple_mention list ->
   ?nonce:string ->
+  ?notification_policy:post_message_notification_policy ->
   ?thread_id:string ->
   unit ->
   (message, Macro_sdk_runtime.Request.no_error) Macro_sdk_runtime.Request.t

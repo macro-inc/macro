@@ -181,6 +181,10 @@ and yojson_of_booking_status : booking_status -> Yojson.Safe.t =
   | Unknown other -> `String other
 
 type nonrec booking = {
+  abandoned_at : string option;
+      (** When Macro stopped trying to update the host's calendar for the
+booking's latest change. A failed booking with this set is not being
+retried, and cancelling it is the way to release its time. *)
   answers : (string * string) list;  (** Answers keyed by question identity. *)
   attendance : booking_attendance option;
       (** Explicit attendance outcome; existing booking records default to unknown. *)
@@ -208,6 +212,7 @@ let booking_of_yojson : Yojson.Safe.t -> booking =
  fun json ->
   let fields = Json.obj json in
   {
+    abandoned_at = Json.optional fields "abandonedAt" Json.string;
     answers = Json.required fields "answers" (Json.map Json.string);
     attendance = Json.optional fields "attendance" booking_attendance_of_yojson;
     email = Json.required fields "email" Json.string;
@@ -231,6 +236,7 @@ and yojson_of_booking : booking -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
+      ("abandonedAt", Option.map Json.of_string value.abandoned_at);
       ("answers", Some ((Json.of_map Json.of_string) value.answers));
       ("attendance", Option.map yojson_of_booking_attendance value.attendance);
       ("email", Some (Json.of_string value.email));
@@ -250,12 +256,13 @@ and yojson_of_booking : booking -> Yojson.Safe.t =
       ("title", Some (Json.of_string value.title));
     ]
 
-let make_booking ~(answers : (string * string) list) ?attendance
+let make_booking ?abandoned_at ~(answers : (string * string) list) ?attendance
     ~(email : string) ~(ends_at : string) ~(event_type_id : string)
     ~(hosts : string list) ~(id : string) ~(location : string) ~(name : string)
     ?question_labels ?reschedule_count ?rescheduled_at ~(starts_at : string)
     ~(status : booking_status) ~(time_zone : string) ~(title : string) () =
   ({
+     abandoned_at;
      answers;
      attendance;
      email;
@@ -703,7 +710,7 @@ type nonrec booking_link_event = {
   macro_call : bool option;
       (** Attach a Macro call when someone books. A join link is created for that
 booking and written onto the calendar invitation. Mutually exclusive
-with [googleMeet]. Prefer this for a Macro booking; omit or false when
+with [googleMeet]. Set it when the user wants a Macro call; omit or false when
 the link should use Google Meet or no video. False is omitted so drafts
 saved before this field still round-trip unchanged. *)
   mode : scheduling_mode;  (** Host assignment policy. *)

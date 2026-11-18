@@ -2663,6 +2663,384 @@ let make_agent_session_response ?acp_session_id ?archived_at ?archived_by
    }
     : agent_session_response)
 
+(** What an operation does to its group's data, the unit a person allows,
+asks about or refuses. *)
+type nonrec permission_action =
+  | Create
+  | Read
+  | Update
+  | Destroy
+  | Send
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let permission_action_of_yojson : Yojson.Safe.t -> permission_action =
+ fun json ->
+  match Json.string json with
+  | "create" -> Create
+  | "read" -> Read
+  | "update" -> Update
+  | "destroy" -> Destroy
+  | "send" -> Send
+  | other -> Json.unknown "permission_action" json (Unknown other)
+
+and yojson_of_permission_action : permission_action -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Create -> `String "create"
+  | Read -> `String "read"
+  | Update -> `String "update"
+  | Destroy -> `String "destroy"
+  | Send -> `String "send"
+  | Unknown other -> `String other
+
+(** Where an effective state comes from. *)
+type nonrec tool_permission_origin =
+  | Tool
+  | Group_action
+  | Default
+  | Session
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let tool_permission_origin_of_yojson : Yojson.Safe.t -> tool_permission_origin =
+ fun json ->
+  match Json.string json with
+  | "tool" -> Tool
+  | "group_action" -> Group_action
+  | "default" -> Default
+  | "session" -> Session
+  | other -> Json.unknown "tool_permission_origin" json (Unknown other)
+
+and yojson_of_tool_permission_origin : tool_permission_origin -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Tool -> `String "tool"
+  | Group_action -> `String "group_action"
+  | Default -> `String "default"
+  | Session -> `String "session"
+  | Unknown other -> `String other
+
+(** How an operation may be called. Ordered from most to least permissive, so
+[max] is the more restrictive of two states. *)
+type nonrec tool_permission_state =
+  | Always
+  | Ask
+  | Never
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let tool_permission_state_of_yojson : Yojson.Safe.t -> tool_permission_state =
+ fun json ->
+  match Json.string json with
+  | "always" -> Always
+  | "ask" -> Ask
+  | "never" -> Never
+  | other -> Json.unknown "tool_permission_state" json (Unknown other)
+
+and yojson_of_tool_permission_state : tool_permission_state -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Always -> `String "always"
+  | Ask -> `String "ask"
+  | Never -> `String "never"
+  | Unknown other -> `String other
+
+type nonrec tool_permission_override = {
+  label : string;  (** What it does, for a person. *)
+  operation : string;  (** The raw operationId. *)
+  origin : tool_permission_origin;  (** [tool] or [session]. *)
+  service : string;  (** The SDK's spec name. *)
+  state : tool_permission_state;  (** Its effective state. *)
+}
+(** An operation whose state differs from its group's action. *)
+
+let tool_permission_override_of_yojson :
+    Yojson.Safe.t -> tool_permission_override =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    label = Json.required fields "label" Json.string;
+    operation = Json.required fields "operation" Json.string;
+    origin = Json.required fields "origin" tool_permission_origin_of_yojson;
+    service = Json.required fields "service" Json.string;
+    state = Json.required fields "state" tool_permission_state_of_yojson;
+  }
+
+and yojson_of_tool_permission_override :
+    tool_permission_override -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("label", Some (Json.of_string value.label));
+      ("operation", Some (Json.of_string value.operation));
+      ("origin", Some (yojson_of_tool_permission_origin value.origin));
+      ("service", Some (Json.of_string value.service));
+      ("state", Some (yojson_of_tool_permission_state value.state));
+    ]
+
+let make_tool_permission_override ~(label : string) ~(operation : string)
+    ~(origin : tool_permission_origin) ~(service : string)
+    ~(state : tool_permission_state) () =
+  ({ label; operation; origin; service; state } : tool_permission_override)
+
+type nonrec tool_permission_action = {
+  action : permission_action;  (** The action. *)
+  origin : tool_permission_origin;
+      (** [group_action], [default] or [session]. *)
+  overrides : tool_permission_override list;
+      (** The operations whose state differs from [state]. *)
+  state : tool_permission_state;
+      (** The state of its operations that have no setting of their own. *)
+  tools : int;  (** How many operations the group has with this action. *)
+}
+(** One action of a group, resolved. *)
+
+let tool_permission_action_of_yojson : Yojson.Safe.t -> tool_permission_action =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    action = Json.required fields "action" permission_action_of_yojson;
+    origin = Json.required fields "origin" tool_permission_origin_of_yojson;
+    overrides =
+      Json.required fields "overrides"
+        (Json.list tool_permission_override_of_yojson);
+    state = Json.required fields "state" tool_permission_state_of_yojson;
+    tools = Json.required fields "tools" Json.int;
+  }
+
+and yojson_of_tool_permission_action : tool_permission_action -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("action", Some (yojson_of_permission_action value.action));
+      ("origin", Some (yojson_of_tool_permission_origin value.origin));
+      ( "overrides",
+        Some ((Json.of_list yojson_of_tool_permission_override) value.overrides)
+      );
+      ("state", Some (yojson_of_tool_permission_state value.state));
+      ("tools", Some (Json.of_int value.tools));
+    ]
+
+let make_tool_permission_action ~(action : permission_action)
+    ~(origin : tool_permission_origin)
+    ~(overrides : tool_permission_override list)
+    ~(state : tool_permission_state) ~(tools : int) () =
+  ({ action; origin; overrides; state; tools } : tool_permission_action)
+
+type nonrec tool_permission_group = {
+  actions : tool_permission_action list;
+      (** All five actions, in display order. *)
+  group : string;  (** The group id. *)
+}
+(** One group, resolved. *)
+
+let tool_permission_group_of_yojson : Yojson.Safe.t -> tool_permission_group =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    actions =
+      Json.required fields "actions"
+        (Json.list tool_permission_action_of_yojson);
+    group = Json.required fields "group" Json.string;
+  }
+
+and yojson_of_tool_permission_group : tool_permission_group -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "actions",
+        Some ((Json.of_list yojson_of_tool_permission_action) value.actions) );
+      ("group", Some (Json.of_string value.group));
+    ]
+
+let make_tool_permission_group ~(actions : tool_permission_action list)
+    ~(group : string) () =
+  ({ actions; group } : tool_permission_group)
+
+(** Whether the permissions are an owned agent's or the caller's own for a
+built-in persona. *)
+type nonrec tool_permission_policy_kind =
+  | Agent
+  | Persona
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let tool_permission_policy_kind_of_yojson :
+    Yojson.Safe.t -> tool_permission_policy_kind =
+ fun json ->
+  match Json.string json with
+  | "agent" -> Agent
+  | "persona" -> Persona
+  | other -> Json.unknown "tool_permission_policy_kind" json (Unknown other)
+
+and yojson_of_tool_permission_policy_kind :
+    tool_permission_policy_kind -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Agent -> `String "agent"
+  | Persona -> `String "persona"
+  | Unknown other -> `String other
+
+(** What a stored setting applies to: every operation of a group's action, or
+one operation. *)
+type nonrec tool_permission_target =
+  | Group_action of {
+      action : permission_action;  (** The action. *)
+      group : string;  (** A registry group id, e.g. [documents]. *)
+    }  (** Every operation of [group] whose action is [action]. *)
+  | Tool of {
+      operation : string;  (** The raw operationId, e.g. [delete_document]. *)
+      service : string;  (** The SDK's spec name, e.g. [storage]. *)
+    }  (** One SDK operation. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let tool_permission_target_of_yojson : Yojson.Safe.t -> tool_permission_target =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "kind" with
+  | "group_action" ->
+      Group_action
+        {
+          action = Json.required fields "action" permission_action_of_yojson;
+          group = Json.required fields "group" Json.string;
+        }
+  | "tool" ->
+      Tool
+        {
+          operation = Json.required fields "operation" Json.string;
+          service = Json.required fields "service" Json.string;
+        }
+  | _ -> Json.unknown "tool_permission_target" json (Unknown json)
+
+and yojson_of_tool_permission_target : tool_permission_target -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Group_action case ->
+      Json.record
+        [
+          ("kind", Some (`String "group_action"));
+          ("action", Some (yojson_of_permission_action case.action));
+          ("group", Some (Json.of_string case.group));
+        ]
+  | Tool case ->
+      Json.record
+        [
+          ("kind", Some (`String "tool"));
+          ("operation", Some (Json.of_string case.operation));
+          ("service", Some (Json.of_string case.service));
+        ]
+  | Unknown json -> json
+
+let make_tool_permission_target_group_action ~(action : permission_action)
+    ~(group : string) () =
+  (Group_action { action; group } : tool_permission_target)
+
+let make_tool_permission_target_tool ~(operation : string) ~(service : string)
+    () =
+  (Tool { operation; service } : tool_permission_target)
+
+type nonrec tool_permission_rule = {
+  state : tool_permission_state;  (** Its state. *)
+  target : tool_permission_target;  (** What it applies to. *)
+  updated_at : string;  (** When it was last set. *)
+  via_agent : bool;  (** The agent set it by restricting itself. *)
+}
+(** A stored setting. *)
+
+let tool_permission_rule_of_yojson : Yojson.Safe.t -> tool_permission_rule =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    state = Json.required fields "state" tool_permission_state_of_yojson;
+    target = Json.required fields "target" tool_permission_target_of_yojson;
+    updated_at = Json.required fields "updatedAt" Json.string;
+    via_agent = Json.required fields "viaAgent" Json.bool;
+  }
+
+and yojson_of_tool_permission_rule : tool_permission_rule -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("state", Some (yojson_of_tool_permission_state value.state));
+      ("target", Some (yojson_of_tool_permission_target value.target));
+      ("updatedAt", Some (Json.of_string value.updated_at));
+      ("viaAgent", Some (Json.of_bool value.via_agent));
+    ]
+
+let make_tool_permission_rule ~(state : tool_permission_state)
+    ~(target : tool_permission_target) ~(updated_at : string)
+    ~(via_agent : bool) () =
+  ({ state; target; updated_at; via_agent } : tool_permission_rule)
+
+type nonrec agent_tool_permissions = {
+  agent_id : bot_id;  (** The agent (or persona) id. *)
+  can_edit : bool;  (** The caller may change and reset them. *)
+  can_tighten : bool;  (** The caller may tighten them. *)
+  groups : tool_permission_group list;
+      (** Every catalog group with its five actions. *)
+  kind : tool_permission_policy_kind;  (** Whose settings these are. *)
+  restricted : int;  (** How many operations are not always allowed. *)
+  rules : tool_permission_rule list;  (** The saved settings. *)
+  session_rules : tool_permission_rule list option;
+      (** The agent's restrictions on itself for this session, when the view is
+of a session. *)
+  version : string;  (** The registry version the resolution used. *)
+}
+(** An agent's permissions as they apply to the caller. *)
+
+let agent_tool_permissions_of_yojson : Yojson.Safe.t -> agent_tool_permissions =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    agent_id = Json.required fields "agentId" bot_id_of_yojson;
+    can_edit = Json.required fields "canEdit" Json.bool;
+    can_tighten = Json.required fields "canTighten" Json.bool;
+    groups =
+      Json.required fields "groups" (Json.list tool_permission_group_of_yojson);
+    kind = Json.required fields "kind" tool_permission_policy_kind_of_yojson;
+    restricted = Json.required fields "restricted" Json.int;
+    rules =
+      Json.required fields "rules" (Json.list tool_permission_rule_of_yojson);
+    session_rules =
+      Json.optional fields "sessionRules"
+        (Json.list tool_permission_rule_of_yojson);
+    version = Json.required fields "version" Json.string;
+  }
+
+and yojson_of_agent_tool_permissions : agent_tool_permissions -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("agentId", Some (yojson_of_bot_id value.agent_id));
+      ("canEdit", Some (Json.of_bool value.can_edit));
+      ("canTighten", Some (Json.of_bool value.can_tighten));
+      ( "groups",
+        Some ((Json.of_list yojson_of_tool_permission_group) value.groups) );
+      ("kind", Some (yojson_of_tool_permission_policy_kind value.kind));
+      ("restricted", Some (Json.of_int value.restricted));
+      ("rules", Some ((Json.of_list yojson_of_tool_permission_rule) value.rules));
+      ( "sessionRules",
+        Option.map
+          (Json.of_list yojson_of_tool_permission_rule)
+          value.session_rules );
+      ("version", Some (Json.of_string value.version));
+    ]
+
+let make_agent_tool_permissions ~(agent_id : bot_id) ~(can_edit : bool)
+    ~(can_tighten : bool) ~(groups : tool_permission_group list)
+    ~(kind : tool_permission_policy_kind) ~(restricted : int)
+    ~(rules : tool_permission_rule list) ?session_rules ~(version : string) () =
+  ({
+     agent_id;
+     can_edit;
+     can_tighten;
+     groups;
+     kind;
+     restricted;
+     rules;
+     session_rules;
+     version;
+   }
+    : agent_tool_permissions)
+
 (** A kind of action or inactivity the user should see: [permission] to run a tool, an
 [elicitation] question or form, a [tool_approval] held for the owner, or [stalled] with no
 activity for over 20 minutes. *)
@@ -5703,6 +6081,42 @@ let make_log_frame_dto ~(content : Yojson.Safe.t)
     ~(direction : log_direction_dto) () =
   ({ content; direction } : log_frame_dto)
 
+type nonrec loosened_operation = {
+  from : tool_permission_state;  (** Its state before. *)
+  label : string;  (** What it does, for a person. *)
+  operation : string;  (** The raw operationId. *)
+  service : string;  (** The SDK's spec name. *)
+  to_ : tool_permission_state;  (** Its state after. *)
+}
+(** An operation a change would have made more permissive. *)
+
+let loosened_operation_of_yojson : Yojson.Safe.t -> loosened_operation =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    from = Json.required fields "from" tool_permission_state_of_yojson;
+    label = Json.required fields "label" Json.string;
+    operation = Json.required fields "operation" Json.string;
+    service = Json.required fields "service" Json.string;
+    to_ = Json.required fields "to" tool_permission_state_of_yojson;
+  }
+
+and yojson_of_loosened_operation : loosened_operation -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("from", Some (yojson_of_tool_permission_state value.from));
+      ("label", Some (Json.of_string value.label));
+      ("operation", Some (Json.of_string value.operation));
+      ("service", Some (Json.of_string value.service));
+      ("to", Some (yojson_of_tool_permission_state value.to_));
+    ]
+
+let make_loosened_operation ~(from : tool_permission_state) ~(label : string)
+    ~(operation : string) ~(service : string) ~(to_ : tool_permission_state) ()
+    =
+  ({ from; label; operation; service; to_ } : loosened_operation)
+
 (** Where the opened item goes. Neither replaces what the person is reading. *)
 type nonrec ui_placement =
   | Beside_agent
@@ -6465,6 +6879,306 @@ and yojson_of_start_fresh_agent_conversation_request :
 
 let make_start_fresh_agent_conversation_request ~(session_id : string) () =
   ({ session_id } : start_fresh_agent_conversation_request)
+
+(** Where a tightening was saved. *)
+type nonrec tool_permission_applied_to =
+  | Agent
+  | Session
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let tool_permission_applied_to_of_yojson :
+    Yojson.Safe.t -> tool_permission_applied_to =
+ fun json ->
+  match Json.string json with
+  | "agent" -> Agent
+  | "session" -> Session
+  | other -> Json.unknown "tool_permission_applied_to" json (Unknown other)
+
+and yojson_of_tool_permission_applied_to :
+    tool_permission_applied_to -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Agent -> `String "agent"
+  | Session -> `String "session"
+  | Unknown other -> `String other
+
+type nonrec tighten_tool_permissions_response = {
+  applied_to : tool_permission_applied_to;  (** Where it was saved. *)
+  permissions : agent_tool_permissions;  (** The permissions now. *)
+}
+(** The result of a tightening. *)
+
+let tighten_tool_permissions_response_of_yojson :
+    Yojson.Safe.t -> tighten_tool_permissions_response =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    applied_to =
+      Json.required fields "appliedTo" tool_permission_applied_to_of_yojson;
+    permissions =
+      Json.required fields "permissions" agent_tool_permissions_of_yojson;
+  }
+
+and yojson_of_tighten_tool_permissions_response :
+    tighten_tool_permissions_response -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("appliedTo", Some (yojson_of_tool_permission_applied_to value.applied_to));
+      ("permissions", Some (yojson_of_agent_tool_permissions value.permissions));
+    ]
+
+let make_tighten_tool_permissions_response
+    ~(applied_to : tool_permission_applied_to)
+    ~(permissions : agent_tool_permissions) () =
+  ({ applied_to; permissions } : tighten_tool_permissions_response)
+
+type nonrec tool_permission_catalog_action = {
+  action : permission_action;  (** The action. *)
+  description : string;  (** What it covers. *)
+  name : string;  (** Its display name, e.g. "Delete". *)
+}
+(** An action, as the catalog describes it to a person. *)
+
+let tool_permission_catalog_action_of_yojson :
+    Yojson.Safe.t -> tool_permission_catalog_action =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    action = Json.required fields "action" permission_action_of_yojson;
+    description = Json.required fields "description" Json.string;
+    name = Json.required fields "name" Json.string;
+  }
+
+and yojson_of_tool_permission_catalog_action :
+    tool_permission_catalog_action -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("action", Some (yojson_of_permission_action value.action));
+      ("description", Some (Json.of_string value.description));
+      ("name", Some (Json.of_string value.name));
+    ]
+
+let make_tool_permission_catalog_action ~(action : permission_action)
+    ~(description : string) ~(name : string) () =
+  ({ action; description; name } : tool_permission_catalog_action)
+
+type nonrec tool_permission_catalog_tool = {
+  action : permission_action;  (** Its action. *)
+  label : string;  (** What it does, for a person. *)
+  operation : string;  (** The raw operationId. *)
+  service : string;  (** The SDK's spec name. *)
+}
+(** One classified SDK operation. *)
+
+let tool_permission_catalog_tool_of_yojson :
+    Yojson.Safe.t -> tool_permission_catalog_tool =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    action = Json.required fields "action" permission_action_of_yojson;
+    label = Json.required fields "label" Json.string;
+    operation = Json.required fields "operation" Json.string;
+    service = Json.required fields "service" Json.string;
+  }
+
+and yojson_of_tool_permission_catalog_tool :
+    tool_permission_catalog_tool -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("action", Some (yojson_of_permission_action value.action));
+      ("label", Some (Json.of_string value.label));
+      ("operation", Some (Json.of_string value.operation));
+      ("service", Some (Json.of_string value.service));
+    ]
+
+let make_tool_permission_catalog_tool ~(action : permission_action)
+    ~(label : string) ~(operation : string) ~(service : string) () =
+  ({ action; label; operation; service } : tool_permission_catalog_tool)
+
+type nonrec tool_permission_catalog_group = {
+  description : string;  (** What it covers. *)
+  id : string;  (** Stable id. *)
+  name : string;  (** Display name. *)
+  tools : tool_permission_catalog_tool list;
+      (** Its operations, in registry order. *)
+}
+(** A group and its operations, as the catalog lists them. *)
+
+let tool_permission_catalog_group_of_yojson :
+    Yojson.Safe.t -> tool_permission_catalog_group =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    description = Json.required fields "description" Json.string;
+    id = Json.required fields "id" Json.string;
+    name = Json.required fields "name" Json.string;
+    tools =
+      Json.required fields "tools"
+        (Json.list tool_permission_catalog_tool_of_yojson);
+  }
+
+and yojson_of_tool_permission_catalog_group :
+    tool_permission_catalog_group -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("description", Some (Json.of_string value.description));
+      ("id", Some (Json.of_string value.id));
+      ("name", Some (Json.of_string value.name));
+      ( "tools",
+        Some ((Json.of_list yojson_of_tool_permission_catalog_tool) value.tools)
+      );
+    ]
+
+let make_tool_permission_catalog_group ~(description : string) ~(id : string)
+    ~(name : string) ~(tools : tool_permission_catalog_tool list) () =
+  ({ description; id; name; tools } : tool_permission_catalog_group)
+
+type nonrec tool_permission_catalog = {
+  actions : tool_permission_catalog_action list;
+      (** The five actions, in display order. *)
+  groups : tool_permission_catalog_group list;
+      (** The groups, in display order. *)
+  version : string;
+      (** The registry version; the same in every permissions view it resolved. *)
+}
+(** Every group, action and operation a permission can name. *)
+
+let tool_permission_catalog_of_yojson : Yojson.Safe.t -> tool_permission_catalog
+    =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    actions =
+      Json.required fields "actions"
+        (Json.list tool_permission_catalog_action_of_yojson);
+    groups =
+      Json.required fields "groups"
+        (Json.list tool_permission_catalog_group_of_yojson);
+    version = Json.required fields "version" Json.string;
+  }
+
+and yojson_of_tool_permission_catalog : tool_permission_catalog -> Yojson.Safe.t
+    =
+ fun value ->
+  Json.record
+    [
+      ( "actions",
+        Some
+          ((Json.of_list yojson_of_tool_permission_catalog_action)
+             value.actions) );
+      ( "groups",
+        Some
+          ((Json.of_list yojson_of_tool_permission_catalog_group) value.groups)
+      );
+      ("version", Some (Json.of_string value.version));
+    ]
+
+let make_tool_permission_catalog
+    ~(actions : tool_permission_catalog_action list)
+    ~(groups : tool_permission_catalog_group list) ~(version : string) () =
+  ({ actions; groups; version } : tool_permission_catalog)
+
+type nonrec tool_permission_change = {
+  state : tool_permission_state option;
+  target : tool_permission_target;  (** What to change. *)
+}
+(** One requested change. [state: None] removes the setting: a tool falls back
+to its group's action, a group's action to always. [always] on a group's
+action removes it too, since that is its default. *)
+
+let tool_permission_change_of_yojson : Yojson.Safe.t -> tool_permission_change =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    state = Json.optional fields "state" tool_permission_state_of_yojson;
+    target = Json.required fields "target" tool_permission_target_of_yojson;
+  }
+
+and yojson_of_tool_permission_change : tool_permission_change -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("state", Option.map yojson_of_tool_permission_state value.state);
+      ("target", Some (yojson_of_tool_permission_target value.target));
+    ]
+
+let make_tool_permission_change ?state ~(target : tool_permission_target) () =
+  ({ state; target } : tool_permission_change)
+
+type nonrec tool_permission_changes = {
+  changes : tool_permission_change list;
+      (** Between 1 and 200 changes, applied together. *)
+}
+(** Changes to an agent's permissions. *)
+
+let tool_permission_changes_of_yojson : Yojson.Safe.t -> tool_permission_changes
+    =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    changes =
+      Json.required fields "changes"
+        (Json.list tool_permission_change_of_yojson);
+  }
+
+and yojson_of_tool_permission_changes : tool_permission_changes -> Yojson.Safe.t
+    =
+ fun value ->
+  Json.record
+    [
+      ( "changes",
+        Some ((Json.of_list yojson_of_tool_permission_change) value.changes) );
+    ]
+
+let make_tool_permission_changes ~(changes : tool_permission_change list) () =
+  ({ changes } : tool_permission_changes)
+
+type nonrec tool_permission_error = {
+  code : string;
+      (** [invalid], [unknown_target], [forbidden], [needs_person], [not_found],
+[would_loosen] or [internal]. *)
+  message : string;  (** What went wrong, for a person. *)
+  operations : loosened_operation list option;
+      (** For [would_loosen]: the operations the change would have loosened. *)
+  targets : tool_permission_target list option;
+      (** For [unknown_target]: the targets the registry does not have. *)
+}
+(** Why a request was refused. *)
+
+let tool_permission_error_of_yojson : Yojson.Safe.t -> tool_permission_error =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    code = Json.required fields "code" Json.string;
+    message = Json.required fields "message" Json.string;
+    operations =
+      Json.optional fields "operations" (Json.list loosened_operation_of_yojson);
+    targets =
+      Json.optional fields "targets"
+        (Json.list tool_permission_target_of_yojson);
+  }
+
+and yojson_of_tool_permission_error : tool_permission_error -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("code", Some (Json.of_string value.code));
+      ("message", Some (Json.of_string value.message));
+      ( "operations",
+        Option.map (Json.of_list yojson_of_loosened_operation) value.operations
+      );
+      ( "targets",
+        Option.map (Json.of_list yojson_of_tool_permission_target) value.targets
+      );
+    ]
+
+let make_tool_permission_error ~(code : string) ~(message : string) ?operations
+    ?targets () =
+  ({ code; message; operations; targets } : tool_permission_error)
 
 (** Why a command was not sent. *)
 type nonrec ui_decline_reason =
@@ -8445,6 +9159,37 @@ let answer_agent_session_tool_approval ~(session_id : string)
         Macro_sdk_runtime.Request.no_error )
       Macro_sdk_runtime.Request.t)
 
+(** [GET /agent-sessions/{session_id}/tool-permissions]
+
+The tool permissions that apply in a session: its agent's (for a built-in
+persona, the session owner's) and the agent's restrictions on itself for
+this session ([sessionRules]). *)
+let get_agent_session_tool_permissions ~(session_id : string) () =
+  ({
+     Request.service = "agent-harness";
+     operation = "get_agent_session_tool_permissions";
+     meth = `GET;
+     path =
+       String.concat ""
+         [
+           "/agent-sessions/";
+           Request.segment ((fun value -> value) session_id);
+           "/tool-permissions";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json agent_tool_permissions_of_yojson;
+     decode_error =
+       Request.error_json [ 403; 404 ] tool_permission_error_of_yojson;
+   }
+    : ( agent_tool_permissions,
+        tool_permission_error )
+      Macro_sdk_runtime.Request.t)
+
 (** [POST /agent-sessions/{session_id}/ui-commands]
 
 Open an item in a new pane of the app tab the person who prompted the
@@ -8567,6 +9312,28 @@ let unregister_agent_session_work ~(session_id : string) () =
    }
     : (unit, Macro_sdk_runtime.Request.no_error) Macro_sdk_runtime.Request.t)
 
+(** [GET /agent-tool-permissions/catalog]
+
+Every group, action and SDK operation an agent permission can name. *)
+let get_agent_tool_permission_catalog () =
+  ({
+     Request.service = "agent-harness";
+     operation = "get_agent_tool_permission_catalog";
+     meth = `GET;
+     path = "/agent-tool-permissions/catalog";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json tool_permission_catalog_of_yojson;
+     decode_error = Request.error_json [ 404 ] tool_permission_error_of_yojson;
+   }
+    : ( tool_permission_catalog,
+        tool_permission_error )
+      Macro_sdk_runtime.Request.t)
+
 (** [GET /agent-work-registrations]
 
 List the caller's active registrations of sessions they can still view, newest first. *)
@@ -8588,6 +9355,139 @@ let list_agent_work_registrations () =
    }
     : ( work_registration_response list,
         Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [GET /agents/{agent_id}/tool-permissions]
+
+An agent's tool permissions: its own when the caller may edit it or is the
+agent, the caller's own settings for a built-in persona. *)
+let get_agent_tool_permissions ~(agent_id : string) () =
+  ({
+     Request.service = "agent-harness";
+     operation = "get_agent_tool_permissions";
+     meth = `GET;
+     path =
+       String.concat ""
+         [
+           "/agents/";
+           Request.segment ((fun value -> value) agent_id);
+           "/tool-permissions";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json agent_tool_permissions_of_yojson;
+     decode_error =
+       Request.error_json [ 403; 404 ] tool_permission_error_of_yojson;
+   }
+    : ( agent_tool_permissions,
+        tool_permission_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [PUT /agents/{agent_id}/tool-permissions]
+
+Change an agent's tool permissions in either direction. Only a person
+signed in to Macro who may edit the agent; for a built-in persona, the
+caller's own settings. *)
+let set_agent_tool_permissions ~(agent_id : string)
+    ~(changes : tool_permission_change list) () =
+  ({
+     Request.service = "agent-harness";
+     operation = "set_agent_tool_permissions";
+     meth = `PUT;
+     path =
+       String.concat ""
+         [
+           "/agents/";
+           Request.segment ((fun value -> value) agent_id);
+           "/tool-permissions";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_tool_permission_changes
+               ({ changes } : tool_permission_changes)));
+     decode_reply = Request.json agent_tool_permissions_of_yojson;
+     decode_error =
+       Request.error_json [ 400; 403; 404 ] tool_permission_error_of_yojson;
+   }
+    : ( agent_tool_permissions,
+        tool_permission_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [DELETE /agents/{agent_id}/tool-permissions]
+
+Reset an agent's tool permissions so everything is always allowed. Only a
+person signed in to Macro who may edit the agent. *)
+let reset_agent_tool_permissions ~(agent_id : string) () =
+  ({
+     Request.service = "agent-harness";
+     operation = "reset_agent_tool_permissions";
+     meth = `DELETE;
+     path =
+       String.concat ""
+         [
+           "/agents/";
+           Request.segment ((fun value -> value) agent_id);
+           "/tool-permissions";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json agent_tool_permissions_of_yojson;
+     decode_error =
+       Request.error_json [ 403; 404 ] tool_permission_error_of_yojson;
+   }
+    : ( agent_tool_permissions,
+        tool_permission_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [POST /agents/{agent_id}/tool-permissions/tighten]
+
+Make an agent's tool permissions stricter. An agent may call this on
+itself; it is saved to the agent when the person it acts for may edit
+it, else to the current session only. Refused when any operation would
+become more permissive. *)
+let tighten_agent_tool_permissions ~(agent_id : string)
+    ~(changes : tool_permission_change list) () =
+  ({
+     Request.service = "agent-harness";
+     operation = "tighten_agent_tool_permissions";
+     meth = `POST;
+     path =
+       String.concat ""
+         [
+           "/agents/";
+           Request.segment ((fun value -> value) agent_id);
+           "/tool-permissions/tighten";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_tool_permission_changes
+               ({ changes } : tool_permission_changes)));
+     decode_reply = Request.json tighten_tool_permissions_response_of_yojson;
+     decode_error =
+       Request.error_json [ 400; 403; 404; 422 ] tool_permission_error_of_yojson;
+   }
+    : ( tighten_tool_permissions_response,
+        tool_permission_error )
       Macro_sdk_runtime.Request.t)
 
 (** [GET /coding-agents]

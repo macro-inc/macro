@@ -66,3 +66,18 @@ fn looks_up_by_service_and_operation_id() {
     assert!(operation("email", "no_such_operation").is_none());
     assert!(operation("no-such-service", "send_message").is_none());
 }
+
+#[test]
+fn an_action_parses_from_its_stored_name() {
+    for action in Action::ALL {
+        assert_eq!(Action::parse(action.as_str()), Some(action));
+    }
+    assert_eq!(Action::parse("delete"), None);
+}
+
+#[test]
+fn the_version_is_twelve_hex_characters() {
+    let version = super::version();
+    assert_eq!(version.len(), 12);
+    assert!(version.chars().all(|c| c.is_ascii_hexdigit()));
+}

@@ -44,6 +44,7 @@ mod runtime_commands;
 mod runtime_gauges;
 mod scheduling;
 mod speech_gateway;
+mod tool_permissions;
 mod trigger;
 mod voice_gateway;
 
@@ -2150,6 +2151,29 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     ));
+    // Agent permissions (`enable-agent-permissions`): who may edit an agent
+    // is the bots service's rule, and the catalog is the checked-in registry.
+    let agent_tool_permissions = agent_permissions::inbound::axum_router::router(
+        agent_permissions::inbound::axum_router::AgentPermissionsRouterState::new(
+            Arc::new(
+                agent_permissions::domain::service::AgentPermissionsService::new(
+                    agent_permissions::outbound::pg::PgPermissionStore::new(pool.clone()),
+                    tool_permissions::BotsAgentDirectory(
+                        bots::domain::service::BotServiceImpl::new(
+                            PgBotsRepo::new(pool.clone()),
+                            broker.clone(),
+                            computers::harness_service(&pool),
+                        ),
+                    ),
+                    tool_permissions::RepoSessionDirectory(session_repo.clone()),
+                    code_mode::PermissionsFlag(feature_flags.clone()),
+                    Arc::new(agent_permissions::outbound::registry::registry_catalog()),
+                ),
+            ),
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let notification_service = Arc::new(agent_session::domain::notifications::NotificationService(
         Arc::new(agent_session::outbound::notifications::PgNotificationStore(
             pool.clone(),
@@ -2239,6 +2263,7 @@ pub async fn run() -> anyhow::Result<()> {
             .with_auto_archive(auto_archive)
             .with_work_registrations(work_registrations)
             .with_tool_approvals(tool_approval_answers)
+            .with_agent_tool_permissions(agent_tool_permissions)
             .with_app_connections(app_connections)
             .with_code_executions(code_executions)
             .with_notifications(notification_ingress)

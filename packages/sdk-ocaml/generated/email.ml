@@ -3529,6 +3529,7 @@ type nonrec forward_calendar_event_error_code =
   | Invalid_recipients
   | Inbox_unavailable
   | Send_failed
+  | Confirmation_required
   | Unknown of string  (** A value this SDK version does not know. *)
 
 let forward_calendar_event_error_code_of_yojson :
@@ -3539,6 +3540,7 @@ let forward_calendar_event_error_code_of_yojson :
   | "invalid_recipients" -> Invalid_recipients
   | "inbox_unavailable" -> Inbox_unavailable
   | "send_failed" -> Send_failed
+  | "confirmation_required" -> Confirmation_required
   | other ->
       Json.unknown "forward_calendar_event_error_code" json (Unknown other)
 
@@ -3550,6 +3552,7 @@ and yojson_of_forward_calendar_event_error_code :
   | Invalid_recipients -> `String "invalid_recipients"
   | Inbox_unavailable -> `String "inbox_unavailable"
   | Send_failed -> `String "send_failed"
+  | Confirmation_required -> `String "confirmation_required"
   | Unknown other -> `String other
 
 type nonrec forward_calendar_event_error = {

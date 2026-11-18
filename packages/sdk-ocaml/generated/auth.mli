@@ -380,6 +380,17 @@ val make_codex_login_start :
   codex_login_start
 (** Expiring browser authorization instructions. *)
 
+type nonrec computer_rollout = {
+  enabled : bool;  (** The computer UI and purchases are on for this user. *)
+}
+(** Whether computers are rolled out to the caller. *)
+
+val computer_rollout_of_yojson : Yojson.Safe.t -> computer_rollout
+val yojson_of_computer_rollout : computer_rollout -> Yojson.Safe.t
+
+val make_computer_rollout : enabled:bool -> unit -> computer_rollout
+(** Whether computers are rolled out to the caller. *)
+
 (** A size a team can buy. *)
 type nonrec computer_size =
   | Standard
@@ -633,10 +644,11 @@ val make_create_profile_picture_upload_request :
 type nonrec create_team_agent = {
   avatar_url : string option;
       (** Profile picture URL (a static file the caller uploaded). *)
-  job_description : string;
-      (** What the agent is responsible for. Seeds its workspace. *)
+  job_description : string option;
+      (** What the agent is responsible for. Seeds its workspace; when this and
+[personality] are empty the agent asks its owner what to take on. *)
   name : string;  (** Display name. *)
-  personality : string;
+  personality : string option;
       (** How the agent behaves and talks. Seeds its workspace. *)
   purchase_key : string;
       (** One key per Invite dialog, reused when the invite is retried, so a
@@ -653,9 +665,9 @@ val yojson_of_create_team_agent : create_team_agent -> Yojson.Safe.t
 
 val make_create_team_agent :
   ?avatar_url:string ->
-  job_description:string ->
+  ?job_description:string ->
   name:string ->
-  personality:string ->
+  ?personality:string ->
   purchase_key:string ->
   size:string ->
   ?voice:string ->
@@ -2360,6 +2372,19 @@ val make_purchase_body :
   purchase_body
 (** Body of a team purchase. *)
 
+(** Why a purchase was refused, as a stable code the buy and add-agent dialogs
+show their own way. One vocabulary for [/team/computers] and
+[/team_agents]. *)
+type nonrec purchase_refusal_code =
+  | Team_on_trial
+  | Payment_declined
+  | No_room
+  | Invite_in_progress
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val purchase_refusal_code_of_yojson : Yojson.Safe.t -> purchase_refusal_code
+val yojson_of_purchase_refusal_code : purchase_refusal_code -> Yojson.Safe.t
+
 (** Where a purchase stands when its request returns. *)
 type nonrec purchase_state =
   | Ready
@@ -2942,6 +2967,7 @@ val make_team :
 (** Where an agent teammate is, from its computer. *)
 type nonrec team_agent_status =
   | Provisioning
+  | Starting
   | Running
   | Paused
   | Failed
@@ -2982,6 +3008,26 @@ val make_team_agent :
   team_agent
 (** An agent teammate: an AI member of a team with its own Macro account and
 its own Macro computer. *)
+
+type nonrec team_agent_error_body = {
+  code : purchase_refusal_code option;
+  message : string;  (** Human-readable message. *)
+  size : computer_size option;
+}
+(** \[[ErrorResponse]\] plus a stable code for refusals the invite dialog shows
+its own way rather than as a message. *)
+
+val team_agent_error_body_of_yojson : Yojson.Safe.t -> team_agent_error_body
+val yojson_of_team_agent_error_body : team_agent_error_body -> Yojson.Safe.t
+
+val make_team_agent_error_body :
+  ?code:purchase_refusal_code ->
+  message:string ->
+  ?size:computer_size ->
+  unit ->
+  team_agent_error_body
+(** \[[ErrorResponse]\] plus a stable code for refusals the invite dialog shows
+its own way rather than as a message. *)
 
 type nonrec team_agents = {
   agents : team_agent list;  (** The agents, oldest first. *)
@@ -3426,6 +3472,15 @@ and passwordless_login_reply =
 and get_team_reply =
   | Ok_ of team_with_members  (** HTTP 200. *)
   | No_content  (** HTTP 204. *)
+
+and create_team_agent_error =
+  | Bad_request of error_response  (** HTTP 400. *)
+  | Unauthorized of error_response  (** HTTP 401. *)
+  | Payment_required of team_agent_error_body  (** HTTP 402. *)
+  | Forbidden of error_response  (** HTTP 403. *)
+  | Conflict of team_agent_error_body  (** HTTP 409. *)
+  | Internal_server_error of error_response  (** HTTP 500. *)
+  | Bad_gateway of error_response  (** HTTP 502. *)
 
 and get_user_organization_reply =
   | Ok_ of user_organization_response  (** HTTP 200. *)
@@ -4092,6 +4147,16 @@ val list_team_computer_offers :
 
 Every size with its price and availability. *)
 
+val get_team_computer_rollout :
+  unit ->
+  ( computer_rollout,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [GET /team/computers/rollout]
+
+Whether the caller sees computers: the same rollout check purchases and
+offers make, so the web never shows computers the backend would refuse. *)
+
 val cancel_team_computer :
   computer_id:string ->
   unit ->
@@ -4315,19 +4380,28 @@ val list_team_agents :
 The caller's team's agents, with their computers' status. *)
 
 val create_team_agent :
-  job_description:string ->
   name:string ->
-  personality:string ->
   purchase_key:string ->
   size:string ->
   ?avatar_url:string ->
+  ?job_description:string ->
+  ?personality:string ->
   ?voice:string ->
   unit ->
-  (team_agent, error_response) Macro_sdk_runtime.Request.t
+  (team_agent, create_team_agent_error) Macro_sdk_runtime.Request.t
 (** [POST /team_agents]
 
 Invite an agent teammate and buy its computer. Requires a team admin or
 owner using their own credential. The agent comes back [provisioning]. *)
+
+val report_team_agent_online :
+  unit -> (unit, error_response) Macro_sdk_runtime.Request.t
+(** [POST /team_agents/me/online]
+
+The calling agent reports that it is online, with its own credential.
+The first report makes it [running] and tells its inviter it is ready;
+later ones change nothing. 404 for an account that isn't an agent of its
+team. *)
 
 val delete_team_agent :
   agent_user_id:string ->
