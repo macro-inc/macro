@@ -70,7 +70,11 @@ async fn comped_purchase_offers_charge_nothing_today_or_later() {
             sold_units: 9,
             ..FakeRepo::default()
         },
-        FakeBilling::default(),
+        // The team has a card, but a comped purchase charges none.
+        FakeBilling {
+            card: Some(visa()),
+            ..FakeBilling::default()
+        },
         FixedClock,
         StaticFleetAttachment(FleetAttachment::Attached),
     )

@@ -489,7 +489,8 @@ pub trait Billing: Send + Sync + 'static {
     /// the buy dialog: each recurring price and what it would invoice now,
     /// the renewal date and the card, from ONE subscription read and ONE
     /// invoice preview (none when `billing` is comped: nothing is invoiced,
-    /// so `due_today` is 0). A Stripe-billed trialing team is refused with
+    /// so `due_today` is 0 and no card is named). `due_today` is net of the
+    /// team's credit balance, which Stripe applies to the invoice first. A Stripe-billed trialing team is refused with
     /// [`BillingError::TeamOnTrial`]. Never on the purchase path.
     fn purchase_terms(
         &self,

@@ -219,14 +219,17 @@ pub async fn offers<
 
 /// Every size with its price and availability, what buying it charges
 /// today, the renewal date and the card charged: what the buy dialog shows.
+/// For the team's owner and admins, who may buy: it names the team's card.
 #[utoipa::path(
     get,
     path = "/team/computers/purchase-offers",
     operation_id = "list_team_computer_purchase_offers",
     responses(
         (status = 200, body = PurchaseOffers),
+        (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 422, body = ErrorResponse),
+        (status = 502, body = ErrorResponse),
         (status = 503, body = ErrorResponse),
     ),
 )]
@@ -240,7 +243,7 @@ pub async fn purchase_offers<
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    access: MacroUserTeamExtractorV2<AdminTeamRole, EntityAccess, Auth>,
     State(state): State<
         ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
     >,

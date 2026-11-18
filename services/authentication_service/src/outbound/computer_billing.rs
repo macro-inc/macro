@@ -144,7 +144,12 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
                         "the invoice preview answered other prices than asked"
                     )));
                 }
-                charges.into_iter().map(|charge| charge.amount).collect()
+                // Each purchase alone: the credit is applied to its invoice
+                // before the card is charged.
+                charges
+                    .into_iter()
+                    .map(|charge| (charge.amount - payment.credit).max(0))
+                    .collect()
             }
             // Nothing is invoiced for a computer the team doesn't pay for.
             PurchaseBilling::Comped { .. } => vec![0; quotes.len()],
@@ -156,10 +161,14 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
                 .map(|(quote, due_today)| PurchaseQuote { quote, due_today })
                 .collect(),
             renews_at: payment.terms.current_period_end,
-            card: payment.card.map(|card| PaymentCard {
-                brand: card_brand(card.brand),
-                last4: card.last4,
-            }),
+            card: match billing {
+                PurchaseBilling::Stripe => payment.card.map(|card| PaymentCard {
+                    brand: card_brand(card.brand),
+                    last4: card.last4,
+                }),
+                // Nothing is charged, so no card is named.
+                PurchaseBilling::Comped { .. } => None,
+            },
         })
     }
 

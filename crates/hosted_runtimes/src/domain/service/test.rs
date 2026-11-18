@@ -22,7 +22,7 @@ mod comped;
 mod first_start;
 mod purchase_offers;
 mod quarantine;
-mod rollout;
+pub(crate) mod rollout;
 mod sold_resources;
 
 /// What the fake subscription does with a removal.

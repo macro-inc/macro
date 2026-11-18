@@ -77,6 +77,15 @@ fn card_of(subscription: &stripe::Subscription) -> Option<PaymentCard> {
     })
 }
 
+/// The customer's credit balance (Stripe keeps credit as a negative
+/// balance). The customer must be expanded.
+fn credit_of(subscription: &stripe::Subscription) -> i64 {
+    match &subscription.customer {
+        stripe::Expandable::Object(customer) => (-customer.balance.unwrap_or(0)).max(0),
+        stripe::Expandable::Id(_) => 0,
+    }
+}
+
 /// What a proration line invoices: its amount, less discounts, plus tax not
 /// included in it.
 fn invoiced(line: &stripe::InvoiceLineItem) -> i64 {
@@ -119,6 +128,7 @@ impl CustomerRepositoryImpl {
         Ok(PaymentTerms {
             terms: terms_of(&subscription)?,
             card,
+            credit: credit_of(&subscription),
         })
     }
 

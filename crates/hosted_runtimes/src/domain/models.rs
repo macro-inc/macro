@@ -527,7 +527,7 @@ pub struct PurchaseOffers {
     /// `quote.amount` every `quote.interval` from then.
     pub renews_at: DateTime<Utc>,
     /// The card purchases are charged to; `None` when there is no card on
-    /// file or the team pays another way.
+    /// file, the team pays another way, or it is comped.
     pub card: Option<PaymentCard>,
 }
 
@@ -540,8 +540,9 @@ pub struct PurchaseSizeOffer {
     #[serde(flatten)]
     pub offer: SizeOffer,
     /// The prorated rest of the current period, invoiced at purchase, in the
-    /// currency's smallest unit; 0 when the computer is included. The charge
-    /// itself is prorated to the second it is bought.
+    /// currency's smallest unit, less the team's credit balance; 0 when the
+    /// team is comped. The charge itself is prorated to the second it is
+    /// bought.
     pub due_today: i64,
 }
 

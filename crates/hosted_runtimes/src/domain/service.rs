@@ -385,9 +385,14 @@ impl<
                 listed.len()
             )));
         }
+        // A comped team is charged nothing, so no card is named.
+        let card = match billing {
+            PurchaseBilling::Stripe => terms.card,
+            PurchaseBilling::Comped { .. } => None,
+        };
         let span = tracing::Span::current();
         span.record("sizes", listed.len());
-        span.record("card", terms.card.is_some());
+        span.record("card", card.is_some());
         Ok(PurchaseOffers {
             sizes: listed
                 .into_iter()
@@ -411,7 +416,7 @@ impl<
                 )
                 .collect(),
             renews_at: terms.renews_at,
-            card: terms.card,
+            card,
         })
     }
 

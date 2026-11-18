@@ -39,6 +39,8 @@ struct FakeTeams {
     reads: Arc<Mutex<Vec<&'static str>>>,
     /// The card the subscription charges.
     card: Option<teams::domain::model::PaymentCard>,
+    /// The customer's credit balance.
+    credit: i64,
 }
 
 impl FakeTeams {
@@ -56,7 +58,11 @@ impl FakeTeams {
             refunds: Arc::default(),
             paid_from_balance: false,
             reads: Arc::default(),
-            card: None,
+            card: Some(teams::domain::model::PaymentCard {
+                brand: teams::domain::model::CardBrand::Visa,
+                last4: "4242".into(),
+            }),
+            credit: 0,
         }
     }
 }
@@ -234,6 +240,7 @@ impl TeamSubscriptionItems for FakeTeams {
         Ok(PaymentTerms {
             terms,
             card: self.card.clone(),
+            credit: self.credit,
         })
     }
 
@@ -635,13 +642,7 @@ async fn refunding_a_team_with_no_subscription_is_typed() {
 
 #[tokio::test]
 async fn purchase_terms_read_the_subscription_once_and_preview_once() {
-    let teams = FakeTeams {
-        card: Some(teams::domain::model::PaymentCard {
-            brand: teams::domain::model::CardBrand::Visa,
-            last4: "4242".into(),
-        }),
-        ..FakeTeams::new(BillingCadence::Month)
-    };
+    let teams = FakeTeams::new(BillingCadence::Month);
     let billing = TeamComputerBilling::new(teams.clone(), prices());
 
     assert_eq!(
@@ -720,4 +721,26 @@ async fn a_trialing_team_paying_by_stripe_gets_no_purchase_terms() {
         Err(BillingError::TeamOnTrial)
     ));
     assert_eq!(*teams.reads.lock().unwrap(), vec!["subscription"]);
+}
+
+#[tokio::test]
+async fn the_customers_credit_comes_off_what_a_purchase_charges_today() {
+    for (credit, due_today) in [(500, 167), (667, 0), (5000, 0)] {
+        let billing = TeamComputerBilling::new(
+            FakeTeams {
+                credit,
+                ..FakeTeams::new(BillingCadence::Month)
+            },
+            prices(),
+        );
+        let terms = billing
+            .purchase_terms(
+                Uuid::nil(),
+                &[ComputerSize::Standard],
+                &PurchaseBilling::Stripe,
+            )
+            .await
+            .unwrap();
+        assert_eq!(terms.quotes[0].due_today, due_today, "credit {credit}");
+    }
 }

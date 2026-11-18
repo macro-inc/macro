@@ -171,9 +171,10 @@ attempt, so a busy database never fails a computer or abandons a removal.
   available) and reports `soldOut` for the rest; a purchase no host can fit
   returns `ComputerError::SoldOut(size)` (409, "No capacity for <size> right
   now") before billing. `GET /team/computers/purchase-offers` lists the same
-  sizes for the buy dialog, each with `dueToday` (the prorated rest of the
-  period a purchase invoices, 0 when comped), plus `renewsAt` and the `card`
-  charged (brand and last four, `null` when the team pays another way). It
+  sizes for the buy dialog (admins only: it names the card), each with
+  `dueToday` (the prorated rest of the period a purchase invoices, less the
+  customer's credit balance; 0 when comped), plus `renewsAt` and the `card`
+  charged (brand and last four; `null` when comped or paid another way). It
   comes from `Billing::purchase_terms`: one expanded subscription read and one
   `invoices/upcoming/lines` preview for every size, never on the purchase
   path. `/offers` stays unchanged for clients that predate it. `allocation`

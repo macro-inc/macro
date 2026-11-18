@@ -69,6 +69,7 @@ async fn payment_terms_read_the_terms_and_the_subscriptions_card_at_once(pool: s
                 brand: CardBrand::Visa,
                 last4: "4242".into(),
             }),
+            credit: 0,
         }
     );
     let requests = server.received_requests().await.unwrap();
@@ -102,6 +103,8 @@ async fn payment_terms_fall_back_to_the_customers_card_and_name_no_other_method(
     });
     sub.customer = stripe::Expandable::Object(Box::new(stripe::Customer {
         id: "cus_test".parse().unwrap(),
+        // Credit is a negative balance.
+        balance: Some(-500),
         invoice_settings: Some(stripe::InvoiceSettingCustomerSetting {
             default_payment_method: Some(stripe::Expandable::Object(Box::new(card(
                 "pm_amex", "amex", "0005",
@@ -113,13 +116,15 @@ async fn payment_terms_fall_back_to_the_customers_card_and_name_no_other_method(
     mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
     let repo = repo(&server, pool);
 
+    let terms = repo.payment_terms(&sub.id).await.unwrap();
     assert_eq!(
-        repo.payment_terms(&sub.id).await.unwrap().card,
+        terms.card,
         Some(PaymentCard {
             brand: CardBrand::Amex,
             last4: "0005".into(),
         })
     );
+    assert_eq!(terms.credit, 500);
 
     // The subscription's own method wins even when it is not a card.
     sub.default_payment_method = Some(stripe::Expandable::Object(Box::new(

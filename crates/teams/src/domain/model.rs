@@ -391,6 +391,9 @@ pub struct PaymentTerms {
     /// The subscription's default card, else the customer's invoice default;
     /// `None` when there is none or the method is not a card.
     pub card: Option<PaymentCard>,
+    /// The customer's credit balance, in the currency's smallest unit (0 or
+    /// more): Stripe applies it to an invoice before charging the card.
+    pub credit: i64,
 }
 
 /// A card as a buyer recognizes it.
