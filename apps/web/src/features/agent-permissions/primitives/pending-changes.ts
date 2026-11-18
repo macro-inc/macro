@@ -1,7 +1,7 @@
 import type {
-  PermissionStateDto,
   ToolPermissionChange,
-} from '@service-agent-harness/tool-permission-types';
+  ToolPermissionState,
+} from '@service-agent-harness/generated/schemas';
 import { ResultAsync } from 'neverthrow';
 import { createStore, produce } from 'solid-js/store';
 import { targetKey } from '../core/model';
@@ -19,9 +19,9 @@ export function createPendingChanges(capabilities: {
   onFailure: (change: ToolPermissionChange, error: unknown) => void;
 }) {
   // Keyed by `targetKey`: the state the control should show meanwhile.
-  const [pending, setPending] = createStore<Record<string, PermissionStateDto>>(
-    {}
-  );
+  const [pending, setPending] = createStore<
+    Record<string, ToolPermissionState>
+  >({});
   // A later click on the same control supersedes an earlier one's cleanup.
   const latest: Record<string, number> = {};
   let sequence = 0;
@@ -38,7 +38,7 @@ export function createPendingChanges(capabilities: {
 
   return {
     /** The state a control shows while its change saves, if one is saving. */
-    pendingState(key: string): PermissionStateDto | undefined {
+    pendingState(key: string): ToolPermissionState | undefined {
       return pending[key];
     },
 
@@ -51,7 +51,7 @@ export function createPendingChanges(capabilities: {
      * Saves `change`, showing `shown` on its control meanwhile (a cleared
      * tool rule shows its action's state).
      */
-    async apply(change: ToolPermissionChange, shown: PermissionStateDto) {
+    async apply(change: ToolPermissionChange, shown: ToolPermissionState) {
       const key = targetKey(change.target);
       const id = ++sequence;
       latest[key] = id;

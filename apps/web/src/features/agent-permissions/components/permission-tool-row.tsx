@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import RobotIcon from '@icon/system/regular/robot.svg';
-import type { PermissionStateDto } from '@service-agent-harness/tool-permission-types';
+import type { ToolPermissionState } from '@service-agent-harness/generated/schemas';
 import { Badge, Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { PermissionRow } from './permission-row';
@@ -24,7 +24,7 @@ export function PermissionToolRow(props: {
   operation: JSX.Element;
   /** The control's accessible name: the tool's label. */
   controlLabel: string;
-  state: PermissionStateDto;
+  state: ToolPermissionState;
   status: ToolRowStatus;
   byAgent?: boolean;
   /** Clears the tool's own rule; present when it has one. */
@@ -33,7 +33,7 @@ export function PermissionToolRow(props: {
   clearLabel: string;
   disabled?: boolean;
   flash?: boolean;
-  onChange: (state: PermissionStateDto) => void;
+  onChange: (state: ToolPermissionState) => void;
 }) {
   const status = () => props.status;
   const differsText = () => {

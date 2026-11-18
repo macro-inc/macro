@@ -6,7 +6,7 @@ import type {
   AgentToolPermissions,
   ToolPermissionCatalog,
   ToolPermissionChanges,
-} from './tool-permission-types';
+} from './generated/schemas';
 
 const host = SERVER_HOSTS['agent-harness'];
 

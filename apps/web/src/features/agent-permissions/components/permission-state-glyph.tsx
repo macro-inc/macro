@@ -1,7 +1,7 @@
 import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import HandPalmIcon from '@icon/system/regular/hand-palm.svg';
 import ProhibitIcon from '@icon/system/regular/prohibit.svg';
-import type { PermissionStateDto } from '@service-agent-harness/tool-permission-types';
+import type { ToolPermissionState } from '@service-agent-harness/generated/schemas';
 import { cn } from '@ui';
 import { Match, Switch } from 'solid-js';
 
@@ -11,7 +11,7 @@ import { Match, Switch } from 'solid-js';
  * amber hand, Never a red prohibit sign.
  */
 export function PermissionStateGlyph(props: {
-  state: PermissionStateDto;
+  state: ToolPermissionState;
   class?: string;
 }) {
   const classes = () => cn('size-4 shrink-0', props.class);

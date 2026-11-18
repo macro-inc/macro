@@ -1,12 +1,12 @@
 import { t } from '@app/lib/i18n';
 import type {
-  ActionDto,
-  PermissionStateDto,
-} from '@service-agent-harness/tool-permission-types';
+  PermissionAction,
+  ToolPermissionState,
+} from '@service-agent-harness/generated/schemas';
 import { match } from 'ts-pattern';
 
 /** The short label on the state control. */
-export function stateLabel(state: PermissionStateDto): string {
+export function stateLabel(state: ToolPermissionState): string {
   return match(state)
     .with('always', () => t('agentPermissions.allow'))
     .with('ask', () => t('agentPermissions.ask'))
@@ -15,7 +15,7 @@ export function stateLabel(state: PermissionStateDto): string {
 }
 
 /** The full state name, for prose and tooltips. */
-export function stateName(state: PermissionStateDto): string {
+export function stateName(state: ToolPermissionState): string {
   return match(state)
     .with('always', () => t('agentPermissions.alwaysAllow'))
     .with('ask', () => t('agentPermissions.askPermission'))
@@ -23,7 +23,7 @@ export function stateName(state: PermissionStateDto): string {
     .exhaustive();
 }
 
-export function stateHint(state: PermissionStateDto): string {
+export function stateHint(state: ToolPermissionState): string {
   return match(state)
     .with('always', () => t('agentPermissions.allowHint'))
     .with('ask', () => t('agentPermissions.askHint'))
@@ -32,7 +32,7 @@ export function stateHint(state: PermissionStateDto): string {
 }
 
 /** "Asks before sending", for a collapsed group's summary. */
-export function asksPhrase(action: ActionDto): string {
+export function asksPhrase(action: PermissionAction): string {
   return match(action)
     .with('create', () => t('agentPermissions.asksBeforeCreating'))
     .with('read', () => t('agentPermissions.asksBeforeReading'))
@@ -43,7 +43,7 @@ export function asksPhrase(action: ActionDto): string {
 }
 
 /** "Never sends", for a collapsed group's summary. */
-export function neverPhrase(action: ActionDto): string {
+export function neverPhrase(action: PermissionAction): string {
   return match(action)
     .with('create', () => t('agentPermissions.neverCreates'))
     .with('read', () => t('agentPermissions.neverReads'))

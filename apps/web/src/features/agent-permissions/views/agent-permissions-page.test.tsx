@@ -3,7 +3,7 @@
  */
 
 import { queryClient } from '@queries/client';
-import type { AgentToolPermissions } from '@service-agent-harness/tool-permission-types';
+import type { AgentToolPermissions } from '@service-agent-harness/generated/schemas';
 import {
   fireEvent,
   render,

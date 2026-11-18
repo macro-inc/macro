@@ -1,11 +1,11 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import type { PermissionStateDto } from '@service-agent-harness/tool-permission-types';
+import type { ToolPermissionState } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
 import { stateHint, stateLabel } from './labels';
 
-const STATES: readonly PermissionStateDto[] = ['always', 'ask', 'never'];
+const STATES: readonly ToolPermissionState[] = ['always', 'ask', 'never'];
 
-const STRICTNESS: Record<PermissionStateDto, number> = {
+const STRICTNESS: Record<ToolPermissionState, number> = {
   always: 0,
   ask: 1,
   never: 2,
@@ -19,13 +19,13 @@ const STRICTNESS: Record<PermissionStateDto, number> = {
 export function PermissionStateControl(props: {
   /** The control's accessible name, e.g. "Email: Send". */
   label: string;
-  value: PermissionStateDto;
-  floor?: PermissionStateDto;
+  value: ToolPermissionState;
+  floor?: ToolPermissionState;
   floorHint?: string;
   disabled?: boolean;
-  onChange: (state: PermissionStateDto) => void;
+  onChange: (state: ToolPermissionState) => void;
 }) {
-  const belowFloor = (state: PermissionStateDto) =>
+  const belowFloor = (state: ToolPermissionState) =>
     props.floor !== undefined && STRICTNESS[state] < STRICTNESS[props.floor];
 
   const options = () =>

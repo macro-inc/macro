@@ -14,7 +14,7 @@ import { queryReadyGate } from '@queries/gate';
 import type {
   AgentToolPermissions,
   ToolPermissionCatalog,
-} from '@service-agent-harness/tool-permission-types';
+} from '@service-agent-harness/generated/schemas';
 import { Button } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Match, Show, Switch } from 'solid-js';

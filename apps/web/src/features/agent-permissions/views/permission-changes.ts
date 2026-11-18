@@ -6,7 +6,7 @@ import type {
   AgentToolPermissions,
   ToolPermissionCatalog,
   ToolPermissionChange,
-} from '@service-agent-harness/tool-permission-types';
+} from '@service-agent-harness/generated/schemas';
 import { TOOL_PERMISSION_REFUSED } from '@service-agent-harness/tool-permissions';
 import type { Accessor } from 'solid-js';
 import { stateName } from '../components/labels';

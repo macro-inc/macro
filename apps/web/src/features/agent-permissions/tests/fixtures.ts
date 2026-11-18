@@ -1,7 +1,7 @@
 import type {
   AgentToolPermissions,
   ToolPermissionCatalog,
-} from '@service-agent-harness/tool-permission-types';
+} from '@service-agent-harness/generated/schemas';
 
 /** Two groups: Email (with a Send override) and Documents. */
 export const CATALOG: ToolPermissionCatalog = {

@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
 import RobotIcon from '@icon/system/regular/robot.svg';
-import type { PermissionStateDto } from '@service-agent-harness/tool-permission-types';
+import type { ToolPermissionState } from '@service-agent-harness/generated/schemas';
 import { Badge, Tooltip } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { PermissionRow } from './permission-row';
@@ -13,7 +13,7 @@ export function PermissionActionRow(props: {
   name: JSX.Element;
   /** The control's accessible name, "Email: Send". */
   controlLabel: string;
-  state: PermissionStateDto;
+  state: ToolPermissionState;
   tools: number;
   differs: number;
   /** The agent restricted this action itself; the tooltip says when. */
@@ -21,7 +21,7 @@ export function PermissionActionRow(props: {
   sessionLimited?: boolean;
   disabled?: boolean;
   flash?: boolean;
-  onChange: (state: PermissionStateDto) => void;
+  onChange: (state: ToolPermissionState) => void;
 }) {
   return (
     <PermissionRow

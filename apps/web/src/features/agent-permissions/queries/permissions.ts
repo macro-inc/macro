@@ -5,7 +5,7 @@ import type {
   AgentToolPermissions,
   ToolPermissionCatalog,
   ToolPermissionChange,
-} from '@service-agent-harness/tool-permission-types';
+} from '@service-agent-harness/generated/schemas';
 import { toolPermissionsClient } from '@service-agent-harness/tool-permissions';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';

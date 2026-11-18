@@ -1,15 +1,15 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type {
-  ActionDto,
-  ActionPermission,
   AgentToolPermissions,
-  CatalogGroup,
-  CatalogTool,
-  PermissionStateDto,
+  PermissionAction,
+  ToolPermissionAction,
   ToolPermissionCatalog,
+  ToolPermissionCatalogGroup,
+  ToolPermissionCatalogTool,
   ToolPermissionChange,
-} from '@service-agent-harness/tool-permission-types';
+  ToolPermissionState,
+} from '@service-agent-harness/generated/schemas';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { stateLabel } from '../components/labels';
@@ -51,7 +51,7 @@ import type { PendingChanges } from '../primitives/pending-changes';
 /** A row to open, scroll to and focus, e.g. from a link in chat. */
 export type PermissionFocus = {
   group: string;
-  action?: ActionDto;
+  action?: PermissionAction;
   tool?: ToolRef;
 };
 
@@ -60,7 +60,10 @@ const TOOL_PAGE = 50;
 
 const FLASH_MS = 1200;
 
-type ToolSection = { action: ActionDto; tools: CatalogTool[] };
+type ToolSection = {
+  action: PermissionAction;
+  tools: ToolPermissionCatalogTool[];
+};
 
 /**
  * Every catalog group as a collapsible row: five action controls and the
@@ -119,14 +122,14 @@ export function AgentPermissionsList(props: {
     );
   };
 
-  const actionName = (action: ActionDto) =>
+  const actionName = (action: PermissionAction) =>
     props.catalog.actions.find((entry) => entry.action === action)?.name ??
     action;
 
-  const permission = (groupId: string, action: ActionDto) =>
+  const permission = (groupId: string, action: PermissionAction) =>
     actionPermission(groupPermissions(props.view, groupId), action);
 
-  const shownActionState = (groupId: string, action: ActionDto) =>
+  const shownActionState = (groupId: string, action: PermissionAction) =>
     props.changes.pendingState(targetKey(groupActionTarget(groupId, action))) ??
     permission(groupId, action)?.state ??
     'always';
@@ -149,7 +152,7 @@ export function AgentPermissionsList(props: {
   // The tools listed under "Individual tools", per action, plus how many
   // more Show more would add.
   const toolSections = (
-    group: CatalogGroup
+    group: ToolPermissionCatalogGroup
   ): { sections: ToolSection[]; hidden: number } => {
     const match = groupMatch(group.id);
     let tools = group.tools;
@@ -180,7 +183,7 @@ export function AgentPermissionsList(props: {
     };
   };
 
-  const agentHint = (groupId: string, action: ActionDto) => {
+  const agentHint = (groupId: string, action: PermissionAction) => {
     const rule = ruleFor(props.view.rules, groupActionTarget(groupId, action));
     if (!rule?.viaAgent) return undefined;
     const date = new Intl.DateTimeFormat(formatLocale(), {
@@ -193,32 +196,40 @@ export function AgentPermissionsList(props: {
   };
 
   // `apply` reports its own failures, so the clicks don't wait on it.
-  const apply = (change: ToolPermissionChange, shown: PermissionStateDto) =>
+  const apply = (change: ToolPermissionChange, shown: ToolPermissionState) =>
     fireAndForget(props.changes.apply(change, shown), 'agent-permissions');
 
   const setAction = (
     groupId: string,
-    action: ActionDto,
-    state: PermissionStateDto
+    action: PermissionAction,
+    state: ToolPermissionState
   ) => apply(changeForAction(groupId, action, state), state);
 
   const setTool = (
-    action: ActionPermission,
-    tool: CatalogTool,
-    state: PermissionStateDto
+    action: ToolPermissionAction,
+    tool: ToolPermissionCatalogTool,
+    state: ToolPermissionState
   ) => apply(changeForTool(action, tool, state), state);
 
-  const clearTool = (action: ActionPermission, tool: CatalogTool) =>
-    apply({ target: toolTarget(tool), state: null }, action.state);
+  const clearTool = (
+    action: ToolPermissionAction,
+    tool: ToolPermissionCatalogTool
+  ) => apply({ target: toolTarget(tool), state: null }, action.state);
 
-  const toolActions = (group: CatalogGroup) =>
+  const toolActions = (group: ToolPermissionCatalogGroup) =>
     toolSections(group).sections.map((section) => section.action);
 
-  const sectionTools = (group: CatalogGroup, action: ActionDto) =>
+  const sectionTools = (
+    group: ToolPermissionCatalogGroup,
+    action: PermissionAction
+  ) =>
     toolSections(group).sections.find((section) => section.action === action)
       ?.tools ?? [];
 
-  const toolRow = (group: CatalogGroup, tool: CatalogTool) => {
+  const toolRow = (
+    group: ToolPermissionCatalogGroup,
+    tool: ToolPermissionCatalogTool
+  ) => {
     const action = () => permission(group.id, tool.action);
     const key = targetKey(toolTarget(tool));
     const rule = () => ruleFor(props.view.rules, toolTarget(tool));

@@ -1,16 +1,16 @@
 import type {
-  ActionDto,
-  ActionPermission,
   AgentToolPermissions,
-  CatalogGroup,
-  CatalogTool,
-  GroupPermissions,
-  PermissionStateDto,
+  PermissionAction,
+  ToolPermissionAction,
   ToolPermissionCatalog,
+  ToolPermissionCatalogGroup,
+  ToolPermissionCatalogTool,
   ToolPermissionChange,
+  ToolPermissionGroup,
   ToolPermissionRule,
+  ToolPermissionState,
   ToolPermissionTarget,
-} from '@service-agent-harness/tool-permission-types';
+} from '@service-agent-harness/generated/schemas';
 
 /**
  * The permissions page's pure logic. The server resolves every state; the only
@@ -18,7 +18,7 @@ import type {
  * override when it has one, else its action's state.
  */
 
-export const ACTION_ORDER: readonly ActionDto[] = [
+export const ACTION_ORDER: readonly PermissionAction[] = [
   'create',
   'read',
   'update',
@@ -42,7 +42,7 @@ export function toolTarget(tool: ToolRef): ToolPermissionTarget {
 
 export function groupActionTarget(
   group: string,
-  action: ActionDto
+  action: PermissionAction
 ): ToolPermissionTarget {
   return { kind: 'group_action', group, action };
 }
@@ -52,15 +52,15 @@ function sameTool(a: ToolRef, b: ToolRef): boolean {
 }
 
 /** The tool's override in its action, when its state differs from the action's. */
-export function toolOverride(action: ActionPermission, tool: ToolRef) {
+export function toolOverride(action: ToolPermissionAction, tool: ToolRef) {
   return action.overrides.find((override) => sameTool(override, tool));
 }
 
 /** A tool's state in its group's custom view. */
 export function toolState(
-  action: ActionPermission,
+  action: ToolPermissionAction,
   tool: ToolRef
-): PermissionStateDto {
+): ToolPermissionState {
   return toolOverride(action, tool)?.state ?? action.state;
 }
 
@@ -78,9 +78,9 @@ export function ruleFor(
  * clears its own rule (`null`), so a saved tool rule always means "differs".
  */
 export function changeForTool(
-  action: ActionPermission,
+  action: ToolPermissionAction,
   tool: ToolRef,
-  state: PermissionStateDto
+  state: ToolPermissionState
 ): ToolPermissionChange {
   return {
     target: toolTarget(tool),
@@ -94,8 +94,8 @@ export function changeForTool(
  */
 export function changeForAction(
   group: string,
-  action: ActionDto,
-  state: PermissionStateDto
+  action: PermissionAction,
+  state: ToolPermissionState
 ): ToolPermissionChange {
   return { target: groupActionTarget(group, action), state };
 }
@@ -104,21 +104,21 @@ export function changeForAction(
 export function groupPermissions(
   view: AgentToolPermissions,
   group: string
-): GroupPermissions | undefined {
+): ToolPermissionGroup | undefined {
   return view.groups.find((entry) => entry.group === group);
 }
 
 export function actionPermission(
-  group: GroupPermissions | undefined,
-  action: ActionDto
-): ActionPermission | undefined {
+  group: ToolPermissionGroup | undefined,
+  action: PermissionAction
+): ToolPermissionAction | undefined {
   return group?.actions.find((entry) => entry.action === action);
 }
 
 export type GroupSummary = {
   toolCount: number;
-  asks: ActionDto[];
-  nevers: ActionDto[];
+  asks: PermissionAction[];
+  nevers: PermissionAction[];
   /** Tools in the group with their own saved rule. */
   customTools: number;
   /** Any rule in the group the agent set on itself. */
@@ -129,7 +129,7 @@ export type GroupSummary = {
 
 function ruleGroup(
   rule: ToolPermissionRule,
-  catalogGroup: CatalogGroup
+  catalogGroup: ToolPermissionCatalogGroup
 ): boolean {
   const target = rule.target;
   if (target.kind === 'group_action') return target.group === catalogGroup.id;
@@ -138,8 +138,8 @@ function ruleGroup(
 
 /** What a collapsed group row says about the group. */
 export function groupSummary(
-  catalogGroup: CatalogGroup,
-  group: GroupPermissions | undefined,
+  catalogGroup: ToolPermissionCatalogGroup,
+  group: ToolPermissionGroup | undefined,
   rules: readonly ToolPermissionRule[]
 ): GroupSummary {
   const actions = ACTION_ORDER.flatMap((action) => {
@@ -179,8 +179,8 @@ export function settingCounts(rules: readonly ToolPermissionRule[]) {
 /** One group-and-action that isn't Always allow, for the editor's summary. */
 export type Restriction = {
   group: string;
-  action: ActionDto;
-  state: Exclude<PermissionStateDto, 'always'>;
+  action: PermissionAction;
+  state: Exclude<ToolPermissionState, 'always'>;
 };
 
 /** Every restricted group action, in catalog then action order. */
@@ -216,9 +216,9 @@ export function restrictionCount(view: AgentToolPermissions): number {
 
 /** The catalog's tools for one action of a group, in catalog order. */
 export function actionTools(
-  catalogGroup: CatalogGroup,
-  action: ActionDto
-): CatalogTool[] {
+  catalogGroup: ToolPermissionCatalogGroup,
+  action: PermissionAction
+): ToolPermissionCatalogTool[] {
   return catalogGroup.tools.filter((tool) => tool.action === action);
 }
 
@@ -230,7 +230,7 @@ export function toolKey(tool: ToolRef): string {
 export type GroupMatch = {
   /** The group's name matched: show it whole. */
   all: boolean;
-  actions: ActionDto[];
+  actions: PermissionAction[];
   /** `toolKey`s of matching tools. */
   tools: string[];
 };
