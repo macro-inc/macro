@@ -10,16 +10,7 @@ import {
 const ARGS: SyncStartArgs = {
   url: 'https://api.example.test/items/soup/graphql/stream',
   headers: { 'x-macro-mail-cache-profile': 'v2' },
-  lanes: [
-    {
-      id: 'tasks',
-      query: 'query SoupBackfillSyncTasks { user { id } }',
-      variables: { input: { initial: { limit: 500 } } },
-      paging: 'soup',
-      kind: { kind: 'hydrate' },
-      passStartedAt: '2026-11-01T00:00:00.000Z',
-    },
-  ],
+  pass: 'first',
 };
 
 const RESULT: SyncRunResult = {

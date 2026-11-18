@@ -10,6 +10,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import type {
   SyncFailure,
   SyncHost,
+  SyncPass,
   SyncRunResult,
 } from '@graphql-cache/sync-protocol';
 import { Telemetry } from '@macro-inc/observability';
@@ -62,7 +63,6 @@ import {
   SECOND_PASS_STREAM,
   unsupportedWhenRefused,
 } from './sync/host';
-import type { SyncPass } from './sync/lanes';
 import {
   type SyncResume,
   syncResumePauseMs,
@@ -87,9 +87,9 @@ const BACKFILL_PROGRESS_PAGE_INTERVAL = 10;
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Email threads whose latest message is at most `days` old, of one signal
- * classification, or of both when `signal` is omitted. */
-export type EmailRecencyWindow = { signal?: boolean; days: number };
+/** Email threads of one signal classification whose latest message is at most
+ * `days` old. */
+type EmailRecencyWindow = { signal: boolean; days: number };
 
 const SIGNAL_EMAIL_WINDOW: EmailRecencyWindow = { signal: true, days: 90 };
 const NOISE_EMAIL_WINDOW: EmailRecencyWindow = { signal: false, days: 30 };
@@ -209,7 +209,7 @@ export const INITIATIVE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
  * Email threads and the first message page used by the thread view, excluding
  * every other entity variant with an impossible id filter.
  */
-export const EMAIL_THREAD_PAGES_INPUT: GraphqlSoupInitialInput = {
+const EMAIL_THREAD_PAGES_INPUT: GraphqlSoupInitialInput = {
   limit: EMAIL_CONTENT_PAGE_LIMIT,
   expand: true,
   // Orders by the latest-message timestamp that emailRecency bounds, so each
@@ -419,7 +419,7 @@ export function withUpdatedSince(
  * Restricts email threads to those matching any window. In the ALL view the
  * email updatedAt literal compares the latest non-spam message timestamp.
  */
-export function withEmailRecency(
+function withEmailRecency(
   input: GraphqlSoupInitialInput,
   windows: readonly EmailRecencyWindow[] | undefined,
   now: number
@@ -427,17 +427,18 @@ export function withEmailRecency(
   if (!windows?.length) return input;
 
   const recency = windows
-    .map(({ signal, days }): GraphqlEmailExpr => {
-      const updatedAt: GraphqlEmailExpr = {
-        literal: {
-          updatedAt: { gte: new Date(now - days * DAY_MS).toISOString() },
+    .map(
+      ({ signal, days }): GraphqlEmailExpr => ({
+        and: {
+          left: { literal: { importance: signal } },
+          right: {
+            literal: {
+              updatedAt: { gte: new Date(now - days * DAY_MS).toISOString() },
+            },
+          },
         },
-      };
-      if (signal === undefined) return updatedAt;
-      return {
-        and: { left: { literal: { importance: signal } }, right: updatedAt },
-      };
-    })
+      })
+    )
     .reduce((left, right) => ({ or: { left, right } }));
   const filters = input.filters ?? {};
   return {
@@ -798,9 +799,9 @@ type StreamedSyncHost = CacheHost & SyncHost;
  * One stream of `pass`, retried with backoff (except `unsupported`, which a
  * server's refusal of the sync protocol counts as). A busy
  * server is asked again every `SYNC_BUSY_PAUSE_MS` for as long as it stays
- * busy, without spending retries. Every attempt re-plans from the cache's
- * saved lane state, so it resumes rather than restarts, and is one span of
- * `trace`. Interrupting it stops the host's run. With `stopAfterMs`, an
+ * busy, without spending retries. Every attempt sends the cache's saved lane
+ * state, from which the server plans it again, so it resumes rather than
+ * restarts, and is one span of `trace`. Interrupting it stops the host's run. With `stopAfterMs`, an
  * attempt still running then is stopped (pages written so far are kept) and
  * the stream resolves to `None` instead of a result.
  */
@@ -814,7 +815,7 @@ const runSyncStream = (
   Effect.tryPromise({
     try: () =>
       trace.stream(async (traceHeaders) => {
-        // Loaded on use: the plan builder reads this module's lane filters.
+        // Loaded on use, off the startup path.
         const { runSyncPass } = await import('./sync/run');
         return runSyncPass(host, pass, options, traceHeaders);
       }),

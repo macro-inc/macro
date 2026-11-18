@@ -14,10 +14,13 @@
  * messages never leave this module. A failure to record never reaches the
  * sync: a stream then runs untraced.
  */
-import type { SyncFailure, SyncRunOutcome } from '@graphql-cache/sync-protocol';
+import type {
+  SyncFailure,
+  SyncPass,
+  SyncRunOutcome,
+} from '@graphql-cache/sync-protocol';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { isServerBusy } from './host';
-import type { SyncPass } from './lanes';
 import type { SyncResume } from './resume';
 
 /**

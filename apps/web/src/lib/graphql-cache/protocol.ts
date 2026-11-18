@@ -18,7 +18,7 @@ import type {
   PeopleSearch,
   PeopleSqlRequest,
 } from './people/generated';
-import type { SyncLanePlan, SyncStartArgs } from './sync-protocol';
+import type { SyncStartArgs } from './sync-protocol';
 
 /**
  * Wire protocol between page contexts and the cache worker (the `CacheHost`
@@ -539,91 +539,54 @@ export function isValidCalendarCommitArgs(
   );
 }
 
-/** Lanes in one sync request; the server rejects more. */
-export const MAX_SYNC_LANES = 32;
+/** Lanes one sync request may skip; the server refuses more. */
+const MAX_SKIPPED_SYNC_LANES = 256;
 const SYNC_LANE_ID = /^[a-z0-9-]{1,64}$/;
 
 const isSyncLaneId = (value: unknown): value is string =>
   typeof value === 'string' && SYNC_LANE_ID.test(value);
 
-const isPositiveSafeInteger = (value: unknown): boolean =>
-  Number.isSafeInteger(value) && (value as number) > 0;
+const isValidSyncCalendar = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOnlyCalendarKeys(value, ['timeZone']) &&
+    typeof value.timeZone === 'string' &&
+    value.timeZone.length > 0);
 
-function isValidSyncLanePlan(value: unknown): value is SyncLanePlan {
-  if (
-    !isRecord(value) ||
-    !hasOnlyCalendarKeys(value, [
-      'id',
-      'query',
-      'operationName',
-      'variables',
-      'paging',
-      'maxItems',
-      'kind',
-      'passStartedAt',
-      'coverage',
-    ]) ||
-    !isSyncLaneId(value.id) ||
-    typeof value.query !== 'string' ||
-    value.query.length === 0 ||
-    (value.operationName !== undefined &&
-      typeof value.operationName !== 'string') ||
-    !isRecord(value.variables) ||
-    (value.paging !== 'soup' && value.paging !== 'calendar') ||
-    (value.maxItems !== undefined && !isPositiveSafeInteger(value.maxItems)) ||
-    typeof value.passStartedAt !== 'string' ||
-    value.passStartedAt.length === 0 ||
-    !isRecord(value.kind)
-  ) {
-    return false;
-  }
-  const kind = value.kind;
-  if (kind.kind === 'hydrate') return hasOnlyCalendarKeys(kind, ['kind']);
-  if (kind.kind === 'membership') {
-    return (
-      hasOnlyCalendarKeys(kind, ['kind', 'scopes']) &&
-      value.maxItems === undefined &&
-      Array.isArray(kind.scopes) &&
-      kind.scopes.length > 0 &&
-      kind.scopes.every(isSyncLaneId)
-    );
-  }
-  return (
-    kind.kind === 'calendar' &&
-    hasOnlyCalendarKeys(kind, ['kind', 'coverage']) &&
-    value.paging === 'calendar' &&
-    Array.isArray(kind.coverage) &&
-    kind.coverage.every(
-      (span) =>
-        isCalendarSpanWire(span) &&
-        (span.start as number) <= (span.end as number)
-    )
-  );
-}
+const isValidSkipLanes = (value: unknown): boolean =>
+  value === undefined ||
+  (Array.isArray(value) &&
+    value.length <= MAX_SKIPPED_SYNC_LANES &&
+    value.every(isSyncLaneId));
 
-/** Non-throwing sync plan validation for wire ingress; the engine re-checks it. */
+/** Non-throwing sync argument validation for wire ingress; the engine re-checks it. */
 export function isValidSyncStartArgs(value: unknown): value is SyncStartArgs {
-  if (
-    !isRecord(value) ||
-    !hasOnlyCalendarKeys(value, ['url', 'headers', 'lanes', 'maxPages']) ||
-    typeof value.url !== 'string' ||
-    !/^https?:\/\//.test(value.url) ||
-    !isRecord(value.headers) ||
-    !Object.values(value.headers).every(
+  return (
+    isRecord(value) &&
+    hasOnlyCalendarKeys(value, [
+      'url',
+      'headers',
+      'pass',
+      'maxPages',
+      'calendar',
+      'completedSince',
+      'skipLanes',
+    ]) &&
+    typeof value.url === 'string' &&
+    /^https?:\/\//.test(value.url) &&
+    isRecord(value.headers) &&
+    Object.values(value.headers).every(
       (header) => typeof header === 'string'
-    ) ||
-    !Array.isArray(value.lanes) ||
-    value.lanes.length > MAX_SYNC_LANES ||
-    !value.lanes.every(isValidSyncLanePlan) ||
-    (value.maxPages !== undefined &&
-      !(
-        Number.isSafeInteger(value.maxPages) && (value.maxPages as number) >= 0
-      ))
-  ) {
-    return false;
-  }
-  const ids = value.lanes.map((lane: SyncLanePlan) => lane.id);
-  return new Set(ids).size === ids.length;
+    ) &&
+    (value.pass === 'first' || value.pass === 'second') &&
+    (value.maxPages === undefined ||
+      (Number.isSafeInteger(value.maxPages) &&
+        (value.maxPages as number) >= 0)) &&
+    isValidSyncCalendar(value.calendar) &&
+    (value.completedSince === undefined ||
+      typeof value.completedSince === 'string') &&
+    isValidSkipLanes(value.skipLanes)
+  );
 }
 
 export function validateRecordSelectionKeys(keys: string[]): string[] {

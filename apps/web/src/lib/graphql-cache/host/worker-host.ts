@@ -1822,7 +1822,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       if (!isValidSyncStartArgs(args)) {
         return {
           ok: false,
-          failure: { kind: 'stream', message: 'invalid sync plan' },
+          failure: { kind: 'stream', message: 'invalid sync arguments' },
         };
       }
       try {

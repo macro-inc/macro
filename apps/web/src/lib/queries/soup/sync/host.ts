@@ -1,6 +1,6 @@
 /**
  * The parts of the sync runner the startup path needs. No runtime imports:
- * `backfill.ts` loads the plan builder only when it streams.
+ * `backfill.ts` loads the pass runner only when it streams.
  */
 import type {
   SyncFailure,

@@ -1,50 +1,27 @@
 /**
- * Streamed cache sync: the contract between the app (which builds plans), the
- * cache hosts (which run them), and the server stream. See
- * docs/architecture/streamed-cache-sync.md. Rust mirrors these shapes with
- * serde camelCase.
+ * Streamed cache sync: the contract between the app (which runs passes), the
+ * cache hosts (which run streams), and the server stream (which plans each
+ * pass's lanes). See docs/architecture/streamed-cache-sync.md. Rust mirrors
+ * these shapes with serde camelCase.
  */
 
-/** How the server follows one lane's pages. */
-export type SyncPaging = 'soup' | 'calendar';
-
-/** Calendar coverage committed when a calendar lane completes. */
-export type SyncCalendarCoverage = unknown;
-
-export type SyncLaneKind =
-  /** Write every page; record delivered keys as members of this lane. */
-  | { kind: 'hydrate' }
-  /** Collect IDs only; on completion delete members of `scopes` not listed. */
-  | { kind: 'membership'; scopes: readonly string[] }
-  /** Write every page; on completion commit `coverage` with the lowest watermark. */
-  | { kind: 'calendar'; coverage: SyncCalendarCoverage };
-
-export type SyncLanePlan = {
-  /** `[a-z0-9-]{1,64}`; also the key of the lane's saved state. */
-  id: string;
-  /** Server-safe query text (client-only directives removed). */
-  query: string;
-  operationName?: string;
-  /** Variables for the lane's first page: an initial input or a resume point. */
-  variables: Record<string, unknown>;
-  paging: SyncPaging;
-  /** Stop after at least this many items. Invalid on membership lanes. */
-  maxItems?: number;
-  kind: SyncLaneKind;
-  /** ISO time this lane's pass started; stored with the first page. */
-  passStartedAt: string;
-  /** Opaque description stored when the lane completes. */
-  coverage?: unknown;
-};
+/** The sync pass a run streams; the server plans each pass's lanes. */
+export type SyncPass = 'first' | 'second';
 
 export type SyncStartArgs = {
   /** Absolute stream URL. */
   url: string;
   /** Extra request headers (mail cache profile, bearer token). */
   headers: Record<string, string>;
-  lanes: readonly SyncLanePlan[];
+  pass: SyncPass;
   /** End the stream after this many pages; the next run resumes. */
   maxPages?: number;
+  /** Sync calendar windows in the app's IANA time zone; absent while calendars read REST. */
+  calendar?: { timeZone: string };
+  /** Leave out lanes that completed at or after this ISO time: they are current for this run. */
+  completedSince?: string;
+  /** Lanes the server leaves out of this stream. */
+  skipLanes?: readonly string[];
 };
 
 export type SyncLaneRunSummary = {
@@ -92,8 +69,8 @@ export type SyncRunOutcome =
 /** Saved per-lane state, read from the cache database. */
 export type SyncLaneState = {
   id: string;
-  /** Resume point of an unfinished pass; null when none is in progress. */
-  nextVariables: Record<string, unknown> | null;
+  /** The server's checkpoint of an unfinished pass, sent back to resume it; null when none is in progress. */
+  resume: unknown;
   /** Pages and items written in the current (or last) pass. */
   pages: number;
   items: number;

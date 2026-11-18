@@ -1827,16 +1827,7 @@ describe('createTauriCacheHost', () => {
     const syncArgs: SyncStartArgs = {
       url: 'https://example.test/items/soup/graphql/stream',
       headers: { 'x-macro-mail-cache-profile': 'v5' },
-      lanes: [
-        {
-          id: 'tasks',
-          query: 'query SyncTasks { user { id } }',
-          variables: {},
-          paging: 'soup',
-          kind: { kind: 'hydrate' },
-          passStartedAt: '2026-11-01T00:00:00.000Z',
-        },
-      ],
+      pass: 'first',
     };
     const completed: SyncRunOutcome = {
       ok: true,
@@ -1889,7 +1880,7 @@ describe('createTauriCacheHost', () => {
           host.syncStart!({ ...syncArgs, url: 'ftp://example.test/stream' })
         ).resolves.toEqual({
           ok: false,
-          failure: { kind: 'stream', message: 'invalid sync plan' },
+          failure: { kind: 'stream', message: 'invalid sync arguments' },
         });
         expect(invokeMock).not.toHaveBeenCalledWith(
           'graphql_cache_sync_start',
@@ -1908,7 +1899,7 @@ describe('createTauriCacheHost', () => {
       const lanes: SyncLaneState[] = [
         {
           id: 'tasks',
-          nextVariables: { input: { continuation: { cursor: 'c1' } } },
+          resume: { cursor: 'c1', items: 2 },
           pages: 1,
           items: 2,
           passStartedAt: '2026-11-01T00:00:00.000Z',

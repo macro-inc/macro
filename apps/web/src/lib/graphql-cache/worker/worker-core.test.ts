@@ -4116,16 +4116,7 @@ describe('CacheWorkerCore', () => {
     const args = {
       url: 'https://api.example.test/items/soup/graphql/stream',
       headers: {},
-      lanes: [
-        {
-          id: 'tasks',
-          query: 'query SoupBackfillSyncTasks { user { id } }',
-          variables: {},
-          paging: 'soup' as const,
-          kind: { kind: 'hydrate' as const },
-          passStartedAt: '2026-11-01T00:00:00.000Z',
-        },
-      ],
+      pass: 'first' as const,
     };
     const result = {
       reason: 'complete',

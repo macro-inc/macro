@@ -1206,7 +1206,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       if (!isValidSyncStartArgs(args)) {
         return {
           ok: false,
-          failure: { kind: 'stream', message: 'invalid sync plan' },
+          failure: { kind: 'stream', message: 'invalid sync arguments' },
         };
       }
       try {
