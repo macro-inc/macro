@@ -148,13 +148,70 @@ where
         let (provider_id, value) = match &action {
             MailboxAction::Flagged(value) => (system_labels::STARRED, *value),
             MailboxAction::Trashed(value) => (system_labels::TRASH, *value),
-            MailboxAction::Junk(value) => (system_labels::SPAM, *value),
+            MailboxAction::Junk(value) => {
+                return self
+                    .set_gmail_thread_junk(&link, thread_id, actor, *value)
+                    .await;
+            }
             MailboxAction::Category { name, present } => (name.as_str(), *present),
             _ => unreachable!("read and archive handled above"),
         };
         let label = self.link_label_by_provider_id(link.id, provider_id).await?;
         Ok(self
             .update_thread_labels_with_actor(&link, thread_id, label.id, value, Some(actor))
+            .await?
+            .successful_ids
+            .len())
+    }
+
+    /// Report spam and Not spam for a Gmail thread. Gmail's own buttons move
+    /// the conversation between the inbox and Spam, as the Outlook path moves
+    /// it to and from the Junk Email folder; the SPAM label alone would leave
+    /// reported mail in the inbox and bring rescued mail back archived. Each
+    /// label is its own write, and the one that keeps the thread where the
+    /// user can try again goes last: Report spam files the thread under Spam
+    /// before it leaves the inbox, Not spam puts it in the inbox before it
+    /// leaves Spam. The number of messages the SPAM write covers.
+    #[tracing::instrument(err, skip_all, fields(link_id = %link.id, %thread_id, junk))]
+    async fn set_gmail_thread_junk(
+        &self,
+        link: &Link,
+        thread_id: Uuid,
+        actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        junk: bool,
+    ) -> Result<usize, EmailErr> {
+        let spam = self
+            .link_label_by_provider_id(link.id, system_labels::SPAM)
+            .await?;
+        let messages = self
+            .email_repo
+            .mailbox_action_messages(link.id, thread_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+        let present = || messages.iter().filter(|message| message.is_present);
+        if junk {
+            let filed = self
+                .update_thread_labels_with_actor(
+                    link,
+                    thread_id,
+                    spam.id,
+                    true,
+                    Some(actor.clone()),
+                )
+                .await?;
+            if present().any(|message| message.in_inbox) {
+                self.set_thread_inbox(link, thread_id, actor, false).await?;
+            }
+            return Ok(filed.successful_ids.len());
+        }
+        // Only mail that was in Spam goes back to the inbox: Not spam on a
+        // thread that is not spam leaves an archived thread archived.
+        if present().any(|message| message.in_junk && !message.is_draft) {
+            self.set_thread_inbox(link, thread_id, actor.clone(), true)
+                .await?;
+        }
+        Ok(self
+            .update_thread_labels_with_actor(link, thread_id, spam.id, false, Some(actor))
             .await?
             .successful_ids
             .len())
