@@ -8,7 +8,8 @@ use sha2::{Digest, Sha256};
 use crate::{
     Result,
     agent_session::{
-        IndexedMessages, delete_by_id, response_error, stored_parent, unrecorded_children,
+        IndexedMessages, delete_by_id, fenced_action, response_error, stored_parent,
+        unrecorded_children,
     },
     date_format::EpochMillis,
     error::{OpensearchClientError, OpensearchOperation},
@@ -281,36 +282,21 @@ async fn write_children(
     require_alias: bool,
     version: u64,
 ) -> Result<()> {
+    let version = external_version(version, OpensearchOperation::ReconcileAgentSessionBulk)?;
     let mut body = Vec::with_capacity(plan.write.len() * 2 + plan.delete.len());
     for (id, document) in &plan.write {
         body.push(
-            serde_json::to_string(&serde_json::json!({
-                "index": {
-                    "_id": id,
-                    "routing": routing,
-                    "version": version,
-                    "version_type": "external_gte",
-                }
-            }))
-            .map_err(|error| {
-                serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error)
-            })?,
+            serde_json::to_string(&fenced_action("index", id, routing, version)).map_err(
+                |error| serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error),
+            )?,
         );
         body.push(document.clone());
     }
     for id in &plan.delete {
         body.push(
-            serde_json::to_string(&serde_json::json!({
-                "delete": {
-                    "_id": id,
-                    "routing": routing,
-                    "version": version,
-                    "version_type": "external_gte",
-                }
-            }))
-            .map_err(|error| {
-                serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error)
-            })?,
+            serde_json::to_string(&fenced_action("delete", id, routing, version)).map_err(
+                |error| serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error),
+            )?,
         );
     }
 

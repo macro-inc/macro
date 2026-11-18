@@ -127,6 +127,23 @@ pub(crate) async fn unrecorded_children(
         .collect())
 }
 
+/// A bulk action on one of a session's documents, fenced by `version`: the
+/// index refuses it when the document already holds a later version, so a
+/// delayed request from an earlier reconcile cannot overwrite a later one.
+pub(crate) fn fenced_action(
+    action: &str,
+    id: &str,
+    routing: &str,
+    version: i64,
+) -> serde_json::Value {
+    serde_json::json!({ action: {
+        "_id": id,
+        "routing": routing,
+        "version": version,
+        "version_type": "external_gte",
+    } })
+}
+
 /// Delete a session's documents by id under `version`, failing unless every
 /// delete applied or found nothing to delete. An older version than a
 /// document holds is refused, so a delayed delete cannot remove what a later
@@ -142,15 +159,7 @@ pub(crate) async fn delete_by_id(
 ) -> Result<()> {
     let body: Vec<String> = ids
         .iter()
-        .map(|id| {
-            serde_json::json!({ "delete": {
-                "_id": id,
-                "routing": agent_session_id,
-                "version": version,
-                "version_type": "external_gte",
-            } })
-            .to_string()
-        })
+        .map(|id| fenced_action("delete", id, agent_session_id, version).to_string())
         .collect();
     let response = client
         .bulk(opensearch::BulkParts::Index(index))
