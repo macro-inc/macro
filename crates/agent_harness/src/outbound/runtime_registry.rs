@@ -27,7 +27,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::domain::ports::{
-    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeConnectionId, RuntimeConnections,
+    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
+    RuntimeConnections,
 };
 
 #[cfg(test)]
@@ -45,13 +46,6 @@ pub struct LiveRuntimeSessions {
     pub acp_sessions: Vec<ListedSession>,
     /// The span that asked, for reattaching to follow from.
     pub span: tracing::Span,
-}
-
-/// The optional messages a runtime said, when it dialed, that it accepts.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct RuntimeAccepts {
-    /// `ToRuntimeMessage::AgentsChanged`.
-    pub agents_changed: bool,
 }
 
 /// A connection and the identity its presence reports carry.
@@ -323,7 +317,7 @@ async fn record_connected<Sender>(
 ) where
     Sender: TransportSender<ToRuntimeMessage>,
 {
-    let recorded = presence.connected(harness, listed.id).await;
+    let recorded = presence.connected(harness, listed.id, listed.accepts).await;
     if recorded != ConnectionRecorded::AgentBound || !listed.accepts.agents_changed {
         return;
     }

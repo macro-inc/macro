@@ -110,9 +110,12 @@ read it before changing behaviour.
   queues `Effect::DeliverAgent`, which hands the agent over the runtime bus to
   the replica holding macrod's socket; `TimerKind::AgentStartDue` gives it
   `AGENT_START_DEADLINE` after macrod connects, then fails it with
-  `Failure::AgentNotStarted`). A give-up during the first start counts in
-  `first_start_failures`, except `Failure::HostLost` (a host outage is not the
-  computer's failure); the first leaves the computer for a team retry
+  `Failure::AgentNotStarted`; a macrod that declared no `apply-agent`
+  capability when it dialed applies `Event::MacrodConnectedWithoutAgentHandOff`
+  instead, which fails it at once with `Failure::AgentUnsupported` and pages).
+  A give-up during the first start counts in `first_start_failures`, except
+  `Failure::HostLost` (a host outage is not the computer's failure); the first
+  leaves the computer for a team retry
   (no new charge), the second (`MAX_FIRST_START_FAILURES`) releases it
   (`EndsAt{now}`, Destroy), queues `Effect::RefundPurchase` (billing worker:
   a credit note on the purchase's invoice under `computer-refund:{id}`,

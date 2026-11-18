@@ -133,6 +133,10 @@ pub const RUNTIME_ACCEPTS_HEADER: &str = "x-macro-runtime-accepts";
 /// The [`RUNTIME_ACCEPTS_HEADER`] entry for [`ToRuntimeMessage::AgentsChanged`].
 pub const ACCEPTS_AGENTS_CHANGED: &str = "agents-changed";
 
+/// The [`RUNTIME_ACCEPTS_HEADER`] entry for [`ToRuntimeMessage::ApplyAgent`]:
+/// a runtime that doesn't list it can't run an agent teammate.
+pub const ACCEPTS_APPLY_AGENT: &str = "apply-agent";
+
 /// Agent Service to Agent Runtime traffic on the logical protocol stream.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]

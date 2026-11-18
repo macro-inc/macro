@@ -13,6 +13,11 @@ pub enum Event {
     InstanceStopped,
     /// The guest connected to the harness service.
     MacrodConnected,
+    /// The guest connected with a macrod that can't take an agent teammate
+    /// (it declared no apply-agent capability): an agent computer gives up
+    /// at once rather than at [`AGENT_START_DEADLINE`]; any other computer
+    /// treats it as [`Self::MacrodConnected`].
+    MacrodConnectedWithoutAgentHandOff,
     /// The guest disconnected from the harness service.
     MacrodDisconnected,
     /// Timer: macrod has been gone for [`MACROD_GRACE`], with a fresh fleet observation.

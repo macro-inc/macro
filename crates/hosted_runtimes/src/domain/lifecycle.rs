@@ -303,6 +303,9 @@ pub enum Failure {
     /// The agent teammate didn't report itself online within
     /// [`AGENT_START_DEADLINE`] of macrod connecting.
     AgentNotStarted,
+    /// The computer's macrod can't take an agent teammate: its image
+    /// predates agent hand-off.
+    AgentUnsupported,
     /// The purchase's charge was refused, so the computer was released.
     Payment,
 }
@@ -317,6 +320,7 @@ impl Failure {
             Self::HostLost => "The computer's host stopped responding.",
             Self::SetupExhausted => "The computer couldn't be set up again.",
             Self::AgentNotStarted => "The agent teammate didn't start on its computer.",
+            Self::AgentUnsupported => "The computer's software can't run an agent teammate.",
             Self::Payment => "The payment for the computer didn't go through, so it was released.",
         }
     }
@@ -560,6 +564,20 @@ pub fn transition(
                     stop(&mut next, &mut effects, host);
                 }
             }
+        }
+
+        Event::MacrodConnectedWithoutAgentHandOff => {
+            if !(state.awaiting_agent && !gave_up(&state.phase)) {
+                return transition(state, &Event::MacrodConnected, context);
+            }
+            give_up(
+                &mut next,
+                &mut effects,
+                Failure::AgentUnsupported,
+                "macrod on this computer declared no apply-agent capability: its image \
+                 predates agent hand-off"
+                    .to_owned(),
+            );
         }
 
         Event::MacrodDisconnected => {

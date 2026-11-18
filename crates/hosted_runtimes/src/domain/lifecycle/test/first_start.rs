@@ -315,3 +315,37 @@ fn an_agent_is_handed_over_again_until_it_reports_online() {
     let (_, effects) = apply(&online, Event::AgentRedeliver);
     assert_eq!(effects, vec![]);
 }
+
+#[test]
+fn an_agent_computer_whose_macrod_cannot_take_an_agent_fails_at_once() {
+    let (failed, effects) = apply(
+        &agent_setting_up(),
+        Event::MacrodConnectedWithoutAgentHandOff,
+    );
+
+    assert!(matches!(failed.phase, Phase::Crashed { retry: None, .. }));
+    assert_eq!(failed.failure, Some(Failure::AgentUnsupported));
+    assert_eq!(failed.first_start_failures, 1);
+    assert!(!effects.contains(&Effect::DeliverAgent));
+    assert!(
+        effects.contains(&Effect::PageOperator {
+            reason: "macrod on this computer declared no apply-agent capability: its image \
+                 predates agent hand-off"
+                .to_owned(),
+        })
+    );
+    assert!(effects.contains(&Effect::NotifySetup {
+        outcome: SetupOutcome::Failed {
+            failure: Failure::AgentUnsupported,
+            failed_at: now(),
+        },
+    }));
+}
+
+#[test]
+fn a_person_computer_runs_on_a_macrod_that_cannot_take_an_agent() {
+    let without = apply(&setting_up(), Event::MacrodConnectedWithoutAgentHandOff);
+
+    assert_eq!(without, apply(&setting_up(), Event::MacrodConnected));
+    assert_eq!(without.0.phase, Phase::Running);
+}
