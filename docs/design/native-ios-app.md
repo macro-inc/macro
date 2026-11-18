@@ -99,18 +99,25 @@ Rules:
   VoiceOver comes from UIKit, not from emulation.
 - Design tokens (colors, type scale, spacing, radii) are generated from the web
   theme into a Swift asset catalog. No hand-copied colors.
-- Each primitive records the native build that introduced it. The bundle build
-  collects the primitives it uses and raises `min-native-build.json` itself, so
-  the existing iOS release gate covers renderer changes with no new process.
+- Every primitive, prop and renderer capability (a new list behavior, a new
+  gesture) records the native build that introduced it, in the same Rust
+  definitions. Because props are typed, the bundle build can list every
+  primitive and prop the mobile views use from the TypeScript program, and it
+  raises `min-native-build.json` to the highest build any of them needs. The
+  existing iOS release gate then covers renderer changes with no new process.
 
 ### 2. One mobile view, two outputs
 
 Primitives also have plain DOM implementations, so a `views/mobile/*.tsx` file
 renders in mobile web and in the current Tauri app unchanged. Desktop views are
 untouched. Features keep the layered structure in
-[frontend features](../architecture/frontend-features.md): `core/`,
-`queries/` and `primitives/` already have no DOM in them, which is exactly what
-lets them run headless.
+[frontend features](../architecture/frontend-features.md), but `core/`,
+`queries/` and `primitives/` are not headless-ready yet: about 190 files there
+use `window` or `document`, mostly focus and visibility listeners and custom
+events. Phase 0 replaces those with a small host interface (app foreground,
+visibility, app events), backed by `window` and `document` on the web and by
+`UIApplication` notifications on iOS. A lint then keeps new browser globals out
+of those layers.
 
 ### 3. Headless JavaScript on iOS
 
@@ -164,7 +171,7 @@ lets them run headless.
 2. **Generated contract**: primitives in Rust, TS and Swift generated; CI fails
    on stale output (as `Check Specta Types` does today) and Swift fails to
    compile on an unhandled primitive.
-3. **Automatic native floor**: primitives used by a bundle raise
+3. **Automatic native floor**: primitives, props and capabilities used by a bundle raise
    `min-native-build.json`; older binaries are asked to update instead of
    receiving a bundle they can't render.
 4. **Route coverage manifest**: every mobile route is `native` or `webIsland`.
@@ -178,7 +185,7 @@ lets them run headless.
 
 | Phase | Ships | Exit check |
 | --- | --- | --- |
-| 0 | Swift shell, `JSContext`, Rust engine bound into JS; the whole app as one `webIsland` | Parity with today's Tauri app on TestFlight |
+| 0 | Swift shell, `JSContext`, Rust engine bound into JS; host interface replacing browser globals in feature logic; the whole app as one `webIsland` | Parity with today's Tauri app on TestFlight |
 | 1 | Primitive catalog v1 with DOM implementations; list-heavy surfaces first (inbox, channel list, tasks) | Scroll and cold-start budgets met on an older device |
 | 2 | Native navigation, tabs, sheets and menus | No web chrome visible outside islands |
 | 3 | Widget and notification service extension on UniFFI | Offline reads from the shared Turso file |
