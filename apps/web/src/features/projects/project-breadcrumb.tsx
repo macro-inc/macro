@@ -3,6 +3,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
 import { useProjectsContext } from './context/projects-context';
@@ -41,18 +42,22 @@ export function ProjectBreadcrumbItem(
     >
       {(item) => (
         <div class="flex min-w-0 items-center">
+          {/* A compact (phone) bar shows the plain icon to keep room for the
+              name; Change icon stays in the project's menu. */}
           <Show when={editableProject()}>
             {(project) => (
-              <EntityAppearanceTrigger
-                entity={{
-                  type: 'initiative',
-                  id: project().id,
-                  name: project().name,
-                  ownerId: project().ownerId,
-                  appearance: project().appearance,
-                }}
-                editable
-              />
+              <div class="contents group-data-[compact]/location:hidden">
+                <EntityAppearanceTrigger
+                  entity={{
+                    type: 'initiative',
+                    id: project().id,
+                    name: project().name,
+                    ownerId: project().ownerId,
+                    appearance: project().appearance,
+                  }}
+                  editable
+                />
+              </div>
             )}
           </Show>
           <ViewBreadcrumbs.Button
@@ -61,13 +66,16 @@ export function ProjectBreadcrumbItem(
             onClick={item.onSelect}
             tooltip={name()}
           >
-            <Show when={!editableProject()}>
-              <EntityIcon
-                targetType="initiative"
-                appearance={props.project?.appearance}
-                size="xs"
-              />
-            </Show>
+            <EntityIcon
+              targetType="initiative"
+              appearance={props.project?.appearance}
+              size="xs"
+              class={cn(
+                'shrink-0',
+                editableProject() &&
+                  'hidden group-data-[compact]/location:block'
+              )}
+            />
             <span class="truncate">{name()}</span>
           </ViewBreadcrumbs.Button>
         </div>
