@@ -206,7 +206,7 @@ export function RoutineEditor(props: {
               onClick={item.onSelect}
               tooltip={breadcrumbName()}
             >
-              <Show when={!props.identityIcon}>{icon('size-3')}</Show>
+              <Show when={!props.identityIcon}>{icon('size-4')}</Show>
               <span class="truncate">{breadcrumbName()}</span>
             </ViewBreadcrumbs.Button>
             <Show when={props.actions}>
