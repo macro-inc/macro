@@ -839,6 +839,7 @@ export class Sdk extends HeyApiClient {
     /**
      * Every size with its price and availability, what buying it charges
      * today, the renewal date and the card charged: what the buy dialog shows.
+     * For the team's owner and admins, who may buy: it names the team's card.
      */
     public listTeamComputerPurchaseOffers<ThrowOnError extends boolean = false>(options?: Options<ListTeamComputerPurchaseOffersData, ThrowOnError>): RequestResult<ListTeamComputerPurchaseOffersResponses, ListTeamComputerPurchaseOffersErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListTeamComputerPurchaseOffersResponses, ListTeamComputerPurchaseOffersErrors, ThrowOnError>({ url: '/team/computers/purchase-offers', ...options });

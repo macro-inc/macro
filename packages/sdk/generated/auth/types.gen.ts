@@ -1873,8 +1873,9 @@ export type PurchaseRefusalCode = 'team_on_trial' | 'payment_declined' | 'no_roo
 export type PurchaseSizeOffer = SizeOffer & {
     /**
      * The prorated rest of the current period, invoiced at purchase, in the
-     * currency's smallest unit; 0 when the computer is included. The charge
-     * itself is prorated to the second it is bought.
+     * currency's smallest unit, less the team's credit balance; 0 when the
+     * team is comped. The charge itself is prorated to the second it is
+     * bought.
      */
     dueToday: number;
 };
@@ -4693,8 +4694,10 @@ export type ListTeamComputerPurchaseOffersData = {
 };
 
 export type ListTeamComputerPurchaseOffersErrors = {
+    401: ErrorResponse;
     403: ErrorResponse;
     422: ErrorResponse;
+    502: ErrorResponse;
     503: ErrorResponse;
 };
 

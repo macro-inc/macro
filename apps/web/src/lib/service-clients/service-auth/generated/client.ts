@@ -4998,10 +4998,16 @@ export const listTeamComputerOffers = async (
 /**
  * @summary Every size with its price and availability, what buying it charges
 today, the renewal date and the card charged: what the buy dialog shows.
+For the team's owner and admins, who may buy: it names the team's card.
  */
 export type listTeamComputerPurchaseOffersResponse200 = {
   data: PurchaseOffers;
   status: 200;
+};
+
+export type listTeamComputerPurchaseOffersResponse401 = {
+  data: ErrorResponse;
+  status: 401;
 };
 
 export type listTeamComputerPurchaseOffersResponse403 = {
@@ -5014,6 +5020,11 @@ export type listTeamComputerPurchaseOffersResponse422 = {
   status: 422;
 };
 
+export type listTeamComputerPurchaseOffersResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
 export type listTeamComputerPurchaseOffersResponse503 = {
   data: ErrorResponse;
   status: 503;
@@ -5024,8 +5035,10 @@ export type listTeamComputerPurchaseOffersResponseSuccess =
     headers: Headers;
   };
 export type listTeamComputerPurchaseOffersResponseError = (
+  | listTeamComputerPurchaseOffersResponse401
   | listTeamComputerPurchaseOffersResponse403
   | listTeamComputerPurchaseOffersResponse422
+  | listTeamComputerPurchaseOffersResponse502
   | listTeamComputerPurchaseOffersResponse503
 ) & {
   headers: Headers;
