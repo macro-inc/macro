@@ -1,3 +1,4 @@
+import { createLexicalTagsMenuHost } from '@core/component/LexicalMarkdown/editing/overlay-hosts/lexical-tags';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import {
   QueryClient,
@@ -68,7 +69,10 @@ describe('closed inline tags menu', () => {
         return (
           <div data-testid="editor">
             Cached body
-            <TagsMenu editor={createEditor()} menu={menu} />
+            <TagsMenu
+              host={createLexicalTagsMenuHost(createEditor)}
+              menu={menu}
+            />
           </div>
         );
       }

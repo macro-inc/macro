@@ -14,7 +14,13 @@ import {
 import { visibleAnchor } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
-import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
@@ -104,6 +110,27 @@ export function createCommentLayout() {
   createEffect(() => {
     const commentMargin = md.commentMargin;
     if (!commentMargin) return;
+
+    if (!md.editor && md.nativeRuntime) {
+      const geometry = md.nativeRuntime.view.observeMarkGeometry<MarkId>(
+        commentMargin,
+        (id, top) => setMarkLocationTops(id, top)
+      );
+      createEffect(() => {
+        const marks = new Map<MarkId, HTMLElement[]>();
+        for (const id in commentState.marks) {
+          const mark = commentState.marks[id];
+          if (mark)
+            marks.set(
+              mark.id,
+              Object.values(mark.markNodes).filter((el) => !!el)
+            );
+        }
+        untrack(() => geometry.setMarks(marks));
+      });
+      onCleanup(() => geometry.dispose());
+      return;
+    }
 
     // Measure marks against the margin itself: it scrolls with the document,
     // so the offsets hold at any scroll position without tracking scrollTop.

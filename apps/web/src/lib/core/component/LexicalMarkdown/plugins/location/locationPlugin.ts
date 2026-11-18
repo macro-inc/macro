@@ -388,11 +388,25 @@ export function $getSelectionLocation() {
 }
 
 export function $getLocationUrl(blockName: BlockName, blockId: string) {
-  const url = new URL(window.location.href);
+  return persistentLocationUrl(
+    window.location.href,
+    blockName,
+    blockId,
+    $getSelectionLocation()
+  );
+}
+
+/** The shareable document URL for a location; without one, the bare document URL. */
+export function persistentLocationUrl(
+  href: string,
+  blockName: BlockName,
+  blockId: string,
+  location: PersistentLocation | null
+) {
+  const url = new URL(href);
   if (blockId) {
     url.pathname = `app/${blockName}/${blockId}`;
   }
-  const location = $getSelectionLocation();
   const params = url.searchParams;
   for (const [key] of params.entries()) {
     params.delete(key);

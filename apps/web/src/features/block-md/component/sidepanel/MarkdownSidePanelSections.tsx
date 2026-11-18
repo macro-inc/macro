@@ -42,7 +42,10 @@ import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { useMarkdownDocument } from '../../context/markdown-document-context';
-import { createPinnedProperties } from '../../primitives/create-pinned-properties';
+import {
+  createDocumentPinnedPropertyStore,
+  createPinnedProperties,
+} from '../../primitives/create-pinned-properties';
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
@@ -186,7 +189,10 @@ function PropertiesSectionContent(props: {
       ? [...getDefaultPinnedProperties('task'), SYSTEM_PROPERTY_IDS.PROJECT]
       : [];
   const pins = createPinnedProperties(
-    () => mdData.editor,
+    createDocumentPinnedPropertyStore({
+      editor: () => mdData.editor,
+      native: () => mdData.nativeRuntime?.pinnedProperties,
+    }),
     defaultTitlePropertyDefinitionIds
   );
 
@@ -205,7 +211,7 @@ function PropertiesSectionContent(props: {
       pinnedPropertyIds={pins.ids}
       defaultTitlePropertyDefinitionIds={defaultTitlePropertyDefinitionIds}
       pinnedPropertyDefinitionOrder={PINNED_ORDER}
-      onPropertyPinned={mdData.editor ? pins.pin : undefined}
+      onPropertyPinned={pins.ready() ? pins.pin : undefined}
       onPropertyUnpinned={pins.unpin}
       showTags={false}
       renderSection={props.renderSection}

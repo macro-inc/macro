@@ -18,7 +18,7 @@ service, Redis subscriber, or Pulumi stack.
 
 - Owns routing and cancellation, not document state or authorization.
 - `services/sync-service` validates each document-scoped token and owns CRDT state.
-- Browser envelopes are generated from `services/sync-service/bebop/schema.bop`.
+- Browser envelopes are generated from `crates/sync_protocol/bebop/schema.bop`.
 
 ## Checks
 

@@ -57,7 +57,18 @@ export type SerializedDocumentCardNode = Spread<
   SerializedLexicalNode
 >;
 
-export type DocumentCardDecoratorProps = DocumentCardData & {
+/** Imported preview payloads without a view are passed through unchanged. */
+export type DocumentCardPreviewInput =
+  | PreviewData
+  | (Readonly<Record<string, unknown>> & { readonly view?: undefined })
+  | (ReadonlyArray<unknown> & { readonly view?: undefined });
+
+export type DocumentCardDecoratorProps = Omit<
+  DocumentCardData,
+  'mentionUuid' | 'previewData'
+> & {
+  mentionUuid?: string | null;
+  previewData?: DocumentCardPreviewInput | null;
   key: NodeKey;
   theme: EditorThemeClasses;
   previewComponent?: DecoratorComponent<DocumentCardDecoratorProps>;

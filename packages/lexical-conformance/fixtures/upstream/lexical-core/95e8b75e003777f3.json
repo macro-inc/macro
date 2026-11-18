@@ -1,0 +1,70 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/sdk-entry.test.ts",
+    "test": [
+      "sdk entry",
+      "rejects state with a node type it does not register, naming it"
+    ],
+    "recordedWith": "lexical-conformance@a9cdd366bfcb8ceb435bb252033e328861fd8b0d6c8c62ea7acdf2869ff6f65c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/sdk.createDocumentEditor",
+      "args": [],
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.parseEditorState",
+      "args": [
+        {
+          "root": {
+            "type": "root",
+            "version": 1,
+            "children": [
+              {
+                "type": "not-a-macro-node",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0
+          }
+        }
+      ],
+      "this": {
+        "$ed": 0
+      },
+      "throws": {
+        "name": "Error",
+        "message": "parseEditorState: type \"not-a-macro-node\" + not found"
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

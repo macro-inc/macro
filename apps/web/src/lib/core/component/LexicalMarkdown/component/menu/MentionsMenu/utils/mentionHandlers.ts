@@ -3,6 +3,13 @@ import type { EntityItem } from '@core/context/quickAccess';
 import { trackMention } from '@core/signal/mention';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
+import type {
+  AgentSessionMentionInfo,
+  BookingLinkMentionInfo,
+  DateMentionInfo,
+  DocumentMentionInfo,
+  GroupMentionInfo,
+} from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
 import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
@@ -39,7 +46,12 @@ function entityDisplayName(item: EntityItem): string {
 }
 
 /** Whether a mention inserted into this editor is recorded as a document reference. */
-function tracksMentions(dependencies: HandlerDependencies): boolean {
+export function tracksMentions(
+  dependencies: Pick<
+    HandlerDependencies,
+    'blockId' | 'blockName' | 'disableMentionTracking'
+  >
+): boolean {
   const { blockId, blockName, disableMentionTracking } = dependencies;
   return Boolean(
     blockId &&
@@ -54,20 +66,49 @@ function tracksMentions(dependencies: HandlerDependencies): boolean {
  * it skips the document/user attachment callbacks — but it is tracked like
  * any other entity mention so the session's References panel lists the doc.
  */
-async function handleAgentSessionMention(
+function handleAgentSessionMention(
   session: { id: string; name?: string },
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor, blockId } = dependencies;
+  return handleAgentSessionMentionWithInsertion(session, () => {
+    const { editor, blockId } = dependencies;
+    return {
+      blockId,
+      tracksMentions: () => tracksMentions(dependencies),
+      insert(buildPayload) {
+        editor.dispatchCommand(
+          INSERT_AGENT_SESSION_MENTION_COMMAND,
+          buildPayload()
+        );
+      },
+    };
+  });
+}
+
+export type AgentSessionMentionInsertion = Pick<
+  HandlerDependencies,
+  'blockId'
+> & {
+  tracksMentions(): boolean;
+  insert(buildPayload: () => AgentSessionMentionInfo): void | Promise<void>;
+};
+
+/** Share agent-session tracking and the payload without an editor facade. */
+export async function handleAgentSessionMentionWithInsertion(
+  session: { id: string; name?: string },
+  prepare: () => AgentSessionMentionInsertion
+): Promise<void> {
+  const { blockId, tracksMentions, insert } = prepare();
   const mentionUuid =
-    blockId && tracksMentions(dependencies)
+    blockId && tracksMentions()
       ? await trackMention(blockId, 'agent_session', session.id)
       : undefined;
-  editor.dispatchCommand(INSERT_AGENT_SESSION_MENTION_COMMAND, {
+  const completion = insert(() => ({
     id: session.id,
     label: session.name,
     ...(mentionUuid ? { mentionUuid } : {}),
-  });
+  }));
+  if (completion !== undefined) await completion;
 }
 
 /**
@@ -75,18 +116,43 @@ async function handleAgentSessionMention(
  * CRM record, so the record's References list includes this document. A CRM
  * reference does not share a file, invite a user, or notify the contact.
  */
-async function handleCrmMention(
+function handleCrmMention(
   item: EntityItem,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor, blockId } = dependencies;
+  return handleCrmMentionWithInsertion(item, () => {
+    const { editor, blockId } = dependencies;
+    return {
+      blockId,
+      tracksMentions: () => tracksMentions(dependencies),
+      insert(buildPayload) {
+        editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, buildPayload());
+      },
+    };
+  });
+}
+
+/** Writes a mention as a document-mention payload. */
+export type DocumentMentionWrite = {
+  insert(buildPayload: () => DocumentMentionInfo): void | Promise<void>;
+};
+
+export type CrmMentionInsertion = Pick<HandlerDependencies, 'blockId'> &
+  DocumentMentionWrite & { tracksMentions(): boolean };
+
+/** Share CRM tracking and the chip payload without an editor facade. */
+export async function handleCrmMentionWithInsertion(
+  item: EntityItem,
+  prepare: () => CrmMentionInsertion
+): Promise<void> {
+  const { blockId, tracksMentions, insert } = prepare();
   const entity = item.data;
   if (entity.type !== 'crm_contact' && entity.type !== 'crm_company') return;
   const mentionUuid =
-    blockId && tracksMentions(dependencies)
+    blockId && tracksMentions()
       ? await trackMention(blockId, entity.type, entity.id)
       : undefined;
-  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+  const completion = insert(() => ({
     documentId: entity.id,
     documentName:
       entity.type === 'crm_contact'
@@ -94,32 +160,75 @@ async function handleCrmMention(
         : entityDisplayName(item),
     blockName: entity.type === 'crm_contact' ? 'contact' : 'company',
     ...(mentionUuid ? { mentionUuid } : {}),
-  });
+  }));
+  if (completion !== undefined) await completion;
 }
 
 /**
  * Handle entity mention (documents, channels, emails, etc.).
  */
-async function handleEntityMention(
+export type EntityMentionInsertion = Pick<
+  HandlerDependencies,
+  'blockId' | 'onDocumentMention' | 'onEmailMention'
+> & {
+  tracksMentions(): boolean;
+  insert(buildPayload: () => DocumentMentionInfo): void | Promise<void>;
+  selectAgent?: (session: { id: string; name?: string }) => Promise<void>;
+  selectCrm?: (item: EntityItem) => Promise<void>;
+};
+
+function handleEntityMention(
   item: EntityItem,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor, blockId, onDocumentMention, onEmailMention } = dependencies;
+  return handleEntityMentionWithInsertion(item, () => {
+    const { editor, blockId, onDocumentMention, onEmailMention } = dependencies;
+    return {
+      blockId,
+      onDocumentMention,
+      onEmailMention,
+      tracksMentions: () => tracksMentions(dependencies),
+      selectAgent: (session) =>
+        handleAgentSessionMention(session, dependencies),
+      selectCrm: (entity) => handleCrmMention(entity, dependencies),
+      insert(buildPayload) {
+        editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, buildPayload());
+      },
+    };
+  });
+}
 
+/** Share entity mapping and tracking without supplying an editor facade. */
+export async function handleEntityMentionWithInsertion(
+  item: EntityItem,
+  prepare: () => EntityMentionInsertion
+): Promise<void> {
+  const {
+    blockId,
+    onDocumentMention,
+    onEmailMention,
+    tracksMentions,
+    insert,
+    selectAgent,
+    selectCrm,
+  } = prepare();
   const entity = item.data;
   if (entity.type === 'agent_session') {
-    return await handleAgentSessionMention(entity, dependencies);
+    if (!selectAgent)
+      throw new Error('Agent session mention insertion is unavailable');
+    return await selectAgent(entity);
   }
 
   if (entity.type === 'crm_contact' || entity.type === 'crm_company') {
-    return await handleCrmMention(item, dependencies);
+    if (!selectCrm) throw new Error('CRM mention insertion is unavailable');
+    return await selectCrm(item);
   }
 
   const blockNameForMention = getBlockNameFromEntity(item);
   const itemName = entityDisplayName(item);
 
   let mentionId: string | undefined;
-  if (blockId && tracksMentions(dependencies)) {
+  if (blockId && tracksMentions()) {
     const trackType = match(item.bucket)
       .with('channel', 'dm', () => 'channel' as const)
       .with('initiative', () => 'initiative' as const)
@@ -136,7 +245,7 @@ async function handleEntityMention(
     onDocumentMention?.(entity as unknown as any);
   }
 
-  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+  const completion = insert(() => ({
     documentId: entity.id,
     documentName: itemName,
     blockName: blockNameForMention,
@@ -145,34 +254,73 @@ async function handleEntityMention(
       item.bucket === 'channel' || item.bucket === 'dm'
         ? (entity as ChannelEntity).channelType
         : undefined,
-  });
+  }));
+  if (completion !== undefined) await completion;
 }
 
 /**
  * Handle date mention from DateOption.
  */
-async function handleDateMentionFromOption(
+export type DateMentionInsertion = {
+  insert(buildPayload: () => DateMentionInfo): void | Promise<void>;
+};
+
+/** Keep actual date-provider values and dispatch payload reads in Source order. */
+export async function handleDateMentionWithInsertion(
+  dateOption: DateOption,
+  prepare: () => DateMentionInsertion
+): Promise<void> {
+  const { insert } = prepare();
+  const completion = insert(() => ({
+    date: dateOption.date.toISOString(),
+    displayFormat: dateOption.displayText,
+  }));
+  if (completion !== undefined) await completion;
+}
+
+function handleDateMentionFromOption(
   dateOption: DateOption,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor } = dependencies;
-  editor.dispatchCommand(INSERT_DATE_MENTION_COMMAND, {
-    date: dateOption.date.toISOString(),
-    displayFormat: dateOption.displayText,
+  return handleDateMentionWithInsertion(dateOption, () => {
+    const { editor } = dependencies;
+    return {
+      insert(buildPayload) {
+        editor.dispatchCommand(INSERT_DATE_MENTION_COMMAND, buildPayload());
+      },
+    };
   });
 }
 
 /**
  * Handle group mention (e.g., @here).
  */
-async function handleGroupMentionItem(
+function handleGroupMentionItem(
   group: { id: string; groupAlias: string },
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor } = dependencies;
-  editor.dispatchCommand(INSERT_GROUP_MENTION_COMMAND, {
-    groupAlias: group.groupAlias,
+  return handleGroupMentionWithInsertion(group, () => {
+    const { editor } = dependencies;
+    return {
+      insert(buildPayload) {
+        editor.dispatchCommand(INSERT_GROUP_MENTION_COMMAND, buildPayload());
+      },
+    };
   });
+}
+
+export type GroupMentionInsertion = {
+  insert(buildPayload: () => GroupMentionInfo): void | Promise<void>;
+};
+
+/** Share the audience-group payload without an editor facade. */
+export async function handleGroupMentionWithInsertion(
+  group: { id: string; groupAlias: string },
+  prepare: () => GroupMentionInsertion
+): Promise<void> {
+  const { insert } = prepare();
+  const completion = insert(() => ({ groupAlias: group.groupAlias }));
+  if (completion !== undefined) await completion;
 }
 
 function buildBookingUrl(profileId: string, slug: string): string {
@@ -185,18 +333,43 @@ function buildBookingUrl(profileId: string, slug: string): string {
 /**
  * Handle booking link mention insertion.
  */
-async function handleBookingLinkMention(
+function handleBookingLinkMention(
   item: BookingLinkMentionItem,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor } = dependencies;
-  const { profileId, slug, title } = item.data;
-  editor.dispatchCommand(INSERT_BOOKING_LINK_MENTION_COMMAND, {
-    profileId,
-    slug,
-    label: title,
-    url: buildBookingUrl(profileId, slug),
+  return handleBookingLinkMentionWithInsertion(item, () => {
+    const { editor } = dependencies;
+    return {
+      insert(buildPayload) {
+        editor.dispatchCommand(
+          INSERT_BOOKING_LINK_MENTION_COMMAND,
+          buildPayload()
+        );
+      },
+    };
   });
+}
+
+export type BookingLinkMentionInsertion = {
+  insert(buildPayload: () => BookingLinkMentionInfo): void | Promise<void>;
+};
+
+/** Share the booking payload and its one url builder without an editor facade. */
+export async function handleBookingLinkMentionWithInsertion(
+  item: BookingLinkMentionItem,
+  prepare: () => BookingLinkMentionInsertion
+): Promise<void> {
+  const { insert } = prepare();
+  const completion = insert(() => {
+    const { profileId, slug, title } = item.data;
+    return {
+      profileId,
+      slug,
+      label: title,
+      url: buildBookingUrl(profileId, slug),
+    };
+  });
+  if (completion !== undefined) await completion;
 }
 
 /**
@@ -204,32 +377,69 @@ async function handleBookingLinkMention(
  * mention for a single event, an instance mention for a repeating one.
  * Posting it in a channel shares the event with the channel's members.
  */
-async function handleCalendarEventMention(
+function handleCalendarEventMention(
   item: CalendarEventMentionItem,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { eventId, title, occurrenceKey } = item.data;
-  dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-    documentId: eventId,
-    documentName: title,
-    blockName: 'calendar',
-    blockParams: occurrenceKey ? { occurrenceKey } : undefined,
+  return handleCalendarEventMentionWithInsertion(item, () =>
+    editorDocumentWrite(dependencies)
+  );
+}
+
+/** Share the calendar chip payload without an editor facade. */
+export async function handleCalendarEventMentionWithInsertion(
+  item: CalendarEventMentionItem,
+  prepare: () => DocumentMentionWrite
+): Promise<void> {
+  const { insert } = prepare();
+  const completion = insert(() => {
+    const { eventId, title, occurrenceKey } = item.data;
+    return {
+      documentId: eventId,
+      documentName: title,
+      blockName: 'calendar',
+      blockParams: occurrenceKey ? { occurrenceKey } : undefined,
+    };
   });
+  if (completion !== undefined) await completion;
+}
+
+function editorDocumentWrite(
+  dependencies: HandlerDependencies
+): DocumentMentionWrite {
+  const { editor } = dependencies;
+  return {
+    insert(buildPayload) {
+      editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, buildPayload());
+    },
+  };
 }
 
 /**
  * Insert a WhatsApp group chip. Posting it in a channel shares the group with
  * the channel's members; nothing else tracks or attaches it.
  */
-async function handleExternalChatMention(
+function handleExternalChatMention(
   group: { id: string; name: string },
   dependencies: HandlerDependencies
 ): Promise<void> {
-  dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+  return handleExternalChatMentionWithInsertion(group, () =>
+    editorDocumentWrite(dependencies)
+  );
+}
+
+/** Share the WhatsApp group chip payload without an editor facade. */
+export async function handleExternalChatMentionWithInsertion(
+  group: { id: string; name: string },
+  prepare: () => DocumentMentionWrite
+): Promise<void> {
+  const { insert } = prepare();
+  const completion = insert(() => ({
     documentId: group.id,
     documentName: group.name,
     blockName: 'external_chat',
-  });
+  }));
+  if (completion !== undefined) await completion;
 }
 
 /**
@@ -237,10 +447,21 @@ async function handleExternalChatMention(
  * message can activate their own copy from its card. The chip goes in only
  * once the template reflects the routine's current setup.
  */
-async function handleRoutineMention(
+function handleRoutineMention(
   routine: { id: string; name: string },
   dependencies: HandlerDependencies
 ): Promise<void> {
+  return handleRoutineMentionWithInsertion(routine, () =>
+    editorDocumentWrite(dependencies)
+  );
+}
+
+/** Share routine publishing and its chip payload without an editor facade. */
+export async function handleRoutineMentionWithInsertion(
+  routine: { id: string; name: string },
+  prepare: () => DocumentMentionWrite
+): Promise<void> {
+  const { insert } = prepare();
   const shared = await Telemetry.span(
     'routine.template.share',
     async (span) => {
@@ -264,11 +485,12 @@ async function handleRoutineMention(
     });
     return;
   }
-  dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+  const completion = insert(() => ({
     documentId: routine.id,
     documentName: routine.name,
     blockName: 'routine',
-  });
+  }));
+  if (completion !== undefined) await completion;
 }
 
 /**

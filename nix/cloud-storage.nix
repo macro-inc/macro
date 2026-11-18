@@ -149,6 +149,16 @@
       # pruned sources; only changes when a manifest or the lock changes.
       deployDummySrc = craneLib.mkDummySrc { inherit src; };
 
+      # Dependency-only builds compile registry crates against the
+      # [patch.crates-io] crates under vendor/ (loro against the patched
+      # loro-internal), so those must keep their real sources, not stubs.
+      depsDummySrc = pkgs.runCommand "cloud-storage-deps-dummy-src" { } ''
+        cp -rT ${deployDummySrc} $out
+        chmod -R +w $out
+        rm -rf $out/vendor
+        cp -rT ${rootDepsSrc}/vendor $out/vendor
+      '';
+
       # Real sources of one workspace crate dir, same filter as the full tree
       # (keeps per-crate assets: pdfium blobs, .sql migrations, templates).
       crateDirSrc =
@@ -162,7 +172,7 @@
       # Workspace-root files that crates read across crate boundaries: the
       # .sqlx offline cache (sqlx macros resolve it from the workspace root),
       # shared assets under static_assets/ (include_bytes!-ed from workspace
-      # crates), and the [patch.crates-io] crates under vendor/, which
+      # crates), and vendored path dependencies (including [patch.crates-io]), which
       # mkDummySrc would otherwise stub out. Included in every pruned source, so a
       # sqlx prepare still invalidates all leaves — coarser than ideal, but
       # the query-to-crate mapping is not recoverable from the file names.
@@ -183,10 +193,13 @@
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)
           || (rel == "vendor")
-          || (rel == "vendor/utoipa-swagger-ui")
-          || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
-          || (rel == "vendor/chrono-tz")
-          || (pkgs.lib.hasPrefix "vendor/chrono-tz/" rel)
+          || (pkgs.lib.any (directory: rel == directory || pkgs.lib.hasPrefix "${directory}/" rel) [
+            "vendor/utoipa-swagger-ui"
+            "vendor/chrono-tz"
+            "vendor/regress"
+            "vendor/loro-editor"
+            "vendor/loro-test-utils"
+          ])
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -286,6 +299,7 @@
 
       commonArgs = {
         inherit src;
+        dummySrc = depsDummySrc;
         pname = "cloud-storage";
         version = "0.1.0";
         strictDeps = true;
@@ -1183,10 +1197,15 @@
         # Deploy builds compile [patch.crates-io] crates from the pruned
         # source, so their real code (not mkDummySrc's stubs) must be there.
         pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
-          grep -q "fn write_embed_code" \
-            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
-          grep -q "IANA_TZDB_VERSION" \
-            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/chrono-tz/src/prebuilt/directory.rs
+          pruned_src=${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}
+          grep -q "fn write_embed_code" "$pruned_src/vendor/utoipa-swagger-ui/build.rs"
+          grep -q "pub struct Regex" "$pruned_src/vendor/regress/src/api.rs"
+          grep -q "pub mod oplog" "$pruned_src/vendor/loro-editor/loro-internal/src/lib.rs"
+          grep -q "fn update_many" "$pruned_src/vendor/loro-editor/loro-internal/src/container/richtext/tracker/id_to_cursor.rs"
+          test -f "$pruned_src/vendor/loro-test-utils/Cargo.toml"
+          grep -q "IANA_TZDB_VERSION" "$pruned_src/vendor/chrono-tz/src/prebuilt/directory.rs"
+          # Dependency-only builds compile loro against the real patched loro-internal.
+          grep -q "pub mod handler" "${depsDummySrc}/vendor/loro-editor/loro-internal/src/lib.rs"
           touch $out
         '';
         pruned-deploy-src-starter-agent =

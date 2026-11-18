@@ -26,9 +26,11 @@ export function useAccountManagersQuery() {
   return useQuery(accountManagersOptions);
 }
 
-function accountManagerGrantOptions(id: string) {
+function accountManagerGrantOptions(id: string | null | undefined) {
   return {
-    queryKey: accountManagerKeys.grant(id).queryKey,
+    // The same key as grant(id), built from its prefix so a stored null or
+    // omitted id keeps its own entry, as Source keys it.
+    queryKey: [...accountManagerKeys.grant._def, id],
     queryFn: () =>
       throwOnErr(() => storageServiceClient.getAccountManagerGrant({ id })),
     retry: false,
@@ -38,7 +40,9 @@ function accountManagerGrantOptions(id: string) {
   };
 }
 
-export function useAccountManagerGrantQuery(id: Accessor<string>) {
+export function useAccountManagerGrantQuery(
+  id: Accessor<string | null | undefined>
+) {
   return useQuery(() => accountManagerGrantOptions(id()));
 }
 

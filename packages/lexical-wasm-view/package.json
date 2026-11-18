@@ -1,0 +1,46 @@
+{
+  "name": "@macro-inc/lexical-wasm-view",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./compat": "./src/compat/index.ts",
+    "./view/*": "./src/view/*.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:browser": "bun run test:browser:dev && bun run test:browser:ordered",
+    "test:browser:dev": "playwright test --config browser-test/playwright.config.ts",
+    "test:browser:ordered": "playwright test --config browser-test/normal-enter.playwright.config.ts --project chromium"
+  },
+  "dependencies": {
+    "@macro-inc/collaboration": "workspace:*",
+    "@macro-inc/observability": "workspace:*",
+    "solid-js": "^1.9.7",
+    "prismjs": "^1.30.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.0",
+    "@types/node": "^24.8.0",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.3",
+    "vite": "8.3.7",
+    "vite-plugin-solid": "2.11.16",
+    "vitest": "5.1.0",
+    "@types/prismjs": "^1.26.5",
+    "lexical": "0.45.0",
+    "@lexical/headless": "0.45.0",
+    "@lexical/html": "0.45.0",
+    "@lexical/rich-text": "0.45.0",
+    "@lexical/list": "0.45.0",
+    "@lexical/link": "0.45.0",
+    "@lexical/table": "0.45.0",
+    "@lexical/code": "0.45.0",
+    "@lexical/mark": "0.45.0",
+    "loro-crdt": "1.16.3"
+  },
+  "sideEffects": false
+}

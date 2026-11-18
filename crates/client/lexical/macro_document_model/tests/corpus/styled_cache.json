@@ -1,0 +1,587 @@
+{
+  "source": "lexical@0.45.0/dist/Lexical.dev.mjs",
+  "sourceSha256": "90090cd9d7e66f49e255d233a096f504583924ff7902f8f6ed27787d4c80b819",
+  "rows": [
+    {
+      "input": {
+        "root": {
+          "type": "root",
+          "version": 1,
+          "format": "",
+          "direction": null,
+          "indent": 0,
+          "children": [
+            {
+              "type": "paragraph",
+              "version": 1,
+              "format": "",
+              "direction": null,
+              "indent": 0,
+              "textFormat": 1,
+              "textStyle": "color: red;",
+              "children": []
+            }
+          ]
+        }
+      },
+      "case": "empty-bold-paragraph",
+      "before": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 1,
+                "textStyle": "color: red;"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 1,
+          "textStyle": "color: red;"
+        }
+      },
+      "attached": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 1,
+                "textStyle": "color: red;"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 1,
+          "textStyle": "color: red;"
+        }
+      },
+      "afterMetadata": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "$": {
+                  "probe": "metadata"
+                },
+                "textFormat": 1,
+                "textStyle": "color: red;"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 1,
+          "textStyle": "color: red;"
+        }
+      },
+      "afterContent": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "$": {
+                  "probe": "metadata"
+                },
+                "textFormat": 1,
+                "textStyle": "color: red;"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 1,
+          "textStyle": "color: red;"
+        }
+      }
+    },
+    {
+      "input": {
+        "root": {
+          "type": "root",
+          "version": 1,
+          "format": "",
+          "direction": null,
+          "indent": 0,
+          "children": [
+            {
+              "type": "paragraph",
+              "version": 1,
+              "format": "",
+              "direction": null,
+              "indent": 0,
+              "textFormat": 1,
+              "textStyle": "color: red;",
+              "children": [
+                {
+                  "type": "text",
+                  "version": 1,
+                  "text": "plain",
+                  "format": 0,
+                  "detail": 0,
+                  "mode": "normal",
+                  "style": ""
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "case": "styled-paragraph-unstyled-child",
+      "before": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "plain",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 1,
+          "textStyle": "color: red;"
+        }
+      },
+      "attached": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "plain",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 1,
+          "textStyle": "color: red;"
+        }
+      },
+      "afterMetadata": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "plain",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "$": {
+                  "probe": "metadata"
+                },
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      },
+      "afterContent": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "changed",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "$": {
+                  "probe": "metadata"
+                },
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      }
+    },
+    {
+      "input": {
+        "root": {
+          "type": "root",
+          "version": 1,
+          "format": "",
+          "direction": null,
+          "indent": 0,
+          "children": [
+            {
+              "type": "paragraph",
+              "version": 1,
+              "format": "",
+              "direction": null,
+              "indent": 0,
+              "textFormat": 1,
+              "textStyle": "color: red;",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "version": 1,
+                  "format": "",
+                  "direction": null,
+                  "indent": 0,
+                  "textFormat": 0,
+                  "textStyle": "",
+                  "children": [
+                    {
+                      "type": "text",
+                      "version": 1,
+                      "text": "plain",
+                      "format": 0,
+                      "detail": 0,
+                      "mode": "normal",
+                      "style": ""
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "case": "styled-paragraph-nested-unstyled-child",
+      "before": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "plain",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "paragraph",
+                    "version": 1,
+                    "textFormat": 0,
+                    "textStyle": ""
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 1,
+                "textStyle": "color: red;"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 1,
+          "textStyle": "color: red;"
+        }
+      },
+      "attached": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "plain",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "paragraph",
+                    "version": 1,
+                    "textFormat": 0,
+                    "textStyle": ""
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 1,
+                "textStyle": "color: red;"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 1,
+          "textStyle": "color: red;"
+        }
+      },
+      "afterMetadata": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "plain",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "paragraph",
+                    "version": 1,
+                    "textFormat": 0,
+                    "textStyle": ""
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "$": {
+                  "probe": "metadata"
+                },
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      },
+      "afterContent": {
+        "readOnly": true,
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "changed",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "paragraph",
+                    "version": 1,
+                    "textFormat": 0,
+                    "textStyle": ""
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "$": {
+                  "probe": "metadata"
+                },
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "raw": {
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,2200 @@
+[
+  {
+    "name": "missing-meta",
+    "meta": null,
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "empty-filtered-list",
+    "meta": {
+      "listKey": "100",
+      "items": [],
+      "settings": {
+        "filters": {
+          "status": [
+            "done",
+            "done"
+          ]
+        },
+        "future": {
+          "keep": [
+            1,
+            null
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "plain-wrappers",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "2",
+          "leadingKeys": [
+            "12",
+            "11"
+          ],
+          "attachedKeys": [
+            "21",
+            "20"
+          ],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": null,
+        "future": {
+          "keep": false
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "task-overrides",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "urgent",
+          "taskId": "task"
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": [
+            "in-progress"
+          ],
+          "priority": [
+            "low"
+          ],
+          "assignees": [
+            "known"
+          ],
+          "due": [
+            "later"
+          ]
+        }
+      }
+    },
+    "tasks": {
+      "task": {
+        "statusOptionId": "00000001-0000-0000-0002-000000000002",
+        "priorityOptionId": "00000001-0000-0000-0003-000000000001",
+        "assigneeIds": [
+          "unknown",
+          "known",
+          "known"
+        ],
+        "due": "2030-05-22T00:00:00"
+      }
+    },
+    "names": {
+      "known": "Known"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unknown-task-fallback",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "high",
+          "taskId": "task"
+        }
+      ],
+      "settings": null
+    },
+    "tasks": {
+      "task": {
+        "statusOptionId": "future-status",
+        "priorityOptionId": "future-priority",
+        "assigneeIds": [],
+        "due": null
+      }
+    },
+    "names": {
+      "inline": "Must not replace inline name"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "progress-independent-of-filter",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": "done"
+        },
+        {
+          "key": "2",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": "canceled"
+        },
+        {
+          "key": "3",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "4",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": " ",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "5",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Open",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": [
+            "not-started"
+          ]
+        }
+      }
+    },
+    "tasks": {
+      "done": {
+        "statusOptionId": "00000001-0000-0000-0002-000000000004",
+        "priorityOptionId": null,
+        "assigneeIds": [],
+        "due": null
+      },
+      "canceled": {
+        "statusOptionId": "00000001-0000-0000-0002-000000000005",
+        "priorityOptionId": null,
+        "assigneeIds": [],
+        "due": null
+      }
+    },
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "or-within-and-across",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "2",
+          "leadingKeys": [
+            "11"
+          ],
+          "attachedKeys": [
+            "21"
+          ],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:00:00",
+          "markerPriority": "urgent",
+          "taskId": "task"
+        },
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "3",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "person",
+              "name": "Person"
+            }
+          ],
+          "mentionDue": "2030-05-16T00:00:00",
+          "markerPriority": "urgent",
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": [
+            "future",
+            "in-progress",
+            "in-progress",
+            "not-started"
+          ],
+          "priority": [
+            "urgent",
+            "none"
+          ],
+          "assignees": [
+            "unassigned",
+            "person"
+          ],
+          "due": [
+            "today",
+            "week"
+          ]
+        }
+      }
+    },
+    "tasks": {
+      "task": {
+        "statusOptionId": "00000001-0000-0000-0002-000000000002",
+        "priorityOptionId": null,
+        "assigneeIds": [],
+        "due": null
+      }
+    },
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "due-overdue",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "2",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "not-a-date",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "3",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-13T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "4",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "5",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "6",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-21T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "7",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-22T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "8",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:30:00Z",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "overdue"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "due-today",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "2",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "not-a-date",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "3",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-13T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "4",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "5",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "6",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-21T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "7",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-22T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "8",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:30:00Z",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "today"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "due-week",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "2",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "not-a-date",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "3",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-13T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "4",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "5",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "6",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-21T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "7",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-22T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "8",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:30:00Z",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "week"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "due-later",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "2",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "not-a-date",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "3",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-13T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "4",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "5",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "6",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-21T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "7",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-22T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "8",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:30:00Z",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "later"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "due-none",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "2",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "not-a-date",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "3",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-13T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "4",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "5",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "6",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-21T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "7",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-22T00:00:00",
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "8",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:30:00Z",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "none"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "spring-calendar-days",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-03-16T12:00:00",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "week"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-03-09T12:00:00"
+  },
+  {
+    "name": "fall-calendar-days",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-11-07T12:00:00",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "week"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-10-31T12:00:00"
+  },
+  {
+    "name": "js-maximum-year",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "+275760-09-13T00:00:00.000Z",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "week"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "+275760-09-12T00:00:00.000Z"
+  },
+  {
+    "name": "js-minimum-year",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "-271821-04-21T00:00:00.000Z",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "week"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "-271821-04-20T00:00:00.000Z"
+  },
+  {
+    "name": "nullish-and-unknown-filters",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": null,
+          "priority": null,
+          "assignees": null,
+          "due": null,
+          "future": [
+            "keep"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unknown-choice-duplicates",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "2",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": [
+            "future",
+            "future",
+            "done"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "empty-due-overrides-inline",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "2030-05-14T00:00:00",
+          "markerPriority": null,
+          "taskId": "task"
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "none"
+          ]
+        }
+      }
+    },
+    "tasks": {
+      "task": {
+        "statusOptionId": null,
+        "priorityOptionId": null,
+        "assigneeIds": [],
+        "due": ""
+      }
+    },
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "legacy-absent-fields",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "markerPriority": null
+        }
+      ],
+      "settings": null
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-string-status",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": "done"
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-mixed-status",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": [
+            "done",
+            null,
+            42
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-scalar-status",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": 42
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-length-object-status",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": {
+            "length": 1
+          }
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-array-container",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": []
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-string-container",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": "future"
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-boolean-container",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": true
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "year-zero-leap-rollover",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "0000-03-01T12:00:00",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "today"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "0000-02-29T12:00:00"
+  },
+  {
+    "name": "year-zero-week-boundary",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "0000-02-29T12:00:00",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "week"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "0000-02-22T12:00:00"
+  },
+  {
+    "name": "year-zero-reverse-rollover",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "0000-02-29T12:00:00",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "overdue"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "0000-03-01T12:00:00"
+  },
+  {
+    "name": "year-99-boundary",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "0100-01-01T12:00:00",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "week"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "0099-12-31T12:00:00"
+  },
+  {
+    "name": "historical-offset-seconds",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "1891-10-01T12:00:00",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "week"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "1891-09-24T12:00:00"
+  },
+  {
+    "name": "all-option-mappings",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": "urgent",
+          "taskId": "task-1"
+        },
+        {
+          "key": "2",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": "urgent",
+          "taskId": "task-2"
+        },
+        {
+          "key": "3",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": "urgent",
+          "taskId": "task-3"
+        },
+        {
+          "key": "4",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": "urgent",
+          "taskId": "task-4"
+        },
+        {
+          "key": "5",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": "urgent",
+          "taskId": "task-5"
+        }
+      ],
+      "settings": null
+    },
+    "tasks": {
+      "task-1": {
+        "statusOptionId": "00000001-0000-0000-0002-000000000001",
+        "priorityOptionId": "00000001-0000-0000-0003-000000000001",
+        "assigneeIds": [],
+        "due": null
+      },
+      "task-2": {
+        "statusOptionId": "00000001-0000-0000-0002-000000000002",
+        "priorityOptionId": "00000001-0000-0000-0003-000000000002",
+        "assigneeIds": [],
+        "due": null
+      },
+      "task-3": {
+        "statusOptionId": "00000001-0000-0000-0002-000000000003",
+        "priorityOptionId": "00000001-0000-0000-0003-000000000003",
+        "assigneeIds": [],
+        "due": null
+      },
+      "task-4": {
+        "statusOptionId": "00000001-0000-0000-0002-000000000004",
+        "priorityOptionId": "00000001-0000-0000-0003-000000000004",
+        "assigneeIds": [],
+        "due": null
+      },
+      "task-5": {
+        "statusOptionId": "00000001-0000-0000-0002-000000000005",
+        "priorityOptionId": null,
+        "assigneeIds": [],
+        "due": null
+      }
+    },
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "empty-resolved-name",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": "task"
+        }
+      ],
+      "settings": null
+    },
+    "tasks": {
+      "task": {
+        "statusOptionId": null,
+        "priorityOptionId": null,
+        "assigneeIds": [
+          "empty"
+        ],
+        "due": null
+      }
+    },
+    "names": {
+      "empty": ""
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "year-four-leap",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "0004-03-01T12:00:00",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "week"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "0004-02-29T12:00:00"
+  },
+  {
+    "name": "year-96-leap",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "0096-03-01T12:00:00",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "week"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "0096-02-29T12:00:00"
+  },
+  {
+    "name": "percentage-half",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "2",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "3",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "4",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "5",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "6",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "7",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "8",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": null
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-03-09T12:00:00"
+  },
+  {
+    "name": "unsupported-task-key-constructor",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "high",
+          "taskId": "constructor"
+        }
+      ],
+      "settings": null
+    },
+    "tasks": {},
+    "names": {
+      "inline": "Must not replace inline name"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-task-key-toString",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "high",
+          "taskId": "toString"
+        }
+      ],
+      "settings": null
+    },
+    "tasks": {},
+    "names": {
+      "inline": "Must not replace inline name"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-task-key-__proto__",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "high",
+          "taskId": "__proto__"
+        }
+      ],
+      "settings": null
+    },
+    "tasks": {},
+    "names": {
+      "inline": "Must not replace inline name"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-option-statusOptionId-constructor",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "high",
+          "taskId": "task"
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": [
+            "not-started"
+          ]
+        }
+      }
+    },
+    "tasks": {
+      "task": {
+        "statusOptionId": "constructor",
+        "priorityOptionId": "future-priority",
+        "assigneeIds": [],
+        "due": null
+      }
+    },
+    "names": {
+      "inline": "Must not replace inline name"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-option-statusOptionId-__proto__",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "high",
+          "taskId": "task"
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": [
+            "not-started"
+          ]
+        }
+      }
+    },
+    "tasks": {
+      "task": {
+        "statusOptionId": "__proto__",
+        "priorityOptionId": "future-priority",
+        "assigneeIds": [],
+        "due": null
+      }
+    },
+    "names": {
+      "inline": "Must not replace inline name"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-option-priorityOptionId-constructor",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "high",
+          "taskId": "task"
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": [
+            "not-started"
+          ]
+        }
+      }
+    },
+    "tasks": {
+      "task": {
+        "statusOptionId": "future-status",
+        "priorityOptionId": "constructor",
+        "assigneeIds": [],
+        "due": null
+      }
+    },
+    "names": {
+      "inline": "Must not replace inline name"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-option-priorityOptionId-__proto__",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "high",
+          "taskId": "task"
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": [
+            "not-started"
+          ]
+        }
+      }
+    },
+    "tasks": {
+      "task": {
+        "statusOptionId": "future-status",
+        "priorityOptionId": "__proto__",
+        "assigneeIds": [],
+        "due": null
+      }
+    },
+    "names": {
+      "inline": "Must not replace inline name"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "unsupported-own-reserved-task-key",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "high",
+          "taskId": "constructor"
+        }
+      ],
+      "settings": null
+    },
+    "tasks": {
+      "constructor": {
+        "statusOptionId": "future-status",
+        "priorityOptionId": "future-priority",
+        "assigneeIds": [],
+        "due": null
+      }
+    },
+    "names": {
+      "inline": "Must not replace inline name"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "empty-task-key-skips-lookup",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "high",
+          "taskId": ""
+        }
+      ],
+      "settings": null
+    },
+    "tasks": {
+      "": {
+        "statusOptionId": "00000001-0000-0000-0002-000000000002",
+        "priorityOptionId": "future-priority",
+        "assigneeIds": [],
+        "due": null
+      }
+    },
+    "names": {
+      "inline": "Must not replace inline name"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "name-map-prototype-strings",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [
+            {
+              "id": "inline",
+              "name": "Inline"
+            }
+          ],
+          "mentionDue": "2030-05-15T00:00:00",
+          "markerPriority": "high",
+          "taskId": "task"
+        }
+      ],
+      "settings": null
+    },
+    "tasks": {
+      "task": {
+        "statusOptionId": "future-status",
+        "priorityOptionId": "future-priority",
+        "assigneeIds": [
+          "constructor",
+          "toString",
+          "__proto__"
+        ],
+        "due": null
+      }
+    },
+    "names": {
+      "constructor": "Named"
+    },
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "due-prototype-string-is-invalid-date",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "2",
+          "leadingKeys": [
+            "12",
+            "11"
+          ],
+          "attachedKeys": [
+            "21",
+            "20"
+          ],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": "__proto__",
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "due": [
+            "none"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  },
+  {
+    "name": "prototype-filter-choice-is-ordinary-string",
+    "meta": {
+      "listKey": "100",
+      "items": [
+        {
+          "key": "2",
+          "leadingKeys": [
+            "12",
+            "11"
+          ],
+          "attachedKeys": [
+            "21",
+            "20"
+          ],
+          "checked": false,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        },
+        {
+          "key": "1",
+          "leadingKeys": [],
+          "attachedKeys": [],
+          "checked": true,
+          "text": "Work",
+          "mentionAssignees": [],
+          "mentionDue": null,
+          "markerPriority": null,
+          "taskId": null
+        }
+      ],
+      "settings": {
+        "filters": {
+          "status": [
+            "constructor",
+            "__proto__"
+          ]
+        }
+      }
+    },
+    "tasks": {},
+    "names": {},
+    "now": "2030-05-14T12:00:00"
+  }
+]

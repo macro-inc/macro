@@ -17,6 +17,8 @@ and backend document transformations.
 Keep runtime code independent of the web app and browser-only modules. The web
 composer imports the URL matcher from this package; do not duplicate it.
 
+Keep stored null image constraints intact at the UI boundary. The dimension helper treats them as absent.
+
 ## Checks
 
 - From `apps/web`: `bun run test --project lexical-core`.
@@ -27,6 +29,10 @@ composer imports the URL matcher from this package; do not duplicate it.
   `apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test/README.md`.
 
 ## Gotchas
+
+Keep admitted document-reference nulls and view-less preview payloads in
+decorator props while leaving serialized authoring types narrow; JSON import
+preserves the raw values and object order.
 
 GitHub comment and PR bodies go through `normalizeGithubMarkdown`
 (`utils/github-markdown.ts`) before import: it rewrites GitHub's raw HTML into

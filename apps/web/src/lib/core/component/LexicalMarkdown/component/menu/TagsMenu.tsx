@@ -15,7 +15,6 @@ import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { Surface } from '@ui';
-import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
   createMemo,
@@ -27,12 +26,8 @@ import {
   Show,
 } from 'solid-js';
 import { floatWithSelection } from '../../directive/floatWithSelection';
-import {
-  CLOSE_INLINE_SEARCH_COMMAND,
-  REMOVE_INLINE_SEARCH_COMMAND,
-} from '../../plugins';
+import type { TagsMenuHost } from '../../editing/overlay-hosts/tags';
 import type { TagMentionLifecycle } from '../../plugins/tags';
-import { INSERT_TAG_MENTION_COMMAND } from '../../plugins/tags';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { InlineFollowupMenu } from './InlineFollowupMenu';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
@@ -95,7 +90,7 @@ function ScrollIntoViewOnSelect(props: {
 }
 
 export function TagsMenu(props: {
-  editor: LexicalEditor;
+  host: TagsMenuHost;
   menu: MenuOperations;
   portalScope?: PortalScope;
   useBlockBoundary?: boolean;
@@ -198,7 +193,7 @@ export function TagsMenu(props: {
       clearTimeout(applyPromptOpenTimeout);
       applyPromptOpenTimeout = undefined;
     }
-    props.editor.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
+    props.host.closeSearch();
     setPendingApplyTag(null);
     setApplyPromptSelection(null);
     props.menu.setIsOpen(false);
@@ -209,8 +204,7 @@ export function TagsMenu(props: {
       closeMenu();
       return;
     }
-    props.editor.dispatchCommand(REMOVE_INLINE_SEARCH_COMMAND, undefined);
-    props.editor.dispatchCommand(INSERT_TAG_MENTION_COMMAND, item);
+    props.host.insertTag(item);
     setCreateStep(null);
     props.menu.setSearchTerm('');
 
@@ -405,7 +399,7 @@ export function TagsMenu(props: {
             ref={(el) => {
               floatWithSelection(el, () => ({
                 selection: mountSelection(),
-                reactiveOnContainer: props.editor.getRootElement(),
+                reactiveOnContainer: props.host.root(),
                 useBlockBoundary: props.useBlockBoundary,
                 onAvailableHeight: setMenuAvailableHeight,
                 fullHeight: MAX_CONTENT_HEIGHT + PANEL_DECORATION_HEIGHT,
@@ -471,7 +465,7 @@ export function TagsMenu(props: {
         </ScopedPortal>
       </Show>
       <InlineFollowupMenu
-        editor={props.editor}
+        root={props.host.root()}
         open={pendingApplyTag() !== null}
         selection={applyPromptSelection()}
         portalScope={props.portalScope}

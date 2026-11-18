@@ -19,20 +19,13 @@ import FileRs from '@icon/system/regular/file-rs.svg';
 import FileSql from '@icon/system/regular/file-sql.svg';
 import FileTs from '@icon/system/regular/file-ts.svg';
 import TrashCan from '@icon/system/regular/trash-simple.svg';
-import { $isCodeNode, CodeNode } from '@lexical/code';
 import {
-  $isCustomCodeNode,
   LanguageDefinitions,
   normalizedLanguage,
   type SupportedLanguage,
 } from '@macro-inc/lexical-core';
 import { Button, CopyButton, cn, Dropdown, ToggleSwitch } from '@ui';
-import {
-  $getNodeByKey,
-  type EditorThemeClasses,
-  type LexicalEditor,
-  type NodeKey,
-} from 'lexical';
+import type { EditorThemeClasses } from 'lexical';
 import {
   type Accessor,
   type Component,
@@ -45,8 +38,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { glueToElement } from '../../directive/glueToElement';
-import { deleteCodeNode } from '../../plugins/code/deleteCodeNode';
-import { autoRegister } from '../../plugins/shared/utils';
+import type { CodeAccessoryHost } from './code-accessory-host';
 
 const LanguageIcons: Record<
   SupportedLanguage,
@@ -85,12 +77,10 @@ function StaticLabel(props: { language: SupportedLanguage }) {
 function CodeLanguageSelector(props: {
   language: Accessor<string | null>;
   setLanguage: (language: string) => void;
-  editor?: LexicalEditor;
+  editable: boolean;
 }) {
   const [open, setOpen] = createSignal(false);
-  const editable = () => {
-    return props.editor && props.editor.isEditable();
-  };
+  const editable = () => props.editable;
   const validCurrentLanguage = (): SupportedLanguage => {
     const language = props.language();
     if (language && language.toLowerCase() in LanguageDefinitions) {
@@ -150,44 +140,18 @@ function CodeLanguageSelector(props: {
 
 export function CodeBoxAccessory(props: {
   floatRef: HTMLElement;
-  editor: LexicalEditor;
-  nodeKey: NodeKey;
+  host: CodeAccessoryHost;
 }) {
-  const [language, setLanguage] = createSignal('JavaScript');
-  const [isPreviewMode, setIsPreviewMode] = createSignal(false);
+  const host = props.host;
+  const floatRef = () => host.mountElement?.() ?? props.floatRef;
+  const language = host.language;
+  const isPreviewMode = host.previewEnabled;
+  const setIsPreviewMode = host.setPreviewEnabledLocally;
 
   const isNested = isInBlock() && useIsNestedBlock();
 
-  if (ENABLE_SVG_PREVIEW) {
-    autoRegister(
-      props.editor.registerMutationListener(
-        CodeNode,
-        (mutations) => {
-          const match = mutations.get(props.nodeKey);
-          if (match === 'created' || match === 'updated') {
-            queueMicrotask(() =>
-              props.editor.read(() => {
-                const node = $getNodeByKey(props.nodeKey);
-                if (!$isCodeNode(node)) return;
-                setLanguage(node.getLanguage() ?? 'plain');
-                if ($isCustomCodeNode(node)) {
-                  setIsPreviewMode(node.getPreviewEnabled());
-                }
-              })
-            );
-          }
-        },
-        { skipInitialization: false }
-      )
-    );
-  }
-
   const copyCode = async () => {
-    const code = props.editor.read(() => {
-      const node = $getNodeByKey(props.nodeKey);
-      if (!node) return '';
-      return node.getTextContent();
-    });
+    const code = host.codeText();
     if (!code) return false;
     try {
       await navigator.clipboard.writeText(code);
@@ -198,34 +162,13 @@ export function CodeBoxAccessory(props: {
     }
   };
 
-  const deleteCode = () => {
-    deleteCodeNode(props.editor, props.nodeKey);
-  };
-
-  const setLanguageOnNode = (language: string) => {
-    props.editor.update(() => {
-      const node = $getNodeByKey(props.nodeKey);
-      if (!$isCustomCodeNode(node)) return;
-      node.setLanguage(language);
-      setIsPreviewMode(node.getPreviewEnabled());
-    });
-  };
-
-  const setPreviewModeOnNode = (enabled: boolean) => {
-    props.editor.update(() => {
-      const node = $getNodeByKey(props.nodeKey);
-      if (!$isCustomCodeNode(node)) return;
-      node.setPreviewEnabled(enabled);
-    });
-  };
-
   const showPreviewToggle = () => {
     return ENABLE_SVG_PREVIEW && language().toLowerCase() === 'svg';
   };
 
   createEffect(() => {
     if (isNested) return;
-    props.floatRef.classList.add('__accessory-code-box');
+    floatRef().classList.add('__accessory-code-box');
   });
 
   return (
@@ -234,16 +177,17 @@ export function CodeBoxAccessory(props: {
         class="fixed pointer-events-none md-code-box-header"
         ref={(el) => {
           glueToElement(el, () => ({
-            editor: props.editor,
-            element: () => props.floatRef,
+            root: host.root,
+            observeMutations: host.observeMutations,
+            element: floatRef,
           }));
         }}
       >
         <div class="w-full flex justify-between content-center items-start p-1 pointer-events-auto text-ink-extra-muted/50">
           <CodeLanguageSelector
             language={language}
-            setLanguage={setLanguageOnNode}
-            editor={props.editor}
+            setLanguage={host.setLanguage}
+            editable={host.editableAtMount}
           />
           <div class="flex items-center h-full">
             <Show when={showPreviewToggle()}>
@@ -256,12 +200,12 @@ export function CodeBoxAccessory(props: {
                   checked={isPreviewMode()}
                   onChange={(enabled) => {
                     setIsPreviewMode(enabled);
-                    setPreviewModeOnNode(enabled);
+                    host.setPreviewEnabled(enabled);
                   }}
                 />
               </div>
             </Show>
-            <Show when={props.editor.isEditable()}>
+            <Show when={host.editableAtMount}>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -270,7 +214,7 @@ export function CodeBoxAccessory(props: {
                 on:click={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  deleteCode();
+                  host.deleteCode();
                 }}
               >
                 <TrashCan class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
@@ -293,16 +237,7 @@ export function CodeBoxAccessory(props: {
           </div>
         </div>
         <Show when={isPreviewMode() && showPreviewToggle()}>
-          <SvgPreview
-            svgContent={() => {
-              return props.editor.read(() => {
-                const node = $getNodeByKey(props.nodeKey);
-                if (!node) return '';
-                return node.getTextContent();
-              });
-            }}
-            overlay={true}
-          />
+          <SvgPreview svgContent={host.codeText} overlay={true} />
         </Show>
       </div>
     </Show>

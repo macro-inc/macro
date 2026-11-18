@@ -1,0 +1,63 @@
+[package]
+name = "sync_sim"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[dependencies]
+document_session = { workspace = true, features = ["conformance", "test-faults"] }
+lexical_model = { workspace = true, features = ["model-segmentation"] }
+lexical_loro.workspace = true
+lexical_markdown.workspace = true
+lexical_rich_nodes.workspace = true
+macro_document_model.workspace = true
+proptest.workspace = true
+doc_sync_core.workspace = true
+sync_protocol = { workspace = true, features = ["presence"] }
+sync_server_core.workspace = true
+sync_server_sim.workspace = true
+macro_sync_service_jwt.workspace = true
+uuid_value.workspace = true
+loro.workspace = true
+bebop.workspace = true
+futures.workspace = true
+serde.workspace = true
+specta.workspace = true
+serde_json.workspace = true
+postcard.workspace = true
+thiserror.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+xxhash-rust.workspace = true
+
+[dev-dependencies]
+sha2.workspace = true
+tracing.workspace = true
+specta-serde.workspace = true
+specta-typescript.workspace = true
+macro_env_var = { path = "../macro_env_var" }
+sync_router = { path = "../sync_router" }
+tokio.workspace = true
+tokio-util.workspace = true
+anyhow.workspace = true
+
+[[test]]
+name = "random_sessions"
+path = "tests/random_sessions.rs"
+
+[[test]]
+name = "replay"
+path = "tests/replay.rs"
+
+[[test]]
+name = "stories"
+path = "tests/stories.rs"
+
+[[test]]
+name = "mixed_versions"
+path = "tests/mixed_versions.rs"
+
+[[test]]
+name = "known_failures"
+path = "tests/known_failures.rs"

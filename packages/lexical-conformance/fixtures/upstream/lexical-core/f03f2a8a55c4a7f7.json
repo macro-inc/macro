@@ -1,0 +1,298 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/document-reference-render-props.test.ts",
+    "test": [
+      "retains imported card extra object preview data without a view member"
+    ],
+    "recordedWith": "lexical-conformance@a9cdd366bfcb8ceb435bb252033e328861fd8b0d6c8c62ea7acdf2869ff6f65c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "ighen",
+    "namespaceGenerated": true,
+    "nodes": [
+      "document-card",
+      "document-mention"
+    ],
+    "nodeClasses": {
+      "document-card": {
+        "$fn": "@macro-inc/lexical-core/nodes/DocumentCardNode.DocumentCardNode"
+      },
+      "document-mention": {
+        "$fn": "@macro-inc/lexical-core/nodes/DocumentMentionNode.DocumentMentionNode"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {},
+    "editable": true,
+    "headless": false,
+    "rootElement": false
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "ighen",
+        "namespaceGenerated": true,
+        "nodes": [
+          "document-card",
+          "document-mention"
+        ],
+        "nodeClasses": {
+          "document-card": {
+            "$fn": "@macro-inc/lexical-core/nodes/DocumentCardNode.DocumentCardNode"
+          },
+          "document-mention": {
+            "$fn": "@macro-inc/lexical-core/nodes/DocumentMentionNode.DocumentMentionNode"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": false,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.parseEditorState",
+      "args": [
+        "{\"root\":{\"type\":\"root\",\"version\":1,\"children\":[{\"type\":\"document-card\",\"version\":1,\"documentId\":\"fixture-document\",\"documentName\":\"Document\",\"blockName\":\"md\",\"previewData\":{\"opaque\":{\"second\":2,\"first\":1}}}]}}"
+      ],
+      "this": {
+        "$ed": 0
+      },
+      "ret": {
+        "$state": 1
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.setEditorState",
+      "args": [
+        {
+          "$state": 1
+        }
+      ],
+      "this": {
+        "$ed": 0
+      },
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [
+        "setEditorState"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "type": "document-card",
+                "version": 1,
+                "documentId": "fixture-document",
+                "documentName": "Document",
+                "blockName": "md",
+                "blockParams": {},
+                "previewBox": [
+                  "100%",
+                  "400px"
+                ],
+                "previewData": {
+                  "opaque": {
+                    "second": 2,
+                    "first": 1
+                  }
+                }
+              }
+            ],
+            "format": "",
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "Document",
+        "nodeMapKeys": [
+          "root",
+          "1"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              false
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$nodesOfType",
+          "args": [
+            {
+              "$klass": "document-card"
+            }
+          ],
+          "ret": [
+            {
+              "$h": 2,
+              "key": "1",
+              "type": "document-card",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "get:0",
+          "this": [
+            {
+              "$h": 2
+            }
+          ],
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "DocumentCardNode.exportComponentProps",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "documentId": "fixture-document",
+            "documentName": "Document",
+            "blockName": "md",
+            "blockParams": {},
+            "previewBox": [
+              "100%",
+              "400px"
+            ],
+            "previewData": {
+              "opaque": {
+                "second": 2,
+                "first": 1
+              }
+            },
+            "mentionUuid": {
+              "$undef": true
+            }
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:previewData",
+          "this": {
+            "documentId": "fixture-document",
+            "documentName": "Document",
+            "blockName": "md",
+            "blockParams": {},
+            "previewBox": [
+              "100%",
+              "400px"
+            ],
+            "previewData": {
+              "opaque": {
+                "second": 2,
+                "first": 1
+              }
+            },
+            "mentionUuid": {
+              "$undef": true
+            }
+          },
+          "args": [],
+          "ret": {
+            "opaque": {
+              "second": 2,
+              "first": 1
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "type": "document-card",
+            "version": 1,
+            "documentId": "fixture-document",
+            "documentName": "Document",
+            "blockName": "md",
+            "blockParams": {},
+            "previewBox": [
+              "100%",
+              "400px"
+            ],
+            "previewData": {
+              "opaque": {
+                "second": 2,
+                "first": 1
+              }
+            }
+          }
+        ],
+        "format": "",
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "Document",
+    "nodeMapKeys": [
+      "root",
+      "1"
+    ]
+  }
+}

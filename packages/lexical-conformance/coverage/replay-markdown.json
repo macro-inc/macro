@@ -1,0 +1,27 @@
+{
+  "scope": "Historical replay output; CI still requires fresh runtime evidence",
+  "base": "1e8b03cd7c2",
+  "inputs": "14b08cb19a153aab2aca7e2a8afbba875cda8b81167321b2029013b6704d6fde",
+  "logSHA256": "47a991cbf98f0b9091b552ac78247bebb368d7bafe57541088bc4e1047e8bc6b",
+  "counts": {
+    "pass": 1377,
+    "fail": 0,
+    "ledger": 44
+  },
+  "before": 1701,
+  "pending": 1699,
+  "removed": [
+    {
+      "id": "S2:@lexical/markdown:registerMarkdownShortcuts",
+      "fixture": "upstream/lexical-markdown/82573c9eb4f2fe12.json",
+      "test": "upstream::lexical-markdown::Markdown > composition-end trigger characters (#7026) > applies inline code when compositionend commits the trigger as a multi-character chunk",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$setCompositionKey",
+      "fixture": "upstream/lexical-markdown/82573c9eb4f2fe12.json",
+      "test": "upstream::lexical-markdown::Markdown > composition-end trigger characters (#7026) > applies inline code when compositionend commits the trigger as a multi-character chunk",
+      "status": "pass"
+    }
+  ]
+}

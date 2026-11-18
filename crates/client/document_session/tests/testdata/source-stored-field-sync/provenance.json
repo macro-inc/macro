@@ -1,0 +1,9 @@
+{
+  "control": "apps/web/src/lib/core/component/LexicalMarkdown/collaboration/storedFieldSync.test.ts",
+  "control_sha256": "2621cc65f372f4f101a4b9179ec4ce7c9690c102446ae3a2a9e3b36d284c31f9",
+  "composition": "createLexicalWrapper markdown-sync withIds + richText/list/markdownShortcuts/delete/history(400, Loro) + registerMarkdownEditing; CollabProvider.tsx blob db6531bfc6f7 load and sync wiring",
+  "source_tree": "962cd3f6c2deea657db0f4ad5babe72966cdc471",
+  "command": "VITE_ENABLE_MARKDOWN_SEARCH_TEXT=true SOURCE_STORED_FIELD_OUT=<this dir> bunx vitest run src/lib/core/component/LexicalMarkdown/collaboration/storedFieldSync.test.ts (in apps/web)",
+  "vitest_log_sha256": "6174fd4ec03722aa451e036e55b82e6b053902189881781be965ca385f2dd61a",
+  "cases_sha256": "5b1e65cc3743f046951a578e6a2d5bce8627aad120e2156914e2890ff322fd00"
+}

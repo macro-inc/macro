@@ -1,0 +1,263 @@
+[
+  {
+    "type": "table",
+    "field": "frozenColumnCount",
+    "stored": null,
+    "name": "table.frozenColumnCount=null",
+    "source": "delete",
+    "file": "00.loro"
+  },
+  {
+    "type": "table",
+    "field": "frozenColumnCount",
+    "stored": 0,
+    "name": "table.frozenColumnCount=0",
+    "source": "delete",
+    "file": "01.loro"
+  },
+  {
+    "type": "table",
+    "field": "frozenColumnCount",
+    "stored": 2,
+    "name": "table.frozenColumnCount=2",
+    "source": "keep",
+    "file": "02.loro"
+  },
+  {
+    "type": "table",
+    "field": "frozenRowCount",
+    "stored": null,
+    "name": "table.frozenRowCount=null",
+    "source": "delete",
+    "file": "03.loro"
+  },
+  {
+    "type": "table",
+    "field": "frozenRowCount",
+    "stored": 0,
+    "name": "table.frozenRowCount=0",
+    "source": "delete",
+    "file": "04.loro"
+  },
+  {
+    "type": "table",
+    "field": "frozenRowCount",
+    "stored": 2,
+    "name": "table.frozenRowCount=2",
+    "source": "keep",
+    "file": "05.loro"
+  },
+  {
+    "type": "table",
+    "field": "rowStriping",
+    "stored": null,
+    "name": "table.rowStriping=null",
+    "source": "delete",
+    "file": "06.loro"
+  },
+  {
+    "type": "table",
+    "field": "rowStriping",
+    "stored": false,
+    "name": "table.rowStriping=false",
+    "source": "delete",
+    "file": "07.loro"
+  },
+  {
+    "type": "table",
+    "field": "rowStriping",
+    "stored": true,
+    "name": "table.rowStriping=true",
+    "source": "keep",
+    "file": "08.loro"
+  },
+  {
+    "type": "table",
+    "field": "colWidths",
+    "stored": null,
+    "name": "table.colWidths=null",
+    "source": "keep",
+    "file": "09.loro"
+  },
+  {
+    "type": "table",
+    "field": "colWidths",
+    "stored": [
+      90,
+      110
+    ],
+    "name": "table.colWidths=[90,110]",
+    "source": "keep",
+    "file": "10.loro"
+  },
+  {
+    "type": "tablecell",
+    "field": "width",
+    "stored": null,
+    "name": "tablecell.width=null",
+    "source": "delete",
+    "file": "11.loro"
+  },
+  {
+    "type": "tablecell",
+    "field": "width",
+    "stored": 0,
+    "name": "tablecell.width=0",
+    "source": "delete",
+    "file": "12.loro"
+  },
+  {
+    "type": "tablecell",
+    "field": "width",
+    "stored": 150,
+    "name": "tablecell.width=150",
+    "source": "keep",
+    "file": "13.loro"
+  },
+  {
+    "type": "listitem/bullet",
+    "field": "checked",
+    "stored": null,
+    "name": "listitem/bullet.checked=null",
+    "source": "delete",
+    "file": "14.loro"
+  },
+  {
+    "type": "listitem/bullet",
+    "field": "checked",
+    "stored": false,
+    "name": "listitem/bullet.checked=false",
+    "source": "delete",
+    "file": "15.loro"
+  },
+  {
+    "type": "listitem/bullet",
+    "field": "checked",
+    "stored": true,
+    "name": "listitem/bullet.checked=true",
+    "source": "delete",
+    "file": "16.loro"
+  },
+  {
+    "type": "listitem/check",
+    "field": "checked",
+    "stored": null,
+    "name": "listitem/check.checked=null",
+    "source": "write false",
+    "file": "17.loro"
+  },
+  {
+    "type": "listitem/check",
+    "field": "checked",
+    "stored": false,
+    "name": "listitem/check.checked=false",
+    "source": "keep",
+    "file": "18.loro"
+  },
+  {
+    "type": "custom-code",
+    "field": "language",
+    "stored": null,
+    "name": "custom-code.language=null",
+    "source": "delete",
+    "file": "19.loro"
+  },
+  {
+    "type": "custom-code",
+    "field": "language",
+    "stored": "",
+    "name": "custom-code.language=\"\"",
+    "source": "delete",
+    "file": "20.loro"
+  },
+  {
+    "type": "custom-code",
+    "field": "language",
+    "stored": "python",
+    "name": "custom-code.language=\"python\"",
+    "source": "keep",
+    "file": "21.loro"
+  },
+  {
+    "type": "custom-code",
+    "field": "theme",
+    "stored": null,
+    "name": "custom-code.theme=null",
+    "source": "delete",
+    "file": "22.loro"
+  },
+  {
+    "type": "custom-code",
+    "field": "theme",
+    "stored": "dark",
+    "name": "custom-code.theme=\"dark\"",
+    "source": "keep",
+    "file": "23.loro"
+  },
+  {
+    "type": "code-highlight",
+    "field": "highlightType",
+    "stored": null,
+    "name": "code-highlight.highlightType=null",
+    "source": "delete",
+    "file": "24.loro"
+  },
+  {
+    "type": "code-highlight",
+    "field": "highlightType",
+    "stored": "",
+    "name": "code-highlight.highlightType=\"\"",
+    "source": "delete",
+    "file": "25.loro"
+  },
+  {
+    "type": "code-highlight",
+    "field": "highlightType",
+    "stored": "keyword",
+    "name": "code-highlight.highlightType=\"keyword\"",
+    "source": "keep",
+    "file": "26.loro"
+  },
+  {
+    "type": "pr-mention",
+    "field": "url",
+    "stored": null,
+    "name": "pr-mention.url=null",
+    "source": "delete",
+    "file": "27.loro"
+  },
+  {
+    "type": "pr-mention",
+    "field": "url",
+    "stored": "https://github.com/o/r/pull/2",
+    "name": "pr-mention.url=\"https://github.com/o/r/pull/2\"",
+    "source": "keep",
+    "file": "28.loro"
+  },
+  {
+    "type": "classed-block",
+    "field": "attributes",
+    "stored": null,
+    "name": "classed-block.attributes=null",
+    "source": "delete",
+    "file": "29.loro"
+  },
+  {
+    "type": "classed-block",
+    "field": "attributes",
+    "stored": {
+      "data-x": "y"
+    },
+    "name": "classed-block.attributes={\"data-x\":\"y\"}",
+    "source": "delete",
+    "file": "30.loro"
+  },
+  {
+    "type": "pr-mention/url-id",
+    "field": "url",
+    "stored": null,
+    "name": "pr-mention/url-id.url=null",
+    "source": "write \"https://github.com/o/r/pull/3\"",
+    "file": "31.loro"
+  }
+]

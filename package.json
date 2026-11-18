@@ -82,6 +82,7 @@
 			"packages/graphics",
 			"packages/loro-mirror",
 			"packages/lexical-core",
+			"packages/lexical-wasm-view",
 			"services/ai-editing-worker",
 			"services/mcp-chatgpt-worker",
 			"services/bots/anthropic-status-bot",
@@ -91,6 +92,7 @@
 			"packages/spreadsheet",
 			"vendor/ironcalc/pkg",
 			"packages/sdk-docs",
+			"tooling/sync-sim",
 			"packages/sdk",
 			"packages/muppet",
 			"packages/starter-agent"

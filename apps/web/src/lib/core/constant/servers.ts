@@ -85,6 +85,9 @@ const proxyOrigin: string | undefined =
     ? globalThis.location?.origin
     : resolveProxyOrigin(rawLocalBackendOrigin);
 const wsProxyOrigin = proxyOrigin?.replace(/^http/, 'ws');
+// Local static builds can use the proxy without enabling development code.
+const useLocalProxy =
+  import.meta.env.VITE_LOCAL_SERVERS === 'ALL' && Boolean(proxyOrigin);
 
 // Follow the page's hostname (keeping the proxy's port) so the app works from
 // any `*.localhost` alias. Hostnames get separate cookie jars, so opening tabs
@@ -103,7 +106,7 @@ function resolveProxyOrigin(configured: string | undefined) {
 }
 
 export const SERVER_HOSTS: Servers =
-  import.meta.env.MODE === 'development'
+  import.meta.env.MODE === 'development' || useLocalProxy
     ? selectLocalServers()
     : serverHostRemote;
 
@@ -111,9 +114,12 @@ export const SERVER_HOSTS: Servers =
  * The app talks to a self-contained local stack (`run_local`, `just stack`)
  * through its single-origin proxy, which keeps each instance's cookies apart.
  * `run_dev` uses the same proxy origin but not those cookie rules.
+ * Static production bundles can route transport locally without enabling
+ * this development-only authentication handoff.
  */
 export function usesLocalStackProxy(): boolean {
   return (
+    import.meta.env.MODE === 'development' &&
     import.meta.env.VITE_LOCAL_STACK === 'true' &&
     SERVER_HOSTS['auth-service'] === proxyServers()?.['auth-service']
   );
@@ -214,7 +220,7 @@ function selectSyncServiceHost():
       ws: `wss://${overrideHost}`,
     };
   }
-  if (import.meta.env.MODE !== 'development') {
+  if (import.meta.env.MODE !== 'development' && !useLocalProxy) {
     return syncServiceHostRemote;
   }
   const selectedLocalServers: string = import.meta.env.VITE_LOCAL_SERVERS;
@@ -260,10 +266,13 @@ const nativeSessionServices = {
 /**
  * The DSS host to use for sync-service permission tokens.
  * When the sync service is remote, permission tokens must come from the remote DSS
- * because they need to be signed with the matching JWT secret.
+ * because they need to be signed with the matching JWT secret. Production sync
+ * overrides retain the hosted signer even when local proxy routing is selected.
  */
 export const SYNC_PERMISSION_TOKEN_DSS_HOST =
-  SYNC_SERVICE_HOSTS === syncServiceHostRemote
+  SYNC_SERVICE_HOSTS === syncServiceHostRemote ||
+  (import.meta.env.MODE !== 'development' &&
+    Boolean(import.meta.env.VITE_SYNC_SERVICE_HOST))
     ? serverHostRemote['document-storage-service']
     : SERVER_HOSTS['document-storage-service'];
 

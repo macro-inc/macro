@@ -1,0 +1,8 @@
+{
+  "spec": "S4 section 3.6; S3 Q20",
+  "masks": [],
+  "reason": "Clock and all nanoid constructors are injected on both sides; no residual generated awaitId or golden root id requires masking. Stored ids and timestamps remain compared.",
+  "skips": [
+    { "name": "html-not-yet-ported", "reason": "No Rust markdown_to_html implementation exists at the frozen model prerequisite tip." }
+  ]
+}

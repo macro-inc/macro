@@ -1,7 +1,4 @@
-import type { ComposeTaskSuccess } from '@app/features/task-composer/core/types';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
-import { trackMention } from '@core/signal/mention';
 import CheckSquare from '@icon/system/regular/check-square.svg';
 import CodeBlock from '@icon/system/regular/code-block.svg';
 import FileText from '@icon/system/regular/file-text.svg';
@@ -27,7 +24,6 @@ import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
 import {
   $createAwaitNode,
   $createDatabaseQueryNode,
-  $createDocumentMentionNode,
   $isAwaitNode,
   AwaitNode,
   CustomCodeNode,
@@ -44,93 +40,15 @@ import GifIcon from '@phosphor/gif.svg';
 import type { LexicalEditor, NodeKey } from 'lexical';
 import { $getNodeByKey, $insertNodes } from 'lexical';
 import { nanoid } from 'nanoid';
+import { openLexicalCreationComposer } from '../../editing/overlay-hosts/lexical-creation';
 import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';
-import {
-  INSERT_AWAIT_NODE_COMMAND,
-  REPLACE_AWAIT_NODE_COMMAND,
-} from '../await';
 import { TRY_INSERT_GIF_COMMAND } from '../gif';
 import { TRY_INSERT_EQUATION_COMMAND } from '../katex';
 import { TRY_INSERT_LINK_COMMAND } from '../links';
 import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
-import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions/mentionsPlugin';
 import { NODE_TRANSFORM } from '../node-transform';
 import { TRY_INSERT_TABLE_PICKER_COMMAND } from '../tables';
-import { type Action, ActionCategory, type ActionContext } from './types';
-
-async function trackSlashCreatedMention(
-  context: ActionContext | undefined,
-  documentId: string
-) {
-  if (
-    !context?.sourceDocumentId ||
-    context.disableMentionTracking ||
-    context.sourceBlockName === 'channel' ||
-    context.sourceBlockName === 'chat'
-  ) {
-    return undefined;
-  }
-
-  return await trackMention(context.sourceDocumentId, 'document', documentId);
-}
-
-function openCreationComposer(
-  editor: LexicalEditor,
-  context: ActionContext | undefined,
-  kind: 'task' | 'document'
-) {
-  const splitManager = globalSplitManager();
-  if (!splitManager) return;
-  const awaitId = nanoid(21);
-  let placeholderInserted = false;
-  splitManager.createPopoverSplit({
-    content: {
-      type: 'component',
-      id: kind === 'task' ? 'task-compose' : 'document-compose',
-      params: {
-        onCreateStart: ({ title }: { title: string }) => {
-          const handled = editor.dispatchCommand(INSERT_AWAIT_NODE_COMMAND, {
-            awaitId,
-            text: `Creating ${title}`,
-          });
-          placeholderInserted = handled;
-        },
-        onCreateFailure: () => {
-          if (!placeholderInserted) return;
-          editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, { awaitId });
-          placeholderInserted = false;
-        },
-        onSuccess: async (result: ComposeTaskSuccess) => {
-          const mentionUuid = await trackSlashCreatedMention(
-            context,
-            result.documentId
-          );
-          if (placeholderInserted) {
-            editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, {
-              awaitId,
-              $createReplacement: () =>
-                $createDocumentMentionNode({
-                  documentId: result.documentId,
-                  documentName: result.title,
-                  blockName: kind === 'task' ? 'task' : 'md',
-                  createdAt: Date.now(),
-                  mentionUuid,
-                }),
-            });
-            placeholderInserted = false;
-            return;
-          }
-          editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-            documentId: result.documentId,
-            documentName: result.title,
-            blockName: kind === 'task' ? 'task' : 'md',
-            mentionUuid,
-          });
-        },
-      },
-    },
-  });
-}
+import { type Action, ActionCategory } from './types';
 
 export const ACTIONS: Action[] = [
   {
@@ -245,7 +163,8 @@ export const ACTIONS: Action[] = [
     keywords: ['task', 'todo', 'create'],
     category: ActionCategory.ELEMENT,
     icon: CheckSquare,
-    action: (editor, context) => openCreationComposer(editor, context, 'task'),
+    action: (editor, context) =>
+      openLexicalCreationComposer(editor, context, 'task'),
     dependencies: [DocumentMentionNode, AwaitNode],
   },
   {
@@ -255,7 +174,7 @@ export const ACTIONS: Action[] = [
     category: ActionCategory.ELEMENT,
     icon: FileText,
     action: (editor, context) =>
-      openCreationComposer(editor, context, 'document'),
+      openLexicalCreationComposer(editor, context, 'document'),
     dependencies: [DocumentMentionNode, AwaitNode],
   },
   {

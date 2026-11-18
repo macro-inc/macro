@@ -374,7 +374,10 @@ export function formatDate(date: Date): string {
  * `new Date` would read it as UTC midnight, the previous day west of
  * Greenwich. Anything else is a timestamp.
  */
-export function parseMentionDate(value: string): Date {
+export function parseMentionDate(value: string | null | undefined): Date {
+  // A stored null or omitted date: what new Date(value) gives for each.
+  if (value === null) return new Date(0);
+  if (value === undefined) return new Date(Number.NaN);
   const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!day) return new Date(value);
   const [year, month, date] = day.slice(1).map(Number);

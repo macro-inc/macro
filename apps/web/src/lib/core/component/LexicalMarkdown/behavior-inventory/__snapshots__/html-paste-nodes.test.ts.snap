@@ -1,0 +1,2167 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`actual OFF HTML paste of exported account-manager-request:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-account-manager-request="00000000-0000-4000-8000-000000000001">Account manager request</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Account manager request",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Account manager request",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported agent-activity:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div data-agent-activity="session">Ran cmd</div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Ran cmd",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported agent-context:full:export 1`] = `
+{
+  "handled": true,
+  "html": "",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported agent-session-mention:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div data-agent-session-mention="true" data-agent-session-id="session" data-agent-session-label="session label" data-mention-uuid="mention" data-agent-session-expanded="true">session label</div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "expanded": true,
+          "id": "session",
+          "label": "session label",
+          "mentionUuid": "mention",
+          "type": "agent-session-mention",
+          "version": 3,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "session label",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported authored tab 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">	</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 2,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "	",
+              "type": "tab",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "	",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported autolink:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported await:full:export 1`] = `
+{
+  "handled": true,
+  "html": "",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported booking-link-mention:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-booking-link-mention="true" data-booking-profile-id="profile" data-booking-slug="slot" data-booking-label="Book" data-booking-url="https://example.com/booking">Book</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "label": "Book",
+              "profileId": "profile",
+              "slug": "slot",
+              "type": "booking-link-mention",
+              "url": "https://example.com/booking",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Book",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported code:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported code-highlight:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span class="text-green" style="white-space: pre-wrap;">node text</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "node text",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "node text",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported comment-mark:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported completion:full:export 1`] = `
+{
+  "handled": true,
+  "html": "",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported connect-app:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-connect-app="app">Connect App</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Connect App",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Connect App",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported contact-mention:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-contact-mention="true" data-contact-id="contact" data-name="Example, Alex Q." data-email-or-domain="user@example.com" data-is-company="false" data-mention-uuid="mention">Alex Q Example</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "contactId": "contact",
+              "emailOrDomain": "user@example.com",
+              "isCompany": false,
+              "mentionUuid": undefined,
+              "name": "Example, Alex Q.",
+              "type": "contact-mention",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Alex Q Example",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported custom-code:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported database-query:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div data-database-query="true">Open &amp; ready</div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Open & ready",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Open & ready",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported date-mention:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-date-mention="true" data-date="2026-11-07" data-display-format="Nov 7, 2026" data-mention-uuid="mention">Nov 7, 2026</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "date": "2026-11-07",
+              "displayFormat": "Nov 7, 2026",
+              "mentionUuid": undefined,
+              "type": "date-mention",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Nov 7, 2026",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported diff:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported diff-delete:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported diff-insert:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div></div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported diff-text:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span class="diff-insert" data-diff-status="insert" data-diff-author="author" style="white-space: pre-wrap;">node text</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "node text",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "node text",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported document-card:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div data-document-card="true" data-document-id="document" data-document-name="Name" data-block-name="md" data-block-params="{&quot;1&quot;:&quot;one&quot;,&quot;2&quot;:&quot;two&quot;,&quot;z&quot;:&quot;last&quot;}" data-preview-box="[&quot;100%&quot;,400]" data-preview-data="{&quot;view&quot;:{&quot;x&quot;:1,&quot;y&quot;:2,&quot;scale&quot;:0.5}}" data-mention-uuid="mention"></div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "blockName": "md",
+          "blockParams": {
+            "1": "one",
+            "2": "two",
+            "z": "last",
+          },
+          "documentId": "document",
+          "documentName": "Name",
+          "mentionUuid": "mention",
+          "previewBox": [
+            "100%",
+            400,
+          ],
+          "previewData": {
+            "view": {
+              "scale": 0.5,
+              "x": 1,
+              "y": 2,
+            },
+          },
+          "type": "document-card",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Name",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported document-mention:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-document-mention="true" data-document-id="document" data-document-name="Name" data-block-name="md" data-block-params="{&quot;key&quot;:&quot;value&quot;}" data-mention-uuid="mention" data-channel-type="channel" data-created-at="1794052800000" data-collapsed="true">Name</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "blockName": "md",
+              "blockParams": {
+                "key": "value",
+              },
+              "channelType": "channel",
+              "collapsed": true,
+              "createdAt": 1794052800000,
+              "documentId": "document",
+              "documentName": "Name",
+              "mentionUuid": "mention",
+              "type": "document-mention",
+              "version": 2,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Name",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported equation:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div data-lexical-equation="eF4y" data-lexical-inline="false"></div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "equation": "x^2",
+              "inline": false,
+              "type": "equation",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "x^2",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported group-mention:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-group-mention="true" data-group-alias="everyone">@everyone</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "groupAlias": "everyone",
+              "type": "group-mention",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "@everyone",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported heading:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<h2 class="text-lg text-[1.125em] font-semibold mb-2" style="padding-inline-start: 80px; text-align: right;" data-lexical-indent="2" dir="rtl"><span style="white-space: pre-wrap;">child</span></h2>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "tag": "h2",
+          "type": "heading",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported horizontalrule:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<hr>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "type": "horizontalrule",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "
+",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported html-render:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div data-html-render="true" class="macro_html_render macro_html_render_adapt"><template shadowrootmode="open"><p>hello</p></template></div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "adaptColors": true,
+          "html": "<p>hello</p>",
+          "type": "html-render",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported image:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div><img src="https://example.com/image.png" width="400" height="300" data-src-type="url" data-image-id="image-id" data-scale="1.25" data-constrained-width="400" data-constrained-height="300" alt="diagram"></div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "alt": "diagram",
+          "constrainedHeight": 300,
+          "constrainedWidth": 400,
+          "height": 300,
+          "id": "image-id",
+          "scale": 1.25,
+          "srcType": "url",
+          "type": "image",
+          "url": "https://example.com/image.png",
+          "version": 1,
+          "width": 400,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported inline-search:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span class="md-inline-search bg-hover text-ink-muted rounded-sm p-0.5" style="white-space: pre-wrap;">node text</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "node text",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "node text",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported linebreak:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<br>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "type": "linebreak",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "
+",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported link:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported list:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported listitem:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported magic-chip:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div data-magic-chip="session">acp_ready</div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "acp_ready",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "acp_ready",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported mark:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported paragraph:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported paste:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div data-paste-node="true" data-content="paste text" data-paste-origin="referenced">paste text</div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "content": "paste text",
+          "origin": "referenced",
+          "type": "paste",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "paste text",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported pr-mention:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-pr-mention="true" data-pr-label="Fix" data-mention-uuid="mention" data-pr-url="https://github.com/example/project/pull/42">Fix</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "id": "",
+              "label": "Fix",
+              "mentionUuid": "mention",
+              "type": "pr-mention",
+              "url": "https://github.com/example/project/pull/42",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Fix",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported quote:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported reply-target:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div data-reply-target-node="message">Reply</div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Reply",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Reply",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported search-match:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported snapshot:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-snapshot-node="true" data-document-id="document" data-document-name="Name" data-block-name="md" data-content="snapshot" data-snapshot-date="2026-11-07T12:00:00.000Z" data-mention-uuid="mention">Name</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "blockName": "md",
+              "content": "snapshot",
+              "documentId": "document",
+              "documentName": "Name",
+              "mentionUuid": "mention",
+              "snapshotDate": "2026-11-07T12:00:00.000Z",
+              "type": "snapshot",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Name",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported system-notification:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div data-system-notification="source">notification</div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "notification",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "notification",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported table:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported tablecell:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported tablerow:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<tr style="height: 25px; padding-inline-start: 80px;" data-lexical-indent="2" dir="rtl"><span style="white-space: pre-wrap;">child</span></tr>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported tag-mention:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-tag-mention="true" data-tag-option-id="option" data-tag-property-definition-id="property" data-tag-name="urgent" data-tag-scope="team" data-tag-color="#f00">urgent</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "color": "#f00",
+              "name": "urgent",
+              "optionId": "option",
+              "propertyDefinitionId": "property",
+              "scope": "team",
+              "type": "tag-mention",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "urgent",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported task-list:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">child</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "child",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "child",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported text:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">node text</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "node text",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "node text",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported theme-mention:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-theme-mention="true" data-theme-json="{&quot;1&quot;:&quot;one&quot;,&quot;2&quot;:&quot;two&quot;,&quot;accent&quot;:&quot;#123&quot;}">Dusk</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Dusk",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "Dusk",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported unknown-mention:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div data-unknown-mention="true" data-name="Unknown"></div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "name": "Unknown",
+              "type": "unknown-mention",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported unlinked-text:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">node text</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "node text",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "node text",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported user-mention:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-user-mention="true" data-user-id="user" data-email="user@example.com" data-display-name="User" data-mention-uuid="mention">@User</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "displayName": "User",
+              "email": "user@example.com",
+              "mentionUuid": undefined,
+              "type": "user-mention",
+              "userId": "user",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "@User",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported valid classed-block 1`] = `
+{
+  "handled": true,
+  "html": "<span style="white-space: pre-wrap;">classed</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "classed",
+              "type": "text",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "classed",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported video:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<div><video src="https://example.com/video.mp4" width="1280" height="720" data-src-type="url" data-video-id="video-id" data-scale="1" controls="false"></video></div>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "constrainedHeight": undefined,
+          "constrainedWidth": undefined,
+          "controls": true,
+          "height": 720,
+          "id": "video-id",
+          "scale": 1,
+          "srcType": "url",
+          "type": "video",
+          "url": "https://example.com/video.mp4",
+          "version": 1,
+          "width": 1280,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "",
+  "prevented": true,
+}
+`;
+
+exports[`actual OFF HTML paste of exported watermark:full:export 1`] = `
+{
+  "handled": true,
+  "html": "<span data-watermark="true" data-content="watermark" class="macro-watermark-node">watermark</span>",
+  "model": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "content": "watermark",
+              "type": "watermark",
+              "version": 1,
+            },
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "textFormat": 0,
+          "textStyle": "",
+          "type": "paragraph",
+          "version": 1,
+        },
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+    },
+  },
+  "plain": "watermark",
+  "prevented": true,
+}
+`;

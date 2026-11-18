@@ -26,7 +26,10 @@ import {
   Suspense,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { createPinnedProperties } from '../primitives/create-pinned-properties';
+import {
+  createDocumentPinnedPropertyStore,
+  createPinnedProperties,
+} from '../primitives/create-pinned-properties';
 import { InlinePropertyValue } from './InlinePropertyValue';
 import { useMarkdownName } from './MarkdownNameProvider';
 
@@ -48,7 +51,10 @@ export function InlineTaskProperties() {
       ? [...getDefaultPinnedProperties('task'), SYSTEM_PROPERTY_IDS.PROJECT]
       : [];
   const pins = createPinnedProperties(
-    () => state.editor.md.editor,
+    createDocumentPinnedPropertyStore({
+      editor: () => state.editor.md.editor,
+      native: () => state.editor.md.nativeRuntime?.pinnedProperties,
+    }),
     defaultDefinitionIds
   );
   const titleProperties = () => {
@@ -89,7 +95,7 @@ export function InlineTaskProperties() {
   // Property assignment IDs arrive from the server; persist each requested pin
   // to the editor once its assignment exists and the editor is ready.
   createEffect(() => {
-    if (pendingPins().size === 0 || !state.editor.md.editor) return;
+    if (pendingPins().size === 0 || !pins.ready()) return;
     for (const property of properties()) {
       if (!pendingPins().has(property.propertyDefinitionId)) continue;
       pins.pin(property.propertyId, titleProperties());

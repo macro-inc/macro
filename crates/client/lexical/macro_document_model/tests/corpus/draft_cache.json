@@ -1,0 +1,957 @@
+{
+  "source": "actual stripDraftCommentMarks -> Original parseEditorState -> DOM setEditorState -> exportJSON",
+  "sourceSha256": "90090cd9d7e66f49e255d233a096f504583924ff7902f8f6ed27787d4c80b819",
+  "rows": [
+    {
+      "name": "comment-mark:full:headless",
+      "writerWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "child",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": "rtl",
+                  "format": "right",
+                  "indent": 2,
+                  "type": "comment-mark",
+                  "version": 1,
+                  "$": {
+                    "id": "node-id",
+                    "peerId": "peer-id",
+                    "sharedPeerIds": [
+                      "peer",
+                      "second"
+                    ],
+                    "extra": {
+                      "kept": true
+                    },
+                    "taskListView": {
+                      "filters": {
+                        "status": [
+                          "todo"
+                        ],
+                        "extra": "kept"
+                      }
+                    }
+                  },
+                  "ids": [
+                    "mark",
+                    "second"
+                  ],
+                  "threadId": 42,
+                  "isDraft": true
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "strippedWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "parsedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "attachedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "raw": {
+        "textFormat": 1,
+        "textStyle": "color:red"
+      },
+      "readOnly": true
+    },
+    {
+      "name": "comment-mark:threadId-absent:headless",
+      "writerWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "child",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": "rtl",
+                  "format": "right",
+                  "indent": 2,
+                  "type": "comment-mark",
+                  "version": 1,
+                  "$": {
+                    "id": "node-id",
+                    "peerId": "peer-id",
+                    "sharedPeerIds": [
+                      "peer",
+                      "second"
+                    ],
+                    "extra": {
+                      "kept": true
+                    },
+                    "taskListView": {
+                      "filters": {
+                        "status": [
+                          "todo"
+                        ],
+                        "extra": "kept"
+                      }
+                    }
+                  },
+                  "ids": [
+                    "mark",
+                    "second"
+                  ],
+                  "threadId": null,
+                  "isDraft": true
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "strippedWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "parsedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "attachedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "raw": {
+        "textFormat": 1,
+        "textStyle": "color:red"
+      },
+      "readOnly": true
+    },
+    {
+      "name": "comment-mark:threadId-null:headless",
+      "writerWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "child",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": "rtl",
+                  "format": "right",
+                  "indent": 2,
+                  "type": "comment-mark",
+                  "version": 1,
+                  "$": {
+                    "id": "node-id",
+                    "peerId": "peer-id",
+                    "sharedPeerIds": [
+                      "peer",
+                      "second"
+                    ],
+                    "extra": {
+                      "kept": true
+                    },
+                    "taskListView": {
+                      "filters": {
+                        "status": [
+                          "todo"
+                        ],
+                        "extra": "kept"
+                      }
+                    }
+                  },
+                  "ids": [
+                    "mark",
+                    "second"
+                  ],
+                  "threadId": null,
+                  "isDraft": true
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "strippedWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "parsedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "attachedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "raw": {
+        "textFormat": 1,
+        "textStyle": "color:red"
+      },
+      "readOnly": true
+    },
+    {
+      "name": "comment-mark:state-{\"id\":\"\",\"peerId\":4,\"sharedPeerIds\":\"bad\",\"extra\":1}:headless",
+      "writerWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "child",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": "rtl",
+                  "format": "right",
+                  "indent": 2,
+                  "type": "comment-mark",
+                  "version": 1,
+                  "$": {
+                    "id": "",
+                    "peerId": 4,
+                    "sharedPeerIds": "bad",
+                    "extra": 1
+                  },
+                  "ids": [
+                    "mark",
+                    "second"
+                  ],
+                  "threadId": 42,
+                  "isDraft": true
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "strippedWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "parsedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "attachedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "raw": {
+        "textFormat": 1,
+        "textStyle": "color:red"
+      },
+      "readOnly": true
+    },
+    {
+      "name": "comment-mark:state-{\"id\":0,\"peerId\":\"\",\"sharedPeerIds\":[],\"extra\":2}:headless",
+      "writerWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "child",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": "rtl",
+                  "format": "right",
+                  "indent": 2,
+                  "type": "comment-mark",
+                  "version": 1,
+                  "$": {
+                    "id": 0,
+                    "peerId": "",
+                    "sharedPeerIds": [],
+                    "extra": 2
+                  },
+                  "ids": [
+                    "mark",
+                    "second"
+                  ],
+                  "threadId": 42,
+                  "isDraft": true
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "strippedWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "parsedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "attachedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "raw": {
+        "textFormat": 1,
+        "textStyle": "color:red"
+      },
+      "readOnly": true
+    },
+    {
+      "name": "comment-mark:state-{}:headless",
+      "writerWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "child",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": "rtl",
+                  "format": "right",
+                  "indent": 2,
+                  "type": "comment-mark",
+                  "version": 1,
+                  "ids": [
+                    "mark",
+                    "second"
+                  ],
+                  "threadId": 42,
+                  "isDraft": true
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "strippedWire": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 1,
+              "textStyle": "color:red"
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "parsedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "attachedJSON": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "child",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": "rtl",
+              "format": "right",
+              "indent": 2,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": "rtl",
+          "format": "right",
+          "indent": 2,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "raw": {
+        "textFormat": 1,
+        "textStyle": "color:red"
+      },
+      "readOnly": true
+    }
+  ]
+}

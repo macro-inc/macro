@@ -17,7 +17,7 @@ producers' dependencies.
 ## Scope
 
 - Owns: the vocabulary of both types.
-- Not here: rendering a context into a prompt (`services/lexical-service`), storing
+- Not here: rendering a context into a prompt (`macro_document_composers` for Rust, `services/lexical-service` for TS), storing
   an origin (`agent_session`), or deciding that an agent should run (`agent_trigger`).
 
 ## Boundaries

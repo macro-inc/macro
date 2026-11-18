@@ -4,6 +4,22 @@ import {
   DatabaseQueryNode,
 } from '@macro-inc/lexical-core/nodes/DatabaseQueryNode';
 import {
+  $createDocumentCardNode,
+  DocumentCardNode,
+} from '@macro-inc/lexical-core/nodes/DocumentCardNode';
+import {
+  $createHorizontalRuleNode,
+  HorizontalRuleNode,
+} from '@macro-inc/lexical-core/nodes/HorizontalRuleNode';
+import {
+  $createImageNode,
+  ImageNode,
+} from '@macro-inc/lexical-core/nodes/ImageNode';
+import {
+  $createVideoNode,
+  VideoNode,
+} from '@macro-inc/lexical-core/nodes/VideoNode';
+import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
@@ -29,10 +45,26 @@ import {
 const caret = vi.hoisted(() => ({ rect: new DOMRect(0, 0, 0, 0) }));
 vi.mock('../../utils', () => ({ $getCaretRect: () => caret.rect }));
 
-function createTestEditor(): LexicalEditor {
+type StoppingType =
+  | 'image'
+  | 'video'
+  | 'horizontalrule'
+  | 'database-query'
+  | 'document-card';
+function createTestEditor(
+  kind: StoppingType = 'database-query'
+): LexicalEditor {
   const editor = createEditor({
     namespace: 'block-decorator-navigation-test',
-    nodes: [ParagraphNode, TextNode, DatabaseQueryNode],
+    nodes: [
+      ParagraphNode,
+      TextNode,
+      DatabaseQueryNode,
+      ImageNode,
+      VideoNode,
+      HorizontalRuleNode,
+      DocumentCardNode,
+    ],
     onError: (error) => {
       throw error;
     },
@@ -49,11 +81,23 @@ function createTestEditor(): LexicalEditor {
         .clear()
         .append(
           $createParagraphNode().append($createTextNode('Above')),
-          $createDatabaseQueryNode({
-            queryId: 'query',
-            prompt: 'Open tickets by status',
-            displayMode: 'table',
-          }),
+          kind === 'image'
+            ? $createImageNode({ srcType: 'url', url: 'about:blank' })
+            : kind === 'video'
+              ? $createVideoNode({ srcType: 'url', url: 'about:blank' })
+              : kind === 'horizontalrule'
+                ? $createHorizontalRuleNode()
+                : kind === 'document-card'
+                  ? $createDocumentCardNode({
+                      documentId: 'document',
+                      documentName: 'Card',
+                      blockName: 'md',
+                    })
+                  : $createDatabaseQueryNode({
+                      queryId: 'query',
+                      prompt: 'Count entries',
+                      displayMode: 'table',
+                    }),
           $createParagraphNode().append($createTextNode('Below'))
         );
     },
@@ -174,3 +218,39 @@ describe('arrow keys across a database answer', () => {
     expect(selected(editor)).toEqual({ text: 'Above', offset: 0 });
   });
 });
+
+for (const kind of [
+  'image',
+  'video',
+  'horizontalrule',
+  'database-query',
+  'document-card',
+] satisfies StoppingType[]) {
+  test(`Source ${kind} stops in both directions and a second ArrowDown leaves the model range before DOM selectionchange`, () => {
+    const editor = createTestEditor(kind);
+    try {
+      editor.update(() => $getRoot().getLastChildOrThrow().selectStart(), {
+        discrete: true,
+      });
+      press(editor, KEY_ARROW_UP_COMMAND, 'ArrowUp');
+      expect(selected(editor)).toEqual({ node: kind });
+      press(editor, KEY_ARROW_DOWN_COMMAND, 'ArrowDown');
+      expect(selected(editor)).toEqual({ text: 'Below', offset: 0 });
+      editor.read(() => {
+        const selection = $getSelection();
+        // selectNext first installs the paragraph Element point. The browser
+        // selectionchange later descends it to a Text point through shared selection.ts.
+        expect($isRangeSelection(selection) && selection.anchor.type).toBe(
+          'element'
+        );
+      });
+      editor.update(() => $getRoot().getFirstChildOrThrow().selectEnd(), {
+        discrete: true,
+      });
+      press(editor, KEY_ARROW_DOWN_COMMAND, 'ArrowDown');
+      expect(selected(editor)).toEqual({ node: kind });
+    } finally {
+      editor.setRootElement(null);
+    }
+  });
+}

@@ -54,9 +54,9 @@ export const TASK_LIST_BAR_CLASS = 'mdtl-bar-mount';
  * reconciler never touches it. The app portals its task-list controls into
  * this mount.
  *
- * Serializes as `task-list` with the exact `list` wire shape; legacy `list`
- * nodes import through the ListNode replacement, so both types deserialize to
- * this class.
+ * Serializes as `task-list` with the exact `list` wire shape. Factory
+ * replacements create this class; hosts upgrade legacy plain `list` imports
+ * with a transform because JSON parsing bypasses factory replacements.
  */
 export class TaskListNode extends ListNode {
   static getType() {

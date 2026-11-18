@@ -4,8 +4,8 @@ import { lazy } from '@core/util/lazy';
 import { NOOP_SPAN } from '@macro-inc/observability';
 import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
-import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
+import { createMarkdownConnection } from './queries/markdown-connection';
 
 export const definition = defineBlock({
   name: 'md',
@@ -38,14 +38,12 @@ export const definition = defineBlock({
           loadSpan.error('load context failed');
           return err(context.error);
         }
-        const { token, authorization, documentMetadata, userAccessLevel } =
-          context.value;
+        const { documentMetadata, userAccessLevel } = context.value;
         loadSpan.setAttr('doc.context.cached', context.value.fromCache);
 
-        const { source: syncSource, doInitialSync } = createSyncServiceSource(
-          source.id,
-          token,
-          authorization,
+        const connection = createMarkdownConnection(
+          documentId,
+          context.value,
           parentSpan
         );
 
@@ -69,8 +67,13 @@ export const definition = defineBlock({
         return ok({
           dssFile: fileWithoutBlob,
           userAccessLevel,
-          syncSource,
-          doInitialSync,
+          connection,
+          ...(connection.type === 'sync'
+            ? {
+                syncSource: connection.source,
+                doInitialSync: connection.doInitialSync,
+              }
+            : {}),
           documentMetadata,
         });
       });

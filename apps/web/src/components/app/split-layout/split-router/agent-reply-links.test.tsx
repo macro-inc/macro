@@ -32,7 +32,15 @@ import type { BlockOrchestrator } from '@core/orchestrator';
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { createRoot, type JSX } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type MockInstance,
+  vi,
+} from 'vitest';
 import { createSplitLayout } from '../layoutManager';
 import { createAppPanePolicy } from './app-pane-policy';
 import {
@@ -189,7 +197,7 @@ function renderSplits(content: () => JSX.Element) {
   return { view, contents, lastRoute };
 }
 
-let windowOpen: ReturnType<typeof vi.spyOn<Window, 'open'>>;
+let windowOpen: MockInstance<Window['open']>;
 
 beforeEach(() => {
   windowOpen = vi.spyOn(window, 'open').mockReturnValue(null);

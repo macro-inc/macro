@@ -1,3 +1,4 @@
+import { createLexicalTagsMenuHost } from '@core/component/LexicalMarkdown/editing/overlay-hosts/lexical-tags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isMobile } from '@core/mobile/isMobile';
 import { onElementConnect } from '@core/util/onElementConnect';
@@ -310,7 +311,7 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
         <Show when={state.tagsMenuOps}>
           {(menu) => (
             <TagsMenu
-              editor={editor}
+              host={createLexicalTagsMenuHost(() => editor)}
               menu={menu()}
               useBlockBoundary={false}
               portalScope={props.portalScope}

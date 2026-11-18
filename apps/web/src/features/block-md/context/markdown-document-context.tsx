@@ -2,6 +2,7 @@ import { MarkdownHostContext } from '@core/component/LexicalMarkdown/context/Mar
 import type { DocumentEntity } from '@entity';
 import type { Accessor, ParentComponent } from 'solid-js';
 import { createContext, useContext } from 'solid-js';
+import type { NativeBodyPopupComposition } from '../component/format-host/native-body-popup';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
 import type { MarkdownDocumentState } from './markdown-document-state';
 
@@ -17,6 +18,8 @@ export type MarkdownDocumentContextValue = {
   };
   persistedName: Accessor<string | undefined>;
   fallbackName: Accessor<string | undefined>;
+  /** The view entry's desktop or touch body popup composition. */
+  bodyFormatPopup: Accessor<NativeBodyPopupComposition>;
   state: MarkdownDocumentState;
   element: Accessor<HTMLElement | undefined>;
 };

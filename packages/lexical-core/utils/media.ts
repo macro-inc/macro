@@ -21,8 +21,8 @@ export function constrainImageDimensions(
 export function calculateEffectiveDimensions(
   width: number,
   height: number,
-  constrainedWidth?: number,
-  constrainedHeight?: number
+  constrainedWidth?: number | null,
+  constrainedHeight?: number | null
 ): { width: number; height: number } {
   if (!constrainedWidth && !constrainedHeight) {
     return { width, height };

@@ -63,3 +63,11 @@ can survive reload, so the flag is not an immediate kill switch for open session
 The router core depends on `EdgeSink` and `DownstreamFactory` ports. A future
 standalone host or gRPC adapter can replace those adapters without changing the
 browser envelope or document sync protocol.
+
+The upstream Durable Object is a runtime adapter over `sync_server_core::Room`.
+Core owns document state, grants, callbacks, persistence order and surface migration;
+`sync_protocol` owns framing, Bebop types, time units and clock-injected presence.
+Worker ports supply sockets, storage, D1, alarms, clocks and the existing HTTP
+comment-only gate. One futures mutex guard spans each callback and the HTTP request
+gate plus handler. Native `sync_server_sim` exercises the same Room with explicit
+time/faults and compares ordered effects against the checked-in Worker corpus.

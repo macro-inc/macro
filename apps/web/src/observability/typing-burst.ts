@@ -10,6 +10,7 @@ import {
 const SURFACES = new Set([
   'markdown',
   'markdown-sync',
+  'editor',
   'chat',
   'plain-text',
   'title',

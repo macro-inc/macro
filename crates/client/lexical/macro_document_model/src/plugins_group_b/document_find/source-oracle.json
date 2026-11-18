@@ -1,0 +1,2631 @@
+[
+  {
+    "name": "case-insensitive",
+    "input": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Apple one apple two APPLE three.",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "searches": [
+      {
+        "query": "apple",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 10,
+            "end": 15,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 20,
+            "end": 25,
+            "isReplace": true,
+            "pairKey": 3
+          }
+        ]
+      },
+      {
+        "query": "APPLE",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 10,
+            "end": 15,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 20,
+            "end": 25,
+            "isReplace": true,
+            "pairKey": 3
+          }
+        ]
+      },
+      {
+        "query": "e",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 4,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 8,
+            "end": 9,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 14,
+            "end": 15,
+            "isReplace": true,
+            "pairKey": 3
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 24,
+            "end": 25,
+            "isReplace": true,
+            "pairKey": 4
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 29,
+            "end": 30,
+            "isReplace": true,
+            "pairKey": 5
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 30,
+            "end": 31,
+            "isReplace": true,
+            "pairKey": 6
+          }
+        ]
+      },
+      {
+        "query": "three.",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 26,
+            "end": 32,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "zzz",
+        "pieces": []
+      }
+    ]
+  },
+  {
+    "name": "across-formatting",
+    "input": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Split ap",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "ple",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "detail": 0,
+                "format": 2,
+                "mode": "normal",
+                "style": "",
+                "text": " and apple",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "searches": [
+      {
+        "query": "apple",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 6,
+            "end": 8,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              1
+            ],
+            "start": 0,
+            "end": 3,
+            "isReplace": false,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              2
+            ],
+            "start": 5,
+            "end": 10,
+            "isReplace": true,
+            "pairKey": 2
+          }
+        ]
+      },
+      {
+        "query": "pple and",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 7,
+            "end": 8,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              1
+            ],
+            "start": 0,
+            "end": 3,
+            "isReplace": false,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              2
+            ],
+            "start": 0,
+            "end": 4,
+            "isReplace": false,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "ple",
+        "pieces": [
+          {
+            "path": [
+              0,
+              1
+            ],
+            "start": 0,
+            "end": 3,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              2
+            ],
+            "start": 7,
+            "end": 10,
+            "isReplace": true,
+            "pairKey": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "same-node-repeats",
+    "input": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "apple apple apple",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "searches": [
+      {
+        "query": "apple",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 6,
+            "end": 11,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 12,
+            "end": 17,
+            "isReplace": true,
+            "pairKey": 3
+          }
+        ]
+      },
+      {
+        "query": "pple a",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 1,
+            "end": 7,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 7,
+            "end": 13,
+            "isReplace": true,
+            "pairKey": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "unicode",
+    "input": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "École école ÉCOLE",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "straße STRASSE ſ s",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Kelvin K k K",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "İ i I ı",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "😀a 😀A 😀 a",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "é é",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "searches": [
+      {
+        "query": "école",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 6,
+            "end": 11,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 12,
+            "end": 17,
+            "isReplace": true,
+            "pairKey": 3
+          }
+        ]
+      },
+      {
+        "query": "ß",
+        "pieces": [
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 4,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "s",
+        "pieces": [
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 0,
+            "end": 1,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 7,
+            "end": 8,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 11,
+            "end": 12,
+            "isReplace": true,
+            "pairKey": 3
+          },
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 12,
+            "end": 13,
+            "isReplace": true,
+            "pairKey": 4
+          },
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 17,
+            "end": 18,
+            "isReplace": true,
+            "pairKey": 5
+          }
+        ]
+      },
+      {
+        "query": "k",
+        "pieces": [
+          {
+            "path": [
+              2,
+              0
+            ],
+            "start": 0,
+            "end": 1,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              2,
+              0
+            ],
+            "start": 7,
+            "end": 8,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              2,
+              0
+            ],
+            "start": 9,
+            "end": 10,
+            "isReplace": true,
+            "pairKey": 3
+          }
+        ]
+      },
+      {
+        "query": "i",
+        "pieces": [
+          {
+            "path": [
+              2,
+              0
+            ],
+            "start": 4,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              3,
+              0
+            ],
+            "start": 2,
+            "end": 3,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              3,
+              0
+            ],
+            "start": 4,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 3
+          }
+        ]
+      },
+      {
+        "query": "😀a",
+        "pieces": [
+          {
+            "path": [
+              4,
+              0
+            ],
+            "start": 0,
+            "end": 3,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              4,
+              0
+            ],
+            "start": 4,
+            "end": 7,
+            "isReplace": true,
+            "pairKey": 2
+          }
+        ]
+      },
+      {
+        "query": "😀",
+        "pieces": [
+          {
+            "path": [
+              4,
+              0
+            ],
+            "start": 0,
+            "end": 2,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              4,
+              0
+            ],
+            "start": 4,
+            "end": 6,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              4,
+              0
+            ],
+            "start": 8,
+            "end": 10,
+            "isReplace": true,
+            "pairKey": 3
+          }
+        ]
+      },
+      {
+        "query": "é",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 1,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 6,
+            "end": 7,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 12,
+            "end": 13,
+            "isReplace": true,
+            "pairKey": 3
+          },
+          {
+            "path": [
+              5,
+              0
+            ],
+            "start": 3,
+            "end": 4,
+            "isReplace": true,
+            "pairKey": 4
+          }
+        ]
+      },
+      {
+        "query": "a",
+        "pieces": [
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 3,
+            "end": 4,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 10,
+            "end": 11,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              4,
+              0
+            ],
+            "start": 2,
+            "end": 3,
+            "isReplace": true,
+            "pairKey": 3
+          },
+          {
+            "path": [
+              4,
+              0
+            ],
+            "start": 6,
+            "end": 7,
+            "isReplace": true,
+            "pairKey": 4
+          },
+          {
+            "path": [
+              4,
+              0
+            ],
+            "start": 11,
+            "end": 12,
+            "isReplace": true,
+            "pairKey": 5
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "regex-metacharacters",
+    "input": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "a+b (x) [y] $1 ^c . * ? | \\ {2}",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "searches": [
+      {
+        "query": "a+b",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 3,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "(x)",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 4,
+            "end": 7,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "[y]",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 8,
+            "end": 11,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "$1",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 12,
+            "end": 14,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "^c",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 15,
+            "end": 17,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": ".",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 18,
+            "end": 19,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "*",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 20,
+            "end": 21,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "?",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 22,
+            "end": 23,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "|",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 24,
+            "end": 25,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "\\",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 26,
+            "end": 27,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "{2}",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 28,
+            "end": 31,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "blocks",
+    "input": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Heading end",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "heading",
+            "version": 1,
+            "tag": "h1"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "start here",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "quote end",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "quote",
+            "version": 1
+          },
+          {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "foo",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "type": "linebreak",
+                "version": 1
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "bar",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "tab",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "detail": 2,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "\t",
+                "type": "tab",
+                "version": 1
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "bed",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "searches": [
+      {
+        "query": "end",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 8,
+            "end": 11,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              2,
+              0
+            ],
+            "start": 6,
+            "end": 9,
+            "isReplace": true,
+            "pairKey": 2
+          }
+        ]
+      },
+      {
+        "query": "endstart",
+        "pieces": []
+      },
+      {
+        "query": "end start",
+        "pieces": []
+      },
+      {
+        "query": "foobar",
+        "pieces": []
+      },
+      {
+        "query": "tabbed",
+        "pieces": []
+      },
+      {
+        "query": "e",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 1,
+            "end": 2,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 8,
+            "end": 9,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 7,
+            "end": 8,
+            "isReplace": true,
+            "pairKey": 3
+          },
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 9,
+            "end": 10,
+            "isReplace": true,
+            "pairKey": 4
+          },
+          {
+            "path": [
+              2,
+              0
+            ],
+            "start": 4,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 5
+          },
+          {
+            "path": [
+              2,
+              0
+            ],
+            "start": 6,
+            "end": 7,
+            "isReplace": true,
+            "pairKey": 6
+          },
+          {
+            "path": [
+              5,
+              2
+            ],
+            "start": 1,
+            "end": 2,
+            "isReplace": true,
+            "pairKey": 7
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "lists",
+    "input": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "a apple",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "detail": 0,
+                            "format": 0,
+                            "mode": "normal",
+                            "style": "",
+                            "text": "apple b",
+                            "type": "text",
+                            "version": 1
+                          }
+                        ],
+                        "direction": null,
+                        "format": "",
+                        "indent": 1,
+                        "type": "listitem",
+                        "version": 1,
+                        "value": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "task-list",
+                    "version": 1,
+                    "listType": "bullet",
+                    "start": 1,
+                    "tag": "ul"
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "done apple",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "checked": true,
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "todo",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "checked": false,
+                "value": 2
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "   ",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "checked": true,
+                "value": 3
+              },
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "checked": false,
+                "value": 4
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "detail": 0,
+                            "format": 0,
+                            "mode": "normal",
+                            "style": "",
+                            "text": "nested apple",
+                            "type": "text",
+                            "version": 1
+                          }
+                        ],
+                        "direction": null,
+                        "format": "",
+                        "indent": 1,
+                        "type": "listitem",
+                        "version": 1,
+                        "checked": true,
+                        "value": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "task-list",
+                    "version": 1,
+                    "listType": "check",
+                    "start": 1,
+                    "tag": "ul"
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "checked": false,
+                "value": 5
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "listType": "check",
+            "start": 1,
+            "tag": "ul"
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "numbered",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "listType": "number",
+            "start": 1,
+            "tag": "ol"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "searches": [
+      {
+        "query": "apple",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0,
+              0
+            ],
+            "start": 2,
+            "end": 7,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              1,
+              0,
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              1,
+              0,
+              0
+            ],
+            "start": 5,
+            "end": 10,
+            "isReplace": true,
+            "pairKey": 3
+          },
+          {
+            "path": [
+              1,
+              4,
+              0,
+              0,
+              0
+            ],
+            "start": 7,
+            "end": 12,
+            "isReplace": true,
+            "pairKey": 4
+          }
+        ]
+      },
+      {
+        "query": "a apple",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 7,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "applenested",
+        "pieces": []
+      }
+    ]
+  },
+  {
+    "name": "mentions",
+    "input": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Hi ",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "type": "user-mention",
+                "version": 1,
+                "userId": "user-1",
+                "email": "user@example.com",
+                "displayName": "Apple Person",
+                "mentionUuid": "mention-1"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " see ",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "type": "document-mention",
+                "version": 2,
+                "documentId": "doc-1",
+                "documentName": "Apple doc",
+                "blockName": "md",
+                "blockParams": {},
+                "mentionUuid": "mention-2",
+                "collapsed": false,
+                "createdAt": 0
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " apple",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "searches": [
+      {
+        "query": "apple",
+        "pieces": [
+          {
+            "path": [
+              0,
+              1
+            ],
+            "start": 1,
+            "end": 6,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              3
+            ],
+            "start": 0,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              0,
+              4
+            ],
+            "start": 1,
+            "end": 6,
+            "isReplace": true,
+            "pairKey": 3
+          }
+        ]
+      },
+      {
+        "query": "@apple",
+        "pieces": [
+          {
+            "path": [
+              0,
+              1
+            ],
+            "start": 0,
+            "end": 6,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "person see",
+        "pieces": [
+          {
+            "path": [
+              0,
+              1
+            ],
+            "start": 7,
+            "end": 13,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              2
+            ],
+            "start": 0,
+            "end": 4,
+            "isReplace": false,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "doc apple",
+        "pieces": [
+          {
+            "path": [
+              0,
+              3
+            ],
+            "start": 6,
+            "end": 9,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              4
+            ],
+            "start": 0,
+            "end": 6,
+            "isReplace": false,
+            "pairKey": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ignored-and-not-really-inline",
+    "input": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "before apple",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "type": "equation",
+                "version": 1,
+                "equation": "apple",
+                "inline": true
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "after",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "horizontalrule",
+            "version": 1
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "img",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "type": "image",
+                "version": 1,
+                "srcType": "url",
+                "id": "",
+                "url": "https://example.invalid/a.png",
+                "width": 0,
+                "height": 0,
+                "scale": 1,
+                "alt": "apple"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "next",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "equation",
+            "version": 1,
+            "equation": "apple",
+            "inline": false
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "searches": [
+      {
+        "query": "apple",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 7,
+            "end": 12,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "appleafter",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 7,
+            "end": 12,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              2
+            ],
+            "start": 0,
+            "end": 5,
+            "isReplace": false,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "imgnext",
+        "pieces": []
+      },
+      {
+        "query": "img",
+        "pieces": [
+          {
+            "path": [
+              2,
+              0
+            ],
+            "start": 0,
+            "end": 3,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "code",
+    "input": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "const apple = 1;",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "custom-code",
+            "version": 1,
+            "language": "javascript",
+            "previewEnabled": false
+          },
+          {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "searches": [
+      {
+        "query": "apple",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 6,
+            "end": 11,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "const",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "legacy-fold-exceptions",
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "ß SS ſ s İ i I ı K k K Σ σ ς",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0
+      }
+    },
+    "searches": [
+      {
+        "query": "ß",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 1,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "ſ",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 5,
+            "end": 6,
+            "isReplace": true,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "i",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 11,
+            "end": 12,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 13,
+            "end": 14,
+            "isReplace": true,
+            "pairKey": 2
+          }
+        ]
+      },
+      {
+        "query": "k",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 19,
+            "end": 20,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 21,
+            "end": 22,
+            "isReplace": true,
+            "pairKey": 2
+          }
+        ]
+      },
+      {
+        "query": "σ",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 23,
+            "end": 24,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 25,
+            "end": 26,
+            "isReplace": true,
+            "pairKey": 2
+          },
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 27,
+            "end": 28,
+            "isReplace": true,
+            "pairKey": 3
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "linebreak-and-tab",
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "foo",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              },
+              {
+                "type": "linebreak",
+                "version": 1
+              },
+              {
+                "type": "text",
+                "version": 1,
+                "text": "bar",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              },
+              {
+                "type": "tab",
+                "version": 1,
+                "text": "\t",
+                "format": 0,
+                "detail": 2,
+                "mode": "normal",
+                "style": ""
+              },
+              {
+                "type": "text",
+                "version": 1,
+                "text": "end",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0
+      }
+    },
+    "searches": [
+      {
+        "query": "foo\nbar",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 3,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              1
+            ],
+            "start": 0,
+            "end": 1,
+            "isReplace": false,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              2
+            ],
+            "start": 0,
+            "end": 3,
+            "isReplace": false,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "bar\tend",
+        "pieces": [
+          {
+            "path": [
+              0,
+              2
+            ],
+            "start": 0,
+            "end": 3,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              3
+            ],
+            "start": 0,
+            "end": 1,
+            "isReplace": false,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              4
+            ],
+            "start": 0,
+            "end": 3,
+            "isReplace": false,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "foobar",
+        "pieces": []
+      },
+      {
+        "query": "barend",
+        "pieces": []
+      }
+    ]
+  },
+  {
+    "name": "explicit-block-newline",
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "alpha",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "beta",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0
+      }
+    },
+    "searches": [
+      {
+        "query": "alpha\nbeta",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 5,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 0,
+            "end": 4,
+            "isReplace": false,
+            "pairKey": 1
+          }
+        ]
+      },
+      {
+        "query": "alphabeta",
+        "pieces": []
+      },
+      {
+        "query": "\n",
+        "pieces": []
+      },
+      {
+        "query": "",
+        "pieces": []
+      }
+    ]
+  },
+  {
+    "name": "ownerless-match-numbering",
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "children": [
+              {
+                "type": "linebreak",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0
+      }
+    },
+    "searches": [
+      {
+        "query": "\n",
+        "pieces": [
+          {
+            "path": [
+              1,
+              0
+            ],
+            "start": 0,
+            "end": 1,
+            "isReplace": true,
+            "pairKey": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "inline-link",
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "hel",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              },
+              {
+                "type": "link",
+                "version": 1,
+                "url": "https://example.com",
+                "children": [
+                  {
+                    "type": "text",
+                    "version": 1,
+                    "text": "lo",
+                    "format": 0,
+                    "detail": 0,
+                    "mode": "normal",
+                    "style": ""
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0
+      }
+    },
+    "searches": [
+      {
+        "query": "hello",
+        "pieces": [
+          {
+            "path": [
+              0,
+              0
+            ],
+            "start": 0,
+            "end": 3,
+            "isReplace": true,
+            "pairKey": 1
+          },
+          {
+            "path": [
+              0,
+              1,
+              0
+            ],
+            "start": 0,
+            "end": 2,
+            "isReplace": false,
+            "pairKey": 1
+          }
+        ]
+      }
+    ]
+  }
+]

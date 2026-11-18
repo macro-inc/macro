@@ -187,6 +187,29 @@ describe('pull request mention face', () => {
     expect(view.container.querySelector('[data-pr-mention]')).toBeNull();
   });
 
+  // Source keeps a stored null or omitted id and resolves the mention from its URL.
+  it.each([null, undefined])(
+    'renders a stored %s id as a plain link from its URL when GitHub is not linked',
+    (id) => {
+      setGithubLinkStatus('unlinked');
+
+      const view = render(() => (
+        <PullRequestMention
+          id={id}
+          url={url}
+          label="macro-inc/macro#7956"
+          key="node"
+          theme={{}}
+        />
+      ));
+
+      const link = screen.getByRole('link');
+      expect(link.getAttribute('href')).toBe(url);
+      expect(link.textContent).toBe('macro-inc/macro#7956');
+      expect(view.container.querySelector('[data-pr-mention]')).toBeNull();
+    }
+  );
+
   it('renders as a plain link when GitHub reauthentication is required', () => {
     setGithubLinkStatus('reauthentication_required');
 

@@ -1,0 +1,45 @@
+{
+  "scope": "Cached shallow-prefix export component checkpoint",
+  "base": "9df334309abf7ac8136e41755ea6b09238caed9f",
+  "invariants": [
+    "Same requested frontier, retained history, redaction and encoder",
+    "Same live logical state/frontiers/attachment; internal lazy caches can materialize",
+    "Cached and prefix byte caps checked before copied seed; future-container header scan is O(containers), not prefix-bounded",
+    "No total heap bound or task-under-50ms claim"
+  ],
+  "libraryTests": {
+    "fullPassed": 495,
+    "ignoredExisting": 4,
+    "strengthenedPrefixPassed": 6,
+    "cases": [
+      "forced forward branch with structural/style/delete/multipeer prefix",
+      "retained base/head checkout and dead-style/deleted-root retention",
+      "compressed-small raw-KV exact-cap and cap-plus-one fallback",
+      "same-document forward/legacy snapshot bytes"
+    ]
+  },
+  "actualWasmReplay": {
+    "scope": "Real DocSession Start/StorageLoaded/Chatter/Tick, retained literal WALs with JS re-encoded cached-root seed; not original browser bytes",
+    "beforeWasmSHA256": "5c2a15cc8bb53a6297d2c9f0fe2661fefddb9442e5b30f4c675d51c06dc17d2d",
+    "afterWasmSHA256": "bf8af31b75cd6d6b9541d401f8aeead60ce679a561c200a876f1a2831fac66d3",
+    "snapshotBytes": 3238458,
+    "snapshotSHA256": "2c374d9fa03985918a9292119d795a47ba4bb51d549f952e7aaf15e9e74adb73",
+    "bytesIdentical": true,
+    "beforeTickMs": 6931.371181,
+    "afterTickMs": 389.6182480000001,
+    "quietTimingGate": false
+  },
+  "firefoxDiagnostics": {
+    "scope": "Same plain novel /140%/wheel and controlled convergence; independent owned documents, nonquiet",
+    "slowCutBeforeAwakeMs": 6339.556,
+    "slowCutAfterAwakeMs": 516.871354,
+    "nearCurrentBeforeAwakeMs": 292.174,
+    "nearCurrentAfterAwakeMs": 224.097551,
+    "under50msGate": false
+  },
+  "validationPending": [
+    "workspace Rust checks/Clippy next serialized heavy turn",
+    "coherent integration/browser acceptance"
+  ],
+  "checksReceiptSHA256": "92f2cecc75196d4170081c31dc989682fd4847562b3941857e9538bcff668d24"
+}

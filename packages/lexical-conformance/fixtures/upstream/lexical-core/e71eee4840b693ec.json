@@ -1,0 +1,53 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/github-markdown.test.ts",
+    "test": [
+      "normalizeGithubMarkdown",
+      "keeps content images and links them when inline"
+    ],
+    "recordedWith": "lexical-conformance@a9cdd366bfcb8ceb435bb252033e328861fd8b0d6c8c62ea7acdf2869ff6f65c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/github-markdown.normalizeGithubMarkdown",
+      "args": [
+        "<p align=\"center\"><img width=\"600\" alt=\"Screenshot\" src=\"https://example.com/a.png\"></p>"
+      ],
+      "ret": "![Screenshot](https://example.com/a.png)"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/github-markdown.normalizeGithubMarkdown",
+      "args": [
+        "See ![chart](https://example.com/c.png) here"
+      ],
+      "ret": "See [chart](https://example.com/c.png) here"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/github-markdown.normalizeGithubMarkdown",
+      "args": [
+        "| ![Warning](https://storage.googleapis.com/coderabbit_public_assets/review-comment-icons-v1/bot.svg) |"
+      ],
+      "ret": "| Warning |"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

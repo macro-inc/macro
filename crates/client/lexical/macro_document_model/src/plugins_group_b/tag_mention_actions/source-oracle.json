@@ -1,0 +1,154 @@
+{
+  "tag-info-with-color": {
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "tag-mention",
+                "version": 1,
+                "optionId": "opt-1",
+                "propertyDefinitionId": "def-old",
+                "scope": "user",
+                "name": "Old name",
+                "color": "#111111"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "info": {
+      "propertyDefinitionId": "def-new",
+      "scope": "team",
+      "name": "New name",
+      "color": "#222222"
+    },
+    "output": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "tag-mention",
+                "version": 1,
+                "optionId": "opt-1",
+                "propertyDefinitionId": "def-new",
+                "scope": "team",
+                "name": "New name",
+                "color": "#222222"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "tags": [
+      [
+        "historic",
+        "skip-dom-selection",
+        "skip-scroll-into-view"
+      ]
+    ]
+  },
+  "tag-info-without-color": {
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "tag-mention",
+                "version": 1,
+                "optionId": "opt-1",
+                "propertyDefinitionId": "def-old",
+                "scope": "user",
+                "name": "Old name",
+                "color": "#111111"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "info": {
+      "propertyDefinitionId": "def-new",
+      "scope": "user",
+      "name": "Plain"
+    },
+    "output": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "tag-mention",
+                "version": 1,
+                "optionId": "opt-1",
+                "propertyDefinitionId": "def-new",
+                "scope": "user",
+                "name": "Plain"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "tags": [
+      [
+        "historic",
+        "skip-dom-selection",
+        "skip-scroll-into-view"
+      ]
+    ]
+  }
+}

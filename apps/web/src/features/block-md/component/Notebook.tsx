@@ -1,7 +1,7 @@
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { REVEAL_NODE_COMMAND } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
@@ -20,7 +20,6 @@ import {
   restoreScrollAnchor,
   type ScrollAnchor,
 } from '@core/util/scrollAnchor';
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -28,6 +27,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  type JSX,
   on,
   onCleanup,
   onMount,
@@ -40,7 +40,6 @@ import { markdownWideMode } from '../wide-mode';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
-import { MarkdownEditor } from './MarkdownEditor';
 import { useMarkdownName } from './MarkdownNameProvider';
 import {
   MARKDOWN_OUTLINE_INSET,
@@ -49,11 +48,15 @@ import {
   outlineFitsGutter,
   useMarkdownOutline,
 } from './MarkdownOutline';
+import { lexicalOutlineSource, nativeOutlineSource } from './outline-source';
 import { SkillDescriptionField } from './SkillDescriptionField';
 import { shouldAutofocusDocument } from './should-autofocus-document';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
-import { registerMarkdownCommands } from './useMarkdownCommands';
+import {
+  markdownCommandTarget,
+  registerMarkdownCommands,
+} from './useMarkdownCommands';
 
 /**
  * Whether the Lexical state debugger panel is open, persisted across reloads so
@@ -95,7 +98,11 @@ function useCanUseLexicalStateDebugger() {
 }
 
 export function Notebook(props: {
-  loroManager: LoroManager;
+  body: (options: {
+    autoFocus: boolean;
+    showStateDebugger: boolean;
+    closeStateDebugger: () => void;
+  }) => JSX.Element;
   documentId: string;
   hotkeyScope: string | undefined;
   autoFocus: boolean;
@@ -107,7 +114,6 @@ export function Notebook(props: {
   const { displayName: documentName } = useMarkdownName();
   const scopeId = () => props.hotkeyScope;
   const ownsEnter = createEnterOwningControl();
-  const resolveAppLink = useMacroMentionLinkResolver();
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -122,8 +128,13 @@ export function Notebook(props: {
   const [contentInset, setContentInset] = createSignal(0);
   const commentBreakpoints = createSizeBreakpoints(width, CommentBreakpoints);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
+  const outlineSource = createMemo(() => {
+    if (md.editor) return lexicalOutlineSource(md.editor);
+    const view = md.nativeRuntime?.view;
+    return view ? nativeOutlineSource(view) : undefined;
+  });
   const outline = useMarkdownOutline({
-    editor: () => md.editor,
+    source: outlineSource,
     enabled: () => outlineFitsGutter(contentInset()) && !isMobile(),
   });
 
@@ -164,7 +175,8 @@ export function Notebook(props: {
       columnLayout,
       () => {
         const scroller = md.scrollContainer;
-        const editorRoot = md.editor?.getRootElement();
+        const editorRoot =
+          md.editor?.getRootElement() ?? md.nativeRuntime?.view.root;
         scrollAnchor =
           scroller && editorRoot
             ? captureScrollAnchor(scroller, editorRoot)
@@ -192,10 +204,11 @@ export function Notebook(props: {
   createEffect(() => {
     const scroller = md.scrollContainer;
     const editor = md.editor;
-    if (!scroller || !editor) return;
+    const native = md.nativeRuntime;
+    if (!scroller || (!editor && !native)) return;
     onCleanup(
       keepScrollAnchorOnResize(scroller, () => {
-        const editorRoot = editor.getRootElement();
+        const editorRoot = editor?.getRootElement() ?? native?.view.root;
         return editorRoot
           ? captureScrollAnchor(scroller, editorRoot)
           : undefined;
@@ -251,6 +264,17 @@ export function Notebook(props: {
           } else if (markdownEditor) {
             markdownEditor.focus(undefined, { defaultSelection: 'rootStart' });
             return true;
+          } else if (md.nativeRuntime?.editing) {
+            md.nativeRuntime.editing?.focus.atStart();
+            return true;
+          }
+          const native = md.nativeRuntime;
+          const atStart = native?.overlays?.titleHandoff?.atStart;
+          if (native && atStart) {
+            // Lexical focus(rootStart) keeps an existing selection.
+            if (native.view.selection().selection.kind === 'none') atStart();
+            else native.view.focus();
+            return true;
           }
           return false;
         },
@@ -283,7 +307,21 @@ export function Notebook(props: {
   const [editorHasFocus, setEditorHasFocus] = createSignal(false);
   createEffect(() => {
     const editor = md.editor;
-    if (!editor) return;
+    if (!editor) {
+      const root = md.nativeRuntime?.view.root;
+      if (!root) return;
+      const update = () =>
+        setEditorHasFocus(root.contains(document.activeElement));
+      root.addEventListener('focusin', update);
+      root.addEventListener('focusout', update);
+      update();
+      onCleanup(() => {
+        root.removeEventListener('focusin', update);
+        root.removeEventListener('focusout', update);
+        setEditorHasFocus(false);
+      });
+      return;
+    }
     const cleanup = editorFocusSignal(editor, setEditorHasFocus);
     onCleanup(cleanup);
   });
@@ -293,7 +331,7 @@ export function Notebook(props: {
     const group = untrack(() =>
       registerMarkdownCommands(
         currentScopeId,
-        () => md.editor,
+        () => markdownCommandTarget(md),
         editorHasFocus,
         {
           canUseStateDebugger: canUseLexicalStateDebugger,
@@ -397,7 +435,10 @@ export function Notebook(props: {
           }}
         >
           <MarkdownOutline
-            editor={() => md.editor}
+            source={outlineSource}
+            revealHeading={(key) =>
+              md.editor?.dispatchCommand(REVEAL_NODE_COMMAND, key)
+            }
             outline={outline}
             portalMount={outlinePortalMount}
             scrollContainer={() => md.scrollContainer}
@@ -418,17 +459,15 @@ export function Notebook(props: {
           <TaskDuplicateMatchPill />
         </div>
         <ParamsProvider state={params}>
-          <MarkdownEditor
-            autoFocusOnMount={props.autoFocus && !isTouchDevice()}
-            resolveAppLink={resolveAppLink}
-            loroManager={props.loroManager}
-            showLexicalStateDebugger={
-              canUseLexicalStateDebugger() && showLexicalStateDebugger()
-            }
-            onLexicalStateDebuggerClose={() =>
-              setShowLexicalStateDebugger(false)
-            }
-          />
+          {props.body({
+            get autoFocus() {
+              return props.autoFocus && !isTouchDevice();
+            },
+            get showStateDebugger() {
+              return canUseLexicalStateDebugger() && showLexicalStateDebugger();
+            },
+            closeStateDebugger: () => setShowLexicalStateDebugger(false),
+          })}
           {/* Wide mode widens only the document body: the discussion keeps the
               standard column, centered under the text. Without wide mode the
               column is already this width, so the box changes nothing. */}

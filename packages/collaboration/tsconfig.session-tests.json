@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/session/**/*.ts", "vitest.session.config.ts"],
+  "exclude": []
+}

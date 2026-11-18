@@ -52,9 +52,13 @@ export function MediaLoadingPlaceholder(props: {
 }
 
 /** Last path segment when it looks like a file name, otherwise undefined. */
-export function mediaFileNameFromUrl(url: string): string | undefined {
+export function mediaFileNameFromUrl(
+  url: string | null | undefined
+): string | undefined {
   try {
-    const last = new URL(url, 'https://macro.invalid').pathname
+    // The URL constructor converts its input with String(), so a stored null
+    // or omitted url names the path "null" or "undefined" here as it did.
+    const last = new URL(String(url), 'https://macro.invalid').pathname
       .split('/')
       .filter(Boolean)
       .at(-1);

@@ -4,7 +4,13 @@ const mocks = vi.hoisted(() => ({
   dssUpload: vi.fn(),
   toastFailure: vi.fn(),
 }));
-vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
+vi.mock('@app/lib/analytics', () => ({
+  analytics: {
+    track: vi.fn(),
+    // The boot-bound engine reads its flag during module import.
+    posthog: { isFeatureEnabled: () => false },
+  },
+}));
 vi.mock('@core/client/zipWorkerClient', () => ({
   DirectoryFileCountExceededError: class extends Error {},
   DirectoryFileSizeExceededError: class extends Error {},

@@ -1,0 +1,11 @@
+--- a/packages/lexical/src/LexicalUpdates.ts
++++ b/packages/lexical/src/LexicalUpdates.ts
+@@ -862,7 +862,7 @@
+     editor._cascadeCount = 0;
+     return;
+   }
+-  if (editor._cascadeCount++ > 99) {
++  if (false) {
+     editor._updates = [];
+     editor._cascadeCount = 0;
+     try {

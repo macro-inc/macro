@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { forceCloseDatabase, IDBFactory } from 'fake-indexeddb';
+import { openDB } from 'idb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDBSnapshotStore } from './snapshot-store';
 import { BrowserWALStore, WALSyncer } from './wal';
@@ -25,6 +26,68 @@ afterEach(() => {
 });
 
 describe('collaboration IndexedDB recovery', () => {
+  it.each(['expired', 'delivered'])(
+    'prunes native quarantined and foreign rows when %s',
+    async (condition) => {
+      const store = new BrowserWALStore<number>('wal', 'doc');
+      await store.append(3);
+      const db = await openDB('wal', 1);
+      try {
+        for (const flag of ['quarantined', 'foreign']) {
+          await db.add('updates', {
+            scopeId: 'doc',
+            update: 2,
+            delivered: condition === 'delivered',
+            createdAt: condition === 'expired' ? 0 : Date.now(),
+            [flag]: true,
+          });
+        }
+
+        if (condition === 'expired') {
+          expect(await store.pruneExpired(1000)).toBe(2);
+        } else {
+          await store.pruneDelivered();
+        }
+
+        expect((await db.getAll('updates')).map((row) => row.update)).toEqual([
+          3,
+        ]);
+      } finally {
+        db.close();
+      }
+    }
+  );
+
+  it.each(['quarantined', 'foreign'])(
+    'does not replay or resend native %s rows after switching to the legacy engine',
+    async (flag) => {
+      const store = new BrowserWALStore<number>('wal', 'doc');
+      await store.append(1);
+      const db = await openDB('wal', 1);
+      try {
+        await db.add('updates', {
+          scopeId: 'doc',
+          update: 2,
+          delivered: false,
+          createdAt: Date.now(),
+          [flag]: true,
+        });
+        await store.append(3);
+
+        expect((await store.getAll()).map((row) => row.update)).toEqual([1, 3]);
+        const push = vi.fn(async (_updates: number[]) => true);
+        const wal = new WALSyncer(store, push);
+        await wal.ready();
+        await wal.flush();
+
+        expect(push).toHaveBeenCalledExactlyOnceWith([1, 3]);
+        expect(await db.getAll('updates')).toHaveLength(3);
+      } finally {
+        db.close();
+      }
+    }
+  );
+
   it.each(['success', 'cursor failure'])(
     'closes the scope-listing connection after %s',
     async (outcome) => {

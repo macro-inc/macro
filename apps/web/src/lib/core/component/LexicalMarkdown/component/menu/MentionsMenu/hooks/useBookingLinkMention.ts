@@ -89,6 +89,8 @@ export function useBookingLinkMention(options: UseBookingLinkMentionOptions) {
   });
 
   return {
+    error: () =>
+      shouldFetch() ? (personal.error ?? teamProfile.error) : undefined,
     bookingLinks,
     isLoading: () =>
       shouldFetch() &&

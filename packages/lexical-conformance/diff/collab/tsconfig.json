@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": [
+    "./*.ts",
+    "../collab.config.mts"
+  ],
+  "compilerOptions": {
+    "paths": {
+      "loro-crdt": [
+        "../../../../node_modules/loro-crdt/nodejs/index.d.ts"
+      ],
+      "@loro-mirror/core": [
+        "../../../../packages/loro-mirror/src/index.ts"
+      ],
+      "@macro-inc/lexical-core": [
+        "../../../../packages/lexical-conformance/diff/collab/core-exports.ts"
+      ]
+    }
+  }
+}

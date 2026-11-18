@@ -4,11 +4,11 @@ import { createServer } from 'vite';
 import { expect, it } from 'vitest';
 import { devExternalSourcemaps } from './dev-sourcemaps';
 
-it('links inline source maps instead of sending them with every module', async () => {
+it('links inline source maps once across repeated plugin registration, including large generated modules', async () => {
   const map = JSON.stringify({
     version: 3,
     sources: ['NewChatPage.tsx'],
-    sourcesContent: ['export const heading = "What should we work on?";'],
+    sourcesContent: ['export const heading = "What should we work on?";' + 'x'.repeat(16 * 1024 * 1024)],
     mappings: 'AAAA',
   });
   const base64 = Buffer.from(map).toString('base64');
@@ -16,7 +16,7 @@ it('links inline source maps instead of sending them with every module', async (
     configFile: false,
     appType: 'custom',
     logLevel: 'silent',
-    plugins: [devExternalSourcemaps({})],
+    plugins: [devExternalSourcemaps({}), devExternalSourcemaps({})],
     optimizeDeps: { noDiscovery: true, include: [] },
     server: { host: '127.0.0.1', port: 0 },
   });

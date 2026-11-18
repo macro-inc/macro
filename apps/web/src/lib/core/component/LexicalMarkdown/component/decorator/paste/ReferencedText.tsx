@@ -1,6 +1,7 @@
 import type { PasteNodeDecoratorProps } from '@macro-inc/lexical-core';
 import { cn, Layer } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import type { PasteNodeHostProp } from '../../../decorator-host/paste-node-host';
 import { QuoteReplyPreview } from '../QuoteReplyPreview';
 import { PasteActionsMenu } from './PasteActionsMenu';
 import { PasteTextViewer } from './PasteTextViewer';
@@ -12,7 +13,9 @@ import { usePasteNode } from './usePasteNode';
  * ({@link QuoteReplyPreview}), so a reference reads the same everywhere —
  * one clipped line, the full text behind a click.
  */
-export function ReferencedText(props: PasteNodeDecoratorProps) {
+export function ReferencedText(
+  props: PasteNodeDecoratorProps & PasteNodeHostProp
+) {
   const node = usePasteNode(props);
   const [open, setOpen] = createSignal(false);
 

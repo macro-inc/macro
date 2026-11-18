@@ -1,21 +1,9 @@
 import { DocumentOutline } from '@app/components/DocumentOutline';
-import {
-  FOLDED_BLOCK_CLASS,
-  REVEAL_NODE_COMMAND,
-} from '@core/component/LexicalMarkdown/plugins/heading-folds';
-import { $isHeadingNode } from '@lexical/rich-text';
-import { $getRoot, type LexicalEditor } from 'lexical';
+import { FOLDED_BLOCK_CLASS } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
-
-type OutlineHeading = {
-  key: string;
-  level: number;
-  text: string;
-  preview: string;
-};
+import type { OutlineHeading, OutlineSource } from './outline-source';
 
 const HEADING_SCROLL_OFFSET = 80;
-const SECTION_PREVIEW_LENGTH = 240;
 const MIN_OUTLINE_HEADINGS = 3;
 export const MARKDOWN_OUTLINE_WIDTH = 40;
 export const MARKDOWN_OUTLINE_INSET = 16;
@@ -72,50 +60,27 @@ function headingsEqual(a: OutlineHeading[], b: OutlineHeading[]) {
 }
 
 export function useMarkdownOutline(props: {
-  editor: Accessor<LexicalEditor | undefined>;
+  source: Accessor<OutlineSource | undefined>;
   enabled: Accessor<boolean>;
 }) {
   const [headings, setHeadings] = createSignal<OutlineHeading[]>([]);
 
   createEffect(() => {
-    const editor = props.editor();
-    if (!editor) {
+    const source = props.source();
+    if (!source) {
       setHeadings([]);
       return;
     }
 
     const refreshHeadings = () => {
-      const nextHeadings = editor.getEditorState().read(() => {
-        const sections: OutlineHeading[] = [];
-        for (const node of $getRoot().getChildren()) {
-          const text = node.getTextContent().trim();
-          if ($isHeadingNode(node) && text) {
-            sections.push({
-              key: node.getKey(),
-              level: Number(node.getTag().slice(1)),
-              text,
-              preview: '',
-            });
-          } else {
-            const section = sections.at(-1);
-            if (section && section.preview.length < SECTION_PREVIEW_LENGTH) {
-              section.preview = `${section.preview} ${text}`
-                .replace(/\s+/g, ' ')
-                .trim()
-                .slice(0, SECTION_PREVIEW_LENGTH);
-            }
-          }
-        }
-        return sections;
-      });
-
+      const nextHeadings = source.readHeadings();
       setHeadings((current) =>
         headingsEqual(current, nextHeadings) ? current : nextHeadings
       );
     };
 
     refreshHeadings();
-    onCleanup(editor.registerUpdateListener(refreshHeadings));
+    onCleanup(source.onUpdate(refreshHeadings));
   });
 
   return {
@@ -127,7 +92,9 @@ export function useMarkdownOutline(props: {
 type MarkdownOutlineState = ReturnType<typeof useMarkdownOutline>;
 
 export function MarkdownOutline(props: {
-  editor: Accessor<LexicalEditor | undefined>;
+  source: Accessor<OutlineSource | undefined>;
+  /** Unfolds any collapsed section hiding the heading before scrolling to it. */
+  revealHeading?: (key: string) => void;
   outline: MarkdownOutlineState;
   portalMount: Accessor<HTMLElement>;
   scrollContainer: Accessor<HTMLElement | undefined>;
@@ -151,15 +118,15 @@ export function MarkdownOutline(props: {
   });
 
   createEffect(() => {
-    const editor = props.editor();
+    const source = props.source();
     const scrollContainer = props.scrollContainer();
     const currentHeadings = props.outline.headings();
-    if (!editor || !scrollContainer) return;
+    if (!source || !scrollContainer) return;
+    let root: HTMLElement | null = null;
 
     let frame: number | undefined;
 
     const syncVisibleHeadings = () => {
-      const root = editor.getRootElement();
       const containerRect = scrollContainer.getBoundingClientRect();
       const viewportTop = Math.max(
         0,
@@ -172,7 +139,7 @@ export function MarkdownOutline(props: {
           scrollContainer.clientHeight
       );
       const renderedHeadings = currentHeadings.flatMap((heading) => {
-        const element = editor.getElementByKey(heading.key);
+        const element = source.getElementByKey(heading.key);
         // Headings inside a folded section take no space on screen.
         if (!element || element.classList.contains(FOLDED_BLOCK_CLASS)) {
           return [];
@@ -199,15 +166,13 @@ export function MarkdownOutline(props: {
     };
     const resizeObserver = new ResizeObserver(queueViewportSync);
     resizeObserver.observe(scrollContainer);
-    const unregisterRootListener = editor.registerRootListener(
-      (root, previousRoot) => {
-        if (previousRoot) resizeObserver.unobserve(previousRoot);
-        if (root) resizeObserver.observe(root);
-        queueViewportSync();
-      }
-    );
-    const unregisterUpdateListener =
-      editor.registerUpdateListener(queueViewportSync);
+    const unregisterRootListener = source.onRoot((nextRoot, previousRoot) => {
+      if (previousRoot) resizeObserver.unobserve(previousRoot);
+      if (nextRoot) resizeObserver.observe(nextRoot);
+      root = nextRoot;
+      queueViewportSync();
+    });
+    const unregisterUpdateListener = source.onUpdate(queueViewportSync);
     queueViewportSync();
     scrollContainer.addEventListener('scroll', queueViewportSync, {
       passive: true,
@@ -240,8 +205,8 @@ export function MarkdownOutline(props: {
   };
 
   const scrollToHeading = (heading: OutlineHeading) => {
-    props.editor()?.dispatchCommand(REVEAL_NODE_COMMAND, heading.key);
-    const headingElement = props.editor()?.getElementByKey(heading.key);
+    props.revealHeading?.(heading.key);
+    const headingElement = props.source()?.getElementByKey(heading.key);
     if (!headingElement) return;
 
     scrollToElement(headingElement);

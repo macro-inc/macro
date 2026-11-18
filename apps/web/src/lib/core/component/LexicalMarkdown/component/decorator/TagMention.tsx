@@ -18,6 +18,7 @@ import {
 } from 'lexical';
 import { createEffect, createMemo, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import type { TagMentionHostProp } from '../../decorator-host/tag-mention-host';
 import { autoRegister } from '../../plugins';
 import { MentionTooltip } from './MentionTooltip';
 
@@ -35,7 +36,16 @@ function optionLabel(value: unknown): string | undefined {
   return undefined;
 }
 
-export function TagMention(props: TagMentionDecoratorProps) {
+/**
+ * Source `importJSON` and `decorate` hand a stored color over unchanged, so an
+ * explicit null reaches this component. Ids, scope and name stay required:
+ * Source fails the whole document on a null name, and opening a tag needs ids.
+ */
+export type TagMentionUIProps = Omit<TagMentionDecoratorProps, 'color'> & {
+  color?: string | null;
+} & TagMentionHostProp;
+
+export function TagMention(props: TagMentionUIProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
@@ -45,12 +55,13 @@ export function TagMention(props: TagMentionDecoratorProps) {
   const isAuthenticated = useIsAuthenticated();
 
   const isSelectedAsNode = createMemo(() => {
+    if (props.host) return props.host.isSelected(props.key);
     const sel = selection();
     if (!sel) return false;
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
   });
 
-  const resolvedTag = createMemo(() => {
+  const resolvedOption = createMemo(() => {
     for (const set of tagsQuery.data ?? []) {
       for (const option of set.options) {
         if (option.id !== props.optionId) continue;
@@ -63,20 +74,32 @@ export function TagMention(props: TagMentionDecoratorProps) {
         };
       }
     }
-    return props;
+    return undefined;
   });
+  const resolvedTag = () => resolvedOption() ?? props;
 
   createEffect(() => {
-    const tag = resolvedTag();
+    const tag = resolvedOption();
+    // An unresolved tag shows the stored props, which never differ from themselves.
     if (
-      tag.propertyDefinitionId === props.propertyDefinitionId &&
-      tag.scope === props.scope &&
-      tag.name === props.name &&
-      tag.color === props.color
+      !tag ||
+      (tag.propertyDefinitionId === props.propertyDefinitionId &&
+        tag.scope === props.scope &&
+        tag.name === props.name &&
+        tag.color === props.color)
     ) {
       return;
     }
 
+    if (props.host) {
+      props.host.setTagInfo(props.key, {
+        propertyDefinitionId: tag.propertyDefinitionId,
+        scope: tag.scope,
+        name: tag.name,
+        color: tag.color,
+      });
+      return;
+    }
     editor?.update(
       () => {
         const node = $getNodeByKey(props.key);
@@ -102,17 +125,20 @@ export function TagMention(props: TagMentionDecoratorProps) {
     navigateToTag(split.openWithSplit, tag, { handle: panel?.handle });
   };
 
-  if (editor) {
+  const onEnter = (event: KeyboardEvent | null) => {
+    if (!isSelectedAsNode()) return false;
+    event?.preventDefault();
+    event?.stopPropagation();
+    open();
+    return true;
+  };
+  if (props.host) {
+    autoRegister(props.host.registerNormalEnter(onEnter));
+  } else if (editor) {
     autoRegister(
       editor.registerCommand(
         KEY_ENTER_COMMAND,
-        (event) => {
-          if (!isSelectedAsNode()) return false;
-          event?.preventDefault();
-          event?.stopPropagation();
-          open();
-          return true;
-        },
+        onEnter,
         COMMAND_PRIORITY_NORMAL
       )
     );
@@ -135,7 +161,11 @@ export function TagMention(props: TagMentionDecoratorProps) {
         }}
       >
         <span class="relative inline-flex -top-px mr-1">
-          <TagDot color={resolvedTag().color} class="size-[0.5em]" />
+          {/* TagDot reads a missing color with `??`, so null and undefined match. */}
+          <TagDot
+            color={resolvedTag().color ?? undefined}
+            class="size-[0.5em]"
+          />
         </span>
         <span class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
           {resolvedTag().name}

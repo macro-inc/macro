@@ -1,0 +1,19 @@
+[package]
+name = "document_id"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+sqlx = ["dep:sqlx"]
+schema = ["dep:utoipa"]
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+sqlx = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+uuid_value.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

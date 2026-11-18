@@ -3,7 +3,6 @@ import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
-import { InlineSearchNode } from '@macro-inc/lexical-core';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
@@ -13,15 +12,13 @@ import {
   onCleanup,
   onMount,
   Show,
+  splitProps,
   untrack,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { floatWithSelection } from '../../directive/floatWithSelection';
-import {
-  CLOSE_EMOJI_SEARCH_COMMAND,
-  INSERT_TEXT_COMMAND,
-  REMOVE_EMOJI_SEARCH_COMMAND,
-} from '../../plugins';
+import type { EmojiMenuHost } from '../../editing/overlay-hosts/emoji';
+import { createLexicalEmojiMenuHost } from '../../editing/overlay-hosts/lexical-emoji';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
@@ -34,13 +31,14 @@ const EMOJI_ITEM_HEIGHT = 32;
 const MAX_EMOJI_LIST_ITEMS = 7;
 const MAX_EMOJI_LIST_HEIGHT = MAX_EMOJI_LIST_ITEMS * EMOJI_ITEM_HEIGHT;
 
-type EmojiMenuProps = {
+type EmojiMenuOptions = {
   menu: MenuOperations;
-  editor: LexicalEditor;
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
   useBlockBoundary?: boolean;
   portalScope?: PortalScope;
 };
+
+type EmojiMenuProps = EmojiMenuOptions & { editor: LexicalEditor };
 
 function EmojiItem(props: {
   emoji: string;
@@ -82,6 +80,18 @@ function EmojiItem(props: {
 }
 
 export function EmojiMenu(props: EmojiMenuProps) {
+  const [model, options] = splitProps(props, ['editor']);
+  return (
+    <HostedEmojiMenu
+      {...options}
+      host={createLexicalEmojiMenuHost(() => model.editor)}
+    />
+  );
+}
+
+export function HostedEmojiMenu(
+  props: EmojiMenuOptions & { host: EmojiMenuHost }
+) {
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
@@ -142,15 +152,14 @@ export function EmojiMenu(props: EmojiMenuProps) {
   });
 
   const [, setEditorParent] = createSignal<HTMLElement>();
-  const cleanupRootListener = props.editor.registerRootListener(() => {
-    setEditorParent(props.editor.getRootElement()?.parentElement ?? undefined);
+  const cleanupRootListener = props.host.subscribeRoot(() => {
+    setEditorParent(props.host.root()?.parentElement ?? undefined);
   });
   onCleanup(cleanupRootListener);
 
   function insertEmoji(emoji: string) {
     recordEmojiUsage(emoji);
-    props.editor.dispatchCommand(REMOVE_EMOJI_SEARCH_COMMAND, undefined);
-    props.editor.dispatchCommand(INSERT_TEXT_COMMAND, emoji);
+    props.host.insertEmoji(emoji);
   }
 
   function isEnclosedEmoji(text: string) {
@@ -166,22 +175,18 @@ export function EmojiMenu(props: EmojiMenuProps) {
   });
 
   onMount(() => {
-    props.editor.registerNodeTransform(
-      InlineSearchNode,
-      (node: InlineSearchNode) => {
-        const text = node.getTextContent();
-        if (isEnclosedEmoji(text)) {
-          const resolved = resolveEmoji(text);
-          if (resolved) {
-            insertEmoji(resolved);
-          }
+    props.host.registerSearchText((text) => {
+      if (isEnclosedEmoji(text)) {
+        const resolved = resolveEmoji(text);
+        if (resolved) {
+          insertEmoji(resolved);
         }
       }
-    );
+    });
   });
 
   const closeMenu = () => {
-    props.editor.dispatchCommand(CLOSE_EMOJI_SEARCH_COMMAND, undefined);
+    props.host.closeSearch();
     props.menu.setIsOpen(false);
   };
 
@@ -265,7 +270,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
           class="cursor-default select-none w-48 z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(mountSelection),
-            reactiveOnContainer: props.editor.getRootElement(),
+            reactiveOnContainer: props.host.root(),
             useBlockBoundary: props.useBlockBoundary,
             onAvailableHeight: setMenuAvailableHeight,
             fullHeight: MAX_EMOJI_LIST_HEIGHT + MENU_DECORATION_HEIGHT,

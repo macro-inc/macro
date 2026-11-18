@@ -39,6 +39,7 @@ pub(crate) const WASM_PACKAGES: &[&str] = &[
     "ai_engine",
     "cache-wasm",
     "database_sql",
+    "document_session_wasm",
     "docx_engine",
     "fig_engine",
     "natural_time",

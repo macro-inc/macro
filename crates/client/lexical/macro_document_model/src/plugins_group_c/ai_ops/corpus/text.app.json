@@ -1,0 +1,2840 @@
+[
+  {
+    "name": "insertText in a plain paragraph",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "insertText",
+        "node": "s0000001",
+        "at": 6,
+        "text": "beta "
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha beta gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "insertText after a bold run stays plain",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "a ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "b",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "a ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "b",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "insertText",
+        "node": "s0000002",
+        "at": 3,
+        "text": " c"
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "a ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "b",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " c",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "<new0>"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "insertText before a bold run stays plain",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "b",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " c",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 1,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "b",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " c",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 1,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "insertText",
+        "node": "s0000002",
+        "at": 0,
+        "text": "a "
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "a ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "<new0>"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "b",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " c",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "removeText within one run",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha beta gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha beta gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "removeText",
+        "node": "s0000001",
+        "at": 5,
+        "len": 5
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "removeText across a format boundary",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "plain ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "bold",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " tail",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "plain ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "bold",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " tail",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "removeText",
+        "node": "s0000003",
+        "at": 3,
+        "len": 9
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "pla",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "ail",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "setText replaces a multi-run block",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "one ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "two",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " three",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "one ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "two",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " three",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "setText",
+        "node": "s0000003",
+        "text": "replaced"
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "replaced",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "setText on each of two blocks",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha beta gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Second line",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha beta gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Second line",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "setText",
+        "node": "s0000001",
+        "text": "Omega beta gamma"
+      },
+      {
+        "kind": "setText",
+        "node": "s0000003",
+        "text": "Final line"
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Omega beta gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Final line",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "setText on a list container fails",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "setText",
+        "node": "s0000004",
+        "text": "flat"
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [
+      0
+    ],
+    "refs": []
+  },
+  {
+    "name": "appendText to a paragraph ending in bold",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "start ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "bold",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "start ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "bold",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "appendText",
+        "node": "s0000002",
+        "text": " end"
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "start ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "bold",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " end",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "<new0>"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "prependText to a paragraph starting in italic",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 2,
+                "mode": "normal",
+                "style": "",
+                "text": "lead",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " rest",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 2,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 2,
+                "mode": "normal",
+                "style": "",
+                "text": "lead",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " rest",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 2,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "prependText",
+        "node": "s0000002",
+        "text": "Intro "
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Intro ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "<new0>"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 2,
+                "mode": "normal",
+                "style": "",
+                "text": "lead",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " rest",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "replaceText second occurrence",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "cat and cat",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "cat and cat",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "replaceText",
+        "node": "s0000001",
+        "find": "cat",
+        "to": "dog",
+        "scope": {
+          "kind": "nth",
+          "n": 2
+        }
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "cat and dog",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "replaceText nth 0 matches nothing and fails",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "cat and cat",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "cat and cat",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "replaceText",
+        "node": "s0000001",
+        "find": "cat",
+        "to": "dog",
+        "scope": {
+          "kind": "nth",
+          "n": 0
+        }
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "cat and cat",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [
+      0
+    ],
+    "refs": []
+  },
+  {
+    "name": "replaceText all occurrences",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "cat and cat",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "cat and cat",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "replaceText",
+        "node": "s0000001",
+        "find": "cat",
+        "to": "dog",
+        "scope": {
+          "kind": "all"
+        }
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "dog and dog",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "replaceText inside a bold run keeps the format",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "say ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "hello world",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " now",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "say ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "hello world",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " now",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "replaceText",
+        "node": "s0000003",
+        "find": "world",
+        "to": "there",
+        "scope": {
+          "kind": "all"
+        }
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "say ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "hello there",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " now",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [],
+    "refs": []
+  },
+  {
+    "name": "a missed replaceText keeps the earlier op and stops",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Beta",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Beta",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "setText",
+        "node": "s0000001",
+        "text": "Omega"
+      },
+      {
+        "kind": "replaceText",
+        "node": "s0000003",
+        "find": "missing",
+        "to": "x",
+        "scope": {
+          "kind": "all"
+        }
+      },
+      {
+        "kind": "setText",
+        "node": "s0000003",
+        "text": "never applied"
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Omega",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "never applied",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 11,
+            "environmentTags": null
+          }
+        }
+      }
+    },
+    "refused": [
+      1
+    ],
+    "refs": []
+  }
+]

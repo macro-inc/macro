@@ -209,6 +209,10 @@ fn test() -> Job {
         .add_step(steps::start_sccache_server())
         .add_step(steps::code_mode_assets())
         .add_step(configure_postgres())
+        // The lexical_loro differential tests run the real JS mirror through Bun.
+        .add_step(steps::install_workspace_js_dependencies())
+        // The lexical_conformance and document_session_ffi replays export HTML through jsdom.
+        .add_step(steps::install_conformance_dependencies())
         .add_step(prepare_tests())
         .add_step(run_tests())
         .add_step(setup_execution_runtime())

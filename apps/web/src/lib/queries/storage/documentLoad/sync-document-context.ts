@@ -1,4 +1,5 @@
 import { LoadErrors, loadResult } from '@core/block';
+import { RUST_EDITOR_ENGINE } from '@core/document-session/engine-selection';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   catchToResult,
@@ -129,7 +130,10 @@ const fileLoader = createSyncDocumentContextLoader({
 });
 
 async function openWith(opener: typeof loader, documentId: string) {
-  if (isNativeMobilePlatform() && !offlineDocumentContextCache.capture()) {
+  if (
+    (isNativeMobilePlatform() || RUST_EDITOR_ENGINE) &&
+    !offlineDocumentContextCache.capture()
+  ) {
     const epoch = documentSessionEpoch();
     await prefetchUserInfo();
     if (

@@ -82,6 +82,12 @@
 ## Hygiene
 
 - Work in the user-visible tab (no isolated contexts) when a human is watching via VNC.
+- Grant `local-network-access` to fresh Chromium contexts on local/preview stacks; otherwise document WebSockets fail with `ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS` and the editor appears stuck.
+- Run Playwright session-refresh helpers under Node from the pinned development
+  shell. Bun 1.3.13 can mis-parse a relative refresh response URL when handling
+  `Set-Cookie`, throwing `ERR_INVALID_URL` after an expired-token refresh. Verify
+  the actual Playwright process runs Node; a Node wrapper spawning Bun still fails.
+- Keep Unix-socket relay paths short (for example, `/tmp/<short>/relay.sock`); paths over about 107 bytes can be truncated at `sockaddr_un` limits, causing misleading TLS EOF or connection-refused errors.
 - Prefer snapshots over screenshots; screenshot only when layout confusion matters.
 - `evaluate_script` with `waitForStableDom: false` for read-only checks — it is cheaper and
   cannot deadlock on animating UI.

@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/**/*.d.ts",
+    "src/**/decorator-host/*-browser-test/**/*"
+  ],
+  "exclude": []
+}

@@ -38,6 +38,8 @@ interface CreateTableTestEditorOptions {
   hasCellBackgroundColor?: boolean;
   /** Forwarded to {@link tablePlugin}; defaults to `true`. */
   hasTabHandler?: boolean;
+  /** Editor onError; defaults to rethrowing. */
+  onError?: (error: Error) => void;
 }
 
 /**
@@ -55,14 +57,15 @@ export function createTableTestEditor(
     hasCellMerge = true,
     hasCellBackgroundColor = true,
     hasTabHandler = true,
+    onError = (error: Error) => {
+      throw error;
+    },
   } = opts;
 
   const editor = createEditor({
     namespace: 'table-test',
     nodes: [...SupportedNodeTypes, ...NodeReplacements],
-    onError: (error) => {
-      throw error;
-    },
+    onError,
   });
   tablePlugin({ hasCellMerge, hasCellBackgroundColor, hasTabHandler })(editor);
   if (touchSelection) tableTouchSelectionPlugin()(editor);

@@ -2,7 +2,7 @@ import {
   MarkdownDetail,
   MarkdownDetailBodyState,
   type MarkdownDetailContext,
-} from '@app/features/drive-view/views/MarkdownDetail';
+} from '@app/features/drive-view/MarkdownDetail';
 import type { JSX } from 'solid-js';
 import type { TaskDetailTarget } from '../types';
 

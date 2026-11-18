@@ -130,5 +130,9 @@ export function useCalendarEventMention(
     ]);
   });
 
-  return { events };
+  return {
+    events,
+    isLoading: () => enabled() && (own.isFetching || shared.isFetching),
+    error: () => (enabled() ? (own.error ?? shared.error) : undefined),
+  };
 }

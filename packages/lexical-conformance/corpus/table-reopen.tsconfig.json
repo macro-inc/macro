@@ -1,0 +1,8 @@
+{
+  "extends": "../../../apps/web/tsconfig.json",
+  "include": [
+    "./table-reopen.test.tsx",
+    "./table-reopen.config.ts",
+    "../../../apps/web/src/**/*.d.ts"
+  ]
+}

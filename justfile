@@ -175,3 +175,47 @@ setup:
 destroy:
   just infra/stacks/fusionauth-instance/destroy
   {{ compose }} down -v
+
+# Record pinned upstream Lexical tests; --check regenerates and compares every fixture.
+lexical-fixtures *ARGS:
+  bun install --frozen-lockfile --ignore-scripts
+  bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts
+  bun packages/lexical-conformance/corpus/synthetic.ts {{ARGS}}
+  bun packages/lexical-conformance/record/run.ts {{ARGS}}
+
+# Build optimized development-only Node and web conformance artifacts.
+build-lexical-conformance-wasm:
+  bun packages/lexical-conformance/diff/build-wasm.ts
+
+# Generate the specification row inventory from the checked-in recorder index.
+lexical-coverage-seed *ARGS:
+  bun packages/lexical-conformance/coverage/gen-matrix.ts {{ARGS}}
+
+# Fail unless vendor/loro-editor with native-editor off compiles as crates.io loro-internal 1.17.1.
+check-loro-editor-vendor:
+  bash tooling/scripts/check-loro-editor-vendor.sh
+
+# Fail if any server dependency graph enables loro-internal's native-editor feature.
+check-loro-native-editor-features:
+  bash tooling/scripts/check-loro-native-editor-features.sh
+
+# Build and test the server Loro consumers per package, with native-editor off as deployed.
+test-loro-servers-upstream:
+  bash tooling/scripts/test-loro-servers-upstream.sh
+
+# Compare the editor Loro copy with native-editor against crates.io 1.17.1: default seeds and regressions.
+test-loro-editor-differential:
+  cargo test --locked --manifest-path vendor/loro-editor/differential/Cargo.toml
+
+# Generate or check traceability and list every uncovered P0 symbol.
+lexical-coverage *ARGS:
+  bun packages/lexical-conformance/coverage/check.ts {{ARGS}}
+
+# Replay the complete corpus and emit content-bound per-case evidence.
+lexical-replay:
+  bun packages/lexical-conformance/coverage/run-replay.ts
+
+# Execute the same complete corpus in wasm-bindgen-test's Node runner.
+lexical-replay-wasm:
+  bun packages/lexical-conformance/coverage/wasm-fixtures.ts
+  LEXICAL_WASM_FIXTURES="$(pwd)/target/lexical-conformance/wasm-fixtures.rs" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p lexical_conformance --features node-dom --target wasm32-unknown-unknown --test replay_wasm -j4

@@ -32,7 +32,9 @@ import type { MarkdownData } from '../definition';
 import { createMarkdownRouteNavigation } from '../primitives/create-markdown-route-navigation';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
+import { desktopBodyFormatPopup } from '../views/body-format-popup';
 import { MarkdownHeader } from '../views/markdown-header';
+import { mobileBodyFormatPopup } from '../views/mobile/body-format-popup';
 import { MobileMarkdownHeader } from '../views/mobile/markdown-header';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
@@ -91,8 +93,8 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
     if (!loaded) return { type: 'loading' };
 
     const loadedSource = source();
-    if (loadedSource?.type === 'sync-service' && loaded.syncSource) {
-      return { type: 'sync', source: loaded.syncSource };
+    if (loadedSource?.type === 'sync-service' && loaded.connection) {
+      return loaded.connection;
     }
     if (loadedSource?.type === 'dss' && loaded.dssFile) {
       return { type: 'dss', file: loaded.dssFile };
@@ -102,7 +104,11 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   };
   const collaborationStatus = () => {
     const source = documentSource();
-    return source.type === 'sync' ? source.source.status() : undefined;
+    return source.type === 'session'
+      ? markdownState.session.status()
+      : source.type === 'sync'
+        ? source.source.status()
+        : undefined;
   };
 
   const setLoadError = blockErrorSignal.set;
@@ -132,6 +138,10 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
         entity={documentEntity()}
         state={markdownState}
         documentSource={documentSource()}
+        // This view's entry picks the body popup composition once.
+        bodyFormatPopup={
+          isTouchDevice() ? mobileBodyFormatPopup : desktopBodyFormatPopup
+        }
         permissions={{
           canComment: canComment(),
           canEdit: canEdit(),
@@ -177,7 +187,12 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
               <MarkdownDocumentContent
                 hotkeyScope={blockHotkeyScopeSignal.get()}
                 autoFocus={canAutofocus && !navigatedFromJK()}
-                doInitialSync={data()?.doInitialSync}
+                doInitialSync={(() => {
+                  const connection = data()?.connection;
+                  return connection?.type === 'sync'
+                    ? connection.doInitialSync
+                    : undefined;
+                })()}
                 optimisticSnapshot={props.optimisticSnapshot}
                 loadCachedSnapshot={() =>
                   loadMarkdownCachedSnapshot(documentId)

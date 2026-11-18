@@ -3,6 +3,7 @@ import {
   MarkdownDocumentProvider,
 } from '@block-md/context/markdown-document-context';
 import { createMarkdownDocumentState } from '@block-md/context/markdown-document-state';
+import { desktopBodyFormatPopup } from '@block-md/views/body-format-popup';
 import {
   $createDocumentCardNode,
   $isDocumentCardNode,
@@ -289,6 +290,7 @@ it.each(['code', 'canvas', 'pdf'] as const)(
         },
         persistedName: () => 'Embeds',
         fallbackName: () => 'Embeds',
+        bodyFormatPopup: () => desktopBodyFormatPopup,
         state: createMarkdownDocumentState(),
         element: () => undefined,
       };

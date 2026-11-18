@@ -1,10 +1,8 @@
 import clickOutside from '@core/directive/clickOutside';
 import { useCanEdit } from '@core/signal/permissions';
 import Check from '@icon/system/regular/check-circle.svg';
-import { $isEquationNode } from '@macro-inc/lexical-core';
 import { createCallback } from '@solid-primitives/rootless';
 import { Tooltip } from '@ui';
-import { $getNodeByKey } from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -13,20 +11,14 @@ import {
   onMount,
   Show,
   untrack,
-  useContext,
 } from 'solid-js';
 import {
   createMenuOpenSignal,
   MenuPriority,
 } from '../../context/FloatingMenuContext';
-import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { useEquationHost } from '../../decorator-host/equation-host';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
-import {
-  INSERT_EQUATION_COMMAND,
-  katexPlugin,
-  UPDATE_EQUATION_COMMAND,
-} from '../../plugins';
 import { Equation } from '../decorator/Equation';
 
 false && floatWithSelection;
@@ -37,9 +29,7 @@ export function FloatingEquationMenu(
   props: { canEdit?: Accessor<boolean> } = {}
 ) {
   const canEdit = props.canEdit ?? useCanEdit();
-  const lexicalWrapper = useContext(LexicalWrapperContext);
-  const plugins = () => lexicalWrapper?.plugins;
-  const editor = () => lexicalWrapper?.editor;
+  const host = useEquationHost();
 
   const [menuOpen, setMenuOpen] = createMenuOpenSignal(
     'equation-menu',
@@ -78,11 +68,7 @@ export function FloatingEquationMenu(
   const getElement = createCallback(() => {
     const currentNodeKey = nodeKey();
     if (currentNodeKey) {
-      const currentNode = $getNodeByKey(currentNodeKey);
-      const currentEditor = editor();
-      if (currentNode && currentEditor) {
-        return currentEditor.getElementByKey(currentNodeKey);
-      }
+      return host.equation.element(currentNodeKey);
     }
     return null;
   });
@@ -93,16 +79,16 @@ export function FloatingEquationMenu(
       return;
     }
 
-    const node = $getNodeByKey(nodeKey);
-    if (!$isEquationNode(node)) {
+    const node = host.equation.current(nodeKey);
+    if (!node) {
       resetMenu();
       return;
     }
 
     setNodeKey(nodeKey);
     setIsNewEquation(false);
-    setEquation(node.__equation);
-    setInline(node.__inline);
+    setEquation(node.equation);
+    setInline(node.inline);
     setMenuOpen(true);
   });
 
@@ -129,16 +115,7 @@ export function FloatingEquationMenu(
       return;
     }
 
-    const currentEditor = editor();
-    if (!currentEditor) {
-      resetMenu();
-      return;
-    }
-
-    currentEditor.dispatchCommand(INSERT_EQUATION_COMMAND, {
-      equation: currentEquation,
-      inline: inline(),
-    });
+    host.equation.insert?.(currentEquation, inline());
 
     resetMenu();
   });
@@ -156,32 +133,17 @@ export function FloatingEquationMenu(
       return;
     }
 
-    const currentEditor = editor();
-    if (!currentEditor) {
-      resetMenu();
-      return;
-    }
-
-    currentEditor.dispatchCommand(UPDATE_EQUATION_COMMAND, {
-      nodeKey: currentNodeKey,
-      equation: currentEquation,
-    });
+    host.equation.update(currentNodeKey, currentEquation);
 
     resetMenu();
   });
 
   createEffect(() => {
-    const currentPlugins = plugins();
-    if (!currentPlugins) return;
-
     if (!canEdit()) return;
-
-    currentPlugins.use(
-      katexPlugin({
-        onClickEquation: handleClickEquation,
-        onCreateEquation: handleCreateEquation,
-      })
-    );
+    host.equation.registerMenu({
+      edit: handleClickEquation,
+      create: handleCreateEquation,
+    });
   });
 
   const keydown = (e: KeyboardEvent) => {
@@ -191,7 +153,7 @@ export function FloatingEquationMenu(
     if (e.key === 'Escape') {
       e.preventDefault();
       resetMenu();
-      editor()?.focus();
+      host.equation.focus();
     }
     if (e.key === 'Enter' && inline()) {
       e.preventDefault();
@@ -226,7 +188,7 @@ export function FloatingEquationMenu(
         use:floatWithElement={{ element: getElement }}
         use:floatWithSelection={{
           selection: untrack(getSelection),
-          reactiveOnContainer: editor()?.getRootElement(),
+          reactiveOnContainer: host.equation.root(),
         }}
         use:clickOutside={() => resetMenu()}
       >

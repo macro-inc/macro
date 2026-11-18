@@ -2,12 +2,21 @@ import type { GroupMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { cn } from '@ui';
 import { useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import type { DecoratorSelectionHostProp } from '../../decorator-host/selection-host';
 
-export function GroupMention(props: GroupMentionDecoratorProps) {
+/** Source `importJSON` keeps a stored null or omitted alias; it renders as a bare `@`. */
+export type GroupMentionUIProps = Omit<
+  GroupMentionDecoratorProps,
+  'groupAlias'
+> & { groupAlias?: string | null } & DecoratorSelectionHostProp;
+
+export function GroupMention(props: GroupMentionUIProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const selection = () => lexicalWrapper?.selection;
 
   const isSelectedAsNode = () => {
+    const host = props.host;
+    if (host) return host.isSelected(props.key);
     const sel = selection();
     if (!sel) return false;
     return sel.type === 'node' && sel.nodeKeys.has(props.key);

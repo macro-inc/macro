@@ -10,7 +10,9 @@ import type {
   WordcountStats,
 } from '@core/component/LexicalMarkdown/plugins';
 import type { FloatingStyle } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
+import type { DocumentFindEngine } from '@core/component/LexicalMarkdown/plugins/find-and-replace/documentFindEngine';
 import { createParamsState } from '@core/component/ParamsProvider';
+import type { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import type { NodeIdMappings } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import type { LexicalEditor } from 'lexical';
 import { createSignal } from 'solid-js';
@@ -20,8 +22,15 @@ import type {
   MarkStore,
   ThreadStore,
 } from '../comments/commentType';
+import type { CommentDraftControls } from '../comments/NativeCommentDraft';
+
+import type { RustMarkdownRuntime } from '../component/RustMarkdownEditor';
+import type { MarkdownCommandTarget } from '../component/useMarkdownCommands';
 
 type MdData = {
+  nativeRuntime?: RustMarkdownRuntime;
+  /** Find bar engine for the mounted body editor. */
+  documentFind?: DocumentFindEngine;
   editor?: LexicalEditor;
   /** Durable nodeId <-> nodeKey mapping for the main editor (from the nodeId plugin). */
   mapping?: NodeIdMappings;
@@ -35,6 +44,10 @@ type MdData = {
   commentMargin?: HTMLElement;
   contentRef?: HTMLElement;
   locationReady?: boolean;
+  /** Native body command-menu target; the Lexical body uses its editor. */
+  nativeCommands?: MarkdownCommandTarget;
+  /** Native body draft lifecycle; the Lexical body uses its editor commands. */
+  commentDraft?: CommentDraftControls;
 };
 
 type FindAndReplaceState = {
@@ -76,11 +89,18 @@ type MarkdownCommentsState = {
 
 export function createMarkdownDocumentState() {
   const params = createParamsState();
+  const [sessionStatus, setSessionStatus] = createSignal<SyncSourceStatus>();
   const [md, setMd] = createStore<MdData>({});
   const [error, setError] = createSignal<MarkdownEditorErrors | null>(null);
   const [findAndReplace, setFindAndReplace] = createStore<FindAndReplaceState>(
     structuredClone(initialFindAndReplaceState)
   );
+  const setFindListOffset = (listOffset: NodekeyOffset[]) => {
+    setFindAndReplace('listOffset', listOffset);
+    if (findAndReplace.currentMatch >= listOffset.length) {
+      setFindAndReplace('currentMatch', 0);
+    }
+  };
 
   const [isGenerating, setIsGenerating] = createSignal(false);
   const [generatedAndWaiting, setGeneratedAndWaiting] = createSignal(false);
@@ -102,6 +122,7 @@ export function createMarkdownDocumentState() {
 
   return {
     params,
+    session: { status: sessionStatus, setStatus: setSessionStatus },
     editor: {
       md,
       setMd,
@@ -109,6 +130,7 @@ export function createMarkdownDocumentState() {
       setError,
       findAndReplace,
       setFindAndReplace,
+      setFindListOffset,
     },
     generation: {
       isGenerating,

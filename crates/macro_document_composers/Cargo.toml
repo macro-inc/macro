@@ -1,0 +1,19 @@
+[package]
+name = "macro_document_composers"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+macro_document_model.workspace = true
+lexical_model.workspace = true
+lexical_markdown.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+url.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+trigger_context.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]

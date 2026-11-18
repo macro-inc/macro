@@ -1,9 +1,3 @@
-import {
-  DO_REPLACE_COMMAND,
-  DO_REPLACE_ONCE_COMMAND,
-  DO_SEARCH_COMMAND,
-} from '@core/component/LexicalMarkdown/plugins';
-import { REVEAL_NODE_COMMAND } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import ReplaceAll from '@icon/system/regular/arrow-bend-double-up-right.svg';
@@ -50,7 +44,7 @@ export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
     findAndReplace: findAndReplaceStore,
     setFindAndReplace: setFindAndReplaceStore,
   } = state.editor;
-  const editor = () => mdData.editor;
+  const engine = () => mdData.documentFind;
   const scopeId = () => props.hotkeyScope;
 
   let inputRef: HTMLInputElement | undefined;
@@ -86,8 +80,8 @@ export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
   };
 
   const getMatchDocumentElement = (matchIndex: number) => {
-    const editorInstance = editor();
-    if (!editorInstance) return;
+    const findEngine = engine();
+    if (!findEngine) return;
 
     const offset = findAndReplaceStore.listOffset.find(
       (item) => item.pairKey === matchIndex + 1
@@ -95,8 +89,8 @@ export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
     if (!offset) return;
 
     // A match inside a folded section unfolds it before we scroll to it.
-    editorInstance.dispatchCommand(REVEAL_NODE_COMMAND, offset.key);
-    const element = editorInstance.getElementByKey(offset.key);
+    findEngine.reveal(offset.key);
+    const element = findEngine.getElementByKey(offset.key);
     return element?.parentElement ?? element ?? undefined;
   };
 
@@ -191,7 +185,7 @@ export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
       setFindAndReplaceStore('isSearching', false);
       return;
     }
-    editor()?.dispatchCommand(DO_SEARCH_COMMAND, query);
+    engine()?.search(query);
 
     if (jump) {
       jumpTo('next');
@@ -240,7 +234,7 @@ export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
     scrollToCurrentHighlight(
       (findAndReplaceStore.currentMatch + 1) % findAndReplaceStore.matches
     );
-    editor()?.dispatchCommand(DO_REPLACE_ONCE_COMMAND, {
+    engine()?.replaceOnce({
       replaceString: replaceString,
       nodeKeyOffsetList: findAndReplaceStore.listOffset.filter(
         (offset) => offset.pairKey === findAndReplaceStore.currentMatch + 1
@@ -255,7 +249,7 @@ export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
     if (!replaceString) {
       return;
     }
-    editor()?.dispatchCommand(DO_REPLACE_COMMAND, {
+    engine()?.replaceAll({
       replaceString: replaceString,
       nodeKeyOffsetList: findAndReplaceStore.listOffset,
     });

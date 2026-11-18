@@ -14,12 +14,15 @@ import { useSchedulesQuery } from './queries/schedules';
 export function useRoutineMentionSource(
   searchTerm: Accessor<string>,
   enabled: Accessor<boolean>
-): Accessor<RoutineMentionItem[]> {
+): Accessor<RoutineMentionItem[]> & {
+  isLoading: Accessor<boolean>;
+  error: Accessor<unknown>;
+} {
   const sharing = useFeatureFlag(enableRoutineSharing);
   const userId = useUserId();
   const active = () => enabled() && sharing().enabled;
   const query = useSchedulesQuery(active);
-  return createLazyMemo(() => {
+  const items = createLazyMemo(() => {
     if (!active() || !queryReadyGate(query)) return [];
     const term = searchTerm().trim().toLocaleLowerCase();
     return query.data.flatMap((routine) =>
@@ -35,5 +38,9 @@ export function useRoutineMentionSource(
           ]
         : []
     );
+  });
+  return Object.assign(items, {
+    isLoading: () => active() && query.isLoading,
+    error: () => (active() ? query.error : undefined),
   });
 }

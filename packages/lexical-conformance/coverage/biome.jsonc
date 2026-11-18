@@ -1,0 +1,6 @@
+{
+  "root": true,
+  "extends": ["../../../biome.base.jsonc"],
+  "vcs": { "enabled": false },
+  "files": { "includes": ["**/*.ts"] }
+}

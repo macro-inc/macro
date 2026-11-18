@@ -945,6 +945,10 @@ jobs:
           sleep 1
         done
         docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
+    - name: Install workspace JS dependencies
+      run: bun install --frozen-lockfile --ignore-scripts
+    - name: Install conformance dependencies
+      run: bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts
     - name: prepare tests
       run: |-
         just setup_test_envs

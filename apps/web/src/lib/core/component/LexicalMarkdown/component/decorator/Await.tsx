@@ -5,7 +5,12 @@ import {
 } from '@macro-inc/lexical-core';
 import { type Component, Show } from 'solid-js';
 
-export const Await: Component<AwaitDecoratorProps> = (props) => {
+/** Source `importJSON` keeps a stored null text, which renders the default. */
+export type AwaitUIProps = Omit<AwaitDecoratorProps, 'text'> & {
+  text?: string | null;
+};
+
+export const Await: Component<AwaitUIProps> = (props) => {
   return (
     // A chat agent's running reply reads as the working line its runs use.
     <Show when={props.text !== PENDING_REPLY_TEXT} fallback={<AgentThinking />}>
