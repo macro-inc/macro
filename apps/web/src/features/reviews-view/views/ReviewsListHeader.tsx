@@ -1,6 +1,6 @@
 import { ListHeader } from '@app/components/view-shell/ListHeader';
 import { cn } from '@ui';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import { ReviewsStatusTabs } from '../components/ReviewsStatusTabs';
 import { createReviewsHeaderFit } from '../primitives/create-reviews-header-fit';
 import type { ReviewsStatusTabId } from '../reviews-types';
@@ -22,9 +22,11 @@ export function ReviewsListHeader(props: {
   const [actions, setActions] = createSignal<HTMLDivElement>();
   const [tabs, setTabs] = createSignal<HTMLElement>();
   const [scope, setScope] = createSignal<HTMLDivElement>();
+  // Read from the fit's timer, outside any owner, so it must be a plain read.
+  const hasStatus = createMemo(() => props.status !== undefined);
   const fit = createReviewsHeaderFit({
     actions,
-    tabs: () => (props.status ? tabs() : undefined),
+    tabs: () => (hasStatus() ? tabs() : undefined),
     scope,
   });
 

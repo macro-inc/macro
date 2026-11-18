@@ -3,13 +3,26 @@ import { expect, type Page, test } from '@playwright/test';
 const fixture = '/src/features/reviews-view/browser-test/header.html';
 
 async function open(page: Page, query = '') {
-  const pageErrors: string[] = [];
-  page.on('pageerror', (error) => pageErrors.push(error.message));
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  let ownerless = 0;
+  // Solid's warning for computations nobody disposes, e.g. made from a timer.
+  page.on('console', (message) => {
+    if (message.text().includes('computations created outside')) ownerless++;
+  });
   await page.setViewportSize({ width: 1400, height: 600 });
   await page.goto(`${fixture}?width=1200${query}`, {
     waitUntil: 'networkidle',
   });
-  return pageErrors;
+  await expect.poll(() => header(page)).toMatchObject({ overflow: 0 });
+  // Modules warn as they load; the header must add none while it works.
+  const loaded = ownerless;
+  return {
+    problems: () => [
+      ...errors,
+      ...(ownerless > loaded ? [`${ownerless - loaded} ownerless`] : []),
+    ],
+  };
 }
 
 const resize = (page: Page, width: number) =>
@@ -53,18 +66,18 @@ async function expectHeader(
 test('keeps the status tabs labelled and the scope shown while the actions fit', async ({
   page,
 }) => {
-  const errors = await open(page);
+  const watch = await open(page);
   await expectHeader(page, { tabs: 'labelled', scope: true });
   await expect(
     page.getByRole('button', { name: 'Search reviews' })
   ).toBeInViewport({ ratio: 1 });
-  expect(errors).toEqual([]);
+  expect(watch.problems()).toEqual([]);
 });
 
 test('gives up tab labels, then the scope name, only as far as the actions need, and takes them back', async ({
   page,
 }) => {
-  const errors = await open(page);
+  const watch = await open(page);
   const steps = [
     { width: 760, tabs: 'labelled', scope: true },
     { width: 620, tabs: 'icons', scope: true },
@@ -82,7 +95,7 @@ test('gives up tab labels, then the scope name, only as far as the actions need,
     await page.waitForTimeout(300);
     expect((await header(page)).tabs).toBe(step.tabs);
   }
-  expect(errors).toEqual([]);
+  expect(watch.problems()).toEqual([]);
 });
 
 test('icon-only status tabs keep their names, tooltips and distinct icons', async ({
@@ -136,10 +149,59 @@ test('an open search that would not fit takes the tab labels, and closing gives 
 test('on the board, with no status tabs, only the scope name makes room', async ({
   page,
 }) => {
-  await open(page, '&board');
+  const watch = await open(page, '&board');
   await expectHeader(page, { tabs: 'none', scope: true });
-  await resize(page, 400);
+  await resize(page, 360);
   await expectHeader(page, { tabs: 'none', scope: false });
   await resize(page, 760);
   await expectHeader(page, { tabs: 'none', scope: true });
+  expect(watch.problems()).toEqual([]);
+});
+
+test('switching between list and board keeps the header settled', async ({
+  page,
+}) => {
+  const watch = await open(page);
+  await resize(page, 460);
+  await expectHeader(page, { tabs: 'icons', scope: false });
+  await page.getByRole('button', { name: 'Toggle board' }).click();
+  await expectHeader(page, { tabs: 'none', scope: true });
+  await page.getByRole('button', { name: 'Toggle board' }).click();
+  await expectHeader(page, { tabs: 'icons', scope: false });
+  await expect(
+    page.getByRole('button', { name: 'Search reviews' })
+  ).toBeInViewport({ ratio: 1 });
+  expect(watch.problems()).toEqual([]);
+});
+
+test('a status that changes the room keeps keyboard focus on the status', async ({
+  page,
+}) => {
+  const watch = await open(page);
+  // Find the narrowest width where Open, whose filter count widens the
+  // filter button, still has labels; one step narrower it has icons.
+  let width = 760;
+  await resize(page, width);
+  await expectHeader(page, { tabs: 'labelled', scope: true });
+  while ((await header(page)).tabs === 'labelled' && width > 560) {
+    width -= 2;
+    await resize(page, width);
+    await page.waitForTimeout(150);
+  }
+  await expectHeader(page, { tabs: 'icons', scope: true });
+
+  // All has no filter count, so the labels fit again, under the keyboard.
+  await page.getByRole('radio', { name: 'Open' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('radio', { name: 'Closed' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('radio', { name: 'All' })).toBeChecked();
+  await expectHeader(page, { tabs: 'labelled', scope: true });
+  await expect(page.getByRole('radio', { name: 'All' })).toBeFocused();
+
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('radio', { name: 'Closed' })).toBeChecked();
+  await expectHeader(page, { tabs: 'icons', scope: true });
+  await expect(page.getByRole('radio', { name: 'Closed' })).toBeFocused();
+  expect(watch.problems()).toEqual([]);
 });

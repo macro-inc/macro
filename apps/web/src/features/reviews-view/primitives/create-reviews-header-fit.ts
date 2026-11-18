@@ -1,7 +1,16 @@
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { nextReviewsHeaderSteps } from '../core/reviews-header-fit';
 
 type HeaderStep = 'tabs' | 'scope';
+
+/** Steps that settle one change; each takes at most one per pass. */
+const SETTLE_PASSES = 4;
 
 /**
  * Decides, from the header as it is laid out, whether the status tabs show
@@ -14,25 +23,25 @@ export function createReviewsHeaderFit(elements: {
   tabs: Accessor<HTMLElement | undefined>;
   scope: Accessor<HTMLElement | undefined>;
 }) {
-  const [steps, setSteps] = createSignal(0);
+  // By name, so the board (no tabs) and the list keep what each gave up.
+  const [given, setGiven] = createSignal<HeaderStep[]>([]);
   const available = (): HeaderStep[] =>
     elements.tabs() ? ['tabs', 'scope'] : ['scope'];
-  const applied = (step: HeaderStep) =>
-    available().slice(0, steps()).includes(step);
+  // Hiding the scope implies the tabs were already short of room.
+  const count = () =>
+    Math.max(0, ...given().map((step) => available().indexOf(step) + 1));
+  const applied = (step: HeaderStep) => {
+    const index = available().indexOf(step);
+    return index !== -1 && index < count();
+  };
 
   const freed: Partial<Record<HeaderStep, number>> = {};
   let labelledTabsWidth: number | undefined;
-  let lastAvailable = available().join();
 
   const measure = () => {
     const actions = elements.actions();
-    if (!actions) return;
+    if (!actions) return false;
     const list = available();
-    // A step means something else once the tabs come or go (the board).
-    if (list.join() !== lastAvailable) {
-      lastAvailable = list.join();
-      setSteps(0);
-    }
     const tabs = elements.tabs();
     if (tabs) {
       const width = tabs.getBoundingClientRect().width;
@@ -44,50 +53,61 @@ export function createReviewsHeaderFit(elements: {
     if (scope && !applied('scope')) {
       freed.scope = scope.getBoundingClientRect().width + gapAfter(scope);
     }
-    setSteps(
-      nextReviewsHeaderSteps(
-        { steps: steps(), freed: list.map((step) => freed[step]) },
-        list.length,
-        {
-          overflow: actions.scrollWidth - actions.clientWidth,
-          slack: slackBefore(actions),
-        }
-      )
+    const next = nextReviewsHeaderSteps(
+      { steps: count(), freed: list.map((step) => freed[step]) },
+      list.length,
+      {
+        overflow: actions.scrollWidth - actions.clientWidth,
+        slack: slackBefore(actions),
+      }
     );
+    if (next === count()) return false;
+    keepTabFocus(tabs, () =>
+      setGiven((current) => [
+        ...current.filter((step) => !list.includes(step)),
+        ...list.slice(0, next),
+      ])
+    );
+    return true;
   };
 
-  createEffect(() => {
-    const actions = elements.actions();
-    if (!actions) return;
-    const watched = [actions, elements.tabs(), elements.scope()];
-    let pending: ReturnType<typeof setTimeout> | undefined;
-    // Measured after the observer's turn: changing the header from inside it
-    // would resize what it is still reporting on.
-    const schedule = () => {
-      pending ??= setTimeout(() => {
-        pending = undefined;
-        measure();
-      });
-    };
-    const resizes = new ResizeObserver(schedule);
-    const observeAll = () => {
-      resizes.disconnect();
-      for (const element of [...watched, ...actions.children]) {
-        if (element) resizes.observe(element);
+  createEffect(
+    on(
+      [elements.actions, elements.tabs, elements.scope],
+      ([actions, tabs, scope]) => {
+        if (!actions) return;
+        let pending: ReturnType<typeof setTimeout> | undefined;
+        // Measured after the observer's turn: changing the header from
+        // inside it would resize what it is still reporting on. Each pass
+        // lays the header out again, so it settles before it is painted.
+        const schedule = () => {
+          pending ??= setTimeout(() => {
+            pending = undefined;
+            let pass = 0;
+            while (pass < SETTLE_PASSES && measure()) pass++;
+          });
+        };
+        const resizes = new ResizeObserver(schedule);
+        const observeAll = () => {
+          resizes.disconnect();
+          for (const element of [actions, tabs, scope, ...actions.children]) {
+            if (element) resizes.observe(element);
+          }
+        };
+        const children = new MutationObserver(() => {
+          observeAll();
+          schedule();
+        });
+        observeAll();
+        children.observe(actions, { childList: true });
+        onCleanup(() => {
+          clearTimeout(pending);
+          resizes.disconnect();
+          children.disconnect();
+        });
       }
-    };
-    const children = new MutationObserver(() => {
-      observeAll();
-      schedule();
-    });
-    observeAll();
-    children.observe(actions, { childList: true });
-    onCleanup(() => {
-      clearTimeout(pending);
-      resizes.disconnect();
-      children.disconnect();
-    });
-  });
+    )
+  );
 
   return {
     iconTabs: () => applied('tabs'),
@@ -95,11 +115,29 @@ export function createReviewsHeaderFit(elements: {
   };
 }
 
+/**
+ * Tabs render their options anew when they switch to icons, which would drop
+ * a keyboard user's focus on a status; it moves to the same status instead.
+ */
+function keepTabFocus(tabs: HTMLElement | undefined, change: () => void) {
+  const focused = document.activeElement;
+  const value =
+    tabs && focused instanceof HTMLInputElement && tabs.contains(focused)
+      ? focused.value
+      : undefined;
+  change();
+  if (value === undefined || tabs?.contains(document.activeElement)) return;
+  tabs
+    ?.querySelector<HTMLInputElement>(`input[value="${CSS.escape(value)}"]`)
+    ?.focus();
+}
+
+/** The gap before the status tabs goes with the scope; the board has none. */
 function gapAfter(element: HTMLElement) {
+  const next = element.nextElementSibling;
   const parent = element.parentElement;
-  return parent
-    ? Number.parseFloat(getComputedStyle(parent).columnGap) || 0
-    : 0;
+  if (!parent || !next || next.getBoundingClientRect().width === 0) return 0;
+  return Number.parseFloat(getComputedStyle(parent).columnGap) || 0;
 }
 
 /** The row packs its actions at the end, so free room shows before them. */
