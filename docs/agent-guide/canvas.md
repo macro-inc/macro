@@ -25,9 +25,24 @@ bottom sheet on a phone and toggles the side panel on a tablet. **More**, or a
 long press on the canvas with Select or Hand, opens the sheet of clipboard,
 group, arrange, select-all and delete actions; the long press selects what is
 under the finger first, and lifting the finger leaves the sheet open without
-pressing the row under it. Check that nothing sits under the dock or the home
-indicator, that every button answers a real tap, and that closing a sheet
-leaves the selection as it was.
+pressing the row under it. **Attach** opens a sheet with Media, Upload media,
+Reference and Artifact: Media and Reference open a
+searchable picker in a second
+sheet, and Upload media opens the device's photo library or file picker and
+places what is chosen at the middle of the view. Check that nothing sits under
+the dock or the home indicator, that every button answers a real tap, and that
+closing a sheet leaves the selection as it was.
+
+Text made low on the screen is panned up clear of the keyboard as it appears,
+and a long line keeps its end in view; the page itself never scrolls and the
+header stays put. The keyboard's Done button on a phone, or its hide key on a
+tablet, commits the text and leaves it selected with the Select tool.
+
+**Zoom to fit** in the zoom sheet shows the whole scene between the header and
+the bottom chrome, 24px clear of both and of the screen's sides, and left of the
+inspector panel when it is open. Turn the device: a canvas nobody has moved since
+the fit is fitted again, and one that was moved keeps what was in the middle of
+the view in the middle.
 
 Handles are drawn small but a finger takes them from further away: a drag that
 starts within 16px of a corner or of the rotation knob, or within 12px outside

@@ -330,8 +330,12 @@ export function GraphicsSurface(props: {
         overflow: 'hidden',
         width: '100%',
         height: '100%',
-        'touch-action': 'none',
-        'overscroll-behavior': 'contain',
+        // A surface that leaves one finger to the page lets it pan and
+        // scroll on; otherwise every touch is the canvas's.
+        'touch-action': props.input?.yieldToPage?.() ? 'pan-x pan-y' : 'none',
+        'overscroll-behavior': props.input?.yieldToPage?.()
+          ? 'auto'
+          : 'contain',
         'user-select': 'none',
         cursor: isShapeKind(props.input?.tool?.())
           ? 'crosshair'

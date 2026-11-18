@@ -509,3 +509,91 @@ async fn a_first_import_reads_the_events_closest_to_today_first(pool: PgPool) {
     );
     assert_synced(&pool).await;
 }
+
+/// Macro's per-mailbox admission, refusing every request as a mailbox whose
+/// in-flight slots mail sync holds.
+struct BusyMailbox;
+
+impl crate::domain::ports::MailboxRequestGate for BusyMailbox {
+    fn acquire(
+        &self,
+        _: crate::domain::models::MailboxAccess,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Uuid, EmailApiError>> + Send + '_>> {
+        Box::pin(async {
+            Err(EmailApiError::RateLimited {
+                retry_after: Some(std::time::Duration::from_millis(2_500)),
+                origin: RateLimitOrigin::Gate(crate::domain::models::GateLimit::Concurrency),
+            })
+        })
+    }
+    fn finish(
+        &self,
+        _: crate::domain::models::MailboxAccess,
+        _: Uuid,
+        _: Option<std::time::Duration>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async {})
+    }
+    fn admitted(
+        &self,
+        _: crate::domain::models::MailboxAccess,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<u64>> + Send + '_>> {
+        Box::pin(async { None })
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_step_the_request_gate_refuses_waits_without_counting_a_failure(pool: PgPool) {
+    // Discovered already, so the first step is the near window's listing.
+    let (server, _) = connected(&pool).await;
+    serve_near_window(&server, &[]).await;
+    let mut busy = OutlookApiClientRepository::for_test(&format!("{}/v1.0/", server.uri()));
+    busy.gate = Some(std::sync::Arc::new(BusyMailbox));
+    let busy = OutlookCalendarSync::new(
+        PgCalendarRepository::new(pool.clone()),
+        busy,
+        IssuedToken,
+        NoOpenClients,
+    );
+
+    assert!(
+        matches!(busy.run_once().await, Ok(true)),
+        "a deferred step is not an error, and the loop moves on"
+    );
+
+    let work = sqlx::query!(
+        r#"SELECT w.attempts,w.last_error,w.lease_until,c.consecutive_sync_failures,c.last_sync_error,a.sync_status,
+            extract(epoch FROM w.next_run_at-now())::float8 AS "wait!"
+        FROM calendar_outlook_work w JOIN calendars c ON c.id=w.calendar_id JOIN calendar_accounts a ON a.id=w.account_id
+        WHERE c.provider_calendar_id='AAMkCalendar'"#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(work.lease_until.is_none());
+    assert!(
+        (1.0..=2.5).contains(&work.wait),
+        "retries after the gate's delay, not {}",
+        work.wait
+    );
+    assert_eq!(
+        (
+            work.attempts,
+            work.last_error,
+            work.consecutive_sync_failures,
+            work.last_sync_error
+        ),
+        (0, None, 0, None),
+        "nothing reached Microsoft, so nothing failed"
+    );
+    assert_eq!(work.sync_status, "syncing");
+    assert!(
+        server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|request| request.url.path() != "/v1.0/me/calendars/AAMkCalendar/calendarView"),
+        "the gate sent nothing"
+    );
+}

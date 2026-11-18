@@ -715,7 +715,8 @@ where
                     ) => CalendarBackfillFailureDisposition::Permanent,
                     Some(
                         CalendarProviderErrorKind::Transient
-                        | CalendarProviderErrorKind::SyncTokenExpired,
+                        | CalendarProviderErrorKind::SyncTokenExpired
+                        | CalendarProviderErrorKind::Deferred,
                     )
                     | None => CalendarBackfillFailureDisposition::Retry,
                 };
