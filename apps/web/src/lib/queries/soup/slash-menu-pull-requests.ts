@@ -24,7 +24,11 @@ export const SLASH_MENU_PULL_REQUESTS_ARGS: SoupAstItemsQueryArgs = {
 export function useSlashMenuPullRequests(enabled: Accessor<boolean>) {
   const query = useSoupAstItemsQuery(
     () => SLASH_MENU_PULL_REQUESTS_ARGS,
-    () => ({ enabled: enabled(), showSupportedForeignEntities: true })
+    () => ({
+      enabled: enabled(),
+      showSupportedForeignEntities: true,
+      ignoresNotifications: true,
+    })
   );
   const pullRequests = createMemo(() =>
     queryReadyGate(query) ? query.data.entities.filter(isGithubPrEntity) : []
