@@ -87,14 +87,13 @@ fn release_job() -> Job {
 }
 
 fn checkout_pr_head() -> Step<Use> {
-    Step::new("Checkout PR head")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .add_with(("ref", "${{ github.event.pull_request.head.sha }}"))
-        .add_with(("persist-credentials", false))
+    steps::abort_stalled_fetch(Step::new("Checkout PR head").uses(
+        "actions",
+        "checkout",
+        "df4cb1c069e1874edd31b4311f1884172cec0e10",
+    )) // v6
+    .add_with(("ref", "${{ github.event.pull_request.head.sha }}"))
+    .add_with(("persist-credentials", false))
 }
 
 /// Bun before Nix: the preconditions run the Android scripts before the

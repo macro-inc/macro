@@ -91,11 +91,11 @@ fn preview() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses(
+    steps::abort_stalled_fetch(Step::new("Checkout Repo").uses(
         "actions",
         "checkout",
         "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    ) // v6
+    )) // v6
 }
 
 fn get_project_name() -> Step<Use> {

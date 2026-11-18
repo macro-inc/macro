@@ -10,6 +10,10 @@ runs:
   using: composite
   steps:
     - uses: actions/checkout@v6
+      # Give up on a stalled fetch so checkout retries it; see steps::abort_stalled_fetch.
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
       with:
         sparse-checkout: |
           .github/

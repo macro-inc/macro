@@ -85,13 +85,12 @@ fn build_job() -> Job {
 /// The pushed commit, not the branch tip: a merge that lands while this run's
 /// backend deploys must not ship its frontend against the older backend.
 pub fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .add_with(("ref", "${{ github.sha }}"))
+    steps::abort_stalled_fetch(Step::new("Checkout Repo").uses(
+        "actions",
+        "checkout",
+        "df4cb1c069e1874edd31b4311f1884172cec0e10",
+    )) // v6
+    .add_with(("ref", "${{ github.sha }}"))
 }
 
 /// Saved entries are named by the set of package keys they hold plus the run

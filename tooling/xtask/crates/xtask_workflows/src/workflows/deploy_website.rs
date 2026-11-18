@@ -130,13 +130,12 @@ fn build_deploy() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .add_with(("lfs", true))
+    steps::abort_stalled_fetch(Step::new("Checkout Repo").uses(
+        "actions",
+        "checkout",
+        "df4cb1c069e1874edd31b4311f1884172cec0e10",
+    )) // v6
+    .add_with(("lfs", true))
 }
 
 /// Without LFS content the site would publish pointer files as its videos.
