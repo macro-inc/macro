@@ -51,12 +51,15 @@ function Section(props: { id: string }) {
 
 function sidebar(view = 'test') {
   const [extra, setExtra] = createSignal(false);
+  const [firstVisible, setFirstVisible] = createSignal(true);
   const result = render(() => (
     <DragDropProvider>
       <ViewSidebar.Root reorderId={view}>
         <ViewSidebar.Content>
           <button type="button">Fixed top</button>
-          <Section id="first" />
+          <Show when={firstVisible()}>
+            <Section id="first" />
+          </Show>
           <Show when={extra()}>
             <Section id="new" />
           </Show>
@@ -70,7 +73,7 @@ function sidebar(view = 'test') {
     [...result.container.querySelectorAll('[data-sidebar-section]')].map(
       (node) => node.getAttribute('data-sidebar-section')
     );
-  return { ...result, order, setExtra };
+  return { ...result, order, setExtra, setFirstVisible };
 }
 
 describe('sidebar section composition', () => {
@@ -155,5 +158,51 @@ describe('sidebar section composition', () => {
       result.getAllByRole('button', { name: 'Reorder Outer' })
     ).toHaveLength(1);
     expect(result.queryByRole('button', { name: 'Reorder Nested' })).toBeNull();
+  });
+
+  it('retains a hidden section position when visible sections move', () => {
+    const result = sidebar();
+    result.setExtra(true);
+    const last = result.getByRole('button', { name: 'Reorder last' });
+    fireEvent.keyDown(last, { key: 'ArrowUp' });
+    fireEvent.keyDown(last, { key: 'ArrowUp' });
+    result.setFirstVisible(false);
+    fireEvent.keyDown(result.getByRole('button', { name: 'Reorder new' }), {
+      key: 'ArrowUp',
+    });
+    result.setFirstVisible(true);
+    expect(result.order()).toEqual(['new', 'first', 'last']);
+  });
+
+  it('preserves named section regions and excludes checkbox labels from dragging', () => {
+    const dragStarted = vi.fn();
+    const result = render(() => (
+      <DragDropProvider onDragStart={dragStarted}>
+        <ViewSidebar.Root reorderId="labels">
+          <ViewSidebar.Content>
+            <ViewSidebar.Section id="plain" label="Plain section">
+              <ViewSidebar.SectionHeader>
+                <h2>Plain section</h2>
+                <label data-testid="checkbox-label">
+                  <input type="checkbox" aria-label="Show calendar" />
+                  Calendar
+                </label>
+              </ViewSidebar.SectionHeader>
+            </ViewSidebar.Section>
+          </ViewSidebar.Content>
+        </ViewSidebar.Root>
+      </DragDropProvider>
+    ));
+    expect(result.getByRole('region', { name: 'Plain section' }).tagName).toBe(
+      'SECTION'
+    );
+    const label = result.getByTestId('checkbox-label');
+    fireEvent.mouseDown(label, { button: 0, clientX: 0, clientY: 0 });
+    fireEvent.mouseMove(document, { clientX: 20, clientY: 20 });
+    fireEvent.mouseUp(document);
+    expect(dragStarted).not.toHaveBeenCalled();
+    fireEvent.click(label);
+    const checkbox = result.getByRole('checkbox', { name: 'Show calendar' });
+    expect(checkbox instanceof HTMLInputElement && checkbox.checked).toBe(true);
   });
 });

@@ -46,7 +46,7 @@ export function SidebarSections(props: {
   const reorder = createSectionReorder({
     keys,
     order: preference.order,
-    setOrder: (order) => preference.setOrder(mergeSectionOrder(keys(), order)),
+    setOrder: preference.setOrder,
     account: preference.account,
     scope,
     animate: (update) => {

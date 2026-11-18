@@ -10,7 +10,7 @@ import {
 
 /** An identity-bearing section; navigation rows outside sections keep their slots. */
 export function SidebarSection(
-  props: JSX.HTMLAttributes<HTMLDivElement> & {
+  props: JSX.HTMLAttributes<HTMLElement> & {
     id: string;
     label: string;
   }
@@ -31,7 +31,8 @@ export function SidebarSection(
       section: local.id,
     });
   const content = () => (
-    <div
+    <section
+      aria-label={local.label}
       {...rest}
       ref={mergeRefs(local.ref, (element) => droppable?.ref(element))}
       data-sidebar-section={local.id}
@@ -45,7 +46,7 @@ export function SidebarSection(
         {local.children}
       </SidebarSectionsContext.Provider>
       <SectionDropIndicator edge={parent?.reorder.dropEdge(local.id)} />
-    </div>
+    </section>
   );
   return (
     <Show

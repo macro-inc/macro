@@ -54,7 +54,8 @@ Open splits and tabs of the same account/view synchronize through storage
 notifications; account/view changes retire their previous listeners.
 Storage is schema-validated through `makePersistedState`; unavailable storage
 leaves in-memory ordering usable. Unknown keys are ignored and new sections stay
-in their default slots. Fixed rows and footer controls do not move. Sections move
+in their default slots. Temporarily hidden sections retain their saved positions.
+Fixed rows and footer controls do not move. Sections move
 as existing DOM nodes, not CSS `order`, preserving input state and reading order.
 
 The backend-free `browser-test/sidebar-reorder.browser.e2e.ts` regression covers

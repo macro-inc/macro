@@ -48,7 +48,7 @@ export function SidebarSectionDragHandle<Key extends string>(props: {
     const control =
       event.target instanceof Element
         ? event.target.closest(
-            'button, a, input, textarea, select, [role="button"], [role="checkbox"], [contenteditable="true"]'
+            'button, a, label, input, textarea, select, [role="button"], [role="checkbox"], [role="switch"], [contenteditable="true"]'
           )
         : null;
     if (control && !control.hasAttribute('data-sidebar-section-trigger'))
