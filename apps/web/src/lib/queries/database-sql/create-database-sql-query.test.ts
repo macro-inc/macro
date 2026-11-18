@@ -205,6 +205,7 @@ describe('createDatabaseSqlQuery', () => {
                   soup: {
                     items: policy === 'cache-only' ? [acme] : [globex],
                     nextCursor: null,
+                    notifiedAt: [],
                   },
                 },
               } satisfies SoupQuery,
@@ -240,7 +241,11 @@ describe('createDatabaseSqlQuery', () => {
                       data: {
                         user: {
                           id: 'macro|viewer@databases.test',
-                          soup: { items: [acme], nextCursor: null },
+                          soup: {
+                            items: [acme],
+                            nextCursor: null,
+                            notifiedAt: [],
+                          },
                         },
                       },
                     }
@@ -292,7 +297,7 @@ describe('createDatabaseSqlQuery', () => {
             data: {
               user: {
                 id: 'macro|viewer@databases.test',
-                soup: { items: [globex], nextCursor: null },
+                soup: { items: [globex], nextCursor: null, notifiedAt: [] },
               },
             },
             stale: false,
@@ -321,7 +326,7 @@ describe('createDatabaseSqlQuery', () => {
               data: {
                 user: {
                   id: 'macro|viewer@databases.test',
-                  soup: { items: [acme], nextCursor: null },
+                  soup: { items: [acme], nextCursor: null, notifiedAt: [] },
                 },
               },
             }),
@@ -366,7 +371,7 @@ describe('createDatabaseSqlQuery', () => {
                 data: {
                   user: {
                     id: 'macro|viewer@databases.test',
-                    soup: { items: [item], nextCursor: null },
+                    soup: { items: [item], nextCursor: null, notifiedAt: [] },
                   },
                 },
               })
@@ -418,7 +423,7 @@ describe('createDatabaseSqlQuery', () => {
             data: {
               user: {
                 id: 'macro|viewer@databases.test',
-                soup: { items: [globex], nextCursor: null },
+                soup: { items: [globex], nextCursor: null, notifiedAt: [] },
               },
             },
             stale: false,
@@ -473,7 +478,7 @@ describe('createDatabaseSqlQuery', () => {
             user: {
               id: 'macro|viewer@databases.test',
               emailLinks: [],
-              soup: { items: [acme], nextCursor: null },
+              soup: { items: [acme], nextCursor: null, notifiedAt: [] },
             },
           };
           return fromValue({ operation, data, stale: false, hasNext: false });
@@ -504,7 +509,7 @@ describe('createDatabaseSqlQuery', () => {
         data: {
           user: {
             id: 'macro|viewer@databases.test',
-            soup: { items: [acme], nextCursor: null },
+            soup: { items: [acme], nextCursor: null, notifiedAt: [] },
           },
         },
       }),
@@ -651,7 +656,7 @@ describe('createDatabaseSqlQuery', () => {
             user: {
               id: 'macro|viewer@databases.test',
               emailLinks: [],
-              soup: { items: [acme], nextCursor: null },
+              soup: { items: [acme], nextCursor: null, notifiedAt: [] },
             },
           };
           return fromValue({ operation, data, stale: false, hasNext: false });
@@ -715,7 +720,7 @@ describe('createDatabaseSqlQuery', () => {
               user: {
                 id: 'macro|viewer@databases.test',
                 emailLinks: [],
-                soup: { items, nextCursor: null },
+                soup: { items, nextCursor: null, notifiedAt: [] },
               },
             };
             return { operation, data, stale: false, hasNext: false };
@@ -741,7 +746,7 @@ describe('createDatabaseSqlQuery', () => {
         data: {
           user: {
             id: 'macro|viewer@databases.test',
-            soup: { items: [acme], nextCursor: null },
+            soup: { items: [acme], nextCursor: null, notifiedAt: [] },
           },
         },
       }),
@@ -811,7 +816,7 @@ describe('a refresh another run replaced', () => {
               user: {
                 id: 'macro|viewer@databases.test',
                 emailLinks: [],
-                soup: { items: [acme], nextCursor: null },
+                soup: { items: [acme], nextCursor: null, notifiedAt: [] },
               },
             } satisfies SoupQuery,
             stale: false,

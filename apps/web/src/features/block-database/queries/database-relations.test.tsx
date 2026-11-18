@@ -103,7 +103,7 @@ function engine(names: () => string[]) {
           user: {
             id: 'macro|viewer@databases.test',
             emailLinks: [],
-            soup: { items: [], nextCursor: null },
+            soup: { items: [], nextCursor: null, notifiedAt: [] },
           },
         };
         return fromValue({ operation, data, stale: false, hasNext: false });
