@@ -177,6 +177,15 @@ impl std::fmt::Display for RuntimeConnectionId {
     }
 }
 
+/// What recording a runtime's connection did to the agents bound to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionRecorded {
+    /// The harness's agents are as they were.
+    AgentsUnchanged,
+    /// An agent was bound to the harness (a Macro computer's first agent).
+    AgentBound,
+}
+
 /// Durable attach/detach bookkeeping for harness runtime connections.
 ///
 /// The registry itself is in-process liveness; this is what lets the rest of
@@ -186,12 +195,13 @@ impl std::fmt::Display for RuntimeConnectionId {
 /// Methods take `Arc<Self>` and return owned futures so the registry can fire
 /// them from its own background tasks.
 pub trait HarnessPresence: Send + Sync + 'static {
-    /// A runtime attached for this harness.
+    /// A runtime attached for this harness. Says whether recording it bound
+    /// an agent to the harness.
     fn connected(
         self: Arc<Self>,
         harness: HarnessId,
         connection: RuntimeConnectionId,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+    ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>>;
 
     /// This connection closed. Other connections of the harness are unaffected.
     fn disconnected(

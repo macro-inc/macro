@@ -267,12 +267,9 @@ export function buildEmailQuery(
 
   // Newest activity first: `updated_at` is the thread's latest message time.
   return {
-    // Address, domain, and subject conditions, as aliases do, use GraphQL.
     ...(isExcludedEmailFolder(context.tab)
       ? { transport: 'rest' as const }
-      : context.aliasFilter || context.savedView
-        ? { transport: 'graphql' as const }
-        : {}),
+      : {}),
     params: {
       expand: true,
       limit: 100,

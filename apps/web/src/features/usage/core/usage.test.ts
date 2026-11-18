@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_AUTO_RELOAD,
-  isUsageAvailable,
   monthlyUsagePercent,
   parseDollarInput,
   validateAutoReload,
@@ -90,20 +89,4 @@ describe('Auto-Reload validation', () => {
       })
     ).toBeUndefined();
   });
-});
-
-describe('Usage rollout', () => {
-  it.each([
-    { production: false, flag: false, available: true },
-    { production: false, flag: true, available: true },
-    { production: false, flag: undefined, available: true },
-    { production: true, flag: false, available: false },
-    { production: true, flag: true, available: true },
-    { production: true, flag: undefined, available: false },
-  ])(
-    'production=$production flag=$flag yields available=$available',
-    ({ production, flag, available }) => {
-      expect(isUsageAvailable(production, flag)).toBe(available);
-    }
-  );
 });

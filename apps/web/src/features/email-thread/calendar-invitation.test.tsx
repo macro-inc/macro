@@ -13,7 +13,7 @@ import {
 } from '../email-message/core/calendar-invitation-fixtures';
 import { EmailCalendarInvitation } from './calendar-invitation';
 
-const calendarUi = vi.hoisted(() => ({ enabled: true, addSharedEvent: true }));
+const calendarUi = vi.hoisted(() => ({ addSharedEvent: true }));
 const copyState = vi.hoisted(() => ({ mutate: vi.fn() }));
 const queryState = vi.hoisted(() => ({
   failed: (): boolean => false,
@@ -60,7 +60,6 @@ vi.mock('@queries/calendar/calendars', () => ({
 vi.mock('@core/email-link', () => ({ useAddInboxFlow: () => vi.fn() }));
 vi.mock('@core/util/url', () => ({ openExternalUrl: vi.fn() }));
 vi.mock('../calendar/hooks/use-calendar-ui-flag', () => ({
-  useCalendarUiFlag: () => () => calendarUi.enabled,
   useCalendarAddSharedEventFlag: () => () => calendarUi.addSharedEvent,
 }));
 vi.mock('../calendar/hooks/create-calendar-rsvp-controller', () => ({
@@ -89,7 +88,6 @@ vi.mock('@ui', async () => ({
 }));
 afterEach(() => {
   cleanup();
-  calendarUi.enabled = true;
   calendarUi.addSharedEvent = true;
   copyState.mutate.mockReset();
 });
@@ -207,21 +205,6 @@ describe('email invitation production host', () => {
       );
     }
   );
-});
-
-it('shows the saved invitation without calendar state when the calendar UI is off', () => {
-  calendarUi.enabled = false;
-  render(() => (
-    <EmailCalendarInvitation
-      threadId="thread"
-      messageId="message"
-      invitation={invitationFixture}
-      hour12
-    />
-  ));
-  expect(screen.queryByText(/Calendar unavailable/)).toBeNull();
-  expect(screen.getByText(/Saved invitation/)).toBeTruthy();
-  expect(screen.queryByRole('group', { name: 'Your response' })).toBeNull();
 });
 
 describe('forwarded event email', () => {

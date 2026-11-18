@@ -1222,16 +1222,50 @@ impl SuggestionRepo for PgSuggestionRepo {
             == 1;
         if moved {
             cancel_run(&mut tx, id, now).await?;
-            sqlx::query!(
-                "UPDATE suggestion_entity SET waiting_since = NULL, waiting_from = NULL WHERE suggestion_id = $1",
-                id,
-            )
-            .execute(&mut *tx)
-            .await?;
+            clear_waiting(&mut tx, id).await?;
         }
         tx.commit().await?;
         Ok(moved)
     }
+
+    async fn answer(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        now: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        let moved = sqlx::query!(
+            r#"UPDATE suggestion
+               SET state = $4, state_reason = NULL, updated_at = $5, state_changed_at = $5
+               WHERE user_id = $1 AND id = $2 AND state = ANY($3)"#,
+            user.as_ref(),
+            id,
+            &state_names(&lifecycle::sources(LifecycleEvent::Answer)),
+            SuggestionState::Done.as_ref(),
+            now,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected()
+            == 1;
+        if moved {
+            clear_waiting(&mut tx, id).await?;
+        }
+        tx.commit().await?;
+        Ok(moved)
+    }
+}
+
+/// Forget the message suggestion `id` waited on: it was answered or ended.
+async fn clear_waiting(conn: &mut PgConnection, id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE suggestion_entity SET waiting_since = NULL, waiting_from = NULL WHERE suggestion_id = $1",
+        id,
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
 }
 
 #[async_trait::async_trait]

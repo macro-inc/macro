@@ -2,10 +2,13 @@
 //!
 //! Kept deliberately small: it says what Macro is in a paragraph, tells the model to call
 //! the `SelfKnowledge` tool, or in code mode read the `about_macro` guide (and
-//! read docs.macro.com), for anything more, and
+//! read macro.com/docs), for anything more, and
 //! pins down the terminology the model is most likely to confuse.
 
 use crate::types::StaticPrompt;
+
+#[cfg(test)]
+mod test;
 
 static TITLE: &str = "About Macro";
 
@@ -46,7 +49,7 @@ static INSTRUCTIONS: &str = concat!(
 
 When a user asks an open-ended question about Macro itself — what it is, what it's
 for, what it can do, or how to do something in Macro — call the SelfKnowledge tool.
-It returns an overview of Macro plus links into the docs (docs.macro.com) that you
+It returns an overview of Macro plus links into the docs (macro.com/docs) that you
 can read with WebFetch (`macro.web.fetch()` in code mode). Do not answer these questions from memory; your training
 data may be stale.
 
@@ -66,7 +69,7 @@ static CODE_MODE_INSTRUCTIONS: &str = concat!(
 When a user asks an open-ended question about Macro itself — what it is, what it's
 for, what it can do, or how to do something in Macro — call DescribeCodeTools with
 topics ["about_macro"]. It returns an overview of Macro plus links into the docs
-(docs.macro.com) that you can read with `macro.web.fetch()`. Do not answer these
+(macro.com/docs) that you can read with `macro.web.fetch()`. Do not answer these
 questions from memory; your training data may be stale.
 
 Watch for ambiguity. A message like "what is this for?" could mean "what is Macro

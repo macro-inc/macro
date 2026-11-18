@@ -2,6 +2,7 @@ import { onlineManager, QueryClient } from '@tanstack/solid-query';
 import { createRenderEffect, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { QueryAccount } from './account-scope';
+import { authKeys } from './keys';
 import {
   createUserNameCache,
   USER_NAME_CACHE_LIMITS as LIMITS,
@@ -409,4 +410,29 @@ it('arms one idle expiry timer for many reads and still expires each name on tim
   await vi.advanceTimersByTimeAsync(LIMITS.idleMs / 2);
   expect(cache.inspect().idle).toBe(0);
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it('labels the viewer from the restored identity when its own name lookup fails offline', async () => {
+  fetch.mockRejectedValue(new Error('offline'));
+  client.setQueryData(authKeys.userInfo.queryKey, {
+    authenticated: true,
+    id: VIEWER.userId,
+    name: 'Viewer Person',
+  });
+  let viewer: UserNameState | undefined;
+  let other: UserNameState | undefined;
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    createRenderEffect(() => {
+      viewer = cache.read(VIEWER.userId);
+      other = cache.read(PERSON);
+    });
+  });
+  await vi.advanceTimersByTimeAsync(10);
+  expect(viewer).toMatchObject({
+    loading: false,
+    name: { first_name: 'Viewer', last_name: 'Person' },
+  });
+  // Only the viewer has a durable label; other people keep the email fallback.
+  expect(other?.name).toBeUndefined();
 });

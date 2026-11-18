@@ -495,36 +495,6 @@ test('Cache actual logout cache lifecycle wipes the registered production host',
   await page.evaluate(() => window.cacheLifecycleHarness.dispose());
 });
 
-test('Cache actual GraphQL Soup selector stays default-off without browser cache resources', async ({
-  page,
-}, testInfo) => {
-  test.skip(
-    !testInfo.project.name.includes('production'),
-    'Cache rollout evidence requires the production bundle'
-  );
-  const requestedUrls: string[] = [];
-  page.on('request', (request) => requestedUrls.push(request.url()));
-  await page.goto(
-    testInfo.project.name.includes('production')
-      ? '/app/graphql-soup-rollout.html'
-      : '/graphql-soup-rollout.html'
-  );
-  await expect(page.locator('#result')).toHaveAttribute('data-status', 'ready');
-  const result = await page.evaluate(() =>
-    window.graphqlSoupRolloutHarness.resolveDefaultOff()
-  );
-  expect(result).toEqual({
-    cacheEnabled: false,
-    cacheHostPresent: false,
-    resources: { workerUrls: [], sharedWorkerUrls: [] },
-  });
-  expect(cacheResources(requestedUrls)).toEqual({
-    wasm: [],
-    engine: [],
-    coordinator: [],
-  });
-});
-
 test('Cache actual PostHog treatment override is lazy and kill applies on navigation', async ({
   page,
 }, testInfo) => {

@@ -19,10 +19,14 @@ code, not in its prompt. The harness also signs the scope into the credential
 - `src/scope.rs`: session scopes and the requests each allows. `generation`:
   reads by method, its own writes, and `POST_READS`; `no_send` (a background
   run that sends nothing): anything but `SENDS`, the requests that reach
-  someone else or start work with the person's full access (agent sessions,
-  session control, tool approvals, review decisions, running or rewriting
+  someone else, carry data out (web fetch and search), or start work with
+  the person's full access (agent sessions, session control, tool
+  approvals, review decisions, running or rewriting
   chat tool calls, and agents, bots, the computers they run on and their
-  credentials). The harness tests
+  credentials); `dry_run` (a routine step's dry run, signed with no
+  correlation): reads by method and `POST_READS`, nothing else, held to the
+  SDK catalog by the harness test `the_dry_run_scope_is_every_sdk_read_and_no_write`.
+  The harness tests
   `a_run_that_sends_nothing_is_refused_every_send_in_the_sdk` (every
   send-like SDK write is refused or reviewed, and every reviewed one is still
   allowed) and
@@ -49,15 +53,27 @@ code, not in its prompt. The harness also signs the scope into the credential
   imports need no route check. `refuse_sharing` is the body check for sharing
   that isn't a grant (link sharing) or that the grant writer can't see:
   documents, call records, initiatives, projects, chats, DSS threads and saved
-  views, CRM pipeline edits. A new such field or edit route joins that check.
+  views, CRM pipeline edits and email contribution activation. Rule validation
+  and count previews are `POST_READS`; they never grant sharing. Policy PUT
+  also belongs in `SENDS`, so `no_send` refuses it before the handler. A new such
+  field or edit route joins that check.
   Both record the refusal for `propagate`.
 - `src/verb.rs`: closed SDK display-verb vocabulary.
-- `src/inbound.rs`: optional signed-claim extractor and HTTP propagation
-  (`propagate` checks the signed scope, then scopes the validated
+- `src/inbound.rs`: optional signed-claim extractor and HTTP propagation.
+  It reads `macro_auth::credential::request_credential`, as authentication
+  does, and verifies every user token the request carries: the request is
+  held to every scope any verified token signs or is stored with, and the
+  narrowest is the one handlers see. Verified tokens of different users,
+  or credentials that can't be told apart, are refused 400
+  `conflicting_credentials` before any handler runs. `propagate` checks the signed scope, then scopes the validated
   correlation, its verb and the signed routine, and answers a request that
   recorded a sharing refusal with 403 `SharingRefused`, whatever error the
-  handler mapped it to). `enforce_signed_scope` is the
+  handler mapped it to. `enforce_signed_scope` is the
   check alone, for a service with no database to look a correlation up in.
+  `refuse_signed_scopes` refuses every request carrying a verified token
+  that signs a scope, for a
+  service no scope may reach at all (the image proxy, which fetches what
+  its caller names).
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 
 ## Boundaries
@@ -82,6 +98,12 @@ code, not in its prompt. The harness also signs the scope into the credential
   authority.
 - Do not check session state: accepted work can complete after a session ends.
 - A scope is matched against the request path: the SDK's path, alone or
-  under one gateway service prefix (`SERVICE_PREFIXES`). Never match by
+  under one gateway service prefix (`SERVICE_PREFIXES`), then alone or
+  under one API version (`/v1`; document storage, cognition and
+  notification serve every route under `/{version}`). Never match by
   suffix: `/web/search` is a write that ends like `/search`.
+- `ANY_WRITE` names GraphQL where document storage mounts it
+  (`/items/soup/graphql`); its test
+  `no_scope_reaches_graphql_where_it_is_mounted` builds the path from the
+  router's own constants, so a moved mount fails until the scope follows.
 - Session deletion cascades mappings; activity retains its existing entity lifecycle.

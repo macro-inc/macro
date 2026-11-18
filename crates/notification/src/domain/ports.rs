@@ -63,10 +63,13 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 
-    /// Get users who have unsubscribed from notifications for a specific item.
+    /// Get users who silenced a specific item for this notification: every
+    /// unsubscribed user, minus those who kept direct mentions when
+    /// `is_direct_mention` is set.
     fn get_unsubscribed_users<'a>(
         &self,
         item_id: &str,
+        is_direct_mention: bool,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 

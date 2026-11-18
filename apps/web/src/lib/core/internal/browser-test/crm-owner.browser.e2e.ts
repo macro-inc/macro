@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { scrollList } from './scroll-gesture';
 
 test('CRM keeps team owner options scoped and resolves chip suggestions without a directory catalog', async ({
   page,
@@ -39,13 +40,13 @@ test('CRM keeps team owner options scoped and resolves chip suggestions without 
   await expect(
     page.getByRole('option', { name: 'Person 0', exact: true })
   ).toBeVisible();
+  // Reaching the end of the list lists the next page below the first.
   const list = page.getByRole('listbox');
-  await list.hover();
-  await page.mouse.wheel(0, 3000);
-  await page.getByRole('option', { name: 'Next options', exact: true }).click();
-  await expect(
-    page.getByRole('option', { name: 'Person 50', exact: true })
-  ).toBeInViewport();
+  await scrollList(list, 3000);
+  const nextPage = page.getByRole('option', { name: 'Person 50', exact: true });
+  await expect(nextPage).toBeAttached();
+  await scrollList(list, 150);
+  await expect(nextPage).toBeInViewport();
   await input.fill('zxq');
   const match = page.getByRole('option', {
     name: 'Broader match',

@@ -15,15 +15,19 @@ afterEach(() => {
   setActiveScope('global');
 });
 
-function press(key: string, init: KeyboardEventInit = {}) {
+function press(
+  key: string,
+  init: KeyboardEventInit = {},
+  target: EventTarget = document
+) {
   const keydown = new KeyboardEvent('keydown', {
     key,
     bubbles: true,
     cancelable: true,
     ...init,
   });
-  document.dispatchEvent(keydown);
-  document.dispatchEvent(
+  target.dispatchEvent(keydown);
+  target.dispatchEvent(
     new KeyboardEvent('keyup', { key, bubbles: true, ...init })
   );
   document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }));
@@ -59,10 +63,6 @@ function renderEmail() {
       scopeId: emailScope,
       enabled: () => true,
       canSearch,
-      showList: () => {
-        handled.push('show list');
-        setListOnScreen(true);
-      },
     });
 
     return (
@@ -74,54 +74,39 @@ function renderEmail() {
               onFocus={() => handled.push('list search')}
             />
           </Show>
+          <textarea aria-label="Reply" />
         </div>
       </div>
     );
   });
   view.getByTestId('email').focus();
 
-  return { handled, setListOnScreen, setCanSearch };
+  return {
+    handled,
+    setListOnScreen,
+    setCanSearch,
+    reply: view.getByRole('textbox', { name: 'Reply' }),
+  };
 }
 
-it('focuses the list search while the list is on screen', () => {
+it('opens the search view with / while the list is on screen', () => {
   const email = renderEmail();
 
   press('/');
 
-  expect(email.handled).toEqual(['list search']);
+  expect(email.handled).toEqual(['search view']);
 });
 
-it('returns to the list and focuses its search once a thread replaces the list', () => {
+it('opens the search view with / once a thread or new email replaces the list', () => {
   const email = renderEmail();
   email.setListOnScreen(false);
 
   press('/');
 
-  expect(email.handled).toEqual(['show list', 'list search']);
+  expect(email.handled).toEqual(['search view']);
 });
 
-it('focuses the returning list search once per press', () => {
-  const email = renderEmail();
-  email.setListOnScreen(false);
-  press('/');
-
-  email.setListOnScreen(false);
-  email.setListOnScreen(true);
-
-  expect(email.handled).toEqual(['show list', 'list search']);
-});
-
-it('returns to the list search when the list comes back', () => {
-  const email = renderEmail();
-  email.setListOnScreen(false);
-  email.setListOnScreen(true);
-
-  press('/');
-
-  expect(email.handled).toEqual(['list search']);
-});
-
-it('leaves the key to the search view on a tab without search', () => {
+it('opens the search view with / on a tab without search', () => {
   const email = renderEmail();
   email.setCanSearch(false);
 
@@ -130,8 +115,29 @@ it('leaves the key to the search view on a tab without search', () => {
   expect(email.handled).toEqual(['search view']);
 });
 
+it('leaves / typed in a text field to the field', () => {
+  const email = renderEmail();
+  email.reply.focus();
+
+  const keydown = press('/', {}, email.reply);
+
+  expect(email.handled).toEqual([]);
+  expect(keydown.defaultPrevented).toBe(false);
+});
+
 it('focuses the list search with Cmd+F while the list is on screen', () => {
   const email = renderEmail();
+
+  const keydown = press('f', { ctrlKey: true });
+
+  expect(email.handled).toEqual(['list search']);
+  expect(keydown.defaultPrevented).toBe(true);
+});
+
+it('focuses the returning list search with Cmd+F once the list comes back', () => {
+  const email = renderEmail();
+  email.setListOnScreen(false);
+  email.setListOnScreen(true);
 
   const keydown = press('f', { ctrlKey: true });
 

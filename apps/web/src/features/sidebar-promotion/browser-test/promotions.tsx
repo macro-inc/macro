@@ -36,7 +36,17 @@ const CARDS: {
     },
     secondary: 'New channel',
   },
-  { sidebar: 'Calendar', copy: CALENDAR_ACCOUNTS_PROMOTION },
+  {
+    sidebar: 'Calendar',
+    copy: {
+      ...CALENDAR_ACCOUNTS_PROMOTION,
+      // As shown while the server offers this user Outlook connections.
+      logos: [
+        ...CALENDAR_ACCOUNTS_PROMOTION.logos,
+        CALENDAR_ACCOUNTS_PROMOTION.outlookLogo,
+      ],
+    },
+  },
   { sidebar: 'Pull requests', copy: PULL_REQUEST_REPOSITORIES_PROMOTION },
 ];
 

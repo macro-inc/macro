@@ -26,7 +26,8 @@ use entity_access::{
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
 use macro_authorization::{
-    BOT_TOKEN_HEADER, BotAuthentication, BotOnly, MacroAuthorizationRejection,
+    AnyPrincipal, BOT_TOKEN_HEADER, BotAuthentication, BotOnly, CredentialAttribution,
+    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationRejection,
     MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -207,6 +208,10 @@ fn caller_from_receipt(
 pub async fn create_channel_scoped_bot_handler<BotSvc, AccessSvc, Auth>(
     State(state): State<ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, AccessSvc, Auth>,
+    // The channel receipt drops the credential's attribution, which the mint
+    // refusal needs.
+    authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    headers: HeaderMap,
     Path(path): Path<ChannelPath>,
     Json(req): Json<CreateChannelScopedBotRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelScopedBotResponse>), ChannelBotWebhookHandlerErr>
@@ -215,6 +220,15 @@ where
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let attribution = match &authorization.authorization {
+        MacroAuthorization::User(user) => user.attribution(),
+        _ => CredentialAttribution::Person,
+    };
+    if super::axum_router::refuses_program_mint(attribution, &headers) {
+        return Err(ChannelBotWebhookHandlerErr::Forbidden(
+            super::axum_router::PROGRAM_MINT_REFUSAL,
+        ));
+    }
     let caller = caller_from_receipt(&access.entity_access_receipt)?;
     let response = state
         .bot_service
@@ -275,7 +289,10 @@ where
 {
     tracing::Span::current().record("channel_id", tracing::field::display(path.channel_id));
 
-    let content = parse_webhook_content(&headers, body)?;
+    let ChannelWebhookRequest {
+        content,
+        notification_policy,
+    } = parse_webhook_request(&headers, body)?;
     let access =
         webhook_access(&state, path.channel_id, preferred_authentication, &headers).await?;
 
@@ -287,7 +304,7 @@ where
                 id: None,
                 // External webhook bot posting on its own; no triggering user.
                 attribution: MessageAttribution::Unprompted,
-                notification_policy: Default::default(),
+                notification_policy,
                 content,
                 thread_id: None,
                 anchor: None,
@@ -331,26 +348,42 @@ fn channel_bot_token(headers: &HeaderMap) -> Result<&str, ChannelBotWebhookHandl
     Ok(token)
 }
 
-fn parse_webhook_content(
+/// Read a JSON request, or take a plain-text body as the content with the
+/// default notification policy.
+fn parse_webhook_request(
     headers: &HeaderMap,
     body: Bytes,
-) -> Result<String, ChannelBotWebhookHandlerErr> {
+) -> Result<ChannelWebhookRequest, ChannelBotWebhookHandlerErr> {
     if body.is_empty() {
         return Err(ChannelBotWebhookHandlerErr::BadRequest(
             "content is required",
         ));
     }
 
-    if is_json_body(headers)
-        && let Ok(request) = serde_json::from_slice::<ChannelWebhookRequest>(&body)
-    {
-        return require_non_empty_content(request.content);
+    if is_json_body(headers) {
+        if let Ok(request) = serde_json::from_slice::<ChannelWebhookRequest>(&body) {
+            return Ok(ChannelWebhookRequest {
+                content: require_non_empty_content(request.content)?,
+                notification_policy: request.notification_policy,
+            });
+        }
+        // A body that asks for a policy must get it, never fall back to
+        // posting itself as text with the default, which notifies everyone.
+        // Look at the raw text, since a malformed body can't be parsed.
+        if std::str::from_utf8(&body).is_ok_and(|text| text.contains("\"notification_policy\"")) {
+            return Err(ChannelBotWebhookHandlerErr::BadRequest(
+                "notification_policy must be Default, MentionsOnly or Silent, with content",
+            ));
+        }
     }
 
     let content = std::str::from_utf8(&body)
         .map_err(|_| ChannelBotWebhookHandlerErr::BadRequest("content must be valid UTF-8"))?
         .to_string();
-    require_non_empty_content(content)
+    Ok(ChannelWebhookRequest {
+        content: require_non_empty_content(content)?,
+        notification_policy: Default::default(),
+    })
 }
 
 fn is_json_body(headers: &HeaderMap) -> bool {
@@ -379,6 +412,9 @@ pub enum ChannelBotWebhookHandlerErr {
     /// Bad request.
     #[error("{0}")]
     BadRequest(&'static str),
+    /// The caller may not do this.
+    #[error("{0}")]
+    Forbidden(&'static str),
     /// Bot service error.
     #[error(transparent)]
     Bot(#[from] BotError),
@@ -397,7 +433,7 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
                 StatusCode::CONFLICT
             }
             Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
-            Self::Message(MessageError::Forbidden) => StatusCode::FORBIDDEN,
+            Self::Message(MessageError::Forbidden) | Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::Bot(BotError::NotFound(_)) | Self::Message(MessageError::NotFound) => {
                 StatusCode::NOT_FOUND
             }

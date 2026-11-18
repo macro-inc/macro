@@ -16,6 +16,8 @@ export type DriveHostActions = {
     location?: SearchLocation,
     newSplit?: boolean
   ) => void;
+  /** Opens a sidebar shortcut at My Files, naming no location. */
+  openShortcut: (entity: EntityData, event: MouseEvent) => void;
   openFavorite: (favorite: Favorite, name: string, event: MouseEvent) => void;
   openCreated: OpenCreatedItem;
   openFolderInNewSplit: (folder: ProjectEntity) => void;

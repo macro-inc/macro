@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One application UUIDv7 identifies this scheduling batch within each member slot.\n-- Existing privacy actions schedule legacy history unchanged. Once a member has\n-- an incarnation, capture it at this authorized producer, never at consumption.\nWITH candidates AS MATERIALIZED (\n    SELECT team_id, user_id, link_id, consent_incarnation, policy_version\n    FROM crm_email_consent\n    WHERE team_id = $1 AND ($2::text IS NULL OR user_id = $2)\n      AND (enabled OR selected_enabled)\n), modern AS (\n    INSERT INTO crm_email_policy_work\n        (team_id, user_id, link_id, consent_incarnation, policy_version, work_id, traceparent)\n    SELECT team_id, user_id, link_id, consent_incarnation, policy_version, $4, $3\n    FROM candidates WHERE consent_incarnation IS NOT NULL\n    ON CONFLICT (team_id, user_id) DO UPDATE SET link_id = EXCLUDED.link_id,\n        consent_incarnation = EXCLUDED.consent_incarnation, policy_version = EXCLUDED.policy_version,\n        work_id = EXCLUDED.work_id, after_thread_id = NULL, after_contact_address = NULL,\n        received_pass = FALSE, requested_at = now(), traceparent = EXCLUDED.traceparent\n    RETURNING team_id, user_id, link_id, consent_incarnation, policy_version, work_id\n)\nINSERT INTO crm_email_backfill_outbox\n    (team_id, user_id, link_id, consent_incarnation, policy_version, work_id, traceparent)\nSELECT team_id, user_id, link_id, consent_incarnation, policy_version, work_id, $3 FROM modern\nUNION ALL\nSELECT team_id, user_id, NULL::uuid, NULL::uuid, NULL::bigint, NULL::uuid, $3\nFROM candidates WHERE consent_incarnation IS NULL\nON CONFLICT (team_id, user_id) DO UPDATE SET link_id = EXCLUDED.link_id,\n    consent_incarnation = EXCLUDED.consent_incarnation, policy_version = EXCLUDED.policy_version,\n    work_id = EXCLUDED.work_id, traceparent = EXCLUDED.traceparent, requested_at = now()\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a51ebcdc0ae451d78753aef47774a0d411ac2d819dccdb5df9d73d4a667f5e81"
+}

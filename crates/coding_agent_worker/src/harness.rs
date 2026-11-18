@@ -24,7 +24,7 @@ use agent_runtime_protocol::domain::connection::{
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
-use tokio::sync::oneshot;
+use tokio::sync::{Notify, oneshot};
 use tokio::task::JoinSet;
 
 #[cfg(test)]
@@ -71,6 +71,8 @@ pub enum BridgeEnd {
 /// its turns in `turns` and handing every ACP line to `tap` when there is
 /// one. `handoff` asks the bridge to stop at a line boundary and hand the
 /// agent over instead.
+/// `agents_changed` is raised when the service says the agents bound to this
+/// harness may have changed.
 #[expect(clippy::too_many_arguments, reason = "the bridge's whole input")]
 pub async fn bridge(
     harness: &Harness,
@@ -81,6 +83,7 @@ pub async fn bridge(
     adopted: Option<RunningAgent>,
     handoff: &mut Handoffs,
     computer: Option<Arc<Computer>>,
+    agents_changed: &Notify,
 ) -> Result<BridgeEnd, BridgeError> {
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
@@ -126,6 +129,7 @@ pub async fn bridge(
                 turns,
                 handoff,
                 computer.as_ref(),
+                agents_changed,
             )
             .await
         }
@@ -200,6 +204,7 @@ enum Relayed {
     HandedOff(()),
 }
 
+#[expect(clippy::too_many_arguments, reason = "the relay's whole input")]
 async fn relay(
     mut agent: AttachedAgent,
     to_service_slot: &mut Option<tokio::sync::mpsc::UnboundedSender<ToServerMessage>>,
@@ -208,6 +213,7 @@ async fn relay(
     turns: &ActiveTurns,
     handoff: &mut Handoffs,
     computer: Option<&Arc<Computer>>,
+    agents_changed: &Notify,
 ) -> Result<Relayed, BridgeError> {
     let to_service = to_service_slot
         .clone()
@@ -278,6 +284,7 @@ async fn relay(
                             let _ = to_service.send(ToServerMessage::ModelProbeResponse { result });
                         });
                     }
+                    Some(ToRuntimeMessage::AgentsChanged) => agents_changed.notify_one(),
                     Some(other) => tracing::debug!(message = ?other, "ignoring an unknown runtime message"),
                     None => return Ok(Relayed::Closed),
                 }

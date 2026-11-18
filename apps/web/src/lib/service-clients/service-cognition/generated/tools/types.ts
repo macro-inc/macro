@@ -1212,6 +1212,57 @@ export type ColumnType =
  */
 export type SpelledColumnType = string;
 /**
+ * Search by app name, then inspect a returned slug before recommending auth.
+ */
+export type DiscoveryRequest =
+  | {
+      /**
+       * App name, e.g. "Notion" or "Linear", not a task description.
+       */
+      query: string;
+      operation: 'search';
+    }
+  | {
+      /**
+       * Exact app slug from search results.
+       */
+      app_slug: string;
+      operation: 'inspect';
+    };
+/**
+ * Discovery results never execute tools or change connections.
+ */
+export type DiscoveryResult =
+  | {
+      /**
+       * Matching apps.
+       */
+      apps: DiscoveredApp[];
+      /**
+       * Narrow the app name if this is true.
+       */
+      more_results: boolean;
+      operation: 'search';
+    }
+  | {
+      app: DiscoveredApp;
+      /**
+       * Whether this caller has an enabled connection. For an app that
+       * connects through its own MCP server, that connection is checked
+       * there, not in Pipedream.
+       */
+      connected: boolean;
+      /**
+       * Advertised tools. Use SearchTools after connecting to load them.
+       */
+      tools: ConnectorTool[];
+      /**
+       * True when some advertised tools were omitted.
+       */
+      tools_truncated: boolean;
+      operation: 'inspect';
+    };
+/**
  * The kind of item to duplicate.
  */
 export type DuplicableEntityType = 'document' | 'database' | 'chat';
@@ -4843,12 +4894,7 @@ export type WebSearchTopic = 'general' | 'news';
 /**
  * Available SDK workflow guides.
  */
-export type CodeGuideTopic =
-  | 'search'
-  | 'ai'
-  | 'templates'
-  | 'examples'
-  | 'about_macro';
+export type CodeGuideTopic = 'search' | 'ai' | 'templates' | 'examples';
 /**
  * How the Jev relevance pass ended.
  */
@@ -5008,57 +5054,6 @@ export type ToolActivityAction =
         [k: string]: unknown;
       };
       type: 'unknown';
-    };
-/**
- * Search by app name, then inspect a returned slug before recommending auth.
- */
-export type DiscoveryRequest =
-  | {
-      /**
-       * App name, e.g. "Notion" or "Linear", not a task description.
-       */
-      query: string;
-      operation: 'search';
-    }
-  | {
-      /**
-       * Exact app slug from search results.
-       */
-      app_slug: string;
-      operation: 'inspect';
-    };
-/**
- * Discovery results never execute tools or change connections.
- */
-export type DiscoveryResult =
-  | {
-      /**
-       * Matching apps.
-       */
-      apps: DiscoveredApp[];
-      /**
-       * Narrow the app name if this is true.
-       */
-      more_results: boolean;
-      operation: 'search';
-    }
-  | {
-      app: DiscoveredApp;
-      /**
-       * Whether this caller has an enabled connection. For an app that
-       * connects through its own MCP server, that connection is checked
-       * there, not in Pipedream.
-       */
-      connected: boolean;
-      /**
-       * Advertised tools. Use SearchTools after connecting to load them.
-       */
-      tools: ConnectorTool[];
-      /**
-       * True when some advertised tools were omitted.
-       */
-      tools_truncated: boolean;
-      operation: 'inspect';
     };
 
 /**
@@ -7159,7 +7154,7 @@ export interface BookingLinkEvent {
   /**
    * Attach a Macro call when someone books. A join link is created for that
    * booking and written onto the calendar invitation. Mutually exclusive
-   * with `googleMeet`. Prefer this for a Macro booking; omit or false when
+   * with `googleMeet`. Set it when the user wants a Macro call; omit or false when
    * the link should use Google Meet or no video. False is omitted so drafts
    * saved before this field still round-trip unchanged.
    */
@@ -9110,6 +9105,52 @@ export interface ToolRelation {
    * Table whose row ids this relation stores.
    */
   tableId: string;
+}
+/**
+ * Find an integration when an external app is missing or a workflow requires an unconnected account, including native import tools that need a connector. Use SearchTools for available actions. Search by app name, then inspect a returned app_slug to see its actual tools and connection status. Only recommend connecting if an advertised tool supports the task; an app's name alone is not evidence. Inspection does not load or execute tools. If suitable and unconnected, include the returned connect_markup in your reply and explain what connecting enables. After connection, use SearchTools again in the same agent session to load and call the new tools.
+ */
+export interface DiscoverConnectors {
+  request: DiscoveryRequest;
+}
+/**
+ * Discovery metadata and optional markup for a user-controlled auth flow.
+ */
+export interface DiscoverConnectorsResponse {
+  result: DiscoveryResult;
+  /**
+   * Include verbatim only if an advertised tool supports the requested task.
+   */
+  connect_markup?: string | null;
+}
+/**
+ * A verified app identity from the directory.
+ */
+export interface DiscoveredApp {
+  /**
+   * Exact identity to inspect or connect.
+   */
+  app_slug: string;
+  /**
+   * Human-readable app name.
+   */
+  name: string;
+  /**
+   * Directory description; inspect tools to verify specific capabilities.
+   */
+  description?: string | null;
+}
+/**
+ * An advertised action, not a tool loaded into the current turn.
+ */
+export interface ConnectorTool {
+  /**
+   * Upstream tool name.
+   */
+  name: string;
+  /**
+   * What the action supports.
+   */
+  description: string;
 }
 /**
  * Start a new coding agent session for a task using an agent returned by ListCodingAgents. Pass a self-contained task with the relevant repository, requirements, findings, and acceptance criteria; the coding agent does not inherit this conversation. Returns a live session reference after its first prompt is accepted, not completed code. Dispatch once per task and do not retry automatically after an uncertain failure.
@@ -11481,7 +11522,7 @@ export interface ImportPipelineCsvResponse {
  */
 export interface IssueBotCredential {
   /**
-   * Bot id from CreateBot or ListBots (macro.bots.list() in ExecuteCode).
+   * Bot id from CreateBot or ListBots.
    */
   botId: string;
   /**
@@ -15150,7 +15191,7 @@ export interface RenameItemResponse {
   name: string;
 }
 /**
- * See a read-only PNG photo of a Macro canvas using the actual Canvas shape/text renderer. Returns a native image plus an immutable revision, source clock, world crop bounds and object IDs. Use for visual/layout understanding and to review edits. Optional item_ids fit a selection; crop requests precise world bounds. No UI, cursors or ghosts are included. Referenced media not accessible to this scoped renderer is explicitly marked unavailable; this tool never fetches arbitrary URLs or expands reference permissions. Image pixels map linearly across crop bounds; use ReadCanvas (canvas().scene() in ExecuteCode) for exact geometry.
+ * See a read-only PNG photo of a Macro canvas using the actual Canvas shape/text renderer. Returns a native image plus an immutable revision, source clock, world crop bounds and object IDs. Use for visual/layout understanding and to review edits. Optional item_ids fit a selection; crop requests precise world bounds. No UI, cursors or ghosts are included. Referenced media not accessible to this scoped renderer is explicitly marked unavailable; this tool never fetches arbitrary URLs or expands reference permissions. Image pixels map linearly across crop bounds; use ReadCanvas for exact geometry.
  */
 export interface RenderCanvas {
   /**
@@ -15431,7 +15472,7 @@ export interface SearchToolsResponse {
   already_available?: string[];
 }
 /**
- * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch (macro.web.fetch() in ExecuteCode) on the relevant page for details and cite it.
+ * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at macro.com/docs; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
  */
 export type SelfKnowledge = {};
 /**
@@ -15439,7 +15480,7 @@ export type SelfKnowledge = {};
  */
 export interface SelfKnowledgeResponse {
   /**
-   * An overview of Macro and a routing map into the docs at docs.macro.com.
+   * An overview of Macro and a routing map into the docs at macro.com/docs.
    */
   about: string;
 }
@@ -15463,6 +15504,10 @@ export interface SendChannelMessage {
    * Optional images, videos, or documents to attach, at most 10. Upload media before sending; a media attachment whose upload has not finished shows as broken.
    */
   attachments?: ChannelMessageAttachmentInput[];
+  /**
+   * Send without notifying anyone, mentioned people included: no push, email or inbox entry. The message still appears in the channel. Use it for routine updates nobody needs to be alerted to.
+   */
+  silent?: boolean;
 }
 /**
  * An attachment to send with a channel message.
@@ -16625,7 +16670,7 @@ export interface CodeGuide {
  *
  * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline. Read and edit canvases with document.canvas(). Read, calculate and edit native spreadsheets with macro.documents.spreadsheet(document).
  *
- * Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; for each item you create or point the user to, return its webUrl() as the URL rather than building one; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
+ * Start every program with a brief comment saying what it does. Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; for each item you create or point the user to, return its webUrl() as the URL rather than building one; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
  *
  * For a workspace overview, fetch small pages for the relevant categories concurrently in one execution with macro.workspace.page({includeTypes:[type], limit:3}). A single mixed page can be dominated by one category; each page is a sample, not a category total. Return selected metadata and hasMore per category, not whole items or snapshots. Exact workspace types include agent_session, calendar_event, ai_chat and channel_thread. Tasks are documents: use includeTypes:["document"], df:{l:{dst:"task"}}. AST & and | combine exactly two expressions; do not wrap a single filter.
  *
@@ -16868,50 +16913,4 @@ export interface ToolActivityEvent {
    * When the action occurred.
    */
   occurredAt: string;
-}
-/**
- * Find an integration when an external app is missing or a workflow requires an unconnected account. Search by app name, then inspect a returned app_slug to see its actual tools and connection status.
- */
-export interface DiscoverConnectors {
-  request: DiscoveryRequest;
-}
-/**
- * Discovery metadata and optional markup for a user-controlled auth flow.
- */
-export interface DiscoverConnectorsResponse {
-  result: DiscoveryResult;
-  /**
-   * Include verbatim only if an advertised tool supports the requested task.
-   */
-  connect_markup?: string | null;
-}
-/**
- * A verified app identity from the directory.
- */
-export interface DiscoveredApp {
-  /**
-   * Exact identity to inspect or connect.
-   */
-  app_slug: string;
-  /**
-   * Human-readable app name.
-   */
-  name: string;
-  /**
-   * Directory description; inspect tools to verify specific capabilities.
-   */
-  description?: string | null;
-}
-/**
- * An advertised action, not a tool loaded into the current turn.
- */
-export interface ConnectorTool {
-  /**
-   * Upstream tool name.
-   */
-  name: string;
-  /**
-   * What the action supports.
-   */
-  description: string;
 }

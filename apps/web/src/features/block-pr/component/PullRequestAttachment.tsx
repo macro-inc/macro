@@ -46,7 +46,7 @@ export function PullRequestAttachment(props: { id: string }) {
       {(loaded) => (
         <PullRequestEntityLink
           entity={loaded()}
-          class="h-6 rounded-md border border-edge-muted/50 px-2 text-sm"
+          class="h-6 max-w-full rounded-md border border-edge-muted/50 px-2 text-sm"
         />
       )}
     </Show>

@@ -2,7 +2,7 @@ import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const agentSessionKeys = createQueryKeys('agentSessionMentions', {
   detail: (id: string) => ({ queryKey: [id] }),
-  preview: (id: string, graphql: boolean) => ({ queryKey: [id, graphql] }),
+  preview: (id: string) => ({ queryKey: [id] }),
 });
 
 /**

@@ -31,12 +31,20 @@ function type(field: HTMLElement, key: string, init: KeyboardEventInit = {}) {
 }
 
 function setup(
-  options: { search?: string; selected?: number; overridden?: boolean } = {}
+  options: {
+    search?: string;
+    selected?: number;
+    overridden?: boolean;
+    /** The search found nothing, so the list has no first row. */
+    empty?: boolean;
+    recent?: string[];
+  } = {}
 ) {
   const [search, setSearch] = createSignal(options.search ?? '');
   const [selected, setSelected] = createSignal(options.selected ?? 0);
+  const [active, setActive] = createSignal(-1);
   const focusResults = vi.fn();
-  const goToFirst = vi.fn(() => true);
+  const goToFirst = vi.fn(() => !options.empty);
   const backToDefaultTab = vi.fn(() => true);
   let list!: HTMLDivElement;
 
@@ -59,6 +67,16 @@ function setup(
             list.focus();
           }}
           registerFocus={() => {}}
+          suggestions={
+            options.recent
+              ? {
+                  count: () => options.recent?.length ?? 0,
+                  active,
+                  setActive,
+                  pick: (index) => setSearch(options.recent?.[index] ?? ''),
+                }
+              : undefined
+          }
         />
       </SplitPanelContext.Provider>
     );
@@ -164,6 +182,48 @@ it('moves from the field to the first result on ArrowDown and on Enter', () => {
   expect(document.activeElement).toBe(list());
   expect(goToFirst).toHaveBeenCalledTimes(2);
   expect(search()).toBe('budget');
+});
+
+it('keeps ArrowDown and Enter in the field when the search found nothing', () => {
+  const { field, search, focusResults, goToFirst } = setup({
+    search: 'zzz',
+    empty: true,
+  });
+
+  field().focus();
+  type(field(), 'ArrowDown');
+  expect(document.activeElement).toBe(field());
+
+  type(field(), 'Enter');
+  expect(document.activeElement).toBe(field());
+  expect(goToFirst).toHaveBeenCalledTimes(2);
+  expect(focusResults).not.toHaveBeenCalled();
+  expect(search()).toBe('zzz');
+});
+
+it('stays in the field past the last suggestion when the search found nothing', () => {
+  const { field } = setup({ search: 'bu', empty: true, recent: ['budget'] });
+
+  field().focus();
+  type(field(), 'ArrowDown');
+  type(field(), 'ArrowDown');
+
+  expect(document.activeElement).toBe(field());
+});
+
+it('moves to the list for a picked suggestion before its rows arrive', () => {
+  const { field, search, list } = setup({
+    search: 'bu',
+    empty: true,
+    recent: ['budget'],
+  });
+
+  field().focus();
+  type(field(), 'ArrowDown');
+  type(field(), 'Enter');
+
+  expect(search()).toBe('budget');
+  expect(document.activeElement).toBe(list());
 });
 
 it('turns off the browser history popup that would take the arrow keys', () => {

@@ -262,7 +262,7 @@ pub enum CodeGuideTopic {
     Templates,
     /// Worked examples: check-then-create in one execution, email triage, extraction.
     Examples,
-    /// What Macro is and a map of the docs at docs.macro.com, for questions
+    /// What Macro is and a map of the docs at macro.com/docs, for questions
     /// about Macro itself.
     AboutMacro,
 }

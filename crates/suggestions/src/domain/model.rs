@@ -895,12 +895,12 @@ pub struct Change {
     pub at: DateTime<Utc>,
 }
 
-/// Why code resolved a suggestion, as stored in `state_reason`.
+/// Why code resolved a suggestion, as stored in `state_reason`. The person
+/// answering a reply suggestion doesn't resolve it but makes it done; rows
+/// resolved before that keep `replied`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum ResolveReason {
-    /// The person answered what the suggestion asked them to answer.
-    Replied,
     /// An item it is about was deleted.
     Deleted,
     /// The person can no longer open an item it is about.

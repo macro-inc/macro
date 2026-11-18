@@ -20,7 +20,10 @@ const ImportJobsTray = lazyNamed(
   'ImportJobsTray'
 );
 
-/** A column centered above the mobile dock, `lift` higher than its usual spot. */
+/**
+ * A column centered above the mobile dock, `lift` higher than its usual spot,
+ * within the horizontal safe area so it stays clear of system control columns.
+ */
 function MobileToastStack(props: {
   ref?: (element: HTMLDivElement) => void;
   class: string;
@@ -31,7 +34,7 @@ function MobileToastStack(props: {
     <div
       ref={props.ref}
       class={cn(
-        'fixed left-1/2 -translate-x-1/2 w-full max-w-lg px-(--mobile-chrome-gutter) pointer-events-none flex flex-col gap-5',
+        'fixed left-(--safe-left) right-(--safe-right) mx-auto max-w-lg px-(--mobile-chrome-gutter) pointer-events-none flex flex-col gap-5',
         props.class
       )}
       style={{

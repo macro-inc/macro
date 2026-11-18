@@ -1,6 +1,7 @@
 import type { Form } from '@service-storage/generated/schemas/form';
 import type { FormDetail } from '@service-storage/generated/schemas/formDetail';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
+import { type QueryKey, QueryObserver } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { renameDatabase } from '../../../features/block-database/queries/rename-database';
@@ -27,10 +28,6 @@ vi.mock('../preview/fetchers', () => ({
 vi.mock('../preview/graphql', () => ({
   isGraphqlPreviewItem: () => false,
 }));
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  isFeatureEnabled: () => false,
-}));
 vi.mock('@service-connection/client', () => ({
   useEntitySubscription: vi.fn(),
 }));
@@ -41,7 +38,22 @@ vi.mock('@service-connection/websocket', () => ({
   ) => messages.push(callback),
 }));
 
+const observers: (() => void)[] = [];
+
+/** Mounts a card on a cached preview; returns the spy its refreshes call. */
+function observeCard(key: QueryKey) {
+  const refresh = vi.fn(async () => queryClient.getQueryData<PreviewItem>(key));
+  const observer = new QueryObserver(queryClient, {
+    queryKey: key,
+    queryFn: refresh,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  observers.push(observer.subscribe(() => {}));
+  return refresh;
+}
+
 afterEach(() => {
+  for (const unsubscribe of observers.splice(0)) unsubscribe();
   queryClient.clear();
   messages.length = 0;
 });
@@ -131,15 +143,17 @@ it('refreshes only this form’s card preview when its shared facts change', () 
     rawName: 'Offsite',
     owner: 'macro|owner@example.com',
   });
+  const currentRefresh = observeCard(current);
+  const otherRefresh = observeCard(other);
   const dispose = createRoot((dispose) => {
     useFormChangedSync(() => 'workshop');
     return dispose;
   });
   messages[0]({ type: 'form_changed', data: { formId: 'offsite' } });
-  expect(queryClient.getQueryState(current)?.isInvalidated).toBe(false);
+  expect(currentRefresh).not.toHaveBeenCalled();
   messages[0]({ type: 'form_changed', data: { formId: 'workshop' } });
-  expect(queryClient.getQueryState(current)?.isInvalidated).toBe(true);
-  expect(queryClient.getQueryState(other)?.isInvalidated).toBe(false);
+  expect(currentRefresh).toHaveBeenCalledOnce();
+  expect(otherRefresh).not.toHaveBeenCalled();
   dispose();
 });
 
@@ -191,6 +205,8 @@ it('refreshes the linked database’s card after renaming a form, without guessi
     rawName: 'Budget',
     owner: 'macro|owner@example.com',
   });
+  const linkedRefresh = observeCard(linked);
+  const unrelatedRefresh = observeCard(unrelated);
 
   const result = await renameForm(
     {
@@ -210,11 +226,11 @@ it('refreshes the linked database’s card after renaming a form, without guessi
   );
 
   expect(result.isOk()).toBe(true);
-  expect(queryClient.getQueryState(linked)?.isInvalidated).toBe(true);
+  expect(linkedRefresh).toHaveBeenCalledOnce();
   expect(queryClient.getQueryData(linked)).toMatchObject({
     rawName: 'Untitled form',
   });
-  expect(queryClient.getQueryState(unrelated)?.isInvalidated).toBe(false);
+  expect(unrelatedRefresh).not.toHaveBeenCalled();
 });
 
 it('refreshes the cards of the forms over a renamed database, and only theirs', async () => {
@@ -327,6 +343,9 @@ it('refreshes the cards of the forms over a renamed database, and only theirs', 
     rawName: 'Offsite',
     owner: 'macro|owner@example.com',
   });
+  const workshopRefresh = observeCard(workshop);
+  const feedbackRefresh = observeCard(feedback);
+  const offsiteRefresh = observeCard(offsite);
 
   const result = await renameDatabase(
     {
@@ -345,10 +364,10 @@ it('refreshes the cards of the forms over a renamed database, and only theirs', 
   );
 
   expect(result.isOk()).toBe(true);
-  expect(queryClient.getQueryState(workshop)?.isInvalidated).toBe(true);
-  expect(queryClient.getQueryState(feedback)?.isInvalidated).toBe(true);
+  expect(workshopRefresh).toHaveBeenCalledOnce();
+  expect(feedbackRefresh).toHaveBeenCalledOnce();
   expect(queryClient.getQueryData(feedback)).toMatchObject({
     rawName: 'Session feedback',
   });
-  expect(queryClient.getQueryState(offsite)?.isInvalidated).toBe(false);
+  expect(offsiteRefresh).not.toHaveBeenCalled();
 });

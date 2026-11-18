@@ -85,7 +85,6 @@ export default {
   filterList: 'Filter list',
   clearFilters: 'Clear filters',
   showHiddenRoutineRuns: 'Show hidden routine runs',
-  nextOptions: 'Next options',
   retryOptions: 'Retry options',
 
   // Filter menu

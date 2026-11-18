@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   setData: vi.fn(),
   invalidate: vi.fn(),
   refetch: vi.fn(),
-  graphql: vi.fn(),
   refreshGraphql: vi.fn(),
   fetchThread: vi.fn(),
   cacheEnabled: vi.fn(() => true),
@@ -21,10 +20,6 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { reminders: { setEmailFollowup: mocks.write } },
-}));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: 'graphql',
-  isFeatureEnabled: mocks.graphql,
 }));
 vi.mock('../client', () => ({
   queryClient: {
@@ -59,15 +54,12 @@ beforeEach(() => {
   mocks.write.mockResolvedValue(ok(result));
 });
 describe('email follow-up cache reconciliation', () => {
-  it('refreshes REST thread and preview state after persistence', async () => {
+  it('refreshes preview and reminder state after persistence', async () => {
     const after = vi.fn();
     await expect(
       executeEmailFollowup('thread', command, after)
     ).resolves.toEqual(result);
     expect(after).toHaveBeenCalledWith(result);
-    expect(mocks.invalidate).toHaveBeenCalledWith({
-      queryKey: emailKeys.threadMessages('thread').queryKey,
-    });
     expect(mocks.invalidate).toHaveBeenCalledWith({
       queryKey: emailKeys.previews._def,
     });
@@ -77,10 +69,8 @@ describe('email follow-up cache reconciliation', () => {
     expect(mocks.invalidate).toHaveBeenCalledWith({
       queryKey: reminderKeys.email('thread').queryKey,
     });
-    expect(mocks.refreshGraphql).not.toHaveBeenCalled();
   });
   it('reads the thread again, and only the lists the cache does not maintain', async () => {
-    mocks.graphql.mockReturnValue(true);
     mocks.cacheEnabled.mockReturnValue(true);
     await executeEmailFollowup('thread', command);
     expect(mocks.fetchThread).toHaveBeenCalledWith('thread');
@@ -89,7 +79,6 @@ describe('email follow-up cache reconciliation', () => {
     });
   });
   it('refreshes GraphQL lists and the thread even when host navigation fails', async () => {
-    mocks.graphql.mockReturnValue(true);
     mocks.cacheEnabled.mockReturnValue(false);
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
