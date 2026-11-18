@@ -40,7 +40,6 @@ agent_changes = { path = "../../crates/agent_changes" }
 agent_code_mode = { path = "../../crates/agent_code_mode" }
 agent_permissions = { path = "../../crates/agent_permissions" }
 agent_egress = { path = "../../crates/agent_egress" }
-agent_permissions = { path = "../../crates/agent_permissions" }
 agent_git = { path = "../../crates/agent_git" }
 agent_fold = { path = "../../crates/folds/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }

@@ -9,6 +9,7 @@ description = "Per-agent tool permissions: which SDK operations an agent's code 
 agent_correlation = { path = "../agent_correlation" }
 agent_fold = { path = "../folds/agent_fold", default-features = false }
 agent_permission_registry = { path = "../agent_permission_registry", features = ["openapi"] }
+ai_toolset = { path = "../ai_toolset" }
 async-trait = { workspace = true }
 axum = { workspace = true }
 bot_id = { path = "../bot_id", features = ["schema"] }

@@ -114,7 +114,10 @@ impl AgentPermissions for FakePermissions {
                         label: format!("Do {}", key.operation),
                     }),
                     state: if known {
-                        self.0.get(&name).copied().unwrap_or(PermissionState::Always)
+                        self.0
+                            .get(&name)
+                            .copied()
+                            .unwrap_or(PermissionState::Always)
                     } else {
                         PermissionState::Never
                     },
@@ -165,10 +168,7 @@ pub(crate) struct Prompters(pub Mutex<Vec<TurnPrompter>>);
 
 #[async_trait]
 impl TurnPrompters for Prompters {
-    async fn current(
-        &self,
-        _: AgentSessionId,
-    ) -> Result<Option<TurnPrompter>, rootcause::Report> {
+    async fn current(&self, _: AgentSessionId) -> Result<Option<TurnPrompter>, rootcause::Report> {
         let mut turns = self.0.lock().unwrap();
         Ok(if turns.len() > 1 {
             Some(turns.remove(0))
@@ -240,7 +240,13 @@ fn not_run(result: Result<impl std::fmt::Debug, CodeModeError>) -> NotRun {
 }
 
 fn two_calls() -> Analysis {
-    Analysis::Calls([call("email", "send_message"), call("storage", "get_document")].into())
+    Analysis::Calls(
+        [
+            call("email", "send_message"),
+            call("storage", "get_document"),
+        ]
+        .into(),
+    )
 }
 
 #[tokio::test]
@@ -360,7 +366,10 @@ async fn a_program_that_cannot_be_analyzed_or_compiled_is_returned_to_rewrite() 
             .await,
     );
     assert_eq!(refused.permission, None);
-    assert_eq!(refused.message, "Error: Unbound value x\n    at main.ml:1:9");
+    assert_eq!(
+        refused.message,
+        "Error: Unbound value x\n    at main.ml:1:9"
+    );
 
     // The analyzer failing is the service's: nothing runs.
     let mut parts = gate(two_calls(), &[], ToolApprovalStatus::Approved, true);
@@ -397,7 +406,13 @@ async fn an_ask_operation_holds_for_the_runs_account_and_runs_on_approval() {
     let actor = MacroUserIdStr::try_from_email("actor@macro.com").unwrap();
     parts
         .gate
-        .hold(&checked, &identity, &actor, "the source", &CancellationToken::new())
+        .hold(
+            &checked,
+            &identity,
+            &actor,
+            "the source",
+            &CancellationToken::new(),
+        )
         .await
         .unwrap();
     let held = parts.holds.held.lock().unwrap();
@@ -447,8 +462,16 @@ async fn nothing_to_ask_holds_nothing() {
 #[tokio::test]
 async fn a_declined_or_expired_hold_does_not_run() {
     for (answer, status, words) in [
-        (ToolApprovalStatus::Denied, DeclinedStatus::Denied, "declined"),
-        (ToolApprovalStatus::Expired, DeclinedStatus::Expired, "in time"),
+        (
+            ToolApprovalStatus::Denied,
+            DeclinedStatus::Denied,
+            "declined",
+        ),
+        (
+            ToolApprovalStatus::Expired,
+            DeclinedStatus::Expired,
+            "in time",
+        ),
         (
             ToolApprovalStatus::Cancelled,
             DeclinedStatus::Cancelled,
@@ -481,7 +504,11 @@ async fn a_declined_or_expired_hold_does_not_run() {
                 .await,
         );
         assert!(refused.message.contains(words), "{}", refused.message);
-        assert!(refused.message.ends_with("It needed approval for: Do send_message."));
+        assert!(
+            refused
+                .message
+                .ends_with("It needed approval for: Do send_message.")
+        );
         assert!(matches!(
             refused.permission,
             Some(ExecutionPermission::Declined { status: got, ref operations }) if got == status && operations.len() == 1

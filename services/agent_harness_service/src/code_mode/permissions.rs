@@ -261,7 +261,12 @@ fn labels(operations: &[GatedOperation]) -> String {
 pub(crate) fn cannot_analyze(reasons: &[AnalysisReason]) -> String {
     let reasons = reasons
         .iter()
-        .map(|reason| format!("main.ml:{}:{}: {}", reason.line, reason.column, reason.message))
+        .map(|reason| {
+            format!(
+                "main.ml:{}:{}: {}",
+                reason.line, reason.column, reason.message
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n");
     format!(

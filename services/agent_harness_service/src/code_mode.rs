@@ -130,7 +130,8 @@ impl ExecutionCredentials for RunCredentials {
         };
         let actor = approve_run(self.gate.as_ref(), identity, source, language, &cancel).await?;
         if let (Some(gate), Some(checked)) = (&self.permissions, &checked) {
-            gate.hold(checked, identity, &actor, source, &cancel).await?;
+            gate.hold(checked, identity, &actor, source, &cancel)
+                .await?;
         }
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
         let correlation = self
@@ -298,8 +299,8 @@ pub const PERMISSIONS_FLAG: &str = "enable-agent-permissions";
 /// (local stacks without PostHog) or when the flags can't be read, it is off.
 pub struct PermissionsFlag<Flags>(pub Option<Flags>);
 
-impl<Flags: feature_flags::FeatureFlags + 'static> agent_permissions::domain::ports::PermissionsRollout
-    for PermissionsFlag<Flags>
+impl<Flags: feature_flags::FeatureFlags + 'static>
+    agent_permissions::domain::ports::PermissionsRollout for PermissionsFlag<Flags>
 {
     async fn enabled(&self, user: &MacroUserIdStr<'static>) -> bool {
         let Some(flags) = &self.0 else {
@@ -314,6 +315,17 @@ impl<Flags: feature_flags::FeatureFlags + 'static> agent_permissions::domain::po
             .is_ok_and(|snapshot| {
                 snapshot.is_enabled(OCAML_FLAG) && snapshot.is_enabled(PERMISSIONS_FLAG)
             })
+    }
+}
+
+/// The same rollout, as code mode and the OCaml gate ask it of a session
+/// owner.
+#[async_trait]
+impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OcamlRollout
+    for PermissionsFlag<Flags>
+{
+    async fn enabled(&self, owner: &MacroUserIdStr<'static>) -> bool {
+        agent_permissions::domain::ports::PermissionsRollout::enabled(self, owner).await
     }
 }
 
