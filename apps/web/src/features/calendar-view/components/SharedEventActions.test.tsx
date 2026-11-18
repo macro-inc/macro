@@ -28,7 +28,12 @@ vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarAddSharedEventFlag: () => () => mocks.addSharedEvent,
 }));
 vi.mock('@queries/calendar/calendars', () => ({
-  useVisibleCalendarsQuery: () => ({ isPending: false, data: mocks.calendars }),
+  useVisibleCalendarsQuery: () => ({
+    isPending: false,
+    isSuccess: true,
+    isPlaceholderData: false,
+    data: mocks.calendars,
+  }),
 }));
 // The mutation's transport and cache invalidation are covered with the
 // query; here it answers with whatever `mocks.copy` returns or throws.
@@ -182,12 +187,16 @@ describe('shared event actions', () => {
     });
   });
 
-  it('cannot add without a writable Google calendar but can still download', () => {
+  it('explains why Outlook cannot save the shared event and still lets the viewer download it', () => {
     mocks.calendars = [calendar({ provider: 'outlook' })];
     renderActions();
 
-    const add = screen.getByRole('button', { name: 'Add to calendar' });
-    expect((add as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('status').textContent).toBe(
+      'Adding shared events requires a writable Google calendar.'
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Add to calendar' })
+    ).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Download .ics' }));
     expect(mocks.download).toHaveBeenCalledWith({
       eventId: 'shared-event',
