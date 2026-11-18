@@ -68,6 +68,10 @@ const iterators: Record<
   'calls.search': (c) => new CallRecordNamespace(c).search('q', bogus),
   'chats.search': (c) => new ChatNamespace(c).search('q', bogus),
   'crm.searchCompanies': (c) => new CrmNamespace(c).searchCompanies('q', bogus),
+  'crm.emailPrivacy.history': (c) =>
+    new CrmNamespace(c).emailPrivacy.history(bogus),
+  'crm.emailPrivacy.excludedThreads': (c) =>
+    new CrmNamespace(c).emailPrivacy.excludedThreads(bogus),
   'email.inbox': (c) => new EmailNamespace(c).inbox(bogus),
   'email.scheduled': (c) => new EmailNamespace(c).scheduled(bogus),
   'email.reminders': (c) => new EmailNamespace(c).reminders(bogus),
