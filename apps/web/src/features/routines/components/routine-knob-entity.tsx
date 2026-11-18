@@ -151,8 +151,10 @@ function EntityList(props: {
     picked?: { id: string; entity_type: EntityType }[]
   ) => {
     const id = ids.values().next().value;
-    // Picking the picked item again unpicks it, as Clear does.
-    if (!id) return props.onInput(null);
+    // The selector reports picking the picked row again as no selection: a
+    // click on it, or Enter while it is highlighted, as it is on opening and
+    // after a click. Keep the pick: only Clear empties it.
+    if (!id) return;
     const entityType = picked?.find((entity) => entity.id === id)?.entity_type;
     const [first, ...rest] = types();
     const only = first && !rest.length ? knobType(first) : undefined;

@@ -34,16 +34,29 @@ vi.mock('@property/editors/selectors/PropertyEntitySelector', () => ({
       info: { id: string; entity_type: string; name: string }[]
     ): void;
   }) => (
-    <button
-      type="button"
-      onClick={() =>
-        props.setSelectedOptions(new Set(['c2']), [
-          { id: 'c2', entity_type: 'CHANNEL', name: 'triage' },
-        ])
-      }
-    >
-      {`Pick triage (${props.config.specificEntityType})`}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() =>
+          props.setSelectedOptions(new Set(['c2']), [
+            { id: 'c2', entity_type: 'CHANNEL', name: 'triage' },
+          ])
+        }
+      >
+        {`Pick triage (${props.config.specificEntityType})`}
+      </button>
+      {/* What it reports for a click or Enter on the row already picked. */}
+      <button
+        type="button"
+        onClick={() =>
+          props.setSelectedOptions(new Set(), [
+            { id: 'c2', entity_type: 'CHANNEL', name: 'triage' },
+          ])
+        }
+      >
+        Pick triage again
+      </button>
+    </>
   ),
 }));
 
@@ -143,6 +156,26 @@ describe('an entity knob', () => {
       value: { type: 'channel', id: 'c1' },
     });
     expect(sentence()).toBe('Post open bugs in bug-reports.');
+  });
+
+  it('keeps a pick when its row is picked again, as Enter on it does', async () => {
+    const current = renderSentence(bugs);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Channel to post in: the chosen channel. Change it',
+      })
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Pick triage (CHANNEL)' })
+    );
+    // Only Clear empties the draft.
+    fireEvent.click(screen.getByRole('button', { name: 'Pick triage again' }));
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect((save as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(save);
+    expect(current()[0]).toMatchObject({
+      value: { type: 'channel', id: 'c2' },
+    });
   });
 
   it('shows a starter’s unpicked channel as still to set', async () => {

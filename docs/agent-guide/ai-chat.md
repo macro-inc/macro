@@ -1034,8 +1034,9 @@ A text knob with no value shows a + and its label (**Not set** under
 An item the step uses (an entity knob: a channel, document, folder, person or
 database) shows by its icon and name and opens the same editor around the
 app's entity picker (for a database, a searchable list of the owner's
-databases). Picking an item only changes the draft, Enter included; **Clear**
-empties it and keeps **Save** disabled until another is picked. On touch it
+databases). Picking an item only changes the draft, Enter included, and
+picking the picked item again keeps it; only **Clear** empties it, keeping
+**Save** disabled until one is picked. On touch it
 opens a sheet instead, with **Cancel**, **Clear** and **Done**, and only
 **Done** applies the pick. One not picked yet, as in a starter, shows the same
 + and its label with a dashed underline. Saving refuses an item the owner
