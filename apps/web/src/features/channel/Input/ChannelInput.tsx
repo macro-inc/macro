@@ -51,6 +51,7 @@ import {
 } from 'lexical';
 import {
   type Accessor,
+  createMemo,
   createSignal,
   type JSX,
   Match,
@@ -297,6 +298,9 @@ export function ChannelInput(props: ChannelInputProps) {
       });
     },
   });
+
+  // The editor follows only the draft text, not the rest of the view.
+  const draft = createMemo(() => inputState.view().value ?? '');
 
   const collapsedInput = createCollapsedInputState({
     inputId: () => props.input.id,
@@ -702,6 +706,11 @@ export function ChannelInput(props: ChannelInputProps) {
   };
   clearComposer = () => {
     isInternalRefocus = true;
+    // Emptying the box on send or close is not typing.
+    acceptTyping = false;
+    queueMicrotask(() => {
+      acceptTyping = true;
+    });
     try {
       clearComposerPreservingFocus(
         lexicalEditor(),
@@ -853,7 +862,7 @@ export function ChannelInput(props: ChannelInputProps) {
                   // Another input on this draft (the channel in another
                   // desktop tab) can change it; the shell shows that change
                   // and does not report its own re-export back.
-                  value={inputState.view().value}
+                  value={draft()}
                   autofocus={!isTouchDevice() && (props.autofocus ?? true)}
                   class="text-base"
                   refFn={attach}

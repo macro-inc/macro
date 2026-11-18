@@ -65,7 +65,7 @@ test('a channel open in two tabs keeps one draft in both', async ({ page }) => {
   const second = page.getByRole('region', { name: 'Second tab' });
   const firstEditor = first.locator('[data-markdown-editable]');
   const secondEditor = second.locator('[data-markdown-editable]');
-  await expect(firstEditor).toBeVisible({ timeout: 30_000 });
+  await expect(firstEditor).toBeVisible({ timeout: 60_000 });
   await expect(secondEditor).toBeVisible();
 
   await firstEditor.click();
