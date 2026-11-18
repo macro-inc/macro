@@ -5,6 +5,9 @@
 
 use std::path::PathBuf;
 
+#[cfg(test)]
+mod test;
+
 /// A `zfs`/`zpool` command failed, or the pool cannot clone blocks.
 #[derive(Debug, thiserror::Error)]
 pub enum ZfsError {
@@ -140,14 +143,7 @@ impl Datasets {
         {
             return self.refuse_pending(&name).await;
         }
-        let mut arguments = vec!["create".to_owned(), "-p".to_owned()];
-        if let Some(recordsize) = recordsize {
-            arguments.extend(["-o".to_owned(), format!("recordsize={recordsize}")]);
-        }
-        if let Some(bytes) = refquota_bytes {
-            arguments.extend(["-o".to_owned(), format!("refquota={bytes}")]);
-        }
-        arguments.push(name);
+        let arguments = create_arguments(&name, recordsize, refquota_bytes);
         let arguments: Vec<&str> = arguments.iter().map(String::as_str).collect();
         zfs_output("zfs", &arguments).await.map(drop)
     }
@@ -212,14 +208,9 @@ impl Datasets {
         {
             return self.refuse_pending(&name).await;
         }
-        let recordsize = format!("recordsize={recordsize}");
-        let refquota = format!("refquota={refquota_bytes}");
-        zfs_output(
-            "zfs",
-            &["clone", "-o", &recordsize, "-o", &refquota, snapshot, &name],
-        )
-        .await
-        .map(drop)
+        let arguments = clone_arguments(snapshot, &name, recordsize, refquota_bytes);
+        let arguments: Vec<&str> = arguments.iter().map(String::as_str).collect();
+        zfs_output("zfs", &arguments).await.map(drop)
     }
 
     /// Clone `snapshot` as `relative`, tagged `tag` in [`SPARE_PROPERTY`]
@@ -389,6 +380,41 @@ impl Datasets {
         }
         Ok(())
     }
+}
+
+/// `zfs create` of `name` with its parents and the given properties.
+fn create_arguments(
+    name: &str,
+    recordsize: Option<&str>,
+    refquota_bytes: Option<u64>,
+) -> Vec<String> {
+    let mut arguments = vec!["create".to_owned(), "-p".to_owned()];
+    if let Some(recordsize) = recordsize {
+        arguments.extend(["-o".to_owned(), format!("recordsize={recordsize}")]);
+    }
+    if let Some(bytes) = refquota_bytes {
+        arguments.extend(["-o".to_owned(), format!("refquota={bytes}")]);
+    }
+    arguments.push(name.to_owned());
+    arguments
+}
+
+/// `zfs clone` of `snapshot` as `name` with a recordsize and a quota.
+fn clone_arguments(
+    snapshot: &str,
+    name: &str,
+    recordsize: &str,
+    refquota_bytes: u64,
+) -> Vec<String> {
+    vec![
+        "clone".to_owned(),
+        "-o".to_owned(),
+        format!("recordsize={recordsize}"),
+        "-o".to_owned(),
+        format!("refquota={refquota_bytes}"),
+        snapshot.to_owned(),
+        name.to_owned(),
+    ]
 }
 
 async fn zfs_output(program: &str, arguments: &[&str]) -> Result<String, ZfsError> {

@@ -6,13 +6,16 @@
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use firecracker_host_api::{ComputerId, DiskBackend, GoldenKey};
+use firecracker_host_api::{ComputerId, ComputerResources, DiskBackend, GoldenKey};
 
 use crate::domain::model::ComputerRecord;
 use crate::domain::ports::{ComputerDisks, Disks, DriveBacking};
 use crate::outbound::file_clone::clone_file;
 use crate::outbound::layout::Layout;
 use crate::outbound::zfs::{COMPUTER_RECORDSIZE, Datasets, GOLDEN_RECORDSIZE, ZfsError};
+
+#[cfg(test)]
+mod test;
 
 const BYTES_PER_GIB: u64 = 1024 * 1024 * 1024;
 
@@ -201,25 +204,13 @@ impl FileDisks {
                 std::fs::create_dir_all(&directory).map_err(io("create", &directory))
             }
             Containers::Zfs(datasets) => {
-                // Every byte the guest can write must fit, or a full disk
-                // reads to the guest as an I/O error instead of ENOSPC: the
-                // rootfs is at least the golden's size, and a hibernation
-                // holds up to all of memory.
-                let root_gib = record
-                    .resources
-                    .root_disk_gib
-                    .max(self.golden_root_disk_gib);
-                let quota_gib = u64::from(root_gib)
-                    + u64::from(record.resources.home_disk_gib)
-                    + u64::from(record.resources.memory_mib).div_ceil(1024)
-                    + QUOTA_HEADROOM_GIB;
+                let quota_bytes =
+                    computer_quota_bytes(&record.resources, self.golden_root_disk_gib);
                 let relative = format!("computers/{}", record.computer_id);
                 // A computer received from another host has its dataset (a
                 // clone of a base from that host) and no golden here.
                 if datasets.exists(&relative).await? {
-                    return Ok(datasets
-                        .set_refquota(&relative, quota_gib * BYTES_PER_GIB)
-                        .await?);
+                    return Ok(datasets.set_refquota(&relative, quota_bytes).await?);
                 }
                 // A clone of the golden's snapshot: the rootfs is the
                 // golden's file in place, and a send from that snapshot
@@ -236,19 +227,14 @@ impl FileDisks {
                                     datasets,
                                     &spare_tag(&snapshot, record.resources.home_disk_gib),
                                     &relative,
-                                    quota_gib * BYTES_PER_GIB,
+                                    quota_bytes,
                                 )
                                 .await
                         {
                             return Ok(());
                         }
                         datasets
-                            .clone_from(
-                                &snapshot,
-                                &relative,
-                                COMPUTER_RECORDSIZE,
-                                quota_gib * BYTES_PER_GIB,
-                            )
+                            .clone_from(&snapshot, &relative, COMPUTER_RECORDSIZE, quota_bytes)
                             .await?;
                         if cloned {
                             self.remove_golden_files(&self.layout.computer(record.computer_id));
@@ -256,11 +242,7 @@ impl FileDisks {
                         Ok(())
                     }
                     None => Ok(datasets
-                        .ensure(
-                            &relative,
-                            Some(COMPUTER_RECORDSIZE),
-                            Some(quota_gib * BYTES_PER_GIB),
-                        )
+                        .ensure(&relative, Some(COMPUTER_RECORDSIZE), Some(quota_bytes))
                         .await?),
                 }
             }
@@ -271,6 +253,19 @@ impl FileDisks {
         let source = self.layout.golden(&record.golden_key()).join("rootfs.ext4");
         reflink_file(&source, &self.rootfs(record.computer_id))
     }
+}
+
+/// The quota of a computer's dataset. Every byte the guest can write must
+/// fit, or a full disk reads to the guest as an I/O error instead of ENOSPC:
+/// the rootfs is at least the golden's size, and a hibernation holds up to
+/// all of memory.
+fn computer_quota_bytes(resources: &ComputerResources, golden_root_disk_gib: u32) -> u64 {
+    let root_gib = resources.root_disk_gib.max(golden_root_disk_gib);
+    let quota_gib = u64::from(root_gib)
+        + u64::from(resources.home_disk_gib)
+        + u64::from(resources.memory_mib).div_ceil(1024)
+        + QUOTA_HEADROOM_GIB;
+    quota_gib * BYTES_PER_GIB
 }
 
 /// Ready spares kept per golden and `/home` size.
