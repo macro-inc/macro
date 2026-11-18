@@ -414,7 +414,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `skipped`), warning `skipping an Outlook occurrence Macro cannot read` with
   its `occurrence_id`, and the span adds `skipped_occurrences`. A secondary
   calendar has no v1.0 delta, so each of its rounds lists and reads every
-  event again. A first import (a calendar never synced, in a scan from
+  event again. A mailbox's own read-only calendars (holidays, Birthdays:
+  `OutlookCalendar::is_system`, read-only, not shared with the mailbox and
+  owned by it) are marked `calendars.system_calendar` at discovery, and
+  their next round starts a day after one finishes
+  (`SYSTEM_CALENDAR_SYNC_INTERVAL`), as Google's system calendars do. Sync
+  health gives them the same day, so booking does not read them as stale.
+  A read-only calendar someone shared keeps two-minute rounds, and so does
+  one subscribed from the web, which Graph lists as shared with no owner. A first import (a calendar never synced, in a scan from
   scratch) lists this month and next first (`OccurrenceRange::near_window`,
   a `calendarView` snapshot on any calendar, with
   `OutlookCalendarLease::near_window` set), then the whole window in a scan of

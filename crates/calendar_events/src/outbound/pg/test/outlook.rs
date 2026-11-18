@@ -55,6 +55,8 @@ fn discovered_calendar(provider_calendar_id: &str) -> OutlookCalendar {
             default_reminders: vec![],
         },
         online_meeting_providers: vec!["teamsForBusiness".into()],
+        owner_address: None,
+        shared_with_me: false,
     }
 }
 async fn calendar(repo: &PgCalendarRepository) -> OutlookCalendarLease {
@@ -2698,4 +2700,77 @@ async fn the_queue_depth_counts_claimable_work_waiting(pool: PgPool) {
         0,
         "an account no claim may take is not queue depth"
     );
+}
+
+/// Discovers one read-only calendar owned by `owner` (the mailbox itself when
+/// `None`), finishes its first round, and returns whether discovery marked it
+/// a system calendar, how long until its next round, and how long after its
+/// sync booking reads it as due.
+async fn read_only_calendar_round(pool: &PgPool, owner: Option<&str>) -> (bool, i64, i64) {
+    let (repo, _, user) = mailbox(pool).await;
+    let discovery = claim(&repo).await.unwrap();
+    let mut calendar = discovered_calendar("holidays");
+    calendar.calendar.access_role = Some("reader".into());
+    calendar.owner_address = Some(owner.map_or_else(
+        || discovery.token_identity.email_address.to_uppercase(),
+        str::to_owned,
+    ));
+    repo.commit_outlook_calendars(&discovery, vec![calendar])
+        .await
+        .unwrap();
+    let lease = claim(&repo).await.unwrap();
+    let calendar_id = lease.target.as_ref().unwrap().calendar_id;
+    clean_round(&repo, &lease).await;
+    let row = sqlx::query!(
+        r#"SELECT c.system_calendar,c.synced_at AS "synced_at!",
+            extract(epoch FROM w.next_run_at-now())::bigint AS "wait!"
+        FROM calendars c JOIN calendar_outlook_work w ON w.calendar_id=c.id WHERE c.id=$1"#,
+        calendar_id
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let due = repo
+        .calendar_sync_health(&user)
+        .await
+        .unwrap()
+        .calendars
+        .into_iter()
+        .find(|freshness| freshness.calendar_id == calendar_id)
+        .unwrap()
+        .refresh_due_at
+        .unwrap();
+    (
+        row.system_calendar,
+        row.wait,
+        (due - row.synced_at).num_seconds(),
+    )
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_mailboxs_own_read_only_calendar_syncs_once_a_day(pool: PgPool) {
+    let (system, wait, due_after) = read_only_calendar_round(&pool, None).await;
+    assert!(
+        system,
+        "a read-only calendar of the mailbox's own, such as its holidays"
+    );
+    assert!(
+        (86_390..=86_400).contains(&wait),
+        "its next round is a day away, as Google's system calendars, not {wait} s"
+    );
+    assert_eq!(
+        due_after, 86_400,
+        "booking reads it as current for a day after each sync"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_calendar_shared_read_only_keeps_its_two_minute_rounds(pool: PgPool) {
+    let (system, wait, due_after) = read_only_calendar_round(&pool, Some("ada@example.com")).await;
+    assert!(
+        !system,
+        "a colleague's calendar shared read-only is their schedule"
+    );
+    assert!((110..=120).contains(&wait), "next round in {wait} s");
+    assert_eq!(due_after, 0);
 }

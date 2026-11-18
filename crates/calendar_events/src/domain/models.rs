@@ -1795,7 +1795,9 @@ pub const WATCH_UNSUPPORTED_RETRY_INTERVAL: chrono::Duration = chrono::Duration:
 /// How often Google's own read-only system calendars (holidays, birthdays)
 /// are synced. Their content changes on the order of once a year, and Google
 /// chronically resets their sync tokens, turning every poll into a full
-/// snapshot; a daily cadence keeps them fresh without that churn.
+/// snapshot; a daily cadence keeps them fresh without that churn. An Outlook
+/// mailbox's own read-only calendars (`OutlookCalendar::is_system`) follow
+/// it too, since without a delta every round re-reads all their events.
 pub const SYSTEM_CALENDAR_SYNC_INTERVAL: chrono::Duration = chrono::Duration::hours(24);
 
 /// Consecutive isolated sync failures a calendar must accumulate before its
