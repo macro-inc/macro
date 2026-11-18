@@ -37,6 +37,10 @@ the recipient for human DMs, the persona for agent DMs, and the channel picture
 or glyph for named channels. Message and thread breadcrumbs resolve identity
 from their parent channel rather than the message or thread ID.
 
+Phone list rows retain the channel's own image or icon during a live call.
+The trailing live-call waveform marks the call, as in the desktop rail; ringing
+calls keep their Join and Decline actions.
+
 ## Composer focus and Esc
 
 Every way of opening a conversation follows one rule
