@@ -50,7 +50,7 @@ pub enum OpensearchOperation {
     DeleteChatMessageById,
     DeleteChatByUserId,
     DeleteEmailByLinkId,
-    DeleteEmailMessageById,
+    DeleteEmailMessages,
     DeleteEmailByUserId,
     DeleteProjectById,
     DeleteCalendarEventById,

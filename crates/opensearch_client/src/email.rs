@@ -41,16 +41,25 @@ impl OpensearchClient {
         .await
     }
 
-    /// Deletes a particular email message
-    pub async fn delete_email_message_by_id(
+    /// Deletes every document of the given email messages, whatever thread
+    /// each was indexed under, in one delete-by-query; removals are visible to
+    /// search when this returns.
+    #[tracing::instrument(
+        skip(self, message_ids),
+        fields(messages = message_ids.len(), deleted = tracing::field::Empty),
+        err
+    )]
+    pub async fn delete_email_messages(
         &self,
-        message_id: &str,
+        message_ids: &[String],
         index_override: Option<&str>,
     ) -> Result<()> {
-        resend_on_lost_connection(|| {
-            delete::email::delete_email_message_by_id(&self.inner, message_id, index_override)
+        let deleted = resend_on_lost_connection(|| {
+            delete::email::delete_email_messages(&self.inner, message_ids, index_override)
         })
-        .await
+        .await?;
+        tracing::Span::current().record("deleted", deleted);
+        Ok(())
     }
 
     /// Deletes all email messages with the specified link_id
