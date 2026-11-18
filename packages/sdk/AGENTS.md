@@ -268,6 +268,7 @@ the existing gateway prefixes.
   and do not fetch another page after the caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.
 - Lazy detail invalidation fences in-flight reads so a pre-write response cannot restore stale cached fields.
+- Listings seed handles with `withListed` (`Channel.fromListing`, `EmailThread.fromPreview`, `Document.recent`), so `field()` reads skip the detail request. Seed only fields whose listing value means the same as the detail's; empty values still load, and any write or load drops the seed. Seeds never serialize.
 - Draft writes must select the draft's inbox with `X-Email-Link-Id`; callers
   supply plain HTML and the SDK encodes it for the draft wire contract.
 - Read many task or initiative names with `tasks.summaries` (`/documents/preview`)
