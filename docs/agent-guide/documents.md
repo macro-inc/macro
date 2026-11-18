@@ -26,6 +26,11 @@ horizontally and removal remains available without hover. Composer fixture
 screenshots: [desktop](media/share-images/desktop.png) and
 [phone](media/share-images/mobile.png).
 
+Opening a document or file in a Drive detail view (tasks, snippets and skills
+included) records the open once in the user's history, which orders Recents and
+Cmd+K. On dev, expect one `POST /history/document/<id>` per open and none when
+the same document reloads, and the item listed first in empty Cmd+K afterwards.
+
 Verify **Public → View** links in a fresh signed-out browser context. The
 `/app/drive/md/<id>` route (including folder/tab document links and legacy
 `/app/md/<id>` redirects) must show the document without private Drive lists or
