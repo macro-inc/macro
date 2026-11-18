@@ -1,9 +1,11 @@
+import { $getRoot } from 'lexical';
 import type { Accessor } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import {
   DraftPersistRejected,
   type DraftSaveResult,
+  type EmailDraftLifecycleState,
   type EmailDraftRestoration,
   type SaveEmailDraft,
 } from '../context/compose-capabilities';
@@ -220,24 +222,31 @@ describe('draft session: reply composer', () => {
     }
   });
 
-  it('drops the draft and aborts the send when the pre-send save learns it was already sent', async () => {
+  it('aborts the send and keeps the text as a new draft when the pre-send save learns it was already sent', async () => {
     const context = createComposeContext();
     vi.mocked(context.drafts.saveDraft)
       .mockRejectedValueOnce(new DraftPersistRejected('DRAFT_ALREADY_SENT'))
       .mockImplementation(async () => committed('server-4'));
     const state = mountReplyComposer(context);
     try {
+      state.edit('Text the sent reply lacks');
       await state.sendEmail();
       await vi.advanceTimersByTimeAsync(0);
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();
-      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
-      expect(state.savedDraftId()).toBeUndefined();
-      // A fresh draft afterwards saves under new handles, not the sent id.
-      state.edit('A new reply');
+      expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+        'This scheduled email was sent. Your composer has been updated.'
+      );
+      expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+        'This email was already sent. Your newer text was kept as a new draft and was not sent.'
+      );
       await vi.advanceTimersByTimeAsync(600);
+      // The text saves under new handles, never into the sent draft.
       const inputs = savedInputs(context);
       expect(inputs).toHaveLength(2);
       expect(inputs[1].draft.db_id).toBeUndefined();
+      expect(decodeBase64Utf8(inputs[1].draft.body_html ?? '')).toContain(
+        'Text the sent reply lacks'
+      );
       expect(inputs[1].clientHandles?.draftId).not.toEqual(
         inputs[0].clientHandles?.draftId
       );
@@ -832,6 +841,203 @@ describe.each(['reply', 'compose'] as const)(
         expect(decodeBase64Utf8(kept.draft.body_html ?? '')).toContain(
           'Text typed after the send'
         );
+      } finally {
+        root.dispose();
+      }
+    });
+
+    /**
+     * The lifecycle never reports the delivery itself, as when a read of the
+     * queued draft is ignored: only a refused save tells the composer.
+     * `sent` is what the composer's read of the refused draft answers.
+     */
+    function readOnlyOnRefusal(
+      context: ReturnType<typeof createComposeContext>,
+      sent: () => Promise<EmailDraftLifecycleState>
+    ) {
+      vi.mocked(context.draftLifecycle.observe).mockImplementation(() => ({
+        state: () => undefined,
+        refresh: vi.fn(async () => undefined),
+        refreshIdentity: vi.fn(sent),
+      }));
+    }
+    const refuseNextSave = (context: ReturnType<typeof createComposeContext>) =>
+      vi
+        .mocked(context.drafts.saveDraft)
+        .mockRejectedValueOnce(new DraftPersistRejected('DRAFT_ALREADY_SENT'));
+
+    it('keeps the text a refused save carried as a new draft when the draft was sent elsewhere', async () => {
+      const context = createComposeContext();
+      const workingCopy = queuedWorkingCopy(context);
+      readOnlyOnRefusal(context, async () => sentElsewhere);
+      const root = mount(context);
+      try {
+        root.edit('Reply that another device sends');
+        await vi.advanceTimersByTimeAsync(600);
+        workingCopy.acknowledge();
+        await vi.advanceTimersByTimeAsync(0);
+        refuseNextSave(context);
+        root.edit('Text typed after the send');
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+          'This scheduled email was sent. Your composer has been updated.'
+        );
+        expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+          'This email was already sent. Your newer text was kept as a new draft and was not sent.'
+        );
+        const kept = newDraftSaves(context);
+        expect(kept).toHaveLength(1);
+        expect(kept[0].draft.db_id).toBeUndefined();
+        expect(decodeBase64Utf8(kept[0].draft.body_html ?? '')).toContain(
+          'Text typed after the send'
+        );
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      } finally {
+        root.dispose();
+      }
+    });
+
+    it('leaves a draft sent elsewhere when its refused save carried nothing the sent message lacks', async () => {
+      const context = createComposeContext();
+      const workingCopy = queuedWorkingCopy(context);
+      let sent: EmailDraftLifecycleState = sentElsewhere;
+      readOnlyOnRefusal(context, async () => sent);
+      const root = mount(context);
+      try {
+        root.edit('Reply that another tab sends');
+        await vi.advanceTimersByTimeAsync(600);
+        workingCopy.acknowledge();
+        await vi.advanceTimersByTimeAsync(0);
+        vi.mocked(context.drafts.saveDraft).mockImplementationOnce(async () => {
+          // The other tab sent the working copy this save carries.
+          sent = { ...sentElsewhere, sentCopy: workingCopy.send() };
+          throw new DraftPersistRejected('DRAFT_ALREADY_SENT');
+        });
+        root.edit('Text in the working copy the send carried');
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+          'This scheduled email was sent. Your composer has been updated.'
+        );
+        expect(context.notices.feedback.alert).not.toHaveBeenCalledWith(
+          'This email was already sent. Your newer text was kept as a new draft and was not sent.'
+        );
+        expect(newDraftSaves(context)).toEqual([]);
+      } finally {
+        root.dispose();
+      }
+    });
+
+    it('neither sends nor settles twice when Send is pressed while the refused draft is read', async () => {
+      const context = createComposeContext();
+      const workingCopy = queuedWorkingCopy(context);
+      const read = Promise.withResolvers<EmailDraftLifecycleState>();
+      readOnlyOnRefusal(context, () => read.promise);
+      const root = mount(context);
+      try {
+        root.edit('Reply that another device sends');
+        await vi.advanceTimersByTimeAsync(600);
+        workingCopy.acknowledge();
+        await vi.advanceTimersByTimeAsync(0);
+        refuseNextSave(context);
+        root.edit('Text typed after the send');
+        await vi.advanceTimersByTimeAsync(600);
+        await root.send();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+        expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+        read.resolve(sentElsewhere);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(
+          vi
+            .mocked(context.notices.feedback.alert)
+            .mock.calls.filter(
+              ([message]) =>
+                message ===
+                'This scheduled email was sent. Your composer has been updated.'
+            )
+        ).toHaveLength(1);
+        expect(newDraftSaves(context)).toHaveLength(1);
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      } finally {
+        root.dispose();
+      }
+    });
+
+    it('keeps the text in the editor when the server refuses its new draft as already sent too', async () => {
+      const context = createComposeContext();
+      const workingCopy = queuedWorkingCopy(context);
+      readOnlyOnRefusal(context, async () => sentElsewhere);
+      const root = mount(context);
+      try {
+        root.edit('Reply that another device sends');
+        await vi.advanceTimersByTimeAsync(600);
+        workingCopy.acknowledge();
+        await vi.advanceTimersByTimeAsync(0);
+        vi.mocked(context.drafts.saveDraft).mockRejectedValue(
+          new DraftPersistRejected('DRAFT_ALREADY_SENT')
+        );
+        root.edit('Text typed after the send');
+        await vi.advanceTimersByTimeAsync(5000);
+
+        // One copy is kept; its refusal does not start another.
+        expect(context.drafts.saveDraft).toHaveBeenCalledTimes(3);
+        expect(
+          vi
+            .mocked(context.notices.feedback.alert)
+            .mock.calls.filter(
+              ([message]) =>
+                message ===
+                'This email was already sent. Your newer text was kept as a new draft and was not sent.'
+            )
+        ).toHaveLength(1);
+        expect(context.notices.reportError).toHaveBeenCalledWith(
+          new Error('The server refused a kept draft as already sent')
+        );
+        expect(root.editor.read(() => $getRoot().getTextContent())).toContain(
+          'Text typed after the send'
+        );
+      } finally {
+        root.dispose();
+      }
+    });
+
+    it('leaves a draft the composer dropped while it read the refusal', async () => {
+      const context = createComposeContext();
+      const workingCopy = queuedWorkingCopy(context);
+      const read = Promise.withResolvers<EmailDraftLifecycleState>();
+      readOnlyOnRefusal(context, () => read.promise);
+      let restored!: (change: EmailDraftRestoration) => void;
+      context.drafts.watchRestorations = (listener) => {
+        restored = listener;
+        return () => {};
+      };
+      const root = mount(context);
+      try {
+        root.edit('Reply that another device sends');
+        await vi.advanceTimersByTimeAsync(600);
+        workingCopy.acknowledge();
+        await vi.advanceTimersByTimeAsync(0);
+        refuseNextSave(context);
+        root.edit('Text typed after the send');
+        await vi.advanceTimersByTimeAsync(600);
+        // A restore reseeds the composer before the read answers.
+        restored({
+          draftId: 'server-draft',
+          originalDraftId: 'server-draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        read.resolve(sentElsewhere);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(context.notices.feedback.alert).not.toHaveBeenCalledWith(
+          'This scheduled email was sent. Your composer has been updated.'
+        );
+        expect(newDraftSaves(context)).toEqual([]);
       } finally {
         root.dispose();
       }

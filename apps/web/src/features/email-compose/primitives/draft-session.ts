@@ -164,11 +164,18 @@ export function reduceDraftSession(
       };
     })
     .with({ type: 'rejected' }, (event) => {
-      if (event.epoch !== state.epoch) return state;
+      // Being sent is final: no later rejection replaces that verdict.
+      if (event.epoch !== state.epoch || alreadySent(state)) return state;
       if (event.code === 'DRAFT_ALREADY_SENT') {
-        // Sent from another device: the server outcome supersedes the
-        // local draft, which the composer drops.
-        return { ...FRESH, epoch: state.epoch + 1 };
+        // Sent from another device. Nothing in flight may adopt or save into
+        // the sent draft, and nothing autosaves until the composer has kept
+        // the text the sent message lacks as a new draft, or dropped its
+        // draft. The identity stays so the composer can read what was sent.
+        return {
+          ...state,
+          policy: { kind: 'latched', code: event.code },
+          epoch: state.epoch + 1,
+        };
       }
       return { ...state, policy: { kind: 'latched', code: event.code } };
     })
@@ -193,6 +200,12 @@ export function reduceDraftSession(
     .exhaustive();
 }
 
+function alreadySent(state: DraftSessionState) {
+  return (
+    state.policy.kind === 'latched' &&
+    state.policy.code === 'DRAFT_ALREADY_SENT'
+  );
+}
 function currentDraftId(state: DraftSessionState) {
   return state.identity.kind === 'none' ? undefined : state.identity.draftId;
 }
@@ -231,5 +244,7 @@ export function createDraftSession(seed?: {
       return identity.kind === 'server' && !identity.queued;
     },
     autosaveAllowed: () => state().policy.kind === 'autosaving',
+    /** The server refused a save because the draft was sent elsewhere. */
+    alreadySent: () => alreadySent(state()),
   };
 }
