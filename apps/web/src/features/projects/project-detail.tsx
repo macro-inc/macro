@@ -3,6 +3,7 @@ import { useTouchTopBarsFloat } from '@app/components/view-shell';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
+  useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -66,9 +67,33 @@ type ProjectDetailProps = {
   route: ProjectRoute;
   navigationRequest?: number;
   breadcrumb?: ProjectBreadcrumbProps;
+  /**
+   * Where the project's entity commands register; a host whose list stays
+   * beside the project in the same split passes a scope of its own.
+   */
+  hotkeyScope?: string;
   onDelete?(): void;
   onSectionChange?(section: ProjectSection): void;
 };
+
+/** The project's Cmd+K entity commands (Copy link, Copy ID) and their keys. */
+function ProjectEntityCommands(props: {
+  project: ProjectDetailData;
+  scopeId: string;
+}) {
+  useBlockEntityCommands({
+    id: props.project.id,
+    scopeId: props.scopeId,
+    resolveEntity: () => ({
+      type: 'initiative',
+      id: props.project.id,
+      name: props.project.name,
+      ownerId: props.project.ownerId,
+      appearance: props.project.appearance,
+    }),
+  });
+  return null;
+}
 
 function ProjectTitleMenu(props: {
   project: ProjectDetailData;
@@ -229,6 +254,19 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       <Show when={props.breadcrumb}>
         {(breadcrumb) => (
           <ProjectBreadcrumbItem {...breadcrumb()} project={source.project()} />
+        )}
+      </Show>
+      {/* Overview only: the Tasks section's list registers the same commands
+          for its rows on the split's scope, and a second registration there
+          would replace theirs. */}
+      <Show
+        when={props.route.section === 'overview' ? source.project() : undefined}
+      >
+        {(project) => (
+          <ProjectEntityCommands
+            project={project()}
+            scopeId={props.hotkeyScope ?? panel.splitHotkeyScope}
+          />
         )}
       </Show>
       <EntityDetailTopBar

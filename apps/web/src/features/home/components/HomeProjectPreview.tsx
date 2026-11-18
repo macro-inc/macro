@@ -5,6 +5,7 @@ import { createSearchParams } from '@app/lib/split-router';
 import { PreviewFrame } from '@components/app/PreviewPanel';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { homeProjectSearch } from '../home-route-schema';
 import { useHomeView } from '../home-view-context';
 
@@ -16,6 +17,9 @@ export function HomeProjectPreview() {
   const [search, setSearch] = createSearchParams(homeProjectSearch);
   const id = () => previewTarget()!.blockId;
   const value = () => `initiative:${id()}`;
+  // Home's list registers the same entity commands on the split's scope, so
+  // the project's live in a child scope, as Home's document previews' do.
+  const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('home-project');
 
   return (
     <PreviewFrame
@@ -39,8 +43,9 @@ export function HomeProjectPreview() {
           )}
         </ViewBreadcrumbs.Item>
         <SidePanel.Root>
-          <div class="flex h-full min-h-0 flex-col">
+          <div ref={attachHotkeys} class="flex h-full min-h-0 flex-col">
             <ProjectDetail
+              hotkeyScope={hotkeyScope}
               navigationRequest={previewNavigationRequest()}
               route={{
                 id: id(),
