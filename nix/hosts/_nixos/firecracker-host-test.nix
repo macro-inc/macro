@@ -245,6 +245,17 @@ pkgs.testers.runNixOSTest {
         devices = [field for field in swaps if field.startswith("/")]
         assert devices == ["/dev/zram0"], devices
 
+    with subtest("a swap device on disk takes the VMs' swap away until it goes"):
+        vms = "/sys/fs/cgroup/system.slice/firecracker-host.service/vms"
+        host.wait_until_succeeds(f"test \"$(cat {vms}/memory.swap.max)\" = max", timeout=60)
+        host.succeed(
+            "dd if=/dev/zero of=/var/swapfile bs=1M count=64 status=none"
+            " && chmod 600 /var/swapfile && mkswap -q /var/swapfile && swapon /var/swapfile"
+        )
+        host.wait_until_succeeds(f"test \"$(cat {vms}/memory.swap.max)\" = 0", timeout=180)
+        host.succeed("swapoff /var/swapfile && rm /var/swapfile")
+        host.wait_until_succeeds(f"test \"$(cat {vms}/memory.swap.max)\" = max", timeout=180)
+
     with subtest("the ZFS dataset clones blocks"):
         host.succeed("test \"$(zfs get -H -o value mounted tank/firecracker)\" = yes")
         host.succeed("test \"$(zfs get -H -o value compression tank/firecracker)\" = lz4")
