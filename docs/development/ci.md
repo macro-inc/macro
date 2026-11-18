@@ -32,6 +32,18 @@ workflow run email_e2e.yml --ref <branch>` (`-f known_bugs=true` adds the
 known bugs). The [suite's README](../../apps/web/tests/email-e2e/README.md)
 has the trigger table and the other commands.
 
+Each workflow's pushes to `main` queue as the dev deploys do: one run at a
+time, never cancelled, and of the pushes that come meanwhile only the newest
+waits; a newer push replaces (cancels) the one waiting. A replaced commit is
+not run on its own: the next run tests the newer tree, which holds its
+changes, so the commit is covered, and a failure points to the commits since
+the last pass rather than to one commit. A push the path filters skip starts
+no run, and the next run covers it the same way. The sweep queues apart, so a
+push never replaces it. A run by hand and a re-run neither wait for nor
+replace another run: a re-run in the queue would replace the push waiting
+and test an older commit in its place (`concurrency` in `xtask_workflows`'
+`email_e2e.rs`).
+
 ### When an email end-to-end alert fires
 
 The last job of each of the three workflows, `Tell Macro Alerts`
@@ -44,20 +56,26 @@ failure when the channel shows the workflow passing, and a green run posts
 apart, since only the sweep runs the tests kept for known bugs. The job's last
 step records what the channel then shows, and the next run's job reads it; a
 workflow's alert jobs run one at a time. A red run while the channel already
-shows it failing, a cancelled run, and a run that ends after a newer run has
-ended post nothing; the job's summary says why. In the last case the newer
-run's alert job tells the channel, or, if that job never runs (its run was
-cancelled), the next run does. A run is red when one of its jobs failed or ran
-out of time. A failed post records nothing, so the next run posts it again, as
-does re-running the alert job while no newer run has ended. A re-run of a
+shows it failing, a run cancelled by hand, and a run that ends after a newer
+run has ended post nothing; the job's summary says why. In the last case the
+newer run's alert job tells the channel, or, if that job never runs (its run
+was cancelled), the next run does. A push replaced while it waited starts no
+job, so it posts nothing either: the next run that ends posts in its place,
+and its failure names the last pass before it, so the changes since span its
+commit. A run is red when one of its jobs failed or ran out of time; GitHub
+lists a run with a job that ran out of time as cancelled, but its alert job
+runs. A failed post records nothing, so the next run posts it again, as does
+re-running the alert job while no newer run has ended. A re-run of a
 flaky failure that passes posts that it passes again only while no newer run
 has ended; otherwise the newer run's result stands.
 
 The alert names the commit and its pull request, the failed jobs with the
 step each failed at, the failed tests the coverage report names, the tests
 kept for a known bug that now pass, and the commit the workflow last passed
-at with the changes since. The author of the pull request it names looks
-first; for the sweep, start from the changes since the last pass.
+at with the changes since. When the workflow last passed at the commit just
+before, the author of the pull request it names looks first; otherwise, as
+after replaced pushes and for the sweep, start from the changes since the
+last pass.
 
 1. Open the run. The summary of its coverage job lists what failed, and the
    coverage report is an artifact of the run: `email-e2e-coverage`,

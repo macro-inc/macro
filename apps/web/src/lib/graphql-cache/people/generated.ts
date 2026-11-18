@@ -2,7 +2,9 @@
 
 import { z } from 'zod/v3';
 
-export const PEOPLE_POLICY_VERSION = 5;
+export const PEOPLE_POLICY_VERSION = 6;
+
+export const PEOPLE_MIN_POLICY_VERSION = 5;
 
 export const PEOPLE_REFERENCE_POLICY_VERSION = 4;
 

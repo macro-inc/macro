@@ -667,11 +667,15 @@ where
         &self.fleet
     }
 
-    /// macrod connected on `harness_id`. Returns whether it is a computer's.
+    /// macrod connected on `harness_id`: whether it is a computer's, and
+    /// whether connecting bound the computer's first agent to it.
     #[tracing::instrument(skip(self), err)]
-    pub async fn macrod_connected(&self, harness_id: HarnessId) -> Result<bool, ComputerError> {
+    pub async fn macrod_connected(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<MacrodConnected, ComputerError> {
         let Some(computer_id) = self.computer_of(harness_id).await? else {
-            return Ok(false);
+            return Ok(MacrodConnected::NotAComputer);
         };
         let computer = self.computer(computer_id).await?;
         use tracing::Instrument;
@@ -686,7 +690,7 @@ where
         &self,
         harness_id: HarnessId,
         computer: Computer,
-    ) -> Result<bool, ComputerError> {
+    ) -> Result<MacrodConnected, ComputerError> {
         let now = self.clock.now();
         self.repo
             .set_harness(computer.id, harness_id)
@@ -700,15 +704,19 @@ where
             .apply(computer.id, Event::MacrodConnected, now)
             .await
             .map_err(internal)?;
+        let mut connected = MacrodConnected::Computer;
         if computer.enrolled_at.is_none() {
             super::telemetry::provisioned(
                 (now - computer.created_at).num_milliseconds() as f64 / 1000.0,
             );
             // A convenience: the span records a failure, and setup carries on.
             // An agent teammate's computer is the agent's; it gets no coding agent.
-            self.create_default_agent_unless_teammate(&computer, harness_id)
+            if let Ok(Some(DefaultAgent::Created { .. })) = self
+                .create_default_agent_unless_teammate(&computer, harness_id)
                 .await
-                .ok();
+            {
+                connected = MacrodConnected::AgentBound;
+            }
         }
         // The pairing is claimed, so the code is useless; remove it anyway.
         self.fleet
@@ -716,7 +724,7 @@ where
             .await
             .inspect_err(|error| tracing::warn!(computer_id = %computer.id, error = ?error, "could not clear enrollment"))
             .ok();
-        Ok(true)
+        Ok(connected)
     }
 
     /// Give the team its first agent on a computer that just became ready.
@@ -733,7 +741,7 @@ where
         &self,
         computer: &Computer,
         harness_id: HarnessId,
-    ) -> Result<(), ComputerError> {
+    ) -> Result<Option<DefaultAgent>, ComputerError> {
         if self
             .repo
             .agent_of(computer.id)
@@ -742,10 +750,11 @@ where
             .is_some()
         {
             tracing::info!(computer_id = %computer.id, "an agent teammate's computer gets no default coding agent");
-            return Ok(());
+            return Ok(None);
         }
-        self.create_default_agent(computer, harness_id).await?;
-        Ok(())
+        self.create_default_agent(computer, harness_id)
+            .await
+            .map(Some)
     }
 
     async fn create_default_agent(
@@ -789,6 +798,25 @@ where
             .ok_or(ComputerError::NotFound)?
             .into_healthy()
             .map_err(|_| ComputerError::NeedsAttention)
+    }
+}
+
+/// What macrod connecting on a harness did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MacrodConnected {
+    /// The harness is not a computer's.
+    NotAComputer,
+    /// A computer's macrod connected; the agents bound to it are unchanged.
+    Computer,
+    /// A computer's macrod connected and its first agent was bound to it.
+    AgentBound,
+}
+
+impl MacrodConnected {
+    /// Whether the harness is a computer's.
+    #[must_use]
+    pub fn is_computer(self) -> bool {
+        !matches!(self, Self::NotAComputer)
     }
 }
 

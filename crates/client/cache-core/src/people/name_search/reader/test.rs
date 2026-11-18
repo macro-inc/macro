@@ -190,3 +190,90 @@ fn eligibility_preserves_self_pin_automated_addresses_and_foreign_keys() {
         assert_eq!(people.len(), expected);
     }
 }
+#[test]
+fn messaged_word_start_matches_lead_strangers_with_exact_names_in_every_mode() {
+    // Two strangers named exactly "Rhea" and a "Rhea Okafor" the viewer
+    // messages: the person the viewer messages leads.
+    let strangers = [
+        ("macro|rhea+1@example.com", Some("Rhea"), None),
+        ("macro|rhea@example.org", Some("rhea"), None),
+        (
+            "macro|rhea.okafor@example.com",
+            Some("Rhea Okafor"),
+            Some(500),
+        ),
+    ];
+    // Messaged people first, by name tier and then recency; then the never
+    // messaged by name tier; a contains-only match last, however recent.
+    let groups = [
+        ("macro|rhea@example.com", Some("Rhea"), None),
+        ("macro|rhea+old@example.com", None, None),
+        (
+            "macro|rhea.okafor@example.com",
+            Some("Rhea Okafor"),
+            Some(100),
+        ),
+        ("macro|rhea+agent@example.com", None, Some(300)),
+        ("macro|rhea.lee@example.com", Some("Rhea Lee"), Some(50)),
+        ("macro|andrhea@example.com", Some("Andrhea"), Some(900)),
+    ];
+    for mode in [
+        PeopleMode::Mention,
+        PeopleMode::Command,
+        PeopleMode::Property,
+        PeopleMode::Recipient,
+    ] {
+        for (rows, expected) in [
+            (
+                &strangers[..],
+                &[
+                    ("macro|rhea.okafor@example.com", 5, 500),
+                    ("macro|rhea+1@example.com", 3, 0),
+                    ("macro|rhea@example.org", 3, 0),
+                ][..],
+            ),
+            (
+                &groups[..],
+                &[
+                    ("macro|rhea.okafor@example.com", 5, 100),
+                    ("macro|rhea.lee@example.com", 5, 50),
+                    ("macro|rhea+agent@example.com", 4, 300),
+                    ("macro|rhea@example.com", 3, 0),
+                    ("macro|rhea+old@example.com", 2, 0),
+                    ("macro|andrhea@example.com", 1, 900),
+                ][..],
+            ),
+        ] {
+            let request = request("rhea", mode, 10);
+            let records = rows
+                .iter()
+                .map(|(id, name, time)| {
+                    let (key, mut record) = person(&request, id, "", time.unwrap_or(0), None);
+                    record.fields.insert(
+                        "name".into(),
+                        name.map_or(CacheValue::Null, |name| CacheValue::String(name.into())),
+                    );
+                    if time.is_none() {
+                        record.fields.remove(CONTEXT_FIELD);
+                    }
+                    (key, record)
+                })
+                .collect::<Vec<_>>();
+            let mut read = NameSearchRead::new(&request, Uuid::from_u128(2), VERSION).unwrap();
+            for (key, record) in &records {
+                read.push(key, record, None);
+            }
+            let PeopleSearchResult::Page { people, .. } = read.finish().unwrap() else {
+                panic!("page");
+            };
+            assert_eq!(
+                people
+                    .iter()
+                    .map(|p| (p.user_id.as_ref(), p.match_rank, p.timestamp_ms))
+                    .collect::<Vec<_>>(),
+                expected,
+                "{mode:?}"
+            );
+        }
+    }
+}
