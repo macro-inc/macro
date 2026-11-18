@@ -128,4 +128,14 @@ describe('ChannelNamespace', () => {
     expect(ids).toEqual(['channel-1', 'channel-2', 'channel-3', 'channel-4']);
     expect(requests).toHaveLength(3);
   });
+
+  test('a blank name search keeps the page size it was given', async () => {
+    const { client, requests } = channelsClient();
+
+    await Array.fromAsync(
+      new ChannelNamespace(client).search('', { pageSize: 2 }),
+    );
+
+    expect(requests[0]).toEqual({ limit: 2 });
+  });
 });
