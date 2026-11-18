@@ -248,11 +248,41 @@ async fn gmail_report_spam_moves_the_thread_out_of_the_inbox(
             ),
             (
                 link,
-                vec![(message, provider_id)],
+                vec![(message, provider_id.clone())],
                 vec![],
                 vec!["INBOX".to_string()]
             ),
         ]
+    );
+
+    // Not spam on the user's own sent mail takes it out of Spam but keeps
+    // it out of the inbox, as Move to inbox does.
+    enqueuer.0.lock().unwrap().clear();
+    sqlx::query!(
+        "UPDATE email_messages SET is_sent = true WHERE id = $1",
+        message
+    )
+    .execute(&pool)
+    .await?;
+    service
+        .change_thread_mailbox_state_impl(owner.clone(), thread, MailboxAction::Junk(false))
+        .await?;
+    assert!(
+        !service
+            .email_repo
+            .thread_by_id(thread)
+            .await?
+            .unwrap()
+            .inbox_visible
+    );
+    assert_eq!(
+        *enqueuer.0.lock().unwrap(),
+        [(
+            link,
+            vec![(message, provider_id)],
+            vec![],
+            vec!["SPAM".to_string()]
+        )]
     );
     Ok(())
 }

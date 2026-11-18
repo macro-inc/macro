@@ -172,7 +172,7 @@ where
     /// user can try again goes last: Report spam files the thread under Spam
     /// before it leaves the inbox, Not spam puts it in the inbox before it
     /// leaves Spam. The number of messages the SPAM write covers.
-    #[tracing::instrument(err, skip_all, fields(link_id = %link.id, %thread_id, junk))]
+    #[tracing::instrument(err, skip_all, fields(link_id = %link.id, %thread_id, junk = junk))]
     async fn set_gmail_thread_junk(
         &self,
         link: &Link,
@@ -204,9 +204,11 @@ where
             }
             return Ok(filed.successful_ids.len());
         }
-        // Only mail that was in Spam goes back to the inbox: Not spam on a
-        // thread that is not spam leaves an archived thread archived.
-        if present().any(|message| message.in_junk && !message.is_draft) {
+        // Only received mail that was in Spam goes back to the inbox: Not spam
+        // on a thread that is not spam leaves an archived thread archived, and
+        // a thread of the user's own sent mail stays out of the inbox, as Move
+        // to inbox keeps it out.
+        if present().any(|message| message.in_junk && !message.is_draft && !message.is_sent) {
             self.set_thread_inbox(link, thread_id, actor.clone(), true)
                 .await?;
         }
