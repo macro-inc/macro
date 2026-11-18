@@ -1,5 +1,6 @@
 //! CRM access is independent of permission to contribute a mailbox.
 
+#[cfg(any(test, feature = "outbound"))]
 pub(crate) mod mailbox_domains;
 
 use entity_access::domain::models::MemberTeamRole;
