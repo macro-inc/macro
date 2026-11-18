@@ -85,6 +85,11 @@ export const routineTriggerSchema = z.discriminatedUnion('kind', [
     match: z.array(payloadTestSchema).optional(),
     /** Only for task property change events. */
     property: propertySelectorSchema.optional(),
+    /**
+     * Only for new email: the inboxes (email link ids) it watches, among the
+     * owner's own and those shared with them. Absent watches every one.
+     */
+    inboxes: z.array(z.string().uuid()).optional(),
     /** Yes/no question the event's content must answer with yes. */
     condition: z.string().optional(),
   }),
@@ -574,6 +579,9 @@ export function newScheduleTrigger(
     cron: '0 0 9 * * *',
   };
 }
+/** As many inboxes as one email trigger may pick. */
+export const MAX_INBOXES = 25;
+
 function validateEventTrigger(
   trigger: EventTriggerDraft,
   creating: boolean
@@ -585,6 +593,8 @@ function validateEventTrigger(
     return 'Choose up to 100 items per event trigger.';
   if ((trigger.property?.values.length ?? 0) > 100)
     return 'Choose up to 100 values per event trigger.';
+  if ((trigger.inboxes?.length ?? 0) > MAX_INBOXES)
+    return `Choose up to ${MAX_INBOXES} inboxes per email trigger.`;
   if ([...(trigger.condition?.trim() ?? '')].length > MAX_CONDITION_CHARS)
     return `Keep the condition under ${MAX_CONDITION_CHARS} characters.`;
   return (

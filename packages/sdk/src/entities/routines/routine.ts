@@ -19,12 +19,16 @@ import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
 import type { Agent } from '../agents/agent';
 import { Chat } from '../chats/chat';
+import type { Link } from '../email/link';
 import { MacroEntity } from '../entity';
 import type { EntityReference } from '../reference';
 import { User } from '../users/user';
 
 /** An event selector references resources by typed handles. */
-export type RoutineEventFilter = Omit<EventFilter, 'ids' | 'condition'> & {
+export type RoutineEventFilter = Omit<
+  EventFilter,
+  'ids' | 'condition' | 'inboxes'
+> & {
   /**
    * The items these events are watched on, as references to handles the SDK
    * returned, such as `{ type: 'channel', entity: channel }`; never ids.
@@ -33,6 +37,13 @@ export type RoutineEventFilter = Omit<EventFilter, 'ids' | 'condition'> & {
   entities?: EntityReference[];
   /** Optional yes/no condition on the triggering content. */
   condition?: string;
+  /**
+   * For `email.message_received` alone: the inboxes whose new mail starts the
+   * routine, from `macro.email.links()`. Omit to watch every inbox the owner
+   * reads, their own and those shared with them; prefer this to checking the
+   * inbox in a code step.
+   */
+  inboxes?: Link[];
 };
 
 /**
@@ -57,9 +68,10 @@ function singleTriggerBody(trigger: SingleRoutineTrigger): RoutineTrigger {
     .with({ type: 'once' }, (value) => value)
     .with({ type: 'events' }, (value) => ({
       type: 'events' as const,
-      filters: value.filters.map(({ entities, ...filter }) => ({
+      filters: value.filters.map(({ entities, inboxes, ...filter }) => ({
         ...filter,
         ids: entities?.map((entity) => entity.entity.id),
+        inboxes: inboxes?.map((inbox) => inbox.id),
       })),
     }))
     .exhaustive();

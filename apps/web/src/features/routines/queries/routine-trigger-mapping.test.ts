@@ -430,3 +430,55 @@ describe('task property selectors', () => {
     expect(taskTriggerProperty(trigger)).toBeUndefined();
   });
 });
+
+describe('email trigger inboxes', () => {
+  const inbox = '01900000-0000-7000-8000-0000000000a1';
+
+  it('round trips the inboxes an email trigger watches', () => {
+    const config = {
+      type: 'events' as const,
+      filters: [
+        { events: ['email.message_received' as const], inboxes: [inbox] },
+      ],
+    };
+    const triggers = parseRoutineTriggers(config)!;
+    expect(triggers[0]).toMatchObject({ kind: 'event', inboxes: [inbox] });
+    expect(routineTriggerSchema.safeParse(triggers[0]).success).toBe(true);
+    expect(serializeTriggers(triggers)).toEqual(config);
+  });
+
+  it('sends no inboxes for every inbox', () => {
+    const trigger = {
+      id: 'trigger',
+      kind: 'event' as const,
+      events: ['email.message_received' as const],
+    };
+    for (const inboxes of [undefined, []])
+      expect(serializeTriggers([{ ...trigger, inboxes }])).toEqual({
+        type: 'events',
+        filters: [{ events: ['email.message_received'] }],
+      });
+    expect(
+      parseRoutineTriggers({
+        type: 'events',
+        filters: [{ events: ['email.message_received'], inboxes: [] }],
+      })?.[0]
+    ).toMatchObject({ inboxes: undefined });
+  });
+
+  it('refuses more inboxes than the backend accepts', () => {
+    const trigger = {
+      id: 'trigger',
+      kind: 'event' as const,
+      events: ['email.message_received' as const],
+    };
+    expect(
+      validateTriggers([
+        {
+          ...trigger,
+          inboxes: Array.from({ length: 26 }, () => crypto.randomUUID()),
+        },
+      ])
+    ).toBe('Choose up to 25 inboxes per email trigger.');
+  });
+});

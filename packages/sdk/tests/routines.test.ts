@@ -149,6 +149,39 @@ test('routine creation sends code and Ask AI steps that write as the user', asyn
     },
   ]);
 });
+test('an email trigger sends the inboxes it watches by their handles', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json(record, { status: 201 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const inbox = macro.email.link('inbox-1');
+  await macro.routines.create({
+    name: 'Helpdesk',
+    trigger: {
+      type: 'events',
+      filters: [{ events: ['email.message_received'], inboxes: [inbox] }],
+    },
+    prompt: 'Triage',
+    userPrompt: 'Triage helpdesk mail',
+  });
+  expect(bodies).toMatchObject([
+    {
+      trigger: {
+        type: 'events',
+        filters: [{ events: ['email.message_received'], inboxes: ['inbox-1'] }],
+      },
+    },
+  ]);
+});
 test('routine writes invalidate detail only after success', async () => {
   let enabled = true;
   let reads = 0;
