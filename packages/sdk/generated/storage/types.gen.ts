@@ -13411,7 +13411,7 @@ export type InitiativeActivityRecord = {
  */
 export type InitiativeDescription = {
     /**
-     * Internal markdown, chips as `<m-*>` tags; empty while no one has opened or written it.
+     * Internal markdown, chips as XML tags such as `<m-user-mention>`; empty while no one has opened or written it.
      */
     markdown: string;
 };
