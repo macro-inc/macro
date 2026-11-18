@@ -1186,6 +1186,34 @@ Macro credits. Opening one lands on this section, where **Sign in with Claude**
 starts over. People can turn them off under **Settings → Notifications →
 Computer Claude sign-ins**.
 
+### Agent permissions
+
+Behind `enable-agent-permissions` and `enable-ocaml-code-mode` (both on in
+dev), an agent's edit form has a **Permissions** section between `Who can use
+it` and `Advanced`: `All allowed` or `<n> restrictions` with the first two
+(`Asks before sending · Email`) and `Manage`, which opens the **Permissions**
+page in place; Back returns to the form with its unsaved edits. The Macro row
+in the agent list has a shield button (`Macro's permissions`) that opens the
+same page for the Macro persona (the new Macro bot id), and
+`requestAgentPermissions(agentId, focus?)` opens it from elsewhere, scrolled
+to a group, action or tool. The section and button are absent while either
+flag is off or the API answers 404, and on the create form.
+
+The page lists every permission group as a collapsible row whose summary says
+what is restricted (`⊘ Never deletes · ✋ Asks before sending · 2 tools
+customized`). Expanded, each of the five actions (Create, Read, Update,
+Delete, Send) has an `Allow · Ask · Never` segmented control (radio group
+named `<Group>: <Action>`; full state names are the tooltips), and
+`Individual tools` lists the group's tools with an `All` / `Differs` filter,
+each with its own control and a ↺ (`Use the <Action> setting`) that clears its
+own rule. Every click saves at once (one `PUT`, queued per agent); a failure
+puts the control back and shows a toast. The search field matches group,
+action and tool names and `service.operation`, and opens matching groups.
+`Reset permissions` asks for confirmation (a drawer on phones) and puts every
+saved setting back to Always allow. People who can't edit the agent see the
+controls disabled and no Reset. On phones the rows stack and controls go full
+width.
+
 ### GitHub reconnect recovery
 
 When GitHub reports that reauthentication is required, reconnect starts OAuth

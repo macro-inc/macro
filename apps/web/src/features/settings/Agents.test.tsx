@@ -26,6 +26,7 @@ import { Agents } from './Agents';
 import {
   agentSettingsRequest,
   requestAgentDetail,
+  requestAgentPermissions,
   requestCreateAgent,
 } from './agentSettingsState';
 import {
@@ -74,6 +75,34 @@ vi.mock('./components/coding-preferences-setting', () => ({
 }));
 vi.mock('./components/auto-archive-setting', () => ({
   AutoArchiveSetting: () => null,
+}));
+
+// The permissions page has its own suite; here only its entry points.
+const permissionMocks = vi.hoisted(() => ({ enabled: false }));
+vi.mock('@app/features/agent-permissions', () => ({
+  useAgentPermissionsFlag: () => () => permissionMocks.enabled,
+  AgentPermissionsSection: (props: {
+    agentId: string;
+    onManage: () => void;
+  }) => (
+    <button type="button" onClick={() => props.onManage()}>
+      Manage permissions of {props.agentId}
+    </button>
+  ),
+  AgentPermissionsPage: (props: {
+    agentId: string;
+    agentName: string;
+    onBack: () => void;
+  }) => (
+    <div>
+      <h1>
+        Permissions page of {props.agentName} ({props.agentId})
+      </h1>
+      <button type="button" onClick={() => props.onBack()}>
+        Back from permissions
+      </button>
+    </div>
+  ),
 }));
 
 const [searchParams, updateSearchParams] = createStore<{
@@ -326,6 +355,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  permissionMocks.enabled = false;
   avatarMocks.upload.mockReset();
   apiKeyMocks.query.data = undefined;
   apiKeyMocks.save.mockReset();
@@ -987,6 +1017,87 @@ describe('Agents', () => {
 
     expect(screen.getByRole('heading', { name: 'Edit agent' })).toBeTruthy();
     expect(agentSettingsRequest()).toBeUndefined();
+  });
+
+  describe('permissions', () => {
+    const ownAgent = {
+      bot: {
+        id: 'agent-1',
+        kind: 'owned',
+        owner: { type: 'user', user_id: 'macro|user@example.com' },
+        name: 'Bug fixer',
+        handle: 'bug-fixer',
+        has_agent: true,
+        created_at: '2026-08-27T12:00:00Z',
+        updated_at: '2026-08-27T12:00:00Z',
+      },
+      instructions: 'Fix the root cause.',
+      harness: 'in-memory',
+      default_model: Model.sonnet55,
+      channel_scope: 'all',
+      channel_ids: [],
+    };
+
+    it('opens from the agent editor and returns to the unsaved form', () => {
+      permissionMocks.enabled = true;
+      agentMocks.query.data = [ownAgent];
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      fireEvent.input(screen.getByLabelText('Instructions'), {
+        target: { value: 'Draft instructions' },
+      });
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Manage permissions of agent-1' })
+      );
+      expect(
+        screen.getByRole('heading', {
+          name: 'Permissions page of Bug fixer (agent-1)',
+        })
+      ).toBeTruthy();
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Back from permissions' })
+      );
+      expect(
+        (screen.getByLabelText('Instructions') as HTMLTextAreaElement).value
+      ).toBe('Draft instructions');
+    });
+
+    it('is not in the editor while the flag is off or when creating', () => {
+      agentMocks.query.data = [ownAgent];
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      expect(
+        screen.queryByRole('button', { name: /Manage permissions/ })
+      ).toBeNull();
+    });
+
+    it("opens Macro's permissions for the new Macro bot from its row", () => {
+      permissionMocks.enabled = true;
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(
+        screen.getByRole('button', { name: "Macro's permissions" })
+      );
+      expect(
+        screen.getByRole('heading', {
+          name: 'Permissions page of Macro (00000000-0000-0000-0000-00000000a2a2)',
+        })
+      ).toBeTruthy();
+    });
+
+    it("opens an agent's permissions when asked to by a link", () => {
+      permissionMocks.enabled = true;
+      agentMocks.query.data = [ownAgent];
+      requestAgentPermissions('agent-1', { group: 'email' });
+      render(() => <Agents {...agentsPageProps} />);
+      expect(
+        screen.getByRole('heading', {
+          name: 'Permissions page of Bug fixer (agent-1)',
+        })
+      ).toBeTruthy();
+      expect(agentSettingsRequest()).toBeUndefined();
+    });
   });
 
   it('lets team members edit without deleting or privatizing another creator agent', () => {
