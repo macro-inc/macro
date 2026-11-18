@@ -10,6 +10,11 @@
 //!   instructions. A routine has at most one.
 //!
 //! Apps the routine requires ([`RoutineProgram::mcp_servers`]) go to its agent.
+//!
+//! A routine may define sub-routines ([`SubRoutineDefinition`]) that its runs
+//! schedule copies of, each with its own trigger and [`Input`] values. A
+//! copy's task ([`SubRoutineCopy`]) names its definition and holds those
+//! values; it runs the definition as its parent holds it.
 #![deny(missing_docs)]
 
 mod catalog;
@@ -17,6 +22,7 @@ mod contract;
 mod knob;
 mod model;
 mod plan;
+mod sub_routine;
 mod validate;
 
 pub use catalog::{CATALOG, CatalogRoutine, NamedItemKind, Surface, catalog_routine};
@@ -27,4 +33,8 @@ pub use knob::{
 };
 pub use model::*;
 pub use plan::{CallRecord, CallStatus, StepPath, StepRecord, StepResult};
+pub use sub_routine::{
+    CopyError, Input, InputError, InputName, InvalidInputName, InvalidSubRoutineName,
+    MAX_INPUT_TEXT_CHARS, SubRoutineCopy, SubRoutineDefinition, SubRoutineName,
+};
 pub use validate::{ProgramError, limits};

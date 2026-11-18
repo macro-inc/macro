@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::knob::Knob;
+use crate::{
+    knob::Knob,
+    sub_routine::{Input, SubRoutineCopy, SubRoutineDefinition, SubRoutineName},
+};
 
 #[cfg(test)]
 mod test;
@@ -42,6 +45,17 @@ pub struct RoutineProgram {
     /// change. A single agent task has no code steps, so it never applies.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dangerously_operate_as_user: bool,
+    /// Values its code reads as `inputs.<name>`: those a sub-routine's copy
+    /// was given when it was scheduled, kept when the copy became a routine
+    /// of its own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inputs: Vec<Input>,
+    /// Routines its runs schedule copies of, with
+    /// `macro.routines.schedule(name, { trigger, inputs })`: written once
+    /// here and checked with it. A copy holds its trigger and its inputs'
+    /// values, and runs its definition as it is here when it runs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sub_routines: Vec<SubRoutineDefinition>,
 }
 
 /// Who a routine's code steps write as.
@@ -288,14 +302,17 @@ pub struct AgentTask {
     pub user_prompt: String,
 }
 
-/// A stored task's two forms, as the scheduler's API describes `task`:
-/// [`RoutineProgram::from_task`] reads them.
+/// A stored task's forms, as the scheduler's API describes `task`:
+/// [`RoutineProgram::from_task`] reads a program or an agent task, and
+/// [`SubRoutineCopy::from_task`] a copy, whose steps are its parent's.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(untagged)]
 pub enum RoutineTask {
     /// Steps, run in order.
     Program(RoutineProgram),
+    /// A copy of a sub-routine its parent defines.
+    Copy(SubRoutineCopy),
     /// A routine that is only an agent.
     Agent(AgentTask),
 }
@@ -314,14 +331,23 @@ impl RoutineProgram {
             single_agent_task: false,
             sdk: None,
             dangerously_operate_as_user: false,
+            inputs: Vec::new(),
+            sub_routines: Vec::new(),
         }
     }
 
     /// Read a stored task: a program (`{"steps": [...]}`), or the single agent
     /// task written before routines had steps, which becomes one agent step.
+    /// A sub-routine's copy is neither: its steps are read from its parent
+    /// ([`Self::copy_program`]).
     pub fn from_task(task: &Value) -> Result<Self, InvalidTask> {
         if task.get("steps").is_some() {
             return Ok(serde_json::from_value(task.clone())?);
+        }
+        if task.get("sub_routine").is_some() {
+            return Err(InvalidTask(serde::de::Error::custom(
+                "a sub-routine's copy runs the steps its parent defines",
+            )));
         }
         let legacy: AgentTask = serde_json::from_value(task.clone())?;
         let instructions = match legacy.prompt.trim() {
@@ -338,6 +364,8 @@ impl RoutineProgram {
             single_agent_task: true,
             sdk: None,
             dangerously_operate_as_user: false,
+            inputs: Vec::new(),
+            sub_routines: Vec::new(),
         })
     }
 
@@ -350,10 +378,16 @@ impl RoutineProgram {
         }
     }
 
-    /// Every code step, mutably, in program order.
+    /// Every code step it holds, mutably, in the order of
+    /// [`Self::code_steps`].
     pub fn code_steps_mut(&mut self) -> Vec<&mut CodeStep> {
+        let definitions = self
+            .sub_routines
+            .iter_mut()
+            .flat_map(|definition| definition.steps.iter_mut());
         self.steps
             .iter_mut()
+            .chain(definitions)
             .filter_map(|step| match step {
                 Step::Code(step) => Some(step),
                 Step::Agent(_) => None,
@@ -361,15 +395,42 @@ impl RoutineProgram {
             .collect()
     }
 
-    /// Every code step, in program order.
+    /// Every code step it holds: its own in program order, then each
+    /// sub-routine's. They are checked, numbered and brought to a new SDK
+    /// together, in this order.
     pub fn code_steps(&self) -> Vec<&CodeStep> {
+        let definitions = self
+            .sub_routines
+            .iter()
+            .flat_map(|definition| definition.steps.iter());
         self.steps
             .iter()
+            .chain(definitions)
             .filter_map(|step| match step {
                 Step::Code(step) => Some(step),
                 Step::Agent(_) => None,
             })
             .collect()
+    }
+
+    /// Where the code step [`Self::code_steps`] numbers `index` is: the
+    /// sub-routine holding it, if any, and its place among that one's steps
+    /// or the routine's own.
+    pub fn code_step_place(&self, index: usize) -> Option<(Option<&SubRoutineName>, usize)> {
+        let own = std::iter::once((None, &self.steps));
+        let definitions = self
+            .sub_routines
+            .iter()
+            .map(|definition| (Some(&definition.name), &definition.steps));
+        own.chain(definitions)
+            .flat_map(|(name, steps)| {
+                steps
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, step)| matches!(step, Step::Code(_)))
+                    .map(move |(position, _)| (name, position))
+            })
+            .nth(index)
     }
 
     /// Every agent step, in program order.

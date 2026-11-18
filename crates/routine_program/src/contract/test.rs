@@ -126,3 +126,66 @@ fn the_recorded_version_names_the_sdk_and_the_contract() {
     assert_eq!(code_version("0.2.2+abc"), version);
     assert_ne!(code_version("0.2.3+def"), version);
 }
+
+#[test]
+fn a_routines_sub_routines_type_its_schedule_and_their_steps_inputs() {
+    let mut routine = RoutineProgram::from_task(&json!({
+        "steps": [code("Schedule", None)],
+        "sub_routines": [
+            {
+                "name": "remind",
+                "title": "Remind me",
+                "inputs": [
+                    { "type": "text", "name": "taskId", "label": "Task" },
+                    { "type": "boolean", "name": "urgent", "label": "Urgent" },
+                ],
+                "steps": [code("Schedule", None), code("Tell", None)],
+            },
+            { "name": "nudge", "title": "Nudge me", "steps": [code("Nudge", None)] },
+        ],
+    }))
+    .unwrap();
+    routine.assign_step_ids();
+    let files = routine.check_files();
+
+    // Numbered on from the routine's own steps; ids are per run, so a
+    // sub-routine's step may reuse a title the routine's own step has.
+    let names: Vec<_> = files.iter().map(|file| file.name.as_str()).collect();
+    assert_eq!(names, ["step_0.ts", "step_1.ts", "step_2.ts", "step_3.ts"]);
+    assert_eq!(files[1].title, "Schedule (in sub-routine `remind`)");
+    assert_eq!(ids(&routine), ["schedule"]);
+    let Step::Code(first) = &routine.sub_routines[0].steps[0] else {
+        panic!("a code step");
+    };
+    assert_eq!(first.id.as_ref().map(StepId::as_str), Some("schedule"));
+
+    let context = |file: &CheckFile| {
+        let lines: Vec<&str> = file.source.lines().collect();
+        lines[1..lines.len() - 1].join("\n")
+    };
+    let schedule = |base: &str, inputs: &str| {
+        format!(
+            "type $SubRoutines = {{ remind: {{ inputs: {{ taskId: string; urgent: boolean }} }}; nudge: {{ inputs?: Record<string, never> }} }};\n\
+             type $Macro = {base}['macro'];\n\
+             type $Routines = $Macro['routines'];\n\
+             type StepContext = Omit<{base}, 'macro'> & {{ macro: Omit<$Macro, 'routines'> & {{ routines: Omit<$Routines, 'schedule'> & {{ schedule<Name extends keyof $SubRoutines>(name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]): ReturnType<$Routines['schedule']> }} }} }}{inputs};"
+        )
+    };
+    assert_eq!(
+        context(&files[0]),
+        schedule("RoutineStepContext<{  }, {  }>", "")
+    );
+    // A sub-routine's steps read its inputs, and the outputs of its own
+    // steps only.
+    assert_eq!(
+        context(&files[2]),
+        schedule(
+            "RoutineStepContext<{ schedule: StepOutput<Awaited<ReturnType<typeof import('./step_1.ts')['main']>>> }, {  }>",
+            " & { inputs: { taskId: string; urgent: boolean } }"
+        )
+    );
+    assert_eq!(
+        context(&files[3]),
+        schedule("RoutineStepContext<{  }, {  }>", " & { inputs: {} }")
+    );
+}

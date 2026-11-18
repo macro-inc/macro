@@ -2,18 +2,26 @@
 
 ## What it is
 
-Routines: the typed program a routine runs. A stored task is either
-`{"steps": [...], "mcp_servers": [...]}` or the single agent task routines used
-before steps (`AgentTask`), which loads as one agent step. Pure data and rules;
-no I/O.
+Routines: the typed program a routine runs. A stored task is
+`{"steps": [...], "mcp_servers": [...]}`, the single agent task routines used
+before steps (`AgentTask`), which loads as one agent step, or a sub-routine's
+copy (`{"sub_routine": "<name>", "inputs": {...}}`), which runs a definition
+its parent holds. Pure data and rules; no I/O.
 
 ## Start here
 
 - `src/model.rs`: steps (code and agent, a flat list run in order), the
   program's recorded `sdk`, `dangerously_operate_as_user` (code steps write
-  as the owner; `CodeIdentity`), `AgentTask`, `RoutineTask` (the two stored
-  forms, as the scheduler's API describes `task`), and
-  `RoutineProgram::from_task`.
+  as the owner; `CodeIdentity`), its `inputs` and `sub_routines`,
+  `AgentTask`, `RoutineTask` (the stored forms, as the scheduler's API
+  describes `task`), and `RoutineProgram::from_task`. `code_steps` covers
+  the sub-routines' code steps after the routine's own; `code_step_place`
+  says where one of them is.
+- `src/sub_routine.rs`: `SubRoutineDefinition` (a routine its runs schedule
+  copies of: name, title, typed `Input`s without values, steps, apps),
+  `SubRoutineCopy` (a copy's task) and `RoutineProgram::copy_program`, the
+  program a copy runs: its definition as the parent holds it now, with the
+  copy's input values.
 - `src/contract.rs`: what a code step receives and returns. `CODE_STEPS`
   (`src/code_steps.md`, how to write a code step: the one description
   CreateRoutine, the scheduler's drafter and the Compose Routines skill read),
@@ -86,6 +94,16 @@ no I/O.
   lines, and a step reads earlier steps' return types by importing their
   files. A change to one step's return can fail a later step.
 - A program with `mcp_servers` needs an agent step (`AppsWithoutAgent`).
+- A routine's sub-routines are checked with it: their code steps get check
+  files numbered after the routine's own, ids unique per run (a definition's
+  steps never see the routine's outputs), and every file of a routine with
+  sub-routines types `macro.routines.schedule` by their names and inputs. A
+  routine with neither sub-routines nor inputs gets byte-identical check
+  files, so adding them never re-checks stored routines.
+- A copy holds no steps. Editing a definition changes every copy that runs
+  after it; a copy whose definition is gone, or whose inputs no longer fit
+  it, fails its run (`CopyError`). Keeping a copy as a routine of its own
+  first writes out its program (`copy_program`), inputs included.
 - `dangerously_operate_as_user` only changes code steps' attribution; agent
   steps keep their agent's. Only the owner sets it: drafts never carry it and
   sharing a routine as a template drops it.

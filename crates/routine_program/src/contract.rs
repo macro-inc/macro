@@ -6,7 +6,10 @@ use std::{collections::HashSet, sync::LazyLock};
 
 use sha2::{Digest, Sha256};
 
-use crate::model::{CodeStep, RoutineProgram, SdkFingerprint, Step, StepId};
+use crate::{
+    model::{CodeStep, RoutineProgram, SdkFingerprint, Step, StepId},
+    sub_routine::{Input, SubRoutineDefinition, SubRoutineName},
+};
 
 #[cfg(test)]
 mod test;
@@ -116,9 +119,10 @@ pub fn code_version(sdk: &str) -> SdkFingerprint {
 /// One code step, as the type checker sees it with the rest of its routine.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CheckFile {
-    /// Which code step, counted in program order from zero.
+    /// Which code step, counted in the order of
+    /// [`RoutineProgram::code_steps`] from zero.
     pub index: usize,
-    /// The step's title.
+    /// The step's title, and the sub-routine holding it, if any.
     pub title: String,
     /// The file name it is checked under, e.g. `step_0.ts`.
     pub name: String,
@@ -128,22 +132,74 @@ pub struct CheckFile {
 }
 
 impl RoutineProgram {
-    /// Give every code step without an id one, from its title, unique in the
-    /// routine, so its output reaches later
-    /// steps. Existing ids stay.
+    /// Give every code step without an id one, from its title, unique among
+    /// the steps it runs with (the routine's own, or one sub-routine's), so
+    /// its output reaches later steps. Existing ids stay.
     pub fn assign_step_ids(&mut self) {
-        let mut taken: HashSet<String> = HashSet::new();
-        collect_ids(&self.steps, &mut taken);
-        assign(&mut self.steps, &mut taken);
+        let lists = std::iter::once(&mut self.steps).chain(
+            self.sub_routines
+                .iter_mut()
+                .map(|definition| &mut definition.steps),
+        );
+        for steps in lists {
+            let mut taken: HashSet<String> = HashSet::new();
+            collect_ids(steps, &mut taken);
+            assign(steps, &mut taken);
+        }
     }
 
-    /// Every code step's check file, in program order. Each declares
-    /// `steps` with the outputs of the steps before it.
+    /// Every code step's check file, numbered in the order of
+    /// [`Self::code_steps`]. Each declares `steps` with the outputs of the
+    /// steps before it in the same run. A routine that defines sub-routines
+    /// types `macro.routines.schedule` with their names and inputs, and a
+    /// routine or sub-routine with inputs types `inputs`.
     pub fn check_files(&self) -> Vec<CheckFile> {
-        let mut walk = Walk::default();
-        walk.steps(&self.steps);
+        let schedules = schedules(&self.sub_routines);
+        let mut walk = Walk {
+            schedules: schedules.clone(),
+            inputs: input_types(&self.inputs),
+            ..Walk::default()
+        };
+        walk.steps(&self.steps, None);
+        for definition in &self.sub_routines {
+            walk = Walk {
+                files: walk.files,
+                schedules: schedules.clone(),
+                inputs: Some(input_types(&definition.inputs).unwrap_or_else(|| "{}".to_owned())),
+                visible: Vec::new(),
+            };
+            walk.steps(&definition.steps, Some(&definition.name));
+        }
         walk.files
     }
+}
+
+/// The TypeScript object type of each sub-routine's `schedule` options'
+/// `inputs`, by name; `None` when the routine defines none.
+fn schedules(definitions: &[SubRoutineDefinition]) -> Option<String> {
+    if definitions.is_empty() {
+        return None;
+    }
+    let fields: Vec<String> = definitions
+        .iter()
+        .map(|definition| match input_types(&definition.inputs) {
+            Some(inputs) => format!("{}: {{ inputs: {inputs} }}", definition.name),
+            None => format!("{}: {{ inputs?: Record<string, never> }}", definition.name),
+        })
+        .collect();
+    Some(format!("{{ {} }}", fields.join("; ")))
+}
+
+/// The TypeScript object type of `inputs`; `None` when there are none.
+fn input_types(inputs: &[Input]) -> Option<String> {
+    if inputs.is_empty() {
+        return None;
+    }
+    let fields: Vec<String> = inputs
+        .iter()
+        .map(|input| format!("{}: {}", input.name(), input.ts_type()))
+        .collect();
+    Some(format!("{{ {} }}", fields.join("; ")))
 }
 
 fn collect_ids(steps: &[Step], taken: &mut HashSet<String>) {
@@ -225,10 +281,15 @@ struct Walk {
     /// The code steps a step at the current position can read, by id and
     /// file, in order.
     visible: Vec<(StepId, String)>,
+    /// The routine's sub-routines' inputs by name ([`schedules`]), which
+    /// type `macro.routines.schedule`; `None` when it defines none.
+    schedules: Option<String>,
+    /// The type of `inputs` for the steps walked; `None` when they have none.
+    inputs: Option<String>,
 }
 
 impl Walk {
-    fn steps(&mut self, steps: &[Step]) {
+    fn steps(&mut self, steps: &[Step], sub_routine: Option<&SubRoutineName>) {
         for step in steps {
             match step {
                 Step::Code(code) => {
@@ -238,20 +299,22 @@ impl Walk {
                     if !source.ends_with('\n') {
                         source.push('\n');
                     }
-                    source.push_str(&format!(
-                        "type StepContext = RoutineStepContext<{}, {}>;\n",
-                        self.outputs(),
-                        knobs(code)
-                    ));
+                    source.push_str(&self.context(code));
                     // The runner calls the module's `main` export with the
                     // context; a step without it, or one taking something
                     // else, would fail every run.
                     source.push_str(&format!(
                         "(undefined as unknown as typeof import('./{name}')['main']) satisfies (context: StepContext) => unknown;\n"
                     ));
+                    let title = match sub_routine {
+                        Some(sub_routine) => {
+                            format!("{} (in sub-routine `{sub_routine}`)", code.title.trim())
+                        }
+                        None => code.title.trim().to_owned(),
+                    };
                     self.files.push(CheckFile {
                         index,
-                        title: code.title.trim().to_owned(),
+                        title,
                         name: name.clone(),
                         source,
                     });
@@ -262,6 +325,30 @@ impl Walk {
                 Step::Agent(_) => {}
             }
         }
+    }
+
+    /// The step's module-scoped `StepContext`. A routine with neither
+    /// sub-routines nor inputs gets the same declaration it always had, so
+    /// its check files, and whether it needs checking again, don't change.
+    /// A routine's sub-routines replace the SDK's
+    /// `macro.routines.schedule` with one that takes only their names, each
+    /// with its inputs.
+    fn context(&self, code: &CodeStep) -> String {
+        let base = format!("RoutineStepContext<{}, {}>", self.outputs(), knobs(code));
+        let inputs = self
+            .inputs
+            .as_ref()
+            .map(|inputs| format!(" & {{ inputs: {inputs} }}"))
+            .unwrap_or_default();
+        let Some(schedules) = &self.schedules else {
+            return format!("type StepContext = {base}{inputs};\n");
+        };
+        format!(
+            "type $SubRoutines = {schedules};\n\
+             type $Macro = {base}['macro'];\n\
+             type $Routines = $Macro['routines'];\n\
+             type StepContext = Omit<{base}, 'macro'> & {{ macro: Omit<$Macro, 'routines'> & {{ routines: Omit<$Routines, 'schedule'> & {{ schedule<Name extends keyof $SubRoutines>(name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]): ReturnType<$Routines['schedule']> }} }} }}{inputs};\n"
+        )
     }
 
     /// The TypeScript object type of the outputs visible here.

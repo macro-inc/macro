@@ -2,9 +2,12 @@
 
 use std::collections::HashSet;
 
+use bots::domain::models::AgentMcpServer;
+
 use crate::{
     knob::{Knob, SentenceSyntax, mentions, sentence_slots},
     model::{AgentStep, CodeStep, RoutineProgram, Step, StepId},
+    sub_routine::{Input, MAX_INPUT_TEXT_CHARS, SubRoutineDefinition, SubRoutineName},
 };
 
 #[cfg(test)]
@@ -36,6 +39,12 @@ pub mod limits {
     pub const MAX_OPTION_CHARS: usize = 60;
     /// Characters in a code step's sentence.
     pub const MAX_SENTENCE_CHARS: usize = 300;
+    /// Sub-routines one routine defines.
+    pub const MAX_SUB_ROUTINES: usize = 5;
+    /// Inputs of one routine or sub-routine.
+    pub const MAX_INPUTS: usize = 12;
+    /// Characters in an input's label.
+    pub const MAX_INPUT_LABEL_CHARS: usize = 60;
 }
 
 use limits::*;
@@ -114,31 +123,157 @@ pub enum ProgramError {
         "in the sentence, write question knob `{0}` as `{{?{0}}}`, and other knobs as `{{{0}}}`"
     )]
     SentenceSlotKind(String),
+    /// More sub-routines than a routine may define.
+    #[error("a routine can define at most {MAX_SUB_ROUTINES} sub-routines")]
+    TooManySubRoutines,
+    /// Two sub-routines with the same name.
+    #[error("sub-routine `{0}` is defined twice")]
+    DuplicateSubRoutine(SubRoutineName),
+    /// A sub-routine without a title, or with a long one.
+    #[error("a sub-routine needs a title of 1 to {MAX_TITLE_CHARS} characters")]
+    SubRoutineTitle,
+    /// A rule one of the routine's sub-routines breaks.
+    #[error("in sub-routine `{name}`: {error}")]
+    InSubRoutine {
+        /// The sub-routine.
+        name: SubRoutineName,
+        /// The rule it breaks.
+        error: Box<ProgramError>,
+    },
+    /// Too many inputs.
+    #[error("a routine or sub-routine can have at most {MAX_INPUTS} inputs")]
+    TooManyInputs,
+    /// Two inputs with the same name.
+    #[error("input `{0}` is declared twice")]
+    DuplicateInput(String),
+    /// An input without a label, or with a long one.
+    #[error("input `{0}` needs a label of 1 to {MAX_INPUT_LABEL_CHARS} characters")]
+    InputLabel(String),
+    /// An input whose value is missing, unexpected or doesn't fit.
+    #[error("input `{name}`: {reason}")]
+    InputValue {
+        /// The input.
+        name: String,
+        /// What is wrong, for the author.
+        reason: String,
+    },
 }
 
 impl RoutineProgram {
-    /// Check every structural rule.
+    /// Check every structural rule, the sub-routines it defines included.
     pub fn validate(&self) -> Result<(), ProgramError> {
-        if self.steps.is_empty() {
-            return Err(ProgramError::Empty);
+        steps(&self.steps, &self.mcp_servers, self.single_agent_task)?;
+        inputs(&self.inputs, Values::Required)?;
+        if self.sub_routines.len() > MAX_SUB_ROUTINES {
+            return Err(ProgramError::TooManySubRoutines);
         }
-        let mut check = Check {
-            single_agent_task: self.single_agent_task,
-            ..Check::default()
-        };
-        if self.steps.len() > MAX_STEPS {
-            return Err(ProgramError::TooManySteps);
-        }
-        for step in &self.steps {
-            check.step(step)?;
-        }
-        if self.agent_steps().len() > 1 {
-            return Err(ProgramError::TooManyAgents);
-        }
-        if !self.mcp_servers.is_empty() && self.agent_steps().is_empty() {
-            return Err(ProgramError::AppsWithoutAgent);
+        let mut names = HashSet::new();
+        for definition in &self.sub_routines {
+            if !names.insert(&definition.name) {
+                return Err(ProgramError::DuplicateSubRoutine(definition.name.clone()));
+            }
+            sub_routine(definition).map_err(|error| ProgramError::InSubRoutine {
+                name: definition.name.clone(),
+                error: Box::new(error),
+            })?;
         }
         Ok(())
+    }
+}
+
+/// A routine's own steps, or a sub-routine's: each step's rules, ids unique
+/// among them, at most one agent, and apps only for an agent.
+fn steps(
+    steps: &[Step],
+    mcp_servers: &[AgentMcpServer],
+    single_agent_task: bool,
+) -> Result<(), ProgramError> {
+    if steps.is_empty() {
+        return Err(ProgramError::Empty);
+    }
+    if steps.len() > MAX_STEPS {
+        return Err(ProgramError::TooManySteps);
+    }
+    let mut check = Check {
+        single_agent_task,
+        ..Check::default()
+    };
+    for step in steps {
+        check.step(step)?;
+    }
+    let agents = steps
+        .iter()
+        .filter(|step| matches!(step, Step::Agent(_)))
+        .count();
+    if agents > 1 {
+        return Err(ProgramError::TooManyAgents);
+    }
+    if !mcp_servers.is_empty() && agents == 0 {
+        return Err(ProgramError::AppsWithoutAgent);
+    }
+    Ok(())
+}
+
+fn sub_routine(definition: &SubRoutineDefinition) -> Result<(), ProgramError> {
+    let title = definition.title.trim().chars().count();
+    if title == 0 || title > MAX_TITLE_CHARS {
+        return Err(ProgramError::SubRoutineTitle);
+    }
+    steps(&definition.steps, &definition.mcp_servers, false)?;
+    inputs(&definition.inputs, Values::Forbidden)
+}
+
+/// Whether inputs hold values: a routine's own do, the copy's it was kept
+/// from; a sub-routine's don't, since each copy is given its own.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Values {
+    Required,
+    Forbidden,
+}
+
+fn inputs(inputs: &[Input], values: Values) -> Result<(), ProgramError> {
+    if inputs.len() > MAX_INPUTS {
+        return Err(ProgramError::TooManyInputs);
+    }
+    let mut names = HashSet::new();
+    for input in inputs {
+        let name = input.name().as_str();
+        if !names.insert(name) {
+            return Err(ProgramError::DuplicateInput(name.to_owned()));
+        }
+        let label = input.label().trim().chars().count();
+        if label == 0 || label > MAX_INPUT_LABEL_CHARS {
+            return Err(ProgramError::InputLabel(name.to_owned()));
+        }
+        input_value(input, values).map_err(|reason| ProgramError::InputValue {
+            name: name.to_owned(),
+            reason: reason.to_owned(),
+        })?;
+    }
+    Ok(())
+}
+
+fn input_value(input: &Input, values: Values) -> Result<(), &'static str> {
+    match (values, input) {
+        (Values::Forbidden, _) if input.value().is_some() => {
+            Err("a sub-routine's input gets its value when a copy is scheduled; remove `value`")
+        }
+        (Values::Forbidden, _) => Ok(()),
+        (
+            Values::Required,
+            Input::Number {
+                value: Some(number),
+                ..
+            },
+        ) if !number.is_finite() => Err("numbers must be finite"),
+        (
+            Values::Required,
+            Input::Text {
+                value: Some(text), ..
+            },
+        ) if text.chars().count() > MAX_INPUT_TEXT_CHARS => Err("text is too long"),
+        (Values::Required, _) if input.value().is_none() => Err("a routine's input needs a value"),
+        (Values::Required, _) => Ok(()),
     }
 }
 
