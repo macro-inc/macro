@@ -22,6 +22,26 @@ export const MAX_LISTED_CONTACTS = 500;
 
 type WindowParameters = Parameters<typeof createContactDirectoryWindow>;
 
+/** The rows listed for one input. `readIn` is the generation of the oldest. */
+type Listed = { key: string; first: IUser[]; later: IUser[]; readIn: number };
+
+/** A re-read of the first page keeps the pages already listed below it, and
+ * with them the generation they were read in. */
+function rereadFirstPage(
+  listed: Listed,
+  fresh: IUser[],
+  generation: number
+): Listed {
+  const first = new Set(fresh.map((user) => user.id));
+  const later = listed.later.filter((user) => !first.has(user.id));
+  return {
+    key: listed.key,
+    first: fresh,
+    later,
+    readIn: later.length ? listed.readIn : generation,
+  };
+}
+
 /**
  * A directory window whose further pages are listed below the earlier ones, up
  * to a bound. Takes the window's arguments and returns its shape, with `data`
@@ -68,11 +88,7 @@ export function createContactDirectoryList(
       options.resetKey?.(),
     ]);
   };
-  // `readIn` is the generation of the oldest listed row: a re-read of the
-  // first page after a change keeps the rows read below it before.
-  let listed:
-    | { key: string; first: IUser[]; later: IUser[]; readIn: number }
-    | undefined;
+  let listed: Listed | undefined;
   const data = createMemo<ContactDirectoryPage | undefined>((shown) => {
     const page = window.data();
     const key = listKey();
@@ -106,15 +122,7 @@ export function createContactDirectoryList(
         ].slice(0, Math.max(room, 0)),
       };
     } else {
-      // A re-read of the first page keeps the pages already listed below it.
-      const first = new Set(fresh.map((user) => user.id));
-      const later = listed.later.filter((user) => !first.has(user.id));
-      listed = {
-        key,
-        first: fresh,
-        later,
-        readIn: later.length ? listed.readIn : generation,
-      };
+      listed = rereadFirstPage(listed, fresh, generation);
     }
 
     // Ranking metadata accompanies only the listed rows, newest page first.
