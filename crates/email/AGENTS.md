@@ -466,7 +466,8 @@ tools — hexagonal, heavily feature-gated.
   a cause.
 - `MailboxSyncService` reads through two gateways: `import_provider` for a
   folder page claimed before the folder's first round completes and for
-  import reconciliation rows, `provider` for everything else. email-service
+  import reconciliation rows, `provider` for everything else, live passes
+  included. email-service
   gives them the Microsoft gate's `Import` and `Live` budgets, so an import
   cannot take the slot live mail and calendar need.
 - An import round's folder stream reads its next page only while its mailbox
@@ -483,6 +484,22 @@ tools — hexagonal, heavily feature-gated.
   same reason. Live folder streams are never paced.
   A message released after a failed read is due at once when a newer
   revision arrived during the lease.
+- A folder's import round is a delta snapshot, so mail that arrives during it
+  would wait for the whole round. While `LiveImportPass`
+  (`domain/mailbox/live_pass.rs`, set by the host from PostHog) is on, an
+  import round's first request reads newest first, and its first page that
+  is not the round's last opens a `mail_folder_live` stream for the folder
+  (`open_live_pass`, under the link lock): `initial_complete = true`, so its
+  rows queue live and notify, it reads through `provider` and is never paced;
+  its first request lists only mail received since `import_started_at`, the
+  claim time of the page that opened it. `enumerate_once` claims a due live
+  pass before any folder (`claim_stream` takes the kind). The round's
+  checkpoint and `reset_stream` delete the pass in their transaction; resync,
+  re-import and a removed folder delete it too, and a webhook wakes it. An
+  expired live pass cursor starts over from now (`restart_live_pass`) and
+  never requeues the folder. Off, live passes are not claimed and rounds read
+  as before. Health, progress, import completion and the folder counts read
+  `kind = 'mail_folder'` only: keep live passes out of them.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no

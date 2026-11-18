@@ -32,7 +32,9 @@ later, so most of these alerts clear without action. Don't edit queue rows in
 production. An importing folder reads its next page only while its mailbox has
 fewer than 200 messages ready to import; until then its enumerate spans read
 `@outlook.outcome:paced`, which is the import keeping pace, not a stall.
-Messages backed off after their own failures don't count.
+Messages backed off after their own failures don't count. With the live pass
+on, the folder's new mail does not wait for its walk
+([New mail during an import](#new-mail-during-an-import)).
 
 A message whose own reads keep failing stops retrying: after 3 refusals Graph
 won't change (`permanent`, such as an undecodable response, or `forbidden`, a
@@ -48,6 +50,31 @@ stops counting once its backoff reaches 30 minutes: during a Microsoft outage
 queued messages keep retrying every 30 minutes and are never abandoned. An
 invitation whose MIME source Graph won't return is retried twice
 (`calendar_parts`), then imported without its calendar parts.
+
+## New mail during an import
+
+A folder's import round is one Graph delta snapshot: mail that arrives while
+it runs is listed only once the round reaches its end, and a large folder's
+round lasts as long as its import. With the PostHog flag
+`enable-outlook-import-live-pass` on, an import round reads the folder newest
+first, and from its first page each importing folder also gets a live pass
+(`email_sync_streams.kind = 'mail_folder_live'`): a delta round of only the
+mail received since the import round started, read like a synced folder
+(woken by change notifications, live Graph budget, never paced), whose
+messages import as new mail. The pass is deleted when the folder's import
+round ends. Its enumerate spans read `@outlook.stream_kind:mail_folder_live`;
+`@outlook.live_pass_opened` marks the page that opened one.
+
+- The flag is evaluated for the service context `outlook-mailbox-sync`. Turn
+  it on for dev with a release condition on the person property
+  `environment = dev`; widen it to production after a dev round trip
+  (connect a large Outlook mailbox, send it mail during the import, see the
+  mail arrive within a minute).
+- Turn it off in PostHog: the workers read it every minute
+  (`outlook.live_import_pass.refresh` spans), stop claiming live passes and
+  start new import rounds unordered. Open passes are deleted as their rounds
+  end; nothing needs cleaning up. A worker that cannot read the flag treats it
+  as off and logs "could not read the Outlook import live pass flag".
 
 ## Stalled mailbox
 
