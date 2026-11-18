@@ -12,6 +12,7 @@ import {
 import type {
   ComputerRollout,
   ComputerStatus,
+  ComputerUsage,
   PowerBody,
   PurchaseBody,
   Purchased,
@@ -27,6 +28,7 @@ export type {
   ComputerSize,
   ComputerStatus,
   ComputerStatusKind,
+  ComputerUsage,
   PurchaseBody as PurchaseComputerRequest,
   Quote,
   SetupStep,
@@ -263,6 +265,11 @@ export const computersClient = {
       fetchWithToken<ComputerStatus[]>(base, { signal })
     ),
   /** Whether computers are rolled out to the caller (flag or dev allowlist). */
+  /** Each computer's CPU and memory over the last day. */
+  usage: () =>
+    withinDeadline((signal) =>
+      fetchWithToken<ComputerUsage[]>(`${base}/usage`, { signal })
+    ),
   rollout: () =>
     withinDeadline((signal) =>
       fetchWithToken<ComputerRollout>(`${base}/rollout`, { signal })

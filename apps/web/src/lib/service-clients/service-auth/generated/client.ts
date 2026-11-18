@@ -20,6 +20,7 @@ import type {
   CodexLoginStart,
   ComputerRollout,
   ComputerStatus,
+  ComputerUsage,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
   CreatedTeamInviteLinkResponse,
@@ -5033,6 +5034,64 @@ export const getTeamComputerRollout = async (
     status: res.status,
     headers: res.headers,
   } as getTeamComputerRolloutResponse;
+};
+
+/**
+ * @summary Each of the team's computers' CPU and memory over the last day, in the
+list's order.
+ */
+export type listTeamComputerUsageResponse200 = {
+  data: ComputerUsage[];
+  status: 200;
+};
+
+export type listTeamComputerUsageResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listTeamComputerUsageResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listTeamComputerUsageResponseSuccess =
+  listTeamComputerUsageResponse200 & {
+    headers: Headers;
+  };
+export type listTeamComputerUsageResponseError = (
+  | listTeamComputerUsageResponse401
+  | listTeamComputerUsageResponse403
+) & {
+  headers: Headers;
+};
+
+export type listTeamComputerUsageResponse =
+  | listTeamComputerUsageResponseSuccess
+  | listTeamComputerUsageResponseError;
+
+export const getListTeamComputerUsageUrl = () => {
+  return `/team/computers/usage`;
+};
+
+export const listTeamComputerUsage = async (
+  options?: RequestInit
+): Promise<listTeamComputerUsageResponse> => {
+  const res = await fetch(getListTeamComputerUsageUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamComputerUsageResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamComputerUsageResponse;
 };
 
 /**

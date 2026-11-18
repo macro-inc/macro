@@ -89,6 +89,16 @@ export default {
   retryFailed: "Couldn't retry. Try again.",
   releasedStatus: 'Released',
   offerSpecs: '{{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
+  usageCpu: 'CPU',
+  usageMemoryName: 'Memory',
+  usagePercent: '{{percent}}%',
+  usageMemory: '{{used}} of {{total}} GB',
+  usageIdle: 'idle',
+  usageCpuChart: 'CPU use over the last day',
+  usageMemoryChart:
+    'Memory this computer uses on its own over the last day, not counting memory shared with its system image',
+  usageMemoryHint:
+    "Memory this computer uses on its own. Memory it shares with its system image isn't counted.",
   computerSpecs: '{{size}} · {{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
   priceMonthly: '{{amount}}/month',
   priceYearly: '{{amount}}/year',
