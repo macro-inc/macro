@@ -812,7 +812,8 @@ a collapsible Favorites section below the views (hidden when there are none).
 Favorite rows open the PR in Reviews (Shift-click opens another split), and their
 context menu can remove the favorite. PR favorites also open in Reviews from the
 global Favorites sidebar or command menu. A PR row's context menu offers **Open
-in new split**, **Copy Link**, and **Open on GitHub**.
+in new split**, **Open in new tab** when supported, **Open on GitHub**, then
+**Copy Link**.
 
 Select a PR to open `/app/reviews/pr/<foreignEntityId>` in the Reviews shell.
 Opening a PR refreshes it from GitHub in the background for viewers with a
@@ -1037,11 +1038,10 @@ entry. Projects without a due date have explicitly open-ended bars. Mobile
 continues to render the project list.
 
 Right-click a project row for its context menu; the row takes focus, as in
-Tasks. Every project offers `Open in new split` (disabled when no split fits),
-`Copy Link` (the Overview link), `Copy ID`, and `Share`, which opens the same
-Share menu as the project's top bar. Edit access adds `Rename`, which opens a
-name dialog, and the `Set status` and `Set priority` submenus; owners also get
-`Delete`, which confirms first and leaves the project's tasks in place.
+Tasks. The menu groups available Open in new split and tab choices first,
+then Share, Copy Link and Copy ID, and editable Rename, appearance, Set status,
+and Set priority. Owners also get Delete last; it confirms first and leaves
+the project's tasks in place. Share opens the same menu as the project's top bar.
 Right-clicking one of several checked rows acts on the whole selection and
 offers only `Set status`, `Set priority`, and, when you own every project,
 `Delete`. A partially failed delete keeps only the failed projects in the
@@ -1051,10 +1051,10 @@ Priority choice as its own row. Use disposable projects: these actions change
 hosted data.
 
 Project rows in shared lists (Home's Projects filter, Search) use the shared
-row menu: `Open in new split`, `Copy Link`, `Copy ID`, and `Share`, plus
-`Rename` and `Delete` on projects you own. These rows carry no access level,
-so an editor who doesn't own the project gets neither; several owned projects
-offer only `Delete`. The dialogs are the Projects list's own.
+row menu: Open in new split (when available), Share, Copy Link, Copy ID,
+then owner-only Rename and Delete. These rows carry no access level, so
+an editor who does not own the project gets neither edit action; several
+owned projects offer only Delete. The dialogs are the Projects list's own.
 
 While a project page shows its Overview, Cmd+K lists `Copy link` and `Copy ID`
 (the same URL and id as the title menu), plus the tag and notification commands

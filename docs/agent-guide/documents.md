@@ -741,9 +741,9 @@ Select data without its header when sorting. A concurrent edit cancels a pending
 sort; references elsewhere in the sheet are not rewritten to follow sorted rows.
 
 The footer's bottom-right **Import and export → Import…** accepts `.csv` and `.xlsx`.
-Right-click a row number or column letter for Macro's contextual menu: clipboard actions,
-clear, hide/unhide, resize and fit-to-data; columns also offer whole-sheet sorting.
-The menu keeps an existing whole-row/column selection when opened within it.
+Right-click a row number or column letter for Macro's contextual menu: Copy first;
+Cut, Paste and Paste values only, insert, clear, resize and fit-to-data together;
+column sorting; Hide/Unhide; then Delete. The menu keeps an existing whole-row/column selection when opened within it.
 Insert/delete shifts cells, references and named ranges in local workbooks and in
 saved workbooks while connected; the commands are disabled while a saved workbook
 is offline or reconnecting. A collaborator's change that arrives while the cells
@@ -877,8 +877,9 @@ iPhone WebKit projects. Chromium uses trusted touch drags; WebKit uses native ta
 and mouse-pointer handle drags. A reduced test viewport only checks layout; verify
 actual keyboard resizing and iOS gesture behavior in the simulator or on a device.
 
-Right-click a cell for the Macro cell menu: Cut, Copy, Paste, Paste values only,
-Clear values, Clear formatting, Fill down/right, and Comment on saved workbooks.
+Right-click a cell for the Macro cell menu: Copy first; then Cut, Paste,
+Paste values only, Clear values, Clear formatting, Fill down/right, cell controls,
+and Comment on saved workbooks.
 Right-click inside a selected range to act on that range; outside it targets the
 clicked cell. **Shift + F10** or the keyboard context-menu key opens the same menu
 for the selection; Escape returns focus to the grid. Fill requires a multi-cell
@@ -1781,21 +1782,16 @@ Layout and test hooks:
   layers snap to guides and to the edges of visible columns and rows of the
   frames they are over, as well as to other layers.
 - **Context menu** (`fig-context-menu`): right-clicking a layer on the
-  canvas selects it (a selection it belongs to is kept) and lists Figma's
-  layer actions with their shortcuts, as `fig-menu-<action>` items: `copy`,
-  `paste-here`, `paste-replace`, `copy-png`, `bring-to-front`,
-  `bring-forward`, `send-backward`, `send-to-back`, `group`, `ungroup`,
-  `frame-selection`, `add-auto-layout` / `remove-auto-layout`,
-  `create-component`, `detach-instance`, `toggle-visible`, `toggle-locked`,
-  `flip-horizontal` (⇧H), `flip-vertical` (⇧V), `rename`, and `delete`
-  (read-only viewers get copy, copy as PNG, and zoom to selection). On
-  empty canvas: `paste-here` (pastes copied layers with their top left at
-  the click, into the frame there), `toggle-ui`, `toggle-rulers`, `toggle-pixel-grid`,
-  `toggle-outline`, the zoom actions, and `select-all`. `paste-replace`
-  puts the pasted layers in place of the selection, centered on it, in one
-  undo step. Both paste what is on the system clipboard (layers from any
-  file or tab, as ⌘V does) when the browser lets the page read it, and
-  otherwise the layers copied in this design.
+  canvas selects it (a selection it belongs to is kept). The menu groups
+  `copy` and `copy-png` first; paste, arrange, structure, flip and rename
+  actions next; visibility and lock controls after those; and `delete` last.
+  Read-only viewers get zoom to selection before copy actions. On empty
+  canvas, the menu offers `paste-here`, `toggle-ui`, `toggle-rulers`,
+  `toggle-pixel-grid`, `toggle-outline`, zoom actions, and `select-all`.
+  `paste-replace` puts the pasted layers in place of the selection, centered
+  on it, in one undo step. Both paste what is on the system clipboard (layers
+  from any file or tab, as ⌘V does) when the browser lets the page read it,
+  and otherwise the layers copied in this design.
 - **Design panel** (`fig-design-panel`, toggled with ⌥8): the fixed selection
   header offers Create component (`fig-create-component`) and Boolean operations
   for editable selections. Design and Prototype

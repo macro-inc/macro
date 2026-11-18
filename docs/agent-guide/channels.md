@@ -1755,14 +1755,11 @@ view's detail stack (a channel mention followed from the email view, say) — th
 conversation renders an inline detail whose top bar holds the channel avatar
 and name, the same inset tab strip, live viewer avatars, and the `Call` and
 `Invite` buttons. An ellipsis follows the name — after the breadcrumb where
-the host supplies one, as in Home — and opens the same entity actions as
-right-clicking the conversation's rail row: `Open in new split` (when available),
-`Rename`, `Set channel picture`,
-`Remove channel picture` (only when the channel has one),
-`Favorite`/`Unfavorite`, `Mute notifications`/`Unmute notifications`,
-`Remind me`, `Copy Link`, `Copy ID`, then `Ask Macro`. A channel can
-therefore be favorited or given a picture without finding its row, from Chat and from every view that
-opens one inline. The menu appears once the conversation itself has loaded,
+the host supplies one, as in Home — and opens the same grouped actions as
+the conversation's rail row: available Open in new split, Favorite/Unfavorite
+and Ask Macro; Copy Link and Copy ID; Rename and Set/Remove channel picture;
+Mute/Unmute notifications and Remind me. Remove channel picture requires an
+existing picture. The menu appears once the conversation itself has loaded,
 reusing a cached conversation without another activation fetch. Opening the
 conversation still refreshes its unread notifications. The split's own title
 `...` menu offers the same picture actions and `Ask Macro`.
