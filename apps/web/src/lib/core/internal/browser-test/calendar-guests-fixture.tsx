@@ -14,7 +14,7 @@ import type {
   QuickAccessList,
   QuickAccessListOptions,
 } from '@core/context/quickAccess/types';
-import { createContactDirectoryWindow } from '@queries/contacts/directory-query';
+import { createContactDirectoryList } from '@queries/contacts/directory-list';
 import { createContactExclusions } from '@queries/contacts/exclusions';
 import { hashKey } from '@tanstack/solid-query';
 import { createSignal, Show } from 'solid-js';
@@ -44,7 +44,7 @@ function useList(
     () => options?.excludedPeople?.() ?? [],
     () => undefined
   );
-  const window = createContactDirectoryWindow(
+  const window = createContactDirectoryList(
     () => ({ userId: VIEWER }),
     async (viewer, _host, request, signal) => {
       signal.throwIfAborted();
@@ -126,7 +126,7 @@ function useList(
     items,
     totalCount: () => items().length,
     isLoading: window.loading,
-    isLoadingMore: window.loading,
+    isLoadingMore: window.loadingMore,
     error: window.error,
     windowKey: window.windowKey,
     hasMore: () => !!window.data()?.nextCursor,

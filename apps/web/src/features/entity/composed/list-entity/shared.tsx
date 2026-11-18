@@ -1,6 +1,7 @@
 import type { DateValue } from '@core/util/date';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { cn } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -81,7 +82,20 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   /** The row visually closes its group (or the list) — the next row is a
    * group header or absent. Layouts use it to drop a trailing divider. */
   isLastInGroup?: boolean;
+  /** The row opens its group (or the list): the row before it is a group
+   * header or absent. Classic email rows draw a line on its top edge. */
+  isFirstInGroup?: boolean;
+  /** How email rows look; other entities ignore it. Defaults to `minimalist`. */
+  rowStyle?: EmailRowStyle;
 }
+
+/**
+ * How an email row looks. `minimalist` marks unread mail with a dot;
+ * `classic` separates rows with a line, lifts unread rows onto a raised
+ * surface with bolder sender, subject and date, and always shows the
+ * selection checkbox in place of the dot.
+ */
+export type EmailRowStyle = 'minimalist' | 'classic';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
@@ -120,6 +134,17 @@ export interface LayoutProps {
   ) => void;
   /** Show a task's Project with its other properties (Projects enabled). */
   showProject?: boolean;
+  /**
+   * An email row in the Classic style: the selection checkbox always shows in
+   * place of the unread dot, and sender, subject and date are bolder while
+   * unread (`classicWeight`).
+   */
+  classic?: boolean;
+}
+
+/** Classic rows' sender, subject and date weight; the preview keeps its own. */
+export function classicWeight(unread: boolean) {
+  return unread ? 'font-semibold' : 'font-normal';
 }
 
 /**
@@ -235,8 +260,14 @@ export function RowIndicator(props: {
   );
 }
 
-export function InboxDivider() {
+/** `hidden` keeps the line's pixel for a line the row draws itself. */
+export function InboxDivider(props: { hidden?: boolean }) {
   return (
-    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-divider" />
+    <div
+      class={cn(
+        'col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px',
+        props.hidden ? 'invisible' : 'bg-edge-divider'
+      )}
+    />
   );
 }

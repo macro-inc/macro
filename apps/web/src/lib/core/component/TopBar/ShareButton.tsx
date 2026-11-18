@@ -2032,6 +2032,7 @@ export function ShareTrigger(props: {
         <CopyButton
           as={ButtonGroup.Button}
           variant="ghost"
+          aria-label="Copy Share Link"
           tooltip="Copy Share Link"
           size={iconSize()}
           onClick={ShareLinkAction().action}

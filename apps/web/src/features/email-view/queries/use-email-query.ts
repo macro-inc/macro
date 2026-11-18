@@ -43,7 +43,7 @@ import {
   type EmailSavedViewScope,
 } from './email-query';
 import { buildEmailDateRows } from './email-results';
-import { buildEmailSearchRequest } from './email-search';
+import { buildEmailSearchRequest, facetsLeftToClient } from './email-search';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
 import { useFocusEmailSource } from './use-focus-email-source';
 import { useReminderEmailSource } from './use-reminder-email-source';
@@ -99,7 +99,9 @@ export type UseEmailDataSourceOptions = {
 /**
  * The server owns importance, calendar, sent and inbox scoping, so — as with
  * the legacy presets' client filters — only the shapes a cached entity can
- * contradict are re-checked here.
+ * contradict are re-checked here. A search hit's draft flag describes the
+ * thread's latest message, not whether it holds a draft, so Drafts trusts the
+ * service's Drafts scoping for hits.
  */
 function emailMatchesTab(
   entity: EmailEntity,
@@ -110,7 +112,7 @@ function emailMatchesTab(
 ): boolean {
   return (
     match(tab)
-      .with('drafts', () => entity.isDraft)
+      .with('drafts', () => searchHit || entity.isDraft)
       .with('archived', () => entity.done === true)
       .with('shared', () => userId !== undefined && entity.ownerId !== userId)
       // The inbox views list only threads still in the inbox; a cached page can
@@ -338,7 +340,9 @@ export function useEmailDataSource(
   );
   const matchesOtherFacets = (email: EmailEntity) =>
     testFacets(
-      { ...state.facets, read: [] },
+      search.isSearching() && search.usesServiceSearch()
+        ? facetsLeftToClient(state.facets)
+        : { ...state.facets, read: [] },
       EMAIL_FACETS,
       email,
       facetContext()

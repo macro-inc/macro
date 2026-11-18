@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_email_backfill_outbox SET requested_at = clock_timestamp() + interval '15 minutes'\n               WHERE team_id = $1 AND user_id = $2 AND work_id = $3\n                 AND consent_incarnation = $4 AND policy_version = $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3ea5e1f498476c99ba4fc6b2a7ca411f3a7874520a6aeb9fe8059123b12d5c07"
+}

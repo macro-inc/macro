@@ -31,6 +31,7 @@ import {
 } from './directory';
 import { contactsKeys } from './keys';
 import { createContactQueryEpoch } from './query-epoch';
+import { openContactReader } from './readers';
 import { requestContactRefresh } from './refresh';
 
 export type ContactWindowHost = ContactDirectoryHost &
@@ -147,10 +148,14 @@ export function createContactDirectoryWindow(
       ...(policy ? { policy } : {}),
     };
   });
+  /** Who the query reads for: nobody until the window is open and its text
+   * has settled. */
+  const queryUserId = () =>
+    enabled() && search() === debouncedSearch() ? scope().userId : undefined;
   const query = useQuery(() =>
     contactWindowOptions(
       owner,
-      enabled() && search() === debouncedSearch() ? scope().userId : undefined,
+      queryUserId(),
       scope().host,
       generation(),
       request(),
@@ -177,6 +182,16 @@ export function createContactDirectoryWindow(
     return result.page;
   };
 
+  // Counted as a reader only once its first page settles, so the publisher's
+  // catch-up reread never competes with the read that lists the first rows.
+  createEffect(() => {
+    if (!enabled()) return;
+    let release: (() => void) | undefined;
+    createEffect(() => {
+      if (!release && !query.isPending) release = openContactReader();
+    });
+    onCleanup(() => release?.());
+  });
   createEffect(() => {
     const host = scope().host;
     if (!host) return;
@@ -238,7 +253,15 @@ export function createContactDirectoryWindow(
     /** Names the page on screen (query, eligibility, continuation). A refresh
      * of that page keeps its key, so callers reset focus only for a new page. */
     windowKey: () => (data() ? hashKey([request()]) : undefined),
-    loading: () => query.isFetching || search() !== debouncedSearch(),
+    /** From the first keystroke until the page for that text lands, with no
+     * gap: a list that keeps rows while loading drops them in a gap. While
+     * the text settles the query sits on a disabled key, pending and idle,
+     * and a computation that runs before the query takes up the settled
+     * text's key still sees that state. */
+    loading: () =>
+      query.isFetching ||
+      search() !== debouncedSearch() ||
+      (!!queryUserId() && query.isPending),
     error: () => query.error,
     next: () => {
       advance();

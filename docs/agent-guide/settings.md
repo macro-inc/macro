@@ -12,8 +12,7 @@ Deleted or replaced scratch databases fail the old import instead of silently
 continuing with incomplete history; its cleanup must leave a replacement intact.
 
 In **Integrations → Accounts**, the **Slack export** row appears only for team admins
-and owners with `enable-slack-archive-import` enabled. Production rollout stays
-off until explicitly enabled. Select an export ZIP, filter the grouped conversation
+and owners. Select an export ZIP, filter the grouped conversation
 picker, optionally show archived conversations, and use Space to toggle focused
 checkboxes. **Select all visible conversations** preserves selections hidden by
 filters; unchecking it or **Clear visible selection** clears only visible selections.
@@ -124,11 +123,26 @@ under that action, including the account catalog's durable refresh.
 
 ### Email read receipts
 
-Behind `enable-email-read-receipts` (on in dev), **Settings → Email → Read
+**Settings → Email → Read
 receipts** lists each owned inbox with a switch that saves immediately. It is
 on by default, and the section's only copy is "See when recipients open
 messages you send." Messages sent from an inbox with it on carry an invisible
 pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
+
+### Email row style
+
+**Settings → Email → Display options → Row style** picks how Mail rows look on
+this device: **Minimalist** (the default; an unread dot, the checkbox on hover)
+or **Classic** (rows wall to wall with one faint line between them and above
+each date group's first row, unread rows on a raised fill with bolder sender,
+subject and date, and the selection checkbox always shown instead of the dot).
+Below the tabs, an inert sample of two made-up rows (one unread, one read)
+shows the chosen style, drawn by the real Mail row; screen readers get a short
+description instead. The choice saves immediately and applies to every open
+Mail list. Phones always show Minimalist rows, so the section and its search
+entry are absent there. The backend-free desktop, tablet and phone
+regression, which also covers the sample (`?view=settings` in the fixture), is
+`bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts row-styles.browser.e2e.ts`.
 
 ### Notification permission prompt
 
@@ -364,10 +378,12 @@ sidebar matches Email and Tasks: a **Settings** title bar, a rounded
 searching): **Invite your team** with its icon and label in a soft pink-to-indigo gradient (opens the invite dialog;
 hidden for members when the team limits invites to admins) or, with no team,
 **Create a team** (opens the create-team dialog), then the grouped section
-pills. Unlike other views, it cannot be hidden at
-desktop widths: there is no **Hide navigation** toggle and `Cmd .` does
-nothing, even if it was hidden before. Below 720px the sidebar becomes an overlay opened from **Show
-navigation** (or `Cmd .`), which starts closed. Escape closes a
+pills. Above 720px, **Hide navigation** beside the title collapses the sidebar;
+**Show navigation** restores it. Wide touch panes always dock the sidebar left
+of the page, with no collapse control and no section pills. Below 720px the
+sidebar becomes an overlay that starts closed; narrow touch panes switch
+sections from pills at the top, led by **Show navigation**. `Cmd .` also
+toggles navigation. Escape closes a
 settings split that shares the layout, or steps back to the previous view when
 it is the only split (Home when there is none). Leave settings by picking any
 other rail item; there is no separate back or fullscreen control.
@@ -424,7 +440,7 @@ Left nav (feature and platform gates still apply):
   **Team · Members**. The team Slack export import and the GitHub App live in
   Integrations; `/app/settings/team-connections` opens Integrations.
 - **Blocks**: Email, Calendar, Agents, CRM. On touch devices, where the Agents
-  sidebar is hidden, **Routines** (`/app/settings/routines`) follows Agents.
+  sidebar can be collapsed, **Routines** (`/app/settings/routines`) follows Agents.
 - **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
 - **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
 - **Developer**: Machines, MCP server, API Keys, Account Managers, Bots.
@@ -537,12 +553,8 @@ language has loaded, PostHog stores it on the person as `interface_language`
 Existing settings URLs remain valid; `connections` still opens Integrations,
 `agent-connections` aliases Integrations, and `harness` aliases Machines (tab id `Harness`, slug `runtimes`).
 
-`Usage` appears directly above Billing, including for Free accounts. In
-production, the `enable-ai-usage-billing` PostHog flag controls activation. While
-it is off or loading, the page shows **AI billing changes take effect on October
-8, 2026.** and all Usage controls are disabled. Turning the flag on activates the
-page and removes the announcement. Dev and local remain interactive even with
-the flag off. The production usage-limit dialog follows the same flag. Its
+`Usage` appears directly above Billing, including for Free accounts. The
+usage-limit dialog's
 **Monthly limit** meter displays a percentage using the backend's current-period
 usage and allowance. The info button explains AI agent chat and AI document
 editing. **Usage Credits** shows the dollar balance and `Add more`, which opens
@@ -663,8 +675,7 @@ users keep their current plan. Cards appear only for users who can
 manage their subscription. Team-paid members see no plan options, including
 on Free seats. Member options stay hidden until the billing summary confirms
 they pay for their own seat. On a team, a plan change moves only the viewer's
-own seat. Max lists "10x more AI usage than Pro"; Free and Pro allowance labels
-still follow the `enable-ai-usage-billing` flag. Usage controls live in Usage.
+own seat. Max lists "10x more AI usage than Pro". Usage controls live in Usage.
 The upgrade modal and Billing use the same plan cards and benefits, including
 the same flag-gated AI usage label and responsive card layout. The modal offers
 Pro and Max to Free accounts, only Max to Pro accounts, and no upgrade cards to
@@ -734,7 +745,7 @@ available in all channels should refresh there without reloading the channel.
 
 ![Integrations overview with example connections](assets/settings-integrations.png)
 
-With `pipedream-mcp` enabled, Settings → Integrations is one searchable list
+Settings → Integrations is one searchable list
 styled like the Drive and Tasks lists, spanning nearly the full settings page
 width. Rows are separated by faint dividers and have Name (icon, name, an
 `mcp` or `native` badge, and a smaller, fainter second line on what it does in
@@ -823,9 +834,7 @@ custom servers. Agents configured with a fixed app selection do not receive the
 owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
 Cursor stays in Agents → Machines with its API key, default model and default effort controls; it is not
-featured or offered in the Connections catalog. Settings → Integrations lists
-Email, Accounts and AI apps above the agent tools and app catalog. The native-only integrations section remains
-available when `pipedream-mcp` is disabled.
+featured or offered in the Connections catalog.
 Open Settings with the rail's gear button or `Ctrl+;`; leave it by picking any other rail item.
 
 `Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
@@ -1169,8 +1178,7 @@ desktop and mobile and contains:
 
 - **Agent → Enable AI agent**: makes the bot available in the model selector
   and lets it respond to mentions, using a chat agent or a connected external
-  runtime. Saving an agent configuration enables it regardless of harness. This
-  section remains gated by the agents rollout.
+  runtime. Saving an agent configuration enables it regardless of harness.
 - **Ownership → Mentionable**: lets teammates find and @mention the bot and
   creates it under team ownership. With the switch off, the creator owns it.
   Only team admins and owners can enable this option.

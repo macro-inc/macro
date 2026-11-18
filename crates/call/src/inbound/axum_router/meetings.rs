@@ -281,7 +281,7 @@ pub async fn join<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriza
     headers: HeaderMap,
     MeetingJoinBody(request): MeetingJoinBody,
 ) -> Result<Json<CallTokenResponse>, CallError> {
-    refuse_code_execution_token(&headers)?;
+    super::refuse_program_token(actor.authorization.user.attribution(), &headers)?;
     // Only SDK callers send options. The app and shipped native builds send no
     // body and keep today's behavior: they switch calls, reclaim their identity
     // after a reconnect, and are never treated as programs.

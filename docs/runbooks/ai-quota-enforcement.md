@@ -229,20 +229,13 @@ handling, but settlement never creates or retries direct charges.
 reports `auto_reload` with the thresholds, `suspended`, and `active`.
 
 The frontend is not tied to this flag. Settings → Usage and the shared usage-limit
-dialog support all plans. Production activation follows the
-`enable-ai-usage-billing` PostHog flag: while off or loading, Usage shows the
-October 8, 2026 announcement with disabled controls and the dialog stays closed.
-Dev and local stay active regardless of the flag. No backend rollout endpoint is
-required. Foreground AI actions recognize the four quota
+dialog support all plans. No backend rollout endpoint is required. Foreground AI actions recognize the four quota
 codes below; clients return typed errors, and presentation happens in the app's
 mutation subscription or direct session/edit action handlers. Generic HTTP errors
 and background queries do not open dialogs. Free refusals offer a paid plan;
 paid refusals link to Usage settings. The monthly percentage uses
 `GET /ai-billing/summary`; plan allowances use `GET /ai-billing/plans`.
-Plan allowance copy and comparisons follow the `enable-ai-usage-billing` PostHog
-flag (`enableAiUsageBilling` in `apps/web/src/lib/core/constant/featureFlags.ts`),
-which defaults on in development builds and follows PostHog elsewhere;
-`VITE_ENABLE_AI_USAGE_BILLING` overrides it locally. Model usage multipliers have
+Model usage multipliers have
 been removed. The Auto-Reload dialog saves through `PATCH /ai-billing/auto-reload`
 and is the only surface that turns usage billing on.
 

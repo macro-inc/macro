@@ -10,6 +10,11 @@ import { rankMentions } from './mention-ranking';
  */
 const TOP_USERS = 2;
 
+/**
+ * The blended sort decides where the other candidates sit among docs and
+ * channels; they fill those slots in candidate order, so phones keep the order
+ * of desktop's People bucket.
+ */
 export function sortMobileMentions(
   items: MentionItem[],
   query: string,
@@ -23,5 +28,16 @@ export function sortMobileMentions(
     (item) => !pinnedIds.has(item.id)
   );
 
-  return [...pinned, ...rest];
+  const restIds = new Set(rest.map((item) => item.id));
+  const candidateIds = new Set(topUserCandidates.map((item) => item.id));
+  const listedCandidates = topUserCandidates.filter(
+    (item) => !pinnedIds.has(item.id) && restIds.has(item.id)
+  );
+  let next = 0;
+  return [
+    ...pinned,
+    ...rest.map((item) =>
+      candidateIds.has(item.id) ? (listedCandidates[next++] ?? item) : item
+    ),
+  ];
 }

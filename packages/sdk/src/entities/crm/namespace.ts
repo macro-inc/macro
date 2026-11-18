@@ -9,6 +9,7 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { CrmEmailPrivacyNamespace } from '../crm-email-privacy/email-privacy';
 import type { Document } from '../documents/document';
 import { Team } from '../teams/team';
 import { Company } from './company';
@@ -18,7 +19,7 @@ import { type CompanyImport, pipelineImport } from './pipeline-entry';
 import { PipelineNamespace } from './pipelines';
 
 /**
- * @routing Use when working with CRM deals, pipelines, stages, companies or contacts; not generic databases, and not a search that merely names a company.
+ * @routing Use when working with CRM records and pipelines; not generic databases or email contribution.
  *
  * @agent
  * ## How CRM pipelines work
@@ -30,11 +31,15 @@ import { PipelineNamespace } from './pipelines';
  * A company also has its own Stage, Owner and Revenue properties on its CRM page. They are separate from every pipeline and not kept in sync with it. When the user has pipelines, deal and stage requests mean pipeline entries; change the company's own properties only when the user asks for those properties specifically.
  */
 export class CrmNamespace {
+  /** Your email contribution. */
+  readonly emailPrivacy: CrmEmailPrivacyNamespace;
+
   /** Pipelines, their records and sharing settings. */
   readonly pipelines: PipelineNamespace;
 
   constructor(private readonly client: MacroClient) {
     this.pipelines = new PipelineNamespace(client);
+    this.emailPrivacy = new CrmEmailPrivacyNamespace(client);
   }
 
   /**
@@ -142,24 +147,26 @@ export class CrmNamespace {
   }
 
   /**
-   * Block a domain (like `acme.com`): email sync skips it, and the company
-   * that owns it, that company's contacts, and contacts without a company at
-   * the domain are hidden. A contact attached to another company follows that
-   * company's domains. Requires a team admin or owner.
+   * Block a domain from email sync without changing existing CRM records.
+   *
+   * Existing companies, contacts and their hidden states are preserved.
+   * Requires a team admin or owner.
    *
    * @destructive
    * @idempotent
+   * @throws When the domain equals or covers a member's connected primary
+   * mailbox domain. The error preserves the server's explanation.
    */
   async blockDomain(domain: string): Promise<void> {
     unwrap(await this.client.storage.blockCrmDomain({ path: { domain } }));
   }
 
   /**
-   * Unblock a domain: email sync resumes for addresses the team's
-   * personal-email and generic-provider filters allow. Contacts without a
-   * company at this domain are shown again. Its company and attached contacts
-   * stay hidden until the company's last blocked domain is removed, then are
-   * shown even if hidden by hand before blocking. Requires a team admin or owner.
+   * Resume eligible email sync for a domain without changing existing CRM records.
+   *
+   * Email sync resumes for addresses the team's personal-email and
+   * generic-provider filters allow. Existing companies, contacts and their
+   * hidden states are preserved. Requires a team admin or owner.
    *
    * @write
    * @idempotent

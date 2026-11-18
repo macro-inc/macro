@@ -2,8 +2,7 @@
 
 ## Import from connected apps
 
-With `enable-sidebar-promotions` on (on in dev) and the Pipedream connector stack
-enabled, the Drive, Tasks, and Customers sidebars end with an import card (the
+The Drive, Tasks, and Customers sidebars end with an import card (the
 Chat sidebar's Slack card is the same component under the Slack import gates;
 see [channels](channels.md#imported-slack-history)):
 overlapping provider logos, a two-line pitch, and **Import files**, **Import
@@ -79,9 +78,12 @@ card sits above **Settings**, outside the scrolling list.
   If a connected account lacks calendar access the button is **Turn on
   calendar**, and if its grant expired, **Reconnect calendar**; both rerun that
   account's consent like the calendar settings menu. Otherwise **Connect a
-  calendar** adds another Google account (mail and calendar, like **Connect
-  another account**; plans without multi-inbox see the paywall). The card
-  hides once two accounts have working calendar access.
+  calendar** adds another account (mail and calendar, like **Connect another
+  account**; plans without multi-inbox see the paywall) through the provider
+  chooser, which offers Google, and Microsoft when the server offers this user
+  Outlook. The pitch names no provider; the card shows the Google Calendar
+  logo, joined by Outlook's while Outlook is offered. The card hides once two
+  accounts have working calendar access.
 - **Pull requests**: "Bring in more repositories". Without a linked GitHub
   account the button is **Connect GitHub**; with an expired link it is
   **Reconnect GitHub** (the same reauthentication as Settings → GitHub). Once
@@ -93,7 +95,7 @@ card sits above **Settings**, outside the scrolling list.
 
 ## Suggested routines
 
-With `enable-routine-suggestions` and `enable-routine-code-steps` on, the
+With `enable-routine-suggestions` on, the
 Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews and Agents
 sidebars start with a suggestions card while the scheduler has suggestions for
 that area; it never shows on touch devices. The card shows up to three

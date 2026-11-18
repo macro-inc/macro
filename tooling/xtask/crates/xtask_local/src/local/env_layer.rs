@@ -216,6 +216,13 @@ pub fn resolve(
         env.extend(super::microsoft_emulator::env(instance));
     }
 
+    // A local stack with no real Gemini key runs the model emulator in
+    // Gemini's place. Decided last, on the env the services will see, so a
+    // key from Doppler, `--env-file` or the process env keeps real Gemini.
+    if super::model_emulator::stands_in(mode, &env) {
+        env.extend(super::model_emulator::env());
+    }
+
     // Remote-AWS modes (dev): pin ENVIRONMENT/project, strip any leaked local
     // endpoints, and resolve the developer's real AWS credentials (incl. session
     // token) over the dev_personal placeholders — the process-env layer can't add

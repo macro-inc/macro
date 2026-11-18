@@ -183,24 +183,9 @@ it('keeps entity-reference targets while excluding metadata, tags, and database 
 it('keeps context order, ignores unavailable ids and deduplicates selected properties', () => {
   const definitions = [definition('a'), definition('b')];
   expect(
-    taskComposerVisiblePropertyIds(
-      ['b', 'missing', 'b', 'a'],
-      definitions,
-      true
-    )
+    taskComposerVisiblePropertyIds(['b', 'missing', 'b', 'a'], definitions)
   ).toEqual(['b', 'a']);
-  expect(taskComposerVisiblePropertyIds([], definitions, true)).toEqual([]);
-});
-
-it('keeps Project behind its feature flag', () => {
-  const definitions = [definition(SYSTEM_PROPERTY_IDS.PROJECT)];
-  expect(
-    taskComposerVisiblePropertyIds(
-      [SYSTEM_PROPERTY_IDS.PROJECT],
-      definitions,
-      false
-    )
-  ).toEqual([]);
+  expect(taskComposerVisiblePropertyIds([], definitions)).toEqual([]);
 });
 
 it('clears tag sets without clearing arbitrary single-select values', () => {

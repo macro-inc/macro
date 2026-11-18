@@ -2,8 +2,13 @@
 //! Invalidate contradicted projections, never infer entity deletion or a new view.
 
 use super::*;
+use cache_core::predicate::compose_pending_optimistic_projection;
+use cache_core::queue::{MutationId, OptimisticSource, decode_optimistic_source};
 use item_filter_index::properties::{compile_mail, mail_profile};
-use predicate_index::{IndexQuery, PredicateExpr};
+use predicate_index::{
+    EffectiveOptimisticProjection, IndexQuery, OptimisticProjectionState, PredicateExpr,
+    evaluate_reference,
+};
 use std::collections::HashMap;
 
 /// Called only for the canonical Soup operation, after composing its current
@@ -173,10 +178,16 @@ pub(crate) async fn first_page_updates<S: PredicateIndexStorage>(
         .load_optimistic_projections(&missing)
         .await
         .map_err(ProjectionError::Storage)?;
+    let protected: Vec<_> = missing
+        .iter()
+        .zip(&pending)
+        .filter_map(|(key, pending)| Some((key, pending.as_ref()?)))
+        .collect();
+    let contradicted = contradicted_writes(storage, &bounded, &protected).await?;
     Ok(missing
         .into_iter()
         .zip(pending)
-        .filter(|(_, pending)| pending.is_none())
+        .filter(|(key, pending)| pending.is_none() || contradicted.contains(key))
         .map(|(record_key, _)| ProjectionMutation::MarkIncomplete {
             record_key,
             profile: mail_profile(),
@@ -184,4 +195,118 @@ pub(crate) async fn first_page_updates<S: PredicateIndexStorage>(
             kind: ProjectionIncompleteKind::Dirty,
         })
         .collect())
+}
+
+/// Rows with queued writes that the page still contradicts.
+///
+/// The server may have applied any prefix of the queue: none of it, the
+/// first write, the first two, and so on. A row the page left out is
+/// contradicted only when its stored facts and every one of those prefixes
+/// still place it in the window: then no queued write explains the omission,
+/// and the server knows something the cache does not (a thread trashed
+/// through REST while its mark read is queued). An archive whose Undo is
+/// still queued explains it, so that row keeps its pending membership.
+async fn contradicted_writes<S: PredicateIndexStorage>(
+    storage: &S,
+    bounded: &ValidatedIndexQuery,
+    protected: &[(&RecordKey, &EffectiveOptimisticProjection)],
+) -> Result<HashSet<RecordKey>, ProjectionError<S::Error>> {
+    if protected.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let keys: Vec<_> = protected.iter().map(|(key, _)| (*key).clone()).collect();
+    let stored = storage
+        .load_projection_states(&keys)
+        .await
+        .map_err(ProjectionError::Storage)?;
+    // Most queued writes are on rows whose stored facts already leave the
+    // window; read the queue only when one does not.
+    let stored_in_window: Vec<_> = protected
+        .iter()
+        .zip(stored)
+        .filter_map(|((key, shadow), state)| match state {
+            Some(ProjectionState::Complete(document)) if in_window(bounded, &document) => {
+                Some((*key, *shadow, ProjectionState::Complete(document)))
+            }
+            _ => None,
+        })
+        .collect();
+    if stored_in_window.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let queue = storage
+        .load_mutation_queue()
+        .await
+        .map_err(ProjectionError::Storage)?;
+    let Ok(sources) = queue
+        .iter()
+        .map(|row| {
+            decode_optimistic_source(&row.optimistic.optimistic_data_json)
+                .map(|source| (row.id, source))
+        })
+        .collect::<Result<Vec<_>, _>>()
+    else {
+        return Ok(HashSet::new());
+    };
+    Ok(stored_in_window
+        .into_iter()
+        .filter(|(key, shadow, stored)| {
+            every_prefix_in_window(bounded, key, stored, shadow, &sources)
+        })
+        .map(|(key, ..)| key.clone())
+        .collect())
+}
+
+/// Replays the queue over the stored facts, as storage composes the shadow.
+/// Storage builds the shadow from the same writes, so the replay ends at it;
+/// if it does not, the replay proves nothing and the row keeps its protection.
+fn every_prefix_in_window(
+    bounded: &ValidatedIndexQuery,
+    key: &RecordKey,
+    stored: &ProjectionState,
+    shadow: &EffectiveOptimisticProjection,
+    sources: &[(MutationId, OptimisticSource)],
+) -> bool {
+    let mut current: Option<EffectiveOptimisticProjection> = None;
+
+    // Composing copies and validates the row's state, so skip the writes
+    // that leave this row alone before composing.
+    let touching = sources.iter().filter(|(_, source)| {
+        source
+            .projection_mutations
+            .iter()
+            .any(|mutation| mutation.record_key() == key)
+    });
+    for (owner, source) in touching {
+        let Ok(next) = compose_pending_optimistic_projection(
+            key,
+            Some(stored),
+            current.as_ref(),
+            &source.projection_mutations,
+        ) else {
+            return false;
+        };
+        let Some(next) = next else { continue };
+        let listed = match &next.state {
+            OptimisticProjectionState::Complete(document) => {
+                next.uncertainty.is_empty() && in_window(bounded, document)
+            }
+            _ => false,
+        };
+        if !listed {
+            return false;
+        }
+        current = Some(EffectiveOptimisticProjection {
+            owner: *owner,
+            state: next.state,
+            uncertainty: next.uncertainty,
+        });
+    }
+    current.is_some_and(|replayed| {
+        replayed.state == shadow.state && replayed.uncertainty == shadow.uncertainty
+    })
+}
+
+fn in_window(bounded: &ValidatedIndexQuery, document: &IndexDocument) -> bool {
+    !evaluate_reference(bounded, std::slice::from_ref(document)).is_empty()
 }

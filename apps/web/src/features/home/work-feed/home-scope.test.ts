@@ -8,17 +8,14 @@ describe('homeWorkFeedScope', () => {
     expect(homeWorkFeedScope(undefined, everything)).toEqual({
       mode: 'work',
       types: [],
-      includeSnippets: false,
+      includeSnippets: true,
     });
   });
 
   it('leaves out kinds this client cannot show', () => {
     const scope = homeWorkFeedScope([], {
-      calendar: false,
       foreignEntities: false,
-      snippets: true,
     });
-    expect(scope?.types).not.toContain('calendar_event');
     expect(scope?.types).not.toContain('pull_request');
     expect(scope?.types).toContain('channel_thread');
     expect(scope?.includeSnippets).toBe(true);
@@ -63,8 +60,5 @@ describe('homeWorkFeedScope', () => {
 
   it('has no scope when the filters leave nothing to show', () => {
     expect(homeWorkFeedScope(['none'], everything)).toBeUndefined();
-    expect(
-      homeWorkFeedScope(['calendar'], { ...everything, calendar: false })
-    ).toBeUndefined();
   });
 });

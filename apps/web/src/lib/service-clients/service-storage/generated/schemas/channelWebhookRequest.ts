@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PostMessageNotificationPolicy } from './postMessageNotificationPolicy';
 
 /**
  * Request to post a channel webhook message.
@@ -11,4 +12,6 @@
 export interface ChannelWebhookRequest {
   /** Message body. */
   content: string;
+  /** Who hears about the message; `Silent` notifies no one. */
+  notification_policy?: PostMessageNotificationPolicy;
 }

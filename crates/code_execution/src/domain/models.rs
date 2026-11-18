@@ -38,6 +38,21 @@ pub struct RunEnvironment {
     /// instead of an agent's or a person's call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unattended: Option<Unattended>,
+    /// How the program's requests leave its process. Host-only: the child
+    /// sees only the hosts it may reach.
+    #[serde(skip)]
+    pub egress: Egress,
+}
+
+/// How a program's requests reach the SDK hosts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Egress {
+    /// Straight from the process to the hosts, which `--allow-net` names.
+    #[default]
+    Direct,
+    /// Through a loopback forwarder the host runs for the run, the only
+    /// address `--allow-net` names; it marks every request.
+    Proxied,
 }
 
 /// The deployment's Macro SDK targets, so a program's requests and links stay

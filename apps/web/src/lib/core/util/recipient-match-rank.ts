@@ -1,6 +1,4 @@
-import { normalizeNameText } from './name-match-score';
-
-const WORD_BREAK = /[^\p{Alphabetic}\p{Number}]+/u;
+import { normalizeNameText, startsWordsOf } from './name-match-score';
 
 /** Same tiers as subsequence_match::ranking::recipient_match_rank. */
 export function recipientMatchRank(
@@ -13,11 +11,5 @@ export function recipientMatchRank(
   const address = email?.toLowerCase();
   if (address === term) return 3;
   if (address && term.includes('@') && address.startsWith(term)) return 2;
-  const words = text.toLowerCase().split(WORD_BREAK).filter(Boolean);
-  return term
-    .split(WORD_BREAK)
-    .filter(Boolean)
-    .every((part) => words.some((word) => word.startsWith(part)))
-    ? 1
-    : 0;
+  return startsWordsOf(text, term) ? 1 : 0;
 }

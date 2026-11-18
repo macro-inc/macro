@@ -138,6 +138,11 @@ embeds and check that their preview bodies load; also check that a code or canva
 mention offers **Convert to Embed** in its preview menu.
 Drag an embed's bottom-right resize grip, then release and select the card. Its
 height should stay at the dragged size and persist after reopening the document.
+On a phone or tablet a canvas embed does not trap scrolling: swipe over it with
+one finger and the document scrolls; pinch or drag it with two fingers and the
+canvas zooms and pans. Tap **Interact** in its corner to move it with one finger
+(the document then stays put), and **Done**, or a tap elsewhere in the document,
+to hand scrolling back.
 Zoom to fit and menu/keyboard zoom use the full canvas viewport center; floating
 inspectors and details overlays do not reserve centering space. Verify with content
 on both sides of the canvas and the inspector visible. Press **.** to fit the
@@ -392,9 +397,8 @@ picker, displays, and editing.
 
 ## Spreadsheets
 
-Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
-flag in every environment. Team targeting is configured in PostHog; ordinary
-document permissions continue to control access to each workbook.
+Spreadsheets are available to everyone. Ordinary document permissions control
+access to each workbook.
 
 Choose **Create → Spreadsheet**, or **New → Spreadsheet** in Files or a folder.
 From Files the new workbook opens inline in the open folder or tab
@@ -876,9 +880,10 @@ Right-click inside the cell text editor retains the native text-editing menu.
 Opening a saved spreadsheet from Files/Drive (including a favorite) keeps the
 Drive navigation sidebar in place. Collapse it with the sidebar control; the
 spreadsheet header then shows the navigation toggle to reopen it. Opening a
-spreadsheet does not change the saved sidebar preference. The header keeps the
-Files location breadcrumbs before the sheet title; click a location breadcrumb
-to return to that file listing.
+spreadsheet does not change the saved sidebar preference. Opened from a Drive
+list, the header keeps that list's location breadcrumbs before the sheet title;
+click a location breadcrumb to return to that file listing. Opened from anywhere
+else, the title stands alone.
 
 ## Spreadsheet comments
 
@@ -918,6 +923,9 @@ with the workbook mention followed by one space; nothing sends automatically.
 The mention captures the active sheet ID/name and normalized selected range at
 click time. Changing the selection later does not change that draft attachment.
 A viewer can ask questions; editing still requires edit permission.
+On phones and tablets the header has neither Ask Macro nor Comments: Ask Macro
+is the first row of the title menu, and it attaches the active sheet and
+selection as the button does.
 
 In the local spreadsheet demo, Ask Macro first saves the entire workbook and
 waits for acknowledgement. A failed save leaves the draft editable and supports
@@ -2434,8 +2442,9 @@ and agent chat links also convert to their respective entity mentions.
 Pasting a bare GitHub pull request URL (`github.com/<owner>/<repo>/pull/<n>`,
 including subpages such as `/files`) inserts a link that becomes a PR mention
 once Macro finds the synced PR, usually within a moment. Hovering the mention
-shows its status, diff size, comments, and checks; clicking opens the PR in a
-split. A PR mention always stays on one line: a long title truncates with an
+shows its status, diff size, comments, and checks; clicking opens the PR on
+GitHub (a new tab, or the system browser in the desktop app). A PR mention
+always stays on one line: a long title truncates with an
 ellipsis before the `#N`, so read the full title from the hover card. In a sent
 message, a mention an agent wrote by URL alone shows `owner/repo#N` until its
 title loads and keeps the same width either way. A PR Macro has not synced

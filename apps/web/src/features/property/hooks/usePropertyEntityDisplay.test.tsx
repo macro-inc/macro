@@ -9,27 +9,13 @@ const fixture = vi.hoisted(() => ({
   previewMounts: 0,
   previewDisposals: 0,
   channelMounts: 0,
-  projectsEnabled: undefined as (() => boolean | undefined) | undefined,
   projectPending: undefined as (() => boolean) | undefined,
   projectMounts: 0,
   projectDisposals: 0,
   projectIdReads: 0,
   userIcons: 0,
-  flagMounts: 0,
 }));
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => {
-    fixture.flagMounts++;
-    return () => ({
-      enabled: fixture.projectsEnabled?.() === true,
-      loading: fixture.projectsEnabled?.() === undefined,
-    });
-  },
-}));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableProjects: { key: 'enable-projects' },
-}));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('../../projects/queries/project-identity', () => ({
   useProjectIdentityQuery: (id: () => string) => {
@@ -102,13 +88,11 @@ afterEach(() => {
   fixture.previewMounts = 0;
   fixture.previewDisposals = 0;
   fixture.channelMounts = 0;
-  fixture.projectsEnabled = undefined;
   fixture.projectPending = undefined;
   fixture.projectMounts = 0;
   fixture.projectDisposals = 0;
   fixture.projectIdReads = 0;
   fixture.userIcons = 0;
-  fixture.flagMounts = 0;
 });
 
 function setup(
@@ -124,17 +108,6 @@ function setup(
 }
 
 describe('usePropertyEntityDisplay subscription ownership', () => {
-  it('subscribes to the project flag only for project values', () => {
-    const [type, setType] = createSignal<'USER' | 'INITIATIVE'>('USER');
-    createRoot((dispose) => {
-      disposals.push(dispose);
-      usePropertyEntityDisplay(() => 'entity-1', type);
-    });
-    expect(fixture.flagMounts).toBe(0);
-    setType('INITIATIVE');
-    expect(fixture.flagMounts).toBe(1);
-  });
-
   it('builds a person’s avatar only when something shows the icon', () => {
     const display = setup('USER');
     expect(fixture.userIcons).toBe(0);
@@ -145,27 +118,24 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
     expect(fixture.userIcons).toBe(1);
   });
 
-  it('only owns project identity queries and links while the rollout is enabled', () => {
-    const [enabled, setEnabled] = createSignal(false);
-    fixture.projectsEnabled = enabled;
-    const display = setup('INITIATIVE');
+  it('owns project identity queries and links only for project values', () => {
+    const [type, setType] = createSignal<'USER' | 'INITIATIVE'>('USER');
+    const display = createRoot((dispose) => {
+      disposals.push(dispose);
+      return usePropertyEntityDisplay(() => 'entity-1', type);
+    });
     expect(fixture.projectMounts).toBe(0);
-    expect(display.nativeProjectId()).toBeUndefined();
 
-    setEnabled(true);
+    setType('INITIATIVE');
     expect(fixture.projectMounts).toBe(1);
     expect(display.nativeProjectId()).toBe('entity-1');
     expect(display.name()).toBe('Launch');
 
-    setEnabled(false);
+    setType('USER');
     expect(fixture.projectDisposals).toBe(1);
-    expect(display.nativeProjectId()).toBeUndefined();
-    expect(display.blockOrFileType()).toBeNull();
-    expect(display.name()).toBe('Project');
   });
 
   it('keeps one project read while the property value re-emits the same project', () => {
-    fixture.projectsEnabled = () => true;
     const [reference, setReference] = createSignal({
       entity_id: 'entity-1',
       entity_type: 'INITIATIVE' as const,
@@ -180,7 +150,6 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
 
     setReference({ entity_id: 'entity-1', entity_type: 'INITIATIVE' });
 
-    expect(fixture.flagMounts).toBe(1);
     expect(fixture.projectMounts).toBe(1);
     expect(fixture.projectIdReads).toBe(1);
     expect(display.name()).toBe('Launch');
@@ -190,7 +159,6 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
     'names a %s from the loading name until its own read answers',
     (type) => {
       const [pending, setPending] = createSignal(true);
-      fixture.projectsEnabled = () => true;
       fixture.projectPending = pending;
       fixture.preview = () =>
         pending()
@@ -209,18 +177,6 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
       expect(display.name()).toBe('Launch');
     }
   );
-
-  it('keeps the generic project label, without fetching, until the rollout enables it', () => {
-    const [enabled, setEnabled] = createSignal<boolean | undefined>();
-    fixture.projectsEnabled = enabled;
-    const display = setup('INITIATIVE');
-    expect(display.isLoading()).toBe(false);
-    expect(display.name()).toBe('Project');
-    setEnabled(false);
-    expect(display.isLoading()).toBe(false);
-    expect(display.name()).toBe('Project');
-    expect(fixture.projectMounts).toBe(0);
-  });
 
   it('settles a live GraphQL preview batch without reacquiring itself', () => {
     vi.useFakeTimers();

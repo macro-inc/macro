@@ -1,5 +1,5 @@
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
-import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   type EmailThreadToolsOptions,
   useEmailThreadTools,
@@ -10,10 +10,23 @@ import {
 } from '../../EmailThreadHostView';
 
 /**
+ * What a view that lists the thread adds: where its title menu's actions go
+ * once they take the thread out of the list.
+ */
+export type MobileEmailThreadList = Pick<
+  EmailThreadToolsOptions,
+  'onMarkedUnread' | 'onDeleted' | 'listNavigation'
+> & { onEmailReminderSaved?: () => void | Promise<void> };
+
+/**
  * Back, the subject with its menu, and Info. Every other thread action lives
  * in the title menu.
  */
-function MobileEmailThreadHeader(props: EmailThreadToolsOptions) {
+function MobileEmailThreadHeader(
+  props: EmailThreadToolsOptions & {
+    onEmailReminderSaved?: () => void | Promise<void>;
+  }
+) {
   const { isInvite, actions, emailEntity, permissions } =
     useEmailThreadTools(props);
 
@@ -28,9 +41,10 @@ function MobileEmailThreadHeader(props: EmailThreadToolsOptions) {
         />
       </MobileHeader>
 
-      <BlockSplitFileMenu
+      <SplitFileMenu
         id={props.id}
         itemType="email"
+        entityKind="email"
         name={props.title}
         ops={[]}
         tools={[
@@ -42,9 +56,9 @@ function MobileEmailThreadHeader(props: EmailThreadToolsOptions) {
           actions.createTask,
           actions.createEvent,
           actions.share,
+          actions.excludeFromCrm,
           actions.moveToFolder,
           actions.downloadEml,
-          actions.excludeFromCrm,
           actions.trash,
           actions.senderToSignal,
           actions.senderToNoise,
@@ -52,13 +66,20 @@ function MobileEmailThreadHeader(props: EmailThreadToolsOptions) {
         ]}
         entity={emailEntity()}
         permissions={permissions()}
+        onEmailReminderSaved={props.onEmailReminderSaved}
       />
     </>
   );
 }
 
-/** The email block on touch, where every thread opens as a block. */
-export function MobileEmailThread(props: EmailBlockViewProps) {
+/**
+ * An email thread on touch. The email block shows it, and so does touch Mail
+ * beside its list (inside a `SplitHeaderScope`), so a thread has one header
+ * in both.
+ */
+export function MobileEmailThread(
+  props: EmailBlockViewProps & { list?: MobileEmailThreadList }
+) {
   return (
     <EmailThreadHostView
       title={props.title}
@@ -72,6 +93,10 @@ export function MobileEmailThread(props: EmailBlockViewProps) {
           onCreateTask={context.createTask}
           onCreateEvent={context.createEvent}
           canCreateEvent={context.canCreateEvent}
+          onMarkedUnread={props.list?.onMarkedUnread}
+          onDeleted={props.list?.onDeleted}
+          listNavigation={props.list?.listNavigation}
+          onEmailReminderSaved={props.list?.onEmailReminderSaved}
         />
       )}
     />
