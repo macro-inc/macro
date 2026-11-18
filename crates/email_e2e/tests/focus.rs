@@ -79,7 +79,10 @@ async fn wait_until_classified(user: &User, thread_id: &str) -> Result<Value, Re
 async fn arrives(inbox: &Inbox, from: &str, subject: &str) -> Result<String, Report> {
     inbox.deliver(&Mail::new(from, subject, "Hello."))?;
     let preview = inbox.wait_for_preview("inbox", subject).await?;
-    Ok(preview["id"].as_str().unwrap_or_default().to_owned())
+    let id = preview["id"]
+        .as_str()
+        .ok_or_else(|| rootcause::report!("the preview of {subject} has no thread id"))?;
+    Ok(id.to_owned())
 }
 
 /// The pushes that told the inbox's readers its Focus changed.

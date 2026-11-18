@@ -52,10 +52,13 @@ const FOCUS_WORKER: &str = "email_focus_worker";
 const FOCUS_WORKER_GROUP: &str = "email-focus";
 /// What that worker logs once it has subscribed to the mail events.
 const FOCUS_WORKER_MARKER: &str = "email focus consumer listening";
-/// How that worker logs, at debug, that it left a thread unclassified, and
-/// the outcome it names when the owner does not have the Focus flag. Its
-/// log is coloured, so each is looked for on its own.
+/// How that worker logs, at debug, that it left a thread unclassified. Its
+/// log is coloured, so this, the thread id and the outcome are looked for
+/// each on its own.
 const FOCUS_SKIPPED: &str = "focus skipped";
+/// The outcome that line names when the owner does not have the Focus flag:
+/// the Debug name of `ClassifyOutcome::NotEnabled` in `email_focus_worker`,
+/// so renaming that variant makes the wait for it time out.
 const FOCUS_NOT_ENABLED: &str = "NotEnabled";
 /// The setting that names the Kafka brokers.
 const KAFKA_BROKERS: &str = "KAFKA_BROKERS";
