@@ -3,6 +3,7 @@ import type { ParentProps } from 'solid-js';
 import { DriveLocationBreadcrumbItems } from '../components/DriveBreadcrumbs';
 import { useDriveView } from '../context/drive-context';
 import {
+  DRIVE_VIEW_BREADCRUMB,
   type DriveLocationBreadcrumb,
   driveCallBreadcrumbValue,
 } from '../core/breadcrumbs';
@@ -19,7 +20,9 @@ export function DriveBreadcrumbs(
     const callId = navigation.activeCallId();
     return callId
       ? driveCallBreadcrumbValue(callId)
-      : (navigation.active()?.value ?? props.entries.at(-1)!.value);
+      : (navigation.active()?.value ??
+          props.entries.at(-1)?.value ??
+          DRIVE_VIEW_BREADCRUMB);
   };
   return (
     <ViewBreadcrumbs.Root

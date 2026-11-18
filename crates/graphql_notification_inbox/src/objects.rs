@@ -142,6 +142,18 @@ impl GraphqlNotificationInboxRow {
         self.0.row_type.into()
     }
 
+    /// Other kinds an inbox scope lists the row under, because what it shows
+    /// is that too: a thread whose reply mentions the viewer is listed under
+    /// mentions as well. A clear of any of these kinds takes the row.
+    async fn also_listed_as(&self) -> Vec<GraphqlNotificationInboxRowType> {
+        self.0
+            .also_listed_as
+            .iter()
+            .copied()
+            .map(Into::into)
+            .collect()
+    }
+
     /// For a thread row, the channel root message or discussion root
     /// comment it is about.
     async fn thread_id(&self) -> Option<&str> {

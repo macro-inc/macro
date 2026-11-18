@@ -228,6 +228,11 @@ skips the turn before any model call; unset or unreadable, summaries run.
 - The row's fenced log writer and the Cursor projection both lock the
   session row `FOR UPDATE`; never add a second `NOWAIT` locker without
   checking both paths (see git history on `src/domain/control.rs`).
+- The search indexing lease (`SearchIndexingRepo::lock`) returns
+  `GrantedLease::granted_at`, read from the database clock in the locking
+  statement itself. search-processing sends it as the version of every write
+  and delete it makes in the index, so it must stay one clock for all workers,
+  never a process clock.
 - `modified_at` is Agents/Home list recency. Bump it for user-visible work
   (`moves_session_list`: starting/running/stopping/blocked) and metadata
   the viewer asked to change. Do not bump it for claim, release, recovery,

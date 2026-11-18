@@ -127,23 +127,78 @@ fn channel_sender() -> ChannelSender<'static> {
 /// Builds a [`WorkerPool`] whose worker channels are captured as receivers.
 fn test_pool(workers: usize, capacity: usize) -> (WorkerPool, Vec<mpsc::Receiver<ReceivedEvent>>) {
     let (senders, receivers) = (0..workers).map(|_| mpsc::channel(capacity)).unzip();
-    (WorkerPool::new(senders), receivers)
+    (WorkerPool::new(senders, Arc::default()), receivers)
 }
 
 fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEvent {
-    ReceivedEvent {
-        event: DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
-            EMAIL_LINK_ID.to_string(),
-            EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
-                link_id: EMAIL_LINK_ID,
-                owner: user_id(),
-                thread_id,
-            }),
-        )),
-        partition: 0,
+    let event = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
+        EMAIL_LINK_ID.to_string(),
+        EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
+            link_id: EMAIL_LINK_ID,
+            owner: user_id(),
+            thread_id,
+        }),
+    ));
+    attach_event_coordinates(
+        Ok::<_, EventBrokerError>(event),
+        0,
         offset,
-    }
+        tracing::Span::none(),
+    )
+    .expect("attached event")
 }
+
+fn received_agent_session_event(session: Uuid, offset: i64) -> ReceivedEvent {
+    use ::agent_session::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
+
+    received_lifecycle_event(session, offset, |identity| {
+        AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata { identity })
+    })
+}
+
+fn received_lifecycle_event(
+    session: Uuid,
+    offset: i64,
+    event: impl FnOnce(
+        ::agent_session::domain::events::SessionIdentity,
+    ) -> ::agent_session::domain::events::AgentSessionLifecycleEvent,
+) -> ReceivedEvent {
+    use ::agent_session::domain::{
+        events::SessionIdentity,
+        model::{AgentSessionId, SessionSource},
+    };
+    use macro_event_topics::MacroAgentSessionLifecycleTopic;
+
+    let id = AgentSessionId::new_from_uuid(session);
+    let event = event(SessionIdentity {
+        session_id: id,
+        session_name: "Indexed session".into(),
+        bot_id: serde_json::from_value(serde_json::json!(Uuid::from_u128(2))).unwrap(),
+        bot_name: "Agent".into(),
+        owner_id: user_id(),
+        origin: None,
+        audience: vec![],
+        source: SessionSource::User,
+    });
+    let message = encoded_message(
+        MacroAgentSessionLifecycleTopic::TOPIC_STR,
+        id,
+        Event::new(event),
+    );
+    attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        0,
+        offset,
+        tracing::Span::none(),
+    )
+    .expect("decodable agent-session event")
+}
+
+const AGENT_SESSION_ID: Uuid = Uuid::from_u128(10);
+const SECOND_AGENT_SESSION_ID: Uuid = Uuid::from_u128(11);
+/// Long enough that a handoff blocked on a full channel fails the test
+/// instead of hanging it; paused time makes the wait instant.
+const BLOCKED_HANDOFF_TIMEOUT: Duration = Duration::from_secs(60);
 
 fn user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|owner@example.com".to_string()).expect("valid user id")
@@ -1915,7 +1970,12 @@ async fn malformed_missing_key_and_unsupported_email_messages_are_commit_safe() 
         key: Some(EMAIL_LINK_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 7, 60);
+    let malformed = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&malformed),
+        7,
+        60,
+        tracing::Span::none(),
+    );
 
     let missing_key = TestMessage {
         topic: MacroEmailTopic::TOPIC_STR,
@@ -1927,14 +1987,24 @@ async fn malformed_missing_key_and_unsupported_email_messages_are_commit_safe() 
         )
         .payload,
     };
-    let missing_key = attach_event_coordinates(DeclaredMacroEvent::decode(&missing_key), 7, 61);
+    let missing_key = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&missing_key),
+        7,
+        61,
+        tracing::Span::none(),
+    );
 
     let unsupported = encoded_message(
         MacroEmailTopic::TOPIC_STR,
         EMAIL_LINK_ID,
         Event::with_schema_version(draft_email_event(false), 2),
     );
-    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 7, 62);
+    let unsupported = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&unsupported),
+        7,
+        62,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
@@ -1970,7 +2040,12 @@ async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
         key: Some(CHAT_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 5, 40);
+    let malformed = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&malformed),
+        5,
+        40,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
@@ -1987,7 +2062,12 @@ async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
         CHAT_ID,
         Event::with_schema_version(unsupported_event, 2),
     );
-    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 5, 41);
+    let unsupported = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&unsupported),
+        5,
+        41,
+        tracing::Span::none(),
+    );
     match pool.handoff(unsupported).await {
         HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
             topic,
@@ -2021,7 +2101,12 @@ async fn unsupported_project_schema_message_is_commit_safe() {
         PROJECT_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 4, 30);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        4,
+        30,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     match pool.handoff(decoded).await {
@@ -2056,7 +2141,12 @@ async fn unsupported_property_schema_message_is_commit_safe() {
         PROPERTY_ENTITY_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 6, 50);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        6,
+        50,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     match pool.handoff(decoded).await {
@@ -2088,7 +2178,12 @@ async fn unsupported_channel_schema_message_is_commit_safe() {
         CHANNEL_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 2, 20);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        2,
+        20,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     match pool.handoff(decoded).await {
@@ -2116,7 +2211,12 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         key: Some(CALL_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 1, 10);
+    let malformed = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&malformed),
+        1,
+        10,
+        tracing::Span::none(),
+    );
     assert!(matches!(malformed, Err(EventBrokerError::Serialization(_))));
 
     let missing_key = TestMessage {
@@ -2129,7 +2229,12 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         )
         .payload,
     };
-    let missing_key = attach_event_coordinates(DeclaredMacroEvent::decode(&missing_key), 1, 11);
+    let missing_key = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&missing_key),
+        1,
+        11,
+        tracing::Span::none(),
+    );
     assert!(matches!(
         missing_key,
         Err(EventBrokerError::MissingMessageKey)
@@ -2140,7 +2245,12 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         CALL_ID,
         Event::with_schema_version(archived_event(), 2),
     );
-    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 1, 12);
+    let unsupported = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&unsupported),
+        1,
+        12,
+        tracing::Span::none(),
+    );
     assert!(matches!(
         unsupported,
         Err(EventBrokerError::UnsupportedSchemaVersion {
@@ -2171,7 +2281,12 @@ async fn successful_handoff_carries_event_partition_and_offset() {
         CALL_ID,
         Event::new(event.clone()),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        3,
+        42,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
@@ -2195,7 +2310,12 @@ async fn closed_worker_channel_leaves_the_current_message_uncommitted() {
         CALL_ID,
         Event::new(archived_event()),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        3,
+        42,
+        tracing::Span::none(),
+    );
     let (pool, receivers) = test_pool(1, 1);
     drop(receivers);
 
@@ -2230,6 +2350,283 @@ async fn bounded_handoff_blocks_when_full_and_preserves_order() {
         HandoffOutcome::HandedOff
     ));
     assert_eq!(receivers[0].recv().await.expect("second event").offset, 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn queued_agent_session_reread_absorbs_later_hints_without_blocking() {
+    let (pool, mut receivers) = test_pool(1, 1);
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+            AGENT_SESSION_ID,
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    for offset in 2..40 {
+        let outcome = tokio::time::timeout(
+            BLOCKED_HANDOFF_TIMEOUT,
+            pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+                AGENT_SESSION_ID,
+                offset,
+            ))),
+        )
+        .await
+        .expect("a hint for a session with a queued reread must not wait on its full worker");
+        assert!(matches!(outcome, HandoffOutcome::Coalesced));
+    }
+
+    assert_eq!(receivers[0].recv().await.expect("queued reread").offset, 1);
+    assert!(matches!(
+        receivers[0].try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
+}
+
+#[tokio::test(start_paused = true)]
+async fn agent_session_flood_does_not_delay_email_events_on_other_partitions() {
+    const AGENT_PARTITION: i32 = 1;
+    const EMAIL_PARTITION: i32 = 4;
+    const SESSION_EVENTS: i64 = 2_000;
+    const EMAIL_EVENTS: u128 = 60;
+
+    let (pool, receivers) = test_pool(WORKER_COUNT, WORKER_CHANNEL_CAPACITY);
+    let hot_worker = pool.shard_index(&AGENT_SESSION_ID.to_string());
+    let email_threads: Vec<Uuid> = (0..EMAIL_EVENTS)
+        .map(|index| Uuid::from_u128(50_000 + index))
+        .collect();
+    let emails_behind_hot_worker = email_threads
+        .iter()
+        .filter(|thread| pool.shard_index(&thread.to_string()) == hot_worker)
+        .count();
+    assert!(
+        emails_behind_hot_worker < WORKER_CHANNEL_CAPACITY - 1,
+        "fixture must not fill the stuck worker with email events alone"
+    );
+
+    // The session's worker is stuck in a reconcile; every other worker drains.
+    let mut stuck = None;
+    let mut drained = Vec::new();
+    for (index, mut receiver) in receivers.into_iter().enumerate() {
+        if index == hot_worker {
+            stuck = Some(receiver);
+            continue;
+        }
+        drained.push(tokio::spawn(async move {
+            let mut emails = 0;
+            while let Some(event) = receiver.recv().await {
+                assert_eq!(event.partition, EMAIL_PARTITION);
+                emails += 1;
+            }
+            emails
+        }));
+    }
+
+    let mut email_threads = email_threads.into_iter();
+    let flood = async {
+        for offset in 0..SESSION_EVENTS {
+            let mut session_event = received_agent_session_event(AGENT_SESSION_ID, offset);
+            session_event.partition = AGENT_PARTITION;
+            let _ = pool.handoff(Ok::<_, EventBrokerError>(session_event)).await;
+            if offset % 30 == 0
+                && let Some(thread) = email_threads.next()
+            {
+                let mut email_event = received_thread_backfilled_event(thread, offset);
+                email_event.partition = EMAIL_PARTITION;
+                assert!(matches!(
+                    pool.handoff(Ok::<_, EventBrokerError>(email_event)).await,
+                    HandoffOutcome::HandedOff
+                ));
+            }
+        }
+    };
+    tokio::time::timeout(BLOCKED_HANDOFF_TIMEOUT, flood)
+        .await
+        .expect("one session's flood must not hold handoff for other events");
+    drop(pool);
+
+    let mut stuck = stuck.expect("hot worker channel");
+    let mut queued_rereads = 0;
+    let mut queued_emails = 0;
+    while let Some(event) = stuck.recv().await {
+        match event.partition {
+            AGENT_PARTITION => queued_rereads += 1,
+            _ => queued_emails += 1,
+        }
+    }
+    let mut delivered_emails = queued_emails;
+    for worker in drained {
+        delivered_emails += worker.await.expect("draining worker did not panic");
+    }
+    assert_eq!(
+        queued_rereads, 1,
+        "one queued reread covers the whole flood"
+    );
+    assert_eq!(delivered_emails, EMAIL_EVENTS as usize);
+}
+
+#[tokio::test]
+async fn hint_arriving_mid_reread_queues_the_next_reread() {
+    let (sender, receiver) = mpsc::channel(WORKER_CHANNEL_CAPACITY);
+    let pending_rereads = Arc::new(PendingRereads::default());
+    let pool = WorkerPool::new(vec![sender], Arc::clone(&pending_rereads));
+    let (started_sender, mut started) = mpsc::channel(4);
+    let resume = Arc::new(tokio::sync::Notify::new());
+    let worker_resume = Arc::clone(&resume);
+    let worker = tokio::spawn(drain_worker_events(
+        receiver,
+        pending_rereads,
+        move |received| {
+            let started_sender = started_sender.clone();
+            let resume = Arc::clone(&worker_resume);
+            async move {
+                started_sender
+                    .send(received.offset)
+                    .await
+                    .expect("test observes every reread");
+                if received.offset == 1 {
+                    resume.notified().await;
+                }
+            }
+        },
+    ));
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+            AGENT_SESSION_ID,
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    assert_eq!(started.recv().await, Some(1), "first reread is running");
+
+    // The running reread may already have read the session, so this hint
+    // needs a reread of its own.
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+            AGENT_SESSION_ID,
+            2
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    resume.notify_one();
+    assert_eq!(started.recv().await, Some(2), "next reread runs");
+
+    drop(pool);
+    worker.await.expect("worker drained without panicking");
+}
+
+#[tokio::test]
+async fn dead_worker_holding_a_claim_leaves_later_hints_uncommitted() {
+    let (pool, receivers) = test_pool(1, 4);
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+            AGENT_SESSION_ID,
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    // The worker dies with the reread still queued.
+    drop(receivers);
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+            AGENT_SESSION_ID,
+            2
+        )))
+        .await,
+        HandoffOutcome::WorkerClosed
+    ));
+}
+
+#[tokio::test]
+async fn distinct_sessions_and_non_reread_events_each_hand_off() {
+    let (pool, mut receivers) = test_pool(1, 8);
+    for event in [
+        received_agent_session_event(AGENT_SESSION_ID, 1),
+        received_agent_session_event(SECOND_AGENT_SESSION_ID, 2),
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 3),
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 4),
+    ] {
+        assert!(matches!(
+            pool.handoff(Ok::<_, EventBrokerError>(event)).await,
+            HandoffOutcome::HandedOff
+        ));
+    }
+    drop(pool);
+
+    let mut offsets = Vec::new();
+    while let Some(event) = receivers[0].recv().await {
+        offsets.push(event.offset);
+    }
+    assert_eq!(offsets, [1, 2, 3, 4]);
+}
+
+#[tokio::test]
+async fn a_settled_session_never_holds_the_reread_its_next_turn_needs() {
+    use ::agent_session::domain::{
+        events::{AgentSessionLifecycleEvent, SessionSettledMetadata, TurnEndedMetadata},
+        model::TurnId,
+    };
+
+    let (pool, mut receivers) = test_pool(1, 4);
+
+    // `settled` changes nothing indexed. Had it taken the session's reread
+    // claim, the `turn_ended` behind it would be coalesced into a reread that
+    // is then skipped, and the reply would never be indexed.
+    let settled = received_lifecycle_event(AGENT_SESSION_ID, 1, |identity| {
+        AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
+            identity,
+            last_turn: None,
+        })
+    });
+    let turn_ended = received_lifecycle_event(AGENT_SESSION_ID, 2, |identity| {
+        AgentSessionLifecycleEvent::TurnEnded(TurnEndedMetadata {
+            identity,
+            turn: TurnId(4),
+            action_id: serde_json::from_value(serde_json::json!(Uuid::from_u128(3))).unwrap(),
+            actor: None,
+            announcement_message_id: None,
+            stop_reason: "end_turn".into(),
+            queued_remaining: 0,
+        })
+    });
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(settled)).await,
+        HandoffOutcome::NoIndexChange
+    ));
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(turn_ended)).await,
+        HandoffOutcome::HandedOff
+    ));
+    drop(pool);
+
+    let mut offsets = Vec::new();
+    while let Some(event) = receivers[0].recv().await {
+        offsets.push(event.offset);
+    }
+    assert_eq!(offsets, [2]);
+}
+
+#[tokio::test]
+async fn closed_worker_releases_the_reread_claim() {
+    let (pool, receivers) = test_pool(1, 1);
+    drop(receivers);
+
+    for offset in [1, 2] {
+        assert!(matches!(
+            pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+                AGENT_SESSION_ID,
+                offset
+            )))
+            .await,
+            HandoffOutcome::WorkerClosed
+        ));
+    }
 }
 
 #[tokio::test]
@@ -2400,4 +2797,194 @@ fn standalone_call_deletion_indexes_by_call_without_channel_context() {
             channel_id: None,
         }
     );
+}
+
+/// Exports every finished span to memory, through the same OpenTelemetry layer
+/// production uses, so tests see real parents and end times.
+struct OtelCapture {
+    exporter: opentelemetry_sdk::trace::InMemorySpanExporter,
+    _provider: opentelemetry_sdk::trace::SdkTracerProvider,
+    _guard: tracing::subscriber::DefaultGuard,
+}
+
+impl OtelCapture {
+    fn install() -> Self {
+        use opentelemetry::trace::TracerProvider as _;
+        use tracing_subscriber::layer::SubscriberExt as _;
+
+        let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .build();
+        let guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(
+            tracing_opentelemetry::layer().with_tracer(provider.tracer("search-processing-test")),
+        ));
+        Self {
+            exporter,
+            _provider: provider,
+            _guard: guard,
+        }
+    }
+
+    /// Call after a first pass has registered the callsites under test:
+    /// another test thread may have cached a "never" interest for them before
+    /// this subscriber existed, so recompute it and measure a second pass.
+    fn rearm(&self) {
+        tracing::callsite::rebuild_interest_cache();
+        self.exporter.reset();
+    }
+
+    fn finished(&self, name: &str) -> Vec<opentelemetry_sdk::trace::SpanData> {
+        self.exporter
+            .get_finished_spans()
+            .expect("in-memory exporter")
+            .into_iter()
+            .filter(|span| span.name == name)
+            .collect()
+    }
+}
+
+fn attribute(span: &opentelemetry_sdk::trace::SpanData, key: &str) -> Option<String> {
+    span.attributes
+        .iter()
+        .find(|attribute| attribute.key.as_str() == key)
+        .map(|attribute| attribute.value.to_string())
+}
+
+fn kafka_record(
+    topic: &str,
+    key: String,
+    partition: i32,
+    offset: i64,
+) -> rdkafka::message::OwnedMessage {
+    rdkafka::message::OwnedMessage::new(
+        None,
+        Some(key.into_bytes()),
+        topic.to_owned(),
+        rdkafka::message::Timestamp::CreateTime(1_000),
+        partition,
+        offset,
+        None,
+    )
+}
+
+#[tokio::test]
+async fn coalesced_event_records_a_process_event_span_with_its_outcome() {
+    let capture = OtelCapture::install();
+    let (pool, _receivers) = test_pool(1, 8);
+
+    for session in [SECOND_AGENT_SESSION_ID, AGENT_SESSION_ID] {
+        capture.rearm();
+        for offset in [1, 2] {
+            let mut event = received_agent_session_event(session, offset);
+            event.partition = 3;
+            let _ = pool.handoff(Ok::<_, EventBrokerError>(event)).await;
+        }
+    }
+
+    let spans = capture.finished("process_event");
+    let [coalesced] = spans.as_slice() else {
+        panic!("only the coalesced event has finished: {spans:?}");
+    };
+    assert_eq!(
+        attribute(coalesced, "outcome").as_deref(),
+        Some("coalesced")
+    );
+    assert_eq!(
+        attribute(coalesced, "event_type").as_deref(),
+        Some("agent_session.renamed")
+    );
+    assert_eq!(attribute(coalesced, "partition").as_deref(), Some("3"));
+    assert_eq!(attribute(coalesced, "offset").as_deref(), Some("2"));
+}
+
+#[test]
+fn received_record_span_names_its_event() {
+    let capture = OtelCapture::install();
+    let record = kafka_record(
+        macro_event_topics::MacroAgentSessionLifecycleTopic::TOPIC_STR,
+        AGENT_SESSION_ID.to_string(),
+        1,
+        4,
+    );
+    let mut id = None;
+    for _ in 0..2 {
+        capture.rearm();
+        let event = received_agent_session_event(AGENT_SESSION_ID, 4).event;
+        id = Some(event_id(&event));
+        let (span, received) = receive_record(&record, || Ok::<_, EventBrokerError>(event));
+        let received = received.expect("decoded record");
+        assert_eq!(received.event_type, "agent_session.renamed");
+        assert_eq!(received.produced_at_ms, Some(1_000));
+        drop((span, received));
+    }
+    let id = id.expect("measured pass");
+
+    let spans = capture.finished("kafka.process");
+    let [record] = spans.as_slice() else {
+        panic!("expected one record span, got {spans:?}");
+    };
+    assert_eq!(
+        attribute(record, "macro.event.type").as_deref(),
+        Some("agent_session.renamed")
+    );
+    assert_eq!(attribute(record, "macro.event.id"), Some(id.to_string()));
+    assert_eq!(
+        attribute(record, "agent.session.id"),
+        Some(AGENT_SESSION_ID.to_string())
+    );
+    assert_eq!(
+        attribute(record, "messaging.kafka.offset").as_deref(),
+        Some("4")
+    );
+}
+
+#[tokio::test]
+async fn record_span_covers_processing_and_fails_with_a_dropped_event() {
+    let capture = OtelCapture::install();
+    let record = kafka_record(MacroEmailTopic::TOPIC_STR, EMAIL_LINK_ID.to_string(), 2, 7);
+    for _ in 0..2 {
+        capture.rearm();
+        let event = received_thread_backfilled_event(EMAIL_THREAD_ID, 7).event;
+        let (span, received) = receive_record(&record, || Ok::<_, EventBrokerError>(event));
+        let received = received.expect("decoded record");
+        // The poll loop is inside the record span only while it hands off.
+        async {}.instrument(span.clone()).await;
+        drop(span);
+
+        process_received(&received, |_| async {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            EventOutcome::Dropped
+        })
+        .await;
+        drop(received);
+    }
+
+    let records = capture.finished("kafka.process");
+    let processing = capture.finished("process_event");
+    let ([record], [processing]) = (records.as_slice(), processing.as_slice()) else {
+        panic!("expected one record and one processing span: {records:?} {processing:?}");
+    };
+    assert_eq!(processing.parent_span_id, record.span_context.span_id());
+    assert!(
+        record.end_time >= processing.end_time,
+        "the record span must cover the processing it waited for"
+    );
+    for span in [record, processing] {
+        assert!(
+            matches!(span.status, opentelemetry::trace::Status::Error { .. }),
+            "a dropped event fails {}",
+            span.name
+        );
+    }
+    assert_eq!(attribute(processing, "outcome").as_deref(), Some("dropped"));
+    assert_eq!(
+        attribute(processing, "event_type").as_deref(),
+        Some("email.thread_backfilled")
+    );
+    assert_eq!(
+        attribute(processing, "entity_id"),
+        Some(EMAIL_THREAD_ID.to_string())
+    );
+    assert!(attribute(processing, "record_age_ms").is_some());
 }

@@ -493,12 +493,8 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog = [
-  // CRM privacy settings use the generated client.
-  'getCrmEmailPrivacy',
-  'listCrmExcludedEmailThreads',
-  'updateCrmEmailPrivacy',
-] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog =
+  [] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',
