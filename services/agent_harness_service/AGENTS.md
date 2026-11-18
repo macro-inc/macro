@@ -50,7 +50,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
   forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
   its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6
-  defaults). `messages` is admitted as `AiFeature::AgentSession`
+  defaults and agent teammates’ Sonnet 5.5 calls). `messages` is admitted as `AiFeature::AgentSession`
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
   only under `ENABLE_AI_USAGE_BILLING`. A caller that hangs up mid-stream does
