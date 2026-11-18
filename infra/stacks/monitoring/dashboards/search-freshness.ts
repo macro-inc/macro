@@ -21,7 +21,7 @@
 // - `search.index.dropped_events`: events committed without reaching the
 //   index (counter), tagged `entity_type`, plus `event_type` when dropped after
 //   their processing retries, or `failure` (`undecodable`, `cut_off_at_stop`,
-//   `not_rewound`, `rewind_unconfirmed`, `queued_at_error_exit`) for records
+//   `not_rewound`, `rewind_unconfirmed`, `queued_without_rewind`) for records
 //   lost outside the workers.
 // - `event_broker.publishes`: events handed to the broker (counter), tagged
 //   `topic`, `event_type` (the payload's tag, e.g. `email.message_received`;

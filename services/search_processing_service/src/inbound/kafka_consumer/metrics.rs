@@ -24,7 +24,7 @@ use opentelemetry::{
     metrics::{Counter, Histogram, Meter, ObservableGauge},
 };
 
-use super::{EventOutcome, ReceivedEvent, entity_type::EntityType, offsets::RecordPosition};
+use super::{EventOutcome, ReceivedEvent, entity_type::EntityType};
 
 #[cfg(test)]
 pub(super) mod test;
@@ -56,8 +56,9 @@ pub(super) enum Loss {
     /// Queued when the consumer stopped, and committing its partition back
     /// failed.
     RewindUnconfirmed,
-    /// Queued when the consumer stopped after an error.
-    QueuedAtErrorExit,
+    /// Queued when the consumer stopped without committing partitions back:
+    /// after an error, or after a worker panicked.
+    QueuedWithoutRewind,
 }
 
 /// [`LAG`] bucket bounds in ms: dense around the 60 s and 5 min targets, then
@@ -180,12 +181,6 @@ impl IndexMetrics {
             tags.push(KeyValue::new(ENTITY_TYPE, entity_type.as_str()));
         }
         self.dropped.add(1, &tags);
-    }
-
-    pub(super) fn record_losses(&self, records: &[RecordPosition], loss: Loss) {
-        for record in records {
-            self.record_loss(record.topic, loss);
-        }
     }
 
     pub(super) fn pending_ages(&self) -> &PendingAges {

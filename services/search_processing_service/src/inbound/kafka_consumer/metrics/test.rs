@@ -206,19 +206,11 @@ fn every_subscribed_topic_has_its_own_entity_type() {
 
 #[test]
 fn records_lost_at_a_stop_count_by_their_topics_entity_type() {
-    use crate::inbound::kafka_consumer::offsets::RecordPosition;
-
     let recorded = Recorded::new();
-    let on = |topic| RecordPosition {
-        topic,
-        partition: 0,
-        offset: 1,
-    };
 
-    recorded.metrics.record_losses(
-        &[on("macro.email"), on("macro.email"), on("macro.documents")],
-        Loss::NotRewound,
-    );
+    for topic in ["macro.email", "macro.email", "macro.documents"] {
+        recorded.metrics.record_loss(topic, Loss::NotRewound);
+    }
 
     assert_eq!(
         recorded

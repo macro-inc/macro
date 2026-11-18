@@ -3369,15 +3369,47 @@ async fn a_stop_during_a_held_handoff_leaves_the_record_queued() {
     assert_eq!(ledger.rewind_points(any_partition), [email_position(3)]);
 }
 
-#[test]
-fn records_cut_off_at_a_stop_are_lost_unless_a_rewind_replays_them() {
-    let on = |partition, offset| RecordPosition {
+fn on(partition: i32, offset: i64) -> RecordPosition {
+    RecordPosition {
         topic: "macro.email",
         partition,
         offset,
-    };
-    let started = [on(0, 4), on(0, 9), on(1, 2)];
-    let rewound = [on(0, 6)];
+    }
+}
 
-    assert_eq!(replayed_none_of(&started, &rewound), [on(0, 4), on(1, 2)]);
+#[test]
+fn a_graceful_stop_loses_what_its_rewind_does_not_redeliver() {
+    let rewind = Rewind {
+        rewound: vec![on(0, 6)],
+        not_rewound: vec![on(2, 5), on(2, 7)],
+        unconfirmed: vec![on(3, 1)],
+    };
+
+    assert_eq!(
+        losses_at_stop(
+            &[on(0, 4), on(0, 9), on(1, 2)],
+            Some(&rewind),
+            &[],
+            Some(on(2, 7)),
+        ),
+        [
+            (on(0, 4), Loss::CutOffAtStop),
+            (on(1, 2), Loss::CutOffAtStop),
+            (on(2, 5), Loss::NotRewound),
+            (on(3, 1), Loss::RewindUnconfirmed),
+        ],
+        "0@9 is replayed from 0@6, and 2@7, held at the stop, was never committed"
+    );
+}
+
+#[test]
+fn a_stop_without_a_rewind_loses_every_queued_record_but_the_uncommitted_one() {
+    assert_eq!(
+        losses_at_stop(&[on(0, 4)], None, &[on(1, 3), on(1, 8)], Some(on(1, 8))),
+        [
+            (on(0, 4), Loss::CutOffAtStop),
+            (on(1, 3), Loss::QueuedWithoutRewind),
+        ],
+        "1@8 met the closed worker channel and stays uncommitted"
+    );
 }

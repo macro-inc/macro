@@ -813,14 +813,23 @@ async fn await_handoff<T>(
     }
 }
 
+/// How polling ended.
+struct PollEnd {
+    result: Result<(), Report>,
+    /// The record polling took and left uncommitted, which the group
+    /// redelivers whatever the stop does with its partition.
+    uncommitted: Option<RecordPosition>,
+}
+
 async fn poll_events(
     consumer: &SearchProcessingKafkaConsumer,
     workers: WorkerPool,
     ledger: &mut OffsetLedger,
     reports: &mut mpsc::UnboundedReceiver<WorkerReport>,
     shutdown: impl Future<Output = ()> + Send,
-) -> Result<(), Report> {
+) -> PollEnd {
     let mut shutdown = std::pin::pin!(shutdown);
+    let mut uncommitted = None;
     let mut sampler = BacklogSampler::new(workers.metrics.pending_ages().clone());
     let mut sample_tick = tokio::time::interval(SAMPLE_INTERVAL);
     sample_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -875,6 +884,7 @@ async fn poll_events(
                 )
                 .await else {
                     tracing::info!("search processing event consumer shutting down");
+                    uncommitted = position;
                     break;
                 };
                 if let Some(position) = position {
@@ -907,12 +917,15 @@ async fn poll_events(
                             offset = kafka_message.offset(),
                             "search processing event worker channel closed; leaving offset uncommitted"
                         );
-                        return Err(rootcause::report!(
-                            "search processing event worker channel closed for topic {} at partition {} offset {}",
-                            rdkafka::Message::topic(kafka_message),
-                            kafka_message.partition(),
-                            kafka_message.offset(),
-                        ));
+                        return PollEnd {
+                            result: Err(rootcause::report!(
+                                "search processing event worker channel closed for topic {} at partition {} offset {}",
+                                rdkafka::Message::topic(kafka_message),
+                                kafka_message.partition(),
+                                kafka_message.offset(),
+                            )),
+                            uncommitted: position,
+                        };
                     }
                 }
 
@@ -923,7 +936,10 @@ async fn poll_events(
         }
     }
 
-    Ok(())
+    PollEnd {
+        result: Ok(()),
+        uncommitted,
+    }
 }
 
 /// What committing back at a stop achieved.
@@ -1102,7 +1118,10 @@ pub(crate) async fn run_event_consumer(
     let mut ledger = OffsetLedger::default();
     // Passing the pool by value drops every sender when polling stops, which
     // closes the worker channels so the workers drain and exit.
-    let poll_result = poll_events(&consumer, pool, &mut ledger, &mut reports, shutdown).await;
+    let PollEnd {
+        result: poll_result,
+        uncommitted,
+    } = poll_events(&consumer, pool, &mut ledger, &mut reports, shutdown).await;
 
     let graceful = poll_result.is_ok();
     let span = tracing::info_span!(
@@ -1132,7 +1151,6 @@ pub(crate) async fn run_event_consumer(
 
         let lost = ledger.started_unfinished();
         span.record("lost", lost.len());
-        let metrics = &context.metrics;
         if !lost.is_empty() {
             tracing::warn!(
                 events = %display_positions(&lost),
@@ -1141,9 +1159,9 @@ pub(crate) async fn run_event_consumer(
         }
         if graceful && drained.panic.is_none() {
             let rewind = rewind_queued(&consumer, &ledger);
-            metrics.record_losses(&replayed_none_of(&lost, &rewind.rewound), Loss::CutOffAtStop);
-            metrics.record_losses(&rewind.not_rewound, Loss::NotRewound);
-            metrics.record_losses(&rewind.unconfirmed, Loss::RewindUnconfirmed);
+            for (record, loss) in losses_at_stop(&lost, Some(&rewind), &[], uncommitted) {
+                context.metrics.record_loss(record.topic, loss);
+            }
             span.record("rewound_partitions", rewind.rewound.len());
             span.record("not_rewound", rewind.not_rewound.len());
             span.record("unconfirmed", rewind.unconfirmed.len());
@@ -1167,8 +1185,9 @@ pub(crate) async fn run_event_consumer(
             }
         } else {
             let queued = ledger.queued();
-            metrics.record_losses(&lost, Loss::CutOffAtStop);
-            metrics.record_losses(&queued, Loss::QueuedAtErrorExit);
+            for (record, loss) in losses_at_stop(&lost, None, &queued, uncommitted) {
+                context.metrics.record_loss(record.topic, loss);
+            }
             span.record("not_rewound", queued.len());
             if !queued.is_empty() {
                 tracing::warn!(
@@ -1189,19 +1208,55 @@ pub(crate) async fn run_event_consumer(
     Ok(())
 }
 
-/// The records in `started` that no rewind point redelivers: a partition
-/// committed back to an offset at or before a record replays it.
-fn replayed_none_of(started: &[RecordPosition], rewound: &[RecordPosition]) -> Vec<RecordPosition> {
-    started
-        .iter()
-        .filter(|record| {
-            !rewound.iter().any(|point| {
+/// The records a stop loses, which the group will not redeliver, with why.
+///
+/// `lost` were started and cut off; a partition committed back to an offset
+/// at or before one replays it. After a `rewind`, the queued records it could
+/// not commit back are lost; without one, every `queued` record is, since it
+/// was committed at handoff. The `uncommitted` record never was, so it is
+/// redelivered either way.
+fn losses_at_stop(
+    lost: &[RecordPosition],
+    rewind: Option<&Rewind>,
+    queued: &[RecordPosition],
+    uncommitted: Option<RecordPosition>,
+) -> Vec<(RecordPosition, Loss)> {
+    let replayed = |record: &RecordPosition| {
+        rewind.is_some_and(|rewind| {
+            rewind.rewound.iter().any(|point| {
                 point.topic == record.topic
                     && point.partition == record.partition
                     && point.offset <= record.offset
             })
         })
-        .copied()
+    };
+    let cut_off = lost
+        .iter()
+        .filter(|record| !replayed(record))
+        .map(|record| (*record, Loss::CutOffAtStop));
+    let queued_losses: Vec<_> = match rewind {
+        Some(rewind) => rewind
+            .not_rewound
+            .iter()
+            .map(|record| (*record, Loss::NotRewound))
+            .chain(
+                rewind
+                    .unconfirmed
+                    .iter()
+                    .map(|record| (*record, Loss::RewindUnconfirmed)),
+            )
+            .collect(),
+        None => queued
+            .iter()
+            .map(|record| (*record, Loss::QueuedWithoutRewind))
+            .collect(),
+    };
+    cut_off
+        .chain(
+            queued_losses
+                .into_iter()
+                .filter(|(record, _)| Some(*record) != uncommitted),
+        )
         .collect()
 }
 

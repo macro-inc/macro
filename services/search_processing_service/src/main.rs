@@ -371,6 +371,9 @@ async fn main() -> anyhow::Result<()> {
     let consumer_result = consumer_supervisor
         .await
         .context("search processing event consumer supervisor failed");
+    if let Err(error) = telemetry.force_flush().await {
+        tracing::warn!(error = ?error, "could not flush telemetry after the consumer stopped");
+    }
 
     // Followers stop at the cancelled token; OpenSearch finishes their tasks.
     #[cfg(feature = "processing")]
