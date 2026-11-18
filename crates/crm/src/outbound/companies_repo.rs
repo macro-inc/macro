@@ -163,19 +163,13 @@ impl CompaniesRepositoryImpl {
 
         // The company upsert matches a primary address under that company.
         // Look up address holders so we can preserve a manual unfiled contact
-        // or a contact that holds the address as a further one. Start from
-        // the address index even when the planner knows the team size.
+        // or a contact that holds the address as a further one.
         let holders = sqlx::query!(
             r#"SELECT ct.id, ct.company_id, ct.manually_created,
                       (LOWER(BTRIM(ct.email)) = ce.email) IS TRUE AS "is_primary!"
                FROM crm_contact_emails ce
-               JOIN LATERAL (
-                   SELECT id, company_id, email, manually_created
-                   FROM crm_contacts
-                   WHERE id = ce.contact_id AND team_id = $1
-                   OFFSET 0
-               ) ct ON TRUE
-               WHERE ce.email = $2
+               JOIN crm_contacts ct ON ct.id = ce.contact_id
+               WHERE ce.email = $2 AND ct.team_id = $1
                ORDER BY ct.id
                LIMIT 20"#,
             team_id,
@@ -383,6 +377,7 @@ impl CompaniesRepositoryImpl {
             gate.resume.notified().await;
         }
 
+        // Keep the address check on this contact's composite key in generic plans.
         let refreshed = sqlx::query_scalar!(
             r#"UPDATE crm_contacts SET name = COALESCE(name, $3),
                 first_interaction = CASE WHEN $6 THEN LEAST(first_interaction, $4) ELSE first_interaction END,
