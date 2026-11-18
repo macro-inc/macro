@@ -78,8 +78,8 @@ and usage metering.
 - Rig records a streamed call's usage onto the `chat` span once per chunk,
   and the first write is the one Datadog shows. Gemini's interim chunks lack
   cache reads, so `MeteredHttpClient` strips their usage
-  (`model/metering_http/interim_usage.rs`). Read billed Gemini usage from `ai_usage`
-  if spans and billing disagree.
+  (`src/model/metering_http/interim_usage.rs`). Read billed Gemini usage
+  from `ai_usage` if spans and billing disagree.
 - `MeteredHttpClient` logs every provider response that means Macro's
   account is suspended or out of credit (`genai_telemetry::provider_account`),
   which pages on-call. A client rekeyed for an agent's own key is built

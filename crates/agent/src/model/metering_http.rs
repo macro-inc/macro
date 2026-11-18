@@ -31,7 +31,7 @@ mod test;
 /// Maximum time to drain a provider execution after its consumer disappears.
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(300);
 /// Bound transient SSE parsing memory; never retain or journal model content.
-pub(in crate::model) const MAX_EVENT_BYTES: usize = 1024 * 1024;
+const MAX_EVENT_BYTES: usize = 1024 * 1024;
 
 /// HTTP adapter installed when building a Rig provider client. Attribution is
 /// obtained from the request scope, never stored on this shared client.
@@ -309,21 +309,21 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
     where
         T: Into<Bytes> + Send,
     {
-        let result = self.send_streaming_metered(request).await;
+        let result = self.send_streaming_without_interim_usage(request).await;
         self.report_account_failure(&result);
         result
     }
 }
 
 impl<H: HttpClientExt + Clone + 'static> MeteredHttpClient<H> {
-    async fn send_streaming_metered<T>(
+    async fn send_streaming_without_interim_usage<T>(
         &self,
         request: Request<T>,
     ) -> http_client::Result<StreamingResponse>
     where
         T: Into<Bytes> + Send,
     {
-        let response = self.send_streaming_observed(request).await?;
+        let response = self.send_streaming_metered(request).await?;
         if self.protocol != WireProtocol::Gemini || !response.status().is_success() {
             return Ok(response);
         }
@@ -334,7 +334,7 @@ impl<H: HttpClientExt + Clone + 'static> MeteredHttpClient<H> {
         ))
     }
 
-    async fn send_streaming_observed<T>(
+    async fn send_streaming_metered<T>(
         &self,
         request: Request<T>,
     ) -> http_client::Result<StreamingResponse>
