@@ -1002,6 +1002,24 @@ async fn call_tool_returns_result() {
     );
 }
 
+/// Running a pending tool call is the user's approval of it, so a program,
+/// such as the agent that proposed the call, can't run it here.
+#[tokio::test]
+async fn a_program_cannot_run_a_pending_tool_call() {
+    let req = Request::builder()
+        .method("POST")
+        .uri("/some-chat-id/tool/call")
+        .header("content-type", "application/json")
+        .header(macro_authorization::CODE_EXECUTION_HEADER, "1")
+        .body(Body::from(
+            r#"{"messageId":"message-1","toolCallId":"tool-1","args":{"x":1}}"#,
+        ))
+        .unwrap();
+
+    let res = mock_id_router().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+}
+
 #[tokio::test]
 async fn call_tool_forwards_missing_args() {
     let req = Request::builder()
