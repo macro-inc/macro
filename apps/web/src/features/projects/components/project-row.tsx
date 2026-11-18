@@ -29,10 +29,11 @@ export const PROJECT_GRID_COLUMNS = [
 ] as const satisfies readonly TaskGridColumnId[];
 
 /**
- * Phones drop the header, the hover checkbox and the columns hidden at their
- * width, as the Tasks list does, so the name gets the room they took.
+ * Touch lists projects on a phone or in a tablet's narrow list pane: no
+ * header, no hover checkbox and none of the columns hidden at that width, as
+ * the Tasks list does on phones, so the name gets the room they took.
  */
-export const PROJECT_PHONE_GRID_COLUMNS = [
+export const PROJECT_TOUCH_GRID_COLUMNS = [
   'content',
   'status',
   'priority',

@@ -998,8 +998,9 @@ search namespace: `tasks.tab=my-projects`, `projects`, or `created-projects`.
 Desktop project-view titles open the same view switcher as Tasks; individual
 project names remain content titles. Mobile keeps the Projects picker.
 Projects use the same list rows, property cells, selection, group headers, and
-keyboard navigation as Tasks. On phones, as in the Tasks list, there are no
-column headings and no checkbox column: each row is the project's name followed
+keyboard navigation as Tasks. On touch devices, where the list fills a phone or
+a tablet's narrow list pane, there are no column headings and no checkbox
+column, as in the Tasks list on phones: each row is the project's name followed
 by its Status, Priority, Assignees, and Due date icons. Search (`Cmd/Ctrl+F`), `Sort projects`,
 `Group projects`, and `Filter projects` sit above the list. Groups default to
 Status; choose None, Priority, or Assignee to change them. Click a group header

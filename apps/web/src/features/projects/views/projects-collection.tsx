@@ -28,7 +28,6 @@ import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/T
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { openInNewTab } from '@components/app/tab-layout/open-in-new-tab';
 import { toast } from '@core/component/Toast/Toast';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -55,7 +54,7 @@ import type { VirtualizerHandle } from 'virtua/solid';
 import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
 import {
   PROJECT_GRID_COLUMNS,
-  PROJECT_PHONE_GRID_COLUMNS,
+  PROJECT_TOUCH_GRID_COLUMNS,
   ProjectListHeader,
   ProjectRow,
 } from '../components/project-row';
@@ -112,7 +111,7 @@ export function ProjectsCollection(props: {
   let focusSearch: (() => void) | undefined;
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
   const columns = () =>
-    isMobile() ? PROJECT_PHONE_GRID_COLUMNS : PROJECT_GRID_COLUMNS;
+    isTouchDevice() ? PROJECT_TOUCH_GRID_COLUMNS : PROJECT_GRID_COLUMNS;
   const isGantt = () =>
     props.ganttEnabled && !isTouchDevice() && collection.layout() === 'gantt';
   const definition = (id: string) =>
@@ -667,7 +666,7 @@ export function ProjectsCollection(props: {
               tabIndex={0}
               class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
             >
-              <Show when={!isMobile()}>
+              <Show when={!isTouchDevice()}>
                 <ProjectListHeader />
               </Show>
               <Show when={backgroundError()}>
