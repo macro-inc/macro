@@ -1,0 +1,43 @@
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_branches.ml
+  s_0d20781b0961ab::t_a367e20cc1b6cc 11-14,30-32,38-39,41-42
+  s_0d20781b0961ab::t_2e712dcb183c19 1-10,15-29,33-37,40,43-44
+packages/sdk-ocaml/analyzer/test/dune
+  s_0d20781b0961ab::t_7604835e4ed867 3-4,36-43,45
+  s_0d20781b0961ab::t_a367e20cc1b6cc 44
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_config.ml
+  s_0d20781b0961ab::t_2e712dcb183c19 1-11
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_fetch_as_module.ml
+  s_0d20781b0961ab::t_2e712dcb183c19 1-17
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_task.ml
+  s_0d20781b0961ab::t_2e712dcb183c19 1-25
+packages/sdk-ocaml/analyzer/test/code_mode_interfaces/dune
+  s_0d20781b0961ab::t_82705741642abe 1-17
+packages/sdk-ocaml/analyzer/test/corpus/code_mode_js_interop.ml
+  s_0d20781b0961ab::t_2e712dcb183c19 1-5
+  s_0d20781b0961ab::t_a367e20cc1b6cc 6-8
+packages/sdk-ocaml/analyzer/test/test_trusted.ml
+  s_0d20781b0961ab::t_7604835e4ed867 1-43,46-48,50-57
+  s_0d20781b0961ab::t_a367e20cc1b6cc 44-45,49
+packages/sdk-ocaml/analyzer/test/corpus/dune
+  s_0d20781b0961ab::t_a367e20cc1b6cc 7-13
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_0d20781b0961ab::t_82705741642abe 177-187,194-195
+packages/sdk-ocaml/analyzer/lib/analyze.mli
+  s_0d20781b0961ab::t_82705741642abe 29-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7e014076020f67e85a494fb52195418e2886e14c",
+  "prompts": {},
+  "sessions": {
+    "s_0d20781b0961ab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4872cb4-4667-43b0-b58e-3a155924d613",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
