@@ -35,8 +35,9 @@ export function DocumentImagePreview(props: { documentId: string }) {
   // The query signs a new URL on every refetch, and a new src reloads the
   // image, so a message scrolled back into view would collapse and regrow.
   // Keep the URL the image loaded from and move to a newer one only after
-  // that URL failed, which is how an expired one shows up. A URL that fails
-  // again after one refetch leaves the chip alone.
+  // that URL failed, which is how an expired one shows up. A fresh URL that
+  // fails before it ever loaded leaves the chip alone; one that loaded and
+  // expires later gets refreshed again.
   const [failedUrl, setFailedUrl] = createSignal<string>();
   const [gaveUp, setGaveUp] = createSignal(false);
   const shownUrl = createMemo<string | undefined>((shown) => {
@@ -64,7 +65,11 @@ export function DocumentImagePreview(props: { documentId: string }) {
 
   const retryWithFreshUrl = () => {
     const url = shownUrl();
-    if (failedUrl() !== undefined) {
+    const failed = failedUrl();
+    // The failed URL can report again while its replacement is on its way.
+    if (failed === url) return;
+
+    if (failed !== undefined) {
       setGaveUp(true);
       return;
     }
@@ -75,7 +80,11 @@ export function DocumentImagePreview(props: { documentId: string }) {
 
   return (
     <Show when={items().length > 0}>
-      <MediaPreview items={items()} onError={retryWithFreshUrl} />
+      <MediaPreview
+        items={items()}
+        onError={retryWithFreshUrl}
+        onLoad={() => setFailedUrl(undefined)}
+      />
     </Show>
   );
 }

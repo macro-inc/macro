@@ -55,12 +55,16 @@ vi.mock('../MediaPreview', () => ({
   MediaPreview: (props: {
     items: { id: string; src: string }[];
     onError?: (id: string) => void;
+    onLoad?: (id: string) => void;
   }) => (
     <ul>
       <For each={props.items}>
         {(item) => (
           <li>
             Inline {item.id} {item.src}
+            <button type="button" onClick={() => props.onLoad?.(item.id)}>
+              Load {item.id}
+            </button>
             <button type="button" onClick={() => props.onError?.(item.id)}>
               Fail {item.id}
             </button>
@@ -105,6 +109,27 @@ it('moves to a fresh URL once when the image fails, then falls back to the chip'
   expect(
     await screen.findByText(
       'Inline chart-doc https://storage.test/chart-doc?signature=2'
+    )
+  ).toBeTruthy();
+
+  fireEvent.click(screen.getByText('Fail chart-doc'));
+  expect(screen.queryByText(/Inline chart-doc/)).toBeNull();
+  expect(screen.getByText('Chip document chart-doc')).toBeTruthy();
+});
+
+it('refreshes an image again when a URL that loaded expires later', async () => {
+  render(() => <Attachments />);
+
+  fireEvent.click(screen.getByText('Fail chart-doc'));
+  await screen.findByText(
+    'Inline chart-doc https://storage.test/chart-doc?signature=2'
+  );
+  fireEvent.click(screen.getByText('Load chart-doc'));
+
+  fireEvent.click(screen.getByText('Fail chart-doc'));
+  expect(
+    await screen.findByText(
+      'Inline chart-doc https://storage.test/chart-doc?signature=3'
     )
   ).toBeTruthy();
 
