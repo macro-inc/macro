@@ -33,8 +33,11 @@ function mutedBySections(
 ): boolean {
   const settings = rail.channelNotifications;
   if (!settings.enabled()) return false;
-  const channelType = rail.channelById(channelId)?.channelType;
-  return settings.channel(channelId, channelType).mutedBySections;
+  // Until its record resolves, the channel's built-in section is unknown,
+  // and its other sections alone could read as all muted.
+  const channel = rail.channelById(channelId);
+  if (!channel) return false;
+  return settings.channel(channelId, channel.channelType).mutedBySections;
 }
 
 export function useChannelRailItemState(

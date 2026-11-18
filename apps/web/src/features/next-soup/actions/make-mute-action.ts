@@ -18,6 +18,7 @@ import {
   useMuteItemMutation,
   useUnmuteItemMutation,
 } from '@queries/notification/unsubscribes';
+import { match } from 'ts-pattern';
 import type { EntityActionListState } from './entity-action-context';
 
 type MakeMuteActionOptions = {
@@ -84,14 +85,41 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
 
   const settingsEnabled = () => options.channelSettings?.enabled() === true;
 
+  /** Any mute or settings write still settling; a re-trigger could undo it. */
+  const writesPending = () =>
+    muteMutation.isPending ||
+    unmuteMutation.isPending ||
+    bulkMutation.isPending ||
+    options.channelSettings?.pending() === true;
+
   const isOwnMuted = (entity: EntityData): boolean =>
     entityIsMuted(options.notificationSource().mutedEntities(), entity);
+
+  /** The channel whose settings apply: a thread or message takes its channel's. */
+  const channelOf = (
+    entity: EntityData
+  ): { id: string; channelType: string | undefined } | undefined =>
+    match(entity)
+      .with({ type: 'channel' }, (channel) => ({
+        id: channel.id,
+        channelType: channel.channelType,
+      }))
+      .with(
+        { type: 'channel_message' },
+        { type: 'channel_thread' },
+        (message) => ({
+          id: message.channelId,
+          channelType: message.channelType,
+        })
+      )
+      .otherwise(() => undefined);
 
   /** Muted by the channel's sections, and not kept notifying by the channel. */
   const isSectionMuted = (entity: EntityData): boolean => {
     const settings = options.channelSettings;
-    if (!settings?.enabled() || entity.type !== 'channel') return false;
-    return settings.channel(entity.id, entity.channelType).mutedBySections;
+    const channel = channelOf(entity);
+    if (!settings?.enabled() || !channel) return false;
+    return settings.channel(channel.id, channel.channelType).mutedBySections;
   };
 
   const isMuted = (entity: EntityData): boolean =>
@@ -106,9 +134,12 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
     const settings = options.channelSettings;
     const sectionMuted = targets.filter(isSectionMuted);
     if (!settings || sectionMuted.length === 0) return 0;
+    const channelIds = new Set(
+      sectionMuted.flatMap((entity) => channelOf(entity)?.id ?? [])
+    );
     const saved = await Promise.all(
-      sectionMuted.map((entity) =>
-        settings.setOverridesSectionMute(entity.id, true)
+      [...channelIds].map((channelId) =>
+        settings.setOverridesSectionMute(channelId, true)
       )
     );
     return saved.filter(Boolean).length;
@@ -121,12 +152,7 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
   ) => {
     // Ignore re-triggers while a toggle is still settling so a rapid
     // double-press can't fire a mute and its own unmute against each other.
-    if (
-      muteMutation.isPending ||
-      unmuteMutation.isPending ||
-      bulkMutation.isPending
-    )
-      return;
+    if (writesPending()) return;
 
     const muteable = entities.filter(canExecute);
     const shouldUnmute = !muted;
@@ -256,8 +282,9 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
     }
 
     const settings = options.channelSettings;
-    if (settings && entity.type === 'channel' && isSectionMuted(entity)) {
-      const view = settings.channel(entity.id, entity.channelType);
+    const channel = channelOf(entity);
+    if (settings && channel && isSectionMuted(entity)) {
+      const view = settings.channel(channel.id, channel.channelType);
       return t('channelSections.mutedBySection', { name: view.sectionNames });
     }
     return undefined;
@@ -272,10 +299,7 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
       : t('entityActions.unmuteNotifications'),
     mutedHint: mutedHint(entities),
     muted: entities.length > 0 && entities.every(isMuted),
-    disabled:
-      muteMutation.isPending ||
-      unmuteMutation.isPending ||
-      bulkMutation.isPending,
+    disabled: writesPending(),
     onMute: (muted) =>
       fireAndForget(setMuted(entities, muted), 'entity-actions'),
     onSnooze: (until) => snooze(entities, until),

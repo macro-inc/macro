@@ -300,10 +300,11 @@ export function useChannelNotificationSettings() {
   const settingsFlag = useFeatureFlag(enableChannelNotificationSettings);
   const sectionsFlag = useFeatureFlag(enableChatSidebarSections);
   // Lists outside Chat build entity menus too; read sections only when the
-  // settings can use them.
-  const readSections = () => settingsFlag().enabled && sectionsFlag().enabled;
+  // settings can use them, and personal ones only where the rail shows them.
+  const readSections = () => settingsFlag().enabled;
+  const readPersonal = () => readSections() && sectionsFlag().enabled;
   const teamLabels = useChannelLabelsQuery(undefined, readSections);
-  const personalLabels = useChannelLabelsQuery('personal', readSections);
+  const personalLabels = useChannelLabelsQuery('personal', readPersonal);
   const favorites = useFavoritesData(
     { entityType: ['channel'] },
     () => settingsFlag().enabled
@@ -311,13 +312,17 @@ export function useChannelNotificationSettings() {
 
   const labels = createMemo<readonly ChannelNotificationLabel[]>(() => {
     if (!readSections()) return [];
+    // As the rail: with sidebar sections the default scope is shared only
+    // for team members; without them it holds the legacy labels.
     const shared =
-      queryReadyGate(teamLabels) && teamLabels.data?.teamId
-        ? teamLabels.data.labels
+      queryReadyGate(teamLabels) &&
+      (teamLabels.data?.teamId || !sectionsFlag().enabled)
+        ? (teamLabels.data?.labels ?? [])
         : [];
-    const personal = queryReadyGate(personalLabels)
-      ? (personalLabels.data?.labels ?? [])
-      : [];
+    const personal =
+      readPersonal() && queryReadyGate(personalLabels)
+        ? (personalLabels.data?.labels ?? [])
+        : [];
     return [...shared, ...personal];
   });
 
