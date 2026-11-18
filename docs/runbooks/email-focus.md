@@ -48,8 +48,10 @@ Traces: see "Email Focus live updates" in `docs/agent-guide/observability.md`.
 Lower the `enable-email-focus` rollout percentage in PostHog; the same flag
 shows the tab. The worker evaluates the flag locally from definitions it
 fetches from PostHog every 5 minutes (`feature_flags::outbound::posthog_local`),
-so it keeps classifying a removed owner's new mail for at most about 5
-minutes. Stored classifications stay.
+so it keeps classifying a removed owner's new mail for about 5 minutes,
+as long as its polls succeed: a failed poll keeps the last definitions, for up
+to an hour (below). A `feature_flags.definitions_poll` span after the change
+shows the worker has it. Stored classifications stay.
 
 If the worker can't fetch the definitions for an hour, or the flag gains a
 condition it can't evaluate locally (a cohort, variants, an unknown field),
