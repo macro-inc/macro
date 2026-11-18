@@ -132,8 +132,9 @@ function rowPersonId(item: CommandMenuItem, viewerId: string | undefined) {
 }
 
 function isTeammateRow(item: CommandMenuItem, team: TeamScope) {
+  if (!team.teammateIds?.size) return false;
   const person = rowPersonId(item, team.viewerId);
-  return person !== undefined && !!team.teammateIds?.has(person);
+  return person !== undefined && team.teammateIds.has(person);
 }
 
 /** A person row for someone outside the viewer's team: an email contact, a
@@ -156,22 +157,37 @@ function isNamedExactly(item: CommandMenuItem, term: string) {
 }
 
 /** With no query, rows keep their order, except that people outside the
- * viewer's team follow all of the team's rows. The commands listed after
- * every recent row stay last, so these people are not buried under the
- * whole command catalog. */
+ * viewer's team follow all of the team's rows, commands the viewer used
+ * included. The never-used commands that end the list stay last, so these
+ * people are not buried under the whole command catalog. */
 export function listOutsidePeopleLast<T extends CommandMenuItem>(
   items: T[],
   team: TeamScope
 ): T[] {
   const outside = (item: T) => isOutsidePerson(item, team);
   const teamRows = items.filter((item) => !outside(item));
-  const trailingCommands =
-    teamRows.findLastIndex((item) => item.kind !== 'command') + 1;
+  const catalogStart =
+    teamRows.findLastIndex(
+      (item) => item.kind !== 'command' || item.sortTimestamp > 0
+    ) + 1;
   return [
-    ...teamRows.slice(0, trailingCommands),
+    ...teamRows.slice(0, catalogStart),
     ...items.filter(outside),
-    ...teamRows.slice(trailingCommands),
+    ...teamRows.slice(catalogStart),
   ];
+}
+
+/** Caches a per-row answer for one ranking pass; the sort asks each row
+ * many times. */
+function perRow<T extends object>(test: (item: T) => boolean) {
+  const answers = new Map<T, boolean>();
+  return (item: T) => {
+    const known = answers.get(item);
+    if (known !== undefined) return known;
+    const answer = test(item);
+    answers.set(item, answer);
+    return answer;
+  };
 }
 
 /** Whether the viewer has a direct message with this person, as the people
@@ -257,15 +273,28 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     teammateIds: options.teammateIds,
     viewerId: options.viewerId,
   };
-  const withTeammate = (item: CommandMenuItem) => isTeammateRow(item, team);
+  const withTeammate = perRow<CommandMenuItem>((item) =>
+    isTeammateRow(item, team)
+  );
+  const outsidePerson = perRow<CommandMenuItem>((item) =>
+    isOutsidePerson(item, team)
+  );
   // Someone outside the team whose email address or full name the query
-  // spells out is the person the viewer is looking for: they keep their place
-  // among the team's results, after every row a stranger follows there.
+  // spells out is the person the viewer is looking for: they rank among the
+  // team's results as a stranger, after every row a stranger follows there,
+  // even when the viewer messages them.
+  const namedOutsider = perRow<CommandMenuItem>(
+    (item) => outsidePerson(item) && isNamedExactly(item, term)
+  );
   const outside = (item: CommandMenuItem) =>
-    isOutsidePerson(item, team) && !isNamedExactly(item, term);
-  // People the viewer never talked to: no teammate and no direct message.
-  const isStranger = (item: CommandMenuItem) =>
-    isPeopleItem(item) && !withTeammate(item) && !hasDirectMessage(item);
+    outsidePerson(item) && !namedOutsider(item);
+  // People the viewer never talked to (no teammate and no direct message),
+  // and those exactly named people outside the team.
+  const isStranger = perRow<CommandMenuItem>(
+    (item) =>
+      namedOutsider(item) ||
+      (isPeopleItem(item) && !withTeammate(item) && !hasDirectMessage(item))
+  );
   // Among names with a word starting with each typed term, the viewer's own
   // results and people they know come first, then strangers, however exactly
   // a stranger's name matches. Names that only contain the query follow,
@@ -355,15 +384,16 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
           .sort(compareRecency)
       : [];
   const listed = [...ranked, ...additional];
-  return preservePersonOrder(
-    prioritizeInternalPeople(
-      [
-        ...listed.filter((item) => !outside(item)),
-        ...listed.filter((item) => outside(item)),
-      ],
-      groupOf
-    ),
-    items,
-    nameRank
-  );
+  // Each side keeps its window order on its own, so a person the window
+  // holds but the ranking left out stays on their side of the team.
+  const side = (isOutside: boolean) =>
+    preservePersonOrder(
+      prioritizeInternalPeople(
+        listed.filter((item) => outside(item) === isOutside),
+        groupOf
+      ),
+      items.filter((item) => outside(item) === isOutside),
+      nameRank
+    );
+  return [...side(false), ...side(true)];
 }

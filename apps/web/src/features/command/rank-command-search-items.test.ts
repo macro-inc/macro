@@ -941,6 +941,33 @@ describe('people outside the team', () => {
     ]);
   });
 
+  it('keeps window people the menu’s matcher leaves out on their own side of the team', () => {
+    const items = [
+      // The people search matched these two by an alias or by words in
+      // another order; the menu's own matcher does not.
+      { ...person('outside', 'Jordan Lee'), personOrder: 0 },
+      { ...person('adams', 'Jacob Adams'), personOrder: 1 },
+      { ...person('baker', 'Baker Sam'), personOrder: 2 },
+      note('note', 'Baker Sam onboarding', NOW - DAY),
+    ];
+
+    expect(rank(items, 'baker sam')).toEqual([
+      'baker',
+      'adams',
+      'note',
+      'outside',
+    ]);
+    expect(
+      rank(
+        [
+          ...items,
+          { ...person('outside-sam', 'Baker Samuels'), personOrder: 3 },
+        ],
+        'baker sam'
+      )
+    ).toEqual(['baker', 'adams', 'note', 'outside-sam', 'outside']);
+  });
+
   it('counts a CRM contact with a teammate’s email address as the teammate', () => {
     const items = [
       { ...person('outside', 'Lena Park'), personOrder: 0 },
@@ -991,6 +1018,22 @@ describe('people outside the team', () => {
     ]);
   });
 
+  it('ranks an exactly named person outside the team as a stranger, even one the viewer messages', () => {
+    const items = [
+      dm('outside-dm', 'Jacob Adams', [VIEWER, 'other-adams']),
+      messagedPerson('outside-person', 'Jacob Adams'),
+      note('note', 'Jacob Adams onboarding', NOW - 30 * DAY),
+      note('contains-note', 'Bjacob adamsplan', NOW),
+    ];
+
+    expect(rank(items, 'jacob adams')).toEqual([
+      'note',
+      'outside-dm',
+      'outside-person',
+      'contains-note',
+    ]);
+  });
+
   it('changes nothing while the roster is unknown or the viewer has no team', () => {
     const items = [
       dm('outside-dm', 'Jacob Rivera', [VIEWER, 'rivera']),
@@ -1015,6 +1058,9 @@ describe('people outside the team', () => {
       command('recent-command', 'Create doc', NOW),
       dm('group-dm', 'Jacob Rivera, Sam Baker', [VIEWER, 'rivera', 'baker']),
       note('note', 'Plan'),
+      // A command used before the last DM is still one of the team's rows.
+      command('older-command', 'Open settings', NOW - 2 * DAY),
+      dm('older-outside-dm', 'Jordan Lee', [VIEWER, 'lee']),
       // The command catalog follows the recent rows.
       command('catalog-a', 'Go to Home', 0),
       command('catalog-b', 'Go to Tasks', 0),
@@ -1027,8 +1073,10 @@ describe('people outside the team', () => {
       'recent-command',
       'group-dm',
       'note',
+      'older-command',
       'outside-dm',
       'outside-crm',
+      'older-outside-dm',
       'catalog-a',
       'catalog-b',
     ]);

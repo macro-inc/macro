@@ -601,11 +601,13 @@ equally well and equally close to the viewer, so a recent weaker match never
 takes a better match's slot. People outside the viewer's team (a person, CRM
 contact or one-to-one DM whose person is not on the team's roster) follow every
 row from the team, typed or not (before typing, `listOutsidePeopleLast` puts
-them after the recent rows, ahead of the command catalog), in the same groups
-among themselves; group DMs stay with the team's rows. A query that
-is exactly such a person's email address or full name of two or more words keeps
-them among the team's rows, still after every row a stranger follows. While the
-roster loads, nobody is outside.
+them after the recent rows and used commands, ahead of the never-used command
+catalog), in the same groups among themselves; group DMs stay with the team's
+rows. Each side keeps its own window order, so a window person the ranking
+left out stays on their side. A query that is exactly such a person's email
+address or full name of two or more words ranks them among the team's rows as a
+stranger, even one the viewer messages. While the roster loads, nobody is
+outside.
 A row whose letters merely appear in order ranks below every row containing the
 typed words.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when

@@ -1778,7 +1778,8 @@ their direct message; an existing one-to-one DM replaces the person row without
 losing name/email matches, including DMs found by typed search beyond the recent
 channel list. Group DMs stay separate, and the viewer is excluded
 from person results. Empty queries keep the existing recency lists, with people
-outside the team after the recent rows and before the command catalog.
+outside the team after the recent rows and used commands, before the command
+catalog.
 Verify a teammate with no DM or CRM record in both categories, including with
 CRM disabled,
 then verify that loading their DM produces one row and that Files/Channels do not
@@ -1790,10 +1791,11 @@ People outside the viewer's team (email and CRM contacts, Macro users on other
 teams, and one-to-one DMs with them) list after every row from the team in
 Cmd+K and mobile name search, typed or not: after teammates, channels,
 documents and group DMs, even rows that only contain the query (before typing,
-ahead of the command catalog). Among themselves they keep the usual order,
-people the viewer messages first. Typing such a person's exact email address,
-or a full name of two or more words, keeps them among the team's results, after
-the team's rows whose words start with the query. Verify with a team member and
+ahead of the never-used command catalog). Among themselves they keep the usual
+order, people the viewer messages first. Typing such a person's exact email
+address, or a full name of two or more words, ranks them among the team's
+results as someone never messaged, after the team's rows whose words start
+with the query, even when the viewer messages them. Verify with a team member and
 outside contacts sharing a first name, a one-letter query, the empty **All**
 list, a full name a teammate and an outside contact share, and an outside email.
 
@@ -1830,8 +1832,9 @@ email-only correspondents included, rank after your own projects, channels,
 documents, agents and commands and after the people you know, among names with
 a word starting with what you typed, however exactly their name matches: typing
 `lee` lists Jordan Lee, whom you message, above a stranger named Leela. Rows
-that only contain the query mid-word come last, strangers last among them. The
-People tab ranks the same way over people only.
+that only contain the query mid-word follow, strangers last among them; people
+outside your team come after all of these (see above). The People tab ranks the
+same way over people only.
 To verify on dev as gab@, type `macro` and `rand` in All: your `macro`-named
 channels, companies, tasks and files, and the tasks and files with a word
 starting with `rand`, list before the email-only accounts whose names start

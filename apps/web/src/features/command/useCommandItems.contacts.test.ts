@@ -18,10 +18,14 @@ const VIEWER = 'macro|viewer@macro.com';
 const mocks = vi.hoisted(() => ({
   lists: {} as Record<string, () => QuickAccessItem[]>,
   searchDms: (): QuickAccessItem[] => [],
+  team: (): string[] => [],
 }));
 vi.mock('@queries/team/members', () => ({
   useTeamMembers: () => ({
-    users: () => [],
+    users: () =>
+      mocks
+        .team()
+        .map((id) => ({ id, email: id.replace(/^macro\|/, ''), name: id })),
     isLoading: () => false,
     isError: () => false,
   }),
@@ -131,6 +135,7 @@ afterEach(() => {
   dispose?.();
   mocks.lists = {};
   mocks.searchDms = () => [];
+  mocks.team = () => [];
 });
 
 function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
@@ -146,6 +151,8 @@ function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
     const [loading, setLoading] = createSignal(false);
     mocks.lists = { person: users, dm: dms };
     mocks.searchDms = searchDms;
+    const [team, setTeam] = createSignal<string[]>([]);
+    mocks.team = team;
     const discovery = {
       search: undefined as Accessor<string> | undefined,
       active: undefined as Accessor<boolean> | undefined,
@@ -190,6 +197,7 @@ function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
       setSearchDms,
       setHasMore,
       setLoading,
+      setTeam,
     };
   });
 }
@@ -339,6 +347,29 @@ describe('command menu contact discovery', () => {
       expect(t.ids()).toEqual([dm.id]);
     }
   );
+
+  it('lists people outside the team after the team once its roster loads, typed or not', () => {
+    const t = setup('all', false);
+    const adams = user('adams@macro.com', 'Jacob Adams');
+    const rivera = user('rivera@example.com', 'Jacob Rivera');
+    const riveraDm = directMessage('dm-rivera', 'Jacob Rivera', rivera.id);
+    const adamsDm = {
+      ...directMessage('dm-adams', 'Jacob Adams', adams.id),
+      sortTimestamp: 0,
+    };
+    t.setUsers([adams, rivera]);
+    t.setDms([riveraDm, adamsDm]);
+    t.setQuery('jacob');
+    // While the roster loads nobody is outside the team.
+    expect(t.ids()).toEqual(['search:all:jacob', 'dm-rivera', 'dm-adams']);
+    t.setQuery('');
+    expect(t.ids()).toEqual(['dm-rivera', 'dm-adams']);
+
+    t.setTeam([VIEWER, adams.id]);
+    expect(t.ids()).toEqual(['dm-adams', 'dm-rivera']);
+    t.setQuery('jacob');
+    expect(t.ids()).toEqual(['search:all:jacob', 'dm-adams', 'dm-rivera']);
+  });
 
   it('keeps contacts out of unrelated categories', () => {
     const t = setup('documents');
