@@ -20,6 +20,8 @@ use crate::domain::ports::{
 };
 use crate::domain::size::ComputerSize;
 
+mod agent_invites;
+pub use agent_invites::MAX_AGENT_ATTEMPTS;
 mod billing;
 pub use billing::{ObservedItem, SubscriptionObserved, SubscriptionStatus};
 mod purchase;
@@ -237,6 +239,13 @@ impl<
         self
     }
 
+    /// Whether the caller sees and may buy computers: the check purchases
+    /// and offers make, so the web follows the same rollout (flag and dev
+    /// allowlist).
+    pub async fn rollout_enabled(&self, user_id: &MacroUserIdStr<'static>) -> bool {
+        self.rollout.enabled(user_id).await
+    }
+
     async fn require_rollout(
         &self,
         user_id: &MacroUserIdStr<'static>,
@@ -403,6 +412,20 @@ impl<
         self.require_attached().await?;
         let event = if on { Event::PowerOn } else { Event::PowerOff };
         self.apply_for_team(team_id, computer_id, event).await
+    }
+
+    /// The agent teammate the computer runs reported itself online, which
+    /// ends its first start. Not gated on an attached fleet: it changes only
+    /// the computer's record. Telling it again changes nothing.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn agent_online(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<(), ComputerError> {
+        self.team_computer(team_id, computer_id).await?;
+        self.apply(computer_id, Event::AgentOnline).await?;
+        Ok(())
     }
 
     /// Retry a computer that gave up restarting, without changing its billing.
