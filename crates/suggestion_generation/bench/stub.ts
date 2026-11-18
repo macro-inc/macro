@@ -32,18 +32,20 @@ const CADDYFILE = `{
 	respond \`{"status":1}\` 200
 }
 :8081 {
-	@inbox {
-		path_regexp user ^/internal/recent_messages/macro\\|(.+)$
-		file {
-			root /srv/inbox
-			try_files /{re.user.1}.json
-		}
-	}
-	handle @inbox {
+	# The regexp's capture is set only once its matcher has run, so the file
+	# check is a second matcher inside the first one's handler.
+	@recent path_regexp user ^/internal/recent_messages/macro\\|(.+)$
+	handle @recent {
 		root * /srv/inbox
-		rewrite * {file_match.relative}
-		header Content-Type application/json
-		file_server
+		@inbox file /{re.user.1}.json
+		handle @inbox {
+			rewrite * /{re.user.1}.json
+			header Content-Type application/json
+			file_server
+		}
+		handle {
+			reverse_proxy email-service:8080
+		}
 	}
 	handle {
 		reverse_proxy email-service:8080
