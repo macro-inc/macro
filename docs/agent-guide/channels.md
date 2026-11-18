@@ -525,9 +525,10 @@ the list from an empty item, and outdents an empty nested item; Enter sends
 once the caret, or a whole selection, is outside the list, and Cmd/Ctrl+Enter
 sends from anywhere.
 This holds in every composer whose Enter sends (channels, threads, DMs,
-comments, AI and agent inputs). A message is sent without the blank lines at
-the end of its draft, so a list left with Enter sends without an empty line
-below it. The composer spaces its
+comments, AI and agent inputs). Channels, threads, DMs, comments and agent
+inputs send a message without the blank lines at the end of its draft, so a
+list left with Enter sends without an empty line below it; the AI chat input
+does not trim its prompt. The composer spaces its
 paragraphs the way the sent message does, so a multi-line draft reads as what
 it will send. Check a multi-line message against the draft that wrote it: the
 spacing must not change on send.
