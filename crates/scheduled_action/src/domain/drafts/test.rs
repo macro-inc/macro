@@ -813,12 +813,23 @@ pub(super) fn app(slug: &str, name: &str) -> AgentMcpServer {
 /// The apps its owner connected, as the harness lists them, or a failure.
 pub(super) struct Connected(pub(super) Option<Vec<AgentMcpServer>>);
 
+/// An app Macro reaches through its own MCP server, which no routine can
+/// require.
+const NATIVE_APP: &str = "sentry";
+
 #[async_trait::async_trait]
 impl DraftApps for Connected {
     async fn connected(&self, _owner: &MacroUserIdStr<'static>) -> Result<Vec<AgentMcpServer>> {
         self.0
             .clone()
             .ok_or_else(|| anyhow::anyhow!("connections unreadable"))
+    }
+
+    async fn requirable(&self, apps: Vec<AgentMcpServer>) -> Result<Vec<AgentMcpServer>> {
+        Ok(apps
+            .into_iter()
+            .filter(|app| app.app_slug != NATIVE_APP)
+            .collect())
     }
 }
 
@@ -892,6 +903,23 @@ async fn a_routine_draft_says_which_apps_it_needs_that_arent_connected() {
         drafted.missing_apps,
         [app("notion", "Notion"), app("github", "GitHub")]
     );
+}
+
+/// An app a routine can't require, even once connected, is never named as
+/// missing: connecting it would still leave the routine unsaveable.
+#[tokio::test]
+async fn a_routine_draft_names_only_missing_apps_a_routine_can_require() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(&rows, Box::new(|_| vec![plain(asks_ai_with(json!([])))]));
+    sessions.missing_apps = vec![app(NATIVE_APP, "Sentry"), app("notion", "Notion")];
+    let sessions = Arc::new(sessions);
+    let drafts = drafts(&rows, &sessions).with_apps(Arc::new(Connected(Some(Vec::new()))));
+
+    let drafted =
+        drafted_routine(draft(&drafts, routine("file each Sentry error in Notion")).await);
+
+    assert!(drafted.apps.is_empty());
+    assert_eq!(drafted.missing_apps, [app("notion", "Notion")]);
 }
 
 /// With nothing connected the prompt says so, and every app is missing.

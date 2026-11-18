@@ -132,8 +132,11 @@ each run.
   already required, at most ten) those it needs that aren't connected; a
   check never fails for them. The draft holds both (`apps`,
   `missing_apps`), sorted again against the listed apps so a required one
-  is always connected, and neither when it has no Ask AI step; the review
-  asks the person to connect each missing one before saving. A step draft
+  is always connected, and neither when it has no Ask AI step. A missing
+  app no routine can require even once connected (one overlaid with its
+  vendor's own MCP server, which connects outside the counted grants) is
+  dropped (`DraftApps::requirable`), so the review asks the person to
+  connect only apps that make the routine saveable. A step draft
   holds no apps. The `routine.draft` span records the drafter (`found` or
   `session`), names found, left and not looked up, the session id,
   checks, items created, the session's tool calls and turns, status
@@ -397,7 +400,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   single-agent task) are apps the routine requires, handed to its agent step;
   a program with apps needs one. The owner must have each connected:
   `TargetValidation` checks on save and `RoutineSessions::prepare` checks
-  again on every run, then adds them to an agent limited to selected apps. An update that omits the key is rejected
+  again on every run, then adds them to an agent limited to selected apps.
+  The harness counts the grants connector dispatch would use: enabled rows,
+  and for an owner on Macro Connect alone only their Connect grants. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
 - An agent target is any agent the owner may run: built in, their own, or
   one on a self-hosted runtime. `TargetValidation` authorizes it on save
