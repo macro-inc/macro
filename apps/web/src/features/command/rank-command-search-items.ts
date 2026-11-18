@@ -167,8 +167,9 @@ export function listOutsidePeopleLast<T extends CommandMenuItem>(
   const outside = (item: T) => isOutsidePerson(item, team);
   const teamRows = items.filter((item) => !outside(item));
   // The catalog starts at the first never-used command after the team's last
-  // other row. Go To commands follow it whether used or not, as without
-  // people outside the team.
+  // other row. Go To commands are listed after the others, so the used ones
+  // that follow it stay in it, below these people, as they sit below every
+  // recent row without them.
   const lastOther = teamRows.findLastIndex((item) => item.kind !== 'command');
   const catalogStart = teamRows.findIndex(
     (item, index) => index > lastOther && !(item.sortTimestamp > 0)

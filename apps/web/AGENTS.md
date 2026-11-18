@@ -602,8 +602,8 @@ takes a better match's slot. People outside the viewer's team (a person, CRM
 contact or one-to-one DM whose person is not on the team's roster) follow every
 row from the team, typed or not (before typing, `listOutsidePeopleLast` puts
 them after the recent rows and the used commands among them, ahead of the
-command catalog that ends the list: never-used commands, then Go To commands),
-in the same groups among themselves; group DMs stay with the team's
+command catalog that starts at the first never-used command after the team's
+other rows), in the same groups among themselves; group DMs stay with the team's
 rows. Each side keeps its own window order, so a window person the ranking
 left out stays on their side. A query that is exactly such a person's email
 address or full name of two or more words ranks them among the team's rows as a

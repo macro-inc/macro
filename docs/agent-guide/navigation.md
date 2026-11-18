@@ -1778,8 +1778,8 @@ their direct message; an existing one-to-one DM replaces the person row without
 losing name/email matches, including DMs found by typed search beyond the recent
 channel list. Group DMs stay separate, and the viewer is excluded
 from person results. Empty queries keep the existing recency lists, with people
-outside the team after the recent rows and used commands, before the command
-catalog.
+outside the team after the recent rows, before the command catalog that starts
+at the first never-used command.
 Verify a teammate with no DM or CRM record in both categories, including with
 CRM disabled,
 then verify that loading their DM produces one row and that Files/Channels do not
