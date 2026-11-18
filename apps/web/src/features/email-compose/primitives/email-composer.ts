@@ -1416,10 +1416,6 @@ export function createEmailComposer(props: EmailComposerOptions) {
     return false;
   }
 
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
   const settleAlreadySent = createAlreadySentSettlement({
     session,
     read: lifecycle.refreshIdentity,

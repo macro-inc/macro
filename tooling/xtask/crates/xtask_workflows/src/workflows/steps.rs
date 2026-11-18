@@ -59,21 +59,32 @@ pub fn setup_namespace_buildx() -> Step<Use> {
     ) // v0.0.23
 }
 
+/// Has git give up on a checkout's fetch once it moves under 10 kB/s for a
+/// minute, so `actions/checkout` retries it (three attempts) instead of waiting
+/// for the job timeout. Fetches that usually take seconds have sat for 5 to 13
+/// minutes. GitHub sends nothing while it builds the pack; whole shallow and
+/// blobless full-history fetches take about 6 to 12 s, so a minute leaves room.
+/// Every generated checkout uses it, and the composite actions under
+/// `.github/actions` copy the same values.
+pub fn abort_stalled_fetch(step: Step<Use>) -> Step<Use> {
+    step.add_env(("GIT_HTTP_LOW_SPEED_LIMIT", "10000"))
+        .add_env(("GIT_HTTP_LOW_SPEED_TIME", "60"))
+}
+
 /// `actions/checkout`, pinned. `full_history` fetches the full history, which
 /// the path-filter diff in `path-check` needs. `persist_credentials` controls
 /// whether checkout leaves the token in git config for later steps.
 pub fn checkout(full_history: bool, persist_credentials: bool) -> Step<Use> {
-    Step::new("Checkout")
-        .uses(
-            "actions",
-            "checkout",
-            "de0fac2e4500dabe0009e67214ff5f5447ce83dd",
-        ) // v4
-        .add_with(("clean", false))
-        .when(full_history, |step| step.add_with(("fetch-depth", 0)))
-        .when(!persist_credentials, |step| {
-            step.add_with(("persist-credentials", false))
-        })
+    abort_stalled_fetch(Step::new("Checkout").uses(
+        "actions",
+        "checkout",
+        "de0fac2e4500dabe0009e67214ff5f5447ce83dd",
+    )) // v6.0.2
+    .add_with(("clean", false))
+    .when(full_history, |step| step.add_with(("fetch-depth", 0)))
+    .when(!persist_credentials, |step| {
+        step.add_with(("persist-credentials", false))
+    })
 }
 
 /// `oven-sh/setup-bun` — installs Bun on the runner. Version-tagged (not
@@ -394,6 +405,40 @@ pub fn mount_web_check_cache_volume(with_rust: bool) -> Step<Use> {
         .add_with(("path", paths.join("\n")))
 }
 
+/// [`mount_web_check_cache_volume`] with Rust, plus cargo's `target` directory.
+/// Only for a job on its own cache tag ([`vars::WEB_CODEGEN_CACHE_TAG`]), followed
+/// by [`reuse_cargo_target`] before anything builds.
+pub fn mount_web_codegen_cache_volume() -> Step<Use> {
+    let paths = [
+        vars::BUN_CACHE_VOLUME_DIR,
+        vars::NODE_MODULES_VOLUME_DIR,
+        "/home/runner/.cargo/registry",
+        "/home/runner/.cargo/git",
+        vars::CARGO_TARGET_VOLUME_DIR,
+    ];
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with(("path", paths.join("\n")))
+}
+
+/// Date the checkout's files by when their contents first appeared, so cargo
+/// rebuilds only the workspace crates whose sources differ from the builds the
+/// kept `target` directory holds (`scripts/cargo_target_reuse.ts`).
+pub fn reuse_cargo_target() -> Step<Run> {
+    Step::new("Reuse the kept cargo target")
+        .run(node_script(include_str!("scripts/cargo_target_reuse.ts")))
+}
+
+/// The last step of every job that runs [`reuse_cargo_target`]: marks every unit
+/// the job built as described by the record, so a job that later builds into
+/// the same `target` without dating its checkout is caught.
+pub fn seal_cargo_target() -> Step<Run> {
+    Step::new("Seal the kept cargo target").run(node_script_calling(
+        include_str!("scripts/cargo_target_reuse.ts"),
+        "seal",
+    ))
+}
+
 /// [`mount_web_check_cache_volume`] plus Vitest's module cache, so the web `Test`
 /// job reuses transforms from earlier runs instead of redoing them all.
 pub fn mount_web_test_cache_volume() -> Step<Use> {
@@ -466,8 +511,13 @@ pub fn start_sccache_server() -> Step<Run> {
 /// itself, so the step needs no checkout, build or dependency. The script
 /// exports `main`.
 pub fn node_script(source: &str) -> String {
+    node_script_calling(source, "main")
+}
+
+/// [`node_script`], calling another exported function.
+pub fn node_script_calling(source: &str, function: &str) -> String {
     format!(
-        "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n{source}\nawait main();\nNODE_SCRIPT\n"
+        "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n{source}\nawait {function}();\nNODE_SCRIPT\n"
     )
 }
 
@@ -523,13 +573,12 @@ pub fn gated_job() -> Job {
 /// options at the call site (`clean: false` on jobs reusing a mounted /nix
 /// volume, `sparse-checkout` for action-only jobs).
 pub fn checkout_v4() -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses(
-            "actions",
-            "checkout",
-            "de0fac2e4500dabe0009e67214ff5f5447ce83dd",
-        ) // v4
-        .add_with(("persist-credentials", false))
+    abort_stalled_fetch(Step::new("Checkout Repo").uses(
+        "actions",
+        "checkout",
+        "de0fac2e4500dabe0009e67214ff5f5447ce83dd",
+    )) // v6.0.2
+    .add_with(("persist-credentials", false))
 }
 
 /// A deploy that ships code built from this commit is blocked until every
@@ -609,14 +658,13 @@ pub fn ensure_pulumi_home_writable() -> Step<Run> {
 /// `actions/checkout` with a dynamic ref (for tag-triggered builds). Uses the
 /// same pinned SHA as [`checkout`].
 pub fn checkout_ref(ref_expr: &str) -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .add_with(("ref", ref_expr))
-        .add_with(("persist-credentials", false))
+    abort_stalled_fetch(Step::new("Checkout Repo").uses(
+        "actions",
+        "checkout",
+        "df4cb1c069e1874edd31b4311f1884172cec0e10",
+    )) // v6
+    .add_with(("ref", ref_expr))
+    .add_with(("persist-credentials", false))
 }
 
 /// Mount only the `/nix` store cache volume (no cargo/sccache). Used by the
@@ -657,7 +705,7 @@ pub fn upload_artifact(name: &str, path: RuntimePath<'_>) -> Step<Use> {
             "actions",
             "upload-artifact",
             "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
+        ) // v6.0.2
         .add_with(("name", name))
         .add_with(("path", path.as_str()))
         .add_with(("if-no-files-found", "error"))
@@ -690,6 +738,20 @@ pub fn upload_release_artifacts(path: RuntimePath<'_>) -> Step<Use> {
         .add_with(("tag_name", "${{ steps.metadata.outputs.tag }}"))
         .add_with(("files", path.as_str()))
         .add_with(("fail_on_unmatched_files", true))
+}
+
+/// After a blobless checkout (`filter: blob:none`):
+/// - older git marks the repository with `extensions.partialclone`, which
+///   Nix's libgit2 refuses to open; `remote.origin.promisor` alone still lets
+///   git fetch missing blobs on demand;
+/// - `git diff` finds renames by reading the merge base's blobs, and `biome
+///   --changed` ignores its exit status, so a failed fetch there would check
+///   no files. Without rename detection, `--name-only` lists the same paths
+///   and reads no blob.
+pub fn prepare_blobless_checkout() -> Step<Run> {
+    Step::new("Prepare the blobless checkout").run(
+        "if git config extensions.partialclone >/dev/null; then git config --unset extensions.partialclone; fi\ngit config diff.renames false\n",
+    )
 }
 
 /// Teardown Nix (always runs).

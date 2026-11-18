@@ -424,6 +424,8 @@ AX-042	The onboarding email step's onConnectWork handler in email-step.tsx retur
 AX-043	The onboarding step's "Continue with Microsoft" button in google-accounts-step.tsx no longer calls onConnectMicrosoft, so the Outlook work inbox connection never starts.
 AX-044	no Try again is offered when the connected accounts fail to load during onboarding
 AX-048	picking Email in the Create menu opens no new message
+AX-049	The universal input's Save as draft button (ComposerFooter in universal-composer.tsx) no longer calls saveEmailDraft, so it saves nothing.
+AX-050	The universal input's primary button (ComposerFooter in universal-composer.tsx) does nothing for an email, so Send email sends nothing.
 AX-051	the universal input's Connect Google starts no connection when no inbox is connected
 AX-052	The review composer's subject setter in DraftComposer.tsx ignores typed subject edits, so the drafted email is sent with its original subject. The field keeps the typed text, so the first assertion that can see the edit is the subject of the sent message at the provider, right after the send; the test fails there.
 AX-054	The review composer's onSend wiring in DraftComposer.tsx no longer calls handleSend, so "Send email" (and Cmd+Enter) on the review card does nothing.
@@ -613,6 +615,7 @@ F-162	the New email switch saves nothing
 F-163	a notification row opens nothing
 F-164	Mark done on Home does nothing
 F-165	New email on a contact's record does nothing
+F-166	The universal input builds its email (emailMessage in actions.ts) with an empty body, so the saved draft and the sent message lose their text: the send test fails at the provider's copy, the draft test at the opened draft's text.
 F-167	Create task on a thread opens no task composer, and Ask Macro opens a conversation without the thread attached
 F-168	the card of an email the assistant drafted sends the assistant's subject, not the one the user typed
 F-174	the refusal of a third inbox is not told
@@ -1085,6 +1088,7 @@ STX-214	The onboarding step's connected line "Work email connected" reads "Work 
 STX-300	The composer skips putting the initialTo addresses into To (email-composer.ts), so a composer opened from a mailto link has an empty To field.
 STX-301	not shown as the row says ("Connect Google to send email and create calendar events. Then return here to compose."): its rendering is switched off or changed in src/features/universal-input/views/universal-composer.tsx
 STX-302	the text of the notice of a consent screen that cannot open is changed in src/features/universal-input/actions.ts
+STX-303	The pending labels of the universal input's buttons are switched off in universal-composer.tsx, so Save as draft and Send email keep their names while the save or send is pending.
 STX-311	not shown as the row says (Empty Home "Welcome home": "… Connect email to include your inbox, too." with "Connect email"): its rendering is switched off or changed in src/features/home/components/HomeEmptyState.tsx
 STX-312	The same break as STX-971: the unread dot of a Home row in HomeListEntity.tsx loses its "Unread" label; the returned reminder shows as a notification on its Home row only through that dot, the one line that renders it for every row.
 STX-313	The kind badge on the sender avatar of a Notifications row (inbox-sender-avatar.tsx) loses its "Email" label for email notifications.
@@ -1113,3 +1117,4 @@ STX-973	The desktop Home view in home-view.tsx hides its list pane while a previ
 STX-974	The Home list's rows in HomeList.tsx keep every email row that has left the source, so a thread marked done stays listed on Home.
 STX-975	The activity row of a program step in CodeExecutionToolCall.tsx shows an empty title instead of the operation's label.
 STX-976	The review composer's disabled accessor in DraftComposer.tsx always returns false, so the fields of a sent review card stay editable.
+STX-977	The open of an email result in actions.ts returns without navigating, so once the save or send finishes the universal input closes and opens neither the draft nor the sent thread.

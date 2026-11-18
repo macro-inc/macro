@@ -106,9 +106,6 @@ async function boot(world: WorldCore) {
     getUnmaintainedGraphqlSoupRevalidations: () => [],
     refreshActiveGraphqlSoupQueries: async () => {},
   }));
-  vi.doMock('@queries/email/draft-cache', () => ({
-    markThreadDraftSaved: () => {},
-  }));
   vi.doMock('@queries/email/thread', () => ({
     fetchAndCacheThread: async () => undefined,
   }));
