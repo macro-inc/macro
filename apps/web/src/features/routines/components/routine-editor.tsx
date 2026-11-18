@@ -62,7 +62,9 @@ export function RoutineSettingRow(props: {
         <span class="text-base text-ink wrap-anywhere">{props.label}</span>
         <Show when={props.description}>
           {(description) => (
-            <span class="text-sm text-ink-muted wrap-anywhere">{description()}</span>
+            <span class="text-sm text-ink-muted wrap-anywhere">
+              {description()}
+            </span>
           )}
         </Show>
       </div>
