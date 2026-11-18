@@ -887,6 +887,7 @@ STL-073	not shown as the row says (done toggle label "Mark as not done" / "Mark 
 STL-074	not shown as the row says (toast "Marked as done" / "Marked as not done" with Undo; "Failed to undo"): its rendering is switched off or changed in src/features/email-thread/thread-completion-adapter.tsx
 STL-075	not shown as the row says (toast "Failed to mark as done" / "Failed to mark as not done"): its rendering is switched off or changed in src/features/email-thread/thread-completion-adapter.tsx
 STL-076	not shown as the row says (toast "Marked as unread" / "Failed to mark as unread"): its rendering is switched off or changed in src/features/email-thread/thread-read-adapter.ts
+STL-077	suppressing either mark-as-read notice in thread-read-adapter.ts leaves the reading pane silent after successfully marking read or after the write is refused
 STL-078	not shown as the row says (toast "Moved to Trash" + Undo; Undo shows "Restored from Trash" or "Failed to restore from Trash"): its rendering is switched off or changed in src/features/block-email/component/useEmailThreadTools.tsx
 STL-080	The pending-operation notice above an Outlook thread loses "Waiting for mailbox confirmation.": that text in MailboxOperationsNotice in email-thread-operations.tsx is emptied.
 STL-081	not shown as the row says ("<action>: Could not apply this change. Try the action again."): its rendering is switched off or changed in src/features/email-thread/email-thread-operations.tsx
