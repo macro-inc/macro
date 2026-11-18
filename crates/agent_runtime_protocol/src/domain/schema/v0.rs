@@ -125,6 +125,14 @@ pub enum ModelProbeResult {
     },
 }
 
+/// The dial header a runtime lists the optional messages it accepts in,
+/// comma-separated. The service sends an optional message only to a runtime
+/// that listed it, so older runtimes never receive one they cannot read.
+pub const RUNTIME_ACCEPTS_HEADER: &str = "x-macro-runtime-accepts";
+
+/// The [`RUNTIME_ACCEPTS_HEADER`] entry for [`ToRuntimeMessage::AgentsChanged`].
+pub const ACCEPTS_AGENTS_CHANGED: &str = "agents-changed";
+
 /// Agent Service to Agent Runtime traffic on the logical protocol stream.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]

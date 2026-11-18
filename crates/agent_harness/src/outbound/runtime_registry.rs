@@ -47,10 +47,18 @@ pub struct LiveRuntimeSessions {
     pub span: tracing::Span,
 }
 
+/// The optional messages a runtime said, when it dialed, that it accepts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RuntimeAccepts {
+    /// `ToRuntimeMessage::AgentsChanged`.
+    pub agents_changed: bool,
+}
+
 /// A connection and the identity its presence reports carry.
 struct ListedConnection<Sender> {
     id: RuntimeConnectionId,
     connection: Arc<RuntimeConnection<Sender>>,
+    accepts: RuntimeAccepts,
 }
 
 // Manual Clone impl: the sender itself is behind the Arc.
@@ -59,6 +67,7 @@ impl<Sender> Clone for ListedConnection<Sender> {
         Self {
             id: self.id,
             connection: Arc::clone(&self.connection),
+            accepts: self.accepts,
         }
     }
 }
@@ -157,9 +166,23 @@ where
     where
         Carrier: Transport<ToRuntimeMessage, ToServerMessage, Sender = Sender>,
     {
+        self.attach_accepting(harness, carrier, RuntimeAccepts::default());
+    }
+
+    /// [`Self::attach`] a runtime that accepts the optional messages in
+    /// `accepts`.
+    pub fn attach_accepting<Carrier>(
+        self: &Arc<Self>,
+        harness: HarnessId,
+        carrier: Carrier,
+        accepts: RuntimeAccepts,
+    ) where
+        Carrier: Transport<ToRuntimeMessage, ToServerMessage, Sender = Sender>,
+    {
         let listed = ListedConnection {
             id: RuntimeConnectionId::generate(),
             connection: RuntimeConnection::connect(carrier),
+            accepts,
         };
 
         // Listed before it is watched: a socket that dies immediately would
@@ -264,8 +287,9 @@ where
 ///
 /// A Macro computer gets its first agent on its first connect. Told now
 /// rather than at its next poll, the runtime covers that agent at once, so a
-/// session requested the moment the computer is ready reaches it. Only then:
-/// a runtime too old to know the message would log every one it is sent.
+/// session requested the moment the computer is ready reaches it. Only a
+/// runtime that said it accepts the message gets it: an older one would log
+/// every one it is sent as malformed.
 async fn record_connected<Sender>(
     presence: Arc<dyn HarnessPresence>,
     harness: HarnessId,
@@ -274,7 +298,7 @@ async fn record_connected<Sender>(
     Sender: TransportSender<ToRuntimeMessage>,
 {
     let recorded = presence.connected(harness, listed.id).await;
-    if recorded != ConnectionRecorded::AgentBound {
+    if recorded != ConnectionRecorded::AgentBound || !listed.accepts.agents_changed {
         return;
     }
     if let Err(error) = listed.connection.agents_changed().await {

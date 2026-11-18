@@ -191,7 +191,9 @@ When recording a dial bound an agent (`HarnessPresence::connected` returns
 `ConnectionRecorded::AgentBound`: a Macro computer gets its first agent on its
 first connect), the registry sends the runtime `ToRuntimeMessage::AgentsChanged`,
 and macrod re-reads its agents and reopens its trigger stream at once instead
-of at its next poll. No other dial gets it, so older runtimes never see it.
+of at its next poll. It goes only to a runtime that listed `agents-changed` in
+the `x-macro-runtime-accepts` dial header (`RuntimeAccepts`, read by
+`inbound/runtime_gateway.rs`), so older runtimes never see it.
 
 Only directly authenticated users with edit access may answer ACP permissions or
 elicitations (`agent_session::ControlEvent::authorized`). Agent runs may deny or
