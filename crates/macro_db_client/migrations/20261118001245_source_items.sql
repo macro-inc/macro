@@ -372,17 +372,23 @@ END $$;
 
 CREATE FUNCTION public.source_items_sub_type_changed() RETURNS trigger
 LANGUAGE plpgsql AS $$
+DECLARE
+    changed boolean := false;
 BEGIN
     PERFORM public.source_items_prepare();
     IF TG_OP IN ('INSERT', 'UPDATE') THEN
         INSERT INTO pg_temp.source_items_pending
         SELECT 'item', 'document', document_id, NULL FROM new_rows;
+        changed := FOUND;
     END IF;
     IF TG_OP IN ('DELETE', 'UPDATE') THEN
         INSERT INTO pg_temp.source_items_pending
         SELECT 'item', 'document', document_id, NULL FROM old_rows;
+        changed := changed OR FOUND;
     END IF;
-    PERFORM public.source_items_schedule();
+    IF changed THEN
+        PERFORM public.source_items_schedule();
+    END IF;
     RETURN NULL;
 END $$;
 

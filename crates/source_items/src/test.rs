@@ -1,6 +1,6 @@
 use crate::{audit, backfill};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use sqlx::{PgConnection, PgPool};
+use sqlx::{Acquire, PgConnection, PgPool};
 
 mod concurrency;
 mod fuzz;
@@ -855,6 +855,58 @@ async fn nested_loops_only(conn: &mut PgConnection) -> Result<(), sqlx::Error> {
     .fetch_one(conn)
     .await?;
     Ok(())
+}
+
+/// A savepoint rolled back undoes what its writes recorded and keeps what came before it, whether
+/// or not the transaction had written before the savepoint.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
+async fn savepoints_rolled_back_record_nothing(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+    insert_document(&mut conn, DOC_2, "2026-01-01 00:00:00").await?;
+
+    // A write, then a savepoint whose write is rolled back.
+    let mut tx = pool.begin().await?;
+    grant(&mut tx, "document", DOC, OWNER, "user").await?;
+    let mut savepoint = tx.begin().await?;
+    grant(&mut savepoint, "document", DOC, MEMBER, "user").await?;
+    savepoint.rollback().await?;
+    tx.commit().await?;
+    assert_eq!(
+        rows(&mut conn, DOC).await?,
+        [row(OWNER, "document", Some("2026-01-01 00:00:00"), 1)]
+    );
+
+    // The transaction's first write in a savepoint that is rolled back, then a write after it.
+    let mut tx = pool.begin().await?;
+    let mut savepoint = tx.begin().await?;
+    grant(&mut savepoint, "document", DOC_2, OWNER, "user").await?;
+    savepoint.rollback().await?;
+    grant(&mut tx, "document", DOC_2, MEMBER, "user").await?;
+    tx.commit().await?;
+    assert_eq!(
+        rows(&mut conn, DOC_2).await?,
+        [row(MEMBER, "document", Some("2026-01-01 00:00:00"), 1)]
+    );
+
+    // Only a rolled-back savepoint wrote: nothing is applied, and the next transaction still is.
+    let mut tx = pool.begin().await?;
+    let mut savepoint = tx.begin().await?;
+    grant(&mut savepoint, "document", DOC_2, TEAM, "team").await?;
+    savepoint.rollback().await?;
+    tx.commit().await?;
+    grant(&mut conn, "document", DOC_2, CHANNEL, "channel").await?;
+    assert_eq!(
+        rows(&mut conn, DOC_2).await?,
+        [
+            row(CHANNEL, "document", Some("2026-01-01 00:00:00"), 1),
+            row(MEMBER, "document", Some("2026-01-01 00:00:00"), 1),
+        ]
+    );
+    assert_exact(&pool).await
 }
 
 /// The migrations leave maintenance off: no trigger on any input, so writes cost what they did.
