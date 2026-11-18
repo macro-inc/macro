@@ -1,4 +1,5 @@
-//! Authenticated MCP code execution, optionally attributed to a managed session.
+//! User-scoped code execution for the public MCP and the in-app chat,
+//! optionally attributed to a managed session.
 use super::{
     CodeModeError, ExecutionActivity, ExecutionStatus,
     service::{Reviews, settle, validate_request},
@@ -56,6 +57,26 @@ pub trait UserCodeMode: Send + Sync + 'static {
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError>;
+}
+
+/// Code mode where this process has no code runner: every execution fails
+/// with [`CodeModeError::Unavailable`]. Hosts that run chat's toolset are
+/// given a real runner at startup, so this answers only a host wired without
+/// one.
+pub struct UnconfiguredCodeMode;
+
+#[async_trait]
+impl UserCodeMode for UnconfiguredCodeMode {
+    async fn execute(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _caller: &ToolCaller,
+        _session: Option<uuid::Uuid>,
+        _request: ExecuteRequest,
+        _cancel: CancellationToken,
+    ) -> Result<UserExecutionReceipt, CodeModeError> {
+        Err(CodeModeError::Unavailable)
+    }
 }
 
 /// User-scoped code mode over an executor whose admission bounds its own traffic.

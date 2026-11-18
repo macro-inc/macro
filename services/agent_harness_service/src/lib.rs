@@ -672,16 +672,6 @@ pub async fn run() -> anyhow::Result<()> {
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
-    let cognition_runtime = agent_harness_service::cognition::build(
-        agent_harness_service::cognition::config::Config::from_env()?,
-        pool.clone(),
-        event_broker_tracker.clone(),
-        import_jobs.clone(),
-        mcp_http,
-    )
-    .await
-    .context("failed to compose cognition APIs")?;
-    let cognition_router = cognition_runtime.router.clone();
     let code_scratch = tempfile::tempdir()?;
     let code_runner = match &config.deno_binary {
         Some(binary) => {
@@ -719,6 +709,16 @@ pub async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
+            // The in-app chat gets a budget of its own,
+            // so chat traffic cannot exhaust the slots sessions rely on.
+            let chat = code_execution::domain::ExecutionService::new(
+                Arc::clone(&runner),
+                code_execution::domain::Limits {
+                    max_running: 8,
+                    max_queued: 16,
+                    ..Default::default()
+                },
+            )?;
             let checker = code_execution::outbound::deno::check::DenoChecker::new(
                 binary.into(),
                 code_scratch.path().join("checks"),
@@ -734,6 +734,7 @@ pub async fn run() -> anyhow::Result<()> {
                 )?,
                 public,
                 routines,
+                chat,
                 Arc::new(checker),
             ))
         }
@@ -756,9 +757,53 @@ pub async fn run() -> anyhow::Result<()> {
     // Code runs reach the SDK hosts through the host's forwarder where the
     // egress flag is on for the user they act as.
     let code_egress = code_mode::EgressRollout::new(feature_flags.clone());
+    // Suggestion generation sessions' code and tools are limited to reads
+    // and their own writes, and background runs that send nothing to what
+    // reaches nobody, wherever their credential is used.
+    let session_scopes: Arc<dyn code_mode::SessionScopes> = Arc::new(code_mode::HarnessScopes {
+        generations: Arc::new(
+            suggestion_generation::outbound::pg_generation_repo::PgGenerationRepo::new(
+                pool.clone(),
+            ),
+        ),
+        runs: Arc::new(
+            suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo::new(pool.clone()),
+        ),
+    });
+    // Chat runs only in code mode, as the signed-in user on chat's own
+    // executor, so the harness needs its Deno runtime.
+    let Some((_, _, _, chat_executor, _)) = &code_runner else {
+        anyhow::bail!("the in-app chat runs in code mode: configure DENO_BINARY");
+    };
+    let chat_code_mode: Arc<dyn agent_code_mode::domain::UserCodeMode> =
+        Arc::new(agent_code_mode::domain::UserCodeModeService::new(
+            Arc::new(chat_executor.clone()),
+            Arc::new(code_mode::UserRunCredentials {
+                egress: code_egress.clone(),
+                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+                signer: MacroApiTokenSigner::new(
+                    pool.clone(),
+                    config.macro_api_token_issuer.as_ref(),
+                    config.macro_api_token_private_secret_key.as_ref(),
+                ),
+                endpoints: code_mode::sdk_endpoints()?,
+                scopes: Arc::clone(&session_scopes),
+            }),
+        ));
+    let cognition_runtime = agent_harness_service::cognition::build(
+        agent_harness_service::cognition::config::Config::from_env()?,
+        pool.clone(),
+        event_broker_tracker.clone(),
+        import_jobs.clone(),
+        mcp_http,
+        chat_code_mode,
+    )
+    .await
+    .context("failed to compose cognition APIs")?;
+    let cognition_router = cognition_runtime.router.clone();
     // Routine code steps run as their owner on the routines' executor.
     let routine_code = match &code_runner {
-        Some((_, _, routines, checker)) => Some(
+        Some((_, _, routines, _, checker)) => Some(
             routine_code::SdkRoutineCode::new(
                 Arc::new(routines.clone()),
                 Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
@@ -807,21 +852,8 @@ pub async fn run() -> anyhow::Result<()> {
     )
     .await
     .map_err(|error| anyhow::anyhow!("{error}"))?;
-    // Suggestion generation sessions' code and tools are limited to reads
-    // and their own writes, and background runs that send nothing to what
-    // reaches nobody, wherever their credential is used.
-    let session_scopes: Arc<dyn code_mode::SessionScopes> = Arc::new(code_mode::HarnessScopes {
-        generations: Arc::new(
-            suggestion_generation::outbound::pg_generation_repo::PgGenerationRepo::new(
-                pool.clone(),
-            ),
-        ),
-        runs: Arc::new(
-            suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo::new(pool.clone()),
-        ),
-    });
     let public_code_mode = match &code_runner {
-        Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
+        Some((_, public, _, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
@@ -885,7 +917,7 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             scopes: Arc::clone(&session_scopes),
         });
-    let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
+    let code_executor = code_runner.as_ref().map(|(runner, _, _, _, _)| {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
@@ -2723,8 +2755,13 @@ pub async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
-    if let Some((sessions, public, routines, _)) = &code_runner {
-        tokio::join!(sessions.shutdown(), public.shutdown(), routines.shutdown());
+    if let Some((sessions, public, routines, chat, _)) = &code_runner {
+        tokio::join!(
+            sessions.shutdown(),
+            public.shutdown(),
+            routines.shutdown(),
+            chat.shutdown()
+        );
     }
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {

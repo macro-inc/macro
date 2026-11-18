@@ -38,7 +38,8 @@ AI system prompts: one module per prompt section, each exporting a
   documents, search) in its SDK namespace's `@agent` TSDoc block, never here:
   `ai_tools` inlines it from the generated catalog, and routed turns load it
   per entity. Only cross-cutting rules live in this crate. `code_mode.rs` is
-  only the general code-mode section.
+  only the general code-mode section (`PROMPT`, and `CHAT_PROMPT` for the
+  in-app chat, which presents with `DisplayResults`).
 
 ## Tool contracts
 
@@ -47,6 +48,8 @@ AI system prompts: one module per prompt section, each exporting a
 - Code mode reads and edits canvases through the SDK's `document.canvas()` handle, never
   `content()`, which does not represent the shared scene, and sees one by returning
   `images: [await canvas.render()]`, which reach the model as image blocks.
+  Only agent sessions load returned images, so only their prompt says so; the
+  chat's user-scoped receipts carry none.
 The agent-session prompt distinguishes typed `<m-notifications>` system facts
 from user requests and defines the notification-only `<noop/>` contract.
 In-app replies use `m-document-mention` with `blockName: "routine"` for routines;

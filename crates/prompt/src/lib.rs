@@ -75,6 +75,22 @@ pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROM
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
     .compose(&skills::PROMPT);
 
+/// [`BASE_PROMPT`] for code-mode hosts, whose Macro docs are a `ReadCodeDocs`
+/// symbol instead of the `SelfKnowledge` tool.
+static CODE_MODE_BASE_PROMPT: ComposedPrompt = tone::PROMPT
+    .compose(&math::PROMPT)
+    .compose(&citations::PROMPT)
+    .compose(&mentions::PROMPT)
+    .compose(&do_not::PROMPT)
+    .compose(&about_macro::CODE_MODE_PROMPT);
+
+/// The in-app chat in code mode: [`TOOL_USE_PROMPT`] with the chat's
+/// [`code_mode`] section. Its user tools stay composer-confirmed.
+pub static CODE_MODE_CHAT_TOOL_USE_PROMPT: ComposedPrompt = CODE_MODE_BASE_PROMPT
+    .compose(&code_mode::CHAT_PROMPT)
+    .compose(&user_tools::PROMPT)
+    .compose(&skills::PROMPT);
+
 /// Database question instructions for hosts that only discover and read data.
 pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
     BASE_PROMPT.compose(&databases::READ_ONLY_PROMPT);

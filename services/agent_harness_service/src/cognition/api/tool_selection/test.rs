@@ -120,3 +120,57 @@ fn the_database_host_carries_how_databases_work_and_no_other_area() {
     // email tool; the scoped prompt must omit its action rules.
     assert!(!prompt.contains("MUST use the `SendEmail` tool"));
 }
+
+/// Hidden means not callable: a native tool chat's code-mode toolset leaves
+/// out is refused by name, not dispatched, while the tools it lists are found.
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn chat_refuses_hidden_native_tools_by_name(pool: sqlx::PgPool) {
+    let ctx = crate::cognition::api::context::test::test_api_context(pool).await;
+    let user = MacroUserIdStr::try_from_email("chat@example.com").unwrap();
+    let chat = service_tools(
+        &ToolSet::All,
+        ctx.all_tools.clone(),
+        &ctx.mcp_selector,
+        &user,
+    )
+    .await;
+    // Empty arguments fail to deserialize for every tool here but
+    // DescribeCodeTools, whose fields all default: it returns the compact
+    // catalog without I/O. A hidden tool never gets that far.
+    let empty = serde_json::json!({});
+    let call = |name: &'static str| {
+        chat.try_tool_call(
+            ctx.tool_service_context.clone(),
+            RequestContext::new(user.clone()),
+            name,
+            &empty,
+        )
+    };
+
+    for hidden in [
+        "ReadContent",
+        "ListEntities",
+        "WebFetch",
+        "SelfKnowledge",
+        "BashCodeExecution",
+        "TextEditorCodeExecution",
+    ] {
+        assert!(
+            ai_tools::tools_for(ai_tools::AiHost::Chat)
+                .toolset
+                .tools
+                .contains_key(hidden),
+            "{hidden} is a native chat tool"
+        );
+        assert!(
+            matches!(call(hidden).await, Err(ToolSetError::NotFound(_))),
+            "chat dispatched hidden {hidden}"
+        );
+    }
+    for listed in ai_tools::CHAT_CODE_MODE_TOOLS {
+        assert!(
+            !matches!(call(listed).await, Err(ToolSetError::NotFound(_))),
+            "chat does not find {listed}"
+        );
+    }
+}

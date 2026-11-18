@@ -1,5 +1,5 @@
 import type { MessagePart } from '@service-agent-fold/generated/types';
-import { ExecutionReceipt } from '@service-cognition/generated/tools/schemas';
+import { ExecuteCodeReceipt } from '@service-cognition/generated/tools/schemas';
 
 // Match UUIDs accepted by Rust, including reserved versions and variants.
 export const isExecutionId = (value: string) =>
@@ -27,7 +27,10 @@ export function codeExecutionInput(part: MessagePart) {
   return { executionId: requested, source: input.source };
 }
 
-/** The tool's receipt, once the server has replied. */
+/**
+ * The tool's receipt, once the server has replied. Only an agent session's
+ * receipt names a saved execution; the chat's user-scoped one has no ID.
+ */
 export function codeExecutionReceipt(part: MessagePart) {
   const detail = part.kind === 'tool_use' ? part.detail : undefined;
   const raw =
@@ -36,10 +39,9 @@ export function codeExecutionReceipt(part: MessagePart) {
       : detail?.kind === 'macro'
         ? detail.output
         : undefined;
-  const parsed = ExecutionReceipt.safeParse(raw);
-  return parsed.success && isExecutionId(parsed.data.executionId)
-    ? parsed.data
-    : undefined;
+  const parsed = ExecuteCodeReceipt.safeParse(raw);
+  if (!parsed.success || !('executionId' in parsed.data)) return;
+  return isExecutionId(parsed.data.executionId) ? parsed.data : undefined;
 }
 
 /**

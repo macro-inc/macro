@@ -20,7 +20,7 @@ fn main() {
         .to_string()
     });
 
-    let tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
+    let tools = ai_tools::tools_for_chat_code_mode();
     let schemas = tools.toolset.request_schemas().unwrap_or_default();
 
     let definitions = schemas
