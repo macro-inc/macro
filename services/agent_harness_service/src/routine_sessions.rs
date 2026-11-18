@@ -154,10 +154,12 @@ where
             .collect())
     }
 
-    /// An overlaid app connects to its vendor's own MCP server, never to a
-    /// grant these connections count, so a routine can't require it. Except
-    /// where Macro Connect serves it to an owner on Connect alone: they never
-    /// see its overlay, and connecting it writes a Connect grant.
+    /// An owner on Macro Connect alone connects every app through Connect,
+    /// so they can connect only the apps Connect serves, overlaid or not:
+    /// they never see an overlay, and connecting writes a Connect grant.
+    /// Anyone else connects through Pipedream, except an overlaid app, which
+    /// connects to its vendor's own MCP server, never to a grant these
+    /// connections count, so a routine can't require it.
     async fn requirable(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -167,12 +169,9 @@ where
         let served_by = self.connect.as_ref().filter(|_| connect_only);
         let mut requirable = Vec::with_capacity(apps.len());
         for app in apps {
-            let kept = match self.connections.overlay(&app.app_slug).await? {
-                None => true,
-                Some(_) => match served_by {
-                    Some(connect) => connect.app_for_slug(&app.app_slug).await?.is_some(),
-                    None => false,
-                },
+            let kept = match served_by {
+                Some(connect) => connect.app_for_slug(&app.app_slug).await?.is_some(),
+                None => self.connections.overlay(&app.app_slug).await?.is_none(),
             };
             if kept {
                 requirable.push(app);

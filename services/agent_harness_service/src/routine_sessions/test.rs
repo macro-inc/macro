@@ -164,21 +164,25 @@ async fn only_grants_dispatch_would_use_are_connected() {
 
 /// An overlaid app connects to its vendor's own MCP server, never to a
 /// grant a routine counts, so a routine can't require it. An owner on
-/// Connect alone never sees the overlay of an app Connect serves: they
-/// connect it through Connect, which a routine counts.
+/// Connect alone connects every app through Connect and never sees an
+/// overlay: they can require exactly the apps Connect serves.
 #[tokio::test]
-async fn an_overlaid_app_is_requirable_only_where_connect_serves_it_alone() {
+async fn a_missing_app_is_requirable_only_where_its_owner_can_connect_it() {
     let asked = || vec![app("sentry"), app("asana"), app("linear")];
     let without_connect = PipedreamConnectedApps::new(store(), None::<Arc<Connect>>);
     let beside_pipedream = PipedreamConnectedApps::new(store(), connect(false, &["sentry"]));
+    let connect_alone = PipedreamConnectedApps::new(store(), connect(true, &["sentry", "asana"]));
     let unserved = PipedreamConnectedApps::new(store(), connect(true, &[]));
-    let served = PipedreamConnectedApps::new(store(), connect(true, &["sentry"]));
 
-    for apps in [&without_connect, &beside_pipedream, &unserved] {
+    for apps in [&without_connect, &beside_pipedream] {
         assert_eq!(
             apps.requirable(&owner(), asked()).await.unwrap(),
             [app("asana"), app("linear")]
         );
     }
-    assert_eq!(served.requirable(&owner(), asked()).await.unwrap(), asked());
+    assert_eq!(
+        connect_alone.requirable(&owner(), asked()).await.unwrap(),
+        [app("sentry"), app("asana")]
+    );
+    assert_eq!(unserved.requirable(&owner(), asked()).await.unwrap(), []);
 }
