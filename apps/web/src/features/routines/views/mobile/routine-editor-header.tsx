@@ -30,7 +30,7 @@ export function MobileRoutineEditorHeader(props: {
         </>
       }
     >
-      <MobileHeader.Back />
+      <MobileHeader.Back onBack={props.onBack} />
       <MobileHeader.Title
         label={props.name}
         icon={props.identityIcon ?? <ClockIcon class="size-4" />}

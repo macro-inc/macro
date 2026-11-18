@@ -1,3 +1,4 @@
+import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
 import {
   SplitPanelContext,
   type SplitPanelContextType,
@@ -6,6 +7,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import {
   type ComponentProps,
   createResource,
+  createRoot,
   createSignal,
   For,
   onMount,
@@ -75,7 +77,9 @@ vi.mock('@app/features/block-agent/context/pending-session', () => ({
   startPendingSession: () => 'pending',
 }));
 vi.mock('@app/features/settings/AgentSettings', () => ({
-  AgentSettings: () => null,
+  AgentSettings: (props: { createKind?: string }) => (
+    <p>Agent creation: {props.createKind ?? 'none'}</p>
+  ),
 }));
 vi.mock('@app/features/settings/IntegrationsPage', () => ({
   IntegrationsPage: () => null,
@@ -207,6 +211,7 @@ vi.mock('./agents-sidebar/agents-sidebar', async () => ({
 vi.mock('../phone-list', () => ({
   PhoneAgentsList: (props: {
     archived: boolean;
+    onCreateAgent: () => void;
     onOpenPage: (page: 'archived' | 'agents' | 'routines') => void;
     onBack: () => void;
     onOpenConversation: (conversation: {
@@ -227,6 +232,7 @@ vi.mock('../phone-list', () => ({
         Session
       </button>
       <button onClick={props.onBack}>List back</button>
+      <button onClick={props.onCreateAgent}>New agent</button>
     </div>
   ),
 }));
@@ -239,7 +245,10 @@ vi.mock(
     changeSessionArchiveState: vi.fn(),
   })
 );
-vi.mock('../components/Topbar', () => ({ Topbar: () => null }));
+vi.mock('../components/Topbar', () => ({
+  Topbar: (props: { onBack?: () => void }) =>
+    props.onBack ? <button onClick={props.onBack}>Page back</button> : null,
+}));
 vi.mock('../context/data-mode', () => ({
   DataModeProvider: state.pass,
   dataModeFor: () => 'chat',
@@ -647,4 +656,48 @@ it('replaces a direct Archived entry with the list when no earlier page exists',
   fireEvent.click(screen.getByRole('button', { name: 'List back' }));
   expect(screen.getByText('Agents list')).toBeTruthy();
   expect(replace).toHaveBeenCalledWith({ type: 'component', id: 'agents' });
+});
+
+it('retains the phone New agent creation intent through the history entry', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const [entry, setEntry] = createSignal<FakeEntry>({
+    content: { type: 'component', id: 'agents' },
+  });
+  state.entry.current = entry;
+  state.replace.current = (next) => setEntry({ content: next });
+  render(() => <AgentsView />);
+  fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+  expect(entry().content.params?.createAgentKind).toBe('agent');
+  expect(screen.getByText('Agent creation: agent')).toBeTruthy();
+});
+
+it('lets an active editor intercept the phone page Back action', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const [entry] = createSignal<FakeEntry>({
+    content: {
+      type: 'component',
+      id: 'agents',
+      params: { agentPage: 'agents' },
+    },
+  });
+  state.entry.current = entry;
+  state.canGoBack.current = () => true;
+  const goBack = vi.fn();
+  state.back.current = goBack;
+  let dispose = () => {};
+  const intercept = vi.fn(() => true);
+  createRoot((cleanup) => {
+    dispose = cleanup;
+    useSplitBackInterceptor(intercept);
+  });
+  try {
+    render(() => <AgentsView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Page back' }));
+    expect(intercept).toHaveBeenCalledOnce();
+    expect(goBack).not.toHaveBeenCalled();
+  } finally {
+    dispose();
+  }
 });

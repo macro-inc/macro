@@ -13,6 +13,7 @@ import {
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { previewBlockTarget } from '@components/app/previewTarget';
+import { runSplitBack } from '@components/app/split-layout/back-interceptor';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -312,8 +313,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       }
     )
   );
-  const openPage = (next: AgentsPage) => {
-    setCreatingKind(undefined);
+  const openPage = (next: AgentsPage, createKind?: AgentKind) => {
+    setCreatingKind(createKind);
     setMobileList(false);
     if (next === 'routines') {
       layout.openWithSplit(routineContent(), {
@@ -329,7 +330,11 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           type: 'component',
           id: 'agents',
           preserveParams: true,
-          params: { agentPage: next, agentPageRequest: crypto.randomUUID() },
+          params: {
+            agentPage: next,
+            agentPageRequest: crypto.randomUUID(),
+            createAgentKind: createKind,
+          },
         },
       });
       return;
@@ -367,7 +372,15 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           next === 'new' &&
             !(content.type === 'component' && content.params?.focusComposer)
         );
-        setCreatingKind(undefined);
+        const createKind =
+          content.type === 'component' && next === 'agents'
+            ? content.params?.createAgentKind
+            : undefined;
+        setCreatingKind(
+          createKind === 'agent' || createKind === 'coder'
+            ? createKind
+            : undefined
+        );
         if (next === 'new' && content.type === 'component') {
           const agent = content.params?.composerAgentId;
           const request = content.params?.agentPageRequest;
@@ -693,7 +706,15 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                     >
                       <Topbar
                         title={pageTitle()}
-                        onBack={mobileLayout() ? backToPreviousPage : undefined}
+                        onBack={
+                          mobileLayout()
+                            ? () =>
+                                runSplitBack({
+                                  canGoBack: () => true,
+                                  goBack: backToPreviousPage,
+                                })
+                            : undefined
+                        }
                       />
                     </Show>
                     <div class="body">
@@ -888,10 +909,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                   onSelectAgent={(agent) =>
                     mobileAgentRequest.select(userId(), agent.id, agent.kind)
                   }
-                  onCreateAgent={() => {
-                    openPage('agents');
-                    setCreatingKind('agent');
-                  }}
+                  onCreateAgent={() => openPage('agents', 'agent')}
                   actions={actions}
                 />
               </AgentsMobileList>

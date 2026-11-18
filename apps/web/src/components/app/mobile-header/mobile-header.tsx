@@ -136,10 +136,10 @@ function Title(props: {
 }
 
 /** Use the shell's history-aware Back action and canonical caret. */
-function Back() {
+function Back(props: { onBack?: () => void } = {}) {
   return (
     <MobileHeaderIsland class="size-10 justify-center !px-0">
-      <SplitBackButton />
+      <SplitBackButton onBack={props.onBack} />
     </MobileHeaderIsland>
   );
 }

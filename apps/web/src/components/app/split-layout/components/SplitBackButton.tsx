@@ -14,8 +14,8 @@ export function hasAgentsBackFallback(content: SplitContent) {
   );
 }
 
-/** The shell and mobile header islands share navigation, guards, and glyph. */
-export function SplitBackButton() {
+/** Shared shell navigation and glyph; a page callback retains draft guards or a cold-link fallback. */
+export function SplitBackButton(props: { onBack?: () => void } = {}) {
   const context = useContext(SplitPanelContext);
   if (!context) return null;
   return (
@@ -26,16 +26,19 @@ export function SplitBackButton() {
       size="icon-sm"
       class="p-1 touch:active:bg-transparent"
       disabled={
+        !props.onBack &&
         !context.handle.canGoBack() &&
         !hasAgentsBackFallback(context.handle.content())
       }
       onClick={() =>
         runSplitBack({
           canGoBack: () =>
+            Boolean(props.onBack) ||
             context.handle.canGoBack() ||
             hasAgentsBackFallback(context.handle.content()),
           goBack: () => {
-            if (!context.handle.canGoBack())
+            if (props.onBack) props.onBack();
+            else if (!context.handle.canGoBack())
               context.handle.replace({
                 next: { type: 'component', id: 'agents' },
                 mergeHistory: true,

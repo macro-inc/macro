@@ -87,7 +87,7 @@ export function PhoneListHeader(
         fallback={
           props.archived ? (
             <>
-              <MobileHeader.Back />
+              <MobileHeader.Back onBack={props.onBack} />
               <MobileHeader.Island>
                 <span class="text-sm font-semibold">
                   {t('viewMenus.archived')}

@@ -23,7 +23,7 @@ export function MobileRoutineTemplateHeader(props: {
         </Show>
       }
     >
-      <MobileHeader.Back />
+      <MobileHeader.Back onBack={props.onBack} />
       <MobileHeader.Title label={props.name} />
     </MobileHeader>
   );

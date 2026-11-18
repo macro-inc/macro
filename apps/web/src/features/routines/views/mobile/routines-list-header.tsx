@@ -36,7 +36,7 @@ export function MobileRoutinesListHeader(props: {
         </>
       }
     >
-      <MobileHeader.Back />
+      <MobileHeader.Back onBack={props.onBack} />
       <MobileHeader.Title label={t('agentWork.routines')} />
     </MobileHeader>
   );
