@@ -1,8 +1,17 @@
 import { ListHeader } from '@app/components/view-shell/ListHeader';
+import { createLabelCollapse } from '@core/signal/create-label-collapse';
 import { cn } from '@ui';
-import { createMemo, createSignal, type JSX, Show } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { ReviewsStatusTabs } from '../components/ReviewsStatusTabs';
-import { createReviewsHeaderFit } from '../primitives/create-reviews-header-fit';
 import type { ReviewsStatusTabId } from '../reviews-types';
 
 /**
@@ -21,24 +30,21 @@ export function ReviewsListHeader(props: {
 }) {
   const [actions, setActions] = createSignal<HTMLDivElement>();
   const [tabs, setTabs] = createSignal<HTMLElement>();
-  const [scope, setScope] = createSignal<HTMLDivElement>();
-  // Read from the fit's timer, outside any owner, so it must be a plain read.
   const hasStatus = createMemo(() => props.status !== undefined);
-  const fit = createReviewsHeaderFit({
+  const collapsed = createLabelCollapse(
     actions,
-    tabs: () => (hasStatus() ? tabs() : undefined),
-    scope,
-  });
+    () => (hasStatus() ? ['tabs', 'scope'] : ['scope']),
+    { watchContent: true }
+  );
+  const iconTabs = () => collapsed('tabs');
+  keepStatusFocus(tabs, iconTabs);
 
   return (
     <ListHeader
       actionsRef={setActions}
       title={
         <div class="flex min-w-0 items-center gap-3">
-          <div
-            ref={setScope}
-            class={cn('min-w-0', fit.hideScope() && 'hidden')}
-          >
+          <div class={cn('min-w-0', collapsed('scope') && 'hidden')}>
             {props.scope}
           </div>
           <Show when={props.status}>
@@ -47,7 +53,7 @@ export function ReviewsListHeader(props: {
                 ref={setTabs}
                 value={status().value}
                 onChange={status().onChange}
-                iconOnly={fit.iconTabs()}
+                iconOnly={iconTabs()}
                 class="shrink-0"
               />
             )}
@@ -57,5 +63,56 @@ export function ReviewsListHeader(props: {
     >
       {props.children}
     </ListHeader>
+  );
+}
+
+/**
+ * Tabs render their options anew when they switch to icons, which would drop
+ * a keyboard user's focus on a status; it moves to the same status instead.
+ */
+function keepStatusFocus(
+  tabs: Accessor<HTMLElement | undefined>,
+  iconOnly: Accessor<boolean>
+) {
+  let focused: string | undefined;
+  createEffect(
+    on(tabs, (element) => {
+      if (!element) return;
+      const remember = (event: FocusEvent) => {
+        if (event.target instanceof HTMLInputElement)
+          focused = event.target.value;
+      };
+      // An option removed with focus still in it is not the user leaving;
+      // by the next microtask it is detached, while one the user left is not.
+      const forget = (event: FocusEvent) => {
+        const option = event.target;
+        queueMicrotask(() => {
+          if (!(option instanceof Node) || !option.isConnected) return;
+          if (!element.contains(document.activeElement)) focused = undefined;
+        });
+      };
+      element.addEventListener('focusin', remember);
+      element.addEventListener('focusout', forget);
+      onCleanup(() => {
+        element.removeEventListener('focusin', remember);
+        element.removeEventListener('focusout', forget);
+      });
+    })
+  );
+  createEffect(
+    on(
+      iconOnly,
+      () => {
+        const element = tabs();
+        if (!element || focused === undefined) return;
+        if (element.contains(document.activeElement)) return;
+        element
+          .querySelector<HTMLInputElement>(
+            `input[value="${CSS.escape(focused)}"]`
+          )
+          ?.focus();
+      },
+      { defer: true }
+    )
   );
 }
