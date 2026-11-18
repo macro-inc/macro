@@ -687,6 +687,19 @@ export const isDisplayableSoupItem = (
   (item.tag !== 'document' ||
     item.data.subType?.type !== 'initiative_description');
 
+/** A channel's participants as they joined; the server returns them unordered. */
+function byJoinTime<T extends { joined_at: string }>(
+  participants: readonly T[]
+): T[] {
+  return participants
+    .map((participant) => ({
+      participant,
+      at: Date.parse(participant.joined_at),
+    }))
+    .sort((a, b) => a.at - b.at)
+    .map(({ participant }) => participant);
+}
+
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
  * under the `viewed_at` sort — as the Unix epoch. Map it to `undefined` so each
@@ -912,10 +925,7 @@ export const mapApiSoupItemToEntity = (
         updatedAt: item.data.channel.updated_at,
         createdAt: item.data.channel.created_at,
         participantIds: item.data.participants.map((p) => p.user_id),
-        // The server returns participants unordered; list them as they joined.
-        participants: [...item.data.participants].sort((a, b) =>
-          a.joined_at.localeCompare(b.joined_at)
-        ),
+        participants: byJoinTime(item.data.participants),
         isParticipant: item.data.is_participant ?? true,
         viewedAt: item.data.viewed_at ?? item.data.interacted_at,
         interactedAt: item.data.interacted_at,
