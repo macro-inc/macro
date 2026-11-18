@@ -2,8 +2,8 @@
 
 ## What it is
 
-Agent code mode's generated assets: the public SDK and Handlebars bundled for
-Deno, the agent SDK documentation catalog, the SDK operation catalog (label,
+Agent code mode's generated assets: the public SDK, Handlebars and Photon (image editing, a
+bundle plus a `.wasm` file) for Deno, the agent SDK documentation catalog, the SDK operation catalog (label,
 method, path and whether it writes), every service the SDK can reach with its
 host in each environment, and the SDK's TypeScript declarations
 routine code is type-checked against. They are

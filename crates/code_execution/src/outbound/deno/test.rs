@@ -279,6 +279,32 @@ async fn javascript_logs_result_and_cleanup() {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn a_program_edits_an_image_with_photon() {
+    let (_root, service) = setup(Limits::default()).await;
+    let source = r#"
+import * as photon from 'photon';
+export async function main() {
+  const pixels = new Uint8Array(200 * 100 * 4).fill(255);
+  const image = new photon.PhotonImage(pixels, 200, 100);
+  const resized = photon.resize(image, 100, 50, photon.SamplingFilter.Lanczos3);
+  photon.grayscale(resized);
+  photon.draw_text(resized, 'hi', 5, 5, 12);
+  const rotated = photon.rotate(resized, 90);
+  const decoded = photon.PhotonImage.new_from_byteslice(rotated.get_bytes());
+  const jpeg = rotated.get_bytes_jpeg(80);
+  return { width: decoded.get_width(), height: decoded.get_height(), jpeg: jpeg.length > 0 };
+}
+"#;
+    let (_, outcome) = run(&service, source, 10_000).await;
+    assert!(
+        matches!(outcome, Outcome::Succeeded { ref value } if *value == serde_json::json!({"width": 50, "height": 100, "jpeg": true})),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn links_point_at_the_deployment_web_app() {
     let (_root, service) = setup(Limits::default()).await;
     let environment = RunEnvironment {

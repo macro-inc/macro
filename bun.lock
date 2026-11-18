@@ -240,6 +240,7 @@
       "name": "@macro-inc/code-mode-sdk",
       "version": "0.0.1",
       "dependencies": {
+        "@cf-wasm/photon": "0.1.30",
         "handlebars": "4.7.9",
       },
       "devDependencies": {
@@ -948,6 +949,10 @@
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.6", "", { "os": "win32", "cpu": "x64" }, "sha512-WN05KwXnTO/2J45RQPvzZMXf7tZUIofHoR35xIPfCo7pQ2RFidxI8sfb5mGsaTxdMmEOzHzOPRCdA5/fCpc7xQ=="],
 
     "@bufbuild/protobuf": ["@bufbuild/protobuf@1.10.1", "", {}, "sha512-wJ8ReQbHxsAfXhrf9ixl0aYbZorRuOWpBNzm8pL8ftmSxQx/wnJD5Eg861NwJU/czy2VXFIebCeZnZrI9rktIQ=="],
+
+    "@cf-wasm/internals": ["@cf-wasm/internals@0.0.3", "", {}, "sha512-v6PmiQnJIrVvL2IdPg5aCqARSKw/U1JvFsms2cCt3Szx3/3EvtVVhN9MALCh6kZ2CV2fvzs3tmiYezRQ6JyqcQ=="],
+
+    "@cf-wasm/photon": ["@cf-wasm/photon@0.1.30", "", { "dependencies": { "@cf-wasm/internals": "0.0.3" } }, "sha512-zOQoHTSkc6M88hR5WHVpqrwqC87clhdfCyfDYZaGqDiCmHFLPe/6UqC2GPAYrwpFTV1N2gJBJmYi1YE+WY3sbQ=="],
 
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@0.5.0", "", {}, "sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg=="],
 

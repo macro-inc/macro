@@ -12,6 +12,7 @@
 		"type-check": "tsc --noEmit --project tsconfig.json"
 	},
 	"dependencies": {
+		"@cf-wasm/photon": "0.1.30",
 		"handlebars": "4.7.9"
 	},
 	"devDependencies": {

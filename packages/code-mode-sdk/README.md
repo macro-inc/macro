@@ -1,13 +1,13 @@
 # Code-mode dependencies and documentation
 
-This build package bundles the actual public `@macro-inc/sdk` and Handlebars for
-Deno. It adds no tool-name proxy or alternate API. Nested namespaces, entity
+This build package bundles the actual public `@macro-inc/sdk`, Handlebars and Photon (local
+image editing, Rust compiled to WebAssembly) for Deno. It adds no tool-name proxy or alternate API. Nested namespaces, entity
 handles, promises and async iterators retain the public SDK implementation.
 
 The agent supplies a JavaScript ES module exporting `async main(context)`. The
 trusted bootstrap provides authenticated `macro`, `session`, and `execution`
 handles plus `token`, `hosts`, `sessionId` and `executionId`. Explicit imports from
-`@macro-inc/sdk` and `handlebars` resolve to local build artifacts; no downloads
+`@macro-inc/sdk`, `handlebars` and `photon` resolve to local build artifacts; no downloads
 or TypeScript compilation happen during a run. SDK local portmap discovery is
 removed from the bundle because service hosts are supplied by the harness.
 
@@ -53,7 +53,7 @@ bun run --cwd packages/code-mode-sdk type-check
 bun run --cwd packages/code-mode-sdk test
 ```
 
-The generated `sdk.mjs`, `handlebars.mjs`, `documentation.json`,
+The generated `sdk.mjs`, `handlebars.mjs`, `photon.mjs`, `photon.wasm`, `documentation.json`,
 `operations.json` (each SDK operation's label, method, path and whether it
 writes), `hosts.json` (every service the SDK can reach, with its host in each
 environment) and `sdk-types.json` (the SDK's declarations routine code is
@@ -62,5 +62,10 @@ committed. `crates/code_mode_assets`
 builds them when it compiles: local cargo runs `scripts/generate.ts` with bun,
 and Nix builds and Rust CI use the `code-mode-assets` flake package through
 `CODE_MODE_ASSETS_DIR`. See that crate's `AGENTS.md`.
+Photon's wasm is a separate file because the bundle reads it from the run
+directory; base64 inside the bundle costs about 90 ms to decode on every
+import. The generator validates and compiles `photon.wasm`, then loads the
+bundle and edits a real image with it, so a broken Photon fails the build, not
+a run.
 Real Deno integration tests live in `crates/code_execution`; public SDK entity
 behavior is tested under `packages/sdk/tests`.

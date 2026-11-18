@@ -1464,7 +1464,7 @@ fields, return type) within a 32 KiB budget; references name other symbols in
 backticks, which read the same way. The agent reads the symbols a program uses,
 together, before writing it. There is no runtime `sdk.help` or
 `sdk.ToolName` proxy. The actual SDK exposes `macro.ai.structuredCompletion` and
-`macro.ai.decide`; Handlebars is imported from `handlebars`. Edit a document or task
+`macro.ai.decide`; Handlebars is imported from `handlebars` and the Photon image editor from `photon`. Edit a document or task
 body with `document.edit(instructions)`, and a canvas through `document.canvas()`.
 
 The harness spawns a fresh Deno process for each execution. Dependencies are
