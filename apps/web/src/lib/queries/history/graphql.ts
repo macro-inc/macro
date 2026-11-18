@@ -6,6 +6,7 @@ import {
   type SearchDocumentWire,
   selectRecords,
 } from '@graphql-cache/index';
+import type { HistoryItemType } from '@service-storage/client';
 import {
   type GraphqlChatQuickAccessNameFragment,
   GraphqlChatQuickAccessNameFragmentDoc,
@@ -13,7 +14,12 @@ import {
   GraphqlDocumentQuickAccessNameFragmentDoc,
   type GraphqlProjectQuickAccessNameFragment,
   GraphqlProjectQuickAccessNameFragmentDoc,
+  HistoryViewedAtCacheWriteDocument,
+  type HistoryViewedAtCacheWriteSubscription,
+  HistoryViewItemDocument,
 } from '@service-storage/graphql/generated/graphql';
+import { type Client, stringifyDocument } from '@urql/core';
+import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 import type { HistoryItem } from './types';
 
 type NameProjection =
@@ -27,7 +33,21 @@ const HISTORY_TYPENAMES = [
   'GraphqlSoupProject',
 ] as const;
 
-type HistoryTypename = (typeof HISTORY_TYPENAMES)[number];
+export type HistoryTypename = (typeof HISTORY_TYPENAMES)[number];
+
+const HISTORY_TYPENAME_BY_ITEM_TYPE: Partial<
+  Record<HistoryItemType, HistoryTypename>
+> = {
+  document: 'GraphqlSoupDocument',
+  chat: 'GraphqlSoupChat',
+  project: 'GraphqlSoupProject',
+};
+
+const SOUP_ENTITY_TYPE_BY_TYPENAME = {
+  GraphqlSoupDocument: 'DOCUMENT',
+  GraphqlSoupChat: 'CHAT',
+  GraphqlSoupProject: 'PROJECT',
+} as const satisfies Record<HistoryTypename, string>;
 
 function nameSelection(
   typename: HistoryTypename
@@ -134,6 +154,79 @@ export async function materializeCachedGraphqlHistoryItems(
       : undefined;
     return item ? [item] : [];
   });
+}
+
+async function holdsHistoryRecord(
+  cacheHost: Pick<CacheHost, 'readRecordsByKeys'>,
+  typename: HistoryTypename,
+  id: string
+): Promise<boolean> {
+  const { records } = await readRecordsByKeys(
+    cacheHost,
+    nameSelection(typename),
+    [`${typename}:${id}`]
+  );
+  return typeof records[0]?.record.name === 'string';
+}
+
+/**
+ * Stamps a view on the item's cached record. Cached history is ordered by each
+ * record's viewedAt, which the server's view reaches only when the cache next
+ * rehydrates the item, so an item outside the cached history (never viewed, or
+ * viewed long ago) would stay unlisted until then. A record the cache does not
+ * hold is loaded first, and nothing is stamped if it is still missing after
+ * `load`. Returns whether the record was stamped.
+ */
+export async function stampCachedHistoryView(
+  cacheHost: Pick<CacheHost, 'readRecordsByKeys' | 'writeQuery'>,
+  view: { itemId: string; itemType: HistoryItemType; viewedAt: string },
+  load: (typename: HistoryTypename) => Promise<void>
+): Promise<boolean> {
+  const typename = HISTORY_TYPENAME_BY_ITEM_TYPE[view.itemType];
+  if (!typename) return false;
+  if (!(await holdsHistoryRecord(cacheHost, typename, view.itemId))) {
+    await load(typename);
+    if (!(await holdsHistoryRecord(cacheHost, typename, view.itemId)))
+      return false;
+  }
+  await cacheHost.writeQuery({
+    query: stringifyDocument(HistoryViewedAtCacheWriteDocument),
+    operationName: 'HistoryViewedAtCacheWrite',
+    data: {
+      soupUpdates: [
+        {
+          __typename: 'SoupUpdated',
+          item: {
+            __typename: typename,
+            id: view.itemId,
+            viewedAt: view.viewedAt,
+          },
+        },
+      ],
+    } satisfies HistoryViewedAtCacheWriteSubscription,
+  });
+  return true;
+}
+
+/** Loads one item into the cache with the fields cached history reads. */
+export async function loadHistoryViewItem(
+  client: Pick<Client, 'query'>,
+  typename: HistoryTypename,
+  id: string
+): Promise<void> {
+  const input = buildGraphqlEntitySoupInput(
+    SOUP_ENTITY_TYPE_BY_TYPENAME[typename],
+    id
+  );
+  if (!input) return;
+  const result = await client
+    .query(
+      HistoryViewItemDocument,
+      { input },
+      { requestPolicy: 'network-only' }
+    )
+    .toPromise();
+  if (result.error) throw result.error;
 }
 
 /** Buckets consumed by history and its hydration subscription. */
