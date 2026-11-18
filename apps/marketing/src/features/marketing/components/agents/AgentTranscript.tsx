@@ -530,7 +530,7 @@ function Inline(props: {
             />
           );
         if (part.startsWith('**') && part.endsWith('**') && part.length > 4)
-          return <strong class="font-bold">{part.slice(2, -2)}</strong>;
+          return <strong class="font-medium">{part.slice(2, -2)}</strong>;
         return part;
       }}
     </For>

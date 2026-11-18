@@ -7,7 +7,7 @@ use email_api_client::domain::models::{
 use email_api_client::domain::request_count;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// Provider double: answers message reads in order, sending `requests` Graph
@@ -29,7 +29,7 @@ impl Provider {
     }
 }
 
-impl MailboxGateway for Provider {
+impl MailboxGateway for Arc<Provider> {
     async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
         Ok(Vec::new())
     }
@@ -57,11 +57,13 @@ impl MailboxGateway for Provider {
     }
 }
 
+/// Live and import reads answer from the same queues.
 fn sync(
     repo: &PgMailboxSync,
     provider: Provider,
-) -> MailboxSyncService<PgMailboxSync, Provider, PgMailboxSync> {
-    MailboxSyncService::new(repo.clone(), provider, repo.clone())
+) -> MailboxSyncService<PgMailboxSync, Arc<Provider>, PgMailboxSync> {
+    let provider = Arc::new(provider);
+    MailboxSyncService::new(repo.clone(), provider.clone(), provider, repo.clone())
 }
 
 /// `attempts` is what the row had before its next claim adds one.
@@ -266,6 +268,14 @@ async fn enumeration_reports_the_page_it_committed(db: PgPool) {
     };
     assert_eq!(span["mailbox.link_id"], link.to_string());
     assert_eq!(span["outlook.stream_kind"], "mail_folder");
+    let stream = sqlx::query_scalar!(
+        "SELECT id FROM email_sync_streams WHERE link_id = $1 AND kind = 'mail_folder'",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(span["outlook.stream_id"], stream.to_string());
     assert_eq!(span["outlook.outcome"], "imported");
     assert_eq!(span["outlook.page_items"], "4");
     assert_eq!(span["outlook.rows_queued"], "3");
@@ -569,6 +579,7 @@ fn changed(ids: &[&str]) -> Result<MailboxChangePage, EmailApiError> {
         changed: ids.iter().map(|id| ProviderId::new(*id).unwrap()).collect(),
         removed: Vec::new(),
         position: StreamPosition::Checkpoint(StreamToken::new("checkpoint".into())),
+        reader_revision: 1,
     })
 }
 

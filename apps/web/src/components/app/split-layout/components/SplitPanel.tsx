@@ -27,6 +27,7 @@ import { createMutable } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { createPriorityCollapseController } from '../../../priority-collapse/PriorityCollapseOverflowSensor';
 import { splitBackInterceptor } from '../back-interceptor';
+import { resolveComponent } from '../componentRegistry';
 import {
   type SplitBottomPanelRegistration,
   type SplitFileMenuActionGroups,
@@ -35,8 +36,9 @@ import {
 } from '../context';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
-import { shouldShowSplitCloseButton } from '../layoutUtils';
+import { shouldShowSplitCloseButton, splitViewId } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
+import { splitContentFromLocation } from '../split-router/legacy-route';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createSplitAutofocus } from '../utils/createSplitAutofocus';
 import { SplitDrawerGroup } from './SplitDrawerContext';
@@ -72,9 +74,11 @@ export function SplitPanel(props: SplitPanelProps) {
   let pointerTarget: WeakRef<Element> | undefined;
 
   const layoutRefs = createMutable<SplitPanelContextType['layoutRefs']>({});
+  const mobileHeaderOwner = createSignal<symbol>();
+  const headerMdControls = createSignal(0);
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
-  const ownedSlots = createOwnedSlots();
+  const ownedSlots = createOwnedSlots(() => splitViewId(props.handle));
 
   const splitLayoutHelpers = useSplitLayout();
   const isNotUnifiedList = () => {
@@ -159,6 +163,24 @@ export function SplitPanel(props: SplitPanelProps) {
   };
 
   const router = useOptionalSplitRouter();
+  const ownsCollectionState = () => {
+    const entry = router?.entry(props.handle.id as string as PaneId);
+    if (!entry) {
+      return (
+        props.split.mount.kind === 'component' &&
+        props.split.mount.meta.ownsCollectionState
+      );
+    }
+
+    // The outlet can render a committed route before the layout mirror updates.
+    // Choose its provider from that same entry, so leaving CRM supplies the
+    // collection context before a destination such as Calls mounts.
+    const content = splitContentFromLocation(entry.location);
+    return (
+      content.type === 'component' &&
+      resolveComponent(content.id).initialMeta?.ownsCollectionState
+    );
+  };
   const hasExternalChat = () =>
     router
       ?.entry(props.handle.id as string as PaneId)
@@ -202,10 +224,7 @@ export function SplitPanel(props: SplitPanelProps) {
     >
       <Suspense>
         <Show
-          when={
-            props.split.mount.kind === 'component' &&
-            props.split.mount.meta.ownsCollectionState
-          }
+          when={ownsCollectionState()}
           fallback={
             <SoupViewContextProvider soup={nextSoup}>
               <SplitRouter.Outlet
@@ -249,6 +268,8 @@ export function SplitPanel(props: SplitPanelProps) {
             headerCollapser: headerCollapseController.collapser,
             toolbarCollapser: toolbarCollapseController.collapser,
             layoutRefs,
+            mobileHeaderOwner,
+            headerMdControls,
             titleFileMenuRef,
             setTitleFileMenuRef,
             titleFileMenuTrigger,

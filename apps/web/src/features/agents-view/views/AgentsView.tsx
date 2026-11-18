@@ -1,4 +1,5 @@
-import { ViewShell } from '@app/components/view-shell';
+import { useViewShell, ViewShell } from '@app/components/view-shell';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { IntegrationsPage } from '@app/features/settings/IntegrationsPage';
@@ -12,6 +13,7 @@ import {
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { previewBlockTarget } from '@components/app/previewTarget';
+import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -19,7 +21,6 @@ import { ChatEmptyStateContext } from '@core/component/AI/component/message/Empt
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
@@ -30,6 +31,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  type JSX,
   Match,
   on,
   onMount,
@@ -68,12 +70,19 @@ import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { agentConversationsQuery } from '../queries/agent-conversations-query';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
 import { agentsTour } from '../tour';
-import { NewChatPage, type StartConversation } from './NewChatPage';
+import {
+  type AgentRequest,
+  NewChatPage,
+  type StartConversation,
+} from './NewChatPage';
 
 type SelectedConversation = {
   conversation: AgentConversationTarget;
   activeConversationId: string;
 };
+
+/** Entry-state slice holding the composer request whose draft was seeded. */
+const SEEDED_COMPOSER_REQUEST = 'agents.seededComposerRequest';
 
 function LoadingComposer() {
   return (
@@ -87,8 +96,24 @@ function LoadingComposer() {
   );
 }
 
+function AgentsMobileList(props: { children: JSX.Element }) {
+  const shell = useViewShell();
+  return (
+    <Show when={!shell.aside.isOverlay()}>
+      <div
+        class="size-full min-h-0 pt-2"
+        style={{ 'padding-bottom': `${FloatRegions.hostHeight()}px` }}
+      >
+        {props.children}
+      </div>
+    </Show>
+  );
+}
+
 function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const panel = useSplitPanelOrThrow();
+  const inlinePreviewLayout = useInlinePreviewLayout();
+  const mobileLayout = () => !inlinePreviewLayout();
   const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
@@ -98,6 +123,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const mode = (): AgentsMode => props.route?.mode ?? 'chat';
   // The composer's Auto/Chat/Code choice; an open conversation keeps its own mode.
   const workspace = createWorkspaceMode();
+  // A coding agent another surface asked the composer to start with.
+  const [requestedAgent, setRequestedAgent] = createSignal<AgentRequest>();
   const listView = createConversationListView(userId());
   const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
   const [localPage, setPage] = createSignal<AgentsPage>('new');
@@ -122,6 +149,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const selectConversation = (conversation: AgentConversationTarget) =>
     batch(() => {
       setPage('new');
+      setMobileList(false);
       setSelected((current) =>
         current?.activeConversationId === conversation.id
           ? current
@@ -150,7 +178,9 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     )
   );
   const dataMode = () => dataModeFor(selected() ? mode() : workspace.mode());
-  const [mobileList, setMobileList] = createSignal(!isRoutinesPage());
+  const [mobileList, setMobileList] = createSignal(
+    !isRoutinesPage() && !props.route
+  );
   const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const [search, setSearch] = createSignal('');
   // Routines that run often leave their runs unlisted; those stay a click
@@ -198,6 +228,13 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     // The preflight page stays mounted when navigating through management.
     composerFocus?.();
   };
+  // A composer request's draft seeds the composer once. Its entry keeps the
+  // request, so Back, Forward and resuming this view deliver it again; the
+  // entry records the seeded request so a sent draft does not come back.
+  const [, setSeededRequest] = useEntryState<string | undefined>(
+    SEEDED_COMPOSER_REQUEST,
+    { default: undefined }
+  );
   // A launcher navigation can target this already-mounted workspace.
   createEffect(
     on(
@@ -207,15 +244,27 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           ? content.params?.focusComposer
           : undefined;
       },
-      (request) => {
-        if (!request) return;
+      (request, previous) => {
+        if (typeof request !== 'string' || !request || request === previous)
+          return;
         const content = panel.handle.content();
+        const draft =
+          content.type === 'component' ? content.params?.draft : undefined;
+        const seeded =
+          panel.handle.currentEntryState()?.[SEEDED_COMPOSER_REQUEST];
+        // The workspace stays mounted across entries, so the captured slice
+        // must follow the request of the entry now shown.
+        setSeededRequest(request);
         if (
-          content.type === 'component' &&
-          typeof content.params?.draft === 'string' &&
-          content.params.draft.length > 0
-        )
-          persistedDraft.setDraft(content.params.draft);
+          request !== seeded &&
+          typeof draft === 'string' &&
+          draft.length > 0
+        ) {
+          persistedDraft.setDraft(draft);
+          // Record it now: a stacked phone pane can unmount without leaving
+          // this entry, which is when entry state is otherwise captured.
+          panel.handle.captureEntryState();
+        }
         showComposer();
       }
     )
@@ -256,10 +305,18 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       },
       () => {
         const content = panel.handle.content();
-        const next =
-          content.type === 'component'
-            ? parseAgentsPage(content.params?.agentPage)
-            : undefined;
+        if (content.type !== 'component') return;
+        const next = parseAgentsPage(content.params?.agentPage);
+        const agent = content.params?.composerAgentId;
+        const request = content.params?.agentPageRequest;
+        if (
+          next === 'new' &&
+          typeof agent === 'string' &&
+          typeof request === 'string'
+        ) {
+          workspace.setMode('code');
+          setRequestedAgent({ agentId: agent, request });
+        }
         if (next) openPage(next);
       }
     )
@@ -269,10 +326,10 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   };
   const openConversation = (
     conversation: AgentConversationTarget,
-    event?: MouseEvent,
+    newSplit = false,
     targetMode: AgentsMode = mode()
   ) => {
-    if (isTouchDevice()) {
+    if (mobileLayout()) {
       layout.openWithSplit(
         {
           type: conversation.type === 'agent_session' ? 'agent' : 'chat',
@@ -286,12 +343,12 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       type: 'component' as const,
       id: agentsRouteId({ mode: targetMode, conversation }),
     };
-    if (!event?.shiftKey && panel.handle.content().id === next.id) {
+    if (!newSplit && panel.handle.content().id === next.id) {
       selectConversation(conversation);
       return;
     }
     const result = layout.openWithSplit(next, {
-      preferNewSplit: event?.shiftKey,
+      preferNewSplit: newSplit,
       referredFrom: 'agents',
     });
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
@@ -306,7 +363,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     });
     openConversation(
       { id, type: 'agent_session' },
-      undefined,
+      false,
       modeForKind(kindForBot(start.botId, rosterSource.roster()))
     );
   };
@@ -375,11 +432,11 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       onSearchChange={setSearch}
       showUnlistedRuns={showUnlistedRuns()}
       onShowUnlistedRunsChange={setShowUnlistedRuns}
-      onOpenConversation={(conversation, event) => {
+      onOpenConversation={(conversation, newSplit) => {
         markRowNotificationsSeenOnOpen(conversation, notifications);
         openConversation(
           conversation,
-          event,
+          newSplit,
           modeForConversation(conversation)
         );
       }}
@@ -389,174 +446,154 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   );
 
   return (
-    <SplitPanel.Root>
-      <SplitPanel.Body>
-        <DataModeProvider value={dataMode}>
-          <div
-            class="agents-view"
-            data-agents-workspace={panel.handle.id}
-            data-mode={dataMode()}
-            data-session={selected() ? '1' : undefined}
-          >
-            <ViewShell.Root
-              asidePreferenceKey="agents"
-              class="bg-panel"
-              resizable
-              aside={{
-                min: 224,
-                max: 380,
-                preserveDuringResize: false,
-              }}
-              main={{ min: 280, preferredWidth: 640 }}
-            >
-              <Show when={!isTouchDevice()}>
-                <ViewShell.Aside>{sidebar()}</ViewShell.Aside>
-              </Show>
+    <DataModeProvider value={dataMode}>
+      <div
+        class="agents-view"
+        data-agents-workspace={panel.handle.id}
+        data-mode={dataMode()}
+        data-session={selected() ? '1' : undefined}
+      >
+        <ViewShell.Root
+          asidePreferenceKey="agents"
+          class="bg-panel"
+          resizable
+          aside={{ min: 224, max: 380, preserveDuringResize: false }}
+          main={{ min: 280, preferredWidth: 640 }}
+        >
+          <ViewShell.Aside>{sidebar()}</ViewShell.Aside>
 
-              <ViewShell.Main class="overflow-hidden">
-                <ViewTour tour={agentsTour} />
-                <main
-                  class="main touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:[&>*]:[--mobile-content-inset-top:0px]"
-                  classList={{ hidden: isTouchDevice() && mobileList() }}
-                >
-                  <Show
-                    when={selected()?.conversation}
-                    keyed
-                    fallback={
-                      <>
-                        <Show when={page() !== 'routines'}>
-                          <Topbar
-                            title={pageTitle()}
-                            onBack={
-                              isTouchDevice()
-                                ? () => setMobileList(true)
-                                : undefined
-                            }
-                          />
-                        </Show>
-                        <div class="body">
-                          <Suspense fallback={<LoadingComposer />}>
-                            <Switch>
-                              <Match when={page() === 'routines'}>
-                                <RoutinesPage />
-                              </Match>
-                              <Match when={page() === 'connections'}>
-                                <IntegrationsPage />
-                              </Match>
-                              <Match when={page() === 'agents'}>
-                                <AgentSettings
-                                  createKind={creatingKind()}
-                                  onCloseCreate={() =>
-                                    setCreatingKind(undefined)
-                                  }
-                                />
-                              </Match>
-                            </Switch>
-                            <div
-                              class="contents"
-                              classList={{ hidden: page() !== 'new' }}
-                            >
-                              <NewChatPage
-                                showUpdates={
-                                  updatesFlag().enabled && page() === 'new'
-                                }
-                                updateSessions={updateSessions()}
-                                onOpenUpdateSession={(id) => {
-                                  const session = updateSessions().find(
-                                    (item) => item.id === id
-                                  );
-                                  if (session)
-                                    openConversation(
-                                      session,
-                                      undefined,
-                                      modeForConversation(session)
-                                    );
-                                }}
-                                mode={workspace.mode()}
-                                onModeChange={workspace.setMode}
-                                active={
-                                  !isTouchDevice() ||
-                                  (!mobileList() && page() === 'new')
-                                }
-                                registerFocus={(focus) => {
-                                  composerFocus = focus;
-                                }}
-                                workspaceId={panel.handle.id}
-                                draft={persistedDraft.draft()}
-                                onDraftChange={persistedDraft.setDraft}
-                                roster={rosterSource.roster()}
-                                rosterLoading={rosterSource.loading()}
-                                availabilityLoading={rosterSource.availabilityLoading()}
-                                onStart={startConversation}
-                                onOpenRoster={openRoster}
-                                belowComposer={
-                                  <TutorialPill
-                                    tutorial="agents"
-                                    class="self-center"
-                                  />
-                                }
-                              />
-                            </div>
-                          </Suspense>
-                        </div>
-                      </>
-                    }
-                  >
-                    {(conversation) => (
-                      // Per conversation, so one switched away from can't hold
-                      // the next in its fallback until its own load settles.
-                      <Suspense fallback={<AgentSessionSkeleton />}>
+          <ViewShell.Main class="overflow-hidden">
+            <ViewTour tour={agentsTour} />
+            <main
+              class="main touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:[&>*]:[--mobile-content-inset-top:0px]"
+              classList={{ hidden: mobileLayout() && mobileList() }}
+            >
+              <Show
+                when={selected()?.conversation}
+                keyed
+                fallback={
+                  <>
+                    <Show when={page() !== 'routines'}>
+                      <Topbar
+                        title={pageTitle()}
+                        onBack={
+                          mobileLayout() ? () => setMobileList(true) : undefined
+                        }
+                      />
+                    </Show>
+                    <div class="body">
+                      <Suspense fallback={<LoadingComposer />}>
                         <Switch>
-                          <Match when={conversation.type === 'agent_session'}>
-                            <AgentSessionPane
-                              id={conversation.id}
-                              notificationSource={notifications}
-                              onSessionId={(sessionId) =>
-                                adoptSessionId(conversation.id, sessionId)
-                              }
-                              onDeleted={showComposer}
+                          <Match when={page() === 'routines'}>
+                            <RoutinesPage />
+                          </Match>
+                          <Match when={page() === 'connections'}>
+                            <IntegrationsPage />
+                          </Match>
+                          <Match when={page() === 'agents'}>
+                            <AgentSettings
+                              createKind={creatingKind()}
+                              onCloseCreate={() => setCreatingKind(undefined)}
                             />
                           </Match>
-                          <Match when={true}>
-                            <div class="body">
-                              <ChatEmptyStateContext.Provider
-                                value={() => (
-                                  <div class="px-4 py-16 text-center">
-                                    <ComposerGreeting>
-                                      What should we work on?
-                                    </ComposerGreeting>
-                                  </div>
-                                )}
-                              >
-                                <PreviewPanel
-                                  target={previewBlockTarget(conversation)}
-                                  orchestrator={orchestrator}
-                                  splitPanelContext={panel}
-                                />
-                              </ChatEmptyStateContext.Provider>
-                            </div>
-                          </Match>
                         </Switch>
+                        <div
+                          class="contents"
+                          classList={{ hidden: page() !== 'new' }}
+                        >
+                          <NewChatPage
+                            showUpdates={
+                              updatesFlag().enabled && page() === 'new'
+                            }
+                            updateSessions={updateSessions()}
+                            onOpenUpdateSession={(id) => {
+                              const session = updateSessions().find(
+                                (item) => item.id === id
+                              );
+                              if (session)
+                                openConversation(
+                                  session,
+                                  false,
+                                  modeForConversation(session)
+                                );
+                            }}
+                            mode={workspace.mode()}
+                            onModeChange={workspace.setMode}
+                            requestedAgent={requestedAgent()}
+                            active={
+                              !mobileLayout() ||
+                              (!mobileList() && page() === 'new')
+                            }
+                            registerFocus={(focus) => {
+                              composerFocus = focus;
+                            }}
+                            workspaceId={panel.handle.id}
+                            draft={persistedDraft.draft()}
+                            onDraftChange={persistedDraft.setDraft}
+                            roster={rosterSource.roster()}
+                            rosterLoading={rosterSource.loading()}
+                            availabilityLoading={rosterSource.availabilityLoading()}
+                            onStart={startConversation}
+                            onOpenRoster={openRoster}
+                            belowComposer={
+                              <TutorialPill
+                                tutorial="agents"
+                                class="self-center"
+                              />
+                            }
+                          />
+                        </div>
                       </Suspense>
-                    )}
-                  </Show>
-                </main>
-                <Show when={isTouchDevice() && mobileList()}>
-                  <div
-                    class="size-full min-h-0 pt-[calc(var(--safe-top,0px)+0.5rem)]"
-                    style={{
-                      'padding-bottom': `${FloatRegions.hostHeight()}px`,
-                    }}
-                  >
-                    {sidebar()}
-                  </div>
-                </Show>
-              </ViewShell.Main>
-            </ViewShell.Root>
-          </div>
-        </DataModeProvider>
-      </SplitPanel.Body>
-    </SplitPanel.Root>
+                    </div>
+                  </>
+                }
+              >
+                {(conversation) => (
+                  // Per conversation, so one switched away from can't hold
+                  // the next in its fallback until its own load settles.
+                  <Suspense fallback={<AgentSessionSkeleton />}>
+                    <Switch>
+                      <Match when={conversation.type === 'agent_session'}>
+                        <AgentSessionPane
+                          id={conversation.id}
+                          notificationSource={notifications}
+                          onSessionId={(sessionId) =>
+                            adoptSessionId(conversation.id, sessionId)
+                          }
+                          onDeleted={showComposer}
+                        />
+                      </Match>
+                      <Match when={true}>
+                        <div class="body">
+                          <ChatEmptyStateContext.Provider
+                            value={() => (
+                              <div class="px-4 py-16 text-center">
+                                <ComposerGreeting>
+                                  What should we work on?
+                                </ComposerGreeting>
+                              </div>
+                            )}
+                          >
+                            <PreviewPanel
+                              target={previewBlockTarget(conversation)}
+                              orchestrator={orchestrator}
+                              splitPanelContext={panel}
+                            />
+                          </ChatEmptyStateContext.Provider>
+                        </div>
+                      </Match>
+                    </Switch>
+                  </Suspense>
+                )}
+              </Show>
+            </main>
+            <Show when={mobileLayout() && mobileList()}>
+              <AgentsMobileList>{sidebar()}</AgentsMobileList>
+            </Show>
+          </ViewShell.Main>
+        </ViewShell.Root>
+      </div>
+    </DataModeProvider>
   );
 }
 
@@ -566,7 +603,11 @@ export function AgentsView(props: { route?: AgentsRoute }) {
     <ListEntityMetadataQueryProvider>
       <StaticMarkdownContext>
         <Suspense fallback={<LoadingComposer />}>
-          <AgentsWorkspace route={props.route} />
+          <SplitPanel.Root>
+            <SplitPanel.Body>
+              <AgentsWorkspace route={props.route} />
+            </SplitPanel.Body>
+          </SplitPanel.Root>
         </Suspense>
       </StaticMarkdownContext>
     </ListEntityMetadataQueryProvider>

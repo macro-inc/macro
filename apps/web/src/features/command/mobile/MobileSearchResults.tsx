@@ -15,6 +15,7 @@ import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import { isTransientRequestError } from '@core/util/request-error';
+import { createSteadyFlag } from '@core/util/steady-flag';
 import {
   type EntityData,
   ListEntity,
@@ -45,7 +46,6 @@ import { createSearchPagination } from './create-search-pagination';
 import { createSearchResultWindow } from './create-search-result-window';
 import { createSearchScrollRestoration } from './create-search-scroll-restoration';
 import type { MobileSearchSession } from './mobileSearchState';
-import { useMobileSearchCategory } from './use-mobile-search-category';
 
 function MobileNameResults(props: {
   session: MobileSearchSession;
@@ -54,12 +54,13 @@ function MobileNameResults(props: {
   const state = props.session;
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [container, setContainer] = createSignal<HTMLDivElement>();
-  const category = useMobileSearchCategory(state.category);
+  const category = state.category;
   const source = useEntitySearch(state.query, category, {
     enabled: () => true,
     contactDiscovery: useCrmContactDiscovery,
   });
   usePending('search.names', source.isLoadingEntities);
+  const searchingShown = createSteadyFlag(source.isSearchingEntities);
   usePending('search.rank', source.isSettling);
   let previousWindow: string | undefined;
   let previousWindowQuery = '';
@@ -148,10 +149,6 @@ function MobileNameResults(props: {
       source.pagination.isLoadingMore() ||
       source.hasError(),
     loadMore: source.pagination.loadMore,
-    replaceWindows: () =>
-      category() === 'people' ||
-      ((category() === 'all' || category() === 'dms') &&
-        state.query().trim().length > 0),
   });
   const { openWithSplit } = useSplitLayout();
   const panel = useSplitPanelOrThrow();
@@ -224,6 +221,11 @@ function MobileNameResults(props: {
           )}
         </VList>
       </Show>
+      <Show when={searchingShown() && items().length > 0}>
+        <p role="status" class="px-2 py-2 text-sm text-ink-muted">
+          {t('commandMenu.searching')}
+        </p>
+      </Show>
       <Show when={source.isLoadingEntities() && items().length === 0}>
         <p role="status" class="p-3 text-ink-muted">
           {t('commandMenu.loading')}
@@ -231,16 +233,6 @@ function MobileNameResults(props: {
       </Show>
       <Show when={!source.isLoadingEntities() && items().length === 0}>
         <p class="p-3 text-ink-muted">{t('commandMenu.noResults')}</p>
-        <Show when={source.pagination.hasMore()}>
-          <Button
-            disabled={source.pagination.isLoadingMore()}
-            onClick={() =>
-              fireAndForget(source.pagination.loadMore(), 'mobile-search')
-            }
-          >
-            {t('viewMenus.nextOptions')}
-          </Button>
-        </Show>
       </Show>
     </div>
   );
@@ -251,7 +243,7 @@ function MobileFullTextResults(props: {
   accountId: string;
 }) {
   const state = props.session;
-  const category = useMobileSearchCategory(state.category);
+  const category = state.category;
   const search = createMobileFullTextSearch(state.query, category);
   usePending('search.full-text', search.isSettling);
   const hasAuthoritativeError = () =>

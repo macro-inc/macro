@@ -311,9 +311,9 @@ pub(crate) async fn upsert_draft(
             replying_to_id, subject, from_contact_id, sent_at,
             has_attachments, is_read, is_starred, is_sent, is_draft,
             body_text, body_html_sanitized, body_macro, headers_jsonb,
-            created_at, updated_at, draft_generation
+            created_at, updated_at, draft_generation, from_name
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
         ON CONFLICT (id) DO UPDATE SET
             provider_id = COALESCE(email_messages.provider_id, EXCLUDED.provider_id),
             thread_id = EXCLUDED.thread_id,
@@ -321,6 +321,7 @@ pub(crate) async fn upsert_draft(
             replying_to_id = EXCLUDED.replying_to_id,
             subject = EXCLUDED.subject,
             from_contact_id = EXCLUDED.from_contact_id,
+            from_name = EXCLUDED.from_name,
             sent_at = EXCLUDED.sent_at,
             is_read = EXCLUDED.is_read,
             is_starred = EXCLUDED.is_starred,
@@ -359,6 +360,7 @@ pub(crate) async fn upsert_draft(
         now,
         now,
         input.draft_generation,
+        input.from_name,
     )
     .execute(&mut *tx)
     .await?;

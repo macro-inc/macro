@@ -70,6 +70,10 @@ export default {
     one: 'Cleared {{count}} notification',
     other: 'Cleared {{count}} notifications',
   },
+  stillClearing: {
+    one: 'Cleared {{count}} notification so far; still clearing',
+    other: 'Cleared {{count}} notifications so far; still clearing',
+  },
   clearedNothing: 'Nothing to clear',
   clearFailed: 'Couldn’t clear notifications',
 

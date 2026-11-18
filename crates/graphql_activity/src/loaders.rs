@@ -6,6 +6,7 @@ use activity::{
 use async_graphql::dataloader::{DataLoader, Loader};
 use chrono::{DateTime, Utc};
 use futures::StreamExt;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::objects::GraphqlActivityEvent;
@@ -309,8 +310,10 @@ where
     // schema-valid selection is served, with per-entity work bounded by the
     // limit argument's validation. max_batch_size only sizes each SQL round
     // trip.
-    let loader = DataLoader::new(EntityActivityLoader::new(reader), tokio::spawn)
-        .max_batch_size(ACTIVITY_EDGE_BATCH_KEYS);
+    let loader = DataLoader::new(EntityActivityLoader::new(reader), |batch| {
+        tokio::spawn(batch.in_current_span())
+    })
+    .max_batch_size(ACTIVITY_EDGE_BATCH_KEYS);
     // Subscription connection data outlives one payload: coalesce concurrent
     // fields, but never serve stale activity across update events.
     loader.enable_all_cache(false);

@@ -35,7 +35,7 @@ async fn create_block_volume_posts_an_empty_custom_block_volume() {
         },
     );
 
-    client
+    let creation = client
         .create_block_volume(
             &crate::StoragePoolName::try_new("default").unwrap(),
             &crate::StorageVolumeName::try_new("mc-01900000000070008000000000000001-data").unwrap(),
@@ -43,6 +43,8 @@ async fn create_block_volume_posts_an_empty_custom_block_volume() {
         )
         .await
         .unwrap();
+
+    assert_eq!(creation, VolumeCreation::Created);
 }
 
 #[tokio::test]
@@ -177,4 +179,46 @@ async fn rebuild_replaces_the_root_disk_from_the_alias_and_waits() {
         )
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn creating_an_existing_volume_reports_that_it_exists() {
+    let server = MockServer::start().await;
+    // incusd's storagePoolVolumesPost answers a duplicate name this way.
+    Mock::given(method("POST"))
+        .and(path("/1.0/storage-pools/default/volumes/custom"))
+        .respond_with(ResponseTemplate::new(409).set_body_json(json!({
+            "type": "error",
+            "status": "",
+            "status_code": 0,
+            "operation": "",
+            "error_code": 409,
+            "error": "Volume by that name already exists",
+            "metadata": null
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = IncusClient::with_http_client(
+        &server.uri(),
+        reqwest::Client::new(),
+        IncusTimeouts {
+            request: Duration::from_secs(90),
+            connect: Duration::from_secs(10),
+            operation_wait_secs: 60,
+            operation_waits: 15,
+            state_change_secs: 60,
+        },
+    );
+
+    let creation = client
+        .create_block_volume(
+            &crate::StoragePoolName::try_new("default").unwrap(),
+            &crate::StorageVolumeName::try_new("mc-01900000000070008000000000000001-data").unwrap(),
+            "20GiB",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(creation, VolumeCreation::AlreadyExists);
 }

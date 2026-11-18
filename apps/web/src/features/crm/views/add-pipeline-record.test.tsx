@@ -16,16 +16,17 @@ const crm = vi.hoisted(() => ({
     id: 'new-company',
   })),
   createContact: vi.fn(),
-}));
-vi.mock('./use-crm', () => ({
-  useCreateCompanyMutation: () => ({ mutateAsync: crm.createCompany }),
-  useCreateContactMutation: () => ({ mutateAsync: crm.createContact }),
-  useQuickAccessCrmCompaniesQuery: () => ({
+  companies: vi.fn(() => ({
     companies: () => [
       { id: 'acme', name: 'Acme', domains: [{ domain: 'acme.com' }] },
     ],
     query: { isLoading: false },
-  }),
+  })),
+}));
+vi.mock('./use-crm', () => ({
+  useCreateCompanyMutation: () => ({ mutateAsync: crm.createCompany }),
+  useCreateContactMutation: () => ({ mutateAsync: crm.createContact }),
+  useQuickAccessCrmCompaniesQuery: crm.companies,
   useQuickAccessCrmContactsQuery: () => ({
     contacts: () => [],
     query: { isLoading: false },
@@ -205,6 +206,58 @@ describe('AddPipelineRecordDialog', () => {
     });
   });
 
+  it('loads the company list for the pipeline page and offers it', async () => {
+    setup();
+    expect(crm.companies).toHaveBeenCalledOnce();
+    await userEvent.type(
+      screen.getByRole('combobox', { name: 'Find or add a company' }),
+      'acme'
+    );
+    expect(await screen.findByRole('option', { name: /Acme/ })).toBeTruthy();
+  });
+
+  it('reads no company list when the row is added from the company page', async () => {
+    const onCreate = vi.fn(async () => true);
+    const onClose = vi.fn();
+    render(() => (
+      <AddPipelineRecordDialog
+        pipeline={{ name: 'Sales', recordType: 'company' }}
+        columns={columns}
+        initialValues={{ stage: 'Lead' }}
+        record={{ id: 'acme', name: 'Acme', detail: 'acme.com' }}
+        onCreate={onCreate}
+        onClose={onClose}
+      />
+    ));
+    expect(crm.companies).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('combobox', { name: 'Find or add a company' })
+    ).toBeNull();
+    expect(screen.getByText('Acme')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Add deal/ }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(onCreate).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        values: { company: 'acme', stage: 'Lead' },
+      })
+    );
+  });
+
+  it('reads no company list when the row is added from the contact page', () => {
+    render(() => (
+      <AddPipelineRecordDialog
+        pipeline={{ name: 'Hiring', recordType: 'contact' }}
+        columns={columns}
+        initialValues={{}}
+        record={{ id: 'maya', name: 'Maya Ortiz', detail: 'maya@example.com' }}
+        onCreate={vi.fn(async () => true)}
+        onClose={vi.fn()}
+      />
+    ));
+    expect(crm.companies).not.toHaveBeenCalled();
+    expect(screen.getByText('Maya Ortiz')).toBeTruthy();
+  });
+
   it('keeps a field still being edited when the form submits', async () => {
     const { onCreate } = setup();
     await userEvent.type(
@@ -312,4 +365,71 @@ describe('AddPipelineRecordDialog', () => {
     expect(crm.createCompany).not.toHaveBeenCalled();
     expect(onCreate).not.toHaveBeenCalled();
   });
+});
+
+it('starts a deal Open in USD and submits an explicitly chosen outcome and currency', async () => {
+  const onCreate = vi.fn(async () => true);
+  const onClose = vi.fn();
+  const commercial: DatabaseViewColumn[] = [
+    ...columns,
+    {
+      id: 'outcome',
+      name: 'Outcome',
+      dataType: 'SELECT_STRING',
+      isMultiSelect: false,
+      writable: true,
+      fixedOptions: true,
+      defaultValue: 'Open',
+      options: [
+        { id: 'open', label: 'Open', color: null },
+        { id: 'lost', label: 'Lost', color: null },
+      ],
+    },
+    {
+      id: 'currency',
+      name: 'Amount currency',
+      dataType: 'SELECT_STRING',
+      isMultiSelect: false,
+      writable: true,
+      fixedOptions: true,
+      defaultValue: 'USD',
+      options: [
+        { id: 'usd', label: 'USD', color: null },
+        { id: 'eur', label: 'EUR', color: null },
+      ],
+    },
+  ];
+  render(() => (
+    <AddPipelineRecordDialog
+      pipeline={{ name: 'Sales', recordType: 'company' }}
+      columns={commercial}
+      initialValues={{ amount: 50 }}
+      onCreate={onCreate}
+      onClose={onClose}
+    />
+  ));
+  await userEvent.type(
+    screen.getByRole('combobox', { name: 'Find or add a company' }),
+    'acme'
+  );
+  await userEvent.click(await screen.findByRole('option', { name: /Acme/ }));
+  await userEvent.click(screen.getByRole('button', { name: /Outcome: Open/ }));
+  await userEvent.click(await screen.findByRole('option', { name: 'Lost' }));
+  await userEvent.click(
+    screen.getByRole('button', { name: /Amount currency: USD/ })
+  );
+  await userEvent.click(await screen.findByRole('option', { name: 'EUR' }));
+  await userEvent.click(screen.getByRole('button', { name: /^Add deal/ }));
+  await waitFor(() =>
+    expect(onCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        values: {
+          company: 'acme',
+          amount: 50,
+          outcome: 'Lost',
+          currency: 'EUR',
+        },
+      })
+    )
+  );
 });

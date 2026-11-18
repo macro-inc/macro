@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        UPDATE harness_pairing_requests\n                        SET device_secret_hash = $2\n                        WHERE id = $1 AND status = 'approved'\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2a0aff92b6de441d1f072aa5eb7d30fb4c23f8cbbf29fdada1e95f46029acceb"
+}

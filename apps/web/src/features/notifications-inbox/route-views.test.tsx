@@ -5,7 +5,6 @@ import { NotificationsRouteView } from './route-views';
 
 const state = vi.hoisted(() => ({
   notifications: (): boolean => false,
-  graphql: (): boolean => true,
   flagsLoaded: (): boolean => true,
   replace: vi.fn(),
   pageView: vi.fn(),
@@ -15,15 +14,11 @@ vi.mock('@core/auth', () => ({ useIsAuthenticated: () => () => true }));
 vi.mock('@core/component/LoadingBlock', () => ({ LoadingBlock: () => null }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableUnifiedNotifications: { key: 'enable-unified-notifications' },
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   usePosthog: () => ({ flagsLoaded: () => state.flagsLoaded() }),
-  useFeatureFlag: (flag: { key: string }) => () => ({
-    enabled:
-      flag.key === 'enable-graphql-soup'
-        ? state.graphql()
-        : state.notifications(),
+  useFeatureFlag: () => () => ({
+    enabled: state.notifications(),
     loading: !state.flagsLoaded(),
   }),
 }));
@@ -40,6 +35,9 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 vi.mock('./notifications-inbox', () => ({
   NotificationsInbox: () => <div>The inbox</div>,
 }));
+vi.mock('./views/notifications-calendar-pane', () => ({
+  NotificationsCalendarPane: () => null,
+}));
 
 const home = {
   next: { type: 'component', id: 'home', entryMetadata: { search: {} } },
@@ -55,7 +53,6 @@ const renderRoute = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   state.notifications = () => false;
-  state.graphql = () => true;
   state.flagsLoaded = () => true;
 });
 
@@ -68,15 +65,6 @@ describe('NotificationsRouteView', () => {
     expect(state.replace).toHaveBeenCalledExactlyOnceWith(home);
     expect(screen.queryByText('The inbox')).toBeNull();
     expect(state.pageView).not.toHaveBeenCalled();
-  });
-
-  it('needs the GraphQL transport as well as the rollout', () => {
-    state.notifications = () => true;
-    state.graphql = () => false;
-    renderRoute();
-
-    expect(state.replace).toHaveBeenCalledExactlyOnceWith(home);
-    expect(screen.queryByText('The inbox')).toBeNull();
   });
 
   it('opens the inbox when the rollout is on', async () => {

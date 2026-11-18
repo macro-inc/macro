@@ -3,7 +3,8 @@ use macro_aws_config::SdkConfig;
 mod bulk_upload;
 
 use models_bulk_upload::{
-    BulkUploadRequest, BulkUploadRequestDocuments, UploadDocumentStatus, UploadFolderStatus,
+    BulkUploadRequest, BulkUploadRequestDocuments, UploadDocumentStatus, UploadFolderProgress,
+    UploadFolderStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -93,6 +94,28 @@ impl BulkUpload {
     ) -> anyhow::Result<BulkUploadRequest> {
         let table = self.table()?;
         bulk_upload::get_bulk_upload_request(&self.client, table, request_id).await
+    }
+
+    /// The request, or `None` when no request has this id.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn find_bulk_upload_request(
+        &self,
+        request_id: &str,
+    ) -> anyhow::Result<Option<BulkUploadRequest>> {
+        let table = self.table()?;
+        bulk_upload::find_bulk_upload_request(&self.client, table, request_id).await
+    }
+
+    /// Records how many of the folder's files are stored so far.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn update_bulk_upload_request_progress(
+        &self,
+        request_id: &str,
+        progress: UploadFolderProgress,
+    ) -> anyhow::Result<()> {
+        let table = self.table()?;
+        bulk_upload::update_bulk_upload_request_progress(&self.client, table, request_id, progress)
+            .await
     }
 
     #[tracing::instrument(skip(self))]

@@ -1,5 +1,4 @@
 import { useChatContext } from '@core/component/AI/context';
-import type { ChatMessageWithAttachments } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
@@ -21,7 +20,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { idStream, timeStream } from '../../util/stream/extendedStream';
-import { AssistantMessage } from './AssistantMessage';
+import { AssistantMessage, messageContentIsEmpty } from './AssistantMessage';
 import { createMobileKeyboardScrollPin } from './create-mobile-keyboard-scroll-pin';
 import { EmptyChatState } from './EmptyChatState';
 import { UserMessage } from './UserMessage';
@@ -44,14 +43,6 @@ type ChatMessagesProps = {
   editDisabled?: boolean;
   pendingLocationParams?: Accessor<Record<string, string> | undefined>;
 };
-
-function messageContentIsEmpty(message: ChatMessageWithAttachments) {
-  if (typeof message.content === 'string' || Array.isArray(message.content)) {
-    return message.content.length === 0;
-  } else {
-    return false;
-  }
-}
 
 export function ChatMessages(props: ChatMessagesProps) {
   const chat = useChatContext();
@@ -91,7 +82,7 @@ export function ChatMessages(props: ChatMessagesProps) {
     const parts = s.data();
     const message = asChatMessage(parts);
     if (!message) return;
-    if (messageContentIsEmpty(message)) return;
+    if (messageContentIsEmpty(message.content)) return;
     return message;
   });
 

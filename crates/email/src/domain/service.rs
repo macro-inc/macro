@@ -701,6 +701,15 @@ where
         self.get_email_thread_previews_by_receipts_impl(viewer, receipts)
             .await
     }
+
+    async fn get_owned_email_thread_preview(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<Option<EnrichedEmailThreadPreview>, EmailErr> {
+        self.get_owned_email_thread_preview_impl(macro_id, thread_id)
+            .await
+    }
 }
 
 impl<T, U, E, CS, Eam, B> EmailContentService for EmailServiceImpl<T, U, E, CS, Eam, B>

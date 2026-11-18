@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE hosted_runtime_effect SET run_after = $3 WHERE id = ANY($1) AND worker = 'fleet' AND run_after = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8Array",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "57b76febdc6ca89b7e5774578a4a43730dca69c17708e49a1ebd269e97ebccf4"
+}

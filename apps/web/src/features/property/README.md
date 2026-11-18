@@ -96,9 +96,9 @@ The system Assignees property uses the existing selected-first ordering at openi
 with available agents and the current team roster. Row positions stay stable while
 selecting. Search uses these options without contact discovery; preserve the
 existing Add/Change property and command-menu search placeholders.
-Existing selected outsiders remain visible and removable, including references
-absent from contacts. Removing an outsider removes that row immediately; the
-picker cannot add that person again unless they join the team.
+Initially selected outsiders remain visible and removable, including references
+absent from contacts. They stay searchable for re-adding while the record remains
+mounted, even after the picker closes. Unrelated non-team contacts stay excluded.
 
 This applies to task/project composers, property pills, side panels, bulk
 editors, and touch picker sheets. References remain `USER` values. Company owner

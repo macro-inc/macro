@@ -344,9 +344,9 @@ export function CallStartedNotifier() {
   return null;
 }
 
-async function joinFromNotification(channelId: string) {
+async function joinFromNotification(channelId: string, callId: string) {
   try {
-    await joinChannelCall(channelId);
+    await joinChannelCall(channelId, { kind: 'join', callId });
   } catch (error) {
     Telemetry.error(error, { surface: 'channel-call' });
     toast.failure('Failed to join call');
@@ -417,7 +417,7 @@ async function emitCallStartedNotification(args: {
     };
     handle.onClick(() => {
       window.focus();
-      fireAndForget(joinFromNotification(channelId), 'channel-call');
+      fireAndForget(joinFromNotification(channelId, callId), 'channel-call');
       handle.close();
       untrack();
       ringer.stop();

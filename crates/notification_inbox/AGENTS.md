@@ -5,7 +5,7 @@
 The unified notifications inbox: the viewer's pending notifications grouped
 by the entity they are filed under and cut into rows (one per channel thread,
 channel top level, entity's comments, email thread, task, pull request, request,
-agent session or runtime). Built on the shared feed layer, `crates/attention_feed`.
+agent session, runtime or team-scoped vault access request). Built on the shared feed layer, `crates/attention_feed`.
 
 ## Start here
 
@@ -13,7 +13,12 @@ agent session or runtime). Built on the shared feed layer, `crates/attention_fee
   one message one row, one stack per top-level message and per entity's
   comments, noise hidden in its natural row.
 - `src/domain/service.rs`: page, recompute, done (of rows or of one notification of a
-  stack), seen and undo.
+  stack), clear, seen and undo.
+- `src/domain/service.rs` (`start_clear`, `run_clear`, `undo_clear`,
+  `claim_stalled_clears`): a clear as a stored action applied in chunks. Its
+  storage is `notification::domain::bulk_action::BulkActionStore`.
+- `src/domain/ports.rs` and `src/outbound/`: clear updates to the viewer's
+  sessions over the connection gateway (feature `outbound`).
 - `src/domain/policy.rs`: which groups the inbox lists.
 
 ## Scope
@@ -26,8 +31,8 @@ agent session or runtime). Built on the shared feed layer, `crates/attention_fee
 
 ## Boundaries
 
-- Depends on: `attention_feed`, `item_filters`, `filter_ast`,
-  `model_notifications`.
+- Depends on: `attention_feed`, `notification` (the bulk action store port),
+  `item_filters`, `filter_ast`, `model_notifications`.
 - Used by: `graphql_notification_inbox`, `document_storage_service`
   (composition).
 
@@ -43,7 +48,9 @@ agent session or runtime). Built on the shared feed layer, `crates/attention_fee
 
 ## Checks
 
-- `cargo test -p notification_inbox`
+- `cargo test -p notification_inbox --all-features`. The store's own
+  transactions are tested against Postgres in `notification`
+  (`cargo test -p notification bulk_action`).
 
 ## Gotchas
 
@@ -56,6 +63,26 @@ agent session or runtime). Built on the shared feed layer, `crates/attention_fee
   (`groupId`, `principalId`, `targetId`).
 - Row contents must not depend on the scope; scopes only filter rows, so the
   web cache can normalize rows by id across inboxes.
+- A scope lists a row by its `row_type` or any of its `also_listed_as` kinds
+  (`also_listed_as` in `src/domain/rows.rs`), for pages, live changes and
+  clears alike: a thread whose reply mentions the viewer is listed under
+  channel mentions too, and a clear of mentions takes the whole thread. A pull
+  request or agent session row that mentions the viewer is also a discussion
+  mention, the kind for mentions outside a channel.
+- A clear belongs to the server, not the request. `start_clear` stores it
+  with its scope and start time frozen; `run_clear` applies it a chunk at a
+  time, each chunk one transaction (state, ledger, cursor) under a lease. A
+  run that stops is claimed again by `claim_stalled_clears` and continues
+  from the cursor, so never keep clear progress in memory or outside that
+  transaction.
+- A clear names its row kinds. An `InboxScope` with no kinds lists every kind
+  for pages; for a clear it is refused, so hiding every kind clears nothing.
+- A clear covers the inbox as it was when it started: notifications newer
+  than `as_of` are filtered out before rows are cut. Groups that new activity
+  moves ahead of the walk are picked up by the recheck pass.
+- Undo restores each notification's earlier state from the ledger and skips
+  those whose state changed since (`user_notification.done_by`). It takes the
+  clear's lease, which is what stops a clear still running.
 - An unread scope filters on each row's `unseen`, which follows the row's own
   rule (mail by its unread messages), so a row leaves or returns through the
   same recompute as any other change.

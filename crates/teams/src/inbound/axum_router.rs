@@ -136,6 +136,10 @@ where
     Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
+    let people_only = axum::middleware::from_fn_with_state(
+        state.authorization_state.clone(),
+        refuse_programs::<Auth>,
+    );
     Router::new()
         .route("/", post(create_team::handler::<T, Eas, Auth>))
         .route(
@@ -148,7 +152,10 @@ where
             get(get_user_invites::handler::<T, Eas, Auth>),
         )
         .route("/", get(get_team::handler::<T, Eas, Auth>))
-        .route("/", patch(patch_team::handler::<T, Eas, Auth>))
+        .route(
+            "/",
+            patch(patch_team::handler::<T, Eas, Auth>).layer(people_only.clone()),
+        )
         .route("/", delete(delete_team::handler::<T, Eas, Auth>))
         .route(
             "/crm",
@@ -156,18 +163,21 @@ where
         )
         .route(
             "/auto-join-domain/toggle",
-            post(toggle_auto_join_domain::handler::<T, Eas, Auth>),
+            post(toggle_auto_join_domain::handler::<T, Eas, Auth>).layer(people_only.clone()),
         )
         .route(
             "/non-admin-invites/toggle",
-            post(toggle_non_admin_invites::handler::<T, Eas, Auth>),
+            post(toggle_non_admin_invites::handler::<T, Eas, Auth>).layer(people_only.clone()),
         )
         .route("/invites", get(get_team_invites::handler::<T, Eas, Auth>))
-        .route("/invite", post(invite_to_team::handler::<T, Eas, Auth>))
+        .route(
+            "/invite",
+            post(invite_to_team::handler::<T, Eas, Auth>).layer(people_only.clone()),
+        )
         .route(
             "/invite-link",
             get(invite_link::get_handler::<T, Eas, Auth>)
-                .post(invite_link::create_handler::<T, Eas, Auth>)
+                .merge(post(invite_link::create_handler::<T, Eas, Auth>).layer(people_only.clone()))
                 .delete(invite_link::delete_handler::<T, Eas, Auth>),
         )
         .route(
@@ -188,13 +198,62 @@ where
         )
         .route(
             "/members/{member_user_id}/plan",
-            patch(patch_team_member_plan::handler::<T, Eas, Auth>),
+            patch(patch_team_member_plan::handler::<T, Eas, Auth>).layer(people_only),
         )
         .route(
             "/invite/{team_invite_id}",
             delete(delete_team_invite::handler::<T, Eas, Auth>),
         )
         .with_state(state)
+}
+
+/// Why a program may not change who is on the team or what they can reach.
+const PROGRAM_TEAM_REFUSAL: &str = "An agent's program cannot invite people, make a join link, or change members' roles, plans, CRM access or the team's sharing defaults. Tell the user to do it in Macro, under Settings, Team.";
+
+/// Inviting people, minting a lasting join link, changing members' roles,
+/// plans or CRM access, the team's default share scope, and opening the team
+/// to a domain or to members' invites decide who reaches the team's content:
+/// a person does those, never an agent's program (`is_program_run`: a
+/// credential signed for an agent or a routine run, or the code-mode header)
+/// nor a bot acting for a member. A credential that does not verify is
+/// rejected here, so a failed check cannot let the request through.
+async fn refuse_programs<Auth: MacroAuthorizationService>(
+    axum::extract::State(authorization): axum::extract::State<MacroAuthorizationState<Auth>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    use axum::extract::FromRequestParts as _;
+    let (mut parts, body) = request.into_parts();
+    let principal = match macro_authorization::OptionalMacroAuthorizationExtractor::<
+        Auth,
+        macro_authorization::AnyPrincipal,
+    >::from_request_parts(&mut parts, &authorization)
+    .await
+    {
+        Ok(extractor) => extractor.authorization,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let program = match &principal {
+        Some(macro_authorization::MacroAuthorization::User(user)) => {
+            macro_authorization::is_program_run(user.attribution(), &parts.headers)
+        }
+        Some(macro_authorization::MacroAuthorization::Bot(_)) => true,
+        _ => parts
+            .headers
+            .contains_key(macro_authorization::CODE_EXECUTION_HEADER),
+    };
+    if program {
+        tracing::warn!("refused a team membership change to a program");
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                message: PROGRAM_TEAM_REFUSAL.into(),
+            }),
+        )
+            .into_response();
+    }
+    next.run(axum::extract::Request::from_parts(parts, body))
+        .await
 }
 
 // --- Error IntoResponse implementations ---
@@ -223,6 +282,12 @@ impl IntoResponse for TeamError {
             ),
             TeamError::BadRequest(_) => (
                 StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: self.to_string().into(),
+                }),
+            ),
+            TeamError::CrmAccessChangesUnavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse {
                     message: self.to_string().into(),
                 }),
@@ -260,6 +325,12 @@ impl IntoResponse for CreateTeamError {
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
                     message: "invalid team name".into(),
+                }),
+            ),
+            CreateTeamError::AlreadyOnTeam => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "you are already on a team; leave it before creating a new one".into(),
                 }),
             ),
             CreateTeamError::StorageLayerError(_) => (
@@ -406,6 +477,13 @@ impl IntoResponse for SetTeamMemberPlanError {
                 }),
             )
                 .into_response(),
+            SetTeamMemberPlanError::SeatIncluded => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "the member's seat is included and has no paid plan".into(),
+                }),
+            )
+                .into_response(),
             SetTeamMemberPlanError::TeamError(e) => e.into_response(),
             SetTeamMemberPlanError::CustomerError(_)
             | SetTeamMemberPlanError::RolesError(_)
@@ -439,6 +517,12 @@ impl IntoResponse for RemoveUserFromTeamError {
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: "user not in team".into(),
+                }),
+            ),
+            RemoveUserFromTeamError::AgentTeammate => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "this member is an agent teammate: remove it from the team's agents (DELETE /team_agents/{id})".into(),
                 }),
             ),
             RemoveUserFromTeamError::CustomerError(_) => (

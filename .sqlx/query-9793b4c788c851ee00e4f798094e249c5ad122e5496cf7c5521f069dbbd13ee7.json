@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM hosted_runtime\n                WHERE team_id = $1 AND agent_user_id = $2\n                  AND (state->'phase'->>'phase') <> 'destroying'\n            ) AS \"live!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "live!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9793b4c788c851ee00e4f798094e249c5ad122e5496cf7c5521f069dbbd13ee7"
+}

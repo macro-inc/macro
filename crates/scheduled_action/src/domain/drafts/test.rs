@@ -14,18 +14,39 @@ use crate::domain::models::{ActionConfiguration, ActionKind, CreatedItem};
 use crate::domain::ports::{HandedBack, StaleDraft};
 use macro_uuid::Uuid;
 
-const OWNER: &str = "macro|owner@example.com";
-const BUG_REPORTS: &str = "every time a message gets sent in bug-reports make a task";
+pub(super) const OWNER: &str = "macro|owner@example.com";
+pub(super) const BUG_REPORTS: &str = "every time a message gets sent in bug-reports make a task";
 
-fn owner() -> MacroUserIdStr<'static> {
+pub(super) fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(OWNER).unwrap()
 }
 
-/// Drafts in memory, as the table keeps them.
+/// Drafts in memory, as the table keeps them; a background draft's row
+/// also has its part in `jobs`.
 #[derive(Default)]
-struct Rows {
-    drafts: Mutex<HashMap<Uuid, (MacroUserIdStr<'static>, BotId, HandedBack, DateTime<Utc>)>>,
-    finished: Mutex<Vec<Uuid>>,
+pub(super) struct Rows {
+    pub(super) drafts:
+        Mutex<HashMap<Uuid, (MacroUserIdStr<'static>, BotId, HandedBack, DateTime<Utc>)>>,
+    pub(super) jobs: Mutex<HashMap<Uuid, JobRow>>,
+    pub(super) finished: Mutex<Vec<Uuid>>,
+    /// How many writes of a job's result fail before one succeeds.
+    pub(super) failing_results: std::sync::atomic::AtomicU8,
+    /// Whether reading a draft's row never answers.
+    pub(super) stalls: std::sync::atomic::AtomicBool,
+    /// Where a job's start waits once its row is written, before it hears so.
+    pub(super) beginning: Gate,
+}
+
+/// A background draft's part of its row.
+#[derive(Debug, Clone)]
+pub(super) struct JobRow {
+    pub(super) client_id: Uuid,
+    pub(super) phase: jobs::DraftJobPhase,
+    pub(super) request: jobs::DraftAsked,
+    pub(super) progress: progress::DraftJobProgress,
+    pub(super) result: Option<Draft>,
+    pub(super) finished_at: Option<DateTime<Utc>>,
+    pub(super) traceparent: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -71,28 +92,44 @@ impl DraftHandBacks for Rows {
     }
 
     async fn handed_back(&self, session: Uuid) -> Result<HandedBack> {
+        if self.stalls.load(std::sync::atomic::Ordering::SeqCst) {
+            std::future::pending::<()>().await;
+        }
+        let cancelled = self
+            .jobs
+            .lock()
+            .unwrap()
+            .get(&session)
+            .is_some_and(|job| job.phase == jobs::DraftJobPhase::Cancelled);
         Ok(self
             .drafts
             .lock()
             .unwrap()
             .get(&session)
-            .map(|(_, _, handed_back, _)| handed_back.clone())
+            .map(|(_, _, handed_back, _)| HandedBack {
+                cancelled,
+                ..handed_back.clone()
+            })
             .unwrap_or_default())
     }
 
     async fn finish(&self, session: Uuid) -> Result<()> {
         self.drafts.lock().unwrap().remove(&session);
+        self.jobs.lock().unwrap().remove(&session);
         self.finished.lock().unwrap().push(session);
         Ok(())
     }
 
     async fn stale(&self, before: DateTime<Utc>, _limit: u16) -> Result<Vec<StaleDraft>> {
+        let jobs = self.jobs.lock().unwrap();
         Ok(self
             .drafts
             .lock()
             .unwrap()
             .iter()
-            .filter(|(_, (_, _, _, started))| *started < before)
+            .filter(|(session, (_, _, _, started))| {
+                *started < before && !jobs.contains_key(session)
+            })
             .map(|(session, (owner, agent, _, _))| StaleDraft {
                 session: *session,
                 owner: owner.clone(),
@@ -102,35 +139,80 @@ impl DraftHandBacks for Rows {
     }
 }
 
+/// Holds whatever passes it, while it is held, until it is opened, and says
+/// when something reaches it.
+#[derive(Default)]
+pub(super) struct Gate {
+    held: std::sync::atomic::AtomicBool,
+    /// Signalled when something reaches the held gate.
+    pub(super) reached: tokio::sync::Notify,
+    opened: tokio::sync::Notify,
+}
+
+impl Gate {
+    pub(super) fn held() -> Self {
+        Self {
+            held: true.into(),
+            ..Self::default()
+        }
+    }
+
+    pub(super) async fn pass(&self) {
+        if self.held.load(std::sync::atomic::Ordering::SeqCst) {
+            self.reached.notify_one();
+            self.opened.notified().await;
+        }
+    }
+
+    /// Let through what waits, and all that comes after.
+    pub(super) fn open(&self) {
+        self.held.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.opened.notify_waiters();
+    }
+}
+
 /// What the draft's session does with its prompt: the routines it checks,
 /// in order, written from the prompt, each with what it says it created.
-type Turn = Box<dyn Fn(&str) -> Vec<(ActionConfiguration, Vec<CreatedItem>)> + Send + Sync>;
+pub(super) type Turn =
+    Box<dyn Fn(&str) -> Vec<(ActionConfiguration, Vec<CreatedItem>)> + Send + Sync>;
 
 /// The routine sessions a draft opens: preparing and prompting are
 /// recorded, and the prompt's turn checks its routines into `rows` as the
-/// check route would, then ends, unless the session `hangs`.
-struct Sessions {
-    rows: Arc<Rows>,
-    code: Arc<Checker>,
-    turn: Turn,
-    hangs: bool,
-    refuses: Option<RoutineSessionError>,
-    prepared: Mutex<Vec<PrepareRoutineSession>>,
-    prompts: Mutex<Vec<String>>,
-    cancelled: Mutex<Vec<AgentSessionId>>,
-    deleted: Mutex<Vec<AgentSessionId>>,
+/// check route would, then ends, unless the session `hangs`. Its turn
+/// can't be read while it is `unreadable`, nor stopped while it is
+/// `unstoppable`.
+pub(super) struct Sessions {
+    pub(super) rows: Arc<Rows>,
+    pub(super) code: Arc<Checker>,
+    pub(super) turn: Turn,
+    pub(super) hangs: bool,
+    pub(super) unreadable: bool,
+    pub(super) unstoppable: bool,
+    pub(super) refuses: Option<RoutineSessionError>,
+    /// Where preparing waits for its admission.
+    pub(super) admitting: Gate,
+    /// Where stopping a session waits.
+    pub(super) stopping: Gate,
+    pub(super) prepared: Mutex<Vec<PrepareRoutineSession>>,
+    pub(super) prompts: Mutex<Vec<String>>,
+    pub(super) cancelled: Mutex<Vec<AgentSessionId>>,
+    pub(super) deleted: Mutex<Vec<AgentSessionId>>,
     /// Signalled on each delete.
-    deletes: tokio::sync::Notify,
+    pub(super) deletes: tokio::sync::Notify,
 }
 
 impl Sessions {
-    fn new(rows: &Arc<Rows>, turn: Turn) -> Self {
+    pub(super) fn new(rows: &Arc<Rows>, turn: Turn) -> Self {
         Self {
             rows: Arc::clone(rows),
             code: Arc::new(Checker::default()),
             turn,
             hangs: false,
+            unreadable: false,
+            unstoppable: false,
             refuses: None,
+            admitting: Gate::default(),
+            stopping: Gate::default(),
             prepared: Mutex::new(Vec::new()),
             prompts: Mutex::new(Vec::new()),
             cancelled: Mutex::new(Vec::new()),
@@ -152,6 +234,7 @@ impl RoutineSessions for Sessions {
         &self,
         command: PrepareRoutineSession,
     ) -> Result<PreparedRoutineSession, RoutineSessionError> {
+        self.admitting.pass().await;
         if let Some(error) = self.refuses {
             return Err(error);
         }
@@ -187,6 +270,9 @@ impl RoutineSessions for Sessions {
         &self,
         _: RoutineSessionAction,
     ) -> Result<RoutineActionStatus, RoutineSessionError> {
+        if self.unreadable {
+            return Err(RoutineSessionError::OperationFailed);
+        }
         Ok(if self.hangs {
             RoutineActionStatus::Pending(RoutinePendingReason::Running)
         } else {
@@ -195,6 +281,10 @@ impl RoutineSessions for Sessions {
     }
 
     async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        self.stopping.pass().await;
+        if self.unstoppable {
+            return Err(RoutineSessionError::OperationFailed);
+        }
         self.cancelled.lock().unwrap().push(command.session_id);
         Ok(())
     }
@@ -208,7 +298,7 @@ impl RoutineSessions for Sessions {
 
 /// What the check route answers for `routine`: its code type-checked as
 /// saving checks it.
-async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
+pub(super) async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
     let mut routine = routine;
     routine.task = code_check::named_steps(&routine.task);
     let (steps, task) = match code_check::checked_task(code, &routine.task, None).await {
@@ -231,7 +321,7 @@ async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
 /// Stands in for the SDK's routines guide, which `agent_code_mode` tests.
 const GUIDE: &str = "Find the item whose name is exactly the name used.";
 
-fn agent() -> DraftAgent {
+pub(super) fn agent() -> DraftAgent {
     DraftAgent {
         bot: bot_id::MACRO_NEW_BOT_ID,
         guide: GUIDE,
@@ -249,7 +339,10 @@ impl SessionCreations for Recorded {
     }
 }
 
-fn drafts(rows: &Arc<Rows>, sessions: &Arc<Sessions>) -> RoutineDrafts<Checker, Sessions> {
+pub(super) fn drafts(
+    rows: &Arc<Rows>,
+    sessions: &Arc<Sessions>,
+) -> RoutineDrafts<Checker, Sessions> {
     RoutineDrafts::new(
         Arc::new(Checker::default()),
         Arc::clone(sessions),
@@ -259,7 +352,7 @@ fn drafts(rows: &Arc<Rows>, sessions: &Arc<Sessions>) -> RoutineDrafts<Checker, 
     .with_conditions_enabled(true)
 }
 
-fn context() -> DraftContext {
+pub(super) fn context() -> DraftContext {
     DraftContext {
         timezone: "America/New_York".into(),
         agent_model: "anthropic/claude-sonnet-5-5".into(),
@@ -269,22 +362,22 @@ fn context() -> DraftContext {
     }
 }
 
-fn routine(description: &str) -> DraftRequest {
+pub(super) fn routine(description: &str) -> DraftRequest {
     DraftRequest::Routine {
         description: description.into(),
     }
 }
 
-fn code_step(title: &str, source: &str) -> Value {
+pub(super) fn code_step(title: &str, source: &str) -> Value {
     json!({ "type": "code", "title": title, "summary": "", "source": source })
 }
 
-fn agent_step() -> Value {
+pub(super) fn agent_step() -> Value {
     json!({ "type": "agent", "model": "anthropic/claude-sonnet-5-5", "instructions": "Research it." })
 }
 
 /// A routine as `macro.routines.check` sends it.
-fn configuration(name: &str, trigger: Value, steps: Value) -> ActionConfiguration {
+pub(super) fn configuration(name: &str, trigger: Value, steps: Value) -> ActionConfiguration {
     ActionConfiguration {
         name: name.into(),
         trigger: serde_json::from_value(trigger).unwrap(),
@@ -297,11 +390,11 @@ fn configuration(name: &str, trigger: Value, steps: Value) -> ActionConfiguratio
 }
 
 /// A check that created nothing.
-fn plain(routine: ActionConfiguration) -> (ActionConfiguration, Vec<CreatedItem>) {
+pub(super) fn plain(routine: ActionConfiguration) -> (ActionConfiguration, Vec<CreatedItem>) {
     (routine, Vec::new())
 }
 
-fn message_posted(ids: &[Uuid]) -> Value {
+pub(super) fn message_posted(ids: &[Uuid]) -> Value {
     json!({
         "type": "events",
         "filters": [{ "events": ["channel.message_posted"], "ids": ids }],
@@ -420,6 +513,15 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         prompt.contains(&format!("<request>{}</request>", inbox.request)),
         "{prompt}"
     );
+    // Only the ones marked as examples: the rest would lengthen the prompt.
+    for routine in routine_program::CATALOG.iter() {
+        assert_eq!(
+            prompt.contains(&format!("<request>{}</request>", routine.request)),
+            routine.example,
+            "{}",
+            routine.key
+        );
+    }
     assert!(drafted.created.is_empty());
     // The session and its row are gone once the draft is back.
     let session = prepared.session_id;
@@ -577,6 +679,118 @@ async fn a_session_that_hands_nothing_back_says_the_draft_failed() {
     assert_eq!(sessions.deleted.lock().unwrap().len(), 1);
 }
 
+/// A routine as `macro.routines.check` sends a single agent task, which the
+/// SDK still accepts.
+fn agent_task(name: &str, trigger: Value, task: Value) -> ActionConfiguration {
+    ActionConfiguration {
+        task,
+        ..configuration(name, trigger, json!([]))
+    }
+}
+
+/// A session that checks a single agent task hands back one agent step
+/// holding its prompt and user prompt, which the editor saves as steps.
+#[tokio::test(start_paused = true)]
+async fn a_draft_of_a_single_agent_task_becomes_its_agent_step() {
+    let task = json!({
+        "prompt": "Read the channel.",
+        "user_prompt": "Summarize it.",
+        "model": "anthropic/claude-sonnet-5-5",
+    });
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            vec![plain(agent_task(
+                "Recap",
+                message_posted(&[]),
+                task.clone(),
+            ))]
+        }),
+    ));
+
+    let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+    assert_eq!(drafted.name, "Recap");
+    assert_eq!(
+        drafted.steps,
+        [json!({
+            "type": "agent",
+            "model": "anthropic/claude-sonnet-5-5",
+            "instructions": "Read the channel.\n\nSummarize it.",
+        })]
+    );
+    let program = RoutineProgram::from_task(&json!({ "steps": drafted.steps })).unwrap();
+    program.validate().unwrap();
+}
+
+/// A single agent task whose step a program wouldn't accept, here blank
+/// instructions, fails the draft as before rather than handing back a step
+/// the editor can't save, and still says what its session created.
+#[tokio::test(start_paused = true)]
+async fn a_draft_of_a_single_agent_task_a_program_would_refuse_fails() {
+    let task = json!({ "prompt": " ", "user_prompt": "", "model": "anthropic/claude-sonnet-5-5" });
+    let notes = CreatedItem {
+        entity_type: model_entity::EntityType::Document,
+        entity_id: "recap-notes".into(),
+    };
+    let rows = Arc::new(Rows::default());
+    let named = notes.clone();
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            vec![(
+                agent_task("Recap", message_posted(&[]), task.clone()),
+                vec![named.clone()],
+            )]
+        }),
+    ));
+
+    let Draft::Failed { message, created } =
+        draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await
+    else {
+        panic!("expected a failed draft");
+    };
+
+    assert_eq!(message, ROUTINE_FAILED);
+    assert_eq!(
+        created,
+        [DraftCreated {
+            entity_type: notes.entity_type,
+            entity_id: notes.entity_id,
+            used: false,
+        }]
+    );
+}
+
+/// A single agent task that declares apps fails the draft as before: a
+/// draft holds only steps, so the apps its step needs would be lost.
+#[tokio::test(start_paused = true)]
+async fn a_draft_of_a_single_agent_task_with_apps_fails() {
+    let task = json!({
+        "prompt": "Read the channel.",
+        "user_prompt": "Summarize it.",
+        "model": "anthropic/claude-sonnet-5-5",
+        "mcp_servers": [{ "app_slug": "linear", "server_name": "Linear" }],
+    });
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            vec![plain(agent_task(
+                "Recap",
+                message_posted(&[]),
+                task.clone(),
+            ))]
+        }),
+    ));
+
+    assert_eq!(
+        draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await,
+        failed(ROUTINE_FAILED)
+    );
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_draft_that_runs_out_of_time_says_so_and_cleans_up() {
     let rows = Arc::new(Rows::default());
@@ -593,10 +807,10 @@ async fn a_draft_that_runs_out_of_time_says_so_and_cleans_up() {
     assert!(rows.drafts.lock().unwrap().is_empty());
 }
 
-/// The free model now and then keeps going after a clean check; the draft
-/// waits a little for its turn to end, then takes the check.
+/// The first check that passes is the draft: the session is stopped there,
+/// without waiting for its turn to end.
 #[tokio::test(start_paused = true)]
-async fn a_draft_stops_waiting_once_a_check_passes() {
+async fn a_draft_stops_its_session_once_a_check_passes() {
     let rows = Arc::new(Rows::default());
     let mut sessions = Sessions::new(
         &rows,
@@ -615,12 +829,62 @@ async fn a_draft_stops_waiting_once_a_check_passes() {
     let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
 
     assert_eq!(drafted.name, "Bug tasks");
+    // One poll, then the settle for activity.
     assert!(
-        started.elapsed() >= CHECKED_GRACE && started.elapsed() < CHECKED_GRACE * 2,
+        started.elapsed() <= POLL + ACTIVITY_SETTLE,
         "{:?}",
         started.elapsed()
     );
     assert_eq!(sessions.cancelled.lock().unwrap().len(), 1);
+}
+
+/// A turn that can't be read a few times in a row ends the draft as failed,
+/// well before its timeout, and still cleans up.
+#[tokio::test(start_paused = true)]
+async fn a_draft_whose_turn_cannot_be_read_gives_up_and_cleans_up() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(&rows, Box::new(|_| Vec::new()));
+    sessions.hangs = true;
+    sessions.unreadable = true;
+    let sessions = Arc::new(sessions);
+
+    let started = tokio::time::Instant::now();
+    let draft = draft(&drafts(&rows, &sessions), routine("label mail")).await;
+
+    assert_eq!(draft, failed(ROUTINE_FAILED));
+    assert!(
+        started.elapsed() < DRAFT_TIMEOUT / 4,
+        "{:?}",
+        started.elapsed()
+    );
+    let session = sessions.prepared.lock().unwrap()[0].session_id;
+    assert_eq!(*sessions.cancelled.lock().unwrap(), [session]);
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    assert!(rows.drafts.lock().unwrap().is_empty());
+}
+
+/// A passing check is the draft even while the turn can't be read.
+#[tokio::test(start_paused = true)]
+async fn a_passing_check_is_drafted_while_the_turn_cannot_be_read() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![plain(configuration(
+                "Bug tasks",
+                message_posted(&[]),
+                json!([code_step("Make a task", "good")]),
+            ))]
+        }),
+    );
+    sessions.hangs = true;
+    sessions.unreadable = true;
+    let sessions = Arc::new(sessions);
+
+    let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+    assert_eq!(drafted.name, "Bug tasks");
+    assert_eq!(sessions.deleted.lock().unwrap().len(), 1);
 }
 
 /// A check that still fails isn't the end: the session goes on fixing it.
@@ -667,7 +931,7 @@ async fn a_session_the_allowance_refuses_is_an_error_and_cleaned_up() {
     assert_eq!(sessions.deleted.lock().unwrap().len(), 1);
 }
 
-fn add(description: &str, steps: Vec<Value>, kind: Option<StepKind>) -> DraftRequest {
+pub(super) fn add(description: &str, steps: Vec<Value>, kind: Option<StepKind>) -> DraftRequest {
     DraftRequest::AddStep {
         description: description.into(),
         routine: RoutineSoFar {

@@ -16,6 +16,10 @@ pub const DOCUMENTATION: &str =
 /// label, HTTP method, path and whether it can write, as JSON.
 pub const OPERATIONS: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/operations.json"));
 
+/// Every service the SDK can reach, per environment (`dev`, `prod`, `local`),
+/// keyed by its name in the SDK, with its host there, as JSON.
+pub const HOSTS: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/hosts.json"));
+
 /// The SDK's TypeScript declarations that routine code is type-checked
 /// against, with their fingerprint, as JSON.
 pub const SDK_TYPES: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/sdk-types.json"));

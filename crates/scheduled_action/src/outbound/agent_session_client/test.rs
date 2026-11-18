@@ -146,6 +146,7 @@ async fn all_commands_use_internal_auth_and_domain_wire_contract_at_both_prefixe
         };
         let prepare = PrepareRoutineSession {
             billing: Default::default(),
+            instructions: None,
             origin: trigger_context::TriggerOrigin::Unknown,
             selection: selection.clone(),
             session_id: identity.session_id,
@@ -255,6 +256,7 @@ async fn typed_sanitized_domain_errors_are_preserved() {
         let error = client
             .prepare(PrepareRoutineSession {
                 billing: Default::default(),
+                instructions: None,
                 origin: trigger_context::TriggerOrigin::Unknown,
                 selection: selection(),
                 session_id: identity().session_id,
@@ -413,6 +415,7 @@ fn prepare_carries_a_non_billable_sessions_billing_and_older_bodies_default_it()
     let identity = identity();
     let prepare = |billing| PrepareRoutineSession {
         billing,
+        instructions: None,
         origin: trigger_context::TriggerOrigin::Unknown,
         selection: selection(),
         session_id: identity.session_id,

@@ -1115,6 +1115,21 @@ where
         entity_id: String,
         user_id: String,
     ) -> Result<Vec<AttachmentEntityReference>, ChannelMessagesErr> {
+        if matches!(
+            entity_type.as_str(),
+            "crm_company" | "crm_contact" | "crm_pipeline"
+        ) {
+            let Some(access) = &self.comment_parent_access else {
+                return Ok(Vec::new());
+            };
+            if !access
+                .can_view_parent(&user_id, &entity_type, &entity_id)
+                .await
+                .map_err(ChannelMessagesErr::Repo)?
+            {
+                return Ok(Vec::new());
+            }
+        }
         let mut references = self
             .repo
             .get_attachment_references(&entity_type, &entity_id, &user_id)

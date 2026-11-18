@@ -13,13 +13,14 @@ use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel};
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 
 use super::event_trigger::ActionTrigger;
-use super::models::{ActionConfiguration, ActionPolicyError, ScheduledAction};
+use super::models::{ActionConfiguration, ActionPolicyError, Requester, ScheduledAction};
 use super::ports::{RoutineTemplateRepo, RoutineTemplateService, ScheduledActionService};
 
 #[cfg(test)]
@@ -94,6 +95,7 @@ pub struct RoutineTemplate {
     #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub variables: Vec<TemplateVariable>,
+    pub appearance: EntityAppearance,
     /// Routines activated from this template, including stopped ones.
     pub active_count: u32,
     pub created_at: DateTime<Utc>,
@@ -109,6 +111,7 @@ pub struct TemplateSnapshot {
     pub trigger: ActionTrigger,
     pub task: Value,
     pub variables: Vec<TemplateVariable>,
+    pub appearance: EntityAppearance,
 }
 
 /// Rejected template input.
@@ -141,6 +144,7 @@ impl ShareRoutineTemplate {
             trigger: action.trigger.clone(),
             task,
             variables: self.variables,
+            appearance: action.appearance.clone(),
         })
     }
 }
@@ -241,13 +245,22 @@ where
         principal: &CreationPrincipal,
         template_id: Uuid,
         input: ActionConfiguration,
+        requester: Requester,
     ) -> Result<ScheduledAction> {
         self.require_sharing(principal.user()).await?;
-        if self.templates.get_template(&template_id).await?.is_none() {
-            return Err(ActionPolicyError::NotFound.into());
-        }
+        let template = self
+            .templates
+            .get_template(&template_id)
+            .await?
+            .ok_or(ActionPolicyError::NotFound)?;
         self.actions
-            .create_action_from_template(principal, input, template_id)
+            .create_action_from_template(
+                principal,
+                input,
+                template_id,
+                template.appearance,
+                requester,
+            )
             .await
     }
 }

@@ -1,4 +1,5 @@
 fragment GraphqlDocumentHistoryFields on GraphqlSoupDocument {
+  appearance
 	__typename
 	id
 	documentName: name
@@ -40,6 +41,7 @@ fragment GraphqlProjectHistoryFields on GraphqlSoupProject {
 }
 
 fragment GraphqlDocumentQuickAccessName on GraphqlSoupDocument {
+  appearance
 	__typename
 	name
 	fileType

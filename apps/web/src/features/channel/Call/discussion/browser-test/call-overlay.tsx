@@ -20,6 +20,7 @@ import { UserContextProvider } from '@core/context/user';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
+import { lazy } from '@core/util/lazy';
 import { EntityProvider } from '@entity';
 import { Popover } from '@kobalte/core/popover';
 import type { NotificationSource } from '@notifications';
@@ -29,7 +30,7 @@ import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
 import { ImperativeDialogHost } from '@ui';
-import { createSignal, lazy, Match, Show, Suspense, Switch } from 'solid-js';
+import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
 import { Dynamic, render } from 'solid-js/web';
 import { ChannelTabProvider } from '../../../Channel/ChannelTabContext';
 import type { ChannelTabId } from '../../../Channel/channel-tabs';
@@ -70,6 +71,8 @@ const blocks = {} as BlockOrchestrator;
 
 function Fixture() {
   const [surfaceOverride, setSurfaceOverride] = createSignal(false);
+  const [away, setAway] = createSignal(false);
+  const activePin = useCallContext().pin.activePin;
   useHotKeyRoot();
   const [tab, setTab] = createSignal<ChannelTabId>('call');
   const params = new URLSearchParams(location.search);
@@ -99,13 +102,24 @@ function Fixture() {
                           >
                             Refresh discussion
                           </button>
+                          <Show when={params.has('miniPlayerFocus') && !away()}>
+                            <button
+                              class="absolute top-0 right-0 z-50"
+                              onClick={() => setAway(true)}
+                            >
+                              Leave call view
+                            </button>
+                          </Show>
                           <ImperativeDialogHost />
                           <CallVolumeProvider>
                             <SeedVolume />
                             <CallFullscreenProvider
                               callId={() => 'fixture-call'}
                             >
-                              <main class="h-screen bg-page text-ink">
+                              <main
+                                class="h-screen bg-page text-ink"
+                                data-call-pin={activePin() ? 'pinned' : 'auto'}
+                              >
                                 <Show when={params.get('headerWidth')}>
                                   {(width) => (
                                     <header
@@ -124,11 +138,14 @@ function Fixture() {
                                 <Suspense>
                                   <Switch>
                                     <Match
-                                      when={params.get('surface') === 'player'}
+                                      when={
+                                        params.get('surface') === 'player' ||
+                                        away()
+                                      }
                                     >
                                       <CallMiniPlayer
                                         onCollapse={() => {}}
-                                        onOpenCall={() => {}}
+                                        onOpenCall={() => setAway(false)}
                                       />
                                     </Match>
                                     <Match
@@ -169,6 +186,7 @@ function Fixture() {
                                             params.get('unread') === 'true',
                                           render: (panel) => (
                                             <CallDiscussionContent
+                                              access={{ kind: 'member' }}
                                               discussion={() => ({
                                                 kind: 'channel_thread',
                                                 channel_id:

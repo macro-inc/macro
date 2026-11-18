@@ -4,6 +4,7 @@
 use super::*;
 use crate::domain::capabilities::ViewerCapabilities;
 use crate::domain::models::{ConferenceChange, EventDetails};
+use crate::domain::ports::CalendarEventDetailsReader;
 
 impl<R, G, T, B, N> CalendarMutationServiceImpl<R, G, T, B, N>
 where
@@ -46,6 +47,40 @@ where
             return Err(CalendarMutationError::GuestsCannotModify);
         }
         Ok(())
+    }
+}
+
+impl<R, G, T, B, N> CalendarEventDetailsReader for CalendarMutationServiceImpl<R, G, T, B, N>
+where
+    R: CalendarRepository,
+    G: CalendarMutationProvider,
+    T: CalendarAccessTokenProvider,
+    B: MacroEventBroker,
+    N: CalendarRefreshNotifier,
+{
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn details_for_update(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        scope: &CalendarUpdateScope,
+    ) -> Result<EventDetails, CalendarMutationError> {
+        let target = self
+            .resolve_mutation_target(requester_id, event_id, calendar_id)
+            .await?;
+        if target.is_read_only {
+            return Err(CalendarMutationError::ReadOnly);
+        }
+        let occurrence_key = match scope {
+            CalendarUpdateScope::All => None,
+            CalendarUpdateScope::ThisEvent { recurrence_id } => Some(recurrence_id.as_str()),
+        };
+        self.repository
+            .get_event_details(target.event_id, occurrence_key)
+            .await
+            .map_err(internal)?
+            .ok_or(CalendarMutationError::NotFound)
     }
 }
 

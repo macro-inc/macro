@@ -2,14 +2,11 @@ import { useViewControlHotkeys } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { openInNewTab } from '@components/app/tab-layout/open-in-new-tab';
 import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableRoutineCodeSteps,
-  enableRoutineConditions,
-  enableRoutineStarterTemplates,
-} from '@core/constant/featureFlags';
+import { enableRoutineStarterTemplates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
 import { useRoutinesDiscover } from '../routine-suggestions/routine-suggestions';
@@ -25,6 +22,7 @@ import { RoutineDetail } from './routine-detail';
 import { startRoutineDraft } from './routine-draft-start';
 import { routineContent, routineIdFromContent } from './routine-navigation';
 import { RoutineNew } from './routine-new';
+import { useRoutineRowMenuActions } from './routine-row-menu-actions';
 import { RoutinesListView } from './views/routines-list';
 
 function RoutinesContent() {
@@ -53,10 +51,18 @@ function RoutinesContent() {
   const source = createRoutineListSource((error) =>
     toast.alert('Could not update routine', { subtext: getErrorMessage(error) })
   );
-  const decisions = useFeatureFlag(enableRoutineConditions);
+  const menu = useRoutineRowMenuActions(source, {
+    open: (id) => open(id),
+    openInNewSplit: (id) =>
+      layout.openWithSplit(routineContent(id), {
+        preferNewSplit: true,
+        activate: true,
+        search: {},
+      }),
+    openInNewTab: (id) => openInNewTab(() => open(id)),
+  });
   const starterTemplates = useFeatureFlag(enableRoutineStarterTemplates);
   const hasPaidAccess = useHasPaidAccess();
-  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
   const catalog = useRoutineCatalog();
   const discover = useRoutinesDiscover();
   /** New routine: describe it, pick a template, or start fresh. */
@@ -72,7 +78,7 @@ function RoutinesContent() {
     startRoutineDraft(
       newRoutineDraft(template, {
         defaultModel: defaultModelForPlan(hasPaidAccess()),
-        codeSteps: codeSteps().enabled,
+        codeSteps: true,
       })
     );
     open('new');
@@ -89,12 +95,11 @@ function RoutinesContent() {
           onCreate={() => create()}
           onOpen={(id) => open(id)}
           templates={
-            starterTemplates().enabled
-              ? featuredTemplates(catalog(), decisions().enabled)
-              : []
+            starterTemplates().enabled ? featuredTemplates(catalog(), true) : []
           }
           onTemplate={startFrom}
           discover={discover()}
+          menu={menu}
         />
       }
     >

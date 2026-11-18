@@ -277,14 +277,19 @@ async fn resuming_a_session_a_live_peer_manages_is_refused_without_rotating() {
     );
 }
 
-/// The in-process runtime skips Macro's own server by the name the harness
-/// gives it, and restates that name rather than importing it. This is the one
-/// crate that sees both, so it is where they are held equal.
+/// The in-process runtime skips Macro's own server, and tells the internal one
+/// from connected apps, by the names the harness gives them, and restates
+/// those names rather than importing them. This is the one crate that sees
+/// both, so it is where they are held equal.
 #[test]
-fn the_in_process_runtime_and_the_harness_agree_on_macros_server_name() {
+fn the_in_process_runtime_and_the_harness_agree_on_macros_server_names() {
     assert_eq!(
         agent_inmem::domain::mcp::MACRO_MCP_NAME,
         agent_harness::domain::model::MACRO_MCP_NAME
+    );
+    assert_eq!(
+        agent_inmem::domain::mcp::MACRO_INTERNAL_MCP_NAME,
+        agent_harness::domain::model::INTERNAL_MCP_NAME
     );
 }
 
@@ -353,4 +358,49 @@ async fn an_in_process_session_releases_only_while_its_log_rebuilds_it() {
             .await
             .expect("the check runs")
     );
+}
+
+/// A session whose row is gone (deleted elsewhere while this process still
+/// held its conversation) has no log to rebuild from, so nothing is lost by
+/// dropping what is held: the check says so rather than failing on every
+/// try.
+#[tokio::test]
+async fn an_in_process_session_whose_row_is_gone_releases() {
+    let (id, repo) = repo_with_session(bot_id::MACRO_NEW_BOT_ID, "opencode");
+    let containers = in_process_containers(&repo);
+    let _attachment = containers.resume(id).await.expect("resumes");
+
+    agent_session::domain::ports::AgentSessionRepo::delete(&repo, id)
+        .await
+        .expect("the row is deleted");
+
+    assert!(
+        containers
+            .idle_release_is_lossless(id)
+            .await
+            .expect("the check answers"),
+        "nothing durable is left to differ from"
+    );
+}
+
+/// Only a background session its opener gave instructions (a routine draft)
+/// goes unread; an accepted suggestion's run, a background session people
+/// open, still streams its reply.
+#[test]
+fn only_a_background_session_with_instructions_goes_unread() {
+    let owner = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|someone@example.com")
+        .expect("a user id");
+    let mut session = test_agent_session(AgentSessionId::new());
+    session.owner_id = model_owner::Owner::User(owner.clone());
+    session.source = agent_session::domain::model::SessionSource::User;
+    session.visibility = agent_session::domain::model::SessionVisibility::Hidden;
+    session.origin = trigger_context::TriggerOrigin::Requested { by: owner };
+    assert!(session.is_background());
+    assert_eq!(reply_delivery(&session), ReplyDelivery::Streamed);
+
+    session.instructions = Some("Draft a routine".to_owned());
+    assert_eq!(reply_delivery(&session), ReplyDelivery::Unseen);
+
+    session.visibility = agent_session::domain::model::SessionVisibility::Listed;
+    assert_eq!(reply_delivery(&session), ReplyDelivery::Streamed);
 }

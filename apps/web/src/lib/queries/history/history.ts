@@ -1,5 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useIsAuthenticated } from '@core/context/user';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -21,6 +19,7 @@ import {
 import { type Accessor, createEffect, onCleanup, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
+import { intervalWhileRead } from '../visible-refresh';
 import {
   HISTORY_SEARCH_BUCKETS,
   readCachedGraphqlHistoryItems,
@@ -127,14 +126,24 @@ const restHistoryQueryOptions = {
 };
 
 export function useHistoryQuery() {
+  return createHistoryQuery();
+}
+
+/**
+ * History for Quick Access, which lists it only while one of its lists reads
+ * the cache: cache changes reread it promptly while `reading` is true and at
+ * most once a minute otherwise, so a list opening never has to read it.
+ */
+export function useHistoryQueryWhileRead(reading: Accessor<boolean>) {
+  return createHistoryQuery(reading);
+}
+
+function createHistoryQuery(reading?: Accessor<boolean>) {
   const authenticated = useIsAuthenticated();
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const activeQueryClient = useQueryClient();
   const graphqlCacheHost = () => {
-    if (authenticated() !== true || !graphqlSoupFlag().enabled)
-      return undefined;
-    const cacheHost = getGraphqlSoupCacheHost();
-    return cacheHost?.disabled ? undefined : cacheHost;
+    if (authenticated() !== true) return undefined;
+    return getGraphqlSoupCacheHost();
   };
 
   createEffect(() => {
@@ -148,7 +157,10 @@ export function useHistoryQuery() {
             { queryKey: historyKeys.graphqlList.queryKey },
             { cancelRefetch: false }
           ),
-        { searchBuckets: () => HISTORY_SEARCH_BUCKETS }
+        {
+          searchBuckets: () => HISTORY_SEARCH_BUCKETS,
+          intervalMs: reading ? intervalWhileRead(reading) : undefined,
+        }
       )
     );
   });

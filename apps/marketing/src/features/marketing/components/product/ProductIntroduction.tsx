@@ -1,6 +1,11 @@
-import { For, Show } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import { productIntroductions } from '../../core/product-introductions';
+import { ProductCopy } from '../ProductMention';
 import './product-introduction.css';
+
+/** Splits a paragraph into plain text, [[product mentions]], and *italics*. */
+const parts = (paragraph: string) =>
+  paragraph.split(/(\[\[.+?\]\]|\*.+?\*)/).filter(Boolean);
 
 export function ProductIntroduction(props: { product: string }) {
   return (
@@ -10,29 +15,21 @@ export function ProductIntroduction(props: { product: string }) {
           <For each={paragraphs()}>
             {(paragraph) => (
               <p>
-                <For each={paragraph.split('**')}>
-                  {(text, index) => (
-                    <Show when={index() % 2 === 1} fallback={text}>
-                      <strong>{text}</strong>
-                    </Show>
+                <For each={parts(paragraph)}>
+                  {(part) => (
+                    <Switch fallback={part}>
+                      <Match when={part.startsWith('[[')}>
+                        <ProductCopy text={part.slice(2, -2)} />
+                      </Match>
+                      <Match when={part.startsWith('*')}>
+                        <em>{part.slice(1, -1)}</em>
+                      </Match>
+                    </Switch>
                   )}
                 </For>
               </p>
             )}
           </For>
-          <Show when={props.product === 'Tasks'}>
-            <div class="product-introduction-videos">
-              <a href="/posts/linear-alternative">
-                <img
-                  src="/og/linear-alternative.png"
-                  alt=""
-                  width="80"
-                  height="45"
-                />
-                <span>Macro vs. Linear</span>
-              </a>
-            </div>
-          </Show>
         </div>
       )}
     </Show>

@@ -2,7 +2,7 @@
 
 ## Notifications view — `/app/notifications`
 
-Behind `enable-unified-notifications` (with GraphQL Soup), the bell below Home
+Behind `enable-unified-notifications`, the bell below Home
 on the outer rail (`g i`) opens one list of everything that needs you, newest
 first. The flag is on in dev and comes from PostHog elsewhere;
 `VITE_ENABLE_UNIFIED_NOTIFICATIONS` overrides it locally. With the flag off the
@@ -101,14 +101,28 @@ for each kind the filters show. It acts on the whole inbox, not only the
 loaded rows, and never on a kind the filters hide; under Unread the choices
 read **Clear today's unread** and **Clear all unread** and take unread rows
 only. Clearing marks the rows done, but unlike a row's Mark done it doesn't
-archive email threads. A toast says how many were cleared and offers **Undo**,
-as does `⌘Z`/`Ctrl+Z`.
+archive email threads; a cleared email row stays gone until new mail arrives.
+The clear belongs to the server: it finishes even if the tab closes, the
+connection drops or the server restarts, and it takes only what had arrived
+when it started. Its rows leave at once, on the reader's other devices too. A
+toast says how many were cleared and offers **Undo**, as does `⌘Z`/`Ctrl+Z`; a
+large clear that is still at work says **so far; still clearing**, then
+announces its final count. Undo works while the clear is still at work and
+stops it. Undo, of a clear or of any Mark done, brings each notification back
+as it was: unread ones stay unread, and anything the reader changed since the
+clear is left alone. With every kind hidden by the filters, a clear takes
+nothing.
 
 **Filter notifications** (funnel, or `f`) offers **Type** checkboxes that start
 checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
 Calendar, Access requests, and Agents. Unchecking a type hides its rows (Mentions
 covers both channel and comment mentions, Replies both channel and comment
-threads). The trigger counts hidden types, and **Reset filters** shows them all
+threads). A row that is two kinds shows while either is checked, once: a thread
+whose reply mentions you is under Mentions and Replies, a top-level message that
+mentions you and has replies likewise, an entity's comments that mention you
+under Mentions and Comments, and a pull request or agent session that mentions
+you under Mentions and Pull requests or Agents. Clearing either kind takes such
+a row whole. The trigger counts hidden types, and **Reset filters** shows them all
 again without changing All or Unread. Choices persist per user across reloads.
 Hiding every type shows **Every kind of notification is hidden** with Reset
 filters; types that hide every row show **No notifications match these filters**. The gear beside
@@ -160,7 +174,7 @@ marking it read. Local-only drafts must not issue a mailbox read.
 Channel/thread rows retain their scoped reads, and message readers still require
 actual visibility; opening another entity must not mark hidden replies seen.
 
-With GraphQL Soup enabled, modern project **Mark read** and **Mark done** actions
+Modern project **Mark read** and **Mark done** actions
 target all of the project's notifications, including notifications absent from
 the loaded feed. The target is `INITIATIVE`; legacy Drive folders retain the
 separate `PROJECT` target.
@@ -246,6 +260,14 @@ normal navigation without resetting the current page to the app root. Check
 both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
 navigate.
+
+On iOS, Macro stays visible whenever it leaves the foreground without a tap:
+opening the app switcher, Control Center, or Notification Center over it keeps
+its content on screen, including on its switcher card. A tap on a banner over
+the open app navigates in place. A tap that opens the app from the background
+or the Lock Screen goes from the system's blank launch screen to the
+destination, never through the previous page. A tap in Notification Center
+pulled down over Macro reveals the same blank cover, then the destination.
 
 For an iOS warm resume, leave the app running past its startup timeout before
 backgrounding it. Tap an uncached notification without a direct channel target
@@ -367,16 +389,50 @@ Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
 
+### Macro computer agent sign-ins
+
+`agent_sign_in_expiry` notifications (inbox, browser, and phone push) carry the
+agent (`claude` for now) and warn the person who signed a team computer in to
+it, plus the team's owner and
+admins, that the sign-in expires soon (three days out), expires today (its last
+day), or expired (passed). They name the computer and
+open **Settings → Runtimes**, where the computer's **Sign in with Claude** runs
+the paste-the-code flow; see the
+[Macro computers walkthrough](settings.md#macro-computers). To check one
+without waiting days, set the computer's active `harness_account_logins` row's
+`expires_at` to within three days on a local stack: the notice arrives within a
+minute.
+
+`computer_setup` notifications (in-app notice, browser, and phone push) tell a
+computer's buyer that first-time setup finished ("Your computer is ready:
+connect your AI and finish setup") or failed ("<computer> could not be set
+up", with the failure reason the computer's status shows). They carry the
+computer id, name, and outcome; opening one reopens that computer's setup
+dialog on Bring your AI (see the Macro computers walkthrough in
+[settings.md](settings.md)). An agent teammate's computer notifies its
+inviter with the agent instead (`agent { userId, name }`): "<name> is ready",
+with **Message <name>** and, for owners and admins, **Bring your AI**, or
+"<name> couldn't be set up" with **Retry**; opening it goes to the DM or to
+Team → Members (see Agent teammates in [settings.md](settings.md)).
+
 ## Notification sounds
 
 **Settings → Notifications → Sounds** turns on an in-app sound for incoming
 notifications. It is off by default and saved per person on each device
-(user-scoped localStorage), so a laptop and a phone choose separately. With
-sounds on, it shows a volume slider and one row per type (Messages, Mentions,
-Thread replies, Email, Meetings & reminders, Tasks, AI & agents, Everything
-else), each with its own on/off switch, sound picker, and play button. Picking
-a sound previews it. Email, AI & agents, and Everything else start off.
+(user-scoped localStorage), so a laptop and a phone choose separately. The
+volume slider appears when notification sounds or Call sounds are on. Turning
+notification sounds on reveals one row per type (Messages, Mentions, Thread
+replies, Email, Meetings & reminders, Tasks, AI & agents, Everything else), each
+with its own on/off switch, sound picker, and play button. Picking a sound
+previews it. Email, AI & agents, and Everything else start off.
 Channel join requests use Everything else, alongside sharing and invitations.
+
+**Call sounds** is a separate, default-on toggle with Join and Leave preview
+buttons. Browser calls use fixed ascending/descending cues for deliberate
+participation changes, including your own. They share this volume and quiet
+hours but do not require notification sounds to be on. See
+[join and leave sounds](calls.md#join-and-leave-sounds) for recovery and platform
+limits.
 
 Sounds are synthesized with Web Audio (`features/notification-sounds`); there
 are no audio files. Event types map to rows in `core/categories.ts`; a new
@@ -384,9 +440,11 @@ backend event type stays quiet until it is mapped there. Incoming calls keep
 their own ring and never use these sounds. Only unseen notifications play,
 notifications within 1.5 s of a sound share it, and only the Macro tab the
 person last focused or touched plays, so several tabs ding once. Closing that
-tab hands sound back to the others until one is focused. Browsers keep
-audio suspended until the page has had a gesture; a notification before that
-stays silent rather than playing late.
+tab hands sound back to the others until one is focused. Mouse, touch, Enter,
+and Space activation unlock audio even while sounds are off, so enabling a
+sound setting also unlocks playback. A cue that cannot resume audio within
+250 ms stays silent rather than playing on a later gesture. Notification sounds
+use the system-default output; call cues follow the selected call speaker.
 
 When Macro plays a sound for a notification, its browser or macOS alert is
 sent silent so the person hears one sound. macOS builds older than the
@@ -410,3 +468,11 @@ persistence, previews, and delivery through a stand-in notification feed:
 (from `apps/web`). To check real delivery, turn sounds on, click anywhere in
 Macro, and trigger a mention from another session; then turn Mentions off and
 check that the next mention is quiet.
+
+
+Password access requests can be grouped under the current team. These are
+notification-only groups: a card or stack notification opens its requested
+item in Passwords, with no separate Team page or generic preview. The group
+is hidden while Passwords or the current team is unavailable, when Passwords
+is disabled, or when its request does not belong to the current team. Other
+notification groups keep their existing navigation.

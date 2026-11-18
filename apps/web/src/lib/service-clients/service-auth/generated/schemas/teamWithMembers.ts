@@ -7,12 +7,15 @@
 
 import type { Team } from './team';
 import type { TeamMember } from './teamMember';
+import type { TeamWithMembersCrmMemberAccess } from './teamWithMembersCrmMemberAccess';
 import type { TeamWithMembersScheduledSeatPlans } from './teamWithMembersScheduledSeatPlans';
 
 /**
  * A team with its members
  */
 export interface TeamWithMembers {
+  /** Current effective CRM access for each member, independent of mailbox consent. */
+  crm_member_access: TeamWithMembersCrmMemberAccess;
   /** The members of the team */
   members: TeamMember[];
   /** Provider-confirmed pending seat changes, keyed by member user ID.

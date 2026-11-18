@@ -13,6 +13,7 @@ import {
 import { LexicalStateDebugger } from '@core/component/LexicalMarkdown/component/debug/LexicalStateDebugger';
 import { GenerateMenu } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
+import { HeadingFoldControls } from '@core/component/LexicalMarkdown/component/misc/HeadingFoldControls';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
@@ -50,6 +51,7 @@ import {
   type NodekeyOffset,
   SearchHighlight,
 } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
+import { createHeadingFolds } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import {
   GO_TO_LOCATION_COMMAND,
   GO_TO_NODE_ID_COMMAND,
@@ -79,10 +81,8 @@ import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
-  enableGitBlame,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import { useIsAuthenticated } from '@core/context/user';
+import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -664,17 +664,19 @@ export function MarkdownEditor(props: {
   });
 
   const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
-  if (isFeatureEnabled(enableGitBlame)) {
-    plugins.use(
-      blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) })
-    );
-  }
+  plugins.use(blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) }));
 
   const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
   plugins.use(
     wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
   );
   setMdStore('wordcountStats', wordcountStats);
+
+  const headingFolds = createHeadingFolds({
+    documentId: blockId,
+    userId: useUserId()(),
+  });
+  plugins.use(headingFolds.plugin);
 
   const [progressStats, setProgressStats] = createProgressStatsStore();
   plugins.use(progressPlugin({ setStore: setProgressStats }));
@@ -753,11 +755,9 @@ export function MarkdownEditor(props: {
             {getBlankMarkdownPlaceholder(canEdit())}
           </div>
         </Show>
-        <Show when={isFeatureEnabled(enableGitBlame)}>
-          <Suspense>
-            <BlameTooltip state={blameTooltipStore} documentId={blockId} />
-          </Suspense>
-        </Show>
+        <Suspense>
+          <BlameTooltip state={blameTooltipStore} documentId={blockId} />
+        </Suspense>
         <HighlightLayer
           editor={editor}
           ref={(el) => {
@@ -774,6 +774,8 @@ export function MarkdownEditor(props: {
             class="bg-accent/50"
           />
         </Show>
+
+        <HeadingFoldControls editor={editor} folds={headingFolds} />
 
         <MarkdownEditingOverlays
           editor={editor}

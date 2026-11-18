@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH active AS (\n                    SELECT login.id, login.provider_account_id\n                    FROM harness_account_logins login\n                    JOIN provider_accounts account ON account.id = login.provider_account_id\n                    WHERE login.harness_id = $1 AND login.provider = $2\n                      AND login.signed_out_at IS NULL AND account.external_account_id = $3\n                ), seen AS (\n                    UPDATE provider_accounts SET last_seen_at = now()\n                    WHERE id IN (SELECT provider_account_id FROM active)\n                )\n                UPDATE harness_account_logins SET expires_at = $4\n                WHERE id IN (SELECT id FROM active)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "agent_provider",
+            "kind": {
+              "Enum": [
+                "claude"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "570f64320a36f17f0f294845362f85e25dd7c0e362e9e6b74acadc0dcd23bb36"
+}

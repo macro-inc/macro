@@ -1,0 +1,14 @@
+node_modules/
+*.tsbuildinfo
+.direnv/
+.scripts*/
+
+# State is kept by bucket (behavior/context/state.ts): only what the agent knows is
+# committed. People, their messages, mail, logs and anything volatile stay on
+# this machine.
+state/private/
+state/run/
+state/log/
+
+# Helpers work in their own worktrees of this repository.
+.worktrees/

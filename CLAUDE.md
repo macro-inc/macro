@@ -27,6 +27,8 @@ patterns in older code.
 | `crates/` | Reusable backend libraries, domain services, and adapters. |
 | `crates/macro_db_client/migrations/` | MacroDB PostgreSQL migrations. |
 | `infra/` | Deployment definitions and local infrastructure. |
+| `agent-teammates/` | Agents that work in Macro as their own users: the `muppet` library and a `starter-agent` template. Outside the root workspace and its checks. |
+| `packages/muppet/`, `packages/starter-agent/` | The hosted agent teammate runtime, in the root workspace: the muppet library and the template each agent's repository starts from (`docs/design/agent-teammates.md`). |
 | `tooling/` | Development tools, scripts, and imported `just` recipes. |
 | `docs/` | Development guides, architecture, designs, runbooks, and the browser agent guide; see [the index](docs/README.md). |
 
@@ -52,6 +54,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | Adding collaborative markdown to a feature | [Collab surface core skill](.agents/skills/collab-surface-core/SKILL.md) |
 | Editing frontend or backend code that adds a flow, view, or hot path, or tracing one | `instrumentation` skill |
 | Finding slow web or desktop app flows in Datadog | `perf-investigation` skill |
+| Finding why agent sessions are slow, costly, or wrong | `agent-session-analysis` skill |
 | Adding, reading or removing a feature flag (web or backend) | `feature-flags` skill |
 | Rust code, builds, or tests | [Rust development](docs/development/rust.md) |
 | SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/development/database.md) |

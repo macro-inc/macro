@@ -1,3 +1,4 @@
+import { scheduledActionKeys } from '@app/features/routines/queries/keys';
 import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { type Ok, ok } from 'neverthrow';
@@ -268,4 +269,11 @@ it('keeps retained identity for the shell but gates source reads until fresh log
   expect(
     client.getQueryData(emailKeys.links(viewer()).queryKey)
   ).toBeUndefined();
+});
+
+it('forgets the previous account’s routine drafts', async () => {
+  const key = scheduledActionKeys.draftJobs.queryKey;
+  client.setQueryData(key, [{ id: 'draft-1', state: 'drafting' }]);
+  await resetQueryAccountSession();
+  expect(client.getQueryData(key)).toBeUndefined();
 });

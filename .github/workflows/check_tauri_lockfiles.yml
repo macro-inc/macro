@@ -11,6 +11,7 @@ jobs:
     runs-on: namespace-profile-linux-tiny-no-cache
     outputs:
       vendoring_inputs: ${{ steps.filter.outputs.vendoring_inputs }}
+    timeout-minutes: 10
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -44,6 +45,7 @@ jobs:
     if: needs.check-tauri-lockfiles.outputs.vendoring_inputs == 'true'
     name: check Tauri vendoring
     runs-on: namespace-profile-linux-small;overrides.cache-tag=nix-checks
+    timeout-minutes: 45
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

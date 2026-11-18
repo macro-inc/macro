@@ -6,12 +6,15 @@ import {
   reviewsTabSearch,
   reviewsTabSearchCodec,
 } from '@app/features/reviews-view/reviews-tab-search';
+import { useOptionalSplitRouter } from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
+import { projectDetailRoute } from '@app/routes/routes';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { type Accessor, createMemo } from 'solid-js';
 import { useSplitLayout } from '../split-layout/layout';
+import { paneOf } from '../split-layout/layoutManager';
 import { isMobileNavViewId, type MobileNavViewId } from './mobile-nav-views';
 
 /**
@@ -25,6 +28,7 @@ export type MobileDockNavId =
   | 'reviews'
   | 'booking-links'
   | 'external'
+  | 'passwords'
   | 'settings';
 
 function mobileNavContent(id: Exclude<MobileDockNavId, 'settings'>) {
@@ -71,6 +75,22 @@ export function useForegroundMobileView(): Accessor<
     // The unified Notifications view is the dock's bell.
     if (content.id === 'notifications') return 'home';
     return isMobileNavViewId(content.id) ? content.id : undefined;
+  });
+}
+
+/**
+ * Whether the foreground split shows a project, whose tabs float their own
+ * Task pill.
+ */
+export function useForegroundProject(): Accessor<boolean> {
+  const router = useOptionalSplitRouter();
+  return createMemo(() => {
+    const split = globalSplitManager()?.activeSplit();
+    if (!router || !split) return false;
+
+    return router
+      .matches(paneOf(split.id))
+      .some((match) => match.id === projectDetailRoute.id);
   });
 }
 

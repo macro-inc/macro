@@ -898,6 +898,9 @@ pub struct ImportRun {
     /// presented while it is still `running`; rows staged after that take it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review_id: Option<Uuid>,
+    /// The agent session presenting that review.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_session_id: Option<Uuid>,
 }
 
 /// What a planning run has found in the source so far.

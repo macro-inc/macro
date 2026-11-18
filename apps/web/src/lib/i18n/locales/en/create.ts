@@ -80,6 +80,10 @@ export default {
   results: 'Results',
   couldNotCreateDatabase: 'Could not create the database',
   couldNotCreateForm: 'Could not create the form',
+  couldNotCreateDocument: 'Could not create the document',
+  couldNotCreateSnippet: 'Could not create the snippet',
+  couldNotCreateCanvas: 'Could not create the canvas',
+  couldNotCreateCodeFile: 'Could not create the code file',
 
   // Create menu groups
   groupDocsLabel: 'Docs',

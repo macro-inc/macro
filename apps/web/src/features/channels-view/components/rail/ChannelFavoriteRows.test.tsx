@@ -38,6 +38,7 @@ import {
 import { useSectionReorder } from './next/useSectionReorder';
 
 const measurements = vi.hoisted(() => ({ contentHeight: (): number => 400 }));
+const rowActivity = vi.hoisted(() => ({ unread: false, mentions: 0 }));
 const rail = vi.hoisted(() => ({
   channelById: (_channelId: string): ChannelEntity | undefined => undefined,
   activateRow: vi.fn(),
@@ -155,12 +156,16 @@ vi.mock('./hooks/useChannelRailState', () => ({
     selected: false,
     focused: false,
     muted: false,
+    unread: rowActivity.unread,
+    mentions: rowActivity.mentions,
   }),
   useChannelRailFavoriteItemState: () => () => ({
     domId: 'rail-favorite-row',
     selected: false,
     focused: false,
     muted: false,
+    unread: rowActivity.unread,
+    mentions: rowActivity.mentions,
   }),
   useChannelRailFavoritesState: () => () => ({
     items: [],
@@ -269,6 +274,8 @@ const channel = {
 let setChannel: Setter<ChannelEntity | undefined>;
 beforeEach(() => {
   vi.clearAllMocks();
+  rowActivity.unread = false;
+  rowActivity.mentions = 0;
   drag.starts.length = 0;
   drag.ends.length = 0;
   drag.draggables.clear();
@@ -453,6 +460,56 @@ describe('favorite rows in the chat rail', () => {
       'favorite:channel:design',
       expect.anything()
     );
+  });
+});
+
+describe('unread mention counts on rail rows', () => {
+  it('shows the count in place of the unread dot on a channel row', () => {
+    rowActivity.unread = true;
+    rowActivity.mentions = 3;
+    render(() => <ChannelOption channel={channel} />);
+
+    const count = screen.getByRole('img', { name: '3 unread mentions' });
+    expect(count.textContent).toBe('3');
+    expect(screen.queryByLabelText('Unread')).toBeNull();
+  });
+
+  it('keeps the unread dot when nothing mentions the viewer', () => {
+    rowActivity.unread = true;
+    render(() => <ChannelOption channel={channel} />);
+
+    expect(screen.getByLabelText('Unread')).toBeTruthy();
+    expect(screen.queryByRole('img', { name: /mention/ })).toBeNull();
+  });
+
+  it('shows a mention in a thread even without a top-level unread', () => {
+    rowActivity.mentions = 1;
+    render(() => <ChannelOption channel={channel} />);
+
+    expect(
+      screen.getByRole('img', { name: '1 unread mention' }).textContent
+    ).toBe('1');
+  });
+
+  it('caps the count at the edge limit', () => {
+    rowActivity.mentions = 10;
+    render(() => <ChannelOption channel={channel} />);
+
+    expect(
+      screen.getByRole('img', { name: 'More than 9 unread mentions' })
+        .textContent
+    ).toBe('9+');
+  });
+
+  it('counts mentions on a favorited channel', () => {
+    setChannel(channel);
+    rowActivity.unread = true;
+    rowActivity.mentions = 2;
+    render(() => <ChannelFavoriteRow favorite={favorite} />);
+
+    expect(
+      screen.getByRole('img', { name: '2 unread mentions' }).textContent
+    ).toBe('2');
   });
 });
 

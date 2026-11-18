@@ -41,6 +41,16 @@ fn main() {
         }
     };
     println!("cargo:rustc-env=MACRO_EMBEDDED_BUNDLE_BUILD={embedded_bundle_build}");
+    // Empty when the manifest names no commit; the updater then sends none.
+    let embedded_bundle_git_sha = read_embedded_bundle_git_sha().unwrap_or_default();
+    println!("cargo:rustc-env=MACRO_EMBEDDED_BUNDLE_GIT_SHA={embedded_bundle_git_sha}");
+    // Settings shows this as the app's build date. It stays fixed for the
+    // binary; OTA bundles replace the JavaScript, not this value.
+    let native_build_time_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock is before the Unix epoch")
+        .as_millis();
+    println!("cargo:rustc-env=MACRO_NATIVE_BUILD_TIME_MS={native_build_time_ms}");
     if let Ok(bundle_update_base_url) = std::env::var("MACRO_BUNDLE_UPDATE_BASE_URL") {
         let bundle_update_base_url = bundle_update_base_url.trim();
         if !bundle_update_base_url.is_empty() {
@@ -51,12 +61,28 @@ fn main() {
     tauri_build::build()
 }
 
-fn read_embedded_bundle_build() -> Result<u64, String> {
-    let path = "../../dist/bundle-manifest.json";
+const EMBEDDED_BUNDLE_MANIFEST: &str = "../../dist/bundle-manifest.json";
+
+fn read_embedded_bundle_manifest() -> Result<serde_json::Value, String> {
+    let path = EMBEDDED_BUNDLE_MANIFEST;
     let contents =
         std::fs::read_to_string(path).map_err(|e| format!("failed to read {path}: {e}"))?;
-    let manifest = serde_json::from_str::<serde_json::Value>(&contents)
-        .map_err(|e| format!("failed to parse {path}: {e}"))?;
+    serde_json::from_str::<serde_json::Value>(&contents)
+        .map_err(|e| format!("failed to parse {path}: {e}"))
+}
+
+/// The commit the embedded bundle was built from, if its manifest records one.
+fn read_embedded_bundle_git_sha() -> Option<String> {
+    read_embedded_bundle_manifest()
+        .ok()?
+        .get("gitSha")?
+        .as_str()
+        .map(str::to_owned)
+}
+
+fn read_embedded_bundle_build() -> Result<u64, String> {
+    let path = EMBEDDED_BUNDLE_MANIFEST;
+    let manifest = read_embedded_bundle_manifest()?;
     manifest
         .get("bundleBuild")
         .and_then(|value| value.as_u64())

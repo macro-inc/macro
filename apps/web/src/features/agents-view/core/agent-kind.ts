@@ -20,6 +20,11 @@ const CHAT_HARNESSES: ReadonlySet<string> = new Set([
   'macro-inmem',
 ]);
 
+/** Whether the harness is Macro's own agent, whose config options Macro defines. */
+export function isMacroHarness(harness: string | null | undefined): boolean {
+  return !!harness && CHAT_HARNESSES.has(harness);
+}
+
 export function isCoderHarness(harness: string | null | undefined): boolean {
   if (!harness) return false;
   return !CHAT_HARNESSES.has(harness);

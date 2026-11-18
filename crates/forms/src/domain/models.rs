@@ -218,6 +218,9 @@ pub enum FormError {
     /// A name is empty or too long.
     #[error("{0}")]
     InvalidName(&'static str),
+    /// Icon or color metadata failed validation.
+    #[error("{0}")]
+    InvalidAppearance(String),
     /// A sharing change was refused.
     #[error("invalid sharing change: {0}")]
     InvalidSharing(SharingRefusal),

@@ -3,8 +3,7 @@
 ## What it is
 
 Mail's list view: desktop sidebar and header, mobile pills and filter drawer,
-the Soup-backed thread list, and saved email views (flag
-`enable-email-saved-views`).
+the Soup-backed thread list, and saved email views.
 
 ## Start here
 
@@ -12,6 +11,29 @@ the Soup-backed thread list, and saved email views (flag
   `mail.savedView` URL id, and saved-view selection.
 - `queries/email-query.ts`: each tab's or saved view's Soup `ef` filter.
 - `queries/use-email-query.ts`: list, search, read admission, local drafts.
+- `views/mobile/email-search.tsx`: the touch search page's field and Cancel
+  (`EmailMobileSearchField`) and recent searches
+  (`EmailMobileRecentSearches`); the mobile layout in `email-view.tsx` opens
+  it from the search pill, puts the field in place of the list pane's pill
+  row, and keeps the list mounted below it. `primitives/create-email-mobile-search.ts` owns whether the page is
+  open, and ends its search whenever it closes.
+- `components/EmailDetailView.tsx` and `components/EmailComposeRouteView.tsx`:
+  entries for a thread and a new email inside Mail. They hold the state and
+  switch between the desktop views (`views/email-detail.tsx`,
+  `views/email-compose-route.tsx`) and the touch ones in `views/mobile/`,
+  which host the thread's or composer's own mobile header in the pane's top
+  bar through `SplitHeaderScope`.
+- `primitives/email-row-style.ts`: the Minimalist/Classic row style chosen in
+  Settings → Email, a per-device preference passed to each row as
+  `ListEntity.rowStyle`; phones always get Minimalist.
+  `components/EmailRowStylePreview.tsx` draws Settings' inert sample of it
+  with the real row, restoring Mail's list tokens that the settings card
+  overrides.
+- `primitives/create-search-scroll-reset.ts`: a new search starts at the top
+  once its own results replace the rows kept on screen.
+- `search/`: recent searches (`recent-searches.ts`, per person in browser
+  storage) and the suggestions the header's search field lists
+  (`create-email-search-suggestions.ts`), behind `enable-email-wide-search`.
 - `filters/email-saved-view.ts`: the `kind: "email"` definition codec: strict
   capture, permissive read with skipped-setting issues, materialization,
   canonical comparison, scope resolution, and each tab's own filters.
@@ -22,11 +44,13 @@ the Soup-backed thread list, and saved email views (flag
   editors; the mobile drawer shares People.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
-- `views/email-saved-views.tsx`: sidebar section, mobile picker, menus, the
+- `views/email-saved-views.tsx`: sidebar section (also the touch sidebar sheet), menus, the
   builder dialog, header actions, unavailable and skipped-setting states.
 
 ## Gotchas
 
+- Keep tags in the desktop Filters menu and mobile filter drawer, not in the
+  sidebar; filter changes stay on the current tab.
 - A saveable tab is a built-in view: it starts from its own restrictions
   (`emailTabFilterState`) as facets plus `state.conditions`, which the Filters
   menu edits like a view's. `emailTabRefinements` keeps the tab's own query
@@ -47,7 +71,17 @@ the Soup-backed thread list, and saved email views (flag
   predicate, as aliases do; local working copies are left out.
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
   ingress depth limit.
+- The data source keeps the previous rows while a search loads only when
+  asked (`keepRowsWhileSearching`) and reports it as `showsPreviousRows`; they
+  never cross a tab change, and `isLoading` stays false while they show, so
+  gate "loading" UI on both.
 - Unread dots are presence in a small first unread page per view, never a count.
+- Cmd+F is registered for the whole desktop view in
+  `use-email-search-hotkeys.ts` and focuses the list header's field through
+  `registerListSearch`; while a thread or a new email has replaced that
+  header it stays unhandled, so the browser can find text in the thread or
+  draft. Email binds no `/`; as in every other view, it opens the app
+  sidebar's Search view.
 - `ViewShell.Main` holds the list at the width `use-reading-pane-list-width.ts`
   reads beside the reading pane, so every drag must be saved through
   `onWidthChangeEnd`; an unsaved one snaps back on the next resize.

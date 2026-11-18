@@ -1,4 +1,5 @@
 import { MarkdownHostContext } from '@core/component/LexicalMarkdown/context/MarkdownHostContext';
+import type { DocumentEntity } from '@entity';
 import type { Accessor, ParentComponent } from 'solid-js';
 import { createContext, useContext } from 'solid-js';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
@@ -8,6 +9,7 @@ export type MarkdownDocumentContextValue = {
   documentId: Accessor<string>;
   kind: Accessor<MarkdownDocumentKind>;
   documentSource: Accessor<MarkdownDocumentSource>;
+  entity?: Accessor<DocumentEntity | undefined>;
   permissions: {
     canComment: Accessor<boolean>;
     canEdit: Accessor<boolean>;

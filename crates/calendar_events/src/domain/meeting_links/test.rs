@@ -5,8 +5,8 @@ use chrono::{NaiveDate, TimeZone, Utc};
 use super::*;
 use crate::domain::models::{
     AttendeeResponseStatus, CalendarAttendeeInput, CalendarEventPatch, ConferenceChange,
-    EventReminders, EventStatus, EventTransparency, EventType, EventVisibility, GuestPolicy,
-    OutOfOfficeProperties, ViewerCapabilities, VisibleCalendar,
+    EventDetails, EventReminders, EventStatus, EventTransparency, EventType, EventVisibility,
+    GuestPolicy, OutOfOfficeProperties, ViewerCapabilities, VisibleCalendar,
 };
 use crate::domain::ports::{
     CalendarDeletionScope, CalendarRsvpScope, CalendarUpdateScope, UnavailableMeetingLinks,
@@ -74,10 +74,15 @@ fn draft() -> CalendarEventDraft {
     }
 }
 
+type RecordedUpdate = (Uuid, Option<Uuid>, CalendarEventPatch, CalendarUpdateScope);
+
 #[derive(Default)]
 struct FakeMutations {
     created: Mutex<Vec<CalendarEventDraft>>,
     create_error: Mutex<Option<CalendarMutationError>>,
+    details: Mutex<Option<EventDetails>>,
+    updated: Mutex<Vec<RecordedUpdate>>,
+    update_error: Mutex<Option<CalendarMutationError>>,
 }
 
 impl FakeMutations {
@@ -114,12 +119,19 @@ impl CalendarMutationService for FakeMutations {
     async fn update_event(
         &self,
         _requester_id: &str,
-        _event_id: Uuid,
-        _calendar_id: Option<Uuid>,
-        _patch: CalendarEventPatch,
-        _scope: CalendarUpdateScope,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
-        unreachable!("the link is written with the create, never as a follow-up patch")
+        if let Some(error) = self.update_error.lock().unwrap().take() {
+            return Err(error);
+        }
+        self.updated
+            .lock()
+            .unwrap()
+            .push((event_id, calendar_id, patch, scope));
+        Ok(sample_event())
     }
 
     async fn delete_event(
@@ -179,6 +191,22 @@ impl CalendarMutationService for FakeMutations {
         _email_link_id: Uuid,
     ) -> Result<(), CalendarMutationError> {
         unreachable!("creating with a Macro call disconnects nothing")
+    }
+}
+
+impl CalendarEventDetailsReader for FakeMutations {
+    async fn details_for_update(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+        _scope: &CalendarUpdateScope,
+    ) -> Result<EventDetails, CalendarMutationError> {
+        self.details
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(CalendarMutationError::NotFound)
     }
 }
 
@@ -334,7 +362,7 @@ async fn a_calendar_write_refused_before_the_provider_cancels_the_fresh_meeting(
         )
         .await
         .unwrap_err();
-        assert!(matches!(error, CreateEventWithMacroCallError::Calendar(_)));
+        assert!(matches!(error, MacroCallEventError::Calendar(_)));
         assert_eq!(
             *links.cancelled.lock().unwrap(),
             vec![("macro|owner@example.com".to_string(), Uuid::from_u128(42))]
@@ -364,7 +392,7 @@ async fn an_event_that_may_have_reached_the_provider_keeps_its_meeting() {
         )
         .await
         .unwrap_err();
-        assert!(matches!(error, CreateEventWithMacroCallError::Calendar(_)));
+        assert!(matches!(error, MacroCallEventError::Calendar(_)));
         assert!(links.cancelled.lock().unwrap().is_empty());
     }
 }
@@ -389,7 +417,7 @@ async fn a_failed_meeting_writes_nothing_to_the_calendar() {
     .unwrap_err();
     assert!(matches!(
         error,
-        CreateEventWithMacroCallError::MeetingLink(MeetingLinkError::Failed(_))
+        MacroCallEventError::MeetingLink(MeetingLinkError::Failed(_))
     ));
     assert!(mutations.created.lock().unwrap().is_empty());
 }
@@ -421,7 +449,7 @@ async fn out_of_office_and_provider_conferencing_are_refused_before_minting() {
         .unwrap_err();
         assert!(matches!(
             error,
-            CreateEventWithMacroCallError::Calendar(CalendarMutationError::InvalidInput(_))
+            MacroCallEventError::Calendar(CalendarMutationError::InvalidInput(_))
         ));
     }
     assert!(links.requests.lock().unwrap().is_empty());
@@ -444,7 +472,322 @@ async fn an_unwired_host_refuses_the_call_without_touching_the_calendar() {
     .unwrap_err();
     assert!(matches!(
         error,
-        CreateEventWithMacroCallError::MeetingLink(MeetingLinkError::Unavailable)
+        MacroCallEventError::MeetingLink(MeetingLinkError::Unavailable)
     ));
     assert!(mutations.created.lock().unwrap().is_empty());
+}
+
+fn stored_details() -> EventDetails {
+    EventDetails {
+        title: "Standup".to_string(),
+        description: Some("<p>Agenda</p>".to_string()),
+        location: Some("Room 4".to_string()),
+        visibility: EventVisibility::Default,
+        time: Some(timed()),
+        recurrence_lines: Vec::new(),
+        has_conference: true,
+    }
+}
+
+fn mutations_holding(details: EventDetails) -> FakeMutations {
+    FakeMutations {
+        details: Mutex::new(Some(details)),
+        ..FakeMutations::default()
+    }
+}
+
+#[tokio::test]
+async fn switching_replaces_the_conference_with_a_call_in_one_write() {
+    let mutations = mutations_holding(stored_details());
+    let links = FakeMeetingLinks::default();
+    let event_id = Uuid::from_u128(7);
+    let calendar_id = Uuid::from_u128(3);
+
+    update_event_with_macro_call(
+        &mutations,
+        &links,
+        "macro|owner@example.com",
+        event_id,
+        Some(calendar_id),
+        CalendarEventPatch::default(),
+        CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap();
+
+    let requests = links.requests.lock().unwrap();
+    let (requester, request) = requests.first().expect("one meeting minted");
+    assert_eq!(requester, "macro|owner@example.com");
+    assert_eq!(request.title, "Standup");
+    assert_eq!(
+        request.scheduled_start,
+        Some(Utc.with_ymd_and_hms(2026, 8, 20, 17, 0, 0).unwrap())
+    );
+
+    let updated = mutations.updated.lock().unwrap();
+    assert_eq!(updated.len(), 1);
+    let (written_id, written_calendar, patch, scope) = updated.first().expect("one write");
+    assert_eq!(*written_id, event_id);
+    assert_eq!(*written_calendar, Some(calendar_id));
+    assert_eq!(*scope, CalendarUpdateScope::All);
+    assert_eq!(patch.conference, Some(ConferenceChange::Removed));
+    assert_eq!(patch.location.as_deref(), Some("Room 4"));
+    assert_eq!(
+        patch.description.as_deref(),
+        Some(
+            format!("<p>Agenda</p>\n<p>Join Macro call: <a href=\"{URL}\">{URL}</a></p>").as_str()
+        )
+    );
+    assert!(links.cancelled.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn switching_applies_the_changes_the_patch_carries() {
+    let mutations = mutations_holding(EventDetails {
+        has_conference: false,
+        ..stored_details()
+    });
+    let links = FakeMeetingLinks::default();
+    let moved = EventTime::Timed {
+        starts_at: Utc.with_ymd_and_hms(2026, 8, 21, 17, 0, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2026, 8, 21, 18, 0, 0).unwrap(),
+        time_zone: None,
+    };
+
+    update_event_with_macro_call(
+        &mutations,
+        &links,
+        "macro|owner@example.com",
+        Uuid::from_u128(7),
+        None,
+        CalendarEventPatch {
+            title: Some("Retro".to_string()),
+            description: Some("New agenda".to_string()),
+            location: Some(String::new()),
+            time: Some(moved.clone()),
+            ..CalendarEventPatch::default()
+        },
+        CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap();
+
+    let requests = links.requests.lock().unwrap();
+    let (_, request) = requests.first().expect("one meeting minted");
+    assert_eq!(request.title, "Retro");
+    assert_eq!(
+        request.scheduled_start,
+        Some(Utc.with_ymd_and_hms(2026, 8, 21, 17, 0, 0).unwrap())
+    );
+
+    let updated = mutations.updated.lock().unwrap();
+    let (_, _, patch, _) = updated.first().expect("one write");
+    assert_eq!(patch.conference, None);
+    assert_eq!(patch.time, Some(moved));
+    assert_eq!(patch.location.as_deref(), Some(URL));
+    assert_eq!(
+        patch.description.as_deref(),
+        Some(format!("New agenda\n<p>Join Macro call: <a href=\"{URL}\">{URL}</a></p>").as_str())
+    );
+}
+
+#[tokio::test]
+async fn switching_an_event_that_holds_a_call_keeps_it_and_drops_the_conference() {
+    let (description, location) = attach_macro_call(Some("<p>Agenda</p>"), None, URL);
+    let mutations = mutations_holding(EventDetails {
+        description: Some(description),
+        location: Some(location),
+        ..stored_details()
+    });
+    let links = FakeMeetingLinks::default();
+
+    update_event_with_macro_call(
+        &mutations,
+        &links,
+        "macro|owner@example.com",
+        Uuid::from_u128(7),
+        None,
+        CalendarEventPatch::default(),
+        CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap();
+
+    assert!(links.requests.lock().unwrap().is_empty());
+    let updated = mutations.updated.lock().unwrap();
+    let (_, _, patch, _) = updated.first().expect("one write");
+    assert_eq!(patch.conference, Some(ConferenceChange::Removed));
+    assert_eq!(patch.description, None);
+    assert_eq!(patch.location, None);
+}
+
+#[tokio::test]
+async fn retrying_a_finished_switch_writes_nothing() {
+    let (description, location) = attach_macro_call(None, None, URL);
+    let mutations = mutations_holding(EventDetails {
+        description: Some(description),
+        location: Some(location),
+        has_conference: false,
+        ..stored_details()
+    });
+    let links = FakeMeetingLinks::default();
+
+    let error = update_event_with_macro_call(
+        &mutations,
+        &links,
+        "macro|owner@example.com",
+        Uuid::from_u128(7),
+        None,
+        CalendarEventPatch::default(),
+        CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(
+        error,
+        MacroCallEventError::Calendar(CalendarMutationError::InvalidInput(_))
+    ));
+    assert!(links.requests.lock().unwrap().is_empty());
+    assert!(mutations.updated.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_replacement_description_keeps_the_stored_calls_join_line() {
+    let (description, location) = attach_macro_call(None, None, URL);
+    let mutations = mutations_holding(EventDetails {
+        description: Some(description),
+        location: Some(location),
+        has_conference: false,
+        ..stored_details()
+    });
+    let links = FakeMeetingLinks::default();
+
+    update_event_with_macro_call(
+        &mutations,
+        &links,
+        "macro|owner@example.com",
+        Uuid::from_u128(7),
+        None,
+        CalendarEventPatch {
+            description: Some("Agenda".to_string()),
+            ..CalendarEventPatch::default()
+        },
+        CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap();
+
+    assert!(links.requests.lock().unwrap().is_empty());
+    let updated = mutations.updated.lock().unwrap();
+    let (_, _, patch, _) = updated.first().expect("one write");
+    let written = patch.description.as_deref().expect("description written");
+    assert!(written.starts_with("Agenda"));
+    assert_eq!(
+        first_macro_call_url(None, Some(written)).as_deref(),
+        Some(URL)
+    );
+}
+
+#[tokio::test]
+async fn a_switch_refused_before_the_provider_cancels_the_fresh_meeting() {
+    for refused in [
+        CalendarMutationError::GuestsCannotModify,
+        CalendarMutationError::ProviderRejected("cannot remove Teams".to_string()),
+    ] {
+        let mutations = mutations_holding(stored_details());
+        *mutations.update_error.lock().unwrap() = Some(refused);
+        let links = FakeMeetingLinks::default();
+
+        let error = update_event_with_macro_call(
+            &mutations,
+            &links,
+            "macro|owner@example.com",
+            Uuid::from_u128(7),
+            None,
+            CalendarEventPatch::default(),
+            CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, MacroCallEventError::Calendar(_)));
+        assert_eq!(
+            *links.cancelled.lock().unwrap(),
+            vec![("macro|owner@example.com".to_string(), Uuid::from_u128(42))]
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_switch_whose_write_may_have_landed_keeps_the_meeting() {
+    let mutations = mutations_holding(stored_details());
+    *mutations.update_error.lock().unwrap() =
+        Some(CalendarMutationError::Retryable("timed out".to_string()));
+    let links = FakeMeetingLinks::default();
+
+    update_event_with_macro_call(
+        &mutations,
+        &links,
+        "macro|owner@example.com",
+        Uuid::from_u128(7),
+        None,
+        CalendarEventPatch::default(),
+        CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(links.cancelled.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_failed_mint_leaves_the_event_untouched() {
+    let mutations = mutations_holding(stored_details());
+    let links = FakeMeetingLinks {
+        fail_create: true,
+        ..FakeMeetingLinks::default()
+    };
+
+    let error = update_event_with_macro_call(
+        &mutations,
+        &links,
+        "macro|owner@example.com",
+        Uuid::from_u128(7),
+        None,
+        CalendarEventPatch::default(),
+        CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(error, MacroCallEventError::MeetingLink(_)));
+    assert!(mutations.updated.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn switching_refuses_an_explicit_provider_conference() {
+    let mutations = mutations_holding(stored_details());
+    let links = FakeMeetingLinks::default();
+
+    let error = update_event_with_macro_call(
+        &mutations,
+        &links,
+        "macro|owner@example.com",
+        Uuid::from_u128(7),
+        None,
+        CalendarEventPatch {
+            conference: Some(ConferenceChange::GoogleMeet),
+            ..CalendarEventPatch::default()
+        },
+        CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(
+        error,
+        MacroCallEventError::Calendar(CalendarMutationError::InvalidInput(_))
+    ));
+    assert!(links.requests.lock().unwrap().is_empty());
 }

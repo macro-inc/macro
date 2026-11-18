@@ -7,6 +7,7 @@ export default {
   join: 'Join',
   muteChannel: 'Mute channel',
   unmuteChannel: 'Unmute channel',
+  onlyMentions: 'Only @mentions',
   muteIndefinitely: 'Until I turn it off',
   customMute: 'Custom…',
   unreadWhenCollapsed: 'Unread when collapsed',
@@ -31,6 +32,8 @@ export default {
   channels: 'Channels',
   allChannels: 'All channels',
   direct_messages: 'Direct messages',
+  /** The phone section pill, where the full name crowds the strip. */
+  directMessagesPill: 'DMs',
   empty: 'No conversations yet',
   emptyFavorites: 'Star conversations to keep them here.',
   emptySection: 'No channels yet',
@@ -139,6 +142,11 @@ export default {
   customOrder: 'Custom order',
   reorderFavoritesFailed: 'Could not reorder favorites. Please try again.',
   unreadOnly: 'Unread only',
+  unreadMentions: {
+    one: '{{count}} unread mention',
+    other: '{{count}} unread mentions',
+  },
+  manyUnreadMentions: { other: 'More than {{count}} unread mentions' },
   noUnreadConversations: 'No unread conversations',
   addChannels: 'Add channels',
   addChannelsTo: 'Add channels to “{{name}}”',

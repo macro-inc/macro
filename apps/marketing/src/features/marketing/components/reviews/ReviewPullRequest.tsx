@@ -180,7 +180,7 @@ export function PullRequestView(props: {
             )}
           </Show>
           <PrIcon status={status()} class="shrink-0" />
-          <span class="min-w-0 truncate text-sm font-semibold">
+          <span class="min-w-0 truncate text-sm font-medium">
             {props.pr.title}
           </span>
           <div class="ml-auto flex shrink-0 items-center gap-2 pr-1">

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-macro-icon="file-zip" aria-hidden="true" focusable="false">
+  <path d="M13.5 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-10L13.5 3Z"/>
+  <path d="M13.5 3v3.5a2 2 0 0 0 2 2H19"/>
+  <g stroke-width="1.5">
+    <path d="M10.5 9.5H12m0 2.5h1.5m-3 2.5H12"/>
+    <rect x="10.5" y="17" width="3" height="2" rx="0.75"/>
+  </g>
+</svg>

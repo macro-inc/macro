@@ -226,6 +226,22 @@ impl MacroNavigationPlugin {
         }
     }
 
+    /// Open a URL the page asked for outside its own navigation, with the same
+    /// policy as [`Self::on_new_window`]: app links go to the SPA router and
+    /// external URLs to the system handler. Unlike a popup request it needs no
+    /// user gesture, and unlike a same-page navigation it never runs the page's
+    /// `beforeunload`. Returns false for a standalone document that needs a
+    /// popup webview, which the caller must open itself.
+    pub fn open_external<R: Runtime>(&self, app: &tauri::AppHandle<R>, url: &Url) -> bool {
+        match self.new_window_destination(url) {
+            NavigationOutput::Internal => false,
+            destination => {
+                self.dispatch(app, destination);
+                true
+            }
+        }
+    }
+
     /// Return true only when the current webview may load the URL itself.
     fn dispatch<R: Runtime>(
         &self,

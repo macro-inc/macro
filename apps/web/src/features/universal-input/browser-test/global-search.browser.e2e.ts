@@ -29,9 +29,7 @@ test('search messages from Julia prepopulates the global Channels and From facet
   ).toHaveText('');
   await expect(page.getByTestId('global-search-requests')).toHaveText('[]');
   await expect(
-    dialog.getByText(
-      'Add at least 3 search characters to search by sender or speaker.'
-    )
+    dialog.getByText('Add search text to search by sender or speaker.')
   ).toBeVisible();
   await dialog
     .getByRole('textbox', { name: 'Search for', exact: true })

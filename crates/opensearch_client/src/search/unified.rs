@@ -20,7 +20,7 @@ use crate::{
         chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
         documents::{
             DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
-            DocumentSearchMode, PropertyFilterArg,
+            DocumentSearchMode, DocumentTermMatching, PropertyFilterArg,
         },
         emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
@@ -94,6 +94,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             property_filters: args.document_search_args.property_filters,
             tag_option_ids: args.document_search_args.tag_option_ids,
             match_all_tags: args.document_search_args.match_all_tags,
+            term_matching: args.document_search_args.term_matching,
         }
     }
 }
@@ -108,8 +109,9 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             page_size: args.page_size,
             match_type: args.match_type,
             collapse: args.collapse,
-            ids_only: false, // Email is never ids only at the moment
+            ids_only: args.email_search_args.ids_only,
             thread_ids: args.email_search_args.thread_ids,
+            required_thread_ids: args.email_search_args.required_thread_ids,
             link_ids: args.email_search_args.link_ids,
             sender: args.email_search_args.sender,
             cc: args.email_search_args.cc,
@@ -239,13 +241,21 @@ pub struct UnifiedDocumentSearchArgs {
     pub property_filters: Vec<PropertyFilterArg>,
     pub tag_option_ids: Vec<String>,
     pub match_all_tags: bool,
+    pub term_matching: DocumentTermMatching,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedEmailSearchArgs {
     pub terms: Vec<String>,
     pub user_ids: Vec<String>,
+    /// Threads reachable besides the `user_ids` mailboxes, or, with
+    /// `ids_only`, the only threads searched.
     pub thread_ids: Vec<String>,
+    /// Search only `thread_ids`, not the `user_ids` mailboxes.
+    pub ids_only: bool,
+    /// When non-empty, every hit's thread must be one of these, on top of
+    /// the access filter.
+    pub required_thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
     pub sender: Vec<String>,
     pub cc: Vec<String>,

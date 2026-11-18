@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_item_entities SET totp_key_id=NULL,metadata=jsonb_set(metadata,'{hasTotp}','false'::jsonb),revision=revision+1 WHERE team_id=$1 AND id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "059e6ee7b40897a679d2cc8f469b64f7d6d60e89bab23dd5be9f0a4018b6c54b"
+}

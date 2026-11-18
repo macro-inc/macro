@@ -1,9 +1,9 @@
-import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { ItemPreview } from '@core/component/ItemPreview';
 import type { ItemEntity } from '@queries/preview';
 import { Button, Tooltip } from '@ui';
 import { createSignal, createUniqueId, For, Show } from 'solid-js';
 import { EntitySelectionBadge } from '../../components/EntitySelectionBadge';
+import { EntityIcon } from '../../extractors/entity-icon';
 import { EntityTitle } from '../../extractors/entity-title';
 import type { EntityData } from '../../types/entity';
 
@@ -65,10 +65,7 @@ export function EntityActionSelection(props: {
               {(entity) => (
                 <li class="flex h-7 min-w-0 items-center gap-2 px-2 text-xs">
                   <span class="size-3.5 shrink-0">
-                    <EntityIcon
-                      targetType={getEntityIconType(entity)}
-                      size="fill"
-                    />
+                    <EntityIcon entity={entity} />
                   </span>
                   <Tooltip
                     label={entity.name ?? 'Untitled'}

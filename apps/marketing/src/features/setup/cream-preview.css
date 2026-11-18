@@ -117,8 +117,7 @@ html[data-palette='cream'] .homepage-sheet-footer { border-top-color: #1d1c1a14;
 html[data-palette='cream'] .homepage-sheet-tab { border-bottom-color: #1d1c1a; background: #1d1c1a0a; color: #1d1c1a; }
 html[data-palette='cream'] .homepage-sheet-add-rows { background: #1d1c1a08; border-color: #1d1c1a14; }
 
-/* ---- GitHub / open source -------------------------------------------- */
-html[data-palette='cream'] .homepage-github-mark { background: var(--color-surface-3); box-shadow: 0 0 0 7px #1d1c1a05; color: #1d1c1a; }
+/* ---- Embedded workspace --------------------------------------------- */
 html[data-palette='cream'] .homepage-embedded-demo { --demo-page: #f5f1e8; }
 html[data-palette='cream'] .homepage-embedded-window { background: #faf8f3; }
 html[data-palette='cream'] .homepage-demo-slide-copy h2 { color: #1d1c1a; }

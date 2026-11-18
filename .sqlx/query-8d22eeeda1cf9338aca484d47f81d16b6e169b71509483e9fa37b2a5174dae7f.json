@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion\n               SET state = $4, state_reason = $5, updated_at = $6, state_changed_at = $6\n               WHERE user_id = $1 AND id = $2 AND state = ANY($3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "TextArray",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d22eeeda1cf9338aca484d47f81d16b6e169b71509483e9fa37b2a5174dae7f"
+}

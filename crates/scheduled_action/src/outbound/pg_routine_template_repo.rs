@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use macro_uuid::Uuid;
+use model_entity::EntityAppearance;
 use model_owner::Owner;
 use serde_json::Value;
 use sqlx::PgPool;
@@ -34,6 +35,7 @@ struct TemplateRow {
     active_count: i64,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    appearance: Option<sqlx::types::Json<EntityAppearance>>,
 }
 
 impl TryFrom<TemplateRow> for RoutineTemplate {
@@ -51,6 +53,7 @@ impl TryFrom<TemplateRow> for RoutineTemplate {
             active_count: u32::try_from(row.active_count)?,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            appearance: row.appearance.map(|value| value.0).unwrap_or_default(),
         })
     }
 }
@@ -60,14 +63,15 @@ impl RoutineTemplateRepo for PgRoutineTemplateRepo {
         sqlx::query!(
             r#"
             INSERT INTO scheduled_action_template
-                (action_id, name, description, trigger_config, task, variables)
-            VALUES ($1, $2, $3, $4, $5, $6)
+                (action_id, name, description, trigger_config, task, variables, appearance)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (action_id) DO UPDATE
             SET name = EXCLUDED.name,
                 description = EXCLUDED.description,
                 trigger_config = EXCLUDED.trigger_config,
                 task = EXCLUDED.task,
                 variables = EXCLUDED.variables,
+                appearance = EXCLUDED.appearance,
                 updated_at = now()
             "#,
             snapshot.action_id,
@@ -76,6 +80,7 @@ impl RoutineTemplateRepo for PgRoutineTemplateRepo {
             serde_json::to_value(&snapshot.trigger)?,
             snapshot.task,
             serde_json::to_value(&snapshot.variables)?,
+            sqlx::types::Json(&snapshot.appearance) as _,
         )
         .execute(&self.pool)
         .await?;
@@ -99,7 +104,7 @@ impl RoutineTemplateRepo for PgRoutineTemplateRepo {
             TemplateRow,
             r#"
             SELECT t.action_id, a.owner, t.name, t.description, t.trigger_config, t.task,
-                   t.variables, t.created_at, t.updated_at,
+                   t.variables, t.created_at, t.updated_at, t.appearance AS "appearance: _",
                    (SELECT count(*) FROM scheduled_action s WHERE s.template_id = t.action_id)
                        AS "active_count!"
             FROM scheduled_action_template t

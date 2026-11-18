@@ -8,6 +8,8 @@ vi.mock('../constant/servers', () => ({
     new URL('/auth', document.baseURI).href,
     'http://127.0.0.1:3006/sync',
   ],
+  SERVER_HOSTS: {},
+  SYNC_SERVICE_HOSTS: { worker: 'https://sync.example' },
 }));
 vi.mock('./platform', () => ({ isTauri: () => platform.native }));
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: nativeFetch }));
@@ -19,6 +21,7 @@ import {
   platformFetch,
   webviewFetch,
 } from './platformFetch';
+import { safeFetch } from './safeFetch';
 
 beforeEach(() => {
   platform.native = true;
@@ -156,6 +159,20 @@ it('routes the installed global fetch to the native transport without recursing'
   expect(browser).toHaveBeenCalledTimes(1);
 });
 
+it.each([
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/vision_wasm_internal.wasm',
+  'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
+])('keeps call background effect assets on the webview %s', async (url) => {
+  const browser = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('browser'));
+  vi.stubGlobal('fetch', browser);
+  installPlatformFetch();
+  await fetch(url);
+  expect(nativeFetch).not.toHaveBeenCalled();
+  expect(browser).toHaveBeenCalledTimes(1);
+});
+
 it('routes installed loopback and localhost-named URLs by service and origin', async () => {
   const browser = vi
     .fn<typeof fetch>()
@@ -190,3 +207,31 @@ it.each([
     expect(nativeFetch).not.toHaveBeenCalled();
   }
 );
+
+it('reports a native request that gets no response as a network error', async () => {
+  const failure =
+    'error sending request for url (https://sync.example/document/1/exists)';
+  nativeFetch.mockRejectedValue(failure);
+  vi.stubGlobal('fetch', initializePlatformFetch(vi.fn<typeof fetch>()));
+
+  await expect(platformFetch('https://sync.example/')).rejects.toThrow(
+    new TypeError(failure)
+  );
+  const result = await safeFetch('https://sync.example/document/1/exists', {
+    method: 'HEAD',
+  });
+  expect(result._unsafeUnwrapErr()).toEqual([
+    { code: 'NETWORK_ERROR', message: 'Network error occurred' },
+  ]);
+});
+
+it('keeps a cancelled native request out of network errors', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  nativeFetch.mockRejectedValue('Request canceled');
+  vi.stubGlobal('fetch', initializePlatformFetch(vi.fn<typeof fetch>()));
+
+  await expect(
+    platformFetch('https://sync.example/', { signal: controller.signal })
+  ).rejects.toBe('Request canceled');
+});

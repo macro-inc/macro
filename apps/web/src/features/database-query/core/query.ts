@@ -12,6 +12,7 @@ import {
 } from '@macro-inc/lexical-core/nodes/databaseQueryData';
 import { err, ok, type Result } from 'neverthrow';
 import { match, P } from 'ts-pattern';
+import { formatAnswerNumber } from './answer-format';
 
 /**
  * What a document stores: a pointer to an immutable saved query plus its
@@ -152,9 +153,7 @@ export function isScalarAnswer(answer: QueryAnswer | undefined): boolean {
 
 export function formatQueryValue(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 }).format(
-    value
-  );
+  return formatAnswerNumber(value, { maximumFractionDigits: 6 });
 }
 
 /** An early affordance, not a security boundary: the engine refuses a write when it runs. */

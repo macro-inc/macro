@@ -4,7 +4,7 @@ import {
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
 import { TasksCreateAction } from '@app/features/tasks-view/tasks-create-action';
-import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSearchParams } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -12,10 +12,12 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { enableGantt, enableProjects } from '@core/constant/featureFlags';
+import {
+  enableEntityAppearance,
+  enableGantt,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { queryClient } from '@queries/client';
 import {
@@ -35,6 +37,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import {
   ProjectsProvider,
   useProjectsContext,
@@ -51,29 +54,19 @@ import { createProjectSources } from './queries/project-sources';
 import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
 
-function createProjectReadGate() {
-  // Each source invokes this under its own owner, which can outlive this view.
-  const flag = useFeatureFlag(enableProjects);
-  return () => flag().enabled;
-}
-
-function createProjectsContext() {
+/** The production capabilities, for hosts outside the Projects view. */
+export function createProjectsContext() {
   const userId = useUserId();
   return createProjectSources(
     initiativeClient,
     { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
     queryClient,
-    userId,
-    createProjectReadGate
+    userId
   );
 }
 
 export function Projects(props: ParentProps) {
-  return (
-    <ShowFeatureFlag flag={enableProjects}>
-      <ProjectsContent>{props.children}</ProjectsContent>
-    </ShowFeatureFlag>
-  );
+  return <ProjectsContent>{props.children}</ProjectsContent>;
 }
 
 function ProjectsContent(props: ParentProps) {
@@ -166,15 +159,17 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
       return selected;
     },
   };
-  const copyLink = makeCopyLinkAction();
-  const copyId = makeCopyEntityIdAction();
+  const copyLink = makeCopyLinkAction({ silent: true });
+  const copyId = makeCopyEntityIdAction({ silent: true });
+  const changeIcon = useChangeEntityIcon();
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [sharing, setSharing] = createSignal<string>();
   return (
     <>
       <ProjectsCollection
         createAction={
           <Show when={!isTouchDevice()}>
-            <TasksCreateAction presentation="toolbar" projectsEnabled />
+            <TasksCreateAction presentation="toolbar" />
           </Show>
         }
         onOpen={open}
@@ -195,11 +190,21 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
         canOpenInNewSplit={() =>
           globalSplitManager()?.canAppendSplit() ?? false
         }
-        onCopyLink={(id) =>
-          fireAndForget(copyLink.executeByBlock(id, 'initiative'), 'projects')
-        }
-        onCopyId={(id) => fireAndForget(copyId.executeById(id), 'projects')}
+        onCopyLink={(id) => copyLink.executeByBlock(id, 'initiative')}
+        onCopyId={(id) => copyId.executeById(id)}
         onShare={(projectId) => setSharing(projectId)}
+        onChangeIcon={
+          appearanceFlag().enabled
+            ? (project) =>
+                changeIcon({
+                  type: 'initiative',
+                  id: project.id,
+                  name: project.name,
+                  ownerId: '',
+                  appearance: project.appearance,
+                })
+            : undefined
+        }
       />
       <Show when={sharing()} keyed>
         {(projectId) => (

@@ -68,25 +68,27 @@ function Root(
 // The sidebar's search field, before the view can search.
 const sidebarSearch = () => <ListSkeleton.Bar class="h-8 w-full" />;
 
-/** The view's sidebar: its title and search, its create action if it has one, and rows. */
+/** The view's sidebar: its title, its search and create action if it has them, and rows. */
 function Sidebar(props: {
   title: string;
   createLabel?: string;
+  /** Only for a sidebar that searches its own list. */
+  search?: boolean;
   children?: JSX.Element;
 }) {
+  const search = () => (props.search ? sidebarSearch : undefined);
+
   return (
     <ViewShell.Aside class="flex flex-col bg-panel">
       <Show
         when={props.createLabel}
         fallback={
-          <Show when={!isTouchDevice()}>
-            <ViewSidebar.Header search={sidebarSearch}>
-              <div class="flex min-w-0 items-center gap-1">
-                <ViewSidebar.CloseButton class="shrink-0" />
-                <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
-              </div>
-            </ViewSidebar.Header>
-          </Show>
+          <ViewSidebar.Header search={search()}>
+            <div class="flex min-w-0 items-center gap-1">
+              <ViewSidebar.CloseButton class="shrink-0" />
+              <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
+            </div>
+          </ViewSidebar.Header>
         }
       >
         {(label) => (
@@ -94,7 +96,7 @@ function Sidebar(props: {
             title={props.title}
             label={label()}
             onCreate={() => {}}
-            search={sidebarSearch}
+            search={search()}
           />
         )}
       </Show>

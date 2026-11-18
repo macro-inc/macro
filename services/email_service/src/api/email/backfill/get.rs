@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email::domain::backfill_jobs::{BackfillJobAccess, BackfillLookupError};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::email::service::backfill::BackfillJob;
@@ -43,34 +44,11 @@ pub async fn handler(
     link: Extension<Link>,
     Path(job_id): Path<Uuid>,
 ) -> Result<Response, Response> {
-    let job = email_db_client::backfill::job::get::get_backfill_job_with_link_id(
-        &ctx.db, job_id, link.id,
-    )
-    .await
-    .map_err(|e| {
-        tracing::warn!(error=?e, "error fetching backfill job");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "error fetching job".into(),
-            }),
-        )
-            .into_response()
-    })?
-    .ok_or_else(|| {
-        tracing::warn!(
-            "job not found during cancel backfill request for link_id {} job_id {}",
-            link.id,
-            job_id
-        );
-        (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                message: "job does not exist".into(),
-            }),
-        )
-            .into_response()
-    })?;
+    let job = ctx
+        .backfill_jobs
+        .get(job_id, BackfillJobAccess::Inbox(link.id))
+        .await
+        .map_err(job_error_response)?;
 
     Ok(Json(GetBackfillJobResponse { job }).into_response())
 }
@@ -99,9 +77,11 @@ pub async fn active_handler(
     State(ctx): State<ApiContext>,
     link: Extension<Link>,
 ) -> Result<Response, GetActiveBackfillError> {
-    let job = email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
+    let job = ctx
+        .backfill_jobs
+        .active(link.id)
         .await
-        .map_err(GetActiveBackfillError::QueryError)?;
+        .map_err(|error| GetActiveBackfillError::QueryError(error.into_inner()))?;
 
     match job {
         Some(job) => Ok(Json(GetActiveBackfillJobResponse { job }).into_response()),
@@ -156,12 +136,11 @@ pub async fn list_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, ListBackfillJobsError> {
-    let jobs = email_db_client::backfill::job::get::get_all_jobs_by_fusionauth_user_id(
-        &ctx.db,
-        &authorization.authorization.user.user_context.fusion_user_id,
-    )
-    .await
-    .map_err(ListBackfillJobsError::QueryError)?;
+    let jobs = ctx
+        .backfill_jobs
+        .list(&authorization.authorization.user.user_context.fusion_user_id)
+        .await
+        .map_err(|error| ListBackfillJobsError::QueryError(error.into_inner()))?;
 
     Ok(Json(ListBackfillJobsResponse { jobs }).into_response())
 }
@@ -186,4 +165,19 @@ impl IntoResponse for ListBackfillJobsError {
         )
             .into_response()
     }
+}
+
+/// Render the shared public/internal job lookup failures.
+pub(crate) fn job_error_response<E>(error: BackfillLookupError<E>) -> Response {
+    let (status, message) = match error {
+        BackfillLookupError::Query(_) => (StatusCode::INTERNAL_SERVER_ERROR, "error fetching job"),
+        BackfillLookupError::NotFound => (StatusCode::NOT_FOUND, "job does not exist"),
+    };
+    (
+        status,
+        Json(ErrorResponse {
+            message: message.into(),
+        }),
+    )
+        .into_response()
 }

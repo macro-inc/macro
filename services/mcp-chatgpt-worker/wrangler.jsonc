@@ -10,6 +10,9 @@
  *   DD_API_KEY - optional; sent with trace exports to a Datadog intake
  *   OPENAI_APPS_CHALLENGE - the domain verification token from OpenAI's app
  *     dashboard, served at /.well-known/openai-apps-challenge
+ *   PERSON_TOKEN_KEY - required in dev and prod; base64 of 32+ random bytes
+ *     (openssl rand -base64 32). Seals the person tokens ChatGPT sees in place
+ *     of user ids and emails. Never commit it.
  */
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
@@ -64,11 +67,12 @@
     },
     "prod": {
       "name": "mcp-chatgpt-worker",
-      "routes": [{ "pattern": "mcp-chatgpt.macro.com", "custom_domain": true }],
+      // Like dev, prod serves from its workers.dev host for now.
+      "workers_dev": true,
       "vars": {
         "ENVIRONMENT": "production",
         "MACRO_ENV": "prod",
-        "RESOURCE_URL": "https://mcp-chatgpt.macro.com/mcp",
+        "RESOURCE_URL": "https://mcp-chatgpt-worker.macroverse.workers.dev/mcp",
         "AUTHORIZATION_SERVER_URL": "https://mcp-server.macro.com",
         "TOOL_GROUPING": "entity",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces"

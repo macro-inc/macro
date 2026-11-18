@@ -228,7 +228,7 @@ where
         (status = 400, description = "Invalid target"),
         (status = 401, description = "Unauthenticated"),
         (status = 403, description = "Harness is not visible to caller"),
-        (status = 409, description = "Macrod machine or Cursor account is not connected"),
+        (status = 409, description = "Macrod machine or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)", content((crate::inbound::model_load::CredentialRejectedResponse = "application/json"), (String = "text/plain"))),
         (status = 504, description = "Macrod probe timed out"),
         (status = 502, description = "Provider probe failed"),
     )
@@ -262,6 +262,9 @@ where
 
 fn capability_error_response(error: DiscoverAgentCapabilitiesError) -> Response {
     let status = match error {
+        DiscoverAgentCapabilitiesError::CredentialRejected(message) => {
+            return crate::inbound::model_load::CredentialRejectedResponse::into_response(message);
+        }
         DiscoverAgentCapabilitiesError::BadRequest(_) => StatusCode::BAD_REQUEST,
         DiscoverAgentCapabilitiesError::Forbidden => StatusCode::FORBIDDEN,
         DiscoverAgentCapabilitiesError::Disconnected => StatusCode::CONFLICT,

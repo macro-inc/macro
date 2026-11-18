@@ -9,10 +9,11 @@ import {
 } from '@thisbeyond/solid-dnd';
 import { cn, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { Show } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { CHANNELS_TOUR } from '../../tour';
 import { formatDetailedTimestamp } from '../../utils';
+import { ChannelMentionCount } from './ChannelCountPill';
 import { ChannelLiveCallBadge } from './ChannelLiveCallBadge';
 import {
   ChannelAvatar,
@@ -183,7 +184,7 @@ export function ChannelOption(props: {
               item().focused &&
               'bg-hover text-ink'
           )}
-          active={item().selected && !isTouchDevice()}
+          active={item().selected}
           aria-current={item().selected ? 'page' : undefined}
           onClick={(event) => {
             if (!isPrimaryMouseDown(event) || didDrag) return;
@@ -250,17 +251,28 @@ export function ChannelOption(props: {
                 </span>
               )}
             </Show>
-            <ChannelMutedIndicator muted={item().muted} />
+            <ChannelMutedIndicator
+              muted={item().muted}
+              mentionsOnly={item().mentionsOnly}
+            />
             <Show
               when={!item().incomingCallId && item().callStatus === 'active'}
             >
               <ChannelLiveCallBadge channelId={props.channel.id} />
             </Show>
-            <Show when={!unjoined() && item().unread}>
-              <span
-                aria-label="Unread"
-                class="size-2 shrink-0 rounded-full bg-accent"
-              />
+            <Show when={!unjoined()}>
+              <Switch>
+                <Match when={item().mentions > 0}>
+                  <ChannelMentionCount count={item().mentions} />
+                </Match>
+                <Match when={item().unread}>
+                  {/* `mx-1` centers the dot where a one-digit count sits. */}
+                  <span
+                    aria-label="Unread"
+                    class="mx-1 size-2 shrink-0 rounded-full bg-accent"
+                  />
+                </Match>
+              </Switch>
             </Show>
           </span>
           <IncomingCallActions

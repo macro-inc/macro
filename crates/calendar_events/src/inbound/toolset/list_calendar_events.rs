@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use super::{
     CalendarLabels, CalendarToolContext, ToolEventAttendee, ToolEventRole, description_preview,
-    time_fields,
+    local_time_fields, time_fields, user_time_zone,
 };
 use crate::domain::{
     models::{
@@ -48,6 +48,12 @@ pub struct CalendarEventListItem {
     /// Exclusive occurrence end: RFC 3339 UTC instant, or YYYY-MM-DD for
     /// all-day events.
     pub end: String,
+    /// Start with its weekday, in the user's time zone when known (it names the
+    /// zone). State days and dates from this field.
+    pub start_local: String,
+    /// Exclusive end with its weekday, like `start_local`. For an all-day event
+    /// the last day covered is the day before this one.
+    pub end_local: String,
     /// Whether the event covers whole days.
     pub is_all_day: bool,
     /// IANA time zone the event was scheduled in, when known.
@@ -159,7 +165,8 @@ tomorrow?\"), to find an event the user wants changed or removed, and to check f
 before creating an event. Keep the window as narrow as the request allows — a day or a week \
 — since wide windows truncate at 200 occurrences. The window must be at most 370 days and \
 within one year past to two years future. If `syncStatus` is `syncing`, tell the user \
-results may still be incomplete.\n\
+results may still be incomplete. Take days and weekdays from `startLocal` and `endLocal`. \
+`end` and `endLocal` are exclusive, so an event ending at midnight or all-day ends the day before.\n\
 \n\
 The user can see calendars that are not theirs, such as a colleague's or a team's. `inbox` is \
 the account syncing a calendar, so it stays the user's own address on all of them, and neither \
@@ -287,18 +294,23 @@ where
 
         let multi_inbox_meetings = multi_inbox_meetings(&occurrences);
         let labels = CalendarLabels::load(&*service_context.mutations, &requester_id).await;
+        let time_zone = user_time_zone(&*service_context.occurrences, &requester_id).await;
         let events: Vec<CalendarEventListItem> = occurrences
             .into_iter()
             .map(|(event, occurrence, link_id)| {
-                let (start, end, is_all_day, time_zone) = time_fields(&occurrence.time);
+                let (start_local, end_local) =
+                    local_time_fields(&occurrence.time, time_zone.as_deref());
+                let (start, end, is_all_day, event_time_zone) = time_fields(&occurrence.time);
                 let is_recurring = !event.recurrence_lines.is_empty();
                 CalendarEventListItem {
                     event_id: event.id,
                     title: event.title.clone(),
                     start,
                     end,
+                    start_local,
+                    end_local,
                     is_all_day,
-                    time_zone,
+                    time_zone: event_time_zone,
                     location: event.location.clone(),
                     description: description_preview(event.description.as_deref()),
                     status: event.status.as_str().to_string(),

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO macro_user_info (macro_user_id, first_name, last_name) VALUES ('00000000-0000-4000-8000-000000000001', 'Grace', 'Hopper')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "8fc339af79aea03badbdf3b6c929662d07c346b58fe6594bcb96367b804066f0"
+}

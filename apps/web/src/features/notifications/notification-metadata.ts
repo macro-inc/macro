@@ -1,4 +1,6 @@
 import { providerIdentity } from '@app/features/external-chat/providers/identity';
+import { t } from '@app/lib/i18n';
+import type { AgentProvider } from '@service-notification/generated/schemas';
 import { format } from 'date-fns';
 import { match, P } from 'ts-pattern';
 import { isEntityDiscussionEvent } from './entity-discussion';
@@ -84,6 +86,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       // Same shape: no actor, reads "Upcoming event · <event title>".
       .with('calendar_event_reminder', () => 'Upcoming event')
       .with('calendar_event_join_request', () => 'asked to join')
+      .with('password_access_requested', () => 'requested access to')
       .with('github_pr_status_changed', () => 'updated a pull request')
       .with('github_pr_check_run', () => {
         const meta = n.notification_metadata;
@@ -109,7 +112,28 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('routine_run_finished', () =>
         routineRunFailed(n) ? 'failed' : 'finished'
       )
+      // The computer is the actor: "<computer> Claude sign-in expired".
+      .with('agent_sign_in_expiry', () => {
+        const meta = n.notification_metadata;
+        if (meta.tag !== 'agent_sign_in_expiry') return 'sign-in expires soon';
+        const agent = agentDisplayName(meta.content.agent);
+        return match(meta.content.stage)
+          .with('expires_soon', () => `${agent} sign-in expires soon`)
+          .with('expires_today', () => `${agent} sign-in expires today`)
+          .with('expired', () => `${agent} sign-in expired`)
+          .exhaustive(() => `${agent} sign-in expires soon`);
+      })
       .with('runtime_access_removed', () => 'removed your access to')
+      // The computer, or the agent teammate it runs, is the actor:
+      // "<computer> is ready", "<agent> couldn't be set up".
+      .with('computer_setup', () => {
+        const meta = n.notification_metadata;
+        if (meta.tag !== 'computer_setup') return 'is ready';
+        if (meta.content.outcome.kind !== 'failed') return 'is ready';
+        return meta.content.agent
+          ? "couldn't be set up"
+          : 'could not be set up';
+      })
       .exhaustive(() => 'notified you about')
   );
 }
@@ -171,8 +195,11 @@ export function getNotificationTargetName(
         },
         (m) => m.content.title || '(No title)'
       )
+      .with({ tag: 'password_access_requested' }, (m) => m.content.itemName)
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
       .with({ tag: 'routine_run_finished' }, () => undefined)
+      .with({ tag: 'agent_sign_in_expiry' }, () => undefined)
+      .with({ tag: 'computer_setup' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -253,6 +280,7 @@ export function getNotificationContent(
         formatCalendarReminderTime(m.content)
       )
       .with({ tag: 'calendar_event_join_request' }, () => undefined)
+      .with({ tag: 'password_access_requested' }, () => undefined)
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
       .with(
         { tag: 'agent_session_settled' },
@@ -266,8 +294,43 @@ export function getNotificationContent(
       .with({ tag: 'routine_run_finished' }, (m) =>
         m.content.outcome === 'failed' ? 'Its run failed.' : 'Its run finished.'
       )
+      .with({ tag: 'agent_sign_in_expiry' }, (m) => {
+        const agent = agentDisplayName(m.content.agent);
+        const when = match(m.content.stage)
+          .with('expires_soon', () => 'expires soon')
+          .with('expires_today', () => 'expires today')
+          .with('expired', () => 'expired')
+          .exhaustive();
+        return `Its ${agent} sign-in ${when}. Sign in again in Settings → Machines.`;
+      })
       .with({ tag: 'runtime_access_removed' }, (m) =>
         stoppedAgentsText(m.content.agents, m.content.runtimeName)
+      )
+      // An agent teammate's: what to do with the agent, not its computer.
+      .with({ tag: 'computer_setup', content: { agent: P.nonNullable } }, (m) =>
+        match(m.content.outcome)
+          .with({ kind: 'ready' }, () =>
+            t('teamAgents.readyNoticeBody', { name: m.content.agent.name })
+          )
+          .with(
+            { kind: 'failed' },
+            ({ failureReason }) =>
+              `${failureReason} ${t('teamAgents.failedNoticeBody', { name: m.content.agent.name })}`
+          )
+          .exhaustive()
+      )
+      .with({ tag: 'computer_setup' }, (m) =>
+        match(m.content.outcome)
+          .with(
+            { kind: 'ready' },
+            () =>
+              'Connect your AI and finish setup, then create an agent on it.'
+          )
+          .with(
+            { kind: 'failed' },
+            ({ failureReason }) => `${failureReason} Retry from the setup flow.`
+          )
+          .exhaustive()
       )
       .exhaustive(() => undefined)
   );
@@ -335,8 +398,11 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'reminder' }, () => true)
       .with({ tag: 'calendar_event_reminder' }, () => true)
       .with({ tag: 'calendar_event_join_request' }, () => true)
+      .with({ tag: 'password_access_requested' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with({ tag: 'routine_run_finished' }, () => false)
+      .with({ tag: 'agent_sign_in_expiry' }, () => false)
+      .with({ tag: 'computer_setup' }, () => false)
       .with({ tag: 'runtime_access_removed' }, () => true)
       .with(
         {
@@ -350,6 +416,13 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       )
       .exhaustive(() => true)
   );
+}
+
+/** The agent's name as people see it, e.g. "Claude". */
+function agentDisplayName(agent: AgentProvider): string {
+  return match(agent)
+    .with('claude', () => 'Claude')
+    .exhaustive();
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {

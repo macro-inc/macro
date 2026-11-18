@@ -29,6 +29,27 @@ impl InvocationAuthorizer for Authorizer {
         )
     }
 }
+/// Names every sender `name`, the way the real directory falls back to an
+/// email when a person set no name.
+struct People {
+    name: Option<&'static str>,
+}
+impl PeopleDirectory for People {
+    async fn people(&self, ids: Vec<String>) -> Result<Vec<ContextPerson>> {
+        Ok(ids
+            .into_iter()
+            .map(|id| ContextPerson {
+                name: self.name.unwrap_or("history@example.com").to_owned(),
+                email: Some("history@example.com".to_owned()),
+                id,
+            })
+            .collect())
+    }
+}
+const NAMED: People = People {
+    name: Some("Ada Lovelace"),
+};
+
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("history@example.com").unwrap()
 }
@@ -92,7 +113,7 @@ async fn reads_the_bound_actor_parent_and_root_and_omits_tombstones() {
                 ],
             })
         });
-    let history = MessageThreadHistory::new(Arc::new(reader), Authorizer { allowed: true });
+    let history = MessageThreadHistory::new(Arc::new(reader), Authorizer { allowed: true }, NAMED);
     let invocation = history
         .authorize_invocation(&user(), &parent(), root())
         .await
@@ -101,6 +122,42 @@ async fn reads_the_bound_actor_parent_and_root_and_omits_tombstones() {
     let messages = history.thread_messages(&invocation).await.unwrap();
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].id, Uuid::from_u128(2));
+    assert_eq!(messages[0].name.as_deref(), Some("Ada Lovelace"));
+}
+
+#[tokio::test]
+async fn a_sender_known_only_by_email_is_left_unnamed() {
+    let mut reader = MockMessageReader::new();
+    reader.expect_get_thread().once().return_once(|_, _| {
+        Ok(MessageThread {
+            state: ThreadState {
+                root_id: root(),
+                user_id: user().to_string(),
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+                resolved: false,
+                deleted_at: None,
+                anchor: None,
+            },
+            root: message(root(), false),
+            replies: vec![],
+        })
+    });
+    let history = MessageThreadHistory::new(
+        Arc::new(reader),
+        Authorizer { allowed: true },
+        People { name: None },
+    );
+    let invocation = history
+        .authorize_invocation(&user(), &parent(), root())
+        .await
+        .unwrap()
+        .unwrap();
+
+    let messages = history.thread_messages(&invocation).await.unwrap();
+
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].name, None);
 }
 
 #[tokio::test]
@@ -108,6 +165,7 @@ async fn revoked_write_permission_yields_no_invocation_or_read() {
     let history = MessageThreadHistory::new(
         Arc::new(MockMessageReader::new()),
         Authorizer { allowed: false },
+        NAMED,
     );
     assert!(
         history
@@ -131,7 +189,7 @@ async fn call_history_uses_the_call_receipt_and_canonical_root() {
                 && *id == root()
         })
         .return_once(|_, _| Err(MessageError::NotFound));
-    let history = MessageThreadHistory::new(Arc::new(reader), Authorizer { allowed: true });
+    let history = MessageThreadHistory::new(Arc::new(reader), Authorizer { allowed: true }, NAMED);
     let invocation = history
         .authorize_invocation(&user(), &MessageParent::Call(root()), root())
         .await
@@ -153,7 +211,7 @@ async fn deleted_thread_uses_the_application_lifecycle_rule() {
         .expect_get_thread()
         .once()
         .return_once(|_, _| Err(MessageError::NotFound));
-    let history = MessageThreadHistory::new(Arc::new(reader), Authorizer { allowed: true });
+    let history = MessageThreadHistory::new(Arc::new(reader), Authorizer { allowed: true }, NAMED);
     let invocation = history
         .authorize_invocation(&user(), &parent(), root())
         .await

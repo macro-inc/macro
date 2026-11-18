@@ -20,7 +20,9 @@ use tracing::Instrument as _;
 
 use super::auto_archive::session_id;
 use super::error::Result;
-use super::model::{AgentSessionId, AgentSessionRenamed, LogAppended};
+use super::model::{
+    AgentSessionActivitySummarized, AgentSessionId, AgentSessionRenamed, LogAppended,
+};
 use super::ports::{AgentSessionQueueChanged, AgentSessionRealtime, SessionViewAccess};
 
 #[cfg(test)]
@@ -584,6 +586,13 @@ where
         let published = self.inner.publish_renamed(event).await;
         self.signal_registered(session);
         published
+    }
+
+    fn publish_activity_summarized(
+        &self,
+        event: AgentSessionActivitySummarized,
+    ) -> impl Future<Output = std::result::Result<(), Report>> + Send {
+        self.inner.publish_activity_summarized(event)
     }
 
     fn publish_queue_changed(

@@ -1,0 +1,9 @@
+[package]
+name = "shown_text"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+lazy-regex = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

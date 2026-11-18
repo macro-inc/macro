@@ -21,6 +21,14 @@ struct FixtureTeam;
 impl MembershipPort for FixtureTeam {
     type Err = std::convert::Infallible;
 
+    async fn denied_view_kinds(
+        &self,
+        _: &str,
+        _: &HashSet<String>,
+    ) -> Result<HashSet<String>, Self::Err> {
+        Ok(HashSet::new())
+    }
+
     async fn viewer_teams(&self, _viewer: &str) -> Result<Vec<Uuid>, Self::Err> {
         Ok(vec![TEAM])
     }
@@ -368,4 +376,115 @@ async fn writes_that_change_nothing_send_no_signal(pool: PgPool) {
     service.delete(OWNER, id, created.revision).await.unwrap();
 
     assert_eq!(changes.take(), vec![]);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("users"))
+)]
+async fn crm_configuration_access_is_rechecked_for_legacy_and_definition_routes(pool: PgPool) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    struct FeatureAccess(Arc<AtomicBool>);
+    impl MembershipPort for FeatureAccess {
+        type Err = std::convert::Infallible;
+        async fn viewer_teams(&self, viewer: &str) -> Result<Vec<Uuid>, Self::Err> {
+            FixtureTeam.viewer_teams(viewer).await
+        }
+        async fn team_members(&self, team: Uuid) -> Result<HashSet<String>, Self::Err> {
+            FixtureTeam.team_members(team).await
+        }
+        async fn denied_view_kinds(
+            &self,
+            _: &str,
+            kinds: &HashSet<String>,
+        ) -> Result<HashSet<String>, Self::Err> {
+            Ok(kinds
+                .iter()
+                .filter(|kind| {
+                    !self.0.load(Ordering::Relaxed) && matches!(kind.as_str(), "crm" | "crm-list")
+                })
+                .cloned()
+                .collect())
+        }
+    }
+    let allowed = Arc::new(AtomicBool::new(true));
+    let service = SavedViewService::new(
+        PgViewStorage::new(pool),
+        FeatureAccess(allowed.clone()),
+        Recorder::default(),
+    );
+    let list = service
+        .legacy_create(
+            OWNER,
+            "Private collection".into(),
+            json!({"kind":"crm-list","teamId":TEAM,"companyIds":[]}),
+        )
+        .await
+        .unwrap();
+    let view = service
+        .create(
+            OWNER,
+            Uuid::now_v7(),
+            "Records view".into(),
+            json!({"kind":"crm"}),
+            None,
+        )
+        .await
+        .unwrap();
+    service
+        .legacy_create(OWNER, "Mail view".into(), json!({"kind":"email"}))
+        .await
+        .unwrap();
+    for enabled in [true, false, true] {
+        allowed.store(enabled, Ordering::Relaxed);
+        assert_eq!(service.get(OWNER, list.id).await.is_ok(), enabled);
+        assert_eq!(service.get(OWNER, view.id).await.is_ok(), enabled);
+        assert_eq!(
+            service
+                .list(OWNER, Some("crm"), None, 50)
+                .await
+                .unwrap()
+                .views
+                .len(),
+            usize::from(enabled)
+        );
+        assert_eq!(
+            service.legacy_list(OWNER).await.unwrap().len(),
+            if enabled { 3 } else { 1 }
+        );
+        assert_eq!(
+            service
+                .legacy_patch(OWNER, list.id, Some("Renamed collection"), None)
+                .await
+                .is_ok(),
+            enabled
+        );
+        if !enabled {
+            assert!(matches!(
+                service.delete(OWNER, view.id, view.revision).await,
+                Err(Error::NotFound)
+            ));
+            assert!(matches!(
+                service
+                    .legacy_create(OWNER, "Blocked".into(), json!({"kind":"crm-list"}))
+                    .await,
+                Err(Error::NotFound)
+            ));
+            assert!(matches!(
+                service
+                    .update(
+                        OWNER,
+                        view.id,
+                        view.revision,
+                        Update {
+                            name: Some("Blocked".into()),
+                            config: None,
+                            share: ShareChange::Unchanged
+                        }
+                    )
+                    .await,
+                Err(Error::NotFound)
+            ));
+        }
+    }
 }

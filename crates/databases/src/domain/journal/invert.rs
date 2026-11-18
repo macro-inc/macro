@@ -512,7 +512,10 @@ impl Inverter<'_> {
                     .collect();
                 let index = self.push(DatabaseOp::Rows {
                     table,
-                    change: RowsChange::Insert { rows: cells },
+                    change: RowsChange::Insert {
+                        rows: cells,
+                        ids: None,
+                    },
                 });
                 self.inverse.restored_rows.insert(index, restored);
             }

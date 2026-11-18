@@ -74,7 +74,7 @@ pub(super) async fn replace_identity_provider_grant(
 
     let Some(existing_link) = existing_links
         .into_iter()
-        .find(|link| link.display_name == display_name)
+        .find(|link| link.display_name.eq_ignore_ascii_case(display_name))
     else {
         tracing::warn!(
             fusion_user_id = %link_owner_id,

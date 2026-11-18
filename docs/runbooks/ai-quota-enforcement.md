@@ -229,20 +229,13 @@ handling, but settlement never creates or retries direct charges.
 reports `auto_reload` with the thresholds, `suspended`, and `active`.
 
 The frontend is not tied to this flag. Settings → Usage and the shared usage-limit
-dialog support all plans. Production activation follows the
-`enable-ai-usage-billing` PostHog flag: while off or loading, Usage shows the
-October 8, 2026 announcement with disabled controls and the dialog stays closed.
-Dev and local stay active regardless of the flag. No backend rollout endpoint is
-required. Foreground AI actions recognize the four quota
+dialog support all plans. No backend rollout endpoint is required. Foreground AI actions recognize the four quota
 codes below; clients return typed errors, and presentation happens in the app's
 mutation subscription or direct session/edit action handlers. Generic HTTP errors
 and background queries do not open dialogs. Free refusals offer a paid plan;
 paid refusals link to Usage settings. The monthly percentage uses
 `GET /ai-billing/summary`; plan allowances use `GET /ai-billing/plans`.
-Plan allowance copy and comparisons follow the `enable-ai-usage-billing` PostHog
-flag (`enableAiUsageBilling` in `apps/web/src/lib/core/constant/featureFlags.ts`),
-which defaults on in development builds and follows PostHog elsewhere;
-`VITE_ENABLE_AI_USAGE_BILLING` overrides it locally. Model usage multipliers have
+Model usage multipliers have
 been removed. The Auto-Reload dialog saves through `PATCH /ai-billing/auto-reload`
 and is the only surface that turns usage billing on.
 
@@ -358,7 +351,7 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Channel responder / ChannelBot | [bot service](../../crates/channel_bots/src/domain/service.rs) | [DSS main](../../services/document_storage_service/src/main.rs), common context T | [response refusal](../../crates/channel_bots/src/domain/service/tests.rs) |
 | Optional channel classification / ChannelBot | [trigger detector](../../crates/channel_bots/src/domain/trigger_detector.rs) | DSS main, independent R for classifier | [explicit routing and inference skip](../../crates/channel_bots/src/domain/trigger_detector/tests.rs) |
 | Trigger inference and image captions / Automation | [trigger service](../../crates/agent_trigger/src/domain/service.rs) | [standalone trigger main](../../services/agent_trigger_service/src/main.rs) R; [harness trigger](../../services/agent_harness_service/src/trigger.rs) receives the harness's settling recorder from harness main | [classification/caption refusal](../../crates/agent_trigger/src/domain/service/test/admission.rs), [no system fallback](../../crates/agent_trigger/src/outbound/jev_judge/test.rs) |
-| Managed session ingress/dispatch/queue / AgentSession | [harness admission](../../crates/agent_harness/src/domain/service/admission.rs) | [harness main](../../services/agent_harness_service/src/main.rs): one `pg_settling_recorder` shared with T for in-memory; managed sandbox inference has **no `ai_usage` producer** | [owner, authorization, runtime funding, restart, queue rejection/outage](../../crates/agent_harness/src/domain/service/test/quota.rs), [HTTP](../../crates/agent_session/src/inbound/axum_router/test.rs), [event shape](../../crates/agent_session/src/domain/events/test.rs) |
+| Managed session ingress/dispatch/queue / AgentSession | [harness admission](../../crates/agent_harness/src/domain/service/admission.rs) | [harness composition root](../../services/agent_harness_service/src/lib.rs): one `pg_settling_recorder` shared with T for in-memory; managed sandbox inference has **no `ai_usage` producer** | [owner, authorization, runtime funding, restart, queue rejection/outage](../../crates/agent_harness/src/domain/service/test/quota.rs), [HTTP](../../crates/agent_session/src/inbound/axum_router/test.rs), [event shape](../../crates/agent_session/src/domain/events/test.rs) |
 | Direct in-memory ACP/provider commands / AgentSession | [admit_turn](../../crates/agent_inmem/src/domain/admission.rs), [agent execution](../../crates/agent_inmem/src/domain/agent.rs) | Harness main → manager → `RigTurnEngine`, the harness's settling recorder passed into T | [direct ACP, queue, cancel, history](../../crates/agent_inmem/src/domain/agent/test.rs), [manager](../../crates/agent_inmem/src/outbound/manager/test.rs) |
 | Session naming / ChatRename | [name generator gate](../../crates/agent_session/src/domain/name_generation.rs) | Harness main, the same settling recorder for `HaikuAgentSessionNameGenerator` (exempt, so never counted or settled) | [fallback without provider calls](../../crates/agent_session/src/domain/name_generation/test.rs) |
 | Repository chooser / AgentRepositoryChoice | [repository choice service](../../crates/agent_harness/src/domain/repository_choice.rs) | Harness main → `CursorContainerManager`, the same settling recorder | [deterministic bypass / typed model refusal](../../crates/agent_harness/src/domain/repository_choice/test.rs) |

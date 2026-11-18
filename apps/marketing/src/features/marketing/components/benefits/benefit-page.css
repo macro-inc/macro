@@ -23,10 +23,11 @@ main.feature-page:has(.benefit-page)::before { display: none; }
 .benefit-art strong { font-weight: 500; }
 .benefit-art small { font-size: 12px; color: #97979c; }
 .benefit-glass {
+  --illustration-radius: 22px;
   background: linear-gradient(145deg, #ffffff0e, #ffffff05 65%);
   box-shadow: inset 0 1px #ffffff16, inset 0 0 0 1px #ffffff0a, 0 24px 54px #0003;
   backdrop-filter: blur(10px);
-  border-radius: 22px;
+  border-radius: var(--illustration-radius);
 }
 .feature-page .feature-page-section .benefit-glass[data-benefit-block] {
   background: linear-gradient(145deg,

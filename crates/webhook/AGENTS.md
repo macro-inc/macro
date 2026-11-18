@@ -16,8 +16,17 @@ before changing ingestion or delivery behavior.
   consumers for `macro.documents`, `macro.channels`, `macro.messages`,
   `macro.webhooks`, `macro.agent_sessions`, `macro.agent_session_lifecycle`,
   `macro.users`, and `macro.call_notifications`.
+- `src/domain/stream.rs` / `src/inbound/stream_router.rs`: the live SSE
+  stream. `StreamFeed` keeps two minutes of events (shared `Arc`s) for
+  clients that ask `resume=true` with a `Last-Event-ID` (`StreamCursor`);
+  without `resume=true` the stream is live-only, as before. See README's
+  "Live event stream and resuming".
 - `src/inbound/worker.rs`: the SQS delivery worker.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.
+- `src/domain/blocked_address.rs`: the one blocked-address classifier, used by
+  create/patch validation and outbound delivery. `src/outbound/address_guard.rs`
+  is the connect-time resolver that enforces it; never add a second
+  classifier or a preflight-only check.
 
 ## Scope
 

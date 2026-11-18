@@ -389,7 +389,7 @@ impl OpsSink for Memory {
                 return Err(Refused::SchemaFixed);
             };
             let change = match change {
-                RowsChange::Insert { rows } => {
+                RowsChange::Insert { rows, .. } => {
                     let mut inserted = Vec::new();
                     for cells in rows {
                         let mut row = Row {

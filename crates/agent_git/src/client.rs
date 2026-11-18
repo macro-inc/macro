@@ -1,0 +1,218 @@
+//! Client for the internal API, for services that create and delete agents.
+
+use std::time::Duration;
+
+use macro_authorization::INTERNAL_API_KEY_HEADER;
+use macro_user_id::user_id::MacroUserIdStr;
+use reqwest::StatusCode;
+use uuid::Uuid;
+
+use crate::api::{CreateRepoRequest, CreatedRepoResponse, EnsureRepoRequest, SetVoiceRequest};
+use crate::domain::models::RepoToken;
+use crate::domain::template::PersonaSeed;
+use crate::domain::voice::VoiceConfig;
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Errors from [`AgentGitClient`].
+#[derive(Debug, thiserror::Error)]
+pub enum AgentGitClientError {
+    /// The request did not complete.
+    #[error("agent git request failed: {0}")]
+    Request(#[from] reqwest::Error),
+    /// Internal credentials must be nonempty HTTP header values.
+    #[error("the internal agent git credential is invalid")]
+    InvalidInternalCredential,
+    /// The agent already has a repo for another team.
+    #[error("the agent's repo belongs to another team")]
+    TeamMismatch,
+    /// Any other non-success status.
+    #[error("agent git service answered {status}: {body}")]
+    Status {
+        /// The status.
+        status: StatusCode,
+        /// The response body.
+        body: String,
+    },
+}
+
+/// Calls `agent_git_service`'s internal API.
+#[derive(Clone)]
+pub struct AgentGitClient {
+    http: reqwest::Client,
+    base_url: String,
+    internal_api_key: reqwest::header::HeaderValue,
+}
+
+impl AgentGitClient {
+    /// `base_url` is `AgentGitServiceUrl` (no trailing slash).
+    pub fn new(base_url: String, internal_api_key: String) -> Result<Self, AgentGitClientError> {
+        if internal_api_key.is_empty() {
+            return Err(AgentGitClientError::InvalidInternalCredential);
+        }
+        let mut internal_api_key = reqwest::header::HeaderValue::from_str(&internal_api_key)
+            .map_err(|_| AgentGitClientError::InvalidInternalCredential)?;
+        internal_api_key.set_sensitive(true);
+        let http = reqwest::Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .build()?;
+
+        Ok(Self {
+            http,
+            base_url,
+            internal_api_key,
+        })
+    }
+
+    fn headers(&self) -> reqwest::header::HeaderMap {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        headers
+    }
+
+    async fn checked(
+        response: reqwest::Response,
+    ) -> Result<reqwest::Response, AgentGitClientError> {
+        let status = response.status();
+
+        if status.is_success() {
+            return Ok(response);
+        }
+        if status == StatusCode::CONFLICT {
+            return Err(AgentGitClientError::TeamMismatch);
+        }
+
+        Err(AgentGitClientError::Status {
+            status,
+            body: response.text().await?,
+        })
+    }
+
+    /// Create the agent's repo, or re-key it (same team). The token in the
+    /// response is the only copy; earlier tokens stop working.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn create_repo(
+        &self,
+        agent_user_id: MacroUserIdStr<'static>,
+        team_id: Uuid,
+        seed: PersonaSeed,
+    ) -> Result<CreatedRepoResponse, AgentGitClientError> {
+        let response = self
+            .http
+            .post(format!("{}/internal/repos", self.base_url))
+            .headers(self.headers())
+            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .json(&CreateRepoRequest {
+                agent_user_id,
+                team_id,
+                seed,
+            })
+            .send()
+            .await?;
+
+        Ok(Self::checked(response).await?.json().await?)
+    }
+
+    /// Recover the repo without replacing its live token.
+    #[tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(agent_user_id.as_ref()), %team_id), err)]
+    pub async fn ensure_repo(
+        &self,
+        agent_user_id: MacroUserIdStr<'static>,
+        team_id: Uuid,
+        seed: PersonaSeed,
+        token: &RepoToken,
+    ) -> Result<CreatedRepoResponse, AgentGitClientError> {
+        let response = self
+            .http
+            .post(format!("{}/internal/repos/ensure", self.base_url))
+            .headers(self.headers())
+            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .json(&EnsureRepoRequest {
+                repo: CreateRepoRequest {
+                    agent_user_id,
+                    team_id,
+                    seed,
+                },
+                token: token.clone(),
+            })
+            .send()
+            .await?;
+        Ok(Self::checked(response).await?.json().await?)
+    }
+
+    /// The voice committed in the agent's repo; `None` when the repo has no
+    /// valid `config/voice.json`. The caller authorized `team_id`.
+    #[tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(agent_user_id.as_ref()), %team_id), err)]
+    pub async fn voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> Result<Option<VoiceConfig>, AgentGitClientError> {
+        let response = self
+            .http
+            .get(format!(
+                "{}?teamId={team_id}",
+                self.voice_url(agent_user_id)
+            ))
+            .headers(self.headers())
+            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .send()
+            .await?;
+
+        if response.status() == StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        Ok(Some(Self::checked(response).await?.json().await?))
+    }
+
+    /// Commit a voice to the agent's repo. The caller authorized `team_id`.
+    #[tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(agent_user_id.as_ref()), %team_id), err)]
+    pub async fn set_voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        voice: VoiceConfig,
+    ) -> Result<(), AgentGitClientError> {
+        let response = self
+            .http
+            .put(self.voice_url(agent_user_id))
+            .headers(self.headers())
+            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .json(&SetVoiceRequest { team_id, voice })
+            .send()
+            .await?;
+
+        Self::checked(response).await?;
+        Ok(())
+    }
+
+    fn voice_url(&self, agent_user_id: &MacroUserIdStr<'_>) -> String {
+        format!(
+            "{}/internal/repos/{}/voice",
+            self.base_url,
+            urlencoding::encode(agent_user_id.as_ref())
+        )
+    }
+
+    /// Delete the agent's repo. Idempotent.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn delete_repo(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), AgentGitClientError> {
+        let response = self
+            .http
+            .delete(format!(
+                "{}/internal/repos/{}",
+                self.base_url,
+                urlencoding::encode(agent_user_id.as_ref())
+            ))
+            .headers(self.headers())
+            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .send()
+            .await?;
+
+        Self::checked(response).await?;
+        Ok(())
+    }
+}

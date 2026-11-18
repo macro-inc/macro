@@ -532,7 +532,7 @@ export default function HomepageSpreadsheet() {
                             }}
                             onDblClick={() => beginEdit()}
                             style={{
-                              'font-weight': cell()?.bold ? '700' : '400',
+                              'font-weight': cell()?.bold ? '500' : '400',
                               'font-style': cell()?.italic
                                 ? 'italic'
                                 : 'normal',

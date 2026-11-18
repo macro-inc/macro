@@ -68,10 +68,10 @@ export function AgentThreadWindow() {
     'line-height': 1.55,
     margin: '0',
   };
-  const name: JSX.CSSProperties = { color: 'var(--c1)', 'font-weight': '600' };
+  const name: JSX.CSSProperties = { color: 'var(--c1)', 'font-weight': '500' };
   const strong: JSX.CSSProperties = {
     color: 'var(--c1)',
-    'font-weight': '600',
+    'font-weight': '500',
   };
 
   // Inline channel mention — canonical channel icon + underlined label, matching
@@ -225,7 +225,7 @@ export function AgentThreadWindow() {
         display: 'inline-flex',
         'font-family': appFont,
         'font-size': '10.5px',
-        'font-weight': '700',
+        'font-weight': '500',
         'letter-spacing': '0.04em',
         padding: '2px 7px',
         'text-transform': 'uppercase',
@@ -447,7 +447,7 @@ export function AgentThreadWindow() {
                 display: 'flex',
                 'font-family': appFont,
                 'font-size': '10.5px',
-                'font-weight': '700',
+                'font-weight': '500',
                 gap: '5px',
                 'letter-spacing': '0.06em',
                 'text-transform': 'uppercase',
@@ -482,7 +482,7 @@ export function AgentThreadWindow() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': fs(),
-                  'font-weight': '600',
+                  'font-weight': '500',
                   'min-width': 0,
                   overflow: 'hidden',
                   'text-overflow': 'ellipsis',
@@ -514,7 +514,7 @@ export function AgentThreadWindow() {
                     color: 'var(--c1)',
                     display: 'inline-flex',
                     'font-size': '9px',
-                    'font-weight': '700',
+                    'font-weight': '500',
                     height: '16px',
                     'justify-content': 'center',
                     width: '16px',

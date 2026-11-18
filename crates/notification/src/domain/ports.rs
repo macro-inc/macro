@@ -63,10 +63,13 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 
-    /// Get users who have unsubscribed from notifications for a specific item.
+    /// Get users who silenced a specific item for this notification: every
+    /// unsubscribed user, minus those who kept direct mentions when
+    /// `is_direct_mention` is set.
     fn get_unsubscribed_users<'a>(
         &self,
         item_id: &str,
+        is_direct_mention: bool,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 
@@ -123,6 +126,16 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
+
+    /// Atomically reopen done notifications: those in `unseen` return to unseen,
+    /// the rest to seen, so an undo restores the state each had before its done.
+    /// Notifications no longer done are left alone. Return the updated rows.
+    fn reopen_notifications(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        unseen: &[Uuid],
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
     /// Get non-deleted, user-owned notification IDs associated with any primary or secondary

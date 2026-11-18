@@ -1,0 +1,50 @@
+id: email-inbound-no-raw-state-access
+language: rust
+severity: error
+message: Email handlers must use services, not raw client fields or local client calls.
+note: |-
+  The SQS receive/ack handle (sqs_worker) and composed service/broker capabilities remain allowed.
+  API context declarations use the companion worker rule; outbound, composition roots and tests are outside this rule.
+files:
+  - crates/email/src/inbound.rs
+  - crates/email/src/inbound/**
+  - services/email_service/src/api.rs
+  - services/email_service/src/api/**
+  - services/email_service/src/pubsub/**/process.rs
+  - services/email_service/src/pubsub/**/error_handlers.rs
+  - services/email_service/src/pubsub/**/deferral.rs
+  - services/email_service/src/pubsub/worker_lifecycle.rs
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/*_test.rs'
+  - '**/*_tests.rs'
+  - services/email_service/src/api/context.rs
+rule:
+  any:
+    - kind: field_declaration
+      has:
+        field: name
+        regex: ^(?:db|pool|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
+    - all:
+        - any:
+            - kind: field_expression
+              has:
+                field: field
+                regex: ^(?:db|pool|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
+            - kind: call_expression
+              has:
+                field: function
+                kind: field_expression
+                has:
+                  field: value
+                  kind: identifier
+                  regex: ^(?:db|pool|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
+        - inside:
+            kind: block
+            inside:
+              kind: function_item
+              stopBy: end
+            stopBy: end

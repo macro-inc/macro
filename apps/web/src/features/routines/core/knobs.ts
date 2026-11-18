@@ -173,6 +173,14 @@ export function knobText(knob: Knob): string {
   );
 }
 
+/**
+ * Whether a knob has no value to show: only text can be blank, since the
+ * scheduler requires every other kind's value.
+ */
+export function knobIsEmpty(knob: Knob): boolean {
+  return knob.type === 'text' && !knob.value.trim();
+}
+
 /** A run of a step's sentence: plain words, or where a knob shows. */
 export type SentencePart =
   | { kind: 'text'; text: string }

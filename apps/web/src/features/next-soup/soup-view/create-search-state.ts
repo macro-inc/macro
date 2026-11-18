@@ -1,6 +1,9 @@
 import type { SoupState } from '@app/features/next-soup/create-soup-state';
 import type { FilterContext } from '@app/features/next-soup/filters/configs/base';
-import type { QueryState } from '@app/features/next-soup/filters/filter-store';
+import {
+  NIL_UUID,
+  type QueryState,
+} from '@app/features/next-soup/filters/filter-store';
 import {
   createSearchState as createSharedSearchState,
   intersectEntityPools,
@@ -28,6 +31,28 @@ interface CreateSearchStateArgs {
   setSearchText: Setter<string>;
 }
 
+const namesAny = (ids: readonly string[] | undefined) =>
+  ids?.some((id) => id !== NIL_UUID) ?? false;
+
+/**
+ * Local results match by name against the view's predicates only, so they are
+ * hidden where a filter has no predicate to test them with: a named channel or
+ * sender (those searches list message hits, not channel rows) and, in the
+ * Search view, its task facets. A type filter NIL-excludes every other type,
+ * which names nothing.
+ */
+export function hidesLocalSearchResults(
+  include: QueryState['include'],
+  surface: string
+) {
+  if (namesAny(include.channelId) || namesAny(include.channelSenderId))
+    return true;
+  return (
+    surface === 'search' &&
+    (namesAny(include.documentOwnerId) || (include.properties?.length ?? 0) > 0)
+  );
+}
+
 export const createSearchState = ({
   surface,
   soup,
@@ -47,11 +72,19 @@ export const createSearchState = ({
     assignees: assignees(),
   });
 
-  const { entityPool, routinePool } = useSearchContext();
+  const hideLocalResults = () =>
+    hidesLocalSearchResults(filters().include, surface());
+  const searchContext = useSearchContext();
+  const entityPool = searchContext.entityPool(
+    () =>
+      !disableLocalSearch?.() &&
+      !hideLocalResults() &&
+      Boolean(searchText().trim())
+  );
   const localPool = createLazyMemo(() => {
     const pool =
       surface() === 'search'
-        ? [...entityPool(), ...routinePool()]
+        ? [...entityPool(), ...searchContext.routinePool()]
         : entityPool();
     const activeIds = soup.predicates
       .activeIds()
@@ -74,16 +107,6 @@ export const createSearchState = ({
     const matchingIds = new Set(matches.map((entity) => entity.id));
     return pool.filter((item) => matchingIds.has(item.data.id));
   });
-
-  // We hide local results for channel-filtered searches because those views
-  // should show message hits from the search service rather than channel rows.
-  const hideLocalResults = () => {
-    const include = filters().include;
-    return (
-      (include.channelId?.length ?? 0) > 0 ||
-      (include.channelSenderId?.length ?? 0) > 0
-    );
-  };
 
   const search = createSharedSearchState({
     surface,

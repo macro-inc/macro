@@ -103,9 +103,11 @@ its sidebar list until the refetch lands, and one meeting's removal reaches ever
 attendee's inbox sync, so a hint on ordinary meetings flashes the whole team's
 calendars. OOO edits (including becoming private or ceasing to be OOO), retiring an
 OOO source, sharing changes, and disconnects require immediate clearing. Missing
-or malformed hints from older servers also clear immediately. Outlook sync still
-sends the hint with every change. The 60-second cache expiry and session-reset
-behavior remain in force.
+or malformed hints from older servers also clear immediately. Outlook follows
+the same rule per event: publishing an Outlook event's change raises the hint
+only when the event was or is OOO, and a calendar discovery raises it only for
+the calendar changes a Google calendar list raises it for. The 60-second cache
+expiry and session-reset behavior remain in force.
 
 Team projections and availability use server-confirmed source copies. An offline
 edit can appear immediately in the editor's own calendar through the mutation
@@ -118,16 +120,23 @@ Queued local edits never enter the team projection cache.
 Browsing and availability answer different questions. The availability tool
 computes a person's busy time from:
 
-- Their directly connected primary calendars by default.
-- Additional calendars they explicitly include in availability settings.
-- Events on any eligible source where one of their owned email addresses is an
-  attendee, even if that source calendar is otherwise excluded.
+- Every calendar they can see through their own or delegated inboxes, until they
+  turn its **Busy** switch off in Settings → Calendar.
+- Meetings on any eligible source where one of their owned email addresses is a
+  guest, or organizes it with other guests on a writable copy, even if that
+  source calendar is otherwise excluded.
 
-Secondary calendars require explicit inclusion because the current source model
-does not prove Google data ownership. Merely subscribing to or managing a
-coworker's calendar must not mark the subscriber busy. Delegated addresses do not
-establish the user's personal attendance. Provider `self` flags alone are also
-insufficient on subscribed calendars.
+Booking links have always counted every calendar, and one switch serves booking,
+team availability and agents, so the default follows booking: turning a
+calendar off is the user's choice, and nothing that blocked their booking links
+stops blocking them on its own. The source model does not prove Google data
+ownership, so a coworker's calendar the user subscribes to or manages counts
+until they turn it off. (Before November 2026 team availability counted only
+primary calendars by default, behind the `enable-calendar-team-sharing` flag.)
+Delegated addresses do not establish the user's personal attendance. Provider
+`self` flags alone are also insufficient on subscribed calendars. A solo entry
+naming the user as its organizer, and the mailbox organizer row Microsoft Graph
+puts on every event of a read-only calendar, are not meetings.
 
 Cancelled, transparent, declined, birthday, and working-location entries do not
 block time. Instance cancellation, attendee responses, and transparency override
@@ -269,7 +278,11 @@ in the rollout.
    before expecting complete availability; do not backfill verification roles
    merely from a calendar's current role. The next normal calendar-list sync
    forces a full refresh for retained sources whose verification role is missing
-   or mismatched, including pre-migration snapshots. Let scheduler/watch recovery
+   or mismatched, including pre-migration snapshots. A source written before the
+   calendar's last committed sync forces none: a refresh keeps a stored copy
+   newer than Google's along with its old role, so that source stays unverified
+   until it changes at Google instead of rebuilding its calendar on every poll.
+   Let scheduler/watch recovery
    drive this verification while the gate is off; monitor Google quotas and
    catch-up progress before activation.
 2. Verify disclosures and the busy-only default in the sharing settings. Confirm

@@ -2,19 +2,19 @@ import { promptActionOf } from '@app/features/block-agent/component/prompt-actio
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
 import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request-access';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
+import { t } from '@app/lib/i18n';
 import {
-  createInputAttachmentTracker,
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
-import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
+import { catalogModelLabel } from '@core/component/AI/constant/model-label';
+import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
-  acceleratedSpeed,
-  speedForModel,
-} from '@core/component/AI/constant/speed';
-import { fastModeEnabled } from '@core/component/AI/signal/speed';
+  preferredSpeed,
+  setPreferredSpeed,
+} from '@core/component/AI/signal/speed';
 import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAttachmentMention';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -32,13 +32,21 @@ import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createMemo, createSignal, type JSX, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  on,
+  Show,
+} from 'solid-js';
 import { AgentUpdatesStack } from '../../agent-updates/views/AgentUpdatesStack';
 import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
   type EffortChoice,
   effortConfigOption,
   effortLabel,
+  selectConfigOption,
 } from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
 import { type AgentKind, kindForMode } from '../core/agent-kind';
@@ -50,6 +58,7 @@ import {
 import { defaultBranchFor, sameRepository } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import {
+  createPersistedComposerAttachments,
   createPersistedComposerDraft,
   NEW_CONVERSATION_ATTACHMENTS_KEY,
 } from '../primitives/composer-draft';
@@ -64,6 +73,9 @@ import { createRepositoryBranches } from '../queries/repository-branches';
 import { AGENTS_TOUR } from '../tour';
 import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
+
+/** Another surface asking the composer to select an agent. */
+export type AgentRequest = { agentId: string; request: string };
 
 /** What the composer hands the workspace to start a session with. */
 export type StartConversation = {
@@ -100,6 +112,12 @@ export function NewChatPage(props: {
    */
   mode?: ComposerMode;
   onModeChange?: (mode: ComposerMode) => void;
+  /**
+   * An agent to select, e.g. one just set up on a Macro computer. Each
+   * request selects it again, also after the user picked another; one not in
+   * the roster yet is selected once it arrives.
+   */
+  requestedAgent?: AgentRequest;
   rosterLoading: boolean;
   /** Agents are listed but whether they can start is still unknown. */
   availabilityLoading?: boolean;
@@ -128,9 +146,18 @@ export function NewChatPage(props: {
     props.roster.filter((agent) => agent.kind === kindForMode(kind));
   const options = () => optionsFor(agentsMode());
   const [agentId, setAgentId] = createSignal<string>();
+  createEffect(
+    on(
+      () => props.requestedAgent,
+      (requested) => {
+        if (requested) setAgentId(requested.agentId);
+      }
+    )
+  );
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
+  const [speedPickerOpen, setSpeedPickerOpen] = createSignal(false);
   const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
   const preferredRepository = createPreferredRepository(userId());
   // An explicit Auto-detect pick must override a saved repository, too.
@@ -199,6 +226,27 @@ export function NewChatPage(props: {
     effortConfigOption(
       capabilities.isSuccess ? capabilities.data.configOptions : []
     );
+  /** The selected model's tier option, when Macro's agent offers more than standard. */
+  const speedOption = () => {
+    if (capabilityTarget()?.harness !== 'in-memory') return;
+    const option = selectConfigOption(
+      capabilities.isSuccess ? capabilities.data.configOptions : [],
+      'speed',
+      'speed'
+    );
+    const offered = nativeSpeeds(
+      option?.options.map((choice) => choice.value) ?? []
+    );
+    return option && offered ? { option, offered } : undefined;
+  };
+  const speedOverride = () => {
+    const tiers = speedOption();
+    if (!tiers) return;
+    return {
+      configId: tiers.option.id,
+      value: resolveSpeed(preferredSpeed(), tiers.offered),
+    };
+  };
   /** The last effort picked for the selected runtime and model, while it is still offered. */
   const selectedEffort = () => {
     const target = capabilityTarget();
@@ -244,6 +292,15 @@ export function NewChatPage(props: {
     const agent = selected();
     if (!agent) return 'Choose an agent to start';
     if (agent.unavailableReason) return agent.unavailableReason;
+    // A paid tier would otherwise be dropped silently while the model's
+    // options are still loading.
+    if (
+      capabilityTarget()?.harness === 'in-memory' &&
+      capabilities.isPending &&
+      preferredSpeed() !== 'standard'
+    ) {
+      return t('agentControls.loadingTiers');
+    }
     if (canSelectRepository() && repoUrl()) {
       if (reachable.loading()) return 'Loading repositories';
       if (reachable.error()) return 'Retry loading repositories before sending';
@@ -301,17 +358,13 @@ export function NewChatPage(props: {
     }
   };
 
-  const attachmentTracker = createMemo(() => {
-    const identity = userId();
-    const key = props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY;
-    return createInputAttachmentTracker({
-      // Unknown identities never read shared storage. Parents may own the
-      // text draft without owning files; those still persist here.
-      persistenceKey: identity
-        ? `${key}:${encodeURIComponent(identity)}`
-        : undefined,
-    });
-  });
+  // Parents may own the text draft without owning files; those still persist here.
+  const attachmentTracker = createMemo(() =>
+    createPersistedComposerAttachments(
+      props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY,
+      userId()
+    )
+  );
   const attachFiles = (files: File[]) =>
     fireAndForget(
       uploadInputAttachments({
@@ -400,13 +453,8 @@ export function NewChatPage(props: {
         ? { modelFallback: true }
         : {}),
       effortOverride: coder ? undefined : effortOverride(),
-      ...(model && inMemory && acceleratedSpeed(model)
-        ? {
-            speedOverride: {
-              configId: 'speed',
-              value: speedForModel(model, fastModeEnabled()),
-            },
-          }
+      ...(inMemory && speedOverride()
+        ? { speedOverride: speedOverride() }
         : {}),
     });
     // Macro's preferred model and the picked efforts stay; coding-agent model
@@ -525,7 +573,9 @@ export function NewChatPage(props: {
     <ChatComposer
       autoFocus={props.autoFocus}
       collapseOnBlur={props.compact}
-      controlsOpen={repositoryPickerOpen() || effortPickerOpen()}
+      controlsOpen={
+        repositoryPickerOpen() || effortPickerOpen() || speedPickerOpen()
+      }
       registerFocus={(focus) => {
         focusInput = focus;
         props.registerFocus?.(focus);
@@ -545,13 +595,14 @@ export function NewChatPage(props: {
             disabled={Boolean(blocked())}
             onChange={rememberEffort}
           />
-          <Show
-            when={['macro-inmem', 'in-memory'].includes(
-              selected()?.harness ?? ''
-            )}
-          >
-            <SpeedToggle model={composerModelOverride() ?? ''} />
-          </Show>
+          <SpeedSelector
+            onCloseAutoFocus={restoreInputFocus}
+            onOpenChange={setSpeedPickerOpen}
+            offered={speedOption()?.option.options ?? []}
+            value={speedOverride()?.value ?? 'standard'}
+            disabled={Boolean(blocked())}
+            onChange={setPreferredSpeed}
+          />
         </div>
       }
       drawer={
@@ -567,11 +618,9 @@ export function NewChatPage(props: {
       drawerOpen
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
-      modelName={modelLabel(
+      modelName={catalogModelLabel(
         composerModelOverride(),
-        selectedCatalog
-          .models()
-          .find((model) => model.id === composerModelOverride())?.name
+        selectedCatalog.models()
       )}
       supportsImages={
         selectedCatalog

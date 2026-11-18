@@ -29,30 +29,40 @@ export function EntityConversationComposer(props: {
 }) {
   const send = useSendMessageMutation();
   const userId = useUserId();
-  const bots = useMessageBotMentionUsers(() => props.parent);
+  // The mention list's agents load when someone heads for the composer
+  // (pointer over it, or focus from the keyboard or a tap), not with every
+  // record or document that shows one.
+  const [writing, setWriting] = createSignal(false);
+  const bots = useMessageBotMentionUsers(() => props.parent, writing);
   let input: InputHandle | undefined;
   return (
-    <ChannelInput
-      parent={props.parent}
-      bots={bots}
-      input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
-      autofocus={false}
-      collapsible={props.collapsible}
-      onReady={(handle) => (input = handle)}
-      onSend={async (snapshot) => {
-        const senderId = userId();
-        if (!senderId) return;
-        await send.mutateAsync({
-          parent: props.parent,
-          senderId,
-          optimisticId: newMessageId(),
-          ...buildPostMessageSendPayload({ snapshot }),
-        });
-        input?.clear();
-        if (props.blurOnSend && document.activeElement instanceof HTMLElement)
-          document.activeElement.blur();
-      }}
-    />
+    <div
+      class="contents"
+      onPointerEnter={() => setWriting(true)}
+      onFocusIn={() => setWriting(true)}
+    >
+      <ChannelInput
+        parent={props.parent}
+        bots={bots}
+        input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
+        autofocus={false}
+        collapsible={props.collapsible}
+        onReady={(handle) => (input = handle)}
+        onSend={async (snapshot) => {
+          const senderId = userId();
+          if (!senderId) return;
+          await send.mutateAsync({
+            parent: props.parent,
+            senderId,
+            optimisticId: newMessageId(),
+            ...buildPostMessageSendPayload({ snapshot }),
+          });
+          input?.clear();
+          if (props.blurOnSend && document.activeElement instanceof HTMLElement)
+            document.activeElement.blur();
+        }}
+      />
+    </div>
   );
 }
 

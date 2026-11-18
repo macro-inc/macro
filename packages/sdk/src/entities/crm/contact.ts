@@ -77,8 +77,29 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   /** The contact's display name, if one has been observed. */
   readonly name = this.field('name');
 
-  /** The contact's email address; absent for a contact added by name alone. */
+  /** The contact's primary email address; absent for a contact added by name alone. */
   readonly email = this.field('email');
+
+  /** Every address the contact is known by: the primary first, then the rest oldest first. */
+  readonly emails = this.mappedField('emails', (emails) => emails ?? []);
+
+  /**
+   * Whether the contact has an address on one of its company's domains. Such a
+   * contact cannot be unlinked from the company or moved to another.
+   */
+  readonly companyDomain = this.mappedField(
+    'companyDomain',
+    (companyDomain) => companyDomain ?? false,
+  );
+
+  /**
+   * The addresses on one of the company's domains. The last one cannot be
+   * removed while the contact is linked to the company.
+   */
+  readonly companyDomainEmails = this.mappedField(
+    'companyDomainEmails',
+    (emails) => emails ?? [],
+  );
 
   /** The CRM company this contact belongs to, if it has one. */
   readonly company = this.mappedField('companyId', (id) =>
@@ -145,7 +166,8 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   }
 
   /**
-   * Add an email when absent. Existing addresses cannot be replaced or cleared.
+   * Make an address the contact's primary, adding it when the contact does not
+   * hold it yet. The previous primary stays on the contact.
    *
    * @write
    * @idempotent
@@ -160,7 +182,43 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   }
 
   /**
-   * Link or switch a personal-provider contact's company. Unlinking is not supported.
+   * Add a further address the contact is known by. It must not belong to
+   * another contact in the team, and becomes the primary only when the contact
+   * has none.
+   *
+   * @write
+   * @idempotent
+   */
+  async addEmail(email: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.addCrmContactEmail({
+        path: { contact_id: this.id },
+        body: { email },
+      }),
+    );
+  }
+
+  /**
+   * Remove one of the contact's addresses. Nothing else is deleted: the contact
+   * stops showing that address's email history. Removing the primary promotes
+   * the oldest address left. The last address on a domain of the contact's
+   * company cannot be removed while the contact is linked to it.
+   *
+   * @destructive
+   * @idempotent
+   */
+  async removeEmail(email: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.removeCrmContactEmail({
+        path: { contact_id: this.id },
+        body: { email },
+      }),
+    );
+  }
+
+  /**
+   * Link or switch the company of a contact whose primary address is on a
+   * personal provider. Rejected for a contact on its company's domain.
    *
    * @write
    * @idempotent
@@ -170,6 +228,21 @@ export class Contact extends FavoritableEntity<ContactDetail> {
       c.storage.setCrmContactCompany({
         path: { contact_id: this.id },
         body: { companyId: company.id },
+      }),
+    );
+  }
+
+  /**
+   * Remove the contact's company link, leaving a contact without a company.
+   * Rejected for a contact on its company's domain.
+   *
+   * @write
+   * @idempotent
+   */
+  async unlinkCompany(): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.unlinkCrmContactCompany({
+        path: { contact_id: this.id },
       }),
     );
   }

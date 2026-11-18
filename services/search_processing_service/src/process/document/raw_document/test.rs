@@ -3,6 +3,7 @@ use super::*;
 #[tokio::test]
 async fn test_generate_upsert() {
     let document_info = DocumentMetadata {
+        appearance: None,
         document_id: "AAA".to_string(),
         document_version_id: 0,
         owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),
@@ -35,8 +36,8 @@ async fn test_generate_upsert() {
         },
     ];
 
-    let upserts =
-        generate_upserts(document_info, markdown_result).expect("Could not generate upserts");
+    let upserts = generate_upserts(document_info, markdown_result, false)
+        .expect("Could not generate upserts");
 
     assert!(!upserts.is_empty());
     assert_eq!(upserts.len(), 2);
@@ -48,6 +49,7 @@ async fn test_generate_upsert_with_sub_type() {
     use document_sub_type::DocumentSubType;
 
     let document_info = DocumentMetadata {
+        appearance: None,
         document_id: "BBB".to_string(),
         document_version_id: 0,
         owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),
@@ -73,8 +75,8 @@ async fn test_generate_upsert_with_sub_type() {
         content: "Task content".to_string(),
     }];
 
-    let upserts =
-        generate_upserts(document_info, markdown_result).expect("Could not generate upserts");
+    let upserts = generate_upserts(document_info, markdown_result, false)
+        .expect("Could not generate upserts");
 
     assert_eq!(upserts.len(), 1);
     assert_eq!(upserts[0].sub_type, Some("task".to_string()));
@@ -82,6 +84,7 @@ async fn test_generate_upsert_with_sub_type() {
 
 fn parent_only_document_info(file_type: Option<&str>) -> DocumentMetadata {
     DocumentMetadata {
+        appearance: None,
         document_id: "CCC".to_string(),
         document_version_id: 0,
         owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),
@@ -114,7 +117,7 @@ fn generate_upserts_preserves_a_bot_owner_principal() {
         content: "Bot document".to_string(),
     }];
 
-    let upserts = generate_upserts(document_info, markdown_result).expect("valid upsert");
+    let upserts = generate_upserts(document_info, markdown_result, false).expect("valid upsert");
 
     assert_eq!(upserts.len(), 1);
     assert_eq!(upserts[0].owner_id, BOT_PRINCIPAL);
@@ -122,7 +125,7 @@ fn generate_upserts_preserves_a_bot_owner_principal() {
 
 #[test]
 fn test_generate_parent_only_upsert() {
-    let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")))
+    let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")), false)
         .expect("could not generate parent-only upsert")
         .expect("expected upsert args");
 
@@ -135,6 +138,38 @@ fn test_generate_parent_only_upsert() {
     assert_eq!(args.content, "");
     assert_eq!(args.raw_content, None);
     assert!(args.properties.is_empty());
+    assert!(!args.is_email_attachment);
+}
+
+#[test]
+fn a_parent_only_upsert_carries_the_email_attachment_flag() {
+    let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")), true)
+        .expect("could not generate parent-only upsert")
+        .expect("expected upsert args");
+
+    assert!(args.is_email_attachment);
+}
+
+#[test]
+fn every_markdown_chunk_carries_the_email_attachment_flag() {
+    let markdown_result = vec![
+        MarkdownParseResult {
+            node_id: "node1".to_string(),
+            raw_content: "# Forwarded".to_string(),
+            content: "Forwarded".to_string(),
+        },
+        MarkdownParseResult {
+            node_id: "node2".to_string(),
+            raw_content: "Body".to_string(),
+            content: "Body".to_string(),
+        },
+    ];
+
+    let upserts = generate_upserts(parent_only_document_info(Some("md")), markdown_result, true)
+        .expect("valid upserts");
+
+    assert_eq!(upserts.len(), 2);
+    assert!(upserts.iter().all(|upsert| upsert.is_email_attachment));
 }
 
 #[test]
@@ -144,7 +179,7 @@ fn test_canvas_routes_to_parent_only_indexing() {
 
 #[test]
 fn test_generate_canvas_parent_only_upsert_has_no_content_chunk() {
-    let args = generate_parent_only_upsert(parent_only_document_info(Some("canvas")))
+    let args = generate_parent_only_upsert(parent_only_document_info(Some("canvas")), false)
         .expect("could not generate parent-only upsert")
         .expect("expected upsert args");
 
@@ -160,7 +195,7 @@ fn test_generate_canvas_parent_only_upsert_has_no_content_chunk() {
 
 #[test]
 fn test_generate_parent_only_upsert_without_file_type() {
-    let args = generate_parent_only_upsert(parent_only_document_info(None))
+    let args = generate_parent_only_upsert(parent_only_document_info(None), false)
         .expect("could not generate parent-only upsert");
 
     assert!(args.is_none());
@@ -536,6 +571,26 @@ async fn legacy_markdown_with_invalid_utf8_is_indexed(pool: sqlx::PgPool) {
         "{lines:?}"
     );
     assert_eq!(indexed_content(&bulk), ["Caf\u{fffd} notes"]);
+}
+
+/// The parent doc among the lines of a `_bulk` body.
+fn indexed_parent(bulk: &[serde_json::Value]) -> &serde_json::Value {
+    bulk.iter()
+        .find(|line| line["document_relation"] == "document")
+        .expect("a parent doc is written")
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("email_attachment_documents"))
+)]
+async fn a_full_index_marks_only_email_attachments(pool: sqlx::PgPool) {
+    let (_, attachment) =
+        index_text_file(&pool, "attachment-a", FileType::Html, b"<p>forwarded</p>").await;
+    let (_, own) = index_text_file(&pool, "plain-d", FileType::Html, b"<p>mine</p>").await;
+
+    assert_eq!(indexed_parent(&attachment)["is_email_attachment"], true);
+    assert_eq!(indexed_parent(&own)["is_email_attachment"], false);
 }
 
 #[tokio::test]

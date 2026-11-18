@@ -10,6 +10,7 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
+import { ViewShellListActiveContext } from '@app/components/view-shell/view-shell-context';
 import { CommandState } from '@app/features/command/state';
 import {
   resolveEntityActionViewContext,
@@ -63,6 +64,7 @@ import {
   Show,
   Suspense,
   Switch,
+  useContext,
 } from 'solid-js';
 import type { CacheSnapshot } from 'virtua';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -72,7 +74,7 @@ import {
   soupNavigationTouchHighlight,
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
-import { isExcludedEmailFolder } from '../constants';
+import { canSearchEmailTab, isExcludedEmailFolder } from '../constants';
 import {
   type EmailListActivationMetadata,
   useEmailView,
@@ -82,6 +84,8 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createSearchScrollReset } from '../primitives/create-search-scroll-reset';
+import { emailRowStyle } from '../primitives/email-row-style';
 import { createEmailFolderRestore } from '../primitives/folder-restore';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
@@ -141,6 +145,9 @@ export function EmailList(props: EmailListProps) {
     filterByTag,
   } = useEmailView();
   usePending('email.list.items', () => source.isLoading());
+  // The wait is still a wait when the previous rows stay on screen for it.
+  const showsPreviousRows = () => source.showsPreviousRows?.() ?? false;
+  usePending('email.list.search_results', showsPreviousRows);
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
 
@@ -317,8 +324,11 @@ export function EmailList(props: EmailListProps) {
     )
   );
   // While the reader has the keyboard the list's keys stand down.
+  const listActive = useContext(ViewShellListActiveContext);
   const listHasKeyboard = () =>
-    panel.isPanelActive() && !(props.pane?.readerHasKeyboard() ?? false);
+    listActive() &&
+    panel.isPanelActive() &&
+    !(props.pane?.readerHasKeyboard() ?? false);
 
   const [collapseEntity, setCollapseEntity] =
     createSignal<(entityId: string) => Promise<void>>();
@@ -565,6 +575,10 @@ export function EmailList(props: EmailListProps) {
   }
 
   const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
+  // The tutorial introduces the inbox; search results are not the inbox.
+  const showsTutorial = () =>
+    state.tab === 'important' &&
+    !(canSearchEmailTab(state.tab) && state.search.trim());
 
   function showsEmptyViewport() {
     return (
@@ -628,6 +642,12 @@ export function EmailList(props: EmailListProps) {
     list.focus.clear({ reason: 'programmatic' });
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
+  createSearchScrollReset({
+    query: () => state.search,
+    showsPreviousRows,
+    reset: () =>
+      setPersistedListState((current) => ({ ...current, scrollOffset: 0 })),
+  });
 
   createEffect(() => {
     rows();
@@ -670,7 +690,7 @@ export function EmailList(props: EmailListProps) {
 
   const listTarget = tourTarget(EMAIL_TOUR.list);
   return (
-    <MaybeSoupEntityActionDrawerManager>
+    <MaybeSoupEntityActionDrawerManager keepOnWideTouch>
       <div
         ref={(element: HTMLDivElement) => {
           setGrid(element);
@@ -777,18 +797,12 @@ export function EmailList(props: EmailListProps) {
                   class="min-h-0 flex-1 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
                 >
                   {/* New inboxes start empty, which is when the tutorial
-                      matters most. The row then takes the touch top inset. */}
-                  <Show
-                    when={state.tab === 'important'}
-                    fallback={<EmailEmptyState />}
-                  >
-                    <div class="touch:pt-(--mobile-content-inset-top)">
-                      <TutorialRow tutorial="mail" />
-                    </div>
-                    <div class="contents touch:[--mobile-content-inset-top:0px]">
-                      <EmailEmptyState />
-                    </div>
+                      matters most. Touch devices show no tutorial, so there
+                      the empty state keeps its own top inset. */}
+                  <Show when={showsTutorial()}>
+                    <TutorialRow tutorial="mail" />
                   </Show>
+                  <EmailEmptyState />
                 </div>
               </Match>
 
@@ -798,7 +812,9 @@ export function EmailList(props: EmailListProps) {
                     setViewport(element);
                     soupNavigationTouchHighlight(element);
                   }}
-                  class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none"
+                  aria-busy={showsPreviousRows()}
+                  classList={{ 'opacity-50': showsPreviousRows() }}
+                  class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none transition-opacity"
                 >
                   {/* Keep insets inside the scroller so rows slide under the floating chrome. */}
                   <div ref={setTopSpacer}>
@@ -806,7 +822,7 @@ export function EmailList(props: EmailListProps) {
                       aria-hidden="true"
                       class="h-0 touch:h-(--mobile-content-inset-top)"
                     />
-                    <Show when={state.tab === 'important'}>
+                    <Show when={showsTutorial()}>
                       <TutorialRow tutorial="mail" />
                     </Show>
                   </div>
@@ -836,7 +852,7 @@ export function EmailList(props: EmailListProps) {
                         checkNearEnd();
                       }}
                     >
-                      {(row) => (
+                      {(row, index) => (
                         <Switch>
                           <Match
                             when={row.kind === 'group-header' ? row : undefined}
@@ -871,6 +887,10 @@ export function EmailList(props: EmailListProps) {
                                   <div role="gridcell">
                                     <ListEntity
                                       entity={entityRow().entity}
+                                      rowStyle={emailRowStyle()}
+                                      isFirstInGroup={
+                                        rows()[index() - 1]?.kind !== 'entity'
+                                      }
                                       onFilterByTag={filterByTag}
                                       meta={
                                         <EmailFocusReason
@@ -1089,7 +1109,6 @@ export function EmailList(props: EmailListProps) {
           >
             <Show when={isExcludedEmailFolder(state.tab)}>
               <Button
-                size="sm"
                 disabled={restoreFolder.isPending}
                 onClick={() =>
                   fireAndForget(

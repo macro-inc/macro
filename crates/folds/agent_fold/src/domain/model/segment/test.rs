@@ -143,7 +143,7 @@ fn code_execution_steps_show_observed_sdk_operations_without_source_or_results()
 }
 
 #[test]
-fn code_without_observed_requests_keeps_its_tool_step() {
+fn code_without_observed_requests_reads_as_workspace_work() {
     let part = MessagePart::ToolUse {
         id: ToolUseId("code-2".into()),
         name: ToolName::Mcp {
@@ -157,7 +157,132 @@ fn code_without_observed_requests_keeps_its_tool_step() {
             error: None,
         },
     };
-    assert_eq!(segments(&[part], true)[0].rows[0].label, "Execute code");
+    assert_eq!(
+        segments(&[part], true)[0].rows,
+        [ActivityRow {
+            id: "code-2".to_owned(),
+            label: "Worked in your workspace".to_owned(),
+            detail: None,
+            status: ActivityStatus::Completed,
+            card: None,
+        }]
+    );
+}
+
+#[test]
+fn code_through_the_public_server_reads_as_workspace_work() {
+    let part = MessagePart::ToolUse {
+        id: ToolUseId("code-4".into()),
+        name: ToolName::Mcp {
+            server: "macro".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Other {
+            kind: "other".into(),
+            input: Some(serde_json::json!({"source": "export async function main() {}"})),
+            result: Some(serde_json::json!({"status": "succeeded"})),
+            output: None,
+            error: None,
+        },
+    };
+    assert_eq!(
+        segments(&[part], true)[0].rows[0].label,
+        "Worked in your workspace"
+    );
+}
+
+#[test]
+fn code_mode_lookups_are_not_steps() {
+    let lookup = |id: &str, name: ToolName| MessagePart::ToolUse {
+        id: ToolUseId(id.into()),
+        name,
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Macro {
+            input: serde_json::json!({"query": "documents"}),
+            output: None,
+            error: None,
+        },
+    };
+    let parts = [
+        lookup(
+            "describe",
+            ToolName::Mcp {
+                server: "macro_internal".into(),
+                tool: "DescribeCodeTools".into(),
+            },
+        ),
+        lookup(
+            "docs",
+            ToolName::Mcp {
+                server: "macro_internal".into(),
+                tool: "ReadCodeDocs".into(),
+            },
+        ),
+        lookup(
+            "search",
+            ToolName::Native {
+                name: "SearchTools".into(),
+            },
+        ),
+        lookup(
+            "load",
+            ToolName::Mcp {
+                server: "macro".into(),
+                tool: "LoadTools".into(),
+            },
+        ),
+    ];
+    assert_eq!(kinds(&segments(&parts, true)), []);
+
+    // Between two steps, a lookup neither splits the run nor adds a row.
+    let between = [
+        run("a", "ls", ToolStatus::Completed),
+        parts[0].clone(),
+        run("b", "pwd", ToolStatus::Completed),
+    ];
+    let segments = segments(&between, true);
+    assert_eq!(kinds(&segments), [(SegmentKind::Activity, true)]);
+    assert_eq!(segments[0].rows.len(), 2);
+}
+
+#[test]
+fn an_unfinished_or_failed_code_run_still_reads_as_workspace_work() {
+    let code = |status: ToolStatus| MessagePart::ToolUse {
+        id: ToolUseId("code-3".into()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status,
+        detail: ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: None,
+            error: None,
+        },
+    };
+    let row = |status: ToolStatus, closed: bool| {
+        let row = segments(&[code(status)], closed)[0].rows[0].clone();
+        (row.label, row.status)
+    };
+    assert_eq!(
+        row(ToolStatus::Running, false),
+        (
+            "Working in your workspace".to_owned(),
+            ActivityStatus::Running
+        )
+    );
+    assert_eq!(
+        row(ToolStatus::Running, true),
+        (
+            "Worked in your workspace".to_owned(),
+            ActivityStatus::Interrupted
+        )
+    );
+    assert_eq!(
+        row(ToolStatus::Failed, true),
+        ("Workspace step failed".to_owned(), ActivityStatus::Failed)
+    );
 }
 
 #[test]

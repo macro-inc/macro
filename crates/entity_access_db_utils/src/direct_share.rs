@@ -30,7 +30,8 @@ pub async fn facts(
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner_id, r.name, None)),
         EntityType::ExternalChat => sqlx::query!("SELECT user_id, name FROM external_chat WHERE id = $1 FOR SHARE", id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.user_id, r.name, None)),
-        EntityType::Harness => sqlx::query!(r#"SELECT COALESCE(owner_user_id, created_by) AS "owner!", name FROM harnesses WHERE id = $1 AND deleted_at IS NULL FOR SHARE"#, id)
+        // A computer's harness belongs to its team and has no direct shares.
+        EntityType::Harness => sqlx::query!(r#"SELECT COALESCE(owner_user_id, created_by) AS "owner!", name FROM harnesses WHERE id = $1 AND deleted_at IS NULL AND computer_id IS NULL FOR SHARE"#, id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner, r.name, None)),
         EntityType::Initiative => sqlx::query!("SELECT owner_user_id, name FROM initiative WHERE id = $1 FOR SHARE", id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner_user_id, r.name, None)),
@@ -98,6 +99,12 @@ pub async fn set(
     upgrade_only: bool,
 ) -> anyhow::Result<()> {
     if let Some(level) = level {
+        let grant = crate::scoped_grants::Grant {
+            source_id: user.as_ref(),
+            source_type: crate::EntityAccessSourceType::User,
+            access_level: level,
+        };
+        crate::scoped_grants::refuse_added_access(tx.as_mut(), id, kind, &[grant]).await?;
         sqlx::query!(r#"INSERT INTO entity_access(entity_id, entity_type, source_id, source_type, access_level)
             VALUES ($1, $2, $3, 'user', $4)
             ON CONFLICT (entity_id, entity_type, source_id, source_type) WHERE granted_from_project_id IS NULL

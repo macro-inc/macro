@@ -53,10 +53,38 @@ per-entity-type search plus a unified search across them — mounted into
 
 ## Gotchas
 
+- Search spans and logs never carry what the user typed: not the query, its
+  terms, or the name term. Skip those arguments and record sizes and enums
+  (`term_len`, `search.terms`, `search.search_on`). The unified
+  search span is built by `simple_unified::unified_search_span`, which a test
+  reads back; add a field there, not by instrumenting the request.
+- A query is valid from one character (`terms::trimmed_query` rejects only a
+  blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
+  term under three characters matches as a whole word in document, chat, call
+  and email content, and name, channel, project and calendar prefixes stop at
+  256 expansions. Measure a common one-letter word before loosening either.
 - Every whitespace-split term is ANDed, so a term the standard tokenizer
   analyzes to nothing (`-`, `@`) matches no document and empties the search.
   `terms::drop_wordless_terms` removes such terms for exact and partial
   queries; run new term handling through it.
+- The one exception to the AND is document content under
+  `term_matching: dynamic` on the unified request (see `opensearch_client`'s
+  `DocumentTermMatching`). It applies only when the request asks for it and
+  the `enable-dynamic-search-term-matching` flag is on for the caller
+  (`TermMatchingRollout`; local stacks have it on). The adapter never
+  makes a search wait on the flag provider: a search gets the caller's
+  remembered answer, or off when there is none, and an answer that is missing
+  or older than five minutes is re-read in the background, once per caller,
+  failed reads remembered as off. So in each process a caller's first search
+  after the flag turns on still runs strict. The mode a first page ran is
+  carried in the unified cursor (`document_term_matching`) and every later
+  page runs it without reading the flag, because processes learn the flag
+  independently and a page must not switch mode; a cursor without it decides
+  per page. So the flag switches first pages: a search already under way,
+  or a hand-made cursor on a request that asks for dynamic matching, keeps
+  the cursor's mode. It is a rollout switch, not an access check. The SDK and AI tools
+  never send it, so their documented AND holds. Names, emails, channels,
+  chats and call records are always a strict AND.
 - Calendar events have two scopes (`calendar_event_scope` on the unified
   request): `own` matches the caller's own and delegated calendars by
   owner and inbox link; `shared_with_you` resolves the events shared with the
@@ -87,6 +115,40 @@ per-entity-type search plus a unified search across them — mounted into
   change to any of these with the default model on rows that are really in the
   index, and a user whose memory does not describe the behavior under test.
 
+- Email filters mean what the Email list query means by them, applied before
+  pagination (`domain/email_search.rs`). Shared threads are resolved from
+  `entity_access` grants to the caller's sources, leaving out their own
+  inboxes, and searched by id (at most `MAX_SHARED_THREADS`); `email_thread_ids`
+  narrow by id. Calendar only and `view` (Sent, Drafts) are `ThreadSet`
+  allowlists read from the partial index each view reads
+  (`idx_email_threads_calendar_view`, `idx_email_threads_sent_view_link_ts_id`,
+  `idx_email_messages_drafts_view`), at most `MAX_THREAD_SET_ALLOWLIST` per set,
+  past which the set is checked per hit; two sets intersect. Read, done
+  (`inbox_visible`), notification state and attachment kinds can each cover
+  most of a mailbox or have no index, so `read_until_page_kept` checks each
+  page's email threads in Postgres and reads further pages until the page is
+  full, the results end, or `MAX_EMAIL_STATE_ROUNDS`; the span records the
+  rounds and whether the bound was reached. Attachment kinds are read from
+  `email_attachments`, as the list's built-in tabs filter them, not from the
+  thread flags, which saved views read and which are not backfilled
+  everywhere. `email_filters.view` is search only: expanding it into a list
+  filter is an `ExpandErr`. `project_ids` (Drive folders) is an allowlist with
+  the list's Project candidate rule (`entity_access::project_email_threads`):
+  the caller's own threads in the folders, every thread in a folder granted to
+  their sources whoever's inbox holds it, and thread shares in the folders,
+  at most `MAX_PROJECT_THREADS`, from at most `MAX_EMAIL_PROJECTS` folders
+  (more is a 400); the other thread-level filters are then checked per hit.
+  Each folder's read stops once it has the cap's worth of threads the caller
+  reads, so a granted folder is not read whole; a folder without a grant is
+  read until then or to its end under the query's 5 s statement timeout.
+  Thread shares are probed only for
+  threads in folders the caller holds no grant on. `crm_domains` and `crm_addresses` are rejected with a 400
+  (`UnsupportedEmailFilter`): they need the list's CRM team scope and consent.
+  Enrichment reads a shared hit through its owner's inbox after `shared_among`
+  confirms a grant on the thread or on its folder; a revoked grant drops it.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+- CRM search authorization uses the primary pool (`crm_db`) so member revocation cannot be reversed by replica lag; denied viewers receive no CRM matches or enrichment.

@@ -1,136 +1,37 @@
-use crate::pubsub::gmail_ops::email_api_error::handle_email_api_error;
-use crate::pubsub::gmail_ops::error_handlers::prefix_error_source;
-use crate::pubsub::gmail_ops::operations::OperationError;
-use crate::pubsub::gmail_ops::operations::block_sender::block_sender;
-use crate::pubsub::gmail_ops::operations::delete_label::delete_label;
-use crate::pubsub::gmail_ops::operations::modify_message_labels::modify_message_labels;
-use crate::pubsub::gmail_ops::operations::unblock_sender::unblock_sender;
+use crate::pubsub::gmail_ops::error_handlers;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
-use anyhow::{Context, Result, anyhow};
-use models_email::gmail::gmail_ops::{GmailOpsOperation, GmailOpsPubsubMessage};
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use anyhow::{Context, Result};
+use email::domain::message_labels::gmail_ops::GmailOpsDisposition;
+use models_email::gmail::gmail_ops::GmailOpsPubsubMessage;
 use sqs_worker::cleanup_message;
 
-/// Processes a message from the gmail ops queue.
-pub async fn process_message(
+/// Decode one delivery, then perform only the acknowledgement selected by the domain.
+pub(crate) async fn process_message(
     ctx: GmailOpsContext,
     message: &aws_sdk_sqs::types::Message,
 ) -> Result<()> {
-    let data = match extract_gmail_ops_message(message) {
-        Ok(data) => data,
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to extract gmail ops message, this is non-retryable.");
-            if let Err(cleanup_err) = cleanup_message(&ctx.sqs_worker, message).await {
-                tracing::error!(error = %cleanup_err, "Failed to clean up message after extraction error");
-            }
-            return Err(e);
-        }
-    };
-
-    let processing_result = inner_process_message(&ctx, &data).await;
-
-    match processing_result {
-        Ok(()) => {
+    let disposition = ctx
+        .service
+        .process(extract_gmail_ops_message(message))
+        .await;
+    match disposition {
+        GmailOpsDisposition::DoneDelete => {
             cleanup_message(&ctx.sqs_worker, message).await?;
             Ok(())
         }
-        Err(ProcessingError::NonRetryable(e)) => {
-            crate::pubsub::gmail_ops::error_handlers::handle_non_retryable_error(
-                &ctx, message, &data, &e,
-            )
-            .await
+        GmailOpsDisposition::InvalidDelete(e) => {
+            if let Err(cleanup_err) = cleanup_message(&ctx.sqs_worker, message).await {
+                tracing::error!(error = %cleanup_err, "Failed to clean up message after extraction error");
+            }
+            Err(e)
         }
-        Err(ProcessingError::Retryable(e)) => {
-            crate::pubsub::gmail_ops::error_handlers::handle_retryable_error(&data, &e).await
+        GmailOpsDisposition::FailureDelete { data, error, log } => {
+            error_handlers::handle_non_retryable_error(&ctx, message, &data, &error, log).await
+        }
+        GmailOpsDisposition::LeaveForRedelivery { data, error } => {
+            error_handlers::handle_retryable_error(&data, &error).await
         }
     }
-}
-
-#[tracing::instrument(skip(ctx, data), err)]
-async fn inner_process_message(
-    ctx: &GmailOpsContext,
-    data: &GmailOpsPubsubMessage,
-) -> Result<(), ProcessingError> {
-    let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, data.link_id)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to fetch link from database"),
-            })
-        })?
-        .ok_or_else(|| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::LinkNotFound,
-                source: anyhow!("No link found for id {}", data.link_id),
-            })
-        })?;
-
-    let (operation_name, operation_result) = match &data.operation {
-        GmailOpsOperation::ModifyMessageLabels(payload) => (
-            "modify_message_labels",
-            modify_message_labels(ctx, &link, &payload.clone().into()).await,
-        ),
-        GmailOpsOperation::ModifyMessageLabelsBatch(payload) => (
-            "modify_message_labels",
-            modify_message_labels(ctx, &link, payload).await,
-        ),
-        GmailOpsOperation::DeleteLabel(payload) => (
-            "delete_label",
-            delete_label(ctx, &link, payload).await.map_err(Into::into),
-        ),
-        GmailOpsOperation::BlockSender(payload) => (
-            "block_sender",
-            block_sender(ctx, &link, payload).await.map_err(Into::into),
-        ),
-        GmailOpsOperation::UnblockSender(payload) => (
-            "unblock_sender",
-            unblock_sender(ctx, &link, payload)
-                .await
-                .map_err(Into::into),
-        ),
-    };
-
-    if let Err(error) = operation_result {
-        let processing_error = match error {
-            OperationError::Gmail(error) => handle_email_api_error(ctx, data, error).await,
-            OperationError::Database(source) => ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source,
-            }),
-            OperationError::WaitingForNewerWrite => wait_in_retry_queue(ctx, data).await,
-        };
-        return Err(prefix_error_source(processing_error, operation_name));
-    }
-
-    tracing::debug!(operation_name, "Successfully processed Gmail operation");
-    Ok(())
-}
-
-/// Moves an operation waiting for a newer label write to the retry queue,
-/// whose receive limit outlasts the newer write's own retries.
-async fn wait_in_retry_queue(
-    ctx: &GmailOpsContext,
-    data: &GmailOpsPubsubMessage,
-) -> ProcessingError {
-    let waiting = || DetailedError {
-        reason: FailureReason::NewerLabelWritePending,
-        source: anyhow!("a newer label write on its messages is still on its way"),
-    };
-    if ctx.retry_worker {
-        return ProcessingError::Retryable(waiting());
-    }
-    if let Err(enqueue_error) = ctx
-        .sqs_client
-        .enqueue_gmail_ops_retry_notification(data.clone())
-        .await
-    {
-        return ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::SqsEnqueueFailed,
-            source: enqueue_error.context("Failed to enqueue gmail ops retry message"),
-        });
-    }
-    ProcessingError::NonRetryable(waiting())
 }
 
 /// Extracts the message from the SQS message body.

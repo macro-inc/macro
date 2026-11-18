@@ -61,7 +61,7 @@ export function WorkspaceEventDetails(props: {
                 }}
               />
               <div>
-                <h2 class="text-sm font-semibold">{props.event.title}</h2>
+                <h2 class="text-sm font-medium">{props.event.title}</h2>
                 <p class="text-xs text-ink-muted mt-1">
                   {new Date(`${props.event.date}T12:00:00`).toLocaleDateString(
                     'en-US',

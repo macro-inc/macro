@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { Cell } from '@core/database-sql/generated/types';
 import {
   DATABASE_QUERY_CHART_MODES,
@@ -94,10 +95,10 @@ export function prepareQueryChart(
 ): ChartResult {
   if (answer.columns.length < 2)
     return {
-      error: 'A chart needs a label column and a number column.',
+      error: t('databaseAnswers.chartNeedsColumns'),
     };
   if (!answer.rows.length)
-    return { error: 'There are no matching records to chart.' };
+    return { error: t('databaseAnswers.chartNoRecords') };
   const names = answer.columns.map((column) => column.name);
   const inferred = names.slice(1).filter((_, index) => {
     const values = answer.rows.map((row) => numeric(row[index + 1]));
@@ -118,28 +119,26 @@ export function prepareQueryChart(
     )
   )
     return {
-      error:
-        'This chart’s columns are unavailable. Update the question or view the result table.',
+      error: t('databaseAnswers.chartColumnsUnavailable'),
     };
   if (answer.rows.length > (mode === 'pie' ? MAX_PIE_CATEGORIES : MAX_POINTS))
     return {
       error:
         mode === 'pie'
-          ? 'This result has more than 20 categories. Choose Bar or ask for fewer groups.'
-          : 'This result has more than 300 points. Ask for a summary or a smaller date range.',
+          ? t('databaseAnswers.chartTooManyCategories')
+          : t('databaseAnswers.chartTooManyPoints'),
     };
   const values = config.y.map((name) =>
     answer.rows.map((row) => numeric(row[columnIndex(name)]))
   );
   if (values.some((column) => column.some((value) => value === undefined)))
     return {
-      error:
-        'A chart needs numeric values. View the table or ask for a numeric summary.',
+      error: t('databaseAnswers.chartNeedsNumbers'),
     };
   if (
     !values.some((column) => column.some((value) => typeof value === 'number'))
   )
-    return { error: 'There are no numeric values to chart.' };
+    return { error: t('databaseAnswers.chartNoNumbers') };
   if (mode === 'pie') {
     const shares = values[0];
     if (
@@ -148,8 +147,7 @@ export function prepareQueryChart(
       shares.some((value) => value !== null && value !== undefined && value < 0)
     )
       return {
-        error:
-          'A pie chart needs one series of nonnegative values. Choose Bar to compare these values.',
+        error: t('databaseAnswers.pieNeedsOneSeries'),
       };
     if (
       !shares.some(
@@ -157,7 +155,7 @@ export function prepareQueryChart(
       )
     )
       return {
-        error: 'A pie chart needs at least one value greater than zero.',
+        error: t('databaseAnswers.pieNeedsPositive'),
       };
   }
 
@@ -168,7 +166,9 @@ export function prepareQueryChart(
     );
   const text = (row: QueryAnswer['rows'][number], name: string) => {
     const cell = cellAt(row, name);
-    return cell.kind === 'empty' ? 'Empty' : resultCellText(cell, references);
+    return cell.kind === 'empty'
+      ? t('databaseAnswers.empty')
+      : resultCellText(cell, references);
   };
   const xCells = answer.rows.map((row) => cellAt(row, config.x));
   const present = xCells.filter((cell) => cell.kind !== 'empty');
@@ -213,7 +213,7 @@ export function prepareQueryChart(
   const series = [...new Set(points.map((point) => point.series))];
   if (series.length > MAX_CHART_SERIES)
     return {
-      error: `This chart splits into more than ${MAX_CHART_SERIES} groups. Ask for fewer groups or view the table.`,
+      error: t('databaseAnswers.chartTooManyGroups', { max: MAX_CHART_SERIES }),
     };
   const drawn = mode === 'pie' ? foldPie(points) : points;
   return {
@@ -223,9 +223,16 @@ export function prepareQueryChart(
       stack: (mode === 'bar' || mode === 'area') && !!config.stack,
       title:
         config.title ||
-        `${config.y.map(columnLabel).join(', ')} by ${columnLabel(config.x)}${
-          config.color ? ` and ${columnLabel(config.color)}` : ''
-        }`,
+        (config.color
+          ? t('databaseAnswers.chartTitleSplit', {
+              values: config.y.map(columnLabel).join(', '),
+              label: columnLabel(config.x),
+              split: columnLabel(config.color),
+            })
+          : t('databaseAnswers.chartTitle', {
+              values: config.y.map(columnLabel).join(', '),
+              label: columnLabel(config.x),
+            })),
       scale,
       categories: [...new Set(drawn.map((point) => point.label))],
       series,
@@ -252,11 +259,11 @@ function foldPie(points: QueryChartPoint[]): QueryChartPoint[] {
   return [
     ...points.filter((point) => kept.has(point)),
     {
-      x: 'Other',
-      label: 'Other',
+      x: t('databaseAnswers.chartOther'),
+      label: t('databaseAnswers.chartOther'),
       series,
       value,
-      tip: `Other (${rest.length} categories)\n${series}: ${formatQueryValue(value)}`,
+      tip: `${t('databaseAnswers.chartOtherTip', { count: rest.length })}\n${series}: ${formatQueryValue(value)}`,
     },
   ];
 }

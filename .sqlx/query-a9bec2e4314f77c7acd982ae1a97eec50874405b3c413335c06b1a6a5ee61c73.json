@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO subscription_item_change (idempotency_key, subscription_id, path, request, outcome) VALUES ($1, $2, $3, '{}', 'abandoned')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a9bec2e4314f77c7acd982ae1a97eec50874405b3c413335c06b1a6a5ee61c73"
+}

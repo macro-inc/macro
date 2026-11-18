@@ -14,18 +14,21 @@ future re-enablement.
 
 Use a pale blue selection highlight (#b8d5ff) with dark text (#101820) in both website entry styles. Keep public website text selectable with native browser behavior; restrict `user-select: none` to interactive controls that need it, never the page globally.
 
-The homepage uses a black background, centered Roboto Slab headings, small
-Inter supporting copy, and the shared pill calls to action. On desktop,
-show `HomepageUnification`'s compact linked feature diagram above `MacroHero`'s
-headline, supporting H2, and Sign Up button. Keep icon labels visible below every
-feature on desktop and mobile, retaining accessible link names and 44px minimum touch targets. Give the desktop diagram 340px of height with 10px labels so labels clear neighboring icons. Share homepage supporting copy between the desktop hero and mobile welcome view.
-Use no extra diagram heading. Animate the desktop feature bubbles into the GitHub mark on scroll using the same `animateOpenSource` transition as mobile, respecting reduced motion and restoring bubbles on reverse scroll. Follow the hero with
-open-source proof, the connected sidebar breakdown, and the
-remaining product chapters, testimonial, blog, and closing CTA. Reuse the original
-diagram story on both screen sizes. Mount the shared UI styles scoped to `.macro-homepage` so the diagrams render identically on direct loads and client-side navigation; do not rely on the signup entry loading global utilities. Do not insert the embedded workspace carousel
-or Home tutorial video into this sequence. Keep the homepage aura at 25% of the
-shared gradient and the grain at 1.2% opacity. Preserve the centered slab headings,
-small Inter descriptions, and thin rules beside each description.
+The homepage uses one opening section on desktop and phones: a large Macro mark
+surrounded by the production welcome graphic's app logos, followed by `MacroHero`'s
+current H1, supporting H2, Sign Up button, and backing/security badges. Reuse
+`ContextScene` unchanged on desktop and phones, including its radial rings,
+Macro bubble, and varied logo sizes. Render the concentric rings at 75% opacity and keep the two major rings only slightly stronger. Add a very faint, wide oval peach, rose, and warm-gold accent wash around the outer bubbles and reuse onboarding’s `WorkspaceTexture` at subdued dot/grain opacity. Give the logo bubbles a nearly transparent glass surface with background blur, a faint gradient edge at 40% of the earlier rim strength, and no bevel or cast shadow; use solid surfaces for reduced transparency. On desktop, scale the graphic to 110%, add 20px above it and 10px below it, and reserve the scaled height in the layout. Keep its orbit tiles centered on their
+positions and the graphic within the reading column. Onboarding retains its
+existing feature diagrams. The hero stays readable without motion and does not
+morph into another section. Follow it with the connected sidebar breakdown,
+product chapters, testimonial, blog, and closing CTA. Mount shared UI styles
+scoped to `.macro-homepage` for direct loads and client-side navigation. Do not
+insert a separate welcome screen, feature diagram section, GitHub proof section,
+embedded workspace carousel, or Home tutorial video into this sequence. Keep the
+homepage aura at 25% of the shared gradient and the grain at 1.2% opacity.
+Preserve centered slab headings, small Inter descriptions, and thin rules beside
+each product chapter description.
 The first-paint scripts and `sitePalette.ts` must apply the same palette policy
 before and after hydration.
 
@@ -35,28 +38,40 @@ Public actions share the raised white pill, one-pixel glass rim, and subtle
 pointer highlight from #9993. In light mode, keep the lift and rim at 75% of that original treatment, including the header button. The homepage and feature hero buttons use
 `site-nav-start`; keep these pills 140px wide and 40px tall to match the desktop Sign Up button, with matching type and icon sizing. Do not add a separate homepage button skin. Keep the current full-height documentation sidebar. Keep the homepage header transparent so the shared `PageVignette` fades scrolling content at the viewport edges without a solid header band. Keep the desktop transition from the hero to the feature diagram free of an extra Explore cue.
 
-Use `HomepageClosing` for a static bottom Sign Up button on the homepage, product, benefits, pricing, blog, and Wall of Love pages. Article layouts use `SitePageClosing` for the same treatment. Keep the header signup fixed in place; never animate it into the footer. Do not add bottom signup sections to security, legal, reference docs, account deletion, jobs, partners, or download pages. On phones, make the bottom signup button fill the content width up to 420px, with a 60px minimum height and 20px label. Keep signup and interactive demo flows separate. Keep miscellaneous links under “More stuff,” including separate Jobs and Partners links and a single Legal link to `/legal`. Keep billing guidance in Pricing, redirect the retired Billing & Plans page there, and leave the keyboard shortcut reference in the app rather than the website. The Legal page lists the existing policy and account-deletion URLs; preserve those URLs and their text. Omit Workspace basics from the sidebar; retain Home, Unified Memory, and Properties guides in search and contextual links from setup and product guides. Keep agent setup guides under Agents.
+Use `HomepageClosing` for a static bottom Sign Up button on the homepage, product, benefits, pricing, blog, and Wall of Love pages. Article layouts use `SitePageClosing` for the same treatment. Keep the header signup fixed in place; never animate it into the footer. Do not add bottom signup sections to security, legal, reference docs, account deletion, jobs, partners, or download pages. On phones, make the bottom signup button fill the content width up to 420px, with a 60px minimum height and 20px label. Keep signup and interactive demo flows separate. Keep miscellaneous links under “More stuff,” including separate Jobs and Partners links and a single Legal link to `/legal`. Keep billing guidance in Pricing, redirect the retired Billing & Plans page there, and leave the keyboard shortcut reference in the app rather than the website. The Legal page lists the existing policy and account-deletion URLs; preserve those URLs and their text. Omit Workspace basics from the sidebar; retain Home, Unified Memory, and Properties guides in search and contextual links from setup and product guides. Keep Agents under Top features. In Agent setup, show BYO agent and Add Macro MCP. Link to client-specific setup from the BYO guide.
 
-Lazy-load the lower `HomepageSections` chunk inside its own Suspense boundary so the hero stays visible while the section code loads and prerendering retains the full page.
+Lazy-load the lower `HomepageSections` chunk inside its own Suspense boundary so the hero stays visible while the section code loads and prerendering retains the full page. Link its static CSS dependencies in the prerendered homepage head so the product graphics are sized correctly before JavaScript loads; verify this with scripts held back in `scripts/verifyHomepage.ts`.
 
 Keep legal pages (`/terms`, `/privacy`, `/dpa`, `/partners/terms`, and `/delete-account`) on the shared `RouteLegal.css` layout: centered slab titles and dates, a 640px reading column, Inter body copy, and spaced section rules. Preserve legal wording, clause numbering, and DPA table navigation when changing presentation.
 
-Below 700px, use the production `OnboardingShell` landing composition: `WelcomeStep`, the Explore cue, the scroll-animated `HomepageUnification` with its heading and copy, then `HomepageSections`. Preserve production section heights and the 144 × 48px Get Started action. Keep desktop `HomepageFeatureLinks` and `MacroHero` separate; do not substitute the compact desktop diagram on mobile.
-
-`MacroHero` uses the production headline “The unified workspace for your company,” supporting copy, and signup link. Keep the introduction compact below the feature diagram instead of filling a viewport. On phones use 24px side gutters, 13px supporting copy, and a 48px CTA.
-Use quiet text links labeled “Learn about [feature] →” below homepage demos, without boxed buttons or a separate “Learn more” heading. Preserve 44px touch targets and direct product-page destinations.
+Add 40px above the hero graphic on phones 390–699px wide; preserve the smaller-phone top spacing.
+Keep the homepage H1 on two lines on narrow phones, reducing it to 32px at 375px and scaling down further below that width.
+Use the same hero markup below 700px, with 24px side gutters, the responsive
+welcome constellation, and 13px supporting copy. Keep the 144 × 48px
+signup action and allow the backing/security badges to wrap. `MacroHero` keeps
+the headline “The unified workspace for your company” and current supporting
+copy. The introduction scrolls naturally rather than filling a viewport.
+Use quiet text links labeled “Learn about [feature] →” below homepage demos, matching the small Inter section descriptions: 370 weight, 14px desktop / 13px phone, 1.65 line height, and placeholder ink. Scale arrows to the text. Use no boxed buttons or separate “Learn more” heading. Preserve 44px touch targets and direct product-page destinations.
 Keep homepage product sections, their messages and graphics, and the following testimonial, blog, and closing sections centered in a fluid 680px column matching the feature pages.
+Label the homepage CRM graphic “Deals” and show its illustrative filter, view, sort/group, visibility, New, and search pills at the upper right, using the Tasks artwork’s subdued pill treatment.
+Keep equal 16px spacing above and below the homepage CRM toolbar, without extra top padding on its outer card. Style the homepage CRM panel like the email card; show two enlarged pipeline columns on desktop and pan with the moving card, retaining the narrower phone camera.
+Omit the audit-log timeline and its caption from the homepage Documents and tasks chapter; keep the collaborative document preview and feature links. Match that document card to the email composer’s neutral glass surface and thin rim, without an extra colored wash. Use the homepage chat’s blue tint and regular weight for its person and date mention pills.
+Keep the signup-to-sidebar connection matched to the sidebar callout color (19.2% ink) with a thinner 0.5px stroke and fully undrawn at the top of the page; draw it only as the visitor scrolls, with a static revealed line after scrolling under reduced motion. Center the backing/security badges in the signup-to-sidebar gap, with equal clearance from the vertical connector to the adjacent logo edges on phones; show them at 40% opacity initially and fade them to full opacity once scrolling brings them into view. Under reduced motion, reveal them without a transition. Keep the Sales footer badges visible. Keep the full backing and certification captions on phones at 8px. Move desktop callouts inward to shorten their horizontal connector span by about 20%. On phones, shift the sidebar graphic 60px left, move its callout labels another 16px left to lengthen the pointers, shorten the agent caption to “Cursor, Claude, ChatGPT”, and use a straight vertical connector with a circular endpoint matching the sidebar pointers (5.1px diameter). Keep that gap about 234px on a tall desktop and 206px on phones, with no extra hero-bottom or sidebar-top padding.
 The hero never intercepts scrolling. `HomepageSections` reuses the deployed
-Email and chat, Documents and tasks, Coding agents, Sheets and databases, and
-CRM chapters. Preserve their original copy and demonstrations instead of
+Email and chat, Documents and tasks, Agent teammates, Sheets and databases, and
+Hands-free CRM chapters. Preserve their original copy and demonstrations instead of
 replacing them with separate feature cards or a sales letter. The shared
 website sidebar handles navigation; do not add a separate homepage index.
 Demonstrations load near the viewport through `DeferredDemo`. Reduced motion
 shows finished, readable content, and examples never send live messages.
-The resources rail follows the closing CTA and security section as a compact grid
-below 1440px; remove the extra section-bottom spacer in that layout.
+Hide the homepage Downloads and Links resources rail below 1440px instead of
+moving it below the closing security section; retain the desktop rail and compact bottom spacing.
 
 Model-picker search fields use a borderless input with a subtle rounded focus ring around the complete search row, including the icon. Keep this styling local to the frozen marketing picker.
+
+Use Inter Variable at no more than 500 weight in website graphics and interactive demos: 500 for titles, tabs, and emphasis; 400 for table rows and body text. Preserve lighter existing text weights. Keep these graphic styles scoped away from page headings and the authenticated app.
+
+Keep the homepage email, document, and CRM cards’ outer rim and shadow effects 35% softer than their previous treatment, without fading their contents.
 
 Use `demo-glass.css` for live graphic panels over gradients: 64% charcoal, a 16px backdrop blur, and a faint edge highlight. Let nested workspace canvases stay transparent and sidebars use a faint tint so they cannot cover the glass. Keep text fully opaque, nested popovers and overlaid mobile navigation solid, and the treatment quieter than Wall of Love cards. Reduced-transparency preferences use a solid panel. Apply this to feature-page and homepage graphics, not the authenticated app or video pixels.
 
@@ -113,6 +128,8 @@ Hero descriptions fill their available width up to the shared maximum rather
 than shrink-wrapping their text, so Safari does not wrap a planned desktop line
 before the explicit line break. Phone copy remains free to wrap.
 
+The Email hero uses side-by-side Google and Microsoft signup links, matching the onboarding provider buttons and retaining the shared signup journey and CTA tracking. On phones, shorten the visible labels to provider names while keeping full accessible labels. Omit the separate provider compatibility caption and duplicated provider illustration section.
+
 Email is the visual reference for product pages. Tasks, Channels, Documents,
 Agents, Calls, and Reviews use `ProductPage` on top of `FeaturePage`: centered
 Slab heroes, a 920px outer feature measure with 24px inset, left-aligned
@@ -132,8 +149,8 @@ product demos, including changing walkthrough narration inside their footer
 controls; retain useful keyboard shortcuts and controls.
 Write it the way the founder talks to another founder: plain words, “we,” the
 competitor by name when the comparison is specific, and why we built it.
-Feature and benefit introductions use two paragraphs from `product-introductions.ts` immediately
-below the hero tutorial and above the feature sections, using the H2 section body
+Feature and benefit introductions use two paragraphs (one for Calls) from `product-introductions.ts` immediately
+below the hero tutorial and above the feature sections. On phones, align product introductions and hero tutorials to the same 20px viewport inset: 12px from the page shell plus 8px from the product page, with no extra width inset on either element. Use the H2 section body
 typography: explain what we wanted from existing tools, then
 the one or two concrete benefits of Macro. Keep comparisons specific, distinguish
 product goals from shipped integrations, and preserve the founder's emphasis on
@@ -256,7 +273,7 @@ the authenticated `/app/*` routes. In standalone dev and preview servers,
 GET/HEAD navigation to `/app` or `/app/*` redirects to the same path and query
 on `VITE_APP_BASE_URL` (default `https://macro.com`), where signup and the real
 app run. Set it to the separate `apps/web` origin for local signup testing. This prevents Vite's
-website fallback from rendering an empty shell for app links. Production routing
+website fallback from rendering an empty shell for app links. Keep `target="_self"` on the hero and header signup links so the website router cannot intercept the app handoff; phone clicks still open `/mobile-signup`. Verify a real document navigation, not only a changed URL. Production routing
 is unchanged; run `apps/web` separately when testing local signup changes.
 
 `/download` is headed “Download Macro Alpha”, says “Available for macOS and
@@ -278,7 +295,7 @@ Before the first prerender build, install Chromium with
 Run `git lfs pull` when migrated video files have not been fetched. The build
 writes the public artifact to `apps/marketing/dist/`, verifies the standalone
 boundary, prerenders public pages, and finishes with the SEO migration gate.
-Keep the desktop homepage introduction compact, with a 44–60px headline and a 52px Sign Up button above the feature constellation. Describe task automation through agent assignments and linked pull-request status updates, without claiming that users never create tasks manually.
+Keep the desktop homepage introduction compact, with a 44–53px headline and a 52px Sign Up button below the welcome constellation. Describe task automation through agent assignments and linked pull-request status updates, without claiming that users never create tasks manually.
 
 The homepage uses Solid SSR and hydration through the same App router as feature pages. Prerender it with the website entry template so its styles load before hydration; reserve the signup template for `/start`. Keep SiteHeader mounted in RootLayout when navigating to or from `/`; sidebar Home links must use client-side routing. Desktop sidebar space and visibility must be present before hydration, without waiting for the mobile menu state. `/start` retains its separate signup entry. Both Vite builds compile Tailwind so
 prerendered demos include their UI utilities before the client bundle loads.
@@ -353,7 +370,7 @@ Integrated documentation below for content ownership and navigation behavior.
 The product entry preloads the requested lazy route and its CSS before replacing
 prerendered HTML, avoiding a header-only flash on first load. Run this preload
 inside the asynchronous startup function, never with a module-level await:
-Rollup can place route dependencies in the entry chunk, which must finish
+the bundler can place route dependencies in the entry chunk, which must finish
 evaluating before those routes can load.
 
 Person and agent mentions use `--marketing-mention` with a soft tint in both
@@ -369,8 +386,9 @@ adding feature-card guides or explanatory drawers.
 Feature-page hero labels pair the matching app icon with “MACRO [PRODUCT]”
 (e.g. “MACRO CRM”), without a slash or the Macro logo. The label links home.
 Feature-page hero titles are short strings. Let them wrap naturally and balance
-across up to three lines on phones; do not shrink them to force one line or add a
-muted second line. Feature-page desktop hero titles are 40px at weight 320 in
+across up to three lines on phones. Keep the font size steady and every line
+at the same color. Add 0.1em of leading between wrapped lines and preserve the
+space around a single-line title. Feature-page desktop hero titles are 40px at weight 320 in
 dark mode. Feature, homepage, and blog hero titles use a 34–40px
 responsive scale on phones, keeping the title visibly larger than body copy.
 
@@ -387,11 +405,13 @@ section rules use 5.4% ink, with 20px more space below each rule than above.
 Feature subpages use `FeatureDemoArt` for an upright workspace card with the homepage email composer's quiet surface and edge. Put avatar-backed conversation bubbles, contextual mentions, and agent tool activity outside the workspace, with clear vertical separation. Do not rotate cards, overlap windows, or wrap the conversation in a second panel. Collaborative docs retain their live conversations. The email-sharing feature graphic uses a single-panel sequence. Only add external illustrative messages when they explain context not already shown in the working UI.
 Keep feature-demo channel and reply composers single-line. Disable native textarea resizing across website demos; composer layout controls their height. Preserve the default header height and add 12px of horizontal spacing before its conversation tabs. Draw the thread spine once; clip overlapping vertical strokes from reply branches. During each pending response, show the channel-style “Macro is thinking” avatar row with animated dots, and clear it when the response arrives or the visitor takes over.
 Keep feature-demo property, tag, pull-request, and progress badges on the same translucent glass surface. Reserve the pull-request badge’s footprint while hidden and keep the status badge width stable so animation never resizes the card.
-Feature app windows omit redundant introductory message bubbles and default to `FeatureDemoArt.glassFrame` for a 12px glass surround with an onboarding-style dotted, grainy accent wash outside the working UI. Keep the glass-framed gradient at 70% intensity and extend the backdrop 108px vertically and 120px horizontally beyond its container. Give the inner card a 64% charcoal fill and 16px backdrop blur, keeping it more opaque than the outer surround; use a solid fill when reduced transparency is requested.
+Feature app windows omit redundant introductory message bubbles and default to `FeatureDemoArt.glassFrame` for an 8px glass surround with an onboarding-style dotted, grainy accent wash outside the working UI. Keep the glass-framed gradient at 25% intensity and extend the backdrop 108px vertically and 120px horizontally beyond its container. Give the inner card a 64% charcoal fill and 16px backdrop blur, keeping it more opaque than the outer surround; use a solid fill when reduced transparency is requested.
+Keep glass surrounds concentric: outer radius equals inner radius plus the 8px inset. Actual `FeatureDemoArt` frames use `--feature-frame-radius` (26.25px) for standard and custom app windows; standalone illustration cards expose `--illustration-radius` so their pseudo-surround follows their desktop/mobile corner size. Do not apply window radii to nested menus, controls, or scaled Paper artwork.
 Keep diagrams and external conversations unframed, and set `glassFrame: false` for the homepage document dissolve or mixed email-sharing composition. Calendar, booking, forms, benefit cards, and guide graphics reuse the glass material with solid reduced-transparency fallbacks.
+Keep all product-page graphics on the shared `product-graphics.css` treatment: one faint window edge, flat message/composer fills without specular rims or cast shadows, and quiet diagram highlights with legible callouts. Fully round shortcut keys and their button backgrounds, use compact labels, and center the shortcut row within its bottom frame space. Scope these rules to `.feature-page` so homepage and onboarding styling remain independent.
 The Docs version-control chapter reuses `TimelineArtworkBand` from the homepage history graphic, with the same animated playhead and reduced-motion fallback.
 The Docs mentions chapter uses `HomepageCollaborativeDoc` with `showHistory={false}` to show the homepage typing and mention-picker animation in a single card, without the split email or conversation bubble.
-The first Docs chapter uses `DocumentProjectDemo` with `teamEditing`: Julia and Jacob type into the same paragraph with named live carets and an inline formatting change. Preserve character-by-character edits rather than revealing complete lines. Keep the interaction boundary so visitors can take over without the animation overwriting their edits.
+The first Docs chapter uses `DocumentProjectDemo` with `teamEditing`: Julia and Jacob type into the same paragraph with named live carets and an inline formatting change. Preserve character-by-character edits rather than revealing complete lines. Keep the interaction boundary so visitors can take over without the animation overwriting their edits. Its window is shorter than the brief, so `doc-story-page-fade` dissolves it into the page with the homepage document's mask instead of cutting the discussion off at a hard bottom edge; keep the title, tags, and edited paragraph above the fade, and keep the scroll room that lets a visitor bring the discussion and composer up to the readable part.
 The Docs backlinks chapter uses `DocumentReferencesDemo` with References expanded from the start. Show the sender, channel, timestamp, and message excerpt; clicking the reference opens its conversation. Keep the panel beside the document on desktop and use the full-width panel on phones.
 `FeatureDemoBackdrop` is shared with the homepage and reuses onboarding's
 `WorkspaceTexture` for dots and grain. Use overlapping, offset elliptical gradients with soft early falloff for a cloudy wash, rather than a centered circular spotlight. Remove the exported artboard radial fills so they do not restore a circular halo. Keep textures behind
@@ -571,8 +591,8 @@ references, paste, and sending a local channel message. References retain their
 formatting after sending; pasted HTML is treated as plain text.
 
 `/demo?embedded=true` supplies the homepage’s embedded workspace.
-`HomepageSections` mounts open-source proof, the connected sidebar breakdown,
-product chapters, and closing sections. The homepage does not mount the embedded
+`HomepageSections` mounts the connected sidebar breakdown, product chapters,
+and closing sections. The homepage does not mount the embedded
 workspace carousel; `/demo` remains available separately.
 
 `/demo` provides a session-only workspace with Home, tasks, email, channels, DMs,
@@ -829,7 +849,7 @@ the FAQ leads with writing, importing, collaboration, and sharing in Macro.
 Verify folder and tag navigation, search, source open/close with Escape and focus
 restoration, edits surviving navigation, local sharing, tool inspection,
 offscreen pause, and reduced motion. Compare desktop and mobile without a fade
-covering the editor. Tests: `DocumentStories.test.tsx`. The checkmark comparison covers document capabilities. Notion uploads live in
+covering the editor, apart from the first chapter's dissolve. Tests: `DocumentStories.test.tsx`. The checkmark comparison covers document capabilities. Notion uploads live in
 page blocks or database properties; imports can convert supported files to pages.
 Both tools support file uploads and Markdown import/export. The comparison makes
 the folder and cross-workspace differences explicit without claiming file formats
@@ -837,9 +857,10 @@ are unsupported or comparing plan-specific upload limits.
 
 ## Calls page walkthrough
 
-Three sections follow the tutorial video: start a call, act on decisions, and
-find past calls. Recording playback and clickable transcripts remain in the
-saved-record section demos.
+Four sections follow the tutorial video: call sharing, agent follow-ups, starting
+a call from chat, and external meeting links. Keep the final external-calls section
+text-only. Recording playback and clickable transcripts remain in the saved-record
+section demos.
 Participant tiles are equal-sized in the marketing call grid, including You.
 The start-call story replays on returning to view until the visitor interacts;
 it never loops while visible or replays for reduced motion. The sequence briefly holds
@@ -962,17 +983,21 @@ short and conversational; omit under-demo captions. All interactions are local.
 ## GitHub page walkthrough
 
 `/github` follows one mobile sign-in fix through its channel, task, pull request,
-and coding-agent session. The former side-by-side PR/Changes hero is no longer
-mounted. Channel playback begins unsplit, opens the inline PR, then opens Changes; interaction
-stops playback. Narrow panes show the active view, and Back/Escape return to the
-channel without discarding its conversation. The task demo links the PR before
-moving to In Review, illustrates a confirmed merge, and updates Completed without
+and coding-agent session. The first demo starts with two chat messages that
+shift up one row when the shared composer sends the example GitHub URL.
+The older message fades at the top while the request for the link stays visible.
+The URL appears as a pretty link with an Open status card on hover. A teammate then
+replies with a replacement PR, pushing the conversation up again. Its icon and
+hover card show Merged, also visible in the reduced-motion view. The
+channel demo preserves the conversation when navigating back from details.
+The task demo links the PR before moving to In Review, illustrates a confirmed
+merge, and updates Completed without
 changing checklist items. Inbox playback holds the opened request for 8.5 seconds
 before resetting its pending/read state; marking an item done stops the loop.
-Keep Julia’s coding request and Cursor’s single completed result under the
-original bug thread. Show the report and reproduction before the PR arrives.
-Do not add a separate acknowledgment or duplicate prose reply from Cursor; the
-completed agent card retains its session and PR link.
+The next demo uses the same composer and fading history. The reporter describes
+the mobile sign-in bug, the visitor types and sends an @Cursor request, and Cursor
+replies with a Running session card. The longer channel demo retains its
+completed result and session and PR links.
 
 GitHub presentation follows `block-pr/PrDetail` and `features/changes` at
 `e2bd582d5f991896bbc69921ee2447def7360636`. Diffs are frozen Pierre renderer output,
@@ -1010,8 +1035,8 @@ Keep Merge/Merged and Open session actions in the shared agent chip at the same
 
 Cursor replies in the Agents, Channels, and GitHub walkthroughs share
 `DemoAgentChip`, adapted from the current `MagicChipView` in the app. It uses
-the settled 88px rounded session card, Open session action, and an output/PR
-row. Cursor mentions are participant mentions (`@Cursor`), not agent-session
+the rounded session card, Open session action for navigable sessions, and an
+output/PR row. Cursor mentions are participant mentions (`@Cursor`), not agent-session
 links. The surrounding conversations use local fictional fixtures; verify
 the session link and returning to the same conversation after playback.
 
@@ -1038,7 +1063,9 @@ Closing restores focus to the mention. Editing a linked cell into plain text
 removes its reference; undo restores it. Check mouse and keyboard opening,
 Escape/close, and phone-width record tabs.
 
-Use `EmailShareStory` for the Mail feature-page illustration: one compact panel changes from email to channel picker to chat, then shows a new reply in the shared thread. Keep the three-step navigation and stop autoplay on the completed result. Avoid stacked email/chat windows and internal scrollbars; reduced motion shows the final result immediately. The separate interactive inbox sandbox retains `EmailSharingDemo` and its `DocMention` link for opening the complete sample thread.
+The Drive page is `DriveStories`: eight sections that all read one small set of files from `driveFiles.ts`, so a file keeps its name, kind, source, and tags from graphic to graphic. `DriveFileRows` is the shared file list, with entity icons coloured as the app colours them. Sharing reuses `DocumentSharingDemo`, the agent section uses the agent session replica, and the record section opens the CRM record on its Files tab. Paper graphics on the Drive and Spreadsheets pages sit in the section's glass frame (`demo={{ tone, glassFrame: true }}` with `backdrop={false}` on the graphic) so they get the same dot-matrix and glow as the product demos.
+
+The Mail feature page's sharing, drafting, and routine sections use the app's own replicas, not drawn diagrams. Sharing uses `EmailChatSharingDemo`: a single chat window types an email mention and a contact-record mention into the shared rich composer, sends them, and receives a short acknowledgment. Manual typing pauses autoplay; both scripted and manual sends preserve the mention tokens. Reserve a fixed desktop/mobile frame height through typing, replies, and loop resets so the surrounding page never shifts. Keep `EmailSharingDemo` for the inbox sandbox’s Share form. Drafting is `EmailDraftStory`, the homepage's conversation and composer; both read their messages from `emailDraftMessages`. `EmailRoutineDemo` shows a routine's effects in order: the email arrives in the inbox, Macro posts it to a channel, and a push notification drops in. Reduced motion shows each finished result immediately.
 
 The retained `HomepageCrm` illustration has no playback footer or Pause/Replay controls;
 it still pauses offscreen and when a visitor enters the demo.
@@ -1079,13 +1106,13 @@ remove its matching guide from the default navigation, including Folders under
 Drive and Reviews under GitHub. Keep the written guides in each feature page’s expandable reference section; direct legacy URLs redirect to that feature, and search opens its reference section. Keep the remaining reference under muted section
 labels, with all links visible rather than chevron dropdowns. Use matching 20px outer gutters on both sides of the website sidebar; keep search and row backgrounds inset from the separator. Match the app’s inner ViewSidebar with 8px row insets on both sides (including headings), 32px desktop rows,
 square rows with no filled selection background, regular 14px labels, and 20px icon slots with 16px glyphs. Use the app navigation’s `chats-circle` icon for Chat in both the sidebar and product hero, not the single-channel hash icon.
-Match the sidebar background to the page in every theme, with a subtle 1px separator at 7% navigation ink. Dim inactive sidebar labels and icons to 60% navigation ink against the sidebar background, and group headings to 70%; keep selected and hovered links at full navigation ink. Keep the desktop sidebar permanently open at a fixed 256px width, with no collapse or resize controls. Keep mobile navigation full-width. Hide the sidebar scrollbar while preserving scrolling; keep the search field pinned at the top. Use the app’s 16px search icon in the same 20px slot and 8px inset as navigation icons; align the search text with row labels. Use “Search pages ⌘F” on Mac and “Search pages Ctrl+F” elsewhere in a faded 14px placeholder matching the navigation label size. Keep the desktop search field and header actions 40px tall, starting 20px from the viewport top; wide pages with an outline stack Book a demo beneath Sign Up. Keep the pinned search field 40px tall with a faint flat border;
+Match the sidebar background to the page in every theme, with a subtle 1px separator at 7% navigation ink. Dim inactive sidebar labels and icons to 60% navigation ink against the sidebar background, and group headings to 70%; keep selected and hovered links at full navigation ink. Keep the desktop sidebar permanently open with no collapse or resize controls: 200px at 768–1439px viewport widths and 241px on wider screens. In the compact sidebar, use 16px left/12px right scroll padding, “Vs Superhuman,” and “Search” plus the keyboard shortcut so navigation labels retain about 20px of trailing clearance. Drive the sidebar and content offsets from `--documentation-nav-width`. Keep mobile navigation full-width. Hide the sidebar scrollbar while preserving scrolling; keep the search field pinned at the top. Use the app’s 16px search icon in the same 20px slot and 8px inset as navigation icons; align the search text with row labels. Use “Search pages ⌘F” on Mac and “Search pages Ctrl+F” elsewhere in a faded 14px placeholder matching the navigation label size. Keep the desktop search field and header actions 40px tall, starting 20px from the viewport top; wide pages with an outline stack Book a demo beneath Sign Up. Keep the pinned search field 40px tall with a faint flat border;
 use 44px rows and a 48px search field on phones. Keep consistent link alignment and use the default arrow cursor on sidebar links. Search feature pages, setup guides, comparisons, customer stories, and useful website pages by title and content, using the app Settings search pattern: icon, title, and muted location. Rank title matches first and tolerate minor title typos. Merge each feature guide into its feature result. Exclude changelogs, the retired Tool Reference, engineering posts, legal pages, and company pages; show at most eight results. Command/Control+K and Command/Control+F open and focus search; arrow keys navigate results and Enter opens one. Escape clears a query first, then closes the mobile drawer; the clear button returns focus to the input. Load the search index only when search is focused or typed into. Build the index in `scripts/site-search.ts` and `scripts/documentation.ts`; register new informational routes there.
 Keep /docs/switch-to-macro focused on bulk importers and MCP migration paths, titled “Switching guide”. Its Switch to Macro sidebar group links to that guide with a setup icon and the Linear, Notion, Superhuman, Slack, and ClickUp comparison posts labelled “Versus [product]” with their monochrome brand icons. Use /download for Get the app and permanently redirect retired guides to their consolidated destination.
 Keep Changelog as one sidebar link; monthly archives remain accessible from its page, outside search.
-Keep the outdated Tool Reference unpublished and redirect its former URLs to MCP Setup.
+Keep the outdated Tool Reference unpublished and redirect its former URLs to Add Macro MCP.
 Keep concise FAQs on feature pages and put the full written setup, shortcut, and limitation reference in the expandable Setup and reference section below. Do not replace interactive demos
-with documentation screenshots. Desktop navigation remains open and pushes the content aside. Phones keep the article visible and use a full-screen drawer on demand; Escape closes it and restores focus. Keep the hamburger-to-Macro morph on the mobile toggle. The desktop mark is static. Use the foreground color for the mark (white in dark mode). Reduced-motion mode skips drawer transitions.
+with documentation screenshots. Desktop navigation remains open and pushes the content aside. Phones keep the article visible and use a full-screen drawer on demand; Escape closes it and restores focus. The mobile toggle folds its three bars into a close mark while the drawer is open and never shows the Macro logo; it keeps a 54px touch target, shows its highlight only on hover-capable pointers and keyboard focus, and sits in a 68px bar matching the drawer background, with the search field 8px below. Use the foreground color for the mark (white in dark mode). Reduced-motion mode skips drawer transitions.
 
 `src/features/documentation` owns the reading page, MDX components, and sidebar. Start guide headers with the title and description, without a Documentation eyebrow.
 Use the matching app block icons beside feature links, block guides, and their
@@ -1197,11 +1224,9 @@ comparison tables, mobile navigation, and touch playback, before release.
 Email, Chat, and Databases use the same treatment through `PaperFeatureGraphic`
 and the exports in `components/paper`. Keep each illustration in its matching
 feature section, alternating with the existing 3D scenes. Email shows account
-selection and email-to-task; Chat shows the create menu and an agent conversation;
-Databases opens with a compact, background-free Notion importer preview based on
-the app's `NativeImportPane`, using local selected-page fixtures and the real
-selection, copy-only notice, security note, and Import action. It also shows a
-query returning a chart. Preserve the 800px
+selection as an unframed inbox with a compact account menu, matching the pipeline database illustration’s regular typography and subtle orange-and-white textured backdrop; fade email previews out toward the bottom without row dividers; retain individual accounts, aliases, and the connect action without annotation bubbles. Email also shows email-to-task; Chat shows the create menu and an agent conversation;
+Databases shows a query returning a chart and a capture of the app's Notion
+import review with sample pages and databases. Preserve the 800px
 section width around the 640px reading column. Use transparent artboards, the
 Tasks glow/grain strength, and the site background token for edge fades in both
 themes. On phones, keep controls and callout anchors together in the compact
@@ -1255,7 +1280,7 @@ Feature hero videos render with `TutorialVideoEmbed`, using the shared player di
 
 `/replace-apps` is the first Main benefits link. It shares feature hero typography, combines app selection with the existing pricing `SavingsCalculator`. Keep its route registered for preload, prerender, and site search.
 
-Use `ProductCopy` in feature section headings and descriptions to render explicit product names as linked icon-and-name mentions. Display only the icon and short product name (Mail, Tasks, etc.), omitting the Macro prefix. Keep them contextual: one or two related products per section, with no pills in hero copy or decorative examples. Link to the product page, preserve readable mobile wrapping, and use the actual product icon. Render mentions as underlined inline links with no border, padding, or resting background; show a subtly rounded background only on hover, fading over 160ms and respecting reduced motion.
+Use `ProductCopy` in feature section headings and descriptions to render explicit product names as linked icon-and-name mentions. Every mention's `href` must be a prerendered route (benefit pages live under `/docs/product/`): the build's link check in `scripts/verify-seo.ts` fails the deploy on a broken internal link, and pull request CI does not run it, so run `bun run build` after adding one. Display only the icon and short product name (Mail, Tasks, etc.), omitting the Macro prefix. Keep them contextual: only the products a section links to, with no pills in hero copy or decorative examples. Agents appears on nearly every page, so mention it in one section per page, the one about agents. Keep each section heading to one line on desktop; a pill's icon adds about a character's width. A product must be listed in `ProductMention.tsx` to render as a mention. Link to the product page, preserve readable mobile wrapping, and use the actual product icon. Render mentions as underlined inline links with a 1px underline at 40% of the text color and no border, padding, or resting background; show a subtly rounded background only on hover, fading over 160ms and respecting reduced motion.
 
 Pricing uses `ProductPage` and `ProductHero`, open Free/Pro/Max plan rows, an expandable semantic comparison table, the shared savings calculator, and `FeaturePageFaq`. Keep pricing FAQ typography identical to feature FAQs; do not reintroduce slab FAQ headings or separate pricing disclosure styles. Use `HomepageClosing` inside the feature-page wrapper.
 
@@ -1266,7 +1291,7 @@ On `/replace-apps`, combine the replacement logos and savings calculator into on
 
 `/forms` appears under More features and uses `ProductFormsPage` with the shared hero, presenter video player, linked product names, glass illustrations, and footer. Its 49-second tutorial comes from `macro-inc/meta-ads` PR #62, through the web-optimized assets in `macro-inc/macro` PR #10113. Keep form responses mapped to database rows, booking after accepted submission, and sharing limited to invited people, channels, or anyone with the link. The canonical setup guide is `apps/docs/product/forms.mdx`, embedded on the feature page.
 
-Feature, benefits, and documentation pages share `PageOutline`: the reading column is balanced between site navigation and a quiet section outline on wide screens. Use short topic labels from `page-outline-labels.ts` for feature and benefit sections, keyed to their heading IDs, and label question sections “FAQ”. Keep full headings in the page content. At narrower widths the outline is hidden so the content keeps its space. Sidebar groups use continuous subtle vertical guide lines, with a bright straight active marker and no rounded selection background, matching docs.macro.com. Match the right outline to the left sidebar: inactive links at 60% ink, its heading at 70%, and active or hovered links at full ink. Style “On this page” like the left group headings: 12px type, 1.6 line-height, weight 370, and an 8px gap below. The right outline uses 14px labels, 16px link indentation, and 32px horizontal padding inside a 256px column matching the left sidebar. On wide feature, benefit, and documentation pages, stack Sign Up above Book a demo in a 192px column aligned with the outline; retain the compact horizontal actions on smaller screens.
+Feature, benefits, and documentation pages share `PageOutline`: the reading column is balanced between site navigation and a quiet section outline on wide screens. Use short topic labels from `page-outline-labels.ts` for feature and benefit sections, keyed to their heading IDs, and label question sections “FAQ”. Keep full headings in the page content. At narrower widths the outline is hidden so the content keeps its space. Sidebar groups use continuous subtle vertical guide lines, with a bright straight active marker and no rounded selection background, matching docs.macro.com. Match the right outline to the left sidebar: inactive links at 60% ink, its heading at 70%, and active or hovered links at full ink. Style “On this page” like the left group headings: 12px type, 1.6 line-height, weight 370, and an 8px gap below. The right outline uses 14px labels, 16px link indentation, and 32px horizontal padding inside a 241px column matching the left sidebar. On wide feature, benefit, and documentation pages, stack Sign Up above Book a demo in a 177px column aligned with the outline; retain the compact horizontal actions on smaller screens.
 
 The homepage uses the same wide-screen right rail and stacked signup/demo actions as feature pages. `HomepageResources` has two matching groups: Downloads for iOS, Mac, and Android, followed by Links for GitHub, X / Twitter, LinkedIn, YouTube, and Instagram. Separate the groups by 24px. Display Links as a horizontal row of social icons with accessible names and hover titles, without a star count. Keep Blog and Documentation out of this resource rail. Keep mobile downloads aligned with the native app's store URLs; resolve the Mac installer through `desktopDownloads.ts`, retaining a verified direct fallback when GitHub is unavailable. Below 1440px the resources follow the homepage content.
 
@@ -1274,4 +1299,6 @@ Use full first and last names for people in channel mockups. Rotate stories acro
 
 The Agents teamwork walkthrough uses a compact 600px frame and finishes on the completed Cursor session card. Keep that card visible at the bottom of the conversation, including with reduced motion; do not loop back to the initial design request.
 
-Keep the server-rendered homepage headline visible on phones before JavaScript loads. Desktop retains its heading through hydration; mobile switches to the existing welcome composition with the same headline and a working signup link. Verify both paths in `scripts/verifyHomepage.ts`.
+Keep the server-rendered homepage headline visible on phones before JavaScript loads. Desktop and mobile retain the shared heading and its layout through hydration, with a working signup link. Verify both paths in `scripts/verifyHomepage.ts`. Retain the Chromium and WebKit checks, including pre-hydration logo sizing and typography. Before releasing homepage changes, also run `bunx playwright install webkit` and `bun -e 'import { webkit } from "@playwright/test"; import { verifyHomepage } from "./scripts/verifyHomepage"; await verifyHomepage(`${process.cwd()}/dist`, webkit)'` from this directory.
+
+The homepage coding-agent result uses the email preview’s glass card and fade-in, with small regular-weight Merge/Open session labels. Omit the repeated requester attribution and quoted instruction above that result card.

@@ -137,6 +137,7 @@ describe('question result display', () => {
   it('draws each column kind as the database grid does', () => {
     const plain = {
       markdown: false,
+      link: false,
       options: [],
       tag: false,
       target: null,
@@ -220,6 +221,7 @@ describe('question result display', () => {
               data-testid={`${entityType}-mention`}
             >{`${entityType} ${id}`}</span>
           ),
+          link: (url) => url,
           row: (row) => row.label,
           text: (markdown) => <span data-testid="markdown">{markdown}</span>,
         }}

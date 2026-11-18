@@ -14,9 +14,9 @@ describe('WorkingLine', () => {
   });
 
   it('shows the label the caller derives from state', () => {
-    const { container } = render(() => <WorkingLine label="Running tools" />);
+    const { container } = render(() => <WorkingLine label="Planning" />);
 
-    expect(container.textContent).toContain('Running tools');
+    expect(container.textContent).toContain('Planning');
     expect(container.textContent).not.toContain('Working');
   });
 

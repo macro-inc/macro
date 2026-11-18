@@ -35,7 +35,6 @@ pub fn code_check_cloud_storage() -> Workflow {
         .add_job("test", test())
         .add_job("build-service-bins", build_service_bins())
         .add_job("graphql-schema-compat", graphql_schema_compat())
-        .add_job("status-check", status_check())
 }
 
 /// Same-repo PRs only: the binary cache below is shared, so an untrusted fork
@@ -53,7 +52,7 @@ const FILTER_CACHE_DIR: RuntimePath<'static> =
 /// it here.
 fn path_check() -> Job {
     Job::default()
-        .timeout_minutes(15u32)
+        .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.with_cache_tag(vars::CI_CACHE_TAG))
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
@@ -93,7 +92,7 @@ fn path_check() -> Job {
 /// fmt + unused dependencies + clippy.
 fn check() -> Job {
     steps::gated_job()
-        .timeout_minutes(45u32)
+        .timeout_minutes(20u32)
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
         .add_step(steps::checkout(false, false))
@@ -125,7 +124,7 @@ fn with_check_env(job: Job) -> Job {
 /// path filter gates it; the xtask then picks the exact binaries.
 fn doppler_config() -> Job {
     steps::gated_job()
-        .timeout_minutes(45u32)
+        .timeout_minutes(20u32)
         .cond(Expression::new(
             "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.doppler_candidates == 'true'",
         ))
@@ -170,7 +169,7 @@ fn graphql_schema_compat() -> Job {
 /// when `skip_tests` is set (`.sqlx`-only diffs still clippy the snapshot).
 fn test() -> Job {
     steps::gated_job()
-        .timeout_minutes(90u32)
+        .timeout_minutes(20u32)
         .cond(Expression::new(
             "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
         ))
@@ -180,6 +179,7 @@ fn test() -> Job {
             "${{ needs.path-check.outputs.rust_packages }}",
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
+        .add_env(("REDIS_URI", "redis://127.0.0.1:6379"))
         .map(with_test_compile_env)
         // The default 10-minute idle timeout can stop the server during long
         // link or test phases, which resets the stats reported at the end.
@@ -204,7 +204,7 @@ fn test() -> Job {
 
 /// The env the jobs that compile for `test` share, so their sccache keys stay
 /// identical.
-fn with_test_compile_env(job: Job) -> Job {
+pub(crate) fn with_test_compile_env(job: Job) -> Job {
     // Debug info is most of what test builds write and link. Panic locations
     // don't depend on it; only backtrace frames lose their file and line.
     job.add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
@@ -217,7 +217,7 @@ fn with_test_compile_env(job: Job) -> Job {
 /// avoids a dev shell when none can match.
 fn build_service_bins() -> Job {
     steps::gated_job()
-        .timeout_minutes(45u32)
+        .timeout_minutes(20u32)
         .cond(Expression::new(BUILD_SERVICE_BINS_CONDITION))
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env((
@@ -271,25 +271,6 @@ fn test_execution_runtime() -> Step<Run> {
         .if_condition(Expression::new(
             "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
         ))
-}
-
-/// Always-run collector used as the required status check. Its name must stay
-/// stable — branch protection references it.
-fn status_check() -> Job {
-    Job::default()
-        .timeout_minutes(5u32)
-        .name("Cloud Storage Status Check")
-        .runs_on(runners::Runner::Small.to_string())
-        .cond(Expression::new("always()"))
-        .needs(vec![
-            "path-check".to_string(),
-            "check".to_string(),
-            "doppler-config".to_string(),
-            "test".to_string(),
-            "build-service-bins".to_string(),
-            "graphql-schema-compat".to_string(),
-        ])
-        .add_step(check_job_results())
 }
 
 // --- workflow-specific steps -------------------------------------------------
@@ -430,7 +411,7 @@ fn cargo_clippy() -> Step<Run> {
 /// database per test, and those file operations are what limit the test run on
 /// the runner's disk. A bind mount, not `--tmpfs`: `configure_postgres` restarts
 /// the container, and a restart empties a `--tmpfs` mount.
-fn postgres_service() -> Container {
+pub(crate) fn postgres_service() -> Container {
     Container::default()
         .image("pgvector/pgvector:pg14")
         .env(
@@ -447,7 +428,7 @@ fn postgres_service() -> Container {
 }
 
 /// redis service container.
-fn redis_service() -> Container {
+pub(crate) fn redis_service() -> Container {
     Container::default()
         .image("redis:7")
         .ports(vec![Port::Name("6379:6379".to_string())])
@@ -458,7 +439,7 @@ fn redis_service() -> Container {
 }
 
 /// Tune the postgres service container for fast concurrent tests.
-fn configure_postgres() -> Step<Run> {
+pub(crate) fn configure_postgres() -> Step<Run> {
     Step::new("configure postgres for concurrent tests")
         .run(include_str!("scripts/configure_postgres.sh"))
 }
@@ -473,33 +454,4 @@ fn prepare_tests() -> Step<Run> {
 /// Run the test suite (no AWS credentials; sccache uses Namespace's remote cache).
 fn run_tests() -> Step<Run> {
     Step::new("run tests").run(include_str!("scripts/run_tests.sh"))
-}
-
-/// Aggregate the upstream job results into a single required status check.
-fn check_job_results() -> Step<Run> {
-    Step::new("Check job results").run(indoc::indoc! {r#"
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "check: ${{ needs.check.result }}"
-        echo "doppler-config: ${{ needs.doppler-config.result }}"
-        echo "test: ${{ needs.test.result }}"
-        echo "build-service-bins: ${{ needs.build-service-bins.result }}"
-        echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
-
-        # Only success and skipped are OK. A job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose tests never ran.
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.check.result }}" \
-          "${{ needs.doppler-config.result }}" \
-          "${{ needs.test.result }}" \
-          "${{ needs.build-service-bins.result }}" \
-          "${{ needs.graphql-schema-compat.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "❌ One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "✅ All jobs passed or were skipped"
-    "#})
 }

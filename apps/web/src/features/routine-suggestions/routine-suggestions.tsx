@@ -12,11 +12,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableRoutineCodeSteps,
-  enableRoutineConditions,
-  enableRoutineStarterTemplates,
-} from '@core/constant/featureFlags';
+import { enableRoutineStarterTemplates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
@@ -80,17 +76,15 @@ function useSuggestionItems() {
   const source = useRoutineSuggestions();
   const catalog = useLoadedRoutineCatalog();
   const hasPaidAccess = useHasPaidAccess();
-  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
   const starterTemplates = useFeatureFlag(enableRoutineStarterTemplates);
-  const decisions = useFeatureFlag(enableRoutineConditions);
   const context = createMemo((): SuggestionContext => {
     const model = defaultModelForPlan(hasPaidAccess());
     return {
       target: { kind: 'model', model },
-      codeSteps: codeSteps().enabled,
+      codeSteps: true,
       base: newRoutineDraft(undefined, {
         defaultModel: model,
-        codeSteps: codeSteps().enabled,
+        codeSteps: true,
       }),
     };
   });
@@ -119,7 +113,7 @@ function useSuggestionItems() {
     const entries = catalog();
     if (!entries) return undefined;
     if (!starterTemplates().enabled) return [];
-    return availableTemplates(entries, decisions().enabled).map((entry) =>
+    return availableTemplates(entries, true).map((entry) =>
       templateItem(entry, context())
     );
   });
@@ -390,6 +384,36 @@ function useDiscoverItems(list: ReturnType<typeof useSuggestionList>) {
     if (!items || !templates) return undefined;
     return discoverItems(list.actions.visible(items), templates);
   });
+}
+
+/**
+ * The routine suggestions the For you page shows: opening one for review,
+ * and saving it as a routine. Their wording comes with the feed. Enabling one twice saves one routine.
+ */
+export function useForYouRoutineSuggestions() {
+  const list = useSuggestionList(
+    () => ({ kind: 'forYou' }),
+    () => {}
+  );
+  const find = (suggestionId: string) =>
+    list.items()?.find((item) => item.id === suggestionId);
+
+  return {
+    review(suggestionId: string) {
+      const item = find(suggestionId);
+      if (!item) throw new Error('Routine suggestion is not loaded');
+
+      list.actions.customize(item);
+    },
+    async turnOn(suggestionId: string) {
+      const item = find(suggestionId);
+      if (!item) throw new Error('Routine suggestion is not loaded');
+
+      await list.actions.enable(item);
+      const status = list.actions.statusFor(item);
+      if (status.kind === 'failed') throw new Error(status.message);
+    },
+  };
 }
 
 /** The one row of suggestions above the routines list. */

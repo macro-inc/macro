@@ -1,6 +1,7 @@
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
@@ -9,12 +10,16 @@ import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import type { MessageData } from '@core/messages/types';
 import { EntityProvider } from '@entity';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, Match, onCleanup, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
 import { createMessageEditor } from '../../Channel/create-message-editor';
 import { MessageEditorContent } from '../../Channel/InlineMessageEditor';
+import { createInputAttachmentTracker } from '../attachment-tracker';
 import { ChannelInput } from '../ChannelInput';
-import { makeInputValuePersistenceKey } from '../utils/persistence';
+import {
+  makeAttachmentTrackerPersistenceKey,
+  makeInputValuePersistenceKey,
+} from '../utils/persistence';
 
 const channelId = 'draft-fixture-channel';
 
@@ -46,9 +51,47 @@ function EditFixture(props: { onSave: (content: string) => void }) {
 }
 
 /**
+ * The channel as one desktop tab mounts it, `Channel` holding the files and
+ * `ChannelInput` the text, over the same stored draft as any other tab.
+ */
+function ChannelTab(props: {
+  label: string;
+  autofocus: boolean;
+  onSend: (value: string) => void;
+}) {
+  const attachmentTracker = createInputAttachmentTracker({
+    persistenceKey: makeAttachmentTrackerPersistenceKey({ channelId }),
+  });
+  return (
+    <section aria-label={props.label}>
+      <ChannelInput
+        input={{
+          mode: 'channel',
+          id: `channel-input-${channelId}`,
+          placeholder: 'Message #draft-fixture',
+        }}
+        autofocus={props.autofocus}
+        onSend={(snapshot) => props.onSend(snapshot.value)}
+        participants={() => []}
+        bots={() => []}
+        attachmentTracker={attachmentTracker}
+        uploadAttachment={async (file) => ({
+          failed: false,
+          destination: 'dss',
+          type: 'document',
+          documentId: `document-${file.name}`,
+        })}
+        persistenceKey={makeInputValuePersistenceKey({ channelId })}
+      />
+    </section>
+  );
+}
+
+/**
  * The real channel composer over the app shell's providers, in the order
  * `routes/Root.tsx` mounts them. Leaving the channel unmounts the composer;
- * opening it again mounts a fresh one over the persisted draft.
+ * opening it again mounts a fresh one over the persisted draft. `?tabs` mounts
+ * the channel twice at once, as two desktop tabs on it do.
  */
 function Fixture() {
   useHotKeyRoot();
@@ -56,6 +99,7 @@ function Fixture() {
     defaultOptions: { queries: { retry: false } },
   });
   onCleanup(() => client.clear());
+  const search = new URLSearchParams(location.search);
   const [open, setOpen] = createSignal(true);
   const [sent, setSent] = createSignal('');
   const [pending, setPending] = createSignal(false);
@@ -89,11 +133,23 @@ function Fixture() {
                     >
                       Fail send
                     </button>
-                    <Show
-                      when={!new URLSearchParams(location.search).has('edit')}
-                      fallback={<EditFixture onSave={setSent} />}
-                    >
-                      <Show when={open()}>
+                    <Switch>
+                      <Match when={search.has('edit')}>
+                        <EditFixture onSave={setSent} />
+                      </Match>
+                      <Match when={search.has('tabs') && open()}>
+                        <ChannelTab
+                          label="First tab"
+                          autofocus
+                          onSend={setSent}
+                        />
+                        <ChannelTab
+                          label="Second tab"
+                          autofocus={false}
+                          onSend={setSent}
+                        />
+                      </Match>
+                      <Match when={open()}>
                         <ChannelInput
                           input={{
                             mode: 'channel',
@@ -121,8 +177,8 @@ function Fixture() {
                             channelId,
                           })}
                         />
-                      </Show>
-                    </Show>
+                      </Match>
+                    </Switch>
                     <ToastRegion />
                   </main>
                 </QuickAccessProvider>
@@ -137,4 +193,5 @@ function Fixture() {
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
+initializeLexical();
 render(() => <Fixture />, root);

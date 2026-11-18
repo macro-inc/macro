@@ -272,7 +272,7 @@ export function TaskCardStyles() {
       }
 
       .tcp-head { align-items: center; display: flex; gap: 10px; justify-content: space-between; padding: 2px 0 9px 4px; }
-      .tcp-title { align-items: center; display: flex; font-size: 12px; font-weight: 600; gap: 5px; line-height: 14px; min-width: 0; }
+      .tcp-title { align-items: center; display: flex; font-size: 12px; font-weight: 500; gap: 5px; line-height: 14px; min-width: 0; }
       .tcp-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .tcp-right { align-items: center; display: flex; flex: none; gap: 7px; }
       .tcp-count { align-items: center; display: flex; font-size: 11px; gap: 5px; line-height: 13px; }

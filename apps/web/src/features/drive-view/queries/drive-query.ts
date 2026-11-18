@@ -16,7 +16,6 @@ export type BuildDriveQueryOptions = {
   selection: DriveSelection;
   userId: string | undefined;
   facetContext: TagFacetContext;
-  snippetsEnabled?: boolean;
 };
 
 type DriveAstBody = BackendAstMap & Pick<SoupAstBody, 'emailView'>;
@@ -48,12 +47,9 @@ function attachmentScope(
 
 function tabDocumentScope(
   selection: DriveSelection,
-  userId: string | undefined,
-  snippetsEnabled: boolean
+  userId: string | undefined
 ): BackendAstNode {
   const nodes: BackendAstNode[] = [{ '!': literal('dst', 'task') }];
-
-  if (!snippetsEnabled) nodes.push({ '!': literal('dst', 'snippet') });
 
   const attachment = attachmentScope(selection);
 
@@ -95,15 +91,14 @@ function selectedFolderDocumentScope(
 
 function baseBody(
   selection: DriveSelection,
-  userId: string | undefined,
-  snippetsEnabled: boolean
+  userId: string | undefined
 ): DriveAstBody {
   const body: DriveAstBody = excludedEntityTargets();
 
   const location = selection.location;
 
   if (location.kind === 'tab') {
-    body.df = tabDocumentScope(selection, userId, snippetsEnabled);
+    body.df = tabDocumentScope(selection, userId);
 
     return body;
   }
@@ -132,6 +127,20 @@ function omitUnsupportedRecentTargets(body: DriveAstBody): DriveAstBody {
   return supported;
 }
 
+/**
+ * Soup reads a name-sorted page from one query over its own entities, which
+ * email threads are not part of. Drop the folder's email target rather than
+ * ask for rows the page cannot return.
+ */
+function omitUnsupportedNameTargets(body: DriveAstBody): DriveAstBody {
+  const supported = { ...body };
+
+  delete supported.ef;
+  delete supported.emailView;
+
+  return supported;
+}
+
 /** Builds the Soup AST for Drive without relying on legacy query state. */
 export function buildDriveQuery(
   options: BuildDriveQueryOptions
@@ -145,7 +154,7 @@ export function buildDriveQuery(
   );
 
   let body: DriveAstBody = mergeAst(
-    baseBody(selection, options.userId, options.snippetsEnabled ?? false),
+    baseBody(selection, options.userId),
     facets
   );
 
@@ -156,6 +165,8 @@ export function buildDriveQuery(
   if (location.kind === 'tab' && location.tab === 'recent') {
     sortMethod = 'touched_by_me';
     body = omitUnsupportedRecentTargets(body);
+  } else if (sortMethod === 'name') {
+    body = omitUnsupportedNameTargets(body);
   }
 
   return {
@@ -163,7 +174,8 @@ export function buildDriveQuery(
       expand: true,
       limit: 100,
       sort_method: sortMethod,
-      sort_direction: 'desc',
+      // Names read A to Z; every other Drive sort is newest first.
+      sort_direction: sortMethod === 'name' ? 'asc' : 'desc',
     },
     body,
   };

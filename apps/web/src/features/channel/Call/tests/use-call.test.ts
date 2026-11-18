@@ -36,6 +36,7 @@ describe('call view errors', () => {
     state = {
       t: 'failed',
       channelId: 'channel-1',
+      intent: { kind: 'join', callId: 'call-1' },
       error: new Error('offline'),
     };
     error = 'Unable to join the call. Please check your connection.';

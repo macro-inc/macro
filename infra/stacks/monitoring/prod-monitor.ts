@@ -28,6 +28,8 @@ export function prodMonitor(
     type?: string;
     /** Attach matching event samples. Needed for Database Monitoring attributes. */
     enableLogsSample?: boolean;
+    /** Evaluate a group only once it has data for the whole window. */
+    requireFullWindow?: boolean;
     /** Overrides for the state-line value text in `alertMessage`. */
     alertDetail?: string;
     warningDetail?: string;
@@ -54,7 +56,7 @@ export function prodMonitor(
       monitorThresholds: args.monitorThresholds,
       monitorThresholdWindows: args.monitorThresholdWindows,
       renotifyInterval: RENOTIFY_MINUTES,
-      requireFullWindow: false,
+      requireFullWindow: args.requireFullWindow ?? false,
       onMissingData: 'default',
       includeTags: true,
       notifyAudit: false,
@@ -77,6 +79,8 @@ export function thresholdGraph(args: {
   query: string;
   critical?: string;
   warning?: string;
+  /** A fixed window, e.g. `month_to_date`, instead of the dashboard's. */
+  liveSpan?: string;
 }): datadog.types.input.DashboardWidget {
   const markers: datadog.types.input.DashboardWidgetTimeseriesDefinitionMarker[] =
     [];
@@ -99,6 +103,7 @@ export function thresholdGraph(args: {
       title: args.title,
       requests: [{ q: args.query, displayType: 'line' }],
       markers,
+      liveSpan: args.liveSpan,
     },
   };
 }

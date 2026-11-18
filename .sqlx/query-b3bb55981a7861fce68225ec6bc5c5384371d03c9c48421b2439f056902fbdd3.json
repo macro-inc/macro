@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_profile_picture SET\n                    state = CASE WHEN state = 'staged' THEN 'due' ELSE state END,\n                    staged = NULL, mime = NULL, attempts = 0, retry_at = now()\n                WHERE account_id = $1 AND jid = ANY($2) AND picture_id IS DISTINCT FROM $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b3bb55981a7861fce68225ec6bc5c5384371d03c9c48421b2439f056902fbdd3"
+}

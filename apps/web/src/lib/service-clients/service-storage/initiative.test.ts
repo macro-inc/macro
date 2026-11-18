@@ -21,6 +21,7 @@ import { createInitiativeClient, initiativeUpdateInput } from './initiative';
 
 const project = {
   __typename: 'GraphqlSoupInitiative',
+  appearance: null,
   id: 'project-1',
   displayName: 'Launch',
   metadata: {
@@ -67,7 +68,14 @@ function clientWith(
     url: 'https://example.test/graphql',
     exchanges: [exchange],
   });
-  return { client: createInitiativeClient(() => graphql), requests };
+  return {
+    client: createInitiativeClient(
+      () => graphql,
+      () => graphql
+    ),
+    graphql,
+    requests,
+  };
 }
 
 describe('initiative GraphQL transport', () => {
@@ -117,7 +125,7 @@ describe('initiative GraphQL transport', () => {
   });
   it('preserves project identity and sharing levels on detail reads', async () => {
     const { client, requests } = clientWith(() => ({
-      data: { user: { initiative: project } },
+      data: { user: { visibleInitiative: project } },
     }));
     const signal = new AbortController().signal;
     const result = await client.get('project-1', signal);
@@ -144,9 +152,21 @@ describe('initiative GraphQL transport', () => {
     });
   });
 
+  it('reads a missing or hidden project as NOT_FOUND', async () => {
+    const { client } = clientWith(() => ({
+      data: { user: { visibleInitiative: null } },
+    }));
+    const result = await client.get('project-1');
+    expect(result.isErr() && result.error).toEqual([
+      { code: 'NOT_FOUND', message: 'initiative not found' },
+    ]);
+  });
+
   it('keeps detail controls read-only when no viewer permission is returned', async () => {
     const { client } = clientWith(() => ({
-      data: { user: { initiative: { ...project, viewerPermission: null } } },
+      data: {
+        user: { visibleInitiative: { ...project, viewerPermission: null } },
+      },
     }));
     const result = await client.get('project-1');
     expect(result.isOk() && result.value.userAccessLevel).toBe('view');
@@ -173,7 +193,7 @@ describe('initiative GraphQL transport', () => {
 
   it('preserves authorization codes and rejects partial cached identity on access loss', async () => {
     const { client } = clientWith(() => ({
-      data: { user: { initiative: project } },
+      data: { user: { visibleInitiative: project } },
       error: new CombinedError({
         graphQLErrors: [
           { message: 'Access revoked', extensions: { code: 'FORBIDDEN' } },
@@ -190,9 +210,30 @@ describe('initiative GraphQL transport', () => {
     const controller = new AbortController();
     const { client } = clientWith(() => {
       controller.abort();
-      return { data: { user: { initiative: project } } };
+      return { data: { user: { visibleInitiative: project } } };
     });
     const result = await client.get('project-1', controller.signal);
     expect(result.isErr()).toBe(true);
+  });
+
+  it('ensures the description surface without a write through the normalized cache', async () => {
+    // A write through the cached client makes every project read in flight
+    // stale, and the cache sends it again.
+    const cached = clientWith(() => ({}));
+    const network = clientWith(() => ({
+      data: { ensureInitiativeDescriptionSurface: 'surface-1' },
+    }));
+    const client = createInitiativeClient(
+      () => cached.graphql,
+      () => network.graphql
+    );
+
+    const result = await client.ensureDescriptionSurface('project-1');
+
+    expect(result.isOk() && result.value).toBe('surface-1');
+    expect(cached.requests).toEqual([]);
+    expect(
+      network.requests.map((request) => [request.kind, request.variables])
+    ).toEqual([['mutation', { initiativeId: 'project-1' }]]);
   });
 });

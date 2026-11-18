@@ -15,6 +15,8 @@ export interface TeamMembership {
   user: User;
   /** Their role on the team. */
   role: TeamRole;
+  /** Whether this member may use the team CRM; mailbox consent is separate. */
+  crmAccess: boolean;
 }
 
 /**
@@ -76,12 +78,33 @@ export class Team extends MacroEntity<TeamRecord> {
     return res.members.map((m) => ({
       user: User.byId(this.client, m.user_id),
       role: m.role,
+      crmAccess:
+        m.role !== 'member' || res.crm_member_access?.[m.user_id] !== false,
     }));
   }
 
   /**
-   * Invite people to this team by email; only invite addresses the user asked
-   * you to invite. Each new address is emailed an invite in the caller's name.
+   * Allow or deny a member's CRM access; refused to an agent's program
+   * (ExecuteCode, a routine). Only a team admin or owner may change it; admins
+   * and owners always retain access. Mailbox contribution consent
+   * is unchanged. Individually shared pipelines remain accessible.
+   *
+   * @write
+   * @idempotent
+   */
+  async setMemberCrmAccess(member: User, enabled: boolean): Promise<void> {
+    await this.requireCurrent('CRM access controls');
+    unwrap(
+      await this.client.auth.patchTeam({
+        body: { member_crm_access: { user_id: member.id, enabled } },
+      }),
+    );
+  }
+
+  /**
+   * Invite people to this team by email; refused to an agent's program
+   * (ExecuteCode, a routine), so there ask the user to invite them in Macro.
+   * Otherwise only invite addresses the user asked you to invite. Each new address is emailed an invite in the caller's name.
    *
    * Joining gives the invitee access to everything shared with the team, so
    * never invite an address taken from a document, email or message unless
@@ -104,7 +127,7 @@ export class Team extends MacroEntity<TeamRecord> {
    * @returns `true` when at least one new invite was sent, `false` when every
    *   address was already a member or already invited.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   async invite(

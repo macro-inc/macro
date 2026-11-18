@@ -6,6 +6,7 @@
 //! machinery lives in the `activity` crate. These arms are pure wiring.
 
 use activity::Ingest;
+use agent_session::domain::events::AgentSessionLifecycleMacroEvent;
 use call::domain::events::CallMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use chat::domain::events::ChatMacroEvent;
@@ -36,6 +37,7 @@ mod source {
             InitiativeMacroEvent,
             DatabaseMacroEvent,
             FormMacroEvent,
+            AgentSessionLifecycleMacroEvent,
     );
 }
 pub(crate) use source::ActivitySourceEvent;
@@ -79,67 +81,10 @@ pub(crate) async fn ingest(
             ActivitySourceEvent::InitiativeMacroEvent(e) => arm(e.event()),
             ActivitySourceEvent::DatabaseMacroEvent(e) => arm(e.event()),
             ActivitySourceEvent::FormMacroEvent(event) => arm(event.event()),
+            ActivitySourceEvent::AgentSessionLifecycleMacroEvent(event) => arm(event.event()),
         }
     })
     .await
 }
 
-/// Realtime activity audience: everyone with current access to the entity,
-/// so entity timelines (side panels) update live for watchers, not only for
-/// the acting subject.
-pub(crate) struct EntityAccessActivityAudience<S> {
-    service: std::sync::Arc<S>,
-}
-
-impl<S> EntityAccessActivityAudience<S> {
-    pub(crate) fn new(service: std::sync::Arc<S>) -> Self {
-        Self { service }
-    }
-}
-
-impl<S> activity::ActivityAudienceExpander for EntityAccessActivityAudience<S>
-where
-    S: entity_access::domain::ports::EntityAccessService,
-{
-    type Err = entity_access::domain::models::AccessError;
-
-    async fn viewer_can_see(
-        &self,
-        entity_type: activity::EntityType,
-        entity_id: &str,
-        viewer: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<bool, Self::Err> {
-        use entity_access::domain::models::{AccessError, ViewAccessLevel};
-        match self
-            .service
-            .generate_entity_access_receipt::<ViewAccessLevel>(viewer, None, entity_id, entity_type)
-            .await
-        {
-            Ok(_) => Ok(true),
-            Err(
-                AccessError::Unauthorized
-                | AccessError::UnauthorizedWithMessage(_)
-                | AccessError::NotFound(_)
-                | AccessError::BadRequest(_),
-            ) => Ok(false),
-            Err(error) => Err(error),
-        }
-    }
-
-    async fn entity_audience(
-        &self,
-        entity_type: activity::EntityType,
-        entity_id: &str,
-    ) -> Result<Vec<macro_user_id::user_id::MacroUserIdStr<'static>>, Self::Err> {
-        match self
-            .service
-            .get_users_by_entity(entity_id, entity_type)
-            .await
-        {
-            // Entity kinds without an expandable audience report BadRequest;
-            // deliver those subject-only instead of surfacing an error.
-            Err(entity_access::domain::models::AccessError::BadRequest(_)) => Ok(Vec::new()),
-            result => result,
-        }
-    }
-}
+pub(crate) use activity::outbound::entity_access_audience::EntityAccessActivityAudience;

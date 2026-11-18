@@ -41,6 +41,7 @@ const due = {
 const detail = {
   id: 'project',
   name: 'Launch',
+  appearance: null,
   updatedAt: '2026-09-30T12:00:00Z',
   userAccessLevel: 'owner' as const,
   taskCount: 0,
@@ -179,7 +180,10 @@ it('seeds the live detail and identity edges from an authoritative create withou
         data: {
           user: {
             id: 'viewer',
-            initiative: { __typename: 'GraphqlSoupInitiative', id: 'project' },
+            visibleInitiative: {
+              __typename: 'GraphqlSoupInitiative',
+              id: 'project',
+            },
           },
         },
       })

@@ -21,9 +21,13 @@ milliseconds instead of waiting on container provisioning.
   (history without reasoning parts and with adjacent text merged, as
   `agent::to_rig_messages` builds it; model, effort, speed, identity,
   instructions) must equal the live one, with no summary in flight, failed, or
-  image descriptions cached, since none of that is in the log. A replay change
-  that drifts from the live history stops sessions from releasing; the
-  manager tests with MCP calls and a failed turn guard it.
+  image descriptions cached, since none of that is in the log. Cards the
+  session presents on a turn's behalf (code-mode views and reviews) never
+  reached the agent, so replay skips them: those marked
+  `_meta.macro.presented`, and older ones by their shape
+  (`agent_session::domain::model::is_presented`). A replay change that drifts
+  from the live history stops sessions from releasing; the manager tests with
+  MCP calls and a failed turn guard it.
 - `src/domain/tool_stream.rs`: throttled, bounded argument previews for pending
   calls; replay ignores previews and retains only calls that began execution.
 - `src/domain/session.rs` / `src/domain/replay.rs`: in-process session state
@@ -36,6 +40,16 @@ milliseconds instead of waiting on container provisioning.
   Every usage row a turn records carries the session id
   (`ai_usage.agent_session_id`); its tools record through
   `ai_usage::for_agent_session`.
+- `src/rig_engine.rs` `GatedToolSet`: every MCP tool of a server other than
+  `macro_internal` (connected apps, custom servers, previews) is first put to
+  `NativeToolGate::refuse_remote_mcp`; the harness's gate refuses it in every
+  scoped session (suggestion generations and runs that send nothing), since
+  the egress proxy that carries it knows no scope. The internal server is
+  told by the server a tool was registered under
+  (`RemoteMcpToolSet::server_of`), never by the name's server segment, which
+  a custom server's name can mangle to (`macro_internal_`), and
+  `dialable_servers` dials each name once, as its first (the harness's own)
+  entry.
 - `src/domain/model_access.rs` (`SessionModels`) and `AgentState::turn_agent_key`:
   an agent with its own usable API key (`agent_api_keys`) runs every turn on
   it without admission, and its session offers only that provider's models.
@@ -63,6 +77,10 @@ milliseconds instead of waiting on container provisioning.
 
 Native user tools bypass the ordinary gate only when the final-draft review
 finisher is installed; otherwise dispatch must resolve their actor normally.
+Native tools that use nobody's access (`WebSearch`, `WebFetch`,
+`SelfKnowledge`) take no `acting_as` and wait for nobody, but still ask the
+gate: the harness's scoped gate refuses them in suggestion generations and
+runs that send nothing.
 
 Session tool schemas require `acting_as: requester | owner` for tools using
 account access, including deferred tools. The gate resolves the selected account
@@ -72,7 +90,24 @@ Reviewed user tools retain the selection through confirmation and execute with
 that account. Billing, memory, and session lifecycle remain owner-scoped. Model-context replay
 retains notification ACP inputs and their replies; the transcript fold separately
 omits system input from its message projection. PresentReview, GetReview and
-DecideReview are eager internal tools in both standard and code modes.
+DecideReview are eager internal tools.
+
+A background session (`AgentSession::is_background`) whose opener gave it
+instructions (`PrepareRoutineSession::instructions`), such as a routine draft,
+runs on `ReplyDelivery::Unseen` (the harness's `reply_delivery`); an accepted
+suggestion's run, opened without any, still streams. An unseen turn reads
+`outbound/rig_engine/unseen.md` as its shared prompt, followed by those
+instructions, so every session of its kind reads them back from the prompt
+cache. It gets no picked documentation (`routes_documentation`), opener,
+skills or `<agent_session>` block, runs at low effort where its model takes
+one (`unseen_effort`), and has only code mode's three tools plus
+`ReadToolResult` (`unseen::CodeModeOnly`), `ExecuteCode` without its reviews
+and views.
+
+Every conversation turn of a user's session runs code mode
+(`tools_for_agent_code_mode`); there is no direct-tools fallback. A turn whose
+MCP catalog lacks any `mcp__macro_internal__` code tool fails
+(`code_tools_listed` in `src/rig_engine.rs`). Summaries advertise no tools.
 
 - Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
 
@@ -82,11 +117,15 @@ DecideReview are eager internal tools in both standard and code modes.
 
 ## Gotchas
 
+- A native tool call held for owner approval must watch `request_context.cancel`
+  (`check_unless_cancelled`): the agent loop waits for running tools on cancel,
+  so an unwatched hold keeps a stopped turn alive.
 - Owners with `auto-skills` (`domain::entity_routing`) route SDK entities on
   code-mode turns: the prompt is `routed_prompt` (no area guidance) and the
   entities `select_documentation` picks bring their `@agent` guide with their
-  index into the turn part. Everyone else keeps `prompt`, which inlines every
-  guide.
+  index onto the turn's request. Everyone else keeps `prompt`, which inlines every
+  guide. Like skill routing, it ranks on the latest user message and the one
+  before it, so a follow-up keeps the previous turn's entities.
 - `auto` is a picker entry, not a routable id: `RigTurnEngine` asks its
   `AutoModelSelector` (Jev through cognition's named decisions, 1 s budget) per turn and runs
   Opus 5.5 (hard), GPT-6.1 Sol (mid) or Gemini 3.8 Flash (simple, and
@@ -105,9 +144,12 @@ DecideReview are eager internal tools in both standard and code modes.
   build turn messages with `to_rig_messages_limited`, not `to_rig_messages`.
 - `rig_engine::system_prompt` orders text from most to least stable for the
   prompt cache: the static Macro prompt (the cached shared block, the same for
-  every agent), then the session's part, then the turn's (`with_turn`). Put
-  anything that changes per turn in the turn part, never in the shared block;
-  measure with `measure_prompt_cache_turns`.
+  every agent), then the session's part. Nothing per turn goes in the system
+  prompt: it sits before the history, so changing it misses the cache for the
+  whole conversation. A turn's SDK documentation rides on the request that
+  received it (`domain::turn_docs`, remembered per session in memory like
+  skills, at most `DOCS_PER_SESSION_BYTES` per session) so the history before
+  it stays cached; measure with `measure_prompt_cache_turns`.
 - Replay tool calls using `_meta.macro.toolName`; ACP titles may be human-readable
   MCP labels, so only use the title for older frames without tool-name metadata.
   An MCP tool's `mcp__<server>__<tool>` name rebuilds as the `McpToolCall` the
@@ -119,3 +161,7 @@ DecideReview are eager internal tools in both standard and code modes.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+The in-process egress MCP client accepts the primary and explicitly configured
+external egress bases, so tool catalogs can inspect paired-runtime sessions.
+Keep route parsing limited to those configured bases.

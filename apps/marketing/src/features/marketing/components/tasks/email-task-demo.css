@@ -1,0 +1,8 @@
+/* The email block's header action group: Ask Macro and Create task in one pill. */
+.email-task-actions { display: flex; align-items: center; gap: 2px; margin-right: 4px; padding: 2px; border-radius: 12px; background: var(--color-surface-2); }
+
+/* Until the task exists the email has the frame to itself. */
+.email-task-demo[data-source-open=false] .task-context-source { border-left: 0; }
+.email-task-demo .mail-thread { min-width: 0; }
+/* The composer opens over the whole email, header included. */
+.email-task-demo .task-flow-popover { inset: 0; }

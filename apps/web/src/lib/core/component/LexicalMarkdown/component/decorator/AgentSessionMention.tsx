@@ -152,7 +152,11 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
                 title={label()}
                 {...navigation}
               >
-                <AgentSessionMentionLabel label={label()} />
+                <AgentSessionMentionLabel
+                  label={label()}
+                  harness={session()?.harness}
+                  botId={session()?.botId}
+                />
               </span>
             }
             content={

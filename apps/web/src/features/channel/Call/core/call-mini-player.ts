@@ -6,9 +6,17 @@ export type CallPreviewParticipant = {
   sharing: boolean;
 };
 
+export type CallPreviewPin = {
+  id: string;
+  kind: 'participant' | 'share';
+};
+
 export function selectCallPreview<T extends CallPreviewParticipant>(
-  participants: readonly T[]
+  participants: readonly T[],
+  pin?: CallPreviewPin
 ): T | undefined {
+  const pinned = participants.find((participant) => participant.id === pin?.id);
+  if (pinned && (pin?.kind === 'participant' || pinned.sharing)) return pinned;
   return (
     participants.find((participant) => participant.sharing) ??
     participants.find((participant) => participant.speaking) ??

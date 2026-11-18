@@ -18,7 +18,7 @@ export function invalidateCalendarViews(): void {
   fireAndForget(invalidateCalendarOccurrences(), 'calendar-sync');
   invalidateCalendarEventPreviews();
   queryClient.invalidateQueries({
-    queryKey: calendarKeys.visibleCalendars.queryKey,
+    queryKey: calendarKeys.visibleCalendars._def,
   });
   queryClient.invalidateQueries({
     queryKey: calendarKeys.joinRequests._def,
@@ -79,7 +79,7 @@ export function handleRefreshCalendar(payload: unknown): void {
   }
   invalidateCalendarEventPreviews();
   queryClient.invalidateQueries({
-    queryKey: calendarKeys.visibleCalendars.queryKey,
+    queryKey: calendarKeys.visibleCalendars._def,
   });
   queryClient.invalidateQueries({
     queryKey: calendarKeys.joinRequests._def,

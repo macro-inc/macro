@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM harness_runtime_connection",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "bbe1689151d11d0dcce780b9e47bdde8ad35cad2bc82a9f63e3c1da9dc44bf25"
+}

@@ -1,13 +1,17 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { AgentSessionListItem } from '@app/features/agents-view/views/AgentSessionListItem';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
+import { groupChatName, isNamedForPeople } from '@channel/group-chat-name';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { Entity, MaybeEntityRow } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { unreadFilterFn } from '@entity/utils/filter';
-import { entityIsMuted } from '@entity/utils/notification';
+import {
+  entityIsMentionsOnly,
+  entityIsMuted,
+} from '@entity/utils/notification';
 import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg?component-solid';
 import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg?component-solid';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg?component-solid';
@@ -41,6 +45,8 @@ export function HomeListEntity(props: HomeListEntityProps) {
   const notificationSource = useGlobalNotificationSource();
   const muted = () =>
     entityIsMuted(notificationSource.mutedEntities(), props.entity);
+  const mentionsOnly = () =>
+    entityIsMentionsOnly(notificationSource.mutedEntities(), props.entity);
 
   return (
     <div class="soup-list-entity relative mx-(--sidebar-gutter) my-(--sidebar-row-gap)">
@@ -114,7 +120,11 @@ export function HomeListEntity(props: HomeListEntityProps) {
                   </Match>
                 </Switch>
               </span>
-              <ChannelMutedIndicator muted={muted()} class="size-3.5" />
+              <ChannelMutedIndicator
+                muted={muted()}
+                mentionsOnly={mentionsOnly()}
+                class="size-3.5"
+              />
               <span
                 data-home-timestamp
                 class="hidden shrink-0 text-xs font-normal text-ink-extra-muted group-hover/home-item:block"
@@ -190,12 +200,17 @@ function HomeThreadTitle(
       'Someone'
     );
   };
+  // Channels go by "#name"; a DM, or a group chat named for its people, by
+  // those people.
   const location = () => {
-    const name = props.channelName || props.entity.name;
-    return props.entity.type === 'channel_thread' &&
-      props.entity.channelType === 'direct_message'
-      ? name
-      : `#${name.replace(/^#/, '')}`;
+    const name = (props.channelName || props.entity.name).replace(/^#/, '');
+    const channelType =
+      'channelType' in props.entity ? props.entity.channelType : undefined;
+    if (channelType === 'direct_message') return name;
+    if (channelType === 'private' && isNamedForPeople(name)) {
+      return groupChatName(name);
+    }
+    return `#${name}`;
   };
   return (
     <span class="flex min-w-0 items-center">

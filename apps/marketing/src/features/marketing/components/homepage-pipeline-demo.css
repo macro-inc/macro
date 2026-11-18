@@ -1,5 +1,5 @@
 .homepage-pipeline-demo {
-  height: 500px;
+  height: 440px;
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--color-edge);
@@ -10,17 +10,26 @@
 }
 .homepage-pipeline-demo > .homepage-crm-scene { height: 100%; flex-direction: row; }
 @media (max-width: 650px) {
-  .homepage-pipeline-demo { height: 480px; }
+  .homepage-pipeline-demo { height: 420px; }
 }
 
+/* Three stages share one frame, so each card gives its width to its content. */
 .homepage-pipeline-demo .homepage-pipeline-board {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px;
 }
-.homepage-pipeline-demo .homepage-pipeline-board > section { width: auto; min-width: 0; }
-.homepage-pipeline-demo .homepage-pipeline-company { font-size: 13px; }
+.homepage-pipeline-demo .homepage-pipeline-board > section { width: auto; min-width: 0; padding: 6px; }
+.homepage-pipeline-demo .homepage-pipeline-board article { position: relative; padding: 10px; margin-top: 8px; }
+.homepage-pipeline-demo .homepage-pipeline-card-header { grid-template-columns: 16px minmax(0, 1fr); gap: 6px; }
+.homepage-pipeline-demo .homepage-pipeline-grip { width: 16px; }
+.homepage-pipeline-demo .homepage-pipeline-company { gap: 6px; font-size: 13px; }
+.homepage-pipeline-demo .homepage-pipeline-company > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The move menu sits over the card's corner on hover instead of holding a column. */
+.homepage-pipeline-demo .homepage-pipeline-actions { position: absolute; top: 8px; right: 6px; background: var(--color-surface-3); }
+.homepage-pipeline-demo .homepage-pipeline-fields { gap: 0 10px; padding-top: 6px; padding-left: 22px; }
+.homepage-pipeline-demo .homepage-pipeline-field { min-width: 0; max-width: 100%; gap: 6px; padding-left: 0; }
 @media (max-width: 699px) {
   .homepage-pipeline-demo .homepage-pipeline-board { grid-template-columns: repeat(3, 220px); }
 }

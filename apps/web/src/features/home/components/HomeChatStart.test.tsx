@@ -1,4 +1,4 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomeChatStart } from './HomeChatStart';
@@ -8,6 +8,7 @@ type ChildrenProps = { children?: JSX.Element };
 const mocks = vi.hoisted(() => ({
   asideCollapsed: false,
   asideOverlay: false,
+  suggestionsEnabled: false,
 }));
 
 vi.mock('@app/components/view-shell', () => ({
@@ -29,6 +30,12 @@ vi.mock('@app/components/view-shell', () => ({
 vi.mock('@channel/DebugSuspense', () => ({
   DebugSuspense: (props: ChildrenProps) => props.children,
 }));
+vi.mock('@app/features/suggestions/use-suggestions-flag', () => ({
+  useSuggestionsFlag: () => () => mocks.suggestionsEnabled,
+}));
+vi.mock('@app/features/suggestions/home-priorities', () => ({
+  HomePriorities: () => <div data-testid="home-today" />,
+}));
 vi.mock('@core/component/AI/component/DragDrop', () => ({
   DragDropWrapper: (props: ChildrenProps & { class?: string }) => (
     <div data-testid="home-composer-frame" class={props.class}>
@@ -42,13 +49,11 @@ vi.mock('@core/component/AI/context', () => ({
 vi.mock('../home-agent-composer', () => ({
   HomeAgentComposer: () => <div data-testid="home-agent-composer" />,
 }));
-vi.mock('./home-recommended-actions', () => ({
-  HomeRecommendedActions: () => <div data-testid="home-suggestions" />,
-}));
 
 beforeEach(() => {
   mocks.asideCollapsed = false;
   mocks.asideOverlay = false;
+  mocks.suggestionsEnabled = false;
 });
 afterEach(cleanup);
 
@@ -79,5 +84,20 @@ describe('Home agent composer alignment', () => {
     expect(
       document.querySelector('[data-home-composer-align="agents"]')
     ).toBeTruthy();
+  });
+});
+
+describe('Home below the composer', () => {
+  it('leaves the space empty while suggestions are off', () => {
+    renderHome();
+
+    expect(screen.queryByTestId('home-today')).toBeNull();
+  });
+
+  it('shows today and the top priorities when suggestions are on', async () => {
+    mocks.suggestionsEnabled = true;
+    renderHome();
+
+    expect(await screen.findByTestId('home-today')).toBeTruthy();
   });
 });

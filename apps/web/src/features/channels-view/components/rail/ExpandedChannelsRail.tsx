@@ -29,6 +29,7 @@ import { CHANNELS_TOUR } from '../../tour';
 import type { ChannelsGroup, ChannelsTab } from '../../types';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import { ConversationsCreateMenu } from '../ConversationsCreateMenu';
+import { ChannelCountPill } from './ChannelCountPill';
 import { ChannelFavoritesSection } from './ChannelFavoriteRows';
 import { ChannelLabelRow, ChannelsCreateMenu } from './ChannelLabelRows';
 import {
@@ -82,6 +83,9 @@ type ChannelRailSearch = {
   close: () => void;
   setQuery: (query: string) => void;
   registerInput: (element: HTMLInputElement) => void;
+  /** Moves keyboard focus from the search field into the results. */
+  focusResults: () => void;
+  hasResults: () => boolean;
   retry: () => Promise<void>;
 };
 
@@ -132,16 +136,15 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           open ? props.search.open() : props.search.close()
         }
         search={() => (
-          <SearchBar
+          <ViewSidebar.Search
             ref={props.search.registerInput}
             label="Search channels and direct messages"
             placeholder="Search conversations"
             value={props.search.query()}
             hotkey="cmd+f"
             onValueChange={props.search.setQuery}
-            onEscape={() => {
-              if (!props.search.query()) props.search.close();
-            }}
+            focusResults={props.search.focusResults}
+            hasResults={props.search.hasResults}
           />
         )}
       >
@@ -482,11 +485,7 @@ function ExpandedGroupSection(props: {
               !section().open && '-rotate-90 opacity-100'
             )}
           />
-          <Show when={section().unreadCount > 0}>
-            <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none tabular-nums text-accent-contrast">
-              {section().unreadCount}
-            </span>
-          </Show>
+          <ChannelCountPill count={section().unreadCount} />
         </button>
         <div
           ref={(element) => {

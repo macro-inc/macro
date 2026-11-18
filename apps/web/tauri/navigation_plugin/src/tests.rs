@@ -298,6 +298,42 @@ fn popup_app_link_emits_once_and_never_creates_a_webview() {
 }
 
 #[test]
+fn open_external_routes_app_links_and_leaves_standalone_documents_to_the_page() {
+    use std::sync::Mutex;
+    use tauri::Listener;
+
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let received = Arc::new(Mutex::new(Vec::new()));
+    let events = received.clone();
+    app.listen("navigate", move |event| {
+        events
+            .lock()
+            .unwrap()
+            .push(serde_json::from_str::<serde_json::Value>(event.payload()).unwrap());
+    });
+    let plugin = test_plugin();
+
+    assert!(plugin.open_external(
+        app.handle(),
+        &Url::parse("https://macro.com/app/mail?view=all").unwrap(),
+    ));
+    assert_eq!(
+        *received.lock().unwrap(),
+        vec![serde_json::json!({"path": "/mail", "query": "view=all"})],
+    );
+
+    assert!(plugin.open_external(app.handle(), &Url::parse("javascript:alert(1)").unwrap()));
+    assert!(!plugin.open_external(
+        app.handle(),
+        &Url::parse("http://tauri.localhost/presenter.html").unwrap(),
+    ));
+    assert_eq!(received.lock().unwrap().len(), 1);
+    assert!(app.webview_windows().is_empty());
+}
+
+#[test]
 fn blocked_popup_neither_opens_nor_emits_navigation() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tauri::Listener;

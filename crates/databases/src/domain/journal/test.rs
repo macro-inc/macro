@@ -207,6 +207,7 @@ fn a_row_insert_is_undone_by_deleting_the_rows_it_inserted() {
                 column: NAME,
                 value: CellValue::Text("Maria".into()),
             }]],
+            ids: None,
         },
     };
     let write = Write::InsertRows {
@@ -214,6 +215,7 @@ fn a_row_insert_is_undone_by_deleting_the_rows_it_inserted() {
         table_id: GUESTS,
         rows: vec![vec![(NAME_DEFINITION, PropertyValue::Str("Maria".into()))]],
         restored: Vec::new(),
+        ids: Vec::new(),
     };
     let before = Before {
         schema: schema(),
@@ -384,6 +386,7 @@ fn a_row_delete_is_undone_by_reinserting_the_rows_under_their_ids_and_positions(
                             value: CellValue::Options(vec![OptionRef::Id(NO)]),
                         },
                     ]],
+                    ids: None,
                 },
             }],
             restored_rows: BTreeMap::from([(
@@ -1213,6 +1216,7 @@ fn what_a_batch_creates_and_removes_again_needs_no_inverse() {
             table: GUESTS,
             change: RowsChange::Insert {
                 rows: vec![Vec::new()],
+                ids: None,
             },
         },
         DatabaseOp::Rows {
@@ -1247,6 +1251,7 @@ fn what_a_batch_creates_and_removes_again_needs_no_inverse() {
             table_id: GUESTS,
             rows: vec![Vec::new()],
             restored: Vec::new(),
+            ids: Vec::new(),
         },
         Write::DeleteRows {
             only_if_unreferenced: false,

@@ -16,6 +16,7 @@ Graph and token spans, so find them by their fields:
 | --- | --- |
 | A mailbox's snapshots | Logs: `"outlook mailbox health" @link_id:<id>` |
 | Its sync work | Spans: `resource_name:outlook.sync.* @mailbox.link_id:<id>` |
+| What Graph holds | Spans: `resource_name:outlook.sync.discover @mailbox.link_id:<id>`, field `@outlook.provider_item_count` (per folder: `email_mailbox_folders.total_item_count`) |
 | Its Graph requests | Spans: `@outlook.throttle_origin:* @mailbox.link_id:<id>` |
 | Token lookups | Spans: `@outlook.token_cache:*` |
 | Deferral logs | Logs: `"mailbox sync work deferred"`, grouped by `@defer_reason` |
@@ -23,18 +24,28 @@ Graph and token spans, so find them by their fields:
 Failed, deferred, throttled and slow (over 5 s) Outlook spans are always
 indexed, with their whole trace; successes are sampled.
 
+Re-importing folders whose first import was cut short has its own runbook:
+[Outlook folder re-import](outlook-folder-reimport.md).
+
 Sync work defers itself: a refused or failed unit is parked and retried
 later, so most of these alerts clear without action. Don't edit queue rows in
-production.
+production. An importing folder reads its next page only while its mailbox has
+fewer than 200 messages ready to import; until then its enumerate spans read
+`@outlook.outcome:paced`, which is the import keeping pace, not a stall.
+Messages backed off after their own failures don't count.
 
 A message whose own reads keep failing stops retrying: after 3 refusals Graph
 won't change (`permanent`, such as an undecodable response, or `forbidden`, a
-403 on that one message) or 50 other failures (about a day of backoff). It is
+403 on that one message) or 50 failures of any other kind (about a day of
+backoff). It is
 then `abandoned`: the span records `@outlook.outcome:abandoned`, a
 `"mailbox message abandoned"` WARN names its `@defer_reason` and attempts, and
 the health snapshot counts it in `abandoned` instead of `queued`. The next
 Graph change to the message, a resync or a reconnect queues it again with
-fresh attempts. Throttling and token failures never count toward this. An
+fresh attempts. Throttling and token failures never count toward this, and a
+Graph 5xx or 408, or a request Graph never answered (connection error, timeout),
+stops counting once its backoff reaches 30 minutes: during a Microsoft outage
+queued messages keep retrying every 30 minutes and are never abandoned. An
 invitation whose MIME source Graph won't return is retried twice
 (`calendar_parts`), then imported without its calendar parts.
 
@@ -77,10 +88,13 @@ the denominator, so a quiet quarter hour needs a few more 429s to alert. The
 Redis gate (`crates/email_api_client/src/outbound/microsoft_gate.rs`)
 holds every mailbox below Graph's published limits for all Microsoft mail and
 calendar callers together, and a Graph 429 cools the mailbox down, so Graph
-should not throttle.
+should not throttle. An import reads within a smaller share of those limits
+(two of the three in-flight slots, 7,500 of the 9,000 requests per window),
+so calendar sync, new mail and the user's own actions keep the rest.
 
 - On the dashboard, compare **Throttled Graph requests by origin**: `gate`
-  refusals are the gate working; `graph` is what this alert counts.
+  refusals are the gate working, and a mailbox that is importing shows many;
+  `graph` is what this alert counts.
 - Group `@outlook.throttle_origin:graph` spans by `@mailbox.link_id` and route
   (resource). One mailbox points at that mailbox's limits; every mailbox
   points at a change in Graph or in the gate.

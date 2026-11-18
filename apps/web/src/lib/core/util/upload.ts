@@ -22,7 +22,7 @@ import {
 } from '@core/constant/allBlocks';
 import { heicConversionService } from '@core/heic/service';
 import { openFilePicker, openFolderPicker } from '@core/util/filePicker';
-import { fireAndForget } from '@core/util/fireAndForget';
+import { humanFileSize } from '@core/util/humanFileSize';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import {
   createStaticUploadFile,
@@ -204,30 +204,6 @@ class UploadError extends Error {
   }
 }
 
-function humanFileSize(bytes: number, si = true, dp = 1): string {
-  const thresh = si ? 1000 : 1024;
-
-  if (Math.abs(bytes) < thresh) {
-    return bytes + ' B';
-  }
-
-  const units = si
-    ? ['kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
-    : ['KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
-  let u = -1;
-  const r = 10 ** dp;
-
-  do {
-    bytes /= thresh;
-    ++u;
-  } while (
-    Math.round(Math.abs(bytes) * r) / r >= thresh &&
-    u < units.length - 1
-  );
-
-  return `${parseFloat(bytes.toFixed(dp))} ${units[u]}`;
-}
-
 function validateFileSize(file: UploadFile): void {
   if (file.size > MAX_FILE_BYTE_SIZE) {
     throw new FileSizeExceededError(getFileName(file));
@@ -304,7 +280,8 @@ export async function uploadFile(
   // Reloading into a newer app build would cut the upload off.
   const releaseReloadHold = holdAutomaticReload();
   try {
-    validateFileSize(uploadSource);
+    // A folder zip is held to the folder limits when it is made instead.
+    if (!dssOptions.unzipFolder) validateFileSize(uploadSource);
 
     const processedFile = await processFile(uploadSource);
 
@@ -365,12 +342,12 @@ export async function uploadFiles(
     isFileUploadEntry(file) ? file : { file, isFolder: false }
   );
   const files = entries.map((entry) => entry.file);
-  const uploadSources = files.map(createUploadFile);
 
-  // validate all files before uploading
-  for (const file of uploadSources) {
+  // validate all files before uploading; folder zips met the folder limits
+  for (const entry of entries) {
+    if (entry.isFolder) continue;
     try {
-      validateFileSize(file);
+      validateFileSize(createUploadFile(entry.file));
     } catch (error) {
       if (error instanceof FileSizeExceededError) {
         handleUploadError(error);
@@ -505,21 +482,11 @@ export async function handleFileFolderDrop(
     }
   );
 
-  const resultPromise = Promise.allSettled([
+  // Folders show in the upload indicator while they are zipped.
+  const results = await Promise.allSettled([
     ...filesPromise,
     ...zipFilesPromise,
   ]);
-
-  if (folderEntries.length > 0) {
-    fireAndForget(
-      toast.promise(resultPromise, {
-        loading: 'Preparing folder upload...',
-      }),
-      'file-upload'
-    );
-  }
-
-  const results = await resultPromise;
 
   const uploadFiles: UploadFileEntry[] = [];
   for (const result of results) {
@@ -553,18 +520,8 @@ export async function handleFolderSelect(
       }))
   );
 
-  const resultPromise = Promise.allSettled(zipEntryPromises);
-
-  if (zipEntryPromises.length > 0) {
-    fireAndForget(
-      toast.promise(resultPromise, {
-        loading: 'Preparing folder upload...',
-      }),
-      'file-upload'
-    );
-  }
-
-  const results = await resultPromise;
+  // Folders show in the upload indicator while they are zipped.
+  const results = await Promise.allSettled(zipEntryPromises);
 
   const uploadFiles: UploadFileEntry[] = [];
   for (const result of results) {

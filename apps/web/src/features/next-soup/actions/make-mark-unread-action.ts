@@ -1,7 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import {
   useMarkThreadAsSeenMutation,
   useMarkThreadAsUnreadMutation,
@@ -25,10 +24,7 @@ export const makeMarkUnreadAction = () => {
 
     const results = await Promise.allSettled(
       targets.map((entity) =>
-        markUnreadMutation.mutateAsync({
-          threadId: entity.id,
-          linkId: entity.type === 'email' ? entity.linkId : undefined,
-        })
+        markUnreadMutation.mutateAsync({ threadId: entity.id })
       )
     );
 
@@ -66,7 +62,6 @@ export const makeMarkUnreadAction = () => {
  */
 export const makeMarkReadAction = () => {
   const markSeenMutation = useMarkThreadAsSeenMutation();
-  const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
 
   const canExecute = (entity: EntityData): boolean =>
     entity.type === 'email' && entity.isRead === false;
@@ -77,12 +72,7 @@ export const makeMarkReadAction = () => {
 
     const results = await Promise.allSettled(
       targets.map((entity) =>
-        markSeenMutation.mutateAsync({
-          threadId: entity.id,
-          linkId: toHeaderLinkId(
-            entity.type === 'email' ? entity.linkId : undefined
-          ),
-        })
+        markSeenMutation.mutateAsync({ threadId: entity.id })
       )
     );
 

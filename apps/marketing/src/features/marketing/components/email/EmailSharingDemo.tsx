@@ -3,7 +3,7 @@ import Hash from '@icon/system/regular/hash.svg';
 import PaperPlane from '@icon/system/regular/paper-plane-tilt.svg';
 import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, on, Show } from 'solid-js';
 import { meetingEmail, meetingReply } from '../../core/email-demo-story';
 import { homepagePeople } from '../../core/homepage-demo-people';
 import { createDemoPointer } from '../../primitives/createDemoPointer';
@@ -159,6 +159,17 @@ export function ChannelResult(props: {
     text: 'I’ll send the setup guide before the call.',
   };
   const [messages, setMessages] = createSignal<HomepageMessage[]>([]);
+  let log: HTMLDivElement | undefined;
+  // A short channel keeps its newest message in view, as the app does.
+  createEffect(
+    on(
+      () => [props.shared, props.updated, messages().length],
+      () =>
+        queueMicrotask(() => {
+          if (log) log.scrollTop = log.scrollHeight;
+        })
+    )
+  );
   return (
     <div class="mail-channel">
       <header class="flex h-12 items-center gap-2 px-4 text-sm">
@@ -177,7 +188,7 @@ export function ChannelResult(props: {
           />
         </div>
       </header>
-      <div class="mail-channel-messages">
+      <div ref={log} class="mail-channel-messages">
         <Show
           when={props.staged}
           fallback={

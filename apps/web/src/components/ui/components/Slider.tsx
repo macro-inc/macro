@@ -41,7 +41,7 @@ function Fill(props: SliderFillProps) {
     <KobalteSlider.Fill
       {...rest}
       class={cn(
-        'absolute h-full rounded-full bg-accent data-[orientation=vertical]:w-full',
+        'absolute h-full rounded-full bg-accent data-[orientation=vertical]:h-auto data-[orientation=vertical]:w-full',
         local.class
       )}
     />

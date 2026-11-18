@@ -1,8 +1,10 @@
 import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
+import { isTransientRequestError } from '@core/util/request-error';
 import type { EntityData } from '@entity';
 import { toNotificationEntity } from '@entity/utils/notification';
 import type { NotificationEntityRef } from '@queries/notification/entity-mutations';
 import { confirmEntityNotificationsDone } from '@queries/notification/state-cache';
+import { CombinedError } from '@urql/core';
 import { batch } from 'solid-js';
 import {
   executeMarkEntitiesDone,
@@ -43,6 +45,11 @@ type Args = {
   notificationEntities: NotificationEntityRef[];
   scopeChannelThreads: boolean;
 };
+
+/** The request never reached a server answer (offline, dropped, 5xx). */
+function isUnreachable(reason: unknown): boolean {
+  return reason instanceof CombinedError && isTransientRequestError(reason);
+}
 
 /** Each independently persisted field owns its display intent and exact receipt. */
 export function createGraphqlDoneOperation(args: Args) {
@@ -122,12 +129,25 @@ export function createGraphqlDoneOperation(args: Args) {
     else attempt.optimistic.applyUndone();
     attempt.displayDone = done;
   };
-  const observeInitial = (outcome: MarkDoneWriteOutcome) =>
+  const observeInitial = (
+    outcome: MarkDoneWriteOutcome,
+    unreachable: Attempt[]
+  ) =>
     batch(() => {
       for (const attempt of attempts.filter((attempt) =>
         matches(attempt, outcome)
       )) {
         if (outcome.result.status === 'rejected') {
+          // The entity write needs a live answer, so it is never queued.
+          // Keep the intent and clear the rows this client knows instead.
+          if (
+            outcome.kind === 'entity-notifications' &&
+            attempt.knownNotificationIds.length > 0 &&
+            isUnreachable(outcome.result.reason)
+          ) {
+            unreachable.push(attempt);
+            continue;
+          }
           failInitial(attempt);
           continue;
         }
@@ -186,6 +206,34 @@ export function createGraphqlDoneOperation(args: Args) {
         }
       }
     });
+
+  /** The ID-scoped write is durably queued, so it replays on reconnect. Its
+   * receipt is the known rows, which is also what Undo reverses. */
+  const markKnownNotificationsDone = async (unreachable: Attempt[]) => {
+    const onWriteSettled = (outcome: MarkDoneWriteOutcome) =>
+      batch(() => {
+        if (outcome.kind !== 'notifications') return;
+        for (const attempt of unreachable) {
+          if (attempt.state !== 'pending') continue;
+          if (outcome.result.status === 'rejected') {
+            failInitial(attempt);
+            continue;
+          }
+          attempt.state = 'done';
+          attempt.receipt = {
+            emailIds: [],
+            notificationIds: attempt.knownNotificationIds,
+          };
+        }
+      });
+    await executeMarkEntitiesDone({
+      emailIds: [],
+      notificationIds: [
+        ...new Set(unreachable.flatMap((a) => a.knownNotificationIds)),
+      ],
+      onWriteSettled,
+    });
+  };
 
   const run = async (done: boolean) => {
     const selected = attempts.filter(
@@ -251,20 +299,31 @@ export function createGraphqlDoneOperation(args: Args) {
           .flatMap(({ rowIds }) => rowIds)
       ).size,
     execute: async () => {
+      const unreachable: Attempt[] = [];
+      let failure: { error: unknown } | undefined;
       try {
         await executeMarkEntitiesDone({
           emailIds: args.emailIds,
           notificationIds: args.notificationIds,
           notificationEntities: args.notificationEntities,
-          onWriteSettled: observeInitial,
+          onWriteSettled: (outcome) => observeInitial(outcome, unreachable),
         });
       } catch (error) {
-        batch(() => {
-          for (const attempt of attempts)
-            if (attempt.state === 'pending') failInitial(attempt);
-        });
-        if (!hasAccepted()) throw error;
+        failure = { error };
       }
+      if (unreachable.length > 0) {
+        try {
+          await markKnownNotificationsDone(unreachable);
+        } catch (error) {
+          failure ??= { error };
+        }
+      }
+      if (!failure) return;
+      batch(() => {
+        for (const attempt of attempts)
+          if (attempt.state === 'pending') failInitial(attempt);
+      });
+      if (!hasAccepted()) throw failure.error;
     },
     undo: () => run(false),
     redo: () => run(true),

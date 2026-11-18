@@ -1,0 +1,53 @@
+[package]
+edition = "2024"
+name = "agent_git"
+publish = false
+version = "0.1.0"
+
+[features]
+client = ["dep:macro_authorization", "dep:macro_tower_layers", "dep:reqwest", "dep:tracing", "dep:urlencoding"]
+default = ["client", "inbound", "outbound"]
+inbound = ["dep:axum", "dep:axum-extra", "dep:macro_authorization", "dep:tracing", "dep:urlencoding"]
+outbound = ["dep:httparse", "dep:sqlx", "dep:teams", "dep:tokio-util", "dep:tracing"]
+
+[dependencies]
+agent_credentials = { path = "../agent_credentials" }
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true, features = ["typed-header"] }
+bytes = { workspace = true }
+chrono = { workspace = true }
+feature_flags = { path = "../feature_flags" }
+futures = { workspace = true }
+hex = { workspace = true }
+lazy-regex = { workspace = true }
+sha2 = { workspace = true }
+httparse = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true }
+macro_tower_layers = { path = "../macro_tower_layers", optional = true }
+macro_user_id = { path = "../macro_user_id" }
+reqwest = { workspace = true, optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+teams = { path = "../teams", optional = true, default-features = false, features = ["ports"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "process", "sync", "time"] }
+tokio-util = { workspace = true, optional = true, features = ["io", "rt"] }
+tracing = { workspace = true, optional = true }
+urlencoding = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+rand = { workspace = true }
+flate2 = { workspace = true }
+macro_authorization = { path = "../macro_authorization", features = ["postgres"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+axum = { workspace = true }
+reqwest = { workspace = true }
+sqlx = { workspace = true }
+teams = { path = "../teams", default-features = false, features = ["outbound", "ports"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { createSignal, type JSX, Show } from 'solid-js';
 
 /** The document owns the saved height; dragging previews locally until release. */
@@ -36,7 +37,7 @@ export function ResizableAnswer(props: {
         <button
           type="button"
           role="separator"
-          aria-label="Resize database answer"
+          aria-label={t('databaseAnswers.resizeDatabaseAnswer')}
           aria-orientation="horizontal"
           aria-valuemin={96}
           aria-valuemax={1600}

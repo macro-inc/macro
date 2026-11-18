@@ -17,6 +17,9 @@ the background; a slow discovery refresh must not delay the new database card.
 Databases open at
 `/app/database/<uuid>`; from Drive (its list, favorites, or **New → Database**)
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
+`?tableId=<uuid>&viewId=<uuid>` (what the SDK's table and view `webUrl()` hand out)
+opens that table and view over the viewer's remembered tab; without `viewId` the
+table opens on its remembered view.
 A database contains tables; records belong to a table and
 its properties describe each record. The database name in the split header is a
 static label until edited. Double-click it or choose **Rename** in Database actions
@@ -67,7 +70,8 @@ never automatically retry a write statement.
 `POST /databases/queries` saves a question; the service compiles it against the
 caller's databases, refuses anything but one `SELECT`, and, when the request names
 chart columns, refuses columns the `SELECT` does not return. The SDK's
-`database.saveQuery({ sql, title, display })` (or `table.saveQuery`) returns a
+`database.saveQuery({ sql, title, display })` (or `table.saveQuery`, or
+`macro.databases.saveQuery` for a question whose tables span databases) returns a
 `SavedQuery` whose `toBlock()` is the `<m-db-query>` block to put in a document,
 and whose `withView()` restyles the answer without saving a new question.
 
@@ -92,26 +96,7 @@ verified removals disappear from local SQL, while delayed older hydration cannot
 restore them. A later successful positive lookup/backfill can add them again.
 ## Feature flag
 
-Databases is behind the `enable-databases` PostHog flag. A deployed app reads it
-at runtime, and a fresh `/app/database/<uuid>` link waits up to three seconds for
-PostHog before deciding. `VITE_ENABLE_DATABASES=true|false` overrides it at build
-time; `bun run dev` defaults it on, and a local stack's static build defers to
-PostHog unless the variable was set when it was built. With the flag off:
-
-- `/app/database/<uuid>` and a `~/database/<uuid>` split show the 404 view. The
-  database block's code is never fetched and no database request is made.
-- **Create → Database**, its **C → L** shortcut, the command palette entry and
-  the slash menu's **Database** and **Query** actions are absent, and no starter database is
-  created.
-- The sidebar, mentions, search and Quick Access list no databases; Activity
-  and the ReadActivity tool leave out database rows.
-- A document's database answer shows its title (or "Database answer") as a
-  plain label, keeps the node unchanged, and never loads the SQL engine.
-- Database tool calls in a chat render as a muted "Database tool" line.
-- The SQL engine's wasm and the database bundles are only fetched once a
-  database surface mounts with the flag on.
-
-`showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) is separate and only hides SQL.
+`showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) shows the SQL behind database answers.
 
 The table selector matches the inset project/channel navigation. In narrow panes,
 scroll its tabs horizontally with a trackpad, mouse wheel, or the arrow buttons.
@@ -162,7 +147,9 @@ all records, including records beyond the first page, and that opening a record
 keeps it available when a view filter excludes it. Cell edits and **Add column**
 use pipeline authorization. Viewer grants hide editing controls. The CRM editor
 fixture (`features/crm/browser-test/editor.html`) covers the real pipeline API
-adapter and shared provider against local test responses.
+adapter and shared provider against local test responses, including wrapped and
+multi-line notes; the plain-database counterpart is
+`features/block-database/browser-test/records.html?multiline`.
 Pipelines poll every five seconds. A poll that returns unchanged data must not
 remount company previews or request them again.
 
@@ -180,6 +167,8 @@ row (within the five-second poll) and the company page's **Pipelines** card both
 show the new stage. The company's own Stage, Owner and Revenue properties in the
 side panel are a separate field these tools do not change. A pipeline created or
 renamed from chat appears in the CRM sidebar as soon as the tool finishes.
+In code mode every pipeline tool, `CreatePipeline` included, runs through
+`macro.crm.pipelines` in `ExecuteCode`, shown as an ExecuteCode row.
 
 ## Properties and records
 
@@ -206,13 +195,14 @@ must use.
 The current type has a checkmark in **Change type**; selecting it leaves the column unchanged. Types that cannot convert any existing values are omitted, while empty columns can still choose a new type.
 
 The header arrow menu groups schema and view actions. **Change type** checks the
-column's values against Text, Number, Select, Multi-select, Date, Time range,
+column's values against Text, Number, Percentage, Select, Multi-select, Date, Time range,
 Checkbox, URL, People, Documents, Tasks, and relations to tables in this database
 (**Related table**) or in any other database you can see (**Other databases**, one
 submenu per database, by name), showing
 "Checking values…" meanwhile, then lists only the types the column can become (a
 checkbox can only become text; only an empty column can become People or a
-relation). A type some values would not survive shows how many, such
+relation). Number and Percentage share the same stored values: 0.25 as a number
+is 25% as a percentage, with no rescaling when the type changes. A type some values would not survive shows how many, such
 as "3 values aren't numbers · Converts into a new column"; it never changes the
 column in place. Choosing it opens a confirmation listing a few of those values,
 and **Convert into a new column** adds a column of that type right after this
@@ -238,7 +228,8 @@ by a number.`); **Save** stays disabled until it does, and Enter saves. Names wi
 spaces go in braces. Numbers added to a date count days; a date minus a date is
 the days between them. An empty number counts as 0 unless every input is empty.
 Formula columns show an ƒ icon, their cells are read-only, and their header menu
-has **Edit formula** instead of **Change type**. Values follow edits to their inputs
+has **Edit formula**. A number formula also offers **Change type** between Number
+and Percentage. Values follow edits to their inputs
 at once, and sort and filter like numbers or dates. Deleting a column a formula uses
 is refused ("Total's formula uses Quantity; change that formula first").
 **Delete column** opens a confirmation;
@@ -321,15 +312,23 @@ toast. A database's only table cannot be deleted: the item is disabled there.
 An editable empty row always follows the records. Enter a value in any of its
 cells to create a record; the next empty row appears immediately. Merely focusing
 or tabbing through an empty row does not save an empty record.
-Click a cell to edit, or focus it with the arrow keys and start typing. The
+Click a cell to edit, or focus it with the arrow keys and start typing. A link
+in a text or URL cell opens like a link in a document (hover shows its preview,
+right-click shows the browser's link menu); clicking anywhere else in the cell,
+Enter, or typing edits it. A URL value that names no domain, such as `TBD`,
+stays plain text. The
 whole cell takes the click, including the space below its value when wrapped
 pills make the row taller; values sit vertically centered in such rows. Enter
 saves and immediately edits the same column in the next row, including the empty
 new-record row. Typing there starts the next record without waiting for the
-previous save. Shift+Enter moves up. Both place the typing cursor at the end of
+previous save. Shift+Enter moves up, except in a text cell, where it starts a new
+line, as Alt+Enter does. Moving places the typing cursor at the end of
 the destination cell's text, ready to type. The active cell has one subtle outline,
-with no additional border around its editor. Arrow keys inside a text editor keep their native cursor
-behavior. Escape cancels. Tab saves and immediately edits the next writable cell;
+with no additional border around its editor. A text cell opens in place at the
+weight and line height it shows, and its row grows to fit a long or multi-line
+value; closed, the cell shows a multi-line value's lines joined on one line. Arrow
+keys inside a text editor move through its lines, wrapped or not, and leave the
+cell only from its first or last line. Escape cancels. Tab saves and immediately edits the next writable cell;
 Shift+Tab moves backward, and both wrap between rows. Read-only columns are
 skipped. If a pending save infers a column's type, the cell currently being typed
 in keeps its editor, draft and focus until it is committed or canceled.
@@ -346,6 +345,11 @@ rounded value. **Enter a valid number** appears in an opaque, focus-only hint. L
 the field hides the hint but keeps the draft and outline; other fields remain
 editable, including through Tab or Shift+Tab. Correct the value or press Escape to
 cancel. Signed decimals and scientific notation remain supported.
+Percentage cells store a fraction and display it with a percent sign (`0.25` shows
+as `25%`). The editor shows percentage points without the sign, so typing `25`
+stores `0.25`. A trailing `%` is accepted. Changing Number to Percentage does not
+rescale existing values. Filters and column totals use the displayed percent, not
+the stored fraction.
 
 Date cells open Macro's date selector (the one tasks use): type a date or phrase
 such as `tomorrow`, `3d`, or `feb 17` and press Enter, or pick **Custom date...**
@@ -375,7 +379,8 @@ Drag across table cells to select a rectangle, or Shift-click another cell to
 extend from the first cell. From the keyboard, Shift+Arrow grows or shrinks the
 rectangle from the focused cell, Shift+Cmd/Ctrl+Arrow runs to the edge of the
 data, Shift+Home/End to the ends of the row, and Cmd/Ctrl+A selects every loaded
-cell; a plain arrow collapses it. Inside an open cell editor Shift+Arrow selects
+cell; a plain arrow collapses it. The grid marks itself
+`data-owns-arrow-keys`, so these keys don't move split focus. Inside an open cell editor Shift+Arrow selects
 text as usual. Delete or Backspace clears editable cells in that
 rectangle as one undoable change; read-only cells are skipped. Newly saved rows
 can be included immediately; unsaved insertion rows are excluded. Escape clears
@@ -575,18 +580,23 @@ A timeline draws one bar per record across its date-range column, on the shared
 Gantt chart: an all-day range spans whole days, and a range with times starts and
 ends at its exact times in the viewer's time zone. The chart is the whole view:
 the record list drawer at the left starts closed (**Show timeline items** opens
-it), beside **Today**, grid settings and zoom controls. A bar shows its record's
+it), and **Today**, grid settings and the **Timeline menu** sit at the top right
+over the header, with zoom controls at the bottom right. A bar shows its record's
 name, then, as room allows, its times (**9:30 AM – 4 PM** within a day,
 **Oct 9, 10:30 AM → Oct 13, 5 PM** across days; all-day bars show none), then
 its bar fields separated by middots. What does not fit drops whole from the
-end (fields first, then times); only a name longer than its bar is cut short.
+end (fields first, then times). A bar too short for its name, such as a one-day
+bar at month zoom or a meeting at week zoom, shows the name beside it, to its
+right, in muted text; it moves back inside once zooming in makes room. A bar
+field cut short (each shows at most about 160px) does not move the name out.
 Records with an empty range show a dashed chip with their name and **No
 dates** in their row at today (now at hours zoom), kept at the nearest visible
 edge when today is scrolled away; ungrouped, they sit under an **Undated**
 heading. Clicking a bar or chip, or Enter on it (they are focusable in row
 order), opens its record.
-The **Timeline menu** (the **⋯** above the chart, for anyone who can change the
-view) chooses **Time range** (which time-range column the bars span), **Bar label**
+The **Timeline menu** (the **⋯** after grid settings, for anyone who can change
+the view; above the message when the timeline has no time range column, or has
+no records and the viewer cannot add one) chooses **Time range** (which time-range column the bars span), **Bar label**
 (the column each record is named by, the table's first by default), **Bar
 fields** (other columns shown after the name, in the order turned on), **Group
 by** (**None**, or a single select or single person) and **Color by** (**None**,
@@ -819,7 +829,8 @@ below shows each webhook's token prefix and a delete button. Deleting the last
 webhook does not create a replacement until the dialog is reopened. POSTing a JSON object to the URL inserts one row (an array inserts
 one per object, up to 100). Keys name columns, ignoring case; `null` leaves a
 cell empty; unknown keys or values that do not fit refuse the whole call with a
-400 listing every problem. The row is written as the webhook's creator, and the
+400 listing every problem. Number and percentage columns take the stored
+number (0.25 is 25%); a trailing `%` is not accepted. The row is written as the webhook's creator, and the
 webhook stops working if they lose edit access.
 
 Browser examples: [desktop](media/database-webhooks/desktop.png) and

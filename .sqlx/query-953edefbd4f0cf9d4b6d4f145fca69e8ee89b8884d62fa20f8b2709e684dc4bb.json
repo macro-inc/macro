@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_item_entities SET metadata=jsonb_set(metadata,'{folderId}','null'::jsonb),revision=revision+1 WHERE team_id=$1 AND metadata->>'folderId' IS NOT NULL AND metadata->>'folderId'=ANY($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "953edefbd4f0cf9d4b6d4f145fca69e8ee89b8884d62fa20f8b2709e684dc4bb"
+}

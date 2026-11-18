@@ -1,10 +1,11 @@
-import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
-import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { useTouchTopBarsFloat } from '@app/components/view-shell';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
+  useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
@@ -22,14 +23,22 @@ import {
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ProjectIcon from '@icon/system/regular/cube.svg';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Tabs } from '@ui';
-import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
+import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
 import { ProjectMenuDropdown } from './components/project-row-menu';
@@ -47,56 +56,19 @@ import {
   type ProjectSection,
 } from './core/project';
 import type { ProjectRoute } from './core/route';
+import { NewProjectTaskPill } from './new-project-task';
 import { openProject } from './open-project';
+import {
+  ProjectBreadcrumbItem,
+  type ProjectBreadcrumbProps,
+} from './project-breadcrumb';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
+import { ProjectTopBar } from './project-top-bar';
 import { ProjectUnavailable } from './project-unavailable';
 import { Projects } from './projects';
 import { ProjectWorkspace } from './views/project-workspace';
-
-type ProjectBreadcrumbProps = {
-  entry: {
-    value: string;
-    data: { type: 'initiative'; id: string; fallbackName?: string };
-  };
-  order: number;
-};
-
-function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
-  const source = useProjectsContext().createProjectSource(
-    () => props.entry.data.id
-  );
-  const name = () =>
-    source.project()?.name ?? props.entry.data.fallbackName ?? 'Project';
-  return (
-    <ViewBreadcrumbs.Item
-      value={props.entry.value}
-      metadata={props.entry.data}
-      order={props.order}
-    >
-      {(item) => (
-        <ViewBreadcrumbs.Button
-          class="gap-1.5"
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-          tooltip={name()}
-        >
-          <ProjectIcon class="size-3 shrink-0" />
-          <span class="truncate">{name()}</span>
-        </ViewBreadcrumbs.Button>
-      )}
-    </ViewBreadcrumbs.Item>
-  );
-}
-
-export function ProjectBreadcrumb(props: ProjectBreadcrumbProps) {
-  return (
-    <Projects>
-      <ProjectBreadcrumbContent {...props} />
-    </Projects>
-  );
-}
 
 type ProjectDetailProps = {
   route: ProjectRoute;
@@ -105,6 +77,30 @@ type ProjectDetailProps = {
   onDelete?(): void;
   onSectionChange?(section: ProjectSection): void;
 };
+
+/** The project's Cmd+K entity commands (Copy link, Copy ID) and their keys. */
+function ProjectEntityCommands(props: {
+  projectId: string;
+  project: Accessor<ProjectDetailData | undefined>;
+  scopeId: string;
+}) {
+  useBlockEntityCommands({
+    id: props.projectId,
+    scopeId: props.scopeId,
+    resolveEntity: () => {
+      const project = props.project();
+      if (!project) return undefined;
+      return {
+        type: 'initiative',
+        id: project.id,
+        name: project.name,
+        ownerId: project.ownerId,
+        appearance: project.appearance,
+      };
+    },
+  });
+  return null;
+}
 
 function ProjectTitleMenu(props: {
   project: ProjectDetailData;
@@ -116,8 +112,10 @@ function ProjectTitleMenu(props: {
 }) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
   const layout = useSplitLayout();
-  const copyLink = makeCopyLinkAction();
-  const copyId = makeCopyEntityIdAction();
+  const copyLink = makeCopyLinkAction({ silent: true });
+  const copyId = makeCopyEntityIdAction({ silent: true });
+  const changeIcon = useChangeEntityIcon();
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [renaming, setRenaming] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
   const [error, setError] = createSignal<string>();
@@ -170,18 +168,25 @@ function ProjectTitleMenu(props: {
           })
         }
         onRename={() => setRenaming(true)}
+        onChangeIcon={
+          appearanceFlag().enabled
+            ? (row) =>
+                changeIcon({
+                  type: 'initiative',
+                  id: row.project.id,
+                  name: row.project.name,
+                  ownerId: props.project.ownerId,
+                  appearance: row.project.appearance,
+                })
+            : undefined
+        }
         onSetOption={(_, property, optionId) =>
           fireAndForget(setOption(property, optionId), 'projects')
         }
         onCopyLink={(row) =>
-          fireAndForget(
-            copyLink.executeByBlock(row.project.id, 'initiative'),
-            'projects'
-          )
+          copyLink.executeByBlock(row.project.id, 'initiative')
         }
-        onCopyId={(row) =>
-          fireAndForget(copyId.executeById(row.project.id), 'projects')
-        }
+        onCopyId={(row) => copyId.executeById(row.project.id)}
         onShare={props.onShare}
         onDelete={() => {
           setError(undefined);
@@ -212,9 +217,12 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
   usePending('project.detail', source.loading);
-  useSplitDisplayName(() => source.project()?.name ?? 'Project');
+  useSplitDisplayName(
+    () => source.project()?.name ?? t('tabs.projectFallbackName')
+  );
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
+  const barFloats = useTouchTopBarsFloat();
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
@@ -241,12 +249,38 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       },
     });
   };
+  const canCreateTask = () => {
+    const project = source.project();
+    return project !== undefined && canEditProject(project);
+  };
   return (
     <>
+      <NewProjectTaskPill
+        onCreateTask={canCreateTask() ? createTask : undefined}
+      />
       <Show when={props.breadcrumb}>
-        {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
+        {(breadcrumb) => (
+          <ProjectBreadcrumbItem {...breadcrumb()} project={source.project()} />
+        )}
       </Show>
-      <EntityDetailTopBar
+      {/* Overview only: the Tasks section's list registers the same commands
+          for its rows on the split's scope, and a second registration there
+          would replace theirs. Keyed by id, which the commands read once. */}
+      <Show
+        when={
+          props.route.section === 'overview' ? source.project()?.id : undefined
+        }
+        keyed
+      >
+        {(projectId) => (
+          <ProjectEntityCommands
+            projectId={projectId}
+            project={source.project}
+            scopeId={panel.splitHotkeyScope}
+          />
+        )}
+      </Show>
+      <ProjectTopBar
         titleMenu={
           <Show when={source.project()}>
             {(project) => (
@@ -267,6 +301,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         navigation={(compact) => (
           <Tabs
             aria-label={t('tabs.projectSections')}
+            size={isTouchDevice() ? 'md' : 'sm'}
             touch="inset"
             class="shrink-0"
             options={[
@@ -286,19 +321,23 @@ function ProjectDetailHost(props: ProjectDetailProps) {
             onChange={section}
           />
         )}
+        share={
+          <Show when={source.project()}>
+            {(project) => (
+              <ShareTrigger
+                onClick={openShare}
+                id={project().id}
+                blockType="initiative"
+                hotkeyScope={panel.splitHotkeyScope}
+              />
+            )}
+          </Show>
+        }
+      />
+      <div
+        class="relative min-h-0 min-w-0 flex-1"
+        classList={{ 'touch:[--mobile-content-inset-top:0px]': !barFloats() }}
       >
-        <Show when={source.project()}>
-          {(project) => (
-            <ShareTrigger
-              onClick={openShare}
-              id={project().id}
-              blockType="initiative"
-              hotkeyScope={panel.splitHotkeyScope}
-            />
-          )}
-        </Show>
-      </EntityDetailTopBar>
-      <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
         <Suspense
           fallback={<ProjectContentSkeleton section={props.route.section} />}
         >

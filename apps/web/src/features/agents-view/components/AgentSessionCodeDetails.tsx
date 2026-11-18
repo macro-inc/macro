@@ -44,7 +44,7 @@ export function AgentSessionCodeDetails(props: {
             target="_blank"
             rel="noreferrer"
             class="pointer-events-auto relative inline-flex shrink-0 items-center gap-1.5 rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
-            aria-label={`Open pull request #${pr().number}${statusLabel() ? `, ${statusLabel()}` : ''}${props.onOpenPullRequest ? '' : ' on GitHub'}`}
+            aria-label={`Open pull request #${pr().number}${statusLabel() ? `, ${statusLabel()}` : ''} on GitHub`}
             onMouseDown={(event) => {
               if (props.onOpenPullRequest) event.preventDefault();
             }}

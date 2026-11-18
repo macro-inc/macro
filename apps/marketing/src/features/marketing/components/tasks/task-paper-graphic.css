@@ -42,17 +42,6 @@
   mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
 }
 
-.task-paper-viewport[data-compact=true][data-view=views] {
-  --text-sm: 20px;
-  --leading-sm: 24px;
-}
-
-.task-paper-viewport[data-compact=true] .paper-task-layout-label {
-  left: 96px;
-  width: 220px;
-  white-space: nowrap;
-}
-
 
 .task-paper-graphic .paper-task-glass {
   background-color: transparent;
@@ -68,4 +57,13 @@
 
 .task-paper-graphic .paper-task-glass-properties-mobile {
   border-radius: 12px;
+  padding: 10px 14px 10px 18px;
+}
+
+/* The phone property card sizes to its content, so centre it on the artboard
+   instead of pinning it to the export's left offset. */
+.task-paper-viewport[data-compact=true] .paper-task-node-117 {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }

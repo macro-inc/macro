@@ -11,7 +11,14 @@ import type {
   StorageRowsQuery,
   TableDetail,
 } from '../../../generated/storage/types.gen';
-import { Lazy, MacroNotFoundError, paginate, unwrap } from '../../utils';
+import {
+  type IterationOptions,
+  iterate,
+  Lazy,
+  MacroNotFoundError,
+  paginate,
+  unwrap,
+} from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Document } from '../documents/document';
 import { MacroEntity } from '../entity';
@@ -274,51 +281,63 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
   }
 
   /**
-   * Rows in pipeline order, automatically paginated.
+   * Rows in pipeline order, automatically paginated; `maxItems` caps the total.
    *
    * @readonly
    */
-  rows(): AsyncGenerator<PipelineRow> {
-    return paginate(async (after) => {
-      const page = unwrap(
-        await this.client.storage.getCrmPipelineRows({
-          path: { id: this.id },
-          query: { after },
-        }),
-      );
-      return {
-        items: page.rows.map((r) => PipelineRow.from(this.client, this, r)),
-        nextCursor: page.next,
-      };
-    });
+  rows(opts?: IterationOptions): AsyncGenerator<PipelineRow> {
+    return iterate('pipeline.rows', opts, {}, () =>
+      paginate(async (after) => {
+        const page = unwrap(
+          await this.client.storage.getCrmPipelineRows({
+            path: { id: this.id },
+            query: { after },
+          }),
+        );
+        return {
+          items: page.rows.map((r) => PipelineRow.from(this.client, this, r)),
+          nextCursor: page.next,
+        };
+      }),
+    );
   }
 
   /**
-   * Query pipeline rows, optionally restricting the query to typed row handles.
+   * Query pipeline rows, optionally restricting the query to typed row handles; `maxItems` caps the total.
    *
    * @readonly
    */
   queryRows(
-    options: { query?: StorageRowsQuery['query']; rows?: PipelineRow[] } = {},
+    options: {
+      query?: StorageRowsQuery['query'];
+      rows?: PipelineRow[];
+      maxItems?: number;
+    } = {},
   ): AsyncGenerator<PipelineRow> {
     if (options.rows?.some((r) => r.pipeline.id !== this.id))
       throw new Error('Rows belong to another pipeline');
-    return paginate(async (after) => {
-      const page = unwrap(
-        await this.client.storage.queryCrmPipelineRows({
-          path: { id: this.id },
-          body: {
-            after,
-            query: options.query,
-            rowIds: options.rows?.map((r) => r.id),
-          },
+    return iterate(
+      'pipeline.queryRows',
+      options,
+      { query: true, rows: true },
+      () =>
+        paginate(async (after) => {
+          const page = unwrap(
+            await this.client.storage.queryCrmPipelineRows({
+              path: { id: this.id },
+              body: {
+                after,
+                query: options.query,
+                rowIds: options.rows?.map((r) => r.id),
+              },
+            }),
+          );
+          return {
+            items: page.rows.map((r) => PipelineRow.from(this.client, this, r)),
+            nextCursor: page.next,
+          };
         }),
-      );
-      return {
-        items: page.rows.map((r) => PipelineRow.from(this.client, this, r)),
-        nextCursor: page.next,
-      };
-    });
+    );
   }
 
   /**
@@ -345,6 +364,7 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
       })),
       allowDuplicates: options.allowDuplicates ?? false,
     };
+    const recordType = await this.trackedRecordType();
     const result = unwrap(
       await this.client.storage.addCrmPipelineEntries({
         path: { id: this.id },
@@ -352,7 +372,6 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
       }),
     );
     this.tableDetail.clear();
-    const recordType = await this.trackedRecordType();
     const entry = (record: (typeof result.added)[number]) =>
       PipelineEntry.from(this.client, this, recordType, record);
     return {
@@ -389,6 +408,7 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
       })),
       baseVersion: options.baseVersion,
     };
+    const recordType = await this.trackedRecordType();
     const result = unwrap(
       await this.client.storage.updateCrmPipelineEntries({
         path: { id: this.id },
@@ -396,7 +416,6 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
       }),
     );
     this.tableDetail.clear();
-    const recordType = await this.trackedRecordType();
     return {
       updated: result.updated.map((updated) => {
         const fields = Object.fromEntries(
@@ -436,6 +455,7 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
         entryIds.push(target.id);
       } else recordIds.push(target.id);
     }
+    const recordType = await this.trackedRecordType();
     const result = unwrap(
       await this.client.storage.removeCrmPipelineEntries({
         path: { id: this.id },
@@ -443,7 +463,6 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
       }),
     );
     this.tableDetail.clear();
-    const recordType = await this.trackedRecordType();
     return {
       removed: result.removed.map((entry) =>
         PipelineEntry.from(this.client, this, recordType, entry),
@@ -453,11 +472,15 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
   }
 
   /**
-   * Read entries by field name and label: `where` filters (`{ Stage: 'Demo' }`,
-   * a list for any of several, `null` for empty), only some companies or
-   * contacts, or a search of their names, domains and emails; sorted by a
-   * field. Also answers per-stage counts and number totals (such as Revenue)
-   * over every match, and the pipeline's fields and version.
+   * Read entries by field name and label.
+   *
+   * `where` filters by field values (`{ Stage: 'Demo' }`, a list for any of
+   * several, `null` for empty). Restrict to some companies or contacts, or
+   * search their names, domains and emails; sort by a field.
+   * Also answers per-stage counts and number totals (such as Revenue)
+   * over every match, and the pipeline's fields and version. A monetary field
+   * (one whose field summary names a `currencyField`) has one total per
+   * `currency`; amounts in different currencies are never converted or added.
    *
    * @param query.limit Most entries to return, 1 to 5000 (default 50); counts and totals cover every match.
    *
@@ -509,9 +532,11 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
   }
 
   /**
-   * Rename or share the pipeline and change its fields and options by name,
-   * in one change: add fields (text, number, checkbox, date, link, select,
-   * multi_select, person or people), rename or delete fields, and add,
+   * Edit pipeline sharing, fields and options together.
+   *
+   * Rename or share the pipeline; change fields and options by name: add
+   * fields (text, number, checkbox, date, link, select, multi_select, person or
+   * people), rename or delete fields, and add,
    * relabel or delete options (new Stage options become the last stages).
    * Returns the fields and version afterwards.
    *
@@ -528,8 +553,10 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
   }
 
   /**
-   * Add a CSV's rows as entries: CSV text, or a CSV document. Columns match
-   * fields by name; Company and Domain (or Contact and Email) name each row's
+   * Import CSV entries into a company or contact pipeline; generic pipelines are refused.
+   *
+   * Accepts CSV text or a CSV document. Columns match fields by name;
+   * Company and Domain (or Contact and Email) name each row's
    * record, created when the team lacks it. Records already here are not
    * added again, and select options the CSV needs are added.
    *
@@ -549,9 +576,12 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
   }
 
   /**
-   * Every entry as CSV text: Company and Domain (or Contact and Email), then
-   * one column per field, people as emails; {@link CrmPipeline.importCsv}
-   * reads the same layout. `complete` is false past 5000 entries.
+   * Export up to 5000 entries as CSV; check `complete` before treating it as a full export.
+   *
+   * Company and contact pipelines export Company and Domain (or Contact and
+   * Email), then one column per field, with people as emails. Generic
+   * pipelines export only their fields. {@link CrmPipeline.importCsv} accepts
+   * the company or contact layout; generic pipelines refuse CSV imports.
    *
    * @readonly
    */
@@ -566,7 +596,10 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
     );
   }
 
-  /** Save every entry as a CSV file in the caller's Macro files, laid out as {@link CrmPipeline.exportCsv} returns it.
+  /**
+   * Save up to 5000 entries as a CSV file; check `complete` before treating it as a full export.
+   *
+   * Saved in the caller's Macro files, laid out as {@link CrmPipeline.exportCsv} returns it.
    *
    * @write
    */
@@ -585,7 +618,10 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
     };
   }
 
-  /** @internal Whether entries track companies or contacts; `undefined` for a generic pipeline. */
+  /**
+   * @internal Whether entries track companies or contacts; `undefined` for a generic pipeline.
+   * Writes read it first, so a failed read cannot hide a committed write that a retry would repeat.
+   */
   private async trackedRecordType(): Promise<
     'company' | 'contact' | undefined
   > {
@@ -714,12 +750,12 @@ export class PipelineTable extends MacroEntity<TableDetail> {
   }
 
   /**
-   * Rows from the authorized pipeline surface.
+   * Rows from the authorized pipeline surface; `maxItems` caps the total.
    *
    * @readonly
    */
-  rows(): AsyncGenerator<PipelineRow> {
-    return this.pipeline.rows();
+  rows(opts?: IterationOptions): AsyncGenerator<PipelineRow> {
+    return this.pipeline.rows(opts);
   }
 }
 

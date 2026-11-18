@@ -27,6 +27,7 @@ impl RoutineTemplateRepo for FakeTemplates {
             active_count: 0,
             created_at: now,
             updated_at: now,
+            appearance: snapshot.appearance,
         };
         self.templates
             .lock()
@@ -102,6 +103,16 @@ async fn sharing_snapshots_the_routine_and_activation_points_back_at_it() {
     let actions = service(false);
     let templates = templates(&actions);
     let id = create_routine(&actions).await;
+    let appearance = EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🌿".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Green),
+    };
+    actions
+        .set_appearance(owner_receipt(user(), id), appearance.clone())
+        .await
+        .unwrap();
 
     let shared = templates
         .share_template(owner_receipt(user(), id), share_input())
@@ -111,6 +122,11 @@ async fn sharing_snapshots_the_routine_and_activation_points_back_at_it() {
     assert_eq!(shared.name, "routine");
     assert_eq!(shared.description, "Summarizes the week");
     assert_eq!(shared.task, configuration(false).task);
+    assert_eq!(shared.appearance, appearance);
+    actions
+        .set_appearance(owner_receipt(user(), id), EntityAppearance::default())
+        .await
+        .unwrap();
     assert_eq!(
         templates.get_template(&other_user(), id).await.unwrap().id,
         id
@@ -121,11 +137,26 @@ async fn sharing_snapshots_the_routine_and_activation_points_back_at_it() {
             &CreationPrincipal::User(other_user()),
             id,
             configuration(false),
+            Requester::Person,
         )
         .await
         .unwrap();
     assert_eq!(activated.template_id, Some(id));
     assert!(activated.owner.is_user(&other_user()));
+    assert_eq!(activated.appearance, appearance);
+    assert_eq!(
+        actions
+            .get_action(&owner_receipt(other_user(), activated.id.unwrap()))
+            .await
+            .unwrap()
+            .appearance,
+        appearance
+    );
+    assert_eq!(
+        activated.configuration_revision,
+        crate::domain::event_runs::ConfigurationRevision::INITIAL
+    );
+    assert_eq!(activated.created_at, activated.updated_at);
 }
 
 #[tokio::test]
@@ -138,9 +169,19 @@ async fn a_shared_routine_never_operates_as_whoever_activates_it() {
         "dangerously_operate_as_user": true,
     });
     let id = actions
-        .create_action(&CreationPrincipal::User(user()), routine)
+        .create_action_from(
+            &CreationPrincipal::User(user()),
+            routine,
+            crate::domain::models::RunCaller {
+                routine: None,
+                correlation: None,
+                requester: Requester::Person,
+            },
+            None,
+        )
         .await
         .unwrap()
+        .into_action()
         .id
         .unwrap();
 
@@ -206,6 +247,7 @@ async fn activating_an_unshared_routine_creates_nothing() {
             &CreationPrincipal::User(other_user()),
             id,
             configuration(false),
+            Requester::Person,
         )
         .await
         .unwrap_err();
@@ -261,6 +303,7 @@ async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_
                 &CreationPrincipal::User(other_user()),
                 id,
                 configuration(false),
+                Requester::Person,
             )
             .await
             .unwrap();
@@ -284,6 +327,7 @@ async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_
                     &CreationPrincipal::User(other_user()),
                     id,
                     configuration(false),
+                    Requester::Person,
                 )
                 .await
                 .unwrap_err(),
@@ -360,6 +404,7 @@ async fn templates_use_the_viewer_and_activating_users_rollout() {
                 },
                 id,
                 configuration(false),
+                Requester::Person,
             )
             .await
             .is_err()

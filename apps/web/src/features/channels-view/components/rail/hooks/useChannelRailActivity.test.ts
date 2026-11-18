@@ -246,3 +246,73 @@ describe('bounded channel unread indicators', () => {
     expect(source.notifications).not.toHaveBeenCalled();
   });
 });
+
+describe('channel mention counts', () => {
+  const mention = (id: string, state: 'unseen' | 'seen' = 'unseen') => ({
+    id,
+    state,
+  });
+  const withMentions = (
+    channel: ChannelEntity,
+    unreadMentions: ChannelEntity['unreadMentions']
+  ): ChannelEntity => ({ ...channel, unreadMentions });
+
+  it('counts unseen mentions per channel, including favorites and thread mentions with no unread dot', () => {
+    const [channels, setChannels] = createSignal([
+      withMentions(row('one', []), [mention('m1'), mention('m2')]),
+      withMentions(row('two', []), [mention('m3', 'seen')]),
+      row('legacy', undefined),
+    ]);
+    const activity = createRoot((cleanup) => {
+      dispose = cleanup;
+      return useChannelRailActivity(channels, calls, () => [
+        withMentions(row('favorite', []), [mention('m4')]),
+      ]);
+    });
+
+    // A thread mention is not a top-level unread, so the dot stays off.
+    expect(activity.unreadChannelIds().size).toBe(0);
+    expect(activity.mentionCount('one')).toBe(2);
+    expect(activity.mentionCount('two')).toBe(0);
+    expect(activity.mentionCount('legacy')).toBe(0);
+    expect(activity.mentionCount('favorite')).toBe(1);
+    // Mentions never feed section counts, which count unread channels.
+    expect(activity.unreadCount('channels')).toBe(0);
+
+    setChannels([withMentions(row('one', []), [mention('m2')])]);
+    expect(activity.mentionCount('one')).toBe(1);
+    setChannels([withMentions(row('one', []), [])]);
+    expect(activity.mentionCount('one')).toBe(0);
+  });
+
+  it('clears on local read intent before the server commits, and restores on rollback', () => {
+    const [readIds, setReadIds] = createSignal(new Set<string>());
+    source.withLocalState.mockImplementation((notification) =>
+      readIds().has(notification.id) ? 'seen' : notification.state
+    );
+    const [favorite] = createSignal<Favorite>({
+      entityId: 'one',
+      entityType: 'channel',
+      createdAt: '2026-01-01',
+      sortOrder: 0,
+    });
+    const { activity, item } = createRoot((cleanup) => {
+      dispose = cleanup;
+      const activity = useChannelRailActivity(
+        () => [],
+        calls,
+        () => [withMentions(row('one', []), [mention('m1'), mention('m2')])]
+      );
+      rail.channelActivity = activity;
+      return { activity, item: useChannelRailFavoriteItemState(favorite) };
+    });
+
+    expect(item().mentions).toBe(2);
+    setReadIds(new Set(['m1']));
+    expect(activity.mentionCount('one')).toBe(1);
+    setReadIds(new Set(['m1', 'm2']));
+    expect(item().mentions).toBe(0);
+    setReadIds(new Set<string>());
+    expect(item().mentions).toBe(2);
+  });
+});

@@ -145,6 +145,8 @@ function observeAvailableDraftIdentity(
         ) {
           if (disposed || session.isStale(epoch) || !session.draftId()) return;
           const code = settlement.code ?? 'INTERNAL';
+          // The composer is already settling a refusal of this draft.
+          if (session.alreadySent()) return;
           if (code !== 'DRAFT_ALREADY_SENT' && !session.autosaveAllowed())
             return;
           session.dispatch({ type: 'rejected', epoch, code });

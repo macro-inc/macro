@@ -50,11 +50,11 @@ even if the viewer switches boards while saving. The adapter supplies the select
 view ID so switching boards also retires unfinished visual moves and sort prompts.
 `browser-test/board.tsx` exercises shared cards, lane composition, and saved ordering with synthetic data.
 
-Successful domain block and unblock mutations evict indexed company rows and
-contact suggestions from the GraphQL cache before refreshing CRM and Soup
-queries. Refresh mounted GraphQL lists that can contain CRM records too: the
-REST mutation returns no changed rows, and hidden records are absent from the
-search index. Failed mutations leave those cached records intact.
+Successful domain block and unblock mutations refresh CRM and Soup email
+readers without archiving or restoring records. Failed mutations leave cached
+records intact. Privacy settings show the server's mailbox-domain refusal
+beside its input and existing-entry warning categories as row descriptions;
+company-domain and personal-provider explanations remain distinct.
 Company selection snapshots and deduplicates the company's domains, waits for
 every domain request, and retains failed domains for retry after the company
 disappears from suggestions. Keep successful blocks when another domain fails.
@@ -80,26 +80,49 @@ Both information panels start with Record details and References; company-only
 Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
 
 Contact headers and Record details share `ContactEmailField` and
-`ContactCompanyField`. Their Tasks-style pills add an email only when blank and link/switch company
-only for server-classified personal-provider emails. Existing email and
-ineligible company values are read-only; no clear/unlink actions are exposed.
+`ContactCompanyField`. The email field lists every address as a Tasks-style
+pill, primary first; each pill opens Make primary and Remove, and a trailing
+control adds another. The company pill links or switches only for a
+personal-provider primary with no address on the company's domain, and offers
+Remove company whenever no address is on the company's domain
+(`companyDomain === false`), behind the shared confirmation dialog, which
+adds that the link cannot be recreated when the primary is not a
+personal-provider address. The single address in `companyDomainEmails`
+shows no Remove, and a company-domain contact keeps a read-only company value
+with its reason in a tooltip. These fields come only from the REST contact
+detail; a response without `emails` or `companyDomain` stays read-only.
 The separate Go to button navigates without selecting.
 Keep these property controls at a 24px visible face with 12px type/icons;
 reserve separate 44px touch targets with transparent expansion and margins.
 Desktop uses the property popover and entity picker; touch uses the shared dialog
 and picker sheet. Drafts remain visible on rejection, pending saves cannot be
 repeated, and record identity keys retire drafts when the record changes.
-After a desktop email addition, return focus to the read-only value in the
-originating property; it is programmatically focusable without adding a tab stop.
-Only committed responses update contact details, both company lists, address
-lookups and normalized contact fields, with session and stale-response fences.
+After a desktop email change, return focus to the control that started it, or
+to the add control once its address is gone. Property popovers are menus, which
+send Tab to their last control; the address editors stop that so Tab reaches
+each action. Only committed responses update contact details (the address list
+and company eligibility included), both company lists, address lookups and
+normalized contact fields, with session and stale-response fences. A lookup
+keeps naming the contact only while the contact holds the looked-up address.
+The Emails tab sends every address in `eca`, and Files adds one
+email-attachment participant leaf per address; the server rejects the whole
+Emails request when an address is no longer the contact's, so both read the
+committed list.
 
 People, Companies and company Team use an exclusive Visible/Archived filter.
 `people-visibility` keeps the workspace choice local to the account/team/role/view,
 preserves search and other display choices, and sanitizes shared/persisted contact
 filters. Archived People is current-administered-team scoped, server filtered
-before pagination; visible People remains viewer-wide. Team applies the same
-exclusive choice to its embedded contact response, including effective parent state.
+before pagination; visible People remains viewer-wide. Team reads its contacts a
+page at a time from `GET /crm/companies/{id}/contacts/page` (`queries/company-contacts.ts`):
+the server applies the Visible/Archived choice (a contact is archived when it or
+its company is) and the search, in the order the full list had, and the list loads
+the next page as its end scrolls into view. A cursor continues only the company,
+Visible/Archived choice and search it came from (anything else answers 400), and the
+loaded pages list each contact once. The server's search answer is shown as it
+came; only rows of an earlier search, kept while the new one loads, are narrowed
+on the client. The company read itself passes `includeContacts=false`. Confirmed visibility and contact edits patch cached Team
+pages in place and refresh the lists a contact can move between.
 
 Successful REST mutations write confirmed flags through the normalized Soup update
 path and patch paginated suggestions, company search pages, REST Soup and embedded
@@ -144,13 +167,9 @@ The selected-record fallback survives detail query errors until the record close
 Global task creation snapshots the focused pane's getter before opening, without
 fetching details or capturing navigation history. Record contexts isolate drafts.
 
-`enable-crm-activity` gates workspace activity tabs (labelled Sales Tasks, Sales Email,
-Sales Notes and Sales Calls), whether CRM supplies its
-composer context, and, with `enable-crm`, the Customer / Contact pill in the task
-composer and Universal Input's task mode. Those two read both flags through
-`customerContactEnabled`. It defaults off everywhere and can be overridden locally with
-`VITE_ENABLE_CRM_ACTIVITY=true`. Off hides activity navigation and skips activity
-queries; saved activity links wait for flag loading, then fall back to Companies.
+The workspace activity tabs are labelled Sales Tasks, Sales Email, Sales Notes and
+Sales Calls. CRM supplies its composer context, and the task composer and Universal
+Input's task mode show the Customer / Contact pill.
 The standard record task action still associates the task with its record.
 The registry and launcher never read this flag. With no supplied context, the
 standard composer opens immediately. Each opening snapshots its
@@ -262,3 +281,21 @@ use the host composer so stage and date-range defaults reach Add deal. CSV write
 commit valid entries, and show record-specific failures; option labels enter the
 local cache only after their batch commits. The backend-free regression is
 `bunx playwright test --config src/features/crm/browser-test/playwright.config.ts stage-requirements.browser.e2e.ts`.
+
+A record page's **Add to pipeline** menu (`add-to-pipeline.tsx`, the device
+entry; `views/add-to-pipeline.tsx` and `views/mobile/add-to-pipeline.tsx`)
+reads nothing until it first opens: `add-to-pipeline-adapter.tsx` then reads
+the team's pipelines and the record's rows through the Pipelines card's own
+`CrmRecordPipelineEntries` query, cache-first (same document and variables, so
+on Overview the normalized cache answers from the card's request), and a
+pipeline's table and stage requirements once its stages or add form show; the
+menu's requirements read does not poll (a refused add reads them again), and the Add deal form it opens reads no
+Quick Access list because its record is fixed. Rows are created with `writeDatabaseRow`
+through the pipeline write path the table uses, so the server's stage guard
+applies; `core/add-to-pipeline.ts` decides which pipelines a record can join and
+whether a stage needs the Add deal form. `ADD_TO_PIPELINE_FLOW` switches between
+choosing a stage and always opening the form; `ADDS_AGAIN` says which record
+types may join a pipeline twice (companies, as separate deals). An add whose
+answer was lost refetches the rows and warns instead of retrying. The
+backend-free desktop/phone regression is
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts add-to-pipeline.browser.e2e.ts`.

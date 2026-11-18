@@ -113,7 +113,15 @@ function LiveChannelCallLine(props: {
             variant="success"
             size="sm"
             disabled={call.isJoining()}
-            onClick={() => fireAndForget(call.joinCall(), 'channel-call')}
+            onClick={() =>
+              fireAndForget(
+                call.joinCall('user', {
+                  kind: 'join',
+                  callId: props.message.id,
+                }),
+                'channel-call'
+              )
+            }
           >
             <PhoneIcon class="size-3.5" />
             Join

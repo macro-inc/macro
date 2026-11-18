@@ -15,8 +15,9 @@ use std::time::{Duration, Instant};
 use agent_session::domain::model::AgentSessionId;
 use futures::{FutureExt, StreamExt, stream};
 use import_notion::domain::inventory::{all_users, inventory};
+use import_notion::domain::macro_cells::{PeopleMap, Person};
 use import_notion::domain::model::{
-    ImportScope, NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged,
+    ImportScope, NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged, RowsPage,
     SearchHit, SearchObject,
 };
 use import_notion::domain::ports::{NotionApi, NotionConnections, NotionError};
@@ -111,7 +112,7 @@ impl NotionApi for NoNotionApi {
         &self,
         _id: &NotionId,
         _cursor: Option<String>,
-    ) -> std::result::Result<Paged<NotionPage>, NotionError> {
+    ) -> std::result::Result<RowsPage, NotionError> {
         match *self {}
     }
 
@@ -810,12 +811,12 @@ where
 
     /// Notion users matched to the user's team by email. Empty when Notion
     /// will not share emails; people columns then stay empty.
-    async fn people(&self, api: &N::Api, user: &MacroUserIdStr<'static>) -> values::PeopleMap {
+    async fn people(&self, api: &N::Api, user: &MacroUserIdStr<'static>) -> PeopleMap {
         let notion_users = match all_users(api).await {
             Ok(users) => users,
             Err(error) => {
                 tracing::warn!(error = ?error, "notion users were not read; people stay empty");
-                return values::PeopleMap::new();
+                return PeopleMap::new();
             }
         };
         let members = self
@@ -836,7 +837,7 @@ where
                         .find(|member| &member.email == email)
                         .map(|member| member.user_id.clone())
                 });
-                (notion_user.id, values::Person { email, macro_user })
+                (notion_user.id, Person { email, macro_user })
             })
             .collect()
     }

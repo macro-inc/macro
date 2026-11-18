@@ -1,10 +1,13 @@
 import path from 'node:path';
-import { chromium, expect } from '@playwright/test';
+import { chromium, expect, type Page } from '@playwright/test';
 import { verifyDemo } from './verifyDemo';
 import { verifyProductPages } from './verifyProductPages';
 
 /** Verify the prerendered homepage keeps its first paint while becoming interactive. */
-export async function verifyHomepage(directory: string): Promise<void> {
+export async function verifyHomepage(
+  directory: string,
+  browserType: typeof chromium = chromium
+): Promise<void> {
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
@@ -25,15 +28,15 @@ export async function verifyHomepage(directory: string): Promise<void> {
   });
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
-    browser = await chromium.launch();
+    browser = await browserType.launch();
     const origin = `http://127.0.0.1:${server.port}`;
-    await verifyDemo(browser, origin);
+    if (browserType === chromium) await verifyDemo(browser, origin);
     // Verify both neutral homepage palettes before and after hydration.
     for (const [viewport, colorScheme] of [
       [{ width: 1440, height: 1000 }, 'dark'],
       [{ width: 390, height: 844 }, 'light'],
     ] as const) {
-      const label = `${viewport.width}×${viewport.height} ${colorScheme}`;
+      const label = `${browserType.name()} ${viewport.width}×${viewport.height} ${colorScheme}`;
       const page = await browser.newPage({
         viewport,
         colorScheme,
@@ -70,7 +73,14 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await page.goto(origin, { waitUntil: 'commit' });
         const headingLocator = page.locator('[data-welcome-heading]');
         await headingLocator.waitFor({ state: 'visible' });
-        await page.evaluate(() => document.fonts.ready);
+        // WebKit's fonts.ready can wait for the load event, which our held
+        // module scripts deliberately prevent. Load the first-paint fonts directly.
+        await page.evaluate(() =>
+          Promise.all([
+            document.fonts.load('32px "Roboto Slab Variable"'),
+            document.fonts.load('16px "Inter Variable"'),
+          ])
+        );
         const heading = await headingLocator.elementHandle();
         if (!heading) throw new Error(`Homepage has no SSR heading (${label})`);
         const before = await heading.boundingBox();
@@ -87,6 +97,25 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await expect(page.locator('#app-scroll-root')).toHaveCSS(
           'background-color',
           'rgb(0, 0, 0)'
+        );
+
+        // Lazy chapter styles must also be linked before hydration.
+        await expect(page.locator('#email .homepage-feature-title')).toHaveCSS(
+          'display',
+          'flex'
+        );
+        await expect(page.locator('#email-title')).toHaveCSS(
+          'font-family',
+          /Roboto Slab Variable/
+        );
+
+        // The welcome graphic must retain its dimensions before scripts run.
+        const mark = page.locator('.homepage-feature-links .ob-welcome-logo');
+        await expect(mark).toHaveCSS('width', '96px');
+        await expect(mark.locator('svg')).toHaveCSS('width', '48px');
+        await expect(headingLocator).toHaveCSS(
+          'font-family',
+          /Roboto Slab Variable/
         );
 
         releaseScripts();
@@ -108,36 +137,26 @@ export async function verifyHomepage(directory: string): Promise<void> {
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
           );
         });
-        if (viewport.width >= 700) {
-          if (!(await heading.evaluate((element) => element.isConnected)))
-            throw new Error(
-              `Homepage replaced its first-painted heading during hydration (${label})`
-            );
-          if ((await heading.textContent()) !== initialText)
-            throw new Error(
-              `Homepage changed heading text during hydration (${label})`
-            );
-          const after = await heading.boundingBox();
-          if (
-            !before ||
-            !after ||
-            (['x', 'y', 'width', 'height'] as const).some(
-              (key) => Math.abs(before[key] - after[key]) > 1
-            )
+        if (!(await heading.evaluate((element) => element.isConnected)))
+          throw new Error(
+            `Homepage replaced its first-painted heading during hydration (${label})`
+          );
+        if ((await heading.textContent()) !== initialText)
+          throw new Error(
+            `Homepage changed heading text during hydration (${label})`
+          );
+        const after = await heading.boundingBox();
+        if (
+          !before ||
+          !after ||
+          (['x', 'y', 'width', 'height'] as const).some(
+            (key) => Math.abs(before[key] - after[key]) > 1
           )
-            throw new Error(
-              `Homepage heading moved during hydration (${label}): ${JSON.stringify({ before, after })}`
-            );
-        } else {
-          // Mobile replaces the desktop SSR fallback with its landing composition.
-          await expect(
-            page.locator('.ob-welcome [data-welcome-heading]')
-          ).toBeVisible();
-          await expect(
-            page.locator('.ob-welcome [data-welcome-heading]')
-          ).toHaveText(/The unified workspace\s*for your company\./);
-          await expect(page.locator('.homepage-hero-cta')).toBeVisible();
-        }
+        )
+          throw new Error(
+            `Homepage heading moved during hydration (${label}): ${JSON.stringify({ before, after })}`
+          );
+        await expect(page.locator('.homepage-hero-cta')).toBeVisible();
         await heading.dispose();
 
         if (viewport.width < 768)
@@ -170,26 +189,19 @@ export async function verifyHomepage(directory: string): Promise<void> {
           .locator('[data-onboarding-scroll]')
           .evaluate((scroller) => scroller.scrollWidth > scroller.clientWidth);
         expect(overflow).toBe(false);
-        if (viewport.width >= 700) {
-          const graphic = await page
-            .locator('.homepage-feature-links .feature-flow')
-            .boundingBox();
-          expect(graphic).not.toBeNull();
-          expect(graphic!.x).toBeGreaterThanOrEqual(0);
-          expect(graphic!.x + graphic!.width).toBeLessThanOrEqual(
-            viewport.width
-          );
-        }
+        const graphic = await page
+          .locator('.homepage-feature-links [data-context-scene]')
+          .boundingBox();
+        if (!graphic)
+          throw new Error(`Homepage has no feature diagram (${label})`);
+        expect(graphic.x).toBeGreaterThanOrEqual(0);
+        expect(graphic.x + graphic.width).toBeLessThanOrEqual(viewport.width);
         await page
           .locator('#email')
           .getByRole('link', { name: 'Learn about email', exact: true })
           .click();
         await expect(page).toHaveURL(`${origin}/email`);
-        await page.goBack();
-        await page.locator('.homepage-hero-cta').click();
-        await expect(page).toHaveURL(
-          `${origin}${viewport.width < 640 ? '/mobile-signup' : '/app/signup'}`
-        );
+        await verifySignupNavigation(page, origin, viewport.width < 640);
         if (errors.length)
           throw new Error(
             `Homepage demo failed (${label}): ${errors.join('; ')}`
@@ -202,9 +214,45 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await page.close();
       }
     }
-    await verifyProductPages(browser, origin);
+    if (browserType === chromium) await verifyProductPages(browser, origin);
   } finally {
     await browser?.close();
     server.stop(true);
+  }
+}
+
+async function verifySignupNavigation(
+  page: Page,
+  origin: string,
+  phone: boolean
+): Promise<void> {
+  // App signup belongs to a separate application. A URL change alone
+  // can pass while the website router renders an empty shell.
+  await page.route(`${origin}/app/signup`, (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<h1>Signup application</h1>',
+    })
+  );
+  const signupUrl = `${origin}${phone ? '/mobile-signup' : '/app/signup'}`;
+  for (const selector of [
+    '.homepage-hero-cta',
+    '.site-header-actions .site-nav-start',
+  ]) {
+    await page.goBack();
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url() === signupUrl &&
+          response.request().isNavigationRequest()
+      ),
+      page.locator(selector).click(),
+    ]);
+    expect(response.ok()).toBe(true);
+    await expect(page).toHaveURL(signupUrl);
+    if (!phone)
+      await expect(
+        page.getByRole('heading', { name: 'Signup application' })
+      ).toBeVisible();
   }
 }

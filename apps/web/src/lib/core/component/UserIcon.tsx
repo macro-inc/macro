@@ -19,8 +19,8 @@ import RobotIcon from '@icon/system/regular/robot.svg';
 import Trash from '@icon/system/regular/trash.svg?component-solid';
 import { Avatar, type AvatarSize, cn } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import { firstPartyBotMark, firstPartyBotMarkTone } from './firstPartyBotMark';
+import { BotMarkAvatar } from './BotMarkAvatar';
+import { firstPartyBotMark } from './firstPartyBotMark';
 import { UserCardTrigger } from './UserCardTrigger';
 
 export type UserIconSize = AvatarSize;
@@ -186,18 +186,7 @@ export function UserIcon(props: UserIconProps) {
     <Switch>
       <Match when={firstPartyBotMark(props.id)} keyed>
         {(mark) => (
-          <Avatar
-            size={size()}
-            class={cn(
-              'bg-surface ring ring-edge-muted',
-              firstPartyBotMarkTone(mark),
-              props.class
-            )}
-          >
-            <Avatar.Fallback>
-              <Dynamic component={mark.Icon} class="size-[62%]" />
-            </Avatar.Fallback>
-          </Avatar>
+          <BotMarkAvatar mark={mark} size={size()} class={props.class} />
         )}
       </Match>
 

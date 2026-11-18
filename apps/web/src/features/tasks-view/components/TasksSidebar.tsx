@@ -1,6 +1,5 @@
 import {
   CollapsibleSection,
-  SearchBar,
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
@@ -158,8 +157,6 @@ export function TasksSidebar() {
   const panel = useSplitPanelOrThrow();
   const {
     state,
-    setState,
-    projectsEnabled,
     setTab,
     selectedTask,
     isSidebarSectionOpen,
@@ -170,10 +167,7 @@ export function TasksSidebar() {
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () =>
-      TASK_TABS.filter((tab) => !isProjectTab(tab.id) || projectsEnabled()).map(
-        (tab) => tab.id
-      ),
+    ids: () => TASK_TABS.map((tab) => tab.id),
     activeId: () => state.tab,
     setActiveId: (id) => setTab(id as TasksTab),
     // Tab cycles these tabs over a list and is focus order over an open project
@@ -186,21 +180,9 @@ export function TasksSidebar() {
     <ViewSidebar.Root aria-label="Tasks navigation" class="relative">
       <SidebarCreateHeader
         title="Tasks"
-        searchLabel="Search tasks"
-        search={() => (
-          <SearchBar
-            label="Search tasks"
-            placeholder="Search tasks"
-            value={state.search}
-            onValueChange={(search) => setState('search', search)}
-          />
-        )}
         createAction={
           !isTouchDevice() ? (
-            <TasksCreateAction
-              presentation="sidebar"
-              projectsEnabled={projectsEnabled()}
-            />
+            <TasksCreateAction presentation="sidebar" />
           ) : undefined
         }
         label={isProjectTab(state.tab) ? t('viewMenus.newProject') : 'New task'}
@@ -218,36 +200,34 @@ export function TasksSidebar() {
           items={BUILT_IN_TASK_TABS}
           label={t('viewMenus.taskViews')}
         />
-        <Show when={projectsEnabled()}>
-          <CollapsibleSection.Root
-            open={isSidebarSectionOpen('projects')}
-            onOpenChange={(open) => setSidebarSectionOpen('projects', open)}
-          >
-            <CollapsibleSection.Header>
-              <CollapsibleSection.Trigger class="flex-1">
-                <span class="min-w-0 truncate">{t('viewMenus.projects')}</span>
-                <CollapsibleSection.Indicator />
-              </CollapsibleSection.Trigger>
-              <CollapsibleSection.Action
-                aria-label={t('viewMenus.newProject')}
-                onClick={() =>
-                  layout.popoverSplit({
-                    type: 'component',
-                    id: 'project-compose',
-                  })
-                }
-              >
-                <PlusIcon class="size-3.5" />
-              </CollapsibleSection.Action>
-            </CollapsibleSection.Header>
-            <CollapsibleSection.Content>
-              <TasksNavigation
-                items={PROJECT_TABS}
-                label={t('viewMenus.projectViews')}
-              />
-            </CollapsibleSection.Content>
-          </CollapsibleSection.Root>
-        </Show>
+        <CollapsibleSection.Root
+          open={isSidebarSectionOpen('projects')}
+          onOpenChange={(open) => setSidebarSectionOpen('projects', open)}
+        >
+          <CollapsibleSection.Header>
+            <CollapsibleSection.Trigger class="flex-1">
+              <span class="min-w-0 truncate">{t('viewMenus.projects')}</span>
+              <CollapsibleSection.Indicator />
+            </CollapsibleSection.Trigger>
+            <CollapsibleSection.Action
+              aria-label={t('viewMenus.newProject')}
+              onClick={() =>
+                layout.popoverSplit({
+                  type: 'component',
+                  id: 'project-compose',
+                })
+              }
+            >
+              <PlusIcon class="size-3.5" />
+            </CollapsibleSection.Action>
+          </CollapsibleSection.Header>
+          <CollapsibleSection.Content>
+            <TasksNavigation
+              items={PROJECT_TABS}
+              label={t('viewMenus.projectViews')}
+            />
+          </CollapsibleSection.Content>
+        </CollapsibleSection.Root>
         <TaskSavedViewsList />
 
         <TaskFavorites

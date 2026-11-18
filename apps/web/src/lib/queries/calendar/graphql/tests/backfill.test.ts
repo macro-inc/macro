@@ -86,6 +86,97 @@ describe('runCalendarBackfill', () => {
     expect(host.calendarCommit).toHaveBeenCalledTimes(1);
   });
 
+  it('retries a window whose hydration a foreground write superseded', async () => {
+    const now = new Date(2026, 9, 7, 15);
+    const months = calendarBackfillMonths(now);
+    const host = {
+      calendarRange: vi.fn(
+        async (args: { startMs: number; endMs: number }) => ({
+          ...covered,
+          gaps: [
+            { kind: 'timed' as const, start: args.startMs, end: args.endMs },
+          ],
+        })
+      ),
+      calendarCommit: vi.fn(async () => ({
+        kind: 'committed' as const,
+        revision: '2' as never,
+        changed: [],
+      })),
+    };
+    const page = {
+      nodes: [],
+      hasNextPage: false,
+      endCursor: null,
+      syncStatus: 'READY' as const,
+      watermark: [{ linkId: 'link-1', seq: '3' }],
+    };
+    const fetchPage = vi
+      .fn(async (_input: CalendarRangeInput) => page)
+      .mockResolvedValueOnce(page)
+      .mockRejectedValueOnce(
+        new Error(
+          'cache hydration superseded by a foreground write; refetch the page'
+        )
+      );
+
+    await runCalendarBackfill(host, {
+      signal: new AbortController().signal,
+      now,
+      fetchPage,
+      delayMs: 0,
+    });
+
+    // Every month is still fetched and committed; the superseded one twice.
+    expect(fetchPage).toHaveBeenCalledTimes(months.length + 1);
+    expect(fetchPage.mock.calls[2]?.[0]).toMatchObject(
+      fetchPage.mock.calls[1]?.[0] ?? {}
+    );
+    expect(host.calendarCommit).toHaveBeenCalledTimes(months.length);
+  });
+
+  it('moves on to the remaining months when a window keeps failing', async () => {
+    const now = new Date(2026, 9, 7, 15);
+    const months = calendarBackfillMonths(now);
+    const host = {
+      calendarRange: vi.fn(
+        async (args: { startMs: number; endMs: number }) => ({
+          ...covered,
+          gaps: [
+            { kind: 'timed' as const, start: args.startMs, end: args.endMs },
+          ],
+        })
+      ),
+      calendarCommit: vi.fn(async () => ({
+        kind: 'committed' as const,
+        revision: '2' as never,
+        changed: [],
+      })),
+    };
+    const failing = months[0]?.start;
+    const fetchPage = vi.fn(async (input: CalendarRangeInput) => {
+      if (input.start === failing) throw new Error('network down');
+      return {
+        nodes: [],
+        hasNextPage: false,
+        endCursor: null,
+        syncStatus: 'READY' as const,
+        watermark: [{ linkId: 'link-1', seq: '3' }],
+      };
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await runCalendarBackfill(host, {
+      signal: new AbortController().signal,
+      now,
+      fetchPage,
+      delayMs: 0,
+    });
+    warn.mockRestore();
+
+    expect(host.calendarCommit).toHaveBeenCalledTimes(months.length - 1);
+  });
+
   it('stops when aborted or when the host cannot serve ranges', async () => {
     const abort = new AbortController();
     abort.abort();

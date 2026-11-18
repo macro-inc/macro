@@ -66,7 +66,9 @@ domain operation doesn't exist, add it to the domain crate first.
   `null` for shared ones. See the [security rules](../../.agents/rules/rust/security.md).
 - **Batch per-entity edges with a DataLoader.** A field resolved once per list row
   goes through a keyed `Loader` (copy `crates/graphql_crm/src/loaders.rs`). Poll
-  hydration futures concurrently so the loader can batch them.
+  hydration futures concurrently so the loader can batch them, and spawn its
+  batches with `|batch| tokio::spawn(batch.in_current_span())` so they stay in
+  the request's trace.
 - **Typed errors.** Set `extensions.code` with the crate's helper (copy `bad_input`
   / `unavailable` in `crates/graphql_calendar/src/lib.rs`, or `mutation_error` in
   `src/mutation.rs`). Log internal details and return a generic message. The web
@@ -77,9 +79,15 @@ domain operation doesn't exist, add it to the domain crate first.
   An archive mutation whose post-write reload found nothing once retried hundreds
   of times and blocked every queued write behind it. If the write committed but
   the reload is empty, return a terminal `NOT_FOUND`.
-- **Skip unknown variants instead of erroring.** An error on a non-null field
-  nulls its parents up to `user` and blanks the screen. Loaders that met an
-  unknown entity type used to fail the whole response; log and omit instead.
+- **Skip unknown variants instead of erroring.** async-graphql 7.2 answers an
+  errored field, nullable or not, by omitting it next to the error and keeping
+  its parent (upstream issue #1801), so a client reads `undefined` from a field
+  its generated type calls non-null. Loaders that met an unknown entity type
+  used to fail the whole response; log and omit instead.
+- **A missing or hidden entity is null, not an error.** Single-entity reads
+  return a nullable field that is null when the viewer cannot see the entity
+  (`soupEntity`, `emailThread`, `visibleInitiative`). The web cache never stores
+  an errored result, so every open of a gone entity would ask again.
 - **Keep payloads off spans.** Use `#[tracing::instrument(skip_all, err(Debug))]` as
   the calendar resolvers do ([observability rule](../../.agents/rules/observability.md)).
 - **Cross-domain fields on Soup entities.** `graphql_soup` can't depend on your

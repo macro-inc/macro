@@ -54,6 +54,7 @@ import type { VirtualizerHandle } from 'virtua/solid';
 import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
 import {
   PROJECT_GRID_COLUMNS,
+  PROJECT_TOUCH_GRID_COLUMNS,
   ProjectListHeader,
   ProjectRow,
 } from '../components/project-row';
@@ -93,8 +94,9 @@ export function ProjectsCollection(props: {
   ganttEnabled: boolean;
   /** Whether the layout has room to open a project beside the list. */
   canOpenInNewSplit: Accessor<boolean>;
-  onCopyLink(id: string): void;
-  onCopyId(id: string): void;
+  onCopyLink(id: string): Promise<unknown>;
+  onCopyId(id: string): Promise<unknown>;
+  onChangeIcon?(project: ProjectRowData['project']): void;
   /** Omit where the host cannot show the project's Share menu. */
   onShare?(id: string): void;
 }) {
@@ -108,6 +110,8 @@ export function ProjectsCollection(props: {
   let searchInput: HTMLInputElement | undefined;
   let focusSearch: (() => void) | undefined;
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
+  const columns = () =>
+    isTouchDevice() ? PROJECT_TOUCH_GRID_COLUMNS : PROJECT_GRID_COLUMNS;
   const isGantt = () =>
     props.ganttEnabled && !isTouchDevice() && collection.layout() === 'gantt';
   const definition = (id: string) =>
@@ -208,11 +212,15 @@ export function ProjectsCollection(props: {
   }>();
   const [deletePending, setDeletePending] = createSignal(false);
   // The menu entry that opened a dialog no longer exists when it closes.
-  const returnFocusToList = (event: Event) => {
-    event.preventDefault();
+  // The timeline takes the grid's place, so focus follows the layout shown.
+  const focusList = () => {
     if (isGantt())
       timeline?.querySelector<HTMLElement>('[tabindex="0"]')?.focus();
     else grid?.focus();
+  };
+  const returnFocusToList = (event: Event) => {
+    event.preventDefault();
+    focusList();
   };
   const menuTargets = (entity: ProjectListEntity) =>
     getSoupMenuEntities(entity, getSoupRowEntities(list.selection.items()));
@@ -314,6 +322,9 @@ export function ProjectsCollection(props: {
           openInNewTab(() => props.onOpen(row.project.id, { newSplit: false }))
         }
         onRename={(row) => setRenaming(row)}
+        onChangeIcon={
+          props.onChangeIcon && ((row) => props.onChangeIcon?.(row.project))
+        }
         onSetOption={(rows, property, optionId) =>
           fireAndForget(setOption(rows, property, optionId), 'projects')
         }
@@ -447,6 +458,7 @@ export function ProjectsCollection(props: {
     <Show when={!isTouchDevice()}>
       <ViewLayoutDropdown
         grouped
+        size="icon-md"
         label="Project layout"
         layouts={props.ganttEnabled ? ['list', 'gantt'] : ['list']}
         value={isGantt() ? 'gantt' : 'list'}
@@ -459,6 +471,7 @@ export function ProjectsCollection(props: {
   const sortControl = () => (
     <ListSortDropdown
       grouped
+      size="icon-md"
       label="Sort projects"
       value={collection.sort()}
       options={[
@@ -473,6 +486,7 @@ export function ProjectsCollection(props: {
   const groupControl = () => (
     <ListGroupDropdown
       grouped
+      size="icon-md"
       label="Group projects"
       value={collection.groupBy()}
       options={[
@@ -488,6 +502,7 @@ export function ProjectsCollection(props: {
     <div class="relative shrink-0">
       <ListFilterDropdown
         grouped
+        size="icon-md"
         label="Filter projects"
         groups={filters()}
         open={openMenu() === 'filters'}
@@ -520,7 +535,7 @@ export function ProjectsCollection(props: {
         aria-label="Filter due date"
         tooltip="Filter due date"
         variant="ghost"
-        size="icon-sm"
+        size="icon-md"
       >
         <CalendarIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
@@ -572,11 +587,11 @@ export function ProjectsCollection(props: {
               </ViewSidebar.Title>
             }
           >
-            <HeaderActionGroup label="Project filters">
+            <HeaderActionGroup label="Project filters" size="md">
               {filterControl()}
               {dueDateControl()}
             </HeaderActionGroup>
-            <HeaderActionGroup label="Project view options">
+            <HeaderActionGroup label="Project view options" size="md">
               {layoutControl()}
               {sortControl()}
               {groupControl()}
@@ -591,7 +606,7 @@ export function ProjectsCollection(props: {
               label="Search projects"
               value={collection.search()}
               onValueChange={collection.setSearch}
-              onEscape={() => grid?.focus()}
+              focusResults={focusList}
               registerFocus={(focus) => {
                 focusSearch = focus;
               }}
@@ -651,7 +666,9 @@ export function ProjectsCollection(props: {
               tabIndex={0}
               class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
             >
-              <ProjectListHeader />
+              <Show when={!isTouchDevice()}>
+                <ProjectListHeader />
+              </Show>
               <Show when={backgroundError()}>
                 <p role="status" class="px-3 text-xs text-ink-muted">
                   Could not refresh projects. Showing the last loaded list.
@@ -717,7 +734,7 @@ export function ProjectsCollection(props: {
                           {(group) => (
                             <TaskGroupHeader
                               row={group()}
-                              columnCount={PROJECT_GRID_COLUMNS.length}
+                              columnCount={columns().length}
                               groupBy={collection.groupBy()}
                               expanded={collection.disclosure.isExpanded(
                                 group().groupId
@@ -745,6 +762,7 @@ export function ProjectsCollection(props: {
                               <ProjectRow
                                 rowId={item().id}
                                 row={item().entity}
+                                columns={columns()}
                                 highlighted={list.focus.isFocused(item().id)}
                                 checked={list.selection.isSelected(item().id)}
                                 onFocus={() =>
@@ -791,7 +809,7 @@ export function ProjectsCollection(props: {
                             <div role="row" id={more().id}>
                               <div
                                 role="gridcell"
-                                aria-colspan={PROJECT_GRID_COLUMNS.length}
+                                aria-colspan={columns().length}
                                 class="flex justify-center py-2"
                               >
                                 <Button
@@ -891,9 +909,7 @@ export function ProjectsCollection(props: {
                       optionId={statusOptionId(entity()) ?? ''}
                       class="size-3.5 shrink-0"
                     />
-                    <span class="min-w-0 truncate">
-                      {entity().project.name}
-                    </span>
+                    <Gantt.BarTitle>{entity().project.name}</Gantt.BarTitle>
                   </Gantt.Bar>
                 </Gantt.Row>
               </ProjectMenu>

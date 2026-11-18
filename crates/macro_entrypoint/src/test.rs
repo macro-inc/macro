@@ -182,6 +182,7 @@ fn rootcause_tracing_subscriber_captures_span_chain() {
     let output = tracing::subscriber::with_default(subscriber, || {
         let request = tracing::info_span!("handle_request", request_id = "req-123");
         let _request_guard = request.enter();
+        // ast-grep-ignore: rust-span-field-recorded-once
         let document = tracing::info_span!("load_document", document_id = 42);
         let _document_guard = document.enter();
 

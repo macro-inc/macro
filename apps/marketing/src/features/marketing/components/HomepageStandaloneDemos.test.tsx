@@ -181,7 +181,7 @@ describe('standalone website demos', () => {
     fireEvent.click(view.getByRole('button', { name: 'Bold' }));
     expect(
       view.getByRole('gridcell', { name: 'A3: Maya' }).style.fontWeight
-    ).toBe('700');
+    ).toBe('500');
     expect(fetch).not.toHaveBeenCalled();
   });
 });

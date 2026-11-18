@@ -82,6 +82,9 @@ impl<B: AgentDmEligibility> AgentDmAuthorizer for BotServiceDmAuthorizer<B> {
                     ChannelMutationErr::Forbidden("This agent is unavailable to you".to_owned())
                 }
                 BotError::BadRequest(message) => ChannelMutationErr::BadRequest(message),
+                error @ BotError::AgentTeammateComputer => {
+                    ChannelMutationErr::BadRequest(error.to_string())
+                }
                 BotError::Unavailable(message) => {
                     ChannelMutationErr::Repo(anyhow::anyhow!(message))
                 }

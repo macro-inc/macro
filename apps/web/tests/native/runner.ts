@@ -6,6 +6,7 @@ import { type Browser, remote } from 'webdriverio';
 import {
   assertNativeRecords,
   checkpoints,
+  expectAccountInitials,
   expectRows,
   nativeHttpReachable,
   selectTab,
@@ -143,9 +144,7 @@ try {
       VITE_LOCAL_BACKEND_ORIGIN: fixture.origin,
       VITE_ENABLE_BEARER_TOKEN_AUTH: 'true',
       LOCAL_JWT: 'fixture-only',
-      VITE_ENABLE_GRAPHQL_SOUP: 'true',
       VITE_ENABLE_GRAPHQL_BACKFILL: 'true',
-      VITE_ENABLE_SNIPPETS: 'true',
       VITE_ENABLE_AUTO_UPDATE_UI: 'false',
     }
   );
@@ -172,6 +171,20 @@ try {
     capabilities,
   });
   console.log(`Native session ${browser.sessionId}; opening Email`);
+  // The app only checks identity when a login hint exists (user-info-gate.ts),
+  // and the gate reads it once at startup. A fresh profile has none, so leave
+  // the hint as a completed sign-in does and reload to let the app see it.
+  await browser.waitUntil(
+    async () =>
+      browser!.execute(
+        () =>
+          location.origin.startsWith('http') &&
+          document.readyState === 'complete'
+      ),
+    { timeout: 120_000 }
+  );
+  await browser.execute(() => localStorage.setItem('macro:login', 'true'));
+  await browser.refresh();
   const emailNavigation = browser.$('button[aria-label="Email"]');
   await emailNavigation.waitForDisplayed({ timeout: 120_000 });
   await emailNavigation.click();
@@ -183,7 +196,7 @@ try {
     await browser.waitUntil(
       async () => {
         const lanes = await checkpoints(browser!);
-        return lanes.length === 7 && lanes.every((lane) => lane.completed);
+        return lanes.length === 9 && lanes.every((lane) => lane.completed);
       },
       { timeout: 60_000 }
     );
@@ -202,6 +215,7 @@ try {
     'Expected the isolated native Turso database'
   );
   await expectRows(browser, matrixMode ? [6, 12, 60] : [6, 12]);
+  await expectAccountInitials(browser, 'OF');
   const onlineSoupRequests = fixture.requests.filter(
     (request) =>
       request.operation === 'Soup' &&
@@ -324,6 +338,21 @@ try {
     if (failures.length)
       throw new AggregateError(failures, 'Native offline filter regressions');
     console.log('PASS: unseen email filter combinations evaluated offline');
+
+    // A relaunch while the API is still down must render from the native
+    // cache, not wait forever on an identity fetch that cannot succeed.
+    await browser.refresh();
+    await browser.$('button[aria-label="Email"]').waitForDisplayed({
+      timeout: 60_000,
+    });
+    await selectTab(browser, 'All');
+    await expectRows(browser, [4, 6, 8, 9, 10, 12]);
+    assert.equal(fixture.requests.length, requestsAtDisconnect);
+    console.log('PASS: offline reload renders mail from the native cache');
+    // The restored identity keeps the user's name, so the avatar keeps its
+    // initials instead of falling back to the email's first letter.
+    await expectAccountInitials(browser, 'OF');
+    console.log('PASS: offline reload keeps the account name');
   } else {
     console.log(
       'PASS: disconnected API with native cache reads (filter regression not run)'

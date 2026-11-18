@@ -293,9 +293,11 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
 
 /// GraphQL activity reader over the Postgres activity log (readonly pool).
 pub(crate) type DssActivityReader = complete_graph::ActivityPortReader<
-    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+    activity::domain::visible_reads::VisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
-        EntityAccessService,
+        activity::outbound::entity_access_audience::EntityAccessActivityAudience<
+            EntityAccessService,
+        >,
     >,
 >;
 
@@ -532,7 +534,7 @@ pub(crate) type DssChannelsState =
 
 /// Type alias for the bots service wired into DSS.
 pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, ai_tools::PipedreamMcpAppCatalog>;
+    BotServiceImpl<PgBotsRepo, DssEventBroker, DssHarnessService, ai_tools::PipedreamMcpAppCatalog>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -541,6 +543,7 @@ pub(crate) type DssBotsState =
 /// Type alias for the harnesses service wired into DSS.
 pub(crate) type DssHarnessService = harnesses::domain::service::HarnessServiceImpl<
     harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+    hosted_runtimes::outbound::pg::PgComputerAgents,
 >;
 
 /// Type alias for the harnesses router state.
@@ -955,6 +958,10 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub search_term_matching: Arc<dyn search_service::TermMatchingRollout>,
+    pub passwords_state: passwords::inbound::router::PasswordRouterState<AuthorizationService>,
+    pub passwords_agent_state:
+        passwords::inbound::agent_router::AgentRouterState<AuthorizationService>,
     pub dictation_state: DssDictationState,
     pub db: PgPool,
     pub readonly_db: ReadOnlyPool,
@@ -997,6 +1004,8 @@ pub(crate) struct ApiContext {
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
     pub graphql_registered_work_context: complete_graph::RegisteredWorkGraphqlContext,
     pub graphql_notification_inbox_context: complete_graph::NotificationInboxGraphqlContext,
+    pub graphql_active_notification_ids_context:
+        complete_graph::ActiveNotificationIdsGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,
     /// Focus reads for the GraphQL `emailFocus` list and thread `focus` field.
@@ -1089,6 +1098,7 @@ impl From<&ApiContext> for SearchHandlerState {
     fn from(ctx: &ApiContext) -> Self {
         SearchHandlerState {
             db: ctx.readonly_db.clone(),
+            crm_db: ctx.db.clone(),
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),
@@ -1105,6 +1115,7 @@ impl From<&ApiContext> for SearchHandlerState {
             calendar_event_labels: Arc::new(CalendarService::new(PgCalendarRepository::new(
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
+            term_matching_rollout: ctx.search_term_matching.clone(),
         }
     }
 }

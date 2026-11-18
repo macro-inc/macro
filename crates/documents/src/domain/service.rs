@@ -23,8 +23,9 @@ use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use unicode_segmentation::UnicodeSegmentation;
 
-use activity::{Actor, Attribution};
+use activity::{Actor, AppearanceUpdate, Attribution};
 use anyhow::anyhow;
+use chrono::Utc;
 use cloudfront_sign::{SignedOptions, get_signed_url};
 use connection::domain::models::{InvalidationEvent, InvalidationReason};
 use connection::domain::ports::ConnectionService;
@@ -50,6 +51,7 @@ use s3_key::{
     build_docx_to_pdf_converted_document_key, document_key_url_path,
 };
 use tracing;
+use uuid::Uuid;
 
 use crate::domain::models::{
     ASSIGNEES_PROPERTY_ID, InitialLinkShare, NOT_STARTED_STATUS_OPTION_ID, PropertyInput,
@@ -1135,6 +1137,76 @@ impl<
         Ok(document_id)
     }
 
+    #[tracing::instrument(err, skip(self, receipt))]
+    async fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance.validate().map_err(DocumentError::BadRequest)?;
+        let id = &receipt.entity().entity_id;
+        let document = self
+            .repo
+            .get_basic_document(id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if document.deleted_at.is_some()
+            || document.try_file_type() != Some(FileType::Md)
+            || !matches!(
+                document.sub_type,
+                None | Some(document_sub_type::DocumentSubType::Snippet)
+            )
+        {
+            return Err(DocumentError::BadRequest(
+                "appearance requires an ordinary Markdown document or snippet".into(),
+            ));
+        }
+        let PublishedDocumentActors {
+            actor,
+            on_behalf_of,
+            actor_user_id,
+        } = published_document_actors(receipt.auth());
+        let update = AppearanceUpdate {
+            appearance: appearance.clone(),
+            attribution: match receipt.auth() {
+                EntityAccessAuth::Authenticated(user) => {
+                    Some(Attribution::direct(Actor::new_from_user(user.clone())))
+                }
+                EntityAccessAuth::Bot(bot) => Some(Attribution::new(
+                    Actor::new_from_bot(bot.bot_id()),
+                    bot.scope().acting_user_id().cloned(),
+                )),
+                EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+            },
+            event_id: Uuid::now_v7(),
+            occurred_at: Utc::now(),
+        };
+        if let Some(previous) = self
+            .repo
+            .set_appearance(id, &update)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?
+        {
+            self.publish_document_event(&DocumentMacroEvent::updated(
+                id.clone(),
+                DocumentUpdatedMetadata {
+                    appearance_change: Some([previous, appearance.clone()]),
+                    document_id: id.clone(),
+                    owner: document.owner,
+                    actor,
+                    on_behalf_of,
+                    actor_user_id,
+                    document_name: None,
+                    previous_project_id: None,
+                    project_id: None,
+                    file_type: None,
+                    share_permission_updated: false,
+                },
+            ));
+        }
+        Ok(appearance)
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
         &self,
@@ -1830,32 +1902,38 @@ impl<
 
         // Update project modified timestamps. args.project_id of None means "no change",
         // so only move the document out of its old project when a different project (or
-        // "" for no project) was explicitly requested.
+        // "" for no project) was explicitly requested. A document whose id isn't a UUID
+        // holds no grant rows: it reads its folders' grants, so it has none to move.
+        let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).ok();
         if let Some(new_project_id) = &args.project_id
             && let Some(old_project_id) = &document_context.project_id
             && new_project_id != old_project_id
             && !old_project_id.is_empty()
         {
-            let old_project_id = uuid::Uuid::parse_str(old_project_id).unwrap();
-            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
-            let _ = self
-                .entity_access_management_service
-                .remove_entity_from_project(&document_uuid, EntityType::Document, &old_project_id)
-                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update entity access for project"));
-            let _ = self.repo.update_project_modified(&old_project_id.to_string()).await.inspect_err(
+            if let (Some(document_uuid), Ok(old_project_id)) =
+                (document_uuid, uuid::Uuid::parse_str(old_project_id))
+            {
+                let _ = self
+                    .entity_access_management_service
+                    .remove_entity_from_project(&document_uuid, EntityType::Document, &old_project_id)
+                    .await.inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update entity access for project"));
+            }
+            let _ = self.repo.update_project_modified(old_project_id).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update project modified date"),
             );
         }
         if let Some(project_id) = &args.project_id
             && !project_id.is_empty()
         {
-            let project_id = uuid::Uuid::parse_str(project_id).unwrap();
-            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
-            let _ = self
-                .entity_access_management_service
-                .add_entity_to_project(&document_uuid, EntityType::Document, &project_id)
-                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
-            let _ = self.repo.update_project_modified(&project_id.to_string()).await.inspect_err(
+            if let (Some(document_uuid), Ok(project_id)) =
+                (document_uuid, uuid::Uuid::parse_str(project_id))
+            {
+                let _ = self
+                    .entity_access_management_service
+                    .add_entity_to_project(&document_uuid, EntityType::Document, &project_id)
+                    .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
+            }
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
         }
@@ -1883,6 +1961,7 @@ impl<
         self.publish_document_event(&DocumentMacroEvent::updated(
             entity_access_receipt.entity().entity_id.clone(),
             DocumentUpdatedMetadata {
+                appearance_change: None,
                 document_id: entity_access_receipt.entity().entity_id.clone(),
                 owner: document_context.owner.clone(),
                 actor_user_id,

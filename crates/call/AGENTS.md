@@ -22,8 +22,12 @@ in-call chat.
   (`src/domain/service/orphan_rooms.rs`).
 - `src/outbound/livekit_rtc_client.rs`: LiveKit adapter.
 - `src/outbound/programmatic_calls.rs`: per-caller server flag for explicit
-  start, join, and leave routes. The legacy GET flow remains available.
+  start and leave, and nonhuman join-by-ID requests. Human sessions can join
+  existing calls by ID while the flag is disabled; legacy GET remains available.
 - `src/outbound/pg_call_repo.rs`, `src/outbound/pg_voice_repo.rs`: Postgres.
+- `src/outbound/pg_call_repo/call_list.rs` (+ `call_list/page.sql`,
+  `call_list/people.sql`): the call list behind Soup's call views and CRM
+  Calls tabs, read from the viewer's grants outward.
 - `src/outbound/pg_call_repo/lifecycle.rs`: atomic empty and program-only
   archival checks; the latter uses the last human departure and a 60-second grace.
 - `src/outbound/ai_call_summarizer.rs`, `src/outbound/s3_recording_storage.rs`:
@@ -60,9 +64,14 @@ in-call chat.
 
 ## Gotchas
 
+- `GET /call/record/{id}` leaves out the presigned `recordingUrl` and `recordingPreviewUrl` for a program (`is_program_run`): they are bearer secrets for as long as they last. A program reads the bytes through `GET /call/record/{id}/recording`.
+- `POST /call/record/{id}/link` refuses an agent's program or a bot (`refuse_program_link`, 403): a new meeting link lets anyone holding it join as a guest. Meeting responses still carry `shareToken`, because the SDK keys meetings on it and it grants only a guest join.
 - A call's discussion is stored in `call_entities.discussion` when it is created, and can't be
   inferred from `channel_id`: past channel calls keep `call_chat`. See
   `docs/design/call-chat-in-channel.md`.
+- A call id lives in exactly one of `calls`, `call_records`, or an imported
+  `call_entities` row: archiving moves it in one transaction. The call list
+  takes the first match per granted id, so never let two of them hold the same id.
 - Declining a call on one device must stop ringing on every other device — this
   regressed once (#7092); route the decline through the shared call state, not
   a per-device signal.
@@ -75,8 +84,12 @@ in-call chat.
   candidate rooms have no `calls` row yet and must be left alone.
 - Bot RTC identities use `bot|<uuid>`. Webhooks never write bot attendance or
   participant events; an archived call's recreated room evicts the bot.
-- `enable-programmatic-calls` fails closed for the explicit start, join, and
-  leave routes. Meeting join ignores optional join settings while disabled.
+- `enable-programmatic-calls` fails closed for explicit start and leave. For
+  `POST /call/record/{call_id}/join`, only `MacroUserAuthentication::is_human_session()`
+  bypasses the flag; API credentials remain gated. Programs are refused before
+  the flag (see below), and the domain service still
+  checks live-call admission and returns Gone for ended calls. Meeting join
+  ignores optional join settings while disabled.
 - Accept bodyless meeting joins even with `Content-Type: application/json`;
   shipped app clients send that header, while nonempty SDK bodies retain JSON validation and body limits.
 - `GET /call/{channel_id}` remains the shipped get-or-create path. New callers
@@ -84,8 +97,16 @@ in-call chat.
   `POST /call/record/{call_id}/join`; the latter never creates a call.
 - A view grant alone does not admit a user to a live call. Channel membership,
   standalone ownership, attendance, or an explicit invite is required.
-- Every token-producing HTTP route refuses `x-macro-code-execution` because
-  tokens can outlive a code execution and cannot be revoked.
+- Every authenticated token-producing HTTP route refuses a program
+  (`macro_authorization::is_program_run`: a credential signed for an agent or a
+  routine run, or `x-macro-code-execution`), because tokens reach the model,
+  outlive the run and cannot be revoked. A program can drop the header with a
+  raw `fetch`, so the signed claims carry the refusal. The guest join has no
+  credential and checks the header only.
+- `edit_call_record_handler` refuses share permission and team sharing
+  changes from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check.
 
 ## Related
 

@@ -115,6 +115,7 @@ fn config(harness: Harness) -> Config {
     let mut config: Config =
         toml::from_str(include_str!("../../../config.example.toml")).expect("example config");
     config.macro_api = MacroApi {
+        egress_url: None,
         api_url: "https://agent-harness.example.com".to_owned(),
         storage_url: "https://storage.example.com".to_owned(),
         web_url: "https://example.com/app".to_owned(),

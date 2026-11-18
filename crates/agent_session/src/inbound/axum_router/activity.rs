@@ -135,6 +135,7 @@ pub async fn get_agent_session_activity<
     }
     crate::domain::activity::read(
         state.repository.as_ref(),
+        state.access.as_ref(),
         &access.entity_access_receipt,
         query.agent_correlation_id,
         cursor,

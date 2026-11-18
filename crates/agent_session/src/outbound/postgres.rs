@@ -1018,19 +1018,18 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         .await
         .context("failed to read the turn prompter")?;
         Ok(row.and_then(|row| {
-            row.turn_action_id.map(|action_id| TurnPrompter {
-                kind: if row.turn_prompter_kind == "system" {
-                    crate::domain::model::PrompterKind::System
-                } else {
-                    crate::domain::model::PrompterKind::User
-                },
-                action_id: agent_runtime_protocol::domain::action::AgentActionId::from_uuid(
-                    action_id,
-                ),
-                user: row.turn_prompter,
-                client: row
-                    .turn_prompter_client
-                    .map(crate::domain::model::UiClientId::from_uuid),
+            row.turn_action_id.map(|action_id| {
+                let kind = crate::domain::model::PrompterKind::from_stored(&row.turn_prompter_kind);
+                TurnPrompter {
+                    kind,
+                    action_id: agent_runtime_protocol::domain::action::AgentActionId::from_uuid(
+                        action_id,
+                    ),
+                    user: row.turn_prompter,
+                    client: row
+                        .turn_prompter_client
+                        .map(crate::domain::model::UiClientId::from_uuid),
+                }
             })
         }))
     }
@@ -1923,18 +1922,10 @@ impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
                   SELECT COALESCE(boundary.created_at, '-infinity'::timestamptz),
                          COALESCE(boundary.id, '00000000-0000-0000-0000-000000000000'::uuid)
                   FROM agent_session AS session
-                  LEFT JOIN LATERAL (
-                    SELECT id, created_at FROM agent_session_log
-                    WHERE id = session.history_start_log_id
-                      AND agent_session_id = $1
-                      AND NOT EXISTS (
-                          SELECT 1 FROM agent_session_log AS trusted
-                          WHERE trusted.agent_session_id = $1
-                            AND trusted.direction IN ('notification', 'to_runtime')
-                            AND trusted.content->'params'->'_meta' ? 'macro.dev/notifications'
-                      )
-                    LIMIT 1
-                  ) AS boundary ON true
+                  LEFT JOIN agent_session_log AS boundary
+                    ON boundary.id = session.history_start_log_id
+                   AND boundary.agent_session_id = session.id
+                   AND NOT session.has_trusted_notifications
                   WHERE session.id = $1
               )
             ORDER BY log.created_at ASC, log.id ASC

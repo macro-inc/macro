@@ -48,6 +48,7 @@ pub(super) fn database_row_top_clause(
     sort: SimpleSortMethod,
     grouped: bool,
     property_sort: bool,
+    name_sort: bool,
 ) -> String {
     let sort_ts = match sort {
         SimpleSortMethod::CreatedAt => "r.created_at",
@@ -61,9 +62,11 @@ pub(super) fn database_row_top_clause(
     } else {
         ""
     };
+    // Rows hydrate without a name, so a name-sorted page always puts them last.
+    let name_column = super::name_sort_column(name_sort, "NULL::text");
     format!(
         r#"SELECT 'database_row'::text as item_type, r.id::text as id,
-        {sort_ts}::timestamptz as sort_ts {group_columns}
+        {sort_ts}::timestamptz as sort_ts {group_columns}{name_column}
         FROM database_rows r
         JOIN database_tables row_table ON row_table.id = r.table_id
         JOIN database_entities row_database ON row_database.database_id = row_table.database_id

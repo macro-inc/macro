@@ -7,11 +7,11 @@
 //! layout build every byte the API would see.
 
 use super::util;
-use crate::SystemPrompt;
 use crate::model::anthropic_prompt_layout::AnthropicPromptLayout;
 use crate::model::router::ModelRouter;
 use crate::stream::ToolResponse;
 use crate::types::{ChatMessage, ChatMessageContent, Role};
+use crate::{PromptSection, SystemPrompt};
 use ai_toolset::tool_search::{LoadToolsResponse, ToolMatch};
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ServiceContext,
@@ -255,10 +255,13 @@ const MODEL_LINE: &str = "\n\nYou are the anthropic/claude-opus-4-8 model. If th
                           cutoff — trust this id over your training data when identifying yourself.";
 
 fn split_prompt(task: &str) -> SystemPrompt {
-    SystemPrompt::split(
-        "# Identity\nYou are Macro.\n",
-        format!("\n<session_instructions>\n{task}\n</session_instructions>"),
-    )
+    let mut prompt = SystemPrompt::default();
+    prompt.push_shared(PromptSection::Identity, "# Identity\nYou are Macro.\n");
+    prompt.push(
+        PromptSection::SessionInstructions,
+        &format!("\n<session_instructions>\n{task}\n</session_instructions>"),
+    );
+    prompt
 }
 
 #[tokio::test]
@@ -436,15 +439,18 @@ async fn a_replayed_turn_repeats_its_live_requests() {
     assert_eq!(earlier[1]["content"][0]["id"], json!("toolu_load"));
 }
 
-/// The turn's own part of the system prompt follows everything the loop
-/// adds, so it changes nothing before it.
+/// Text recorded for a turn is measured, not sent in the system prompt.
 #[tokio::test]
-async fn the_turn_part_comes_after_the_model_line() {
+async fn recorded_turn_text_stays_out_of_the_prompt() {
     let transport = ScriptedProvider::new([text_response("hi")]);
     let (bodies, _) = run_session(
         &transport,
         "anthropic/claude-opus-4-8",
-        split_prompt("task A").with_turn("\n<macro_sdk>docs</macro_sdk>"),
+        {
+            let mut prompt = split_prompt("task A");
+            prompt.record(PromptSection::SdkDocs, "\n<macro_sdk>docs</macro_sdk>");
+            prompt
+        },
         "hi",
     )
     .await;
@@ -452,7 +458,7 @@ async fn the_turn_part_comes_after_the_model_line() {
     assert_eq!(
         bodies[0]["system"][1]["text"],
         json!(format!(
-            "\n<session_instructions>\ntask A\n</session_instructions>{MODEL_LINE}\n<macro_sdk>docs</macro_sdk>"
+            "\n<session_instructions>\ntask A\n</session_instructions>{MODEL_LINE}"
         ))
     );
 }

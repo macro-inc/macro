@@ -2,11 +2,11 @@
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email_api_client::GmailApiClientRepository;
+use email_service::composition::workers::CrmMetadataResolver;
 use email_service::config::Config;
 use email_service::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
-use email_service::pubsub::CrmMetadataResolver;
 use email_service::util::redis::RedisClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
@@ -296,24 +296,38 @@ async fn main() -> anyhow::Result<()> {
         RateBudget::Live,
     );
     let outlook_repository = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_service::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
+        email_service::outbound::email_api::RedisMicrosoftRequestGate::new(
+            redis_conn.clone(),
+            email_api_client::outbound::microsoft_gate::RequestBudget::Live,
+        ),
     ))?;
+    let outlook_credentials = email::domain::mailbox::credentials::MailboxCredentials::new(
+        email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+        email_service::outbound::email_api::MicrosoftCredentialsClient(auth_service_client.clone()),
+    );
     let outlook_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
         outlook_repository.clone(),
-        email::domain::mailbox::credentials::MailboxCredentials::new(
-            email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
-            email_service::outbound::email_api::MicrosoftCredentialsClient(
-                auth_service_client.clone(),
-            ),
-        ),
+        outlook_credentials.clone(),
         // Admission is applied to each actual Graph request by the injected gate.
         email_api_client::domain::ports::AlwaysAllowRateLimiter,
     );
-    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
+    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
+        .with_imports_paused(config.outlook_imports_paused);
     if config.outlook_sync_enabled {
+        let outlook_import_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
+            email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+                email_service::outbound::email_api::RedisMicrosoftRequestGate::new(
+                    redis_conn.clone(),
+                    email_api_client::outbound::microsoft_gate::RequestBudget::Import,
+                ),
+            ))?,
+            outlook_credentials,
+            email_api_client::domain::ports::AlwaysAllowRateLimiter,
+        );
         let mailbox_sync = email::domain::mailbox::MailboxSyncService::new(
             mailbox_repository.clone(),
             email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
+            email_service::outbound::email_api::ProviderMailboxGateway(outlook_import_api),
             mailbox_repository.clone(),
         );
         worker_tracker.spawn(email_service::mailbox_sync_worker::run_health(
@@ -408,6 +422,14 @@ async fn main() -> anyhow::Result<()> {
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db_backfill.clone()),
         metadata_resolver,
     );
+    worker_tracker.spawn(email_service::email_policy_worker::run(
+        crm_service_backfill.clone(),
+        worker_cancellation_token.clone(),
+    ));
+    worker_tracker.spawn(email_service::email_policy_worker::run_previews(
+        crm_service_backfill.clone(),
+        worker_cancellation_token.clone(),
+    ));
 
     if config.outlook_sync_enabled {
         worker_tracker.spawn(email_service::mailbox_sync_worker::run_watches(
@@ -748,16 +770,16 @@ async fn main() -> anyhow::Result<()> {
     // send scheduled emails
     worker_tracker.spawn(async move {
         email_service::pubsub::scheduled::worker::run_worker_with_cancellation(
-            email_service::pubsub::scheduled::context::ScheduledContext {
-                sqs_worker: scheduled_worker,
-                db: db_scheduled,
-                email_api: email_api_scheduled,
-                attachment_bytes: draft_content,
-                s3_client: s3_client_scheduled,
-                attachment_bucket: attachment_bucket_scheduled,
-                macro_event_broker: macro_event_broker_scheduled,
+            email_service::pubsub::scheduled::worker::context(
+                scheduled_worker,
+                db_scheduled,
+                email_api_scheduled,
+                draft_content,
+                s3_client_scheduled,
+                attachment_bucket_scheduled,
+                macro_event_broker_scheduled,
                 read_receipts,
-            },
+            ),
             cancellation_token,
         )
         .await;

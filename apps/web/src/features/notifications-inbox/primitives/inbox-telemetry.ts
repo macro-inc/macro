@@ -36,7 +36,7 @@ export function traceInboxRows<T>(
  * Run a clear in its own span, recording what it takes (kinds, unread only,
  * since a time) and how many rows it cleared, never their content.
  */
-export function traceInboxClear<T extends { count: number }>(
+export function traceInboxClear<T extends { count: number; complete: boolean }>(
   clear: InboxClear,
   operation: () => Promise<T>
 ): Promise<T> {
@@ -47,6 +47,7 @@ export function traceInboxClear<T extends { count: number }>(
     try {
       const result = await operation();
       span.setAttr('inbox.rows', result.count);
+      span.setAttr('inbox.clear_complete', result.complete);
       span.setAttr('inbox.outcome', 'succeeded');
       return result;
     } catch (error) {

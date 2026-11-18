@@ -66,7 +66,7 @@ impl From<ColumnKind> for CastKind {
     fn from(kind: ColumnKind) -> Self {
         match kind {
             ColumnKind::Text => CastKind::Text,
-            ColumnKind::Number => CastKind::Number,
+            ColumnKind::Number | ColumnKind::Percentage => CastKind::Number,
             ColumnKind::Boolean => CastKind::Boolean,
             ColumnKind::Date => CastKind::Date,
             ColumnKind::DateRange => CastKind::DateRange,
@@ -82,9 +82,10 @@ impl From<ColumnKind> for CastKind {
 }
 
 /// The types a column is offered to change to, in menu order.
-pub const TARGETS: [ColumnKind; 11] = [
+pub const TARGETS: [ColumnKind; 12] = [
     ColumnKind::Text,
     ColumnKind::Number,
+    ColumnKind::Percentage,
     ColumnKind::Select { multi: false },
     ColumnKind::Select { multi: true },
     ColumnKind::Date,
@@ -114,6 +115,8 @@ pub enum ColumnTypeName {
     Text,
     /// `number`.
     Number,
+    /// `percentage`.
+    Percentage,
     /// `boolean`.
     Boolean,
     /// `date`.
@@ -140,6 +143,7 @@ impl ColumnKind {
         match self {
             ColumnKind::Text => ColumnTypeName::Text,
             ColumnKind::Number => ColumnTypeName::Number,
+            ColumnKind::Percentage => ColumnTypeName::Percentage,
             ColumnKind::Boolean => ColumnTypeName::Boolean,
             ColumnKind::Date => ColumnTypeName::Date,
             ColumnKind::DateRange => ColumnTypeName::DateRange,
@@ -197,7 +201,7 @@ impl schemars::JsonSchema for SpelledColumnType {
     fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
         schemars::json_schema!({
             "type": "string",
-            "description": "A column type as SQL spells it: text, number, boolean, date, link, \
+            "description": "A column type as SQL spells it: text, number, percentage, boolean, date, link, \
         select, select_number, tag, date_range, entity(KIND) or relation, with [] when a select or reference \
         column holds several values (select[], entity(USER)).",
         })

@@ -8,6 +8,8 @@ import { createSignal, type JSX, Show } from 'solid-js';
 
 export function SchedulingFilters(props: {
   grouped?: boolean;
+  /** Height of the island this sits in; `md` for a list header. */
+  size?: 'sm' | 'md';
   title: string;
   activeCount: number;
   onClear: () => void;
@@ -17,8 +19,9 @@ export function SchedulingFilters(props: {
   const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
   const [mobileOpen, setMobileOpen] = createSignal(false);
   const triggerSize = () => {
-    if (props.activeCount > 0) return props.grouped ? 'sm' : 'md';
-    return props.grouped ? 'icon-sm' : 'icon-md';
+    const compact = props.grouped && props.size !== 'md';
+    if (props.activeCount > 0) return compact ? 'sm' : 'md';
+    return compact ? 'icon-sm' : 'icon-md';
   };
   return (
     <Show

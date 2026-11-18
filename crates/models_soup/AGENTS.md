@@ -26,9 +26,9 @@ model.
 
 ## Boundaries
 
-- Depends on: `call`, `channels`, `crm`, `document_sub_type`, `doppleganger`,
-  `email`, `macro_user_id`, `model`, `model-entity`, `model_owner`,
-  `models_pagination`, `models_properties`.
+- Depends on: `bot_id`, `call`, `channels`, `crm`, `document_sub_type`,
+  `doppleganger`, `email`, `macro_user_id`, `model`, `model-entity`,
+  `model_owner`, `models_pagination`, `models_properties`.
 - Used by: `ai_tools`, `complete_graph`, `databases_sql`, `graphql_initiative`,
   `graphql_soup`, `models_search`, `search_service`, `skills`, `soup`,
   `soup_filter_projection`, `attention_feed`.

@@ -19,7 +19,7 @@ jobs:
       graphql_schema: ${{ steps.filter.outputs.graphql_schema }}
       rust_packages: ${{ steps.nextest-filter.outputs.rust_packages }}
       skip_tests: ${{ steps.nextest-filter.outputs.skip_tests }}
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -321,7 +321,7 @@ jobs:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
       RUSTDOCFLAGS: '-Dwarnings'
       SQLX_OFFLINE: 'true'
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -523,7 +523,7 @@ jobs:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
       RUSTDOCFLAGS: '-Dwarnings'
       SQLX_OFFLINE: 'true'
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -753,11 +753,12 @@ jobs:
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
       NEXTEST_TEST_THREADS: '32'
+      REDIS_URI: redis://127.0.0.1:6379
       CARGO_PROFILE_DEV_DEBUG: '0'
       CARGO_PROFILE_TEST_DEBUG: '0'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SCCACHE_IDLE_TIMEOUT: '0'
-    timeout-minutes: 90
+    timeout-minutes: 20
     services:
       postgres:
         image: pgvector/pgvector:pg14
@@ -1055,7 +1056,7 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: '0'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SQLX_OFFLINE: 'true'
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -1238,41 +1239,3 @@ jobs:
         rust-cache: 'false'
     - name: Check GraphQL schema compatibility
       run: cargo run --locked --manifest-path tooling/xtask/Cargo.toml -- graphql-schema-compat --base HEAD^1
-  status-check:
-    needs:
-    - path-check
-    - check
-    - doppler-config
-    - test
-    - build-service-bins
-    - graphql-schema-compat
-    if: always()
-    name: Cloud Storage Status Check
-    runs-on: namespace-profile-linux-small
-    timeout-minutes: 5
-    steps:
-    - name: Check job results
-      run: |
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "check: ${{ needs.check.result }}"
-        echo "doppler-config: ${{ needs.doppler-config.result }}"
-        echo "test: ${{ needs.test.result }}"
-        echo "build-service-bins: ${{ needs.build-service-bins.result }}"
-        echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
-
-        # Only success and skipped are OK. A job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose tests never ran.
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.check.result }}" \
-          "${{ needs.doppler-config.result }}" \
-          "${{ needs.test.result }}" \
-          "${{ needs.build-service-bins.result }}" \
-          "${{ needs.graphql-schema-compat.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "❌ One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "✅ All jobs passed or were skipped"

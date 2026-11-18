@@ -266,6 +266,7 @@ export function FormulaEditor(props: {
                       <PropertyIcon
                         type={column.dataType}
                         formula={!!column.formula}
+                        percentage={!!column.percentage}
                         class="size-3.5 shrink-0 text-ink-muted"
                       />
                       <span class="truncate">{column.name}</span>
@@ -324,6 +325,7 @@ export function FormulaEditor(props: {
                 <PropertyIcon
                   type={column.dataType}
                   formula={!!column.formula}
+                  percentage={!!column.percentage}
                   class="size-3 shrink-0 text-ink-muted"
                 />
                 <span class="max-w-40 truncate">{column.name}</span>

@@ -318,6 +318,24 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         .await
         .map_err(unavailable)?;
         if restart {
+            // Claims only take the current generation, so older sync work is
+            // dead and would otherwise stay due, read past by every claim.
+            sqlx::query!(
+                "DELETE FROM email_sync_streams WHERE link_id = $1 AND generation < $2",
+                link_id,
+                link.sync_generation
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(unavailable)?;
+            sqlx::query!(
+                "DELETE FROM email_message_reconciliation WHERE link_id = $1 AND generation < $2",
+                link_id,
+                link.sync_generation
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(unavailable)?;
             // Resume the exact recorded phase under the verified replacement
             // grant. Submitting/confirming phases perform reads only, never sends.
             sqlx::query!(

@@ -25,6 +25,9 @@ pub struct ToolFreeRequest {
     pub prompt: String,
     pub schema: DynamicSchema,
     pub thinking: CompletionThinking,
+    /// The hidden agent session whose own work this completion is, recorded
+    /// with it as non-billable usage; `None` for the person's own.
+    pub session: Option<uuid::Uuid>,
 }
 
 /// Sanitized capacity and deadline errors, or the shared completion failure.
@@ -107,7 +110,13 @@ impl ToolFreeCompletion for ToolFreeCompletionService {
         request: ToolFreeRequest,
     ) -> Result<Value, ToolFreeCompletionError> {
         let recorder = self.recorder.clone();
-        let feature = self.feature;
+        let usage = match request.session {
+            Some(session) => UsageContext {
+                agent_session_id: Some(session),
+                ..UsageContext::new(AiFeature::NonBillableAgentSession, owner)
+            },
+            None => UsageContext::new(self.feature, owner),
+        };
         self.run(async move {
             agent::structured_output::dynamic_structured_completion_thinking(
                 request.model,
@@ -116,7 +125,7 @@ impl ToolFreeCompletion for ToolFreeCompletionService {
                 request.schema,
                 request.thinking,
                 recorder.as_ref(),
-                UsageContext::new(feature, owner),
+                usage,
             )
             .await
         })

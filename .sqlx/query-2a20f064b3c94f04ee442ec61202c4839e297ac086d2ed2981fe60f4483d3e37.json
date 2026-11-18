@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ta.team_id,\n                   agent.\"isAgent\" AS is_agent,\n                   EXISTS (\n                       SELECT 1 FROM team_user tu\n                       WHERE tu.team_id = ta.team_id AND tu.user_id = ta.user_id\n                   ) AS \"member!\",\n                   creator.id AS \"created_by?\",\n                   COALESCE(creator.\"isAgent\", FALSE) AS \"created_by_is_agent!\"\n            FROM team_agents ta\n            JOIN \"User\" agent ON agent.id = ta.user_id\n            LEFT JOIN \"User\" creator ON creator.id = ta.created_by\n            WHERE ta.user_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_agent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "member!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_by?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_by_is_agent!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "2a20f064b3c94f04ee442ec61202c4839e297ac086d2ed2981fe60f4483d3e37"
+}

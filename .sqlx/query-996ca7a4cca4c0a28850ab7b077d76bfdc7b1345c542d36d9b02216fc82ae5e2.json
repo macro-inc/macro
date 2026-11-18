@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT as_of\n            FROM notification_bulk_action\n            WHERE id = $1 AND user_id = $2 AND lease_token = $3 AND status = 'applying'\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "as_of",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "996ca7a4cca4c0a28850ab7b077d76bfdc7b1345c542d36d9b02216fc82ae5e2"
+}

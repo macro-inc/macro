@@ -398,7 +398,8 @@ fn an_insert_of_two_rows_is_one_op() {
                                 value: CellValue::Options(vec![OptionRef::Label("Won".into())]),
                             },
                         ],
-                    ]
+                    ],
+                    ids: None,
                 },
             }],
         })

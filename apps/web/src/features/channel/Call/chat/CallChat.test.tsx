@@ -2,6 +2,10 @@
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 import type { InputHandle, InputSnapshot } from '@channel/Input/types';
 import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
+import {
+  useMessageTransport,
+  useMessageViewerOverride,
+} from '@core/messages/message-transport';
 import type { MessageActionHandler } from '@core/messages/types';
 import type { MessageListItem, MessageThread } from '@service-storage/messages';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
@@ -11,6 +15,7 @@ import CallChat from './CallChat';
 
 const mocks = vi.hoisted(() => ({
   source: undefined as unknown,
+  guestSource: undefined as unknown,
   composer: undefined as ChannelInputProps | undefined,
   restore: vi.fn(),
   snapshot: vi.fn(),
@@ -19,6 +24,9 @@ const mocks = vi.hoisted(() => ({
   focus: vi.fn(),
 }));
 vi.mock('./queries/use-call-chat', () => ({ useCallChat: () => mocks.source }));
+vi.mock('./queries/use-guest-call-thread', () => ({
+  useGuestCallThread: () => mocks.guestSource,
+}));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-id' }));
 vi.mock('@queries/messages/mutations', () => ({
   useSendMessageMutation: () => ({ mutateAsync: mocks.send }),
@@ -62,8 +70,23 @@ vi.mock('@core/messages/MessageThread', () => ({
     targetRequestKey?: string | number;
   }) => {
     const navigate = useContext(MessageReferenceNavigation);
+    const transport = useMessageTransport();
+    const viewer = useMessageViewerOverride();
     return (
       <>
+        <span data-testid="viewer">{viewer?.()}</span>
+        <button
+          onClick={() =>
+            transport?.react({
+              parent: props.data.parent,
+              id: props.data.id,
+              emoji: '👍',
+              add: true,
+            })
+          }
+        >
+          React
+        </button>
         <button onClick={() => props.onReply?.({ message: props.data })}>
           Reply
         </button>
@@ -115,7 +138,14 @@ it.each(['user-id', 'another-user'])(
       failed: () => false,
       refresh: mocks.refresh,
     };
-    render(() => <CallChat callId="call-id" open onClose={() => {}} />);
+    render(() => (
+      <CallChat
+        access={{ kind: 'member' }}
+        callId="call-id"
+        open
+        onClose={() => {}}
+      />
+    ));
     const draft: InputSnapshot = {
       value: 'Existing draft',
       mentions: [{ itemType: 'user', itemId: 'bot|owned-agent' }],
@@ -173,6 +203,7 @@ it('only autofocuses when the panel opens, not when a tab becomes visible', () =
   const [focusOnOpen, setFocusOnOpen] = createSignal(false);
   render(() => (
     <CallChat
+      access={{ kind: 'member' }}
       callId="call-id"
       open={open()}
       focusOnOpen={focusOnOpen()}
@@ -185,4 +216,178 @@ it('only autofocuses when the panel opens, not when a tab becomes visible', () =
   setFocusOnOpen(true);
   setOpen(true);
   expect(mocks.focus).toHaveBeenCalledOnce();
+});
+
+it('uses the shared thread, guest viewer, and text-only composer for guests', async () => {
+  const root: MessageThread['root'] = {
+    id: 'call-id',
+    parent: { type: 'call', id: 'call-id' },
+    sender_id: 'guest-id',
+    content: 'Original message',
+    created_at: '2026-09-28T00:00:00Z',
+    updated_at: '2026-09-28T00:00:00Z',
+    attachments: [],
+    mentions: [],
+    reactions: [],
+  };
+  const guestSend = vi.fn().mockResolvedValue(undefined);
+  const guestReact = vi.fn().mockResolvedValue(undefined);
+  mocks.guestSource = {
+    thread: () => ({ root, replies: [] }),
+    parent: () => root.parent,
+    empty: () => false,
+    loading: () => false,
+    failed: () => false,
+    denied: () => false,
+    viewerId: () => 'guest-id',
+    refresh: mocks.refresh,
+    send: guestSend,
+    patch: vi.fn(),
+    remove: vi.fn(),
+    react: guestReact,
+  };
+  render(() => (
+    <CallChat
+      access={{
+        kind: 'guest',
+        session: { token: 'token', participantId: 'participant' },
+      }}
+      callId="call-id"
+      open
+      onClose={() => {}}
+    />
+  ));
+  expect(screen.getByTestId('viewer').textContent).toBe('guest-id');
+  expect(mocks.composer?.persistenceKey).toBeUndefined();
+  expect(mocks.composer?.features).toEqual({
+    mentions: false,
+    createItems: false,
+    gifs: false,
+    richBlocks: false,
+    attachments: false,
+    dictation: false,
+  });
+  mocks.snapshot.mockReturnValue({
+    value: 'Draft',
+    mentions: [],
+    attachments: [],
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+  expect(mocks.restore).toHaveBeenCalledWith(
+    expect.objectContaining({
+      value: expect.stringContaining('m-reply-target'),
+    }),
+    { cursor: 'trailing-paragraph' }
+  );
+  await mocks.composer?.onSend?.({
+    value: 'Hello',
+    mentions: [],
+    attachments: [],
+  });
+  expect(guestSend).toHaveBeenCalledWith({
+    id: 'new-message',
+    content: 'Hello',
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'React' }));
+  expect(guestReact).toHaveBeenCalledWith('call-id', '👍', true);
+});
+
+it('keeps a failed guest send available to retry with the same id', async () => {
+  const send = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('network'))
+    .mockResolvedValue(undefined);
+  mocks.guestSource = {
+    thread: () => undefined,
+    parent: () => ({ type: 'call', id: 'call-id' }),
+    empty: () => true,
+    loading: () => false,
+    failed: () => false,
+    denied: () => false,
+    viewerId: () => 'guest-id',
+    refresh: mocks.refresh,
+    send,
+    patch: vi.fn(),
+    remove: vi.fn(),
+    react: vi.fn(),
+  };
+  render(() => (
+    <CallChat
+      access={{
+        kind: 'guest',
+        session: { token: 'token', participantId: 'participant' },
+      }}
+      callId="call-id"
+      open
+      onClose={() => {}}
+    />
+  ));
+  const snapshot = { value: 'Hello', mentions: [], attachments: [] };
+  await expect(mocks.composer?.onSend?.(snapshot)).rejects.toThrow('network');
+  expect(screen.getByRole('alert').textContent).toContain(
+    'Message could not be sent'
+  );
+  await mocks.composer?.onSend?.(snapshot);
+  expect(send.mock.calls).toEqual([
+    [{ id: 'new-message', content: 'Hello' }],
+    [{ id: 'new-message', content: 'Hello' }],
+  ]);
+});
+
+it('shows the guest access message and retries loading', () => {
+  mocks.guestSource = {
+    thread: () => undefined,
+    parent: () => ({ type: 'call', id: 'call-id' }),
+    empty: () => false,
+    loading: () => false,
+    failed: () => true,
+    denied: () => true,
+    viewerId: () => undefined,
+    refresh: mocks.refresh,
+    send: vi.fn(),
+    patch: vi.fn(),
+    remove: vi.fn(),
+    react: vi.fn(),
+  };
+  render(() => (
+    <CallChat
+      access={{
+        kind: 'guest',
+        session: { token: 'token', participantId: 'participant' },
+      }}
+      callId="call-id"
+      open
+      onClose={() => {}}
+    />
+  ));
+  expect(screen.getByRole('alert').textContent).toBe(
+    'Chat is available while you are in this call.'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(mocks.refresh).toHaveBeenCalledOnce();
+});
+
+it('refetches a member thread when its chat panel reopens', () => {
+  mocks.refresh.mockResolvedValue(undefined);
+  mocks.source = {
+    thread: () => undefined,
+    parent: () => ({ type: 'call', id: 'call-id' }),
+    empty: () => true,
+    loading: () => false,
+    failed: () => false,
+    refresh: mocks.refresh,
+  };
+  const [open, setOpen] = createSignal(true);
+  render(() => (
+    <CallChat
+      access={{ kind: 'member' }}
+      callId="call-id"
+      open={open()}
+      onClose={() => {}}
+    />
+  ));
+  expect(mocks.refresh).not.toHaveBeenCalled();
+  setOpen(false);
+  setOpen(true);
+  expect(mocks.refresh).toHaveBeenCalledOnce();
 });

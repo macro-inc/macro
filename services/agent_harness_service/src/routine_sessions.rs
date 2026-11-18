@@ -21,8 +21,7 @@ pub fn router<Bots, Harness, Sessions, Broker, Repo, Connections, Auth>(
     bots: Bots,
     harness: Harness,
     sessions: Sessions,
-    broker: Broker,
-    repo: Repo,
+    external_requests: BrokerExternalSessionRequests<Broker, Repo>,
     connections: Connections,
     authorization: MacroAuthorizationState<Auth>,
 ) -> Router
@@ -38,7 +37,7 @@ where
     let service = RoutineSessionsService::new(
         bots,
         harness.clone(),
-        BrokerExternalSessionRequests::new(broker, repo),
+        external_requests,
         sessions,
         harness,
         PipedreamConnectedApps(connections),

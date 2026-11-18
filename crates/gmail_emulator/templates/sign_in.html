@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in - Google emulator</title>
+<style>
+  :root { color-scheme: light dark; --line: #dadce0; --muted: #5f6368; --accent: #1a73e8; --card: #fff; --page: #f0f4f9; --text: #1f1f1f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --line: #444746; --muted: #c4c7c5; --accent: #a8c7fa; --card: #1e1f20; --page: #131314; --text: #e3e3e3; }
+  }
+  body { margin: 0; padding: 16px; background: var(--page); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+  main { max-width: 440px; margin: 6vh auto; padding: 32px; background: var(--card); border-radius: 24px; }
+  .banner { margin: 0 0 20px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font-size: 13px; }
+  h1 { margin: 0 0 4px; font-size: 24px; font-weight: 400; }
+  p { margin: 0 0 20px; color: var(--muted); }
+  code { font-size: 13px; overflow-wrap: anywhere; }
+  .user { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 8px; border: 0; border-top: 1px solid var(--line); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .user:hover, .user:focus-visible { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .initial { flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--card); display: grid; place-items: center; font-weight: 600; }
+  .email { display: block; color: var(--muted); font-size: 13px; }
+  fieldset { margin: 20px 0 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+  legend { padding: 0 6px; color: var(--muted); font-size: 13px; }
+  label { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; }
+  .cancel { margin-top: 20px; padding: 8px 16px; border: 1px solid var(--line); border-radius: 18px; background: none; color: var(--accent); font: inherit; cursor: pointer; }
+  .empty { padding: 12px 8px; border-top: 1px solid var(--line); color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <div class="banner">Gmail emulator. This is not Google, and these are seeded test users.</div>
+  <h1>Choose an account</h1>
+  <p>to continue to <code>{{ client_id }}</code> at <code>{{ redirect_host }}</code></p>
+  <form method="post">
+    {% for (name, value) in request %}
+    <input type="hidden" name="{{ name }}" value="{{ value }}">
+    {% endfor %}
+    {% for user in users %}
+    <button class="user" type="submit" name="user" value="{{ user.email }}">
+      <span class="initial">{{ user.initial }}</span>
+      <span>{{ user.name }}<span class="email">{{ user.email }}</span></span>
+    </button>
+    {% endfor %}
+    {% if users.is_empty() %}
+    <div class="empty">The emulator has no mailboxes. Seed one, then reload.</div>
+    {% endif %}
+    {% if !optional_scopes.is_empty() %}
+    <fieldset>
+      <legend>Access the account grants. Uncheck one to withhold it.</legend>
+      {% for scope in optional_scopes %}
+      <label><input type="checkbox" name="granted" value="{{ scope }}" checked> <code>{{ scope }}</code></label>
+      {% endfor %}
+    </fieldset>
+    {% endif %}
+    <button class="cancel" type="submit" name="cancel" value="1">Cancel</button>
+  </form>
+</main>
+</body>
+</html>

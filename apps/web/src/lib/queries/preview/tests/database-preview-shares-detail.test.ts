@@ -11,7 +11,6 @@ vi.mock('@core/constant/allBlocks', () => ({ itemToSafeName: () => '' }));
 vi.mock('@service-cognition/client', () => ({ cognitionApiServiceClient: {} }));
 vi.mock('@service-email/client', () => ({ emailClient: {} }));
 vi.mock('@service-storage/messages', () => ({ entityMessagesClient: {} }));
-vi.mock('../../email/thread', () => ({ threadQueryOptions: vi.fn() }));
 vi.mock('../../agent-session/mention-fetchers', () => ({
   fetchAgentSessionMentionPreviews: vi.fn(),
 }));
@@ -48,10 +47,8 @@ beforeEach(() => {
 
 it('previews an opened database from the read that opened it', async () => {
   (await loadDatabase('db'))._unsafeUnwrap();
-  const previews = await fetchRestPreviewBatch([
-    { type: 'database', id: 'db' },
-  ]);
-  expect(previews.get('db')).toMatchObject({
+  const batch = await fetchRestPreviewBatch([{ type: 'database', id: 'db' }]);
+  expect(batch.previews.get('db')).toMatchObject({
     access: 'access',
     name: 'Planning',
   });

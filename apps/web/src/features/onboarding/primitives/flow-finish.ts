@@ -122,7 +122,7 @@ export function createFlowFinish(
     startPremiumCheckout,
     /** Finish after checkout confirmed payment, recording the tier Stripe returned. */
     finishPremium: (tier: PaidPlanTier = 'premium') => complete(tier, false),
-    /** Staff escape hatch: leave from any step, recorded server-side as skipped. */
+    /** Leave from any step, recorded server-side as skipped. */
     bypass: (step: string) =>
       leave({
         skipped: true,

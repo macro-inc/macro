@@ -4,6 +4,7 @@
 mod test;
 
 use super::{
+    blocked_address::is_blocked_host,
     events::{
         WebhookCreatedMetadata, WebhookDeletedMetadata, WebhookMacroEvent, WebhookUpdatedMetadata,
         WebhookValidatedMetadata,
@@ -18,7 +19,6 @@ use super::{
 use chrono::Utc;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use std::net::IpAddr;
 use url::Url;
 
 const MAX_NAME_LEN: usize = 128;
@@ -104,41 +104,13 @@ fn validate_endpoint_url(
         ));
     };
 
-    if !endpoint_scheme_policy.allows_local_addresses() && is_blocked_endpoint_host(host) {
+    if !endpoint_scheme_policy.allows_local_addresses() && is_blocked_host(host) {
         return Err(WebhookError::BadRequest(
             "endpoint_url host is not allowed".to_string(),
         ));
     }
 
     Ok(())
-}
-
-fn is_blocked_endpoint_host(host: &str) -> bool {
-    let host = host.trim_matches(['[', ']']).to_ascii_lowercase();
-    if host == "localhost" || host.ends_with(".localhost") {
-        return true;
-    }
-
-    host.parse::<IpAddr>().is_ok_and(is_blocked_endpoint_ip)
-}
-
-fn is_blocked_endpoint_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(ip) => {
-            ip.is_private()
-                || ip.is_loopback()
-                || ip.is_link_local()
-                || ip.is_broadcast()
-                || ip.is_unspecified()
-                || ip.octets() == [169, 254, 169, 254]
-        }
-        IpAddr::V6(ip) => {
-            ip.is_loopback()
-                || ip.is_unspecified()
-                || ip.is_unique_local()
-                || (ip.segments()[0] & 0xffc0) == 0xfe80
-        }
-    }
 }
 
 fn validate_filter_value(value: &str) -> bool {

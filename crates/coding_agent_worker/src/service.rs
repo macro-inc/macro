@@ -2,10 +2,12 @@
 //!
 //! The Macro desktop app bundles macrod and manages it as a child process.
 //! `macrod service` is the contract between them: setup flags configure
-//! `macrod.toml` (the same `~/.macrod/macrod.toml` the TUI uses, locked while
-//! serving) without a TUI, state changes stream to stdout as one JSON
-//! object per line, and the process shuts down on SIGTERM, Ctrl-C, or stdin
-//! closing (the embedder exited). `macrod detect-agents` and `macrod inspect`
+//! `macrod.toml` (the same `~/.macrod/macrod.toml` the TUI uses, or the
+//! `--profile` it names, locked while serving) without a TUI, state changes
+//! stream to stdout as one JSON object per line, and the process shuts down
+//! on SIGTERM, Ctrl-C, or stdin closing (the embedder exited), unless
+//! `--ignore-stdin-eof` is set for a system service. `macrod detect-agents`
+//! and `macrod inspect`
 //! are the matching one-shot queries.
 
 use std::path::{Path, PathBuf};
@@ -15,9 +17,10 @@ use rootcause::prelude::ResultExt as _;
 use serde::Serialize;
 use tokio::io::AsyncReadExt as _;
 
-use crate::config::{self, Config, ConfigLock, HarnessCredentials, default_config_path};
+use crate::config::{self, Config, ConfigLock, HarnessCredentials};
 use crate::daemon::Daemon;
-use crate::outbound::pairing::{ClaimStatus, PairingClient};
+use crate::outbound::pairing::{ClaimStatus, PairingClient, machine_name};
+use crate::profiles::{ConfigSelection, ProfileName};
 use crate::tui::agent_catalog::{self, DetectedAgent, PathCommands};
 use crate::tui::config_form::{ConfigForm, Setting};
 
@@ -30,9 +33,13 @@ const DAEMON_WATCH: Duration = Duration::from_secs(5);
 /// Everything `macrod service` accepts. Runtime settings (name, ownership,
 /// permission bypass) are set on the web, never here.
 pub struct ServiceOptions {
-    /// Config file; absent uses [`default_config_path`], the one the TUI
-    /// also uses.
+    /// Keep running without an embedder holding stdin open.
+    pub ignore_stdin_eof: bool,
+    /// Config file; absent uses `profile`, or else the default config the
+    /// TUI also uses.
     pub config: Option<PathBuf>,
+    /// Named profile, `~/.macrod/profiles/<name>.toml`.
+    pub profile: Option<ProfileName>,
     /// Agent preset id from `detect-agents` to configure.
     pub agent: Option<String>,
     /// Workspace directory sessions run in; created when missing.
@@ -104,17 +111,18 @@ fn fatal_root_message(message: &str) -> String {
         .to_owned()
 }
 
-/// Run headless until SIGTERM, Ctrl-C, or stdin closes.
+/// Run headless until signaled or the monitored stdin closes.
 pub async fn run(options: ServiceOptions) -> rootcause::Result<()> {
-    let path = config_path(&options)?;
+    let selection = ConfigSelection::resolve(options.config.clone(), options.profile.clone())?;
+    let path = selection.path.clone();
     // Held until exit: the TUI shares this config, and one harness must not
     // be served twice.
     let _lock: ConfigLock = config::lock(&path)?;
-    let shutdown = shutdown_requested();
+    let shutdown = shutdown_requested(options.ignore_stdin_eof);
     tokio::pin!(shutdown);
 
     let daemon = tokio::select! {
-        daemon = start(&path, &options) => daemon?,
+        daemon = start(&selection, &options) => daemon?,
         () = &mut shutdown => return Ok(()),
     };
 
@@ -134,7 +142,8 @@ pub async fn run(options: ServiceOptions) -> rootcause::Result<()> {
 }
 
 /// Configure, install, pair, and start the serving core.
-async fn start(path: &Path, options: &ServiceOptions) -> rootcause::Result<Daemon> {
+async fn start(selection: &ConfigSelection, options: &ServiceOptions) -> rootcause::Result<Daemon> {
+    let path = selection.path.as_path();
     if !path.exists() && !options.wants_setup() {
         rootcause::bail!(
             "no config at {}; pass --agent and --workspace to create one",
@@ -180,7 +189,7 @@ async fn start(path: &Path, options: &ServiceOptions) -> rootcause::Result<Daemo
         .filter(HarnessCredentials::is_valid)
     {
         Some(credentials) => credentials,
-        None => pair(path, &config).await?,
+        None => pair(selection, &config).await?,
     };
     // Pairing persisted into the file; serve what is actually on disk.
     let config = Config::load(path)?;
@@ -194,9 +203,14 @@ async fn start(path: &Path, options: &ServiceOptions) -> rootcause::Result<Daemo
 ///
 /// One code per invocation on purpose: an expired or consumed pairing ends the
 /// process, and the embedder decides whether to start over.
-async fn pair(path: &Path, config: &Config) -> rootcause::Result<HarnessCredentials> {
+async fn pair(
+    selection: &ConfigSelection,
+    config: &Config,
+) -> rootcause::Result<HarnessCredentials> {
     let client = PairingClient::new(config);
-    let created = client.start().await?;
+    let created = client
+        .start(selection.pairing_name(&machine_name()))
+        .await?;
     emit(&Event::Pairing {
         code: created.code.clone(),
         url: config.macro_api.pairing_approval_url(&created.code),
@@ -214,7 +228,7 @@ async fn pair(path: &Path, config: &Config) -> rootcause::Result<HarnessCredenti
         {
             ClaimStatus::Pending => {}
             ClaimStatus::Claimed(credentials) => {
-                ConfigForm::load(path)?.persist_credentials(&credentials)?;
+                ConfigForm::load(&selection.path)?.persist_credentials(&credentials)?;
                 emit(&Event::Paired {
                     harness_id: credentials.harness_id.to_string(),
                 });
@@ -225,19 +239,9 @@ async fn pair(path: &Path, config: &Config) -> rootcause::Result<HarnessCredenti
     }
 }
 
-fn config_path(options: &ServiceOptions) -> rootcause::Result<PathBuf> {
-    options
-        .config
-        .clone()
-        .or_else(default_config_path)
-        .ok_or_else(|| {
-            rootcause::report!("no config path: pass --config or set HOME (USERPROFILE on Windows)")
-        })
-}
-
 /// Create or edit the config from setup flags, comment-preservingly.
 /// `agent` is the resolved launch for `options.agent`, when one was named.
-fn configure(
+pub(crate) fn configure(
     path: &Path,
     options: &ServiceOptions,
     agent: Option<DetectedAgent>,
@@ -266,6 +270,7 @@ fn configure(
         return ConfigForm::create(path, agent, workspace);
     }
     let mut form = ConfigForm::load(path)?;
+    form.drop_retired_settings();
     if let Some(agent) = &agent {
         form.apply_agent(agent);
     }
@@ -276,7 +281,7 @@ fn configure(
     form.save()
 }
 
-fn installed_agent(id: &str) -> rootcause::Result<DetectedAgent> {
+pub(crate) fn installed_agent(id: &str) -> rootcause::Result<DetectedAgent> {
     let commands = PathCommands::discover();
     agent_catalog::discover(&commands)
         .into_iter()
@@ -290,17 +295,8 @@ fn installed_agent(id: &str) -> rootcause::Result<DetectedAgent> {
 
 /// Resolve when the embedder or operator asks the service to stop: SIGTERM,
 /// Ctrl-C, or stdin reaching EOF (the embedding process exited).
-async fn shutdown_requested() {
-    let stdin_eof = async {
-        let mut stdin = tokio::io::stdin();
-        let mut buffer = [0u8; 256];
-        loop {
-            match stdin.read(&mut buffer).await {
-                Ok(0) | Err(_) => break,
-                Ok(_) => {}
-            }
-        }
-    };
+async fn shutdown_requested(ignore_stdin_eof: bool) {
+    let stdin_eof = stdin_closed(tokio::io::stdin(), ignore_stdin_eof);
     #[cfg(unix)]
     {
         let mut terminate =
@@ -316,6 +312,19 @@ async fn shutdown_requested() {
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {}
         () = stdin_eof => {}
+    }
+}
+
+async fn stdin_closed(mut stdin: impl tokio::io::AsyncRead + Unpin, ignore_eof: bool) {
+    if ignore_eof {
+        std::future::pending::<()>().await;
+    }
+    let mut buffer = [0u8; 256];
+    loop {
+        match stdin.read(&mut buffer).await {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
     }
 }
 
@@ -373,13 +382,13 @@ struct Inspection {
     web_url: Option<String>,
 }
 
-/// Inspect the config at `path` (or the default location) as a JSON document.
-pub fn inspect_json(config: Option<PathBuf>) -> rootcause::Result<String> {
-    let path = config_path(&ServiceOptions {
-        config,
-        agent: None,
-        workspace: None,
-    })?;
+/// Inspect the config `--config` or `--profile` names (else the default one)
+/// as a JSON document.
+pub fn inspect_json(
+    config: Option<PathBuf>,
+    profile: Option<ProfileName>,
+) -> rootcause::Result<String> {
+    let path = ConfigSelection::resolve(config, profile)?.path;
     let mut inspection = Inspection {
         config_path: path.display().to_string(),
         exists: path.exists(),

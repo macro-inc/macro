@@ -47,7 +47,6 @@ import {
   type SavedViewRowReorder,
 } from '../../saved-views/components/saved-view-list';
 import { SavedViewMenuItems } from '../../saved-views/components/saved-view-menu';
-import { SavedViewPicker } from '../../saved-views/components/saved-view-picker';
 import type { SavedView } from '../../saved-views/core/saved-view';
 import {
   savedViewErrorMessage,
@@ -651,28 +650,6 @@ export function EmailSavedViewsSection() {
   );
 }
 
-/** The mobile pill after Filters; its drawer lists and manages views. */
-export function EmailSavedViewsPicker() {
-  const { savedViewsEnabled, savedViewsList, savedViewActive } = useEmailView();
-  const viewerId = useUserId();
-  const title = useEmailSavedViewTitle();
-  // The drawer closes before its action opens a dialog; keep the outer owner.
-  const owner = getOwner();
-  return (
-    <Show when={savedViewsList && savedViewsEnabled()}>
-      <SavedViewPicker
-        active={savedViewActive()}
-        scopeKey={viewerId()}
-        label={title() ?? t('viewMenus.savedViews')}
-      >
-        {(onAction) => (
-          <EmailSavedViewRows onAction={onAction} dialogOwner={owner} />
-        )}
-      </SavedViewPicker>
-    </Show>
-  );
-}
-
 /** The open view's own menu, beside its name. */
 export function EmailSavedViewMenu() {
   const { savedViews } = useEmailView();
@@ -761,7 +738,7 @@ export function EmailSaveViewButton() {
   const create = useCreateEmailSavedView();
   return (
     <Show when={visible()}>
-      <HeaderActionGroup label={t('emailViews.viewActions')}>
+      <HeaderActionGroup label={t('emailViews.viewActions')} size="md">
         <ButtonGroup.Button
           variant="primary"
           class="touch:order-last"
@@ -870,7 +847,7 @@ export function EmailSavedViewActions() {
   return (
     <>
       <Show when={selected()?.dirty}>
-        <HeaderActionGroup label={t('emailViews.viewActions')}>
+        <HeaderActionGroup label={t('emailViews.viewActions')} size="md">
           <Show when={selected()?.record.ownerId === viewerId()}>
             <ButtonGroup.Button
               variant="primary"
@@ -891,7 +868,7 @@ export function EmailSavedViewActions() {
       </Show>
       <Show when={failure()}>
         {(error) => (
-          <HeaderActionGroup label={t('emailViews.saveError')}>
+          <HeaderActionGroup label={t('emailViews.saveError')} size="md">
             <span
               role="alert"
               class="max-w-48 truncate text-xs text-failure-ink"

@@ -1,13 +1,16 @@
 use super::*;
+
+mod seat_requests;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
+use std::str::FromStr;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
     matchers::{method, path},
 };
 
-fn subscription() -> stripe::Subscription {
+pub(super) fn subscription() -> stripe::Subscription {
     stripe::Subscription {
         id: "sub_team".parse().unwrap(),
         customer: stripe::Expandable::Id("cus_test".parse().unwrap()),
@@ -27,7 +30,7 @@ fn subscription() -> stripe::Subscription {
         ..Default::default()
     }
 }
-fn item(id: &str, price: &str, quantity: u64) -> stripe::SubscriptionItem {
+pub(super) fn item(id: &str, price: &str, quantity: u64) -> stripe::SubscriptionItem {
     stripe::SubscriptionItem {
         id: id.parse().unwrap(),
         price: Some(stripe::Price {
@@ -39,7 +42,7 @@ fn item(id: &str, price: &str, quantity: u64) -> stripe::SubscriptionItem {
         ..Default::default()
     }
 }
-fn schedule() -> stripe::SubscriptionSchedule {
+pub(super) fn schedule() -> stripe::SubscriptionSchedule {
     stripe::SubscriptionSchedule {
         id: "sub_sched_test".parse().unwrap(),
         customer: stripe::Expandable::Id("cus_test".parse().unwrap()),
@@ -71,17 +74,17 @@ fn schedule() -> stripe::SubscriptionSchedule {
         ..Default::default()
     }
 }
-fn repo(server: &MockServer, pool: sqlx::PgPool) -> CustomerRepositoryImpl {
+pub(super) fn repo(server: &MockServer, pool: sqlx::PgPool) -> CustomerRepositoryImpl {
     CustomerRepositoryImpl::new(
         stripe::Client::from_url(server.uri().as_str(), "sk_test"),
         SeatPrices {
-            premium: "price_pro".into(),
-            max: Some("price_max".into()),
+            premium: stripe::PriceId::from_str("price_pro").unwrap(),
+            max: Some(stripe::PriceId::from_str("price_max").unwrap()),
         },
         pool,
     )
 }
-async fn mount<T: Serialize + DeserializeOwned>(
+pub(super) async fn mount<T: Serialize + DeserializeOwned>(
     server: &MockServer,
     verb: &str,
     route: &str,
@@ -335,7 +338,7 @@ fn fill_missing(value: &mut Value, field: &str) {
         _ => {}
     }
 }
-fn form(request: &wiremock::Request) -> HashMap<String, String> {
+pub(super) fn form(request: &wiremock::Request) -> HashMap<String, String> {
     url::form_urlencoded::parse(&request.body)
         .into_owned()
         .collect()
@@ -852,13 +855,13 @@ async fn cancelling_a_guard_holder_releases_the_subscription_for_another_instanc
     let acquired = locked.clone();
     let task = tokio::spawn(async move {
         let id = "sub_team".parse().unwrap();
-        let _guard = holder.subscription_guard(&id).await.unwrap();
+        let _guard = holder.subscription_guard(&id, None).await.unwrap();
         acquired.notify_one();
         std::future::pending::<()>().await;
     });
     locked.notified().await;
     let id = "sub_team".parse().unwrap();
-    let mut waiting = Box::pin(waiter.subscription_guard(&id));
+    let mut waiting = Box::pin(waiter.subscription_guard(&id, None));
     assert!(
         tokio::time::timeout(std::time::Duration::from_millis(40), &mut waiting)
             .await
@@ -969,4 +972,274 @@ async fn a_failed_subscription_listing_is_an_error_not_a_free_customer(pool: sql
         .await;
 
     assert!(matches!(found, Err(CustomerError::StorageLayerError(_))));
+}
+
+pub(super) fn subscription_update(requests: &[wiremock::Request]) -> Vec<&wiremock::Request> {
+    requests
+        .iter()
+        .filter(|r| r.method.as_str() == "POST" && r.url.path() == "/v1/subscriptions/sub_team")
+        .collect()
+}
+
+pub(super) fn computer(delta: i64) -> ItemQuantityChange {
+    ItemQuantityChange {
+        price_id: stripe::PriceId::from_str("price_computer").unwrap(),
+        delta,
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_absent_item_price_is_added_idempotently_and_must_be_paid(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let sub = subscription();
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+
+    repo(&server, pool)
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "purchase-1",
+        )
+        .await
+        .unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    let updates = subscription_update(&requests);
+    assert_eq!(updates.len(), 1);
+    let update = form(updates[0]);
+    assert_eq!(
+        update,
+        HashMap::from([
+            ("items[0][price]".to_string(), "price_computer".to_string()),
+            ("items[0][quantity]".to_string(), "1".to_string()),
+            (
+                "proration_behavior".to_string(),
+                "always_invoice".to_string()
+            ),
+            (
+                "payment_behavior".to_string(),
+                "error_if_incomplete".to_string()
+            ),
+            (
+                "metadata[macro_item_change]".to_string(),
+                "purchase-1".to_string()
+            ),
+        ])
+    );
+    assert_eq!(
+        updates[0].headers.get("Idempotency-Key").unwrap(),
+        "purchase-1"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_existing_item_price_gains_the_delta(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    sub.items
+        .data
+        .push(item("si_computer", "price_computer", 1));
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+
+    repo(&server, pool)
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(2)],
+            ItemProration::InvoiceNow,
+            "purchase-2",
+        )
+        .await
+        .unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    let update = form(subscription_update(&requests)[0]);
+    assert_eq!(update["items[0][id]"], "si_computer");
+    assert_eq!(update["items[0][quantity]"], "3");
+    assert!(update.get("items[0][price]").is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn seat_and_computer_changes_join_one_update(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let sub = subscription();
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+
+    repo(&server, pool)
+        .change_item_quantities(
+            &sub.id,
+            vec![
+                computer(1),
+                ItemQuantityChange {
+                    price_id: stripe::PriceId::from_str("price_pro").unwrap(),
+                    delta: 1,
+                },
+            ],
+            ItemProration::InvoiceNow,
+            "purchase-3",
+        )
+        .await
+        .unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    let updates = subscription_update(&requests);
+    assert_eq!(updates.len(), 1);
+    let update = form(updates[0]);
+    assert_eq!(update["items[0][price]"], "price_computer");
+    assert_eq!(update["items[0][quantity]"], "1");
+    assert_eq!(update["items[1][id]"], "si_pro");
+    assert_eq!(update["items[1][quantity]"], "3");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_item_reaching_zero_is_deleted_without_crediting_unused_time(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    sub.items
+        .data
+        .push(item("si_computer", "price_computer", 1));
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+
+    repo(&server, pool)
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(-1)],
+            ItemProration::NoProration,
+            "release-1",
+        )
+        .await
+        .unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    let update = form(subscription_update(&requests)[0]);
+    assert_eq!(update["items[0][id]"], "si_computer");
+    assert_eq!(update["items[0][deleted]"], "true");
+    assert!(update.get("items[0][quantity]").is_none());
+    assert_eq!(update["proration_behavior"], "none");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_change_below_zero_is_rejected_before_stripe(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    sub.items
+        .data
+        .push(item("si_computer", "price_computer", 1));
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+
+    let result = repo(&server, pool)
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(-2)],
+            ItemProration::NoProration,
+            "release-2",
+        )
+        .await;
+
+    assert!(
+        matches!(&result, Err(CustomerError::QuantityBelowZero(price)) if price == "price_computer"),
+        "{result:?}"
+    );
+    let requests = server.received_requests().await.unwrap();
+    assert!(subscription_update(&requests).is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_retried_item_change_is_not_applied_twice(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    sub.metadata
+        .insert(ITEM_CHANGE_KEY.into(), "purchase-4".into());
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+
+    repo(&server, pool)
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "purchase-4",
+        )
+        .await
+        .unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    assert!(subscription_update(&requests).is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_declined_item_change_is_a_payment_failure(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let sub = subscription();
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    Mock::given(method("POST"))
+        .and(path("/v1/subscriptions/sub_team"))
+        .respond_with(ResponseTemplate::new(402).set_body_json(json!({
+            "error": {
+                "type": "card_error",
+                "code": "card_declined",
+                "message": "Your card was declined."
+            }
+        })))
+        .mount(&server)
+        .await;
+
+    let result = repo(&server, pool)
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "purchase-5",
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(CustomerError::PaymentFailed)),
+        "{result:?}"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn subscription_terms_and_prices_are_read_from_stripe(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    sub.items.data[0].price.as_mut().unwrap().recurring = Some(stripe::Recurring {
+        interval: stripe::RecurringInterval::Year,
+        interval_count: 1,
+        usage_type: stripe::RecurringUsageType::Licensed,
+        ..Default::default()
+    });
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    let price = stripe::Price {
+        id: "price_computer".parse().unwrap(),
+        unit_amount: Some(20000),
+        currency: Some(stripe::Currency::USD),
+        recurring: sub.items.data[0].price.as_ref().unwrap().recurring.clone(),
+        ..Default::default()
+    };
+    mount(&server, "GET", "/v1/prices/price_computer", &price, 1).await;
+    let repo = repo(&server, pool);
+
+    assert_eq!(
+        repo.subscription_terms(&sub.id).await.unwrap(),
+        SubscriptionTerms {
+            current_period_end: chrono::DateTime::from_timestamp(1_802_678_400, 0).unwrap(),
+            interval: BillingCadence::Year,
+            currency: "usd".into(),
+            trialing: false,
+        }
+    );
+    assert_eq!(
+        repo.price(&stripe::PriceId::from_str("price_computer").unwrap())
+            .await
+            .unwrap(),
+        PriceInfo {
+            amount: 20000,
+            currency: "usd".into(),
+            interval: Some(BillingCadence::Year),
+        }
+    );
 }

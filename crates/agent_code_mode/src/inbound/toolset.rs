@@ -2,6 +2,7 @@
 use crate::domain::{
     CodeModeError, ExecutionId, ExecutionReceipt, SessionCodeMode, SymbolReferences,
     TaskDocumentation, UserCodeMode, UserExecutionReceipt, documentation_for_task, read_symbols,
+    with_attached_skill,
 };
 use agent_session::domain::model::AgentSession;
 use ai_toolset::{
@@ -70,26 +71,48 @@ enum CodeHost {
     User,
 }
 
+/// What a session program is and how to read the SDK before writing one.
+const SESSION_EXECUTE_CODE: &str = include_str!("toolset/session/execute_code.md");
+/// Reviews and views: how a program shows the person what it drafted, made
+/// or found.
+const SESSION_PRESENT: &str = include_str!("toolset/session/present.md");
+/// Checking back later without waiting in a program.
+const SESSION_CHECK_BACK: &str = include_str!("toolset/session/check_back.md");
+const PROGRAM: &str = include_str!("toolset/shared/program.md");
+const RUNTIME: &str = include_str!("toolset/shared/runtime.md");
+
+/// The running-code text's sentence on a program's `reviews` result.
+const REVIEWS_RESULT: &str = " Optional reviews: [{kind: \"email\" | \"calendar\", id: \"...\"}] defaults to an empty list when omitted.";
+
+/// `ExecuteCode`'s description for a session nobody watches, such as a
+/// routine draft: no reviews or views to present, so neither their guidance,
+/// the `reviews` result, nor the PresentView schema, which is most of the
+/// full description.
+pub fn unseen_execute_code_description() -> String {
+    let running = SESSION_EXECUTE_CODE.replacen(REVIEWS_RESULT, "", 1);
+    format!("{running}\n{SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}")
+}
+
 /// Execute a JavaScript module with the real Macro SDK.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ExecuteCode",
     description = format!(
-        "{}\n{}\n{}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
-        include_str!("toolset/session/execute_code.md"),
-        include_str!("toolset/shared/program.md"),
-        include_str!("toolset/shared/runtime.md"),
+        "{SESSION_EXECUTE_CODE}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
+        SESSION_PRESENT.trim_end(),
         dynamic_ui::present_view_schema(),
     )
 )]
 pub struct ExecuteCode {
-    /// Fresh UUID for this execution, recorded in the tool input so results can
-    /// be recovered even if the session stops before the tool replies.
+    /// Optional caller-chosen ID, recorded in the tool input so a call whose
+    /// reply was lost can be retried without running twice. When absent, the
+    /// server assigns one; the receipt always reports the ID used.
+    #[serde(default)]
     #[schemars(
-        description = "A fresh unique UUID for this execution, used to recover saved results if interrupted. Never use a placeholder, repeated-digit example, or an ID from another session. Reusing your existing ID with identical source returns its saved receipt without running again; different source is rejected. If an ID is unavailable, choose a fresh UUID."
+        description = "Optional; usually omit it. The server assigns an ID and the receipt reports it as executionId. Pass a new random UUID only when a repeated write would be harmful: if the reply is lost, resending the same execution_id with identical source returns the saved receipt instead of running again. Never use an example or placeholder UUID or an ID from another session; an ID already taken runs under a new ID."
     )]
-    pub execution_id: ExecutionId,
+    pub execution_id: Option<ExecutionId>,
     /// Choose whose account authenticates every SDK operation in this execution.
     pub acting_as: ai_toolset::actor::ToolActor,
     /// Copy the current server-issued turn_id from the prompt's execution context.
@@ -130,7 +153,7 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
             .service
             .execute(
                 &context.session,
-                self.execution_id,
+                self.execution_id.unwrap_or_else(ExecutionId::mint),
                 self.acting_as,
                 self.turn_id,
                 ExecuteRequest {
@@ -371,7 +394,7 @@ impl DescribeCodeTools {
                     catalog
                         .iter()
                         .find(|doc| &doc.name == name)
-                        .cloned()
+                        .map(with_attached_skill)
                         .ok_or_else(|| {
                             CodeModeError::Invalid(format!(
                                 "Unknown SDK entity {name}; request the catalog first."

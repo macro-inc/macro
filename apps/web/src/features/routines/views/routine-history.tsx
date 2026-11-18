@@ -48,6 +48,8 @@ type RoutineHistoryProps = {
   describeStep?: (step: HistoryStep, record: HistoryRecord) => string;
   /** A run's header line: what started it, when, and since when. */
   describeStart?: (record: HistoryRecord) => string | undefined;
+  /** Opens a routine the run created. */
+  onOpenRoutine?: (id: string) => void;
   /** Opens the item an event run was about. */
   onOpenItem?: (item: RunItem, newSplit: boolean) => void;
 };
@@ -534,6 +536,7 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
                 describe={describe}
                 startLine={props.describeStart?.(record())}
                 onOpenItem={openItem()}
+                onOpenRoutine={props.onOpenRoutine}
                 onOpenConversation={
                   resource()
                     ? () => {

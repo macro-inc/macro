@@ -2,7 +2,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_session::domain::events::LogAppendedMetadata;
-use agent_session::domain::model::{AgentSessionId, AgentSessionRenamed, LogAppended};
+use agent_session::domain::model::{
+    AgentSessionActivitySummarized, AgentSessionId, AgentSessionRenamed, LogAppended,
+};
 use agent_session::domain::ports::{AgentSessionQueueChanged, AgentSessionRealtime};
 use redis::aio::MultiplexedConnection;
 use redis::streams::{StreamAddOptions, StreamTrimStrategy, StreamTrimmingMode};
@@ -218,6 +220,13 @@ where
         event: AgentSessionRenamed,
     ) -> impl Future<Output = Result<(), Report>> + Send {
         self.inner.publish_renamed(event)
+    }
+
+    fn publish_activity_summarized(
+        &self,
+        event: AgentSessionActivitySummarized,
+    ) -> impl Future<Output = Result<(), Report>> + Send {
+        self.inner.publish_activity_summarized(event)
     }
 
     fn publish_queue_changed(

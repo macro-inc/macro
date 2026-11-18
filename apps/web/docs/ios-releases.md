@@ -1,5 +1,9 @@
 # iOS releases and breaking Tauri changes
 
+The optional `layout_plugin` enables iPhone Duo navigation using UIKit 27.1
+traits. It requires a rebuilt native app; older binaries retain the bottom dock
+without invoking a missing command. The native/web contract remains compatible.
+
 Native reload history and UIKit memory-warning diagnostics require an App Store
 binary update. Their IPC is optional: OTA-only clients retain frontend reload
 markers and instance IDs, with missing native coverage explicitly reported.
@@ -75,7 +79,9 @@ icon and app-name branding are Android-only.
 3. Add the **`ios-update`** label to the PR — once it is ready to merge: the
    **`iOS App Store Release`** workflow
    (`.github/workflows/ios-app-store-release.yml`) first refuses drafts and
-   PRs with failing checks (pending ones are waited on, up to 30 minutes), then builds the app from
+   PRs with failing checks (pending ones are waited on, up to 30 minutes; the
+   native checks and either platform's release checks don't count, so a failed
+   or in-flight Android release never holds this one back), then builds the app from
    the PR head on the Namespace macOS runner inside the Nix dev shell (like
    the `ios-preview` label), uploads it to TestFlight, waits for App Store
    Connect processing + export compliance, and submits it for App Review
@@ -166,11 +172,17 @@ an acknowledgment those bundles cannot send. This opt-in contract does not
 require raising the OTA native floor; the improved cold-launch handoff still
 requires shipping the new native binary.
 
+The native cover exists only while a tap is pending. Earlier binaries also
+covered the app whenever it left the foreground, which blanked it in the app
+switcher and under system overlays; they keep doing so until updated. The web
+contract is the same for both, so the change needs no floor raise.
+
 Run `swift test --package-path tauri/ios_push_plugin/store` from `apps/web`
 for persisted intent/acknowledgment regressions. A simulator build checks the
 UIKit bridge; device verification must include notification launches after
 termination/WebContent eviction and ordinary icon resume, as well as auth
-failures, account switching, and rapid successive taps.
+failures, account switching, and rapid successive taps. Confirm the app stays
+visible in the app switcher and under Control Center and Notification Center.
 
 ## What counts as native code
 

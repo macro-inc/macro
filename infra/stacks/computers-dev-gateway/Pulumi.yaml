@@ -1,0 +1,3 @@
+name: computers-dev-gateway
+runtime: nodejs
+description: WireGuard gateway from the dev VPC to the dev computers host (dev only)

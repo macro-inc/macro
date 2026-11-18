@@ -17,6 +17,7 @@ mod connection;
 mod group_change;
 mod media;
 mod phone;
+mod picture;
 mod signal;
 mod stanza;
 mod state;

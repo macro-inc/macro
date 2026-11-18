@@ -9,7 +9,7 @@ use attention_feed::domain::{
     acknowledge::Acknowledger,
     models::{
         Acknowledgment, CandidateKeying, CandidateRequest, DoneReceipt, EntityFacts, FeedError,
-        FeedKey, FeedViewer, Loaded, counts_as_unseen,
+        FeedKey, FeedViewer, Loaded, counts_as_unseen, unseen_among,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
     reader::FeedReader,
@@ -311,8 +311,10 @@ where
                 Some(assembled) => {
                     let item = &assembled.entry.item;
                     let observed = target.revision.unwrap_or_else(|| item.revision());
+                    let notification_ids = observed.acknowledged(&item.notifications);
                     Acknowledgment {
-                        notification_ids: observed.acknowledged(&item.notifications),
+                        unseen_ids: unseen_among(&item.notifications, &notification_ids),
+                        notification_ids,
                         archive_thread: assembled
                             .facts
                             .mail
@@ -325,6 +327,7 @@ where
                 None => Acknowledgment {
                     key: target.key,
                     notification_ids: Vec::new(),
+                    unseen_ids: Vec::new(),
                     archive_thread: None,
                 },
             };

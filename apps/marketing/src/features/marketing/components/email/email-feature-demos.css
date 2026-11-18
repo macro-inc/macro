@@ -52,8 +52,7 @@
 .email-toolbar-secondary { color: var(--color-ink-extra-muted); }
 .email-feature-demo .mail-row { min-height: 40px; }
 .email-feature-demo .mail-row[aria-current='true'] { background: var(--color-active); }
-.email-feature-demo .mail-rows { padding: 16px 8px 24px; }
-.email-feature-demo .mail-date-group { padding-bottom: 8px; }
+.email-feature-demo .mail-rows { padding: 4px 8px 24px; }
 .email-feature-demo .mail-thread-body { width: 100%; max-width: 968px; margin: 0 auto; padding: 32px 24px; }
 
 .email-auto-tag-menu {
@@ -77,6 +76,9 @@
 .email-tag-summary { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 24px; font: 370 12px Inter, sans-serif; color: var(--color-ink-muted); }
 .email-tag-summary > svg { width: 16px; height: 16px; }
 .email-tag-summary > :last-child { margin-left: auto; white-space: nowrap; }
+
+/* The outer frame contributes another 8px below the shortcut row. */
+#keyboard-speed .email-keyboard-stage .email-shortcut-dock { padding: 14px 0 6px; }
 
 .email-keyboard-demo:focus { outline: none; }
 .email-keyboard-demo:focus-visible .mail-app { outline: 1px solid var(--color-accent); outline-offset: 4px; }

@@ -89,7 +89,7 @@ const captionStyle: JSX.CSSProperties = {
   color: 'var(--c4)',
   'font-family': 'Inter, body',
   'font-size': '12px',
-  'font-weight': '600',
+  'font-weight': '500',
   'letter-spacing': '0.08em',
   'text-transform': 'uppercase',
 };

@@ -54,7 +54,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search' | 'non_billable_agent_session';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'agent_activity_summary' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search' | 'non_billable_agent_session';
 
 /**
  * A structured part within an assistant message.
@@ -675,11 +675,6 @@ export type ErrorResponse = {
 };
 
 /**
- * How long a projection remains active without being requested.
- */
-export type Expiry = 'day' | 'week' | 'month';
-
-/**
  * A private explicit memory document and its optimistic concurrency token.
  */
 export type ExplicitMemory = {
@@ -902,6 +897,16 @@ export type HttpSendChatMessageRequest = {
 };
 
 /**
+ * The caller's ledger rows.
+ */
+export type ImportEntitiesResponse = {
+    /**
+     * The caller's own rows and their team's imported rows, newest first.
+     */
+    entities: Array<ImportEntity>;
+};
+
+/**
  * One row of the import ledger.
  */
 export type ImportEntity = {
@@ -991,6 +996,35 @@ export type ImportEntity = {
 export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
 
 /**
+ * Body for importing one Notion page.
+ */
+export type ImportNotionPageRequest = {
+    /**
+     * The Notion page URL or 32-character page id.
+     */
+    page: string;
+};
+
+/**
+ * The outcome of importing a Notion page, with its ledger row.
+ */
+export type ImportNotionPageResponse = {
+    /**
+     * The row behind the outcome; `entity_id` is the document once imported.
+     */
+    entity: ImportEntity;
+    /**
+     * What happened.
+     */
+    outcome: ImportNotionPageResult;
+};
+
+/**
+ * What importing one Notion page did.
+ */
+export type ImportNotionPageResult = 'imported' | 'already_imported' | 'already_imported_by_teammate' | 'previously_declined' | 'import_in_progress';
+
+/**
  * Discovery-run state for one user × source.
  */
 export type ImportRun = {
@@ -1003,6 +1037,10 @@ export type ImportRun = {
      * presented while it is still `running`; rows staged after that take it.
      */
     review_id?: string | null;
+    /**
+     * The agent session presenting that review.
+     */
+    review_session_id?: string | null;
     scanned?: null | ScanCounts;
     /**
      * The source this run discovered from.
@@ -1145,7 +1183,7 @@ export type MessageWithAttachments = {
 /**
  * The requested inference speed. Standard is backward compatible with old clients.
  */
-export type ModelSpeed = 'standard' | 'fast' | 'ultrafast';
+export type ModelSpeed = 'standard' | 'priority' | 'fast' | 'ultrafast';
 
 export type NewAttachment = {
     attachment_id: string;
@@ -1729,42 +1767,6 @@ export type Price = {
 };
 
 /**
- * The current state of a user's projection instance.
- */
-export type ProjectionStateResponse = {
-    /**
-     * The cached result, if any. JSON-encoded when the projection defines an
-     * `output_schema`.
-     */
-    data?: string | null;
-    /**
-     * The most recent materialization error, if any.
-     */
-    error?: string | null;
-    /**
-     * When the result was generated.
-     */
-    generated_at?: string | null;
-    /**
-     * The projection id.
-     */
-    id: string;
-    /**
-     * When the result becomes stale.
-     */
-    stale_at?: string | null;
-    /**
-     * The materialization status.
-     */
-    status: ProjectionStatus;
-};
-
-/**
- * The materialization status of a user's projection instance.
- */
-export type ProjectionStatus = 'loading' | 'cold' | 'ready' | 'refreshing' | 'error';
-
-/**
  * Response from [`ReadActivity`].
  */
 export type ReadActivityResponse = {
@@ -1777,11 +1779,6 @@ export type ReadActivityResponse = {
      */
     truncated: boolean;
 };
-
-/**
- * How frequently an active projection is regenerated.
- */
-export type RefreshCadence = 'high' | 'medium' | 'low';
 
 /**
  * Request body for rejecting a pending tool call.
@@ -2222,11 +2219,6 @@ export type StructuredToolActivity = {
 };
 
 /**
- * The kind of entity a projection is materialized for.
- */
-export type TargetType = 'user' | 'team';
-
-/**
  * One activity action returned to the AI.
  */
 export type ToolActivityAction = {
@@ -2351,6 +2343,62 @@ export type ToolSet = {
     type: 'databases_read_only';
 };
 
+/**
+ * Body for tracking one external item in the ledger.
+ */
+export type TrackImportEntityRequest = {
+    /**
+     * The Macro entity created from the item; required when `status` is
+     * `imported`.
+     */
+    entityId?: string | null;
+    /**
+     * Stable id of the item in its source: a Linear identifier such as
+     * `ENG-142`, a Notion page URL or id, or a Slack channel id.
+     */
+    foreignId: string;
+    /**
+     * Per-source metadata. Linear: `{identifier, title, …}`; Notion:
+     * `{title, url?, summary?}`; Slack: `{name, …}`.
+     */
+    metadata: {
+        [key: string]: unknown;
+    };
+    /**
+     * The external system the item comes from.
+     */
+    source: ImportSource;
+    /**
+     * `staged` to propose the item, `imported` to record an entity already
+     * created from it.
+     */
+    status: TrackImportStatus;
+};
+
+/**
+ * The outcome of tracking an item, with its ledger row.
+ */
+export type TrackImportEntityResponse = {
+    /**
+     * The row behind the outcome.
+     */
+    entity: ImportEntity;
+    /**
+     * What happened.
+     */
+    outcome: TrackImportOutcome;
+};
+
+/**
+ * What tracking an item did.
+ */
+export type TrackImportOutcome = 'staged' | 'recorded_imported' | 'already_imported' | 'already_imported_by_teammate' | 'previously_declined' | 'import_in_progress';
+
+/**
+ * Whether a tracked item is a candidate or an import already made.
+ */
+export type TrackImportStatus = 'staged' | 'imported';
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -2442,57 +2490,6 @@ export type UpdateToolResponseRequest = {
      * The tool call ID whose response should be updated.
      */
     toolCallId: string;
-};
-
-/**
- * Request body for getting or creating an ai projection. The concrete target
- * id is resolved from the authenticated user, so only the target type is sent.
- */
-export type UpsertProjectionRequest = {
-    /**
-     * When `true` and generation is needed (cold instance or `regenerate`),
-     * the server generates inline and responds with the finished result
-     * instead of returning immediately and pushing an update through the
-     * connection gateway.
-     */
-    await?: boolean;
-    /**
-     * How long the projection remains active without being requested.
-     */
-    expiry: Expiry;
-    /**
-     * The frontend-defined projection id (e.g. `notification_important_widget`).
-     */
-    id: string;
-    /**
-     * Optional `provider/model` id used for generation (e.g.
-     * `cerebras/llama-3.3-70b`). The default model is used when absent.
-     */
-    model?: string | null;
-    /**
-     * Optional JSON schema the generated result must conform to. When set,
-     * `data` holds the JSON serialization of a conforming value. Enforcement
-     * is prompted (non-strict), so it works across providers.
-     */
-    output_schema?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * The prompt used to materialize the projection.
-     */
-    prompt: string;
-    /**
-     * How frequently the projection should be regenerated.
-     */
-    refresh_cadence: RefreshCadence;
-    /**
-     * When `true`, regenerate even if a cached result exists.
-     */
-    regenerate?: boolean;
-    /**
-     * Whether the projection is materialized for the requesting user or their team.
-     */
-    target_type: TargetType;
 };
 
 /**
@@ -2844,27 +2841,6 @@ export type GetUsageHandlerResponses = {
 };
 
 export type GetUsageHandlerResponse = GetUsageHandlerResponses[keyof GetUsageHandlerResponses];
-
-export type UpsertAiProjectionData = {
-    body: UpsertProjectionRequest;
-    path?: never;
-    query?: never;
-    url: '/ai-projections';
-};
-
-export type UpsertAiProjectionErrors = {
-    400: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpsertAiProjectionError = UpsertAiProjectionErrors[keyof UpsertAiProjectionErrors];
-
-export type UpsertAiProjectionResponses = {
-    200: ProjectionStateResponse;
-};
-
-export type UpsertAiProjectionResponse = UpsertAiProjectionResponses[keyof UpsertAiProjectionResponses];
 
 export type GetChatsForAttachmentHandlerData = {
     body?: never;
@@ -3523,6 +3499,99 @@ export type GenerateImageResponses = {
 
 export type GenerateImageResponse2 = GenerateImageResponses[keyof GenerateImageResponses];
 
+export type ListImportEntitiesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only rows from this source.
+         */
+        source?: ImportSource;
+        /**
+         * Only rows in this status.
+         */
+        status?: ImportStatus;
+    };
+    url: '/import/entities';
+};
+
+export type ListImportEntitiesErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ListImportEntitiesResponses = {
+    200: ImportEntitiesResponse;
+};
+
+export type ListImportEntitiesResponse = ListImportEntitiesResponses[keyof ListImportEntitiesResponses];
+
+export type TrackImportEntityData = {
+    body: TrackImportEntityRequest;
+    path?: never;
+    query?: never;
+    url: '/import/entities';
+};
+
+export type TrackImportEntityErrors = {
+    /**
+     * Invalid item or metadata
+     */
+    400: unknown;
+    /**
+     * The import service refused the item
+     */
+    422: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type TrackImportEntityResponses = {
+    200: TrackImportEntityResponse;
+};
+
+export type TrackImportEntityResponse2 = TrackImportEntityResponses[keyof TrackImportEntityResponses];
+
+export type DeclineImportEntityData = {
+    body?: never;
+    path: {
+        /**
+         * Ledger row id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/import/entities/{id}';
+};
+
+export type DeclineImportEntityErrors = {
+    /**
+     * No such row belongs to the caller
+     */
+    404: unknown;
+    /**
+     * Only staged rows can be declined
+     */
+    409: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DeclineImportEntityResponses = {
+    /**
+     * Declined
+     */
+    204: void;
+};
+
+export type DeclineImportEntityResponse = DeclineImportEntityResponses[keyof DeclineImportEntityResponses];
+
 export type NotionReportHandlerData = {
     body?: never;
     path?: never;
@@ -3565,6 +3634,34 @@ export type CancelNotionHandlerResponses = {
 };
 
 export type CancelNotionHandlerResponse = CancelNotionHandlerResponses[keyof CancelNotionHandlerResponses];
+
+export type ImportNotionPageData = {
+    body: ImportNotionPageRequest;
+    path?: never;
+    query?: never;
+    url: '/import/notion/pages';
+};
+
+export type ImportNotionPageErrors = {
+    /**
+     * No page given
+     */
+    400: unknown;
+    /**
+     * Not a page that can be imported, or Notion is not connected
+     */
+    422: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ImportNotionPageResponses = {
+    200: ImportNotionPageResponse;
+};
+
+export type ImportNotionPageResponse2 = ImportNotionPageResponses[keyof ImportNotionPageResponses];
 
 export type RunImportHandlerData = {
     body: RunImportRequest;
@@ -3960,6 +4057,10 @@ export type EditExplicitMemoryErrors = {
      * Internal server error
      */
     500: MemoryErrorBody;
+    /**
+     * Privacy review is unavailable; nothing was saved
+     */
+    503: MemoryErrorBody;
 };
 
 export type EditExplicitMemoryError = EditExplicitMemoryErrors[keyof EditExplicitMemoryErrors];

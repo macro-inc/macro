@@ -6,6 +6,7 @@ import { SettingsPage, SettingsRow } from '@app/features/settings/primitives';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { ShareDrawer } from '@core/component/TopBar/ShareDrawer';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { EmailProviderDialog } from '@core/email-link/ProviderDialog';
@@ -240,6 +241,18 @@ function DirtyComposerScenario() {
           </MobileDrawer.Content>
         </MobileDrawer.Portal>
       </MobileDrawer>
+    </Show>
+  );
+}
+
+/** The Share drawer closes on pointerdown, so its whole tap follows the unmount. */
+function ShareScenario() {
+  const [open, setOpen] = createSignal(true);
+  return (
+    <Show when={open()}>
+      <ShareDrawer open onOpenChange={setOpen}>
+        <div class="h-40 px-3">To</div>
+      </ShareDrawer>
     </Show>
   );
 }
@@ -520,6 +533,9 @@ function Fixture() {
         </Match>
         <Match when={scenario === 'search'}>
           <SearchScenario />
+        </Match>
+        <Match when={scenario === 'share'}>
+          <ShareScenario />
         </Match>
       </Switch>
       <ImperativeDialogHost />

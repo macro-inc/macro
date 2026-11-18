@@ -1,13 +1,11 @@
 import { t } from '@app/lib/i18n';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ChannelEntity } from '@entity';
-import { notificationIsRead } from '@entity/utils/notification';
 import { Telemetry } from '@macro-inc/observability';
-import { ensureNotificationSourceLoaded } from '@notifications/notification-helpers';
+import { markChannelsAsRead } from '@notifications/notification-helpers';
 import {
   useCreateChannelLabelMutation,
   useDeleteChannelLabelMutation,
@@ -49,7 +47,6 @@ type ChannelLabelActionsOptions = {
 
 export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
   const userId = useUserId();
-  const notificationSource = useGlobalNotificationSource();
   const owner = getOwner();
 
   const {
@@ -703,16 +700,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     }
 
     try {
-      await ensureNotificationSourceLoaded(notificationSource);
-      const unread = notificationSource
-        .notifications()
-        .filter(
-          (notification) =>
-            notification.entity_type === 'channel' &&
-            channelIds.has(notification.entity_id) &&
-            !notificationIsRead(notification)
-        );
-      await notificationSource.bulkMarkAsRead(unread);
+      await markChannelsAsRead(channelIds);
     } catch (error) {
       toast.failure(
         errorMessage(error, t('channelSections.markLabelReadFailed'))

@@ -14,7 +14,7 @@ use sqlx::PgPool;
 /// role wins. Postgres orders the `team_role` enum as
 /// `member < admin < owner`, so `ORDER BY team_role DESC` returns the
 /// strongest membership first.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn get_user_team(
     pool: &PgPool,
     user_id: &MacroUserId<Lowercase<'_>>,

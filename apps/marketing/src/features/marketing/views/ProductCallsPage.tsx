@@ -73,20 +73,20 @@ export function RouteCalls() {
           cta="calls_hero_get_started"
           tutorial="calls"
           product="Calls"
-          title="Calls feed into team memory."
+          title="Calls that feed into team memory."
           description="Call from any channel or DM. Give your team and agents context with recordings and transcripts."
         />
         <FeaturePageSection
-          id="call-start"
+          id="call-default"
           demo={{
             tone: 'calls',
           }}
-          title="Start a call from Macro Chat."
-          description="Call from a channel or DM, or share a standalone meeting link with someone outside your team. They can join in a browser without installing anything."
+          title="Team calls and private meetings."
+          description="Calls in team and public channels share their recording, transcript, and summary with your team by default. Calls in DMs and private channels start private. Standalone meeting links are private to participants. Use the call controls to change sharing during a call. Afterward, the person who started it can change access from Sharing in the call’s side panel."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
-            render={() => <CallStartDemo />}
+            render={() => <CallTeamMemoryDemo />}
           />
         </FeaturePageSection>
         <FeaturePageSection
@@ -94,8 +94,8 @@ export function RouteCalls() {
           demo={{
             tone: 'calls',
           }}
-          title="Ask agents to work from transcripts."
-          description="Agents can read the full transcript and a summary of why the call matters and how it fits into the broader picture of your company. Ask one to create tasks or draft a follow-up from what was discussed."
+          title="Macro Agents get the transcript and summary."
+          description="Every speaker is identified, so the transcript knows who said what. Agents can read the full transcript, plus a summary of why the call matters and how it fits into the bigger picture of your company. Ask one to create tasks or draft a follow-up from what was discussed."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -103,18 +103,23 @@ export function RouteCalls() {
           />
         </FeaturePageSection>
         <FeaturePageSection
-          id="call-default"
+          id="call-start"
           demo={{
             tone: 'calls',
           }}
-          title="Share call recordings with your team."
-          description="Channel calls are recorded and shared with your team by default, so you don’t have to remember to share them afterward. You can turn off team sharing; standalone meetings stay with their participants unless shared."
+          title="As easy as a Slack huddle."
+          description="Start a call right in a channel or a DM in Macro Chat, or share a link with anyone, like Google Meet. They can join in a browser without installing anything."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
-            render={() => <CallTeamMemoryDemo />}
+            render={() => <CallStartDemo />}
           />
         </FeaturePageSection>
+        <FeaturePageSection
+          id="call-external"
+          title="External calls, shared by link."
+          description="Create a meeting link and send it to anyone outside your team. They can join in their browser without a Macro account or installing anything."
+        />
         <CallsComparison />
         <FeaturePageFaq
           guide={{ href: '/calls#guide', label: 'calls' }}

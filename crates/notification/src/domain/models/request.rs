@@ -303,6 +303,12 @@ pub enum NotificationStatus {
     Seen,
     /// the notification is either done or _not_ done
     Done(bool),
+    /// Reopen done notifications as they were before their done: those in
+    /// `unseen` return to unseen, the rest to seen.
+    Reopen {
+        /// The notifications that were unseen when they were marked done.
+        unseen: Vec<uuid::Uuid>,
+    },
 }
 
 impl NotificationStatus {
@@ -313,7 +319,7 @@ impl NotificationStatus {
         match self {
             Self::Seen => (&[NotificationState::Unseen], true),
             Self::Done(true) => (&NotificationState::ACTIVE, false),
-            Self::Done(false) => (&[NotificationState::Done], false),
+            Self::Done(false) | Self::Reopen { .. } => (&[NotificationState::Done], false),
         }
     }
 
@@ -325,7 +331,9 @@ impl NotificationStatus {
             let action = match self {
                 NotificationStatus::Seen => NotificationAction::MarkSeen,
                 NotificationStatus::Done(true) => NotificationAction::MarkDone,
-                NotificationStatus::Done(false) => NotificationAction::Reopen,
+                NotificationStatus::Done(false) | NotificationStatus::Reopen { .. } => {
+                    NotificationAction::Reopen
+                }
             };
             action.should_clear_push_notifications()
         } else {

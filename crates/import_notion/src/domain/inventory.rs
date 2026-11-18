@@ -7,8 +7,8 @@ use futures::{StreamExt, TryStreamExt, stream};
 use lazy_regex::regex;
 
 use super::model::{
-    DataSourceSummary, ImportScope, Inventory, InventoryProgress, NotionDataSource, NotionId,
-    NotionPage, NotionParent, NotionUser, SearchHit, SearchObject,
+    DataSourceSummary, DrainedRows, ImportScope, Inventory, InventoryProgress, NotionDataSource,
+    NotionId, NotionPage, NotionParent, NotionUser, RowsNext, SearchHit, SearchObject,
 };
 use super::ports::{NotionApi, NotionError};
 
@@ -124,31 +124,36 @@ pub async fn inventory<Api: NotionApi>(
     })
 }
 
-/// Every row of a data source, oldest first, each once.
-#[tracing::instrument(skip(api), err, fields(rows))]
+/// Every row of a data source, oldest first, each once, and whether that is
+/// all of them: `complete` is `false` when Notion's result cap stopped the
+/// query short.
+#[tracing::instrument(skip(api), err, fields(rows, complete))]
 pub async fn all_rows<Api: NotionApi>(
     api: &Api,
     data_source: &NotionId,
-) -> Result<Vec<NotionPage>, NotionError> {
+) -> Result<DrainedRows, NotionError> {
     let mut rows: Vec<NotionPage> = Vec::new();
     let mut seen: HashSet<NotionId> = HashSet::new();
     let mut cursor = None;
-    loop {
+    let complete = loop {
         let page = api.query_data_source(data_source, cursor).await?;
         // A query that restarts past Notion's result cap repeats the rows
         // created in the same instant as the last one it returned.
         rows.extend(
-            page.results
+            page.rows
                 .into_iter()
                 .filter(|row| seen.insert(row.id.clone())),
         );
-        match page.next_cursor {
-            Some(next) => cursor = Some(next),
-            None => break,
+        match page.next {
+            RowsNext::More { cursor: next } => cursor = Some(next),
+            RowsNext::End => break true,
+            RowsNext::Truncated => break false,
         }
-    }
-    tracing::Span::current().record("rows", rows.len());
-    Ok(rows)
+    };
+    let span = tracing::Span::current();
+    span.record("rows", rows.len());
+    span.record("complete", complete);
+    Ok(DrainedRows { rows, complete })
 }
 
 /// Every workspace member the connection may list, bots excluded.
@@ -414,16 +419,16 @@ async fn summarize<Api: NotionApi>(
             }
             Err(error) => return Err(error),
         };
-        row_count += page.results.len();
+        row_count += page.rows.len();
         sample_titles.extend(
-            page.results
+            page.rows
                 .iter()
                 .take(SAMPLE_TITLES.saturating_sub(sample_titles.len()))
                 .map(|row| row.title.clone()),
         );
-        match page.next_cursor {
-            Some(next) => cursor = Some(next),
-            None => break,
+        match page.next {
+            RowsNext::More { cursor: next } => cursor = Some(next),
+            RowsNext::End | RowsNext::Truncated => break,
         }
     }
     Ok(Some(DataSourceSummary {

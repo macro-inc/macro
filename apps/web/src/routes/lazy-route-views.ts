@@ -1,14 +1,30 @@
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { lazy } from 'solid-js';
 
 /**
  * Every view except Home (the default landing) loads as its own chunk. The
  * split router warms a route's chunks while it navigates, and `AppShell`
  * fetches the likely-next ones once the first screen settles.
  */
+export const ForYouRouteView = lazyNamed(
+  () => import('@app/features/suggestions/route-views'),
+  'ForYouRouteView'
+);
 export const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
+);
+export const BookingLinksRouteView = lazyNamed(
+  () => import('@app/features/scheduling/route-views'),
+  'BookingLinksRouteView'
+);
+export const ExternalRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalRouteView'
+);
+export const ExternalChatRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalChatRouteView'
 );
 export const AgentsRouteView = lazyNamed(
   () => import('@app/features/agents-view/route-views'),
@@ -100,7 +116,7 @@ export const SearchRouteView = lazyNamed(
   'SearchRouteView'
 );
 export const ReviewsPrDetailRouteView = lazyNamed(
-  () => import('@app/features/reviews-view/route-views'),
+  () => import('@app/features/reviews-view/components/ReviewsPrDetail'),
   'ReviewsPrDetailRouteView'
 );
 export const ReviewsRouteView = lazyNamed(
@@ -131,6 +147,10 @@ export const FormRespondRoutePage = lazyNamed(
   () => import('./pages'),
   'FormRespondRoutePage'
 );
+export const PasswordsRouteView = lazyNamed(
+  () => import('@app/features/passwords/route-views'),
+  'PasswordsRouteView'
+);
 export const NotFound = lazy(
   () => import('@core/component/AccessErrorViews/NotFound')
 );
@@ -150,4 +170,36 @@ export const LIKELY_NEXT_VIEWS = [
   TasksRouteView,
   AgentsRouteView,
   CalendarRouteView,
+];
+
+/**
+ * The app's other views. The native apps read chunks from their own bundle, so
+ * they warm these too, after the likely ones: nothing downloads, and a view
+ * nobody warmed shows its skeleton while its code loads.
+ */
+export const OTHER_APP_VIEWS = [
+  ForYouRouteView,
+  SearchRouteView,
+  NotificationsRouteView,
+  NotificationsCalendarRouteView,
+  RecentRouteView,
+  FoldersRouteView,
+  CallsRouteView,
+  CallsCallDetail,
+  CallDetailRouteView,
+  TasksDetailRouteView,
+  ProjectDetailRouteView,
+  ProjectTaskRouteView,
+  EmailComposeRouteView,
+  DriveCallRouteView,
+  ReviewsRouteView,
+  ReviewsPrDetailRouteView,
+  PrDetailRouteView,
+  ActivityRouteView,
+  CompaniesRouteView,
+  SettingsRouteView,
+  BookingLinksRouteView,
+  ExternalRouteView,
+  ExternalChatRouteView,
+  PasswordsRouteView,
 ];

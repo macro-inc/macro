@@ -100,6 +100,10 @@ pub struct MailFolder {
     pub role: FolderRole,
     /// Whether the folder has children that must also be enumerated.
     pub has_children: bool,
+    /// How many items the provider counted in the folder when it was last
+    /// listed, whether or not they have been imported yet.
+    #[serde(default)]
+    pub total_items: Option<u32>,
 }
 
 impl MailFolder {
@@ -227,6 +231,8 @@ pub struct MailboxChangePage {
     pub removed: Vec<ProviderId>,
     /// The continuation or committed checkpoint returned by the provider.
     pub position: StreamPosition,
+    /// The `FolderChangeReader::READER_REVISION` that read the page.
+    pub reader_revision: i16,
 }
 
 /// An opaque continuation/checkpoint which must be validated by its adapter.

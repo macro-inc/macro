@@ -2,8 +2,7 @@
 //! This means that we should get the call before the response
 //! We should not get the call when the response finishes
 //!
-//! This is important for long running tools like rewrite and
-//! subagent
+//! This is important for long running tools like rewrite
 //!
 
 use super::util;

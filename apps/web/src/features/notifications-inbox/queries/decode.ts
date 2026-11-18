@@ -1,6 +1,8 @@
 import { attentionFeedSoupItem } from '@queries/attention-feed/attention-feed-entity';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type {
+  NotificationInboxClearFieldsFragment,
+  NotificationInboxClearStatus,
   NotificationInboxEntryFieldsFragment,
   NotificationInboxRowType,
   NotificationInboxScopeInput,
@@ -11,6 +13,7 @@ import type {
   InboxScope,
   NotificationInboxRow,
 } from '../context/notifications-inbox-context';
+import type { InboxClearState, InboxClearStatus } from '../core/inbox-clear';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
 import type {
   InboxActor,
@@ -38,10 +41,23 @@ const toRowType = (
     .with('PULL_REQUEST', () => 'pull_request' as const)
     .with('CALENDAR_EVENT', () => 'calendar_event' as const)
     .with('CALENDAR_JOIN_REQUEST', () => 'calendar_join_request' as const)
-    .with('ACCESS_REQUESTED', () => 'access_requested' as const)
+    .with(
+      'ACCESS_REQUESTED',
+      'PASSWORD_ACCESS_REQUESTED',
+      () => 'access_requested' as const
+    )
     .with('ACCESS_GRANTED', () => 'access_granted' as const)
     .with('ACCESS_REMOVED', () => 'access_removed' as const)
     .exhaustive(() => 'other' as const);
+
+/** The row types this build knows among `types`; newer ones are dropped. */
+const toKnownRowTypes = (
+  types: readonly NotificationInboxRowType[]
+): InboxRowType[] =>
+  types.flatMap((type) => {
+    const known = toRowType(type);
+    return known === 'other' ? [] : [known];
+  });
 
 /** An actor kind this build doesn't know names no author. */
 const toActor = (actor: WireRow['actor']): InboxActor | undefined => {
@@ -76,26 +92,31 @@ const toActions = (actions: WireRow['actions']): InboxRowAction[] =>
       .exhaustive(() => [])
   );
 
-const toGraphqlRowType = (type: InboxRowType): NotificationInboxRowType =>
-  match(type)
-    .with('agent', () => 'AGENT' as const)
-    .with('email', () => 'EMAIL' as const)
-    .with('channel_mention', () => 'CHANNEL_MENTION' as const)
-    .with('channel_messages', () => 'CHANNEL_MESSAGES' as const)
-    .with('channel_thread', () => 'CHANNEL_THREAD' as const)
-    .with('discussion_mention', () => 'DISCUSSION_MENTION' as const)
-    .with('discussion_messages', () => 'DISCUSSION_MESSAGES' as const)
-    .with('discussion_thread', () => 'DISCUSSION_THREAD' as const)
-    .with('task', () => 'TASK' as const)
-    .with('pull_request', () => 'PULL_REQUEST' as const)
-    .with('calendar_event', () => 'CALENDAR_EVENT' as const)
-    .with('calendar_join_request', () => 'CALENDAR_JOIN_REQUEST' as const)
-    .with('access_requested', () => 'ACCESS_REQUESTED' as const)
-    .with('access_granted', () => 'ACCESS_GRANTED' as const)
-    .with('access_removed', () => 'ACCESS_REMOVED' as const)
-    .exhaustive(() => {
-      throw new Error(`Unknown inbox row type: ${type}`);
-    });
+const toGraphqlRowTypes = (type: InboxRowType): NotificationInboxRowType[] => {
+  // The UI groups ordinary and Passwords access requests under one filter.
+  if (type === 'access_requested')
+    return ['ACCESS_REQUESTED', 'PASSWORD_ACCESS_REQUESTED'];
+  return [
+    match(type)
+      .with('agent', () => 'AGENT' as const)
+      .with('email', () => 'EMAIL' as const)
+      .with('channel_mention', () => 'CHANNEL_MENTION' as const)
+      .with('channel_messages', () => 'CHANNEL_MESSAGES' as const)
+      .with('channel_thread', () => 'CHANNEL_THREAD' as const)
+      .with('discussion_mention', () => 'DISCUSSION_MENTION' as const)
+      .with('discussion_messages', () => 'DISCUSSION_MESSAGES' as const)
+      .with('discussion_thread', () => 'DISCUSSION_THREAD' as const)
+      .with('task', () => 'TASK' as const)
+      .with('pull_request', () => 'PULL_REQUEST' as const)
+      .with('calendar_event', () => 'CALENDAR_EVENT' as const)
+      .with('calendar_join_request', () => 'CALENDAR_JOIN_REQUEST' as const)
+      .with('access_granted', () => 'ACCESS_GRANTED' as const)
+      .with('access_removed', () => 'ACCESS_REMOVED' as const)
+      .exhaustive(() => {
+        throw new Error(`Unknown inbox row type: ${type}`);
+      }),
+  ];
+};
 
 /**
  * Encode an inbox scope for the server. Every known type reads every row,
@@ -107,8 +128,54 @@ export function encodeInboxScope(
   const everyType = ALL_INBOX_ROW_TYPES.every((type) =>
     scope.rowTypes.includes(type)
   );
-  const rowTypes = everyType ? [] : scope.rowTypes.map(toGraphqlRowType);
+  const rowTypes = everyType
+    ? []
+    : [...new Set(scope.rowTypes.flatMap(toGraphqlRowTypes))];
   return scope.unreadOnly ? { rowTypes, unreadOnly: true } : { rowTypes };
+}
+
+/**
+ * Encode what a clear takes. A clear always names its kinds: the server has
+ * no "every kind" for one, so an inbox with every kind hidden clears nothing.
+ */
+export function encodeClearScope(
+  scope: InboxScope
+): NotificationInboxScopeInput {
+  const rowTypes = [...new Set(scope.rowTypes.flatMap(toGraphqlRowTypes))];
+  return scope.unreadOnly ? { rowTypes, unreadOnly: true } : { rowTypes };
+}
+
+/** A status a newer server adds reads as a clear still at work. */
+const toClearStatus = (
+  status: NotificationInboxClearStatus
+): InboxClearStatus =>
+  match<NotificationInboxClearStatus, InboxClearStatus>(status)
+    .with('APPLYING', () => 'applying')
+    .with('DONE', () => 'done')
+    .with('UNDOING', () => 'undoing')
+    .with('UNDONE', () => 'undone')
+    .with('FAILED', () => 'failed')
+    .exhaustive(() => 'applying');
+
+/**
+ * Read a clear as the server stores it. Kinds this build doesn't know are
+ * left out of what it hides here; the server still clears them.
+ */
+export function toInboxClear(
+  clear: NotificationInboxClearFieldsFragment
+): InboxClearState {
+  return {
+    id: clear.clearId,
+    status: toClearStatus(clear.status),
+    takes: {
+      rowTypes: toKnownRowTypes(clear.rowTypes),
+      unreadOnly: clear.unreadOnly,
+      ...(clear.since ? { since: Date.parse(clear.since) } : {}),
+    },
+    asOf: Date.parse(clear.asOf),
+    rows: clear.rowCount,
+    revision: clear.revision,
+  };
 }
 
 /**
@@ -132,6 +199,7 @@ export function toInboxGroup(
       const decoded: NotificationInboxRow = {
         id: row.id,
         type: toRowType(row.rowType),
+        alsoListedAs: toKnownRowTypes(row.alsoListedAs),
         threadId: row.threadId ?? undefined,
         revision: row.revision,
         latestAt,

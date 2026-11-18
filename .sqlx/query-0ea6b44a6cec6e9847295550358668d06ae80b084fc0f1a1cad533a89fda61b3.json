@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO hosted_runtime\n                (id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id,\n                 comp_reason, purchase_key, host_id, awake, state, enrollment_generation,\n                 created_by, created_at, updated_at, agent_user_id)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "computer_size",
+            "kind": {
+              "Enum": [
+                "standard",
+                "large",
+                "xl"
+              ]
+            }
+          }
+        },
+        "Int4",
+        "Int4",
+        "Int4",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Bool",
+        "Jsonb",
+        "Int8",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0ea6b44a6cec6e9847295550358668d06ae80b084fc0f1a1cad533a89fda61b3"
+}

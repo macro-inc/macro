@@ -9,7 +9,11 @@ import {
 } from '@tanstack/solid-query';
 import { createMemo, Show, Suspense } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CRM_TEAM_STAGE_DEFINITION_NAME, useDealStages } from './deal-stages';
+import {
+  CRM_TEAM_STAGE_DEFINITION_NAME,
+  findTeamStageDefinition,
+  useDealStages,
+} from './deal-stages';
 
 const mocks = vi.hoisted(() => ({ definitions: vi.fn() }));
 const customized: PropertyDefinitionWithOptions = {
@@ -190,5 +194,32 @@ describe('deal-stage projections in shared soup contexts', () => {
         SYSTEM_PROPERTY_IDS.STAGE
       )
     );
+  });
+});
+
+describe('findTeamStageDefinition', () => {
+  const named = (
+    id: string,
+    owner: PropertyDefinitionWithOptions['definition']['owner'],
+    isSystem = false
+  ): PropertyDefinitionWithOptions => ({
+    ...customized,
+    definition: { ...customized.definition, id, owner, is_system: isSystem },
+  });
+
+  it("picks the team's stages out of a listing of every scope", () => {
+    const listing: PropertyDefinitionResponse[] = [
+      named('user-stages', { scope: 'user', user_id: 'user' }),
+      named('system-stages', { scope: 'system' }, true),
+      named('team-stages', { scope: 'team', team_id: 'team' }),
+    ];
+    expect(findTeamStageDefinition(listing)?.definition.id).toBe('team-stages');
+  });
+
+  it('finds none when only a personal definition shares the name', () => {
+    const listing: PropertyDefinitionResponse[] = [
+      named('user-stages', { scope: 'user', user_id: 'user' }),
+    ];
+    expect(findTeamStageDefinition(listing)).toBeUndefined();
   });
 });

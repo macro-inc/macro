@@ -10,10 +10,7 @@ import {
 } from '@entity/utils/notification';
 import { Telemetry } from '@macro-inc/observability';
 import { markEmailThreadSeen } from '@queries/email/read-state';
-import {
-  ensureNotificationSourceLoaded,
-  markNotificationsForEntityAsRead,
-} from './notification-helpers';
+import { markNotificationsForEntityAsRead } from './notification-helpers';
 import type { NotificationSource } from './notification-source';
 
 const READ_ON_OPEN_TYPES = new Set<EntityData['type']>([
@@ -43,23 +40,19 @@ export function markRowNotificationsSeenOnOpen(
   if (entity.type === 'foreign' && !isGithubPrEntity(entity)) return;
 
   if (entity.type === 'email' && !entity.isRead) {
-    fireAndForget(
-      markEmailThreadSeen({ threadId: entity.id, linkId: entity.linkId }),
-      'email-read'
-    );
+    fireAndForget(markEmailThreadSeen({ threadId: entity.id }), 'email-read');
   }
 
   const hasLoadedNotifications =
     entity.notifications !== undefined ||
-    notificationSource._notificationsQuery.isStarted ||
-    notificationSource._notificationsQuery.transport === 'rest';
+    notificationSource._notificationsQuery.isStarted;
   const notifications = hasLoadedNotifications
     ? getEntityNotifications(entity, notificationSource).filter(
         (notification) => !notificationIsRead(notification)
       )
     : [];
-  // Calendar and CRM have always completed entity reads here, including cold
-  // REST feeds. Other details own that fallback when their content is ready.
+  // Calendar and CRM complete entity reads here even when the feed has not
+  // started. Other details own that fallback when their content is ready.
   const markWholeEntity =
     entity.type === 'calendar_event' ||
     entity.type === 'crm_company' ||
@@ -75,9 +68,6 @@ export function markRowNotificationsSeenOnOpen(
         if (notifications.length > 0) {
           await notificationSource.bulkMarkAsRead(notifications);
         } else {
-          if (notificationSource._notificationsQuery.transport === 'rest') {
-            await ensureNotificationSourceLoaded(notificationSource);
-          }
           await markNotificationsForEntityAsRead(
             notificationSource,
             toNotificationEntity(entity)

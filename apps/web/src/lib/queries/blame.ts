@@ -1,4 +1,3 @@
-import { enableGitBlame, isFeatureEnabled } from '@core/constant/featureFlags';
 import { syncServiceClient } from '@service-sync/client';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 
@@ -12,7 +11,7 @@ function nodeBlameQueryOptions(documentId: string, nodeId: string | null) {
   return queryOptions({
     queryKey: ['blame', documentId, nodeId],
     queryFn: () => fetchNodeBlame(documentId, nodeId!),
-    enabled: isFeatureEnabled(enableGitBlame) && nodeId !== null,
+    enabled: nodeId !== null,
     staleTime: Infinity,
     retry: false,
   });

@@ -19,7 +19,7 @@ function PlayDisc() {
     <svg
       viewBox="0 0 96 96"
       aria-hidden="true"
-      class="size-12 shrink-0 transition-transform not-touch:group-hover/play:scale-105 mobile:size-10"
+      class="size-12 shrink-0 transition-transform not-touch:group-hover/play:scale-105"
     >
       <circle cx="48" cy="48" r="48" fill="white" fill-opacity="0.16" />
       <path
@@ -36,7 +36,7 @@ function PlayDisc() {
 /**
  * The tutorial video at 80% of the window, paused behind a play pill (play
  * disc, then the presenter and the video's length): the video never
- * autoplays. On phones the shared Dialog becomes its bottom sheet.
+ * autoplays.
  */
 export function TutorialVideoDialog(props: {
   open: boolean;
@@ -114,10 +114,10 @@ export function TutorialVideoDialog(props: {
       onOpenChange={changeOpen}
       position="center"
       animate
-      class="w-[80vw] max-w-[80vw] mobile:w-auto mobile:max-w-none"
+      class="w-[80vw] max-w-[80vw]"
     >
-      <div class="flex h-[80vh] w-full flex-col mobile:h-auto">
-        <div class="flex h-12 shrink-0 items-center gap-2 pr-2 pl-4 mobile:hidden">
+      <div class="flex h-[80vh] w-full flex-col">
+        <div class="flex h-12 shrink-0 items-center gap-2 pr-2 pl-4">
           <Dialog.Title class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
             {props.title}
           </Dialog.Title>
@@ -130,7 +130,7 @@ export function TutorialVideoDialog(props: {
             <XIcon class="size-4 shrink-0" />
           </Dialog.CloseButton>
         </div>
-        <div class="relative mx-2 mb-2 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[18px] bg-[black] mobile:m-0 mobile:rounded-none">
+        <div class="relative mx-2 mb-2 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[18px] bg-[black]">
           <video
             ref={video}
             src={props.videoUrl}
@@ -144,7 +144,7 @@ export function TutorialVideoDialog(props: {
             onKeyDown={(event) => {
               if (event.key === 'Escape') changeOpen(false);
             }}
-            class="max-h-full w-full object-contain mobile:aspect-video"
+            class="max-h-full w-full object-contain"
           />
           <Show when={!started()}>
             {/* The dimmed poster also starts the video on a click; the pill
@@ -165,7 +165,7 @@ export function TutorialVideoDialog(props: {
                   title: props.title,
                   length: props.length,
                 })}
-                class="group/play pointer-events-auto flex h-16 items-center gap-3 rounded-full border border-[white]/12 bg-[rgb(20_20_20/0.85)] py-2 pr-6 pl-2 whitespace-nowrap text-[white] shadow-2xl outline-none transition-colors not-touch:hover:bg-[rgb(38_38_38/0.9)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[white] mobile:h-12 mobile:gap-2 mobile:py-1 mobile:pr-4 mobile:pl-1"
+                class="group/play pointer-events-auto flex h-16 items-center gap-3 rounded-full border border-[white]/12 bg-[rgb(20_20_20/0.85)] py-2 pr-6 pl-2 whitespace-nowrap text-[white] shadow-2xl outline-none transition-colors not-touch:hover:bg-[rgb(38_38_38/0.9)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[white]"
               >
                 <PlayDisc />
                 <span
@@ -175,13 +175,13 @@ export function TutorialVideoDialog(props: {
                 <img
                   src={presenterPhoto}
                   alt=""
-                  class="size-11 shrink-0 rounded-full object-cover mobile:size-9"
+                  class="size-11 shrink-0 rounded-full object-cover"
                 />
                 <span class="flex flex-col items-start text-left leading-tight">
-                  <span class="text-base font-medium mobile:text-sm">
+                  <span class="text-base font-medium">
                     {TUTORIAL_PRESENTER}
                   </span>
-                  <span class="text-sm text-[white]/60 tabular-nums mobile:text-xs">
+                  <span class="text-sm text-[white]/60 tabular-nums">
                     {t('tutorials.watchDemo')} · {props.length}
                   </span>
                 </span>

@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email::domain::message_reads::ThreadMessagesRequest;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::ErrorResponse;
 use sqlx::types::Uuid;
@@ -13,34 +14,6 @@ use sqlx::types::Uuid;
 pub struct ListThreadsParams {
     pub message_offset: Option<i64>,
     pub message_limit: Option<i64>,
-}
-
-/// The default number of messages to return in each thread
-const DEFAULT_MESSAGE_LIMIT: i64 = 5;
-/// The max number of messages that can be returned in a response
-const MESSAGE_MAX: i64 = 100;
-
-/// Represents pagination parameters with defaults applied
-#[derive(Debug, Clone, Copy)]
-struct ListThreadsPaginationParams {
-    message_offset: i64,
-    message_limit: i64,
-}
-
-impl From<ListThreadsParams> for ListThreadsPaginationParams {
-    fn from(params: ListThreadsParams) -> Self {
-        ListThreadsPaginationParams {
-            message_offset: params
-                .message_offset
-                .filter(|&offset| offset >= 0)
-                .unwrap_or(0),
-
-            message_limit: params
-                .message_limit
-                .filter(|&limit| 0 < limit && limit <= MESSAGE_MAX)
-                .unwrap_or(DEFAULT_MESSAGE_LIMIT),
-        }
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -56,17 +29,16 @@ pub async fn handler(
     extract::Path(PathParams { id }): extract::Path<PathParams>,
     extract::Query(query_params): extract::Query<ListThreadsParams>,
 ) -> Result<Response, Response> {
-    let p: ListThreadsPaginationParams = query_params.into();
-
-    let messages =
-        email_db_client::messages::get_parsed::get_paginated_parsed_messages_by_thread_id(
-            &ctx.db,
-            id,
-            p.message_offset,
-            p.message_limit,
-        )
+    let messages = ctx
+        .message_reads
+        .internal_thread_messages(ThreadMessagesRequest {
+            thread_id: id,
+            offset: query_params.message_offset,
+            limit: query_params.message_limit,
+        })
         .await
-        .map_err(|e| {
+        .map_err(|error| {
+            let e = error.into_inner();
             tracing::error!(error=?e, "unable to list messages");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -76,6 +48,5 @@ pub async fn handler(
             )
                 .into_response()
         })?;
-
     Ok((StatusCode::OK, Json(messages)).into_response())
 }

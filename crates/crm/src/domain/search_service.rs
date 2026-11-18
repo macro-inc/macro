@@ -72,7 +72,7 @@ impl<SR> CrmSearchService for CrmSearchServiceImpl<SR>
 where
     SR: CrmSearchRepository,
 {
-    #[tracing::instrument(skip(self, access), err)]
+    #[tracing::instrument(skip(self, access, term), fields(term_len = term.len()), err)]
     async fn search_company_names(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
@@ -82,6 +82,11 @@ where
         limit: i64,
         cursor: Option<CrmCompanySearchCursor>,
     ) -> Result<Vec<CrmCompanyNameMatch>, CrmError> {
+        match access.check_access(&self.search_repository).await {
+            Ok(()) => {}
+            Err(CrmError::AccessDenied) => return Ok(vec![]),
+            Err(error) => return Err(error),
+        }
         let team_id = access.team_id();
         // Members see only visible companies; admins/owners may also reach
         // hidden ones. Derived from the receipt's actual team role, so the
@@ -109,6 +114,11 @@ where
         access: &CrmTeamReceipt<MemberTeamRole>,
         company_ids: &[Uuid],
     ) -> Result<Vec<CrmCompanyForSoup>, CrmError> {
+        match access.check_access(&self.search_repository).await {
+            Ok(()) => {}
+            Err(CrmError::AccessDenied) => return Ok(vec![]),
+            Err(error) => return Err(error),
+        }
         let team_id = access.team_id();
         let include_hidden = access
             .receipt()

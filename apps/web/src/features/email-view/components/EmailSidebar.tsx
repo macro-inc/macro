@@ -1,8 +1,4 @@
-import {
-  SearchBar,
-  useViewTabHotkeys,
-  ViewSidebar,
-} from '@app/components/view-shell';
+import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
@@ -24,21 +20,19 @@ import TrayIcon from '@icon/system/regular/tray.svg';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import SignalIcon from '@icon/system/regular/wave-sine.svg';
 import NoiseIcon from '@icon/system/regular/waveform.svg';
-import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
-import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import {
-  canSearchEmailTab,
   EMAIL_INBOX_TAB_IDS,
   EMAIL_TAB_IDS,
   EMAIL_TAB_LABELS,
   EMAIL_TABS,
   isEmailInboxTab,
 } from '../constants';
+import { switchesEmailTabs } from '../email-search-focus';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
@@ -46,8 +40,6 @@ import { useVisibleEmailTab } from '../use-visible-email-tab';
 import { EmailSavedViewsSection } from '../views/email-saved-views';
 import { EmailInboxList } from './EmailInboxSelector';
 
-// Email is personal, so the sidebar lists only the user's own tags.
-const SIDEBAR_TAG_SCOPES: readonly TagScope[] = ['user'];
 const PRIMARY_TAB_IDS = [
   'favorites',
   'drafts',
@@ -183,14 +175,7 @@ export function EmailSidebar() {
   const isVisible = useVisibleEmailTab();
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const {
-    state,
-    setState,
-    setTab,
-    showTags,
-    isSidebarSectionOpen,
-    setSidebarSectionOpen,
-  } = useEmailView();
+  const { state, setTab } = useEmailView();
 
   const tabIds = () =>
     (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(isVisible);
@@ -205,37 +190,17 @@ export function EmailSidebar() {
       isTouchDevice() ? tabIds() : EMAIL_INBOX_TAB_IDS.filter(isVisible),
     activeId: () => state.tab,
     setActiveId: setTab,
-    shouldHandleSequentialKeyEvent: (event) =>
-      !(
-        event?.target instanceof Element &&
-        event.target.closest('[role="grid"][aria-label="Email"]')
-      ),
+    shouldHandleSequentialKeyEvent: switchesEmailTabs,
   });
 
   return (
     <ViewSidebar.Root aria-label="Email navigation">
-      <Show when={!isTouchDevice()}>
-        <ViewSidebar.Header
-          searchLabel="Search email"
-          search={
-            canSearchEmailTab(state.tab)
-              ? () => (
-                  <SearchBar
-                    label="Search email"
-                    placeholder="Search email"
-                    value={state.search}
-                    onValueChange={(search) => setState('search', search)}
-                  />
-                )
-              : undefined
-          }
-        >
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton class="shrink-0" />
-            <ViewSidebar.Title>Email</ViewSidebar.Title>
-          </div>
-        </ViewSidebar.Header>
-      </Show>
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton class="shrink-0" />
+          <ViewSidebar.Title>Email</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
 
       <Show when={!isTouchDevice()}>
         <ViewSidebar.Primary>
@@ -260,16 +225,6 @@ export function EmailSidebar() {
         <EmailNavigation />
 
         <EmailSavedViewsSection />
-
-        <div ref={tourTarget(EMAIL_TOUR.tags)}>
-          <SidebarTagsSection
-            activeIds={state.facets.tags ?? []}
-            onActiveIdsChange={showTags}
-            open={isSidebarSectionOpen('tags')}
-            onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
-            scopes={SIDEBAR_TAG_SCOPES}
-          />
-        </div>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

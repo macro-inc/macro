@@ -1,19 +1,12 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableDatabases } from '@core/constant/featureFlags';
+import { DatabaseCardSkeleton } from '@app/features/block-database/component/DatabaseCardSkeleton';
+import { lazy } from '@core/util/lazy';
 import {
   $convertCardToMention,
   $isDocumentCardNode,
   type DocumentCardDecoratorProps,
 } from '@macro-inc/lexical-core';
 import { $getNodeByKey, SKIP_DOM_SELECTION_TAG } from 'lexical';
-import {
-  createSignal,
-  lazy,
-  onCleanup,
-  Show,
-  Suspense,
-  useContext,
-} from 'solid-js';
+import { createSignal, onCleanup, Show, Suspense, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { LexicalInteractiveBoundary } from '../core/LexicalInteractiveBoundary';
 
@@ -24,7 +17,6 @@ const DocumentDatabase = lazy(async () => ({
 
 /** Database cards use their own metadata and editor, never document previews. */
 export function DatabaseCard(props: DocumentCardDecoratorProps) {
-  const enabled = useFeatureFlag(enableDatabases);
   const wrapper = useContext(LexicalWrapperContext);
   const [collapsed, setCollapsed] = createSignal(false);
   const [params, setParams] = createSignal(props.blockParams ?? {});
@@ -70,11 +62,12 @@ export function DatabaseCard(props: DocumentCardDecoratorProps) {
     </div>
   );
   return (
-    <Show
-      when={enabled().enabled && !wrapper?.skipPreviewFetch}
-      fallback={placeholder()}
-    >
-      <Suspense fallback={placeholder()}>
+    <Show when={!wrapper?.skipPreviewFetch} fallback={placeholder()}>
+      <Suspense
+        fallback={
+          <DatabaseCardSkeleton name={props.documentName || 'Database'} />
+        }
+      >
         <LexicalInteractiveBoundary>
           <DocumentDatabase
             databaseId={props.documentId}

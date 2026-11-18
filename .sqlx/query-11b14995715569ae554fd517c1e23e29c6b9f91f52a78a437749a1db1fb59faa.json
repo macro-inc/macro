@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Everyone on a page of calls, earliest joiner first: account participants of\n-- live ($1) and archived ($2) calls, and guests of live, archived, and\n-- imported ($3) calls. Each arm reads its table's call id index.\nSELECT\n    cp.call_id AS \"call_id!\",\n    cp.user_id AS \"user_id?\",\n    NULL::uuid AS \"guest_id?\",\n    NULL::text AS \"display_name?\",\n    NULL::text AS \"email?\",\n    cp.joined_at AS \"joined_at!\",\n    cp.left_at\nFROM call_participants cp\nWHERE cp.call_id = ANY($1)\nUNION ALL\nSELECT crp.call_record_id, crp.user_id, NULL, NULL, NULL, crp.joined_at, crp.left_at\nFROM call_record_participants crp\nWHERE crp.call_record_id = ANY($2)\nUNION ALL\nSELECT cg.call_id, NULL, cg.id, cg.display_name, NULL, cg.joined_at, cg.left_at\nFROM call_guests cg\nWHERE cg.call_id = ANY($1)\nUNION ALL\nSELECT crg.call_record_id, NULL, crg.id, crg.display_name, NULL, crg.joined_at, crg.left_at\nFROM call_record_guests crg\nWHERE crg.call_record_id = ANY($2)\nUNION ALL\n-- Imported attendees all joined when the call started, so they keep their\n-- id order.\nSELECT p.call_id, NULL, p.id, p.display_name, p.email,\n       COALESCE(ce.started_at, ce.created_at), ce.ended_at\nFROM call_entity_participants p\nJOIN call_entities ce ON ce.id = p.call_id\nWHERE p.call_id = ANY($3)\nORDER BY 6, 3, 2\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "guest_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "email?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "joined_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "left_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "11b14995715569ae554fd517c1e23e29c6b9f91f52a78a437749a1db1fb59faa"
+}

@@ -74,7 +74,6 @@ export function FeatureComparisons(props: {
           />
         )}
       </For>
-      <h2 class="feature-comparison-heading">{props.title}</h2>
       <div
         class="feature-comparison-scroll"
         tabIndex={0}

@@ -1,5 +1,10 @@
 import { useUserId } from '@core/context/user';
-import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
+import {
+  getDisplayName,
+  getDisplayNameParts,
+  macroIdToEmail,
+  tryMacroId,
+} from '@core/user';
 import {
   useChannelAccessRequestQuery,
   useResolveChannelAccessRequestMutation,
@@ -14,11 +19,18 @@ import {
   type AccessRequestOutcome,
 } from './components/AccessRequestActivityRow';
 import { SystemActivityRow } from './components/SystemActivityRow';
-import type { SystemActivity as SystemActivityEvent } from './core/system-activity';
+import {
+  requesterLabel,
+  type SystemActivity as SystemActivityEvent,
+} from './core/system-activity';
 
 function name(id: string | null | undefined): string {
   if (!id) return 'Someone';
   return getBotDisplayName(id) || getDisplayName(tryMacroId(id)) || 'Someone';
+}
+
+function requesterName(id: string, stored: string | undefined): string {
+  return requesterLabel(getDisplayNameParts(tryMacroId(id)), stored, name(id));
 }
 
 /** App composition uses the same cached principal names as channel messages. */
@@ -43,9 +55,9 @@ export function SystemActivity(props: {
         () => 'a participant'
       )
       .exhaustive();
-  const requestId = () =>
+  const accessRequest = () =>
     props.event.action.kind === 'access_requested'
-      ? props.event.action.requestId
+      ? props.event.action
       : undefined;
   return (
     <Switch
@@ -57,11 +69,12 @@ export function SystemActivity(props: {
         />
       }
     >
-      <Match when={requestId()}>
-        {(requestId) => (
+      <Match when={accessRequest()}>
+        {(request) => (
           <AccessRequestActivity
             channelId={props.channelId}
-            requestId={requestId()}
+            requestId={request().requestId}
+            requesterName={request().requesterName}
             event={props.event}
           />
         )}
@@ -74,6 +87,7 @@ export function SystemActivity(props: {
 function AccessRequestActivity(props: {
   channelId: string;
   requestId: string;
+  requesterName: string | undefined;
   event: SystemActivityEvent;
 }) {
   const userId = useUserId();
@@ -120,7 +134,7 @@ function AccessRequestActivity(props: {
     <AccessRequestActivityRow
       eventId={props.event.id}
       occurredAt={props.event.occurredAt}
-      requesterName={name(props.event.actorId)}
+      requesterName={requesterName(props.event.actorId, props.requesterName)}
       requesterEmail={requesterEmail()}
       outcome={outcome()}
       busy={resolve.isPending}

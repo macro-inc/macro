@@ -30,17 +30,20 @@ import {
   splitContentFromLocation,
   upgradeLegacyPath,
 } from '@components/app/split-layout/split-router/legacy-route';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { type JSX, lazy } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {
   ActivityRouteView,
   AgentsRouteView,
+  BookingLinksRouteView,
   CalendarRouteView,
   CallDetailRouteView,
   CallsCallDetail,
@@ -53,14 +56,18 @@ import {
   DriveRouteView,
   EmailComposeRouteView,
   EmailDetailRouteView,
+  ExternalChatRouteView,
+  ExternalRouteView,
   FoldersRouteView,
   FormRespondRoutePage,
+  ForYouRouteView,
   HomeEntityDetailRouteView,
   MailRouteView,
   MeetingRouter,
   NotFound,
   NotificationsCalendarRouteView,
   NotificationsRouteView,
+  PasswordsRouteView,
   PrDetailRouteView,
   ProjectDetailRouteView,
   ProjectTaskRouteView,
@@ -136,6 +143,7 @@ import {
   externalRoute,
   foldersRoute,
   formRespondRoute,
+  forYouRoute,
   homeCalendarRoute,
   homeChannelRoute,
   homeDocumentRoute,
@@ -154,6 +162,7 @@ import {
   notificationsCalendarRoute,
   notificationsRoute,
   onboardingRoute,
+  passwordsRoute,
   prDetailRoute,
   projectDetailRoute,
   projectTaskRoute,
@@ -195,23 +204,10 @@ const AgentSetupDonePage = lazyNamed(
   () => import('@app/features/agent-setup/agent-setup-page'),
   'AgentSetupDonePage'
 );
-const ExternalChatRouteView = lazyNamed(
-  () => import('@app/features/external-view/route-views'),
-  'ExternalChatRouteView'
-);
-
 const { Router, Route } = SplitRouter;
 
 // Views under appRoute load lazily (lazy-route-views.ts); auth and booking
 // pages render outside it and load with the app.
-const BookingLinksRouteView = lazyNamed(
-  () => import('@app/features/scheduling/route-views'),
-  'BookingLinksRouteView'
-);
-const ExternalRouteView = lazyNamed(
-  () => import('@app/features/external-view/route-views'),
-  'ExternalRouteView'
-);
 const SystemStatusDashboard = lazyNamed(
   () => import('@app/features/system-status/views/SystemStatusDashboard'),
   'SystemStatusDashboard'
@@ -380,7 +376,9 @@ export function appRouteElements(): JSX.Element {
           />
         </Route>
         <Route definition={recentRoute} component={RecentRouteView} />
+        <Route definition={forYouRoute} component={ForYouRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
+        <Route definition={passwordsRoute} component={PasswordsRouteView} />
         <Route
           definition={notificationsRoute}
           component={NotificationsRouteView}
@@ -521,7 +519,7 @@ export function AppRouterView() {
         }),
         stacked: isNativeMobilePlatform,
       })}
-      middleware={createAppSplitRouterMiddleware({ isTouchDevice })}
+      middleware={createAppSplitRouterMiddleware({ isTouchDevice, isMobile })}
       globalSearch={['referral_code']}
       defaultRoute={() => ({ matches: [{ id: baseRoute.id, params: {} }] })}
     >

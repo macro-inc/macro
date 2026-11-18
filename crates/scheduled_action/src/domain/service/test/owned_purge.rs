@@ -11,12 +11,13 @@ fn purging_service(
     let repo = Arc::new(FakeRepo::default());
     *repo.actions.lock().unwrap() = actions;
     let (tx, rx) = tokio::sync::mpsc::channel(10);
-    let service = TestService::new(
+    let service = ScheduledActionServiceImpl::new(
         Arc::clone(&repo),
         Arc::new(FakeExecutor::default()),
         tx,
         grants(&repo),
-    );
+    )
+    .with_event_routines(Rollout(Some(false)));
     (service, repo, rx)
 }
 

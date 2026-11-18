@@ -31,7 +31,22 @@ describe('chat message senders', () => {
     );
 
     expect(row.sender_id).toBe('');
-    expect(row.imported_author).toEqual({ name: 'Ana Ruiz' });
+    expect(row.imported_author).toEqual({ name: 'Ana Ruiz', avatar_url: null });
+  });
+
+  it('shows their WhatsApp picture when the owner can see one', () => {
+    const row = chatMessageData(
+      {
+        ...message,
+        sender: { name: 'Ana Ruiz', pictureUrl: 'https://files.test/file/ana' },
+      },
+      (body) => body
+    );
+
+    expect(row.imported_author).toEqual({
+      name: 'Ana Ruiz',
+      avatar_url: 'https://files.test/file/ana',
+    });
   });
 });
 

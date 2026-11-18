@@ -14,7 +14,8 @@ sender/generic-address checks.
 - `src/body_replyless.rs` + `src/body_replyless/`: strips quoted reply chains
   from HTML and plaintext bodies; `reply_snippet` is the Outlook snippet that
   ingest and `backfill_outlook_snippets` both derive from them.
-- `src/body_parsed.rs`: the parsed-body representation used across callers.
+- `src/body_parsed.rs`: the parsed-body representation used across callers,
+  and `html_to_undecorated_text` for one-line previews (no emphasis marks).
 
 ## Scope
 
@@ -54,6 +55,17 @@ sender/generic-address checks.
 - Sanitization is security-sensitive (XSS via email HTML): any allowlist
   change needs a test proving the previously-dangerous input is now stripped,
   not just that benign input survives.
+- Sanitized HTML is only safe as the sanitizer wrote it. Code that changes it
+  afterwards (trimming, rewriting URLs, cutting the quoted thread) must write
+  it back with the parser's serializer (`scraper`'s `html()`/`inner_html()`)
+  or `lol_html`. Code that assembles it by hand must escape every text node
+  and attribute value it writes: they hold decoded text, so `&lt;b&gt;`
+  comes back as a tag. Never run a regex or string replacement over the
+  result: `scraper` leaves `<` and `>` unescaped inside attribute values. The
+  same goes for removing text from a `<style>` element: what is left must not
+  be able to form `</style>`.
+- Walk a parsed message with a loop, not recursion: nesting depth is the
+  sender's choice, and a deep enough message overflows the stack.
 
 ## Related
 

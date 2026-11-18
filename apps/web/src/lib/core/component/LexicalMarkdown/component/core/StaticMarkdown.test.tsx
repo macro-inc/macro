@@ -339,3 +339,29 @@ describe('static markdown ordered lists', () => {
     expect(rendered.queryByRole('button')).toBeNull();
   });
 });
+
+describe('StaticMarkdown GitHub details', () => {
+  it('renders a collapsed section whose summary opens it', async () => {
+    const view = render(() => (
+      <StaticMarkdownContext lazy={false}>
+        <StaticMarkdown
+          markdown={
+            '<details>\n<summary>**Prompt for AI Agents**</summary>\n\nHidden body\n\n```\nfix it\n```\n\n</details>'
+          }
+          target="internal"
+        />
+      </StaticMarkdownContext>
+    ));
+
+    const summary = await view.findByText('Prompt for AI Agents');
+    const details = summary.closest('details');
+    expect(details?.open).toBe(false);
+    expect(summary.closest('summary')).not.toBeNull();
+    expect(details?.textContent).toContain('Hidden body');
+    expect(details?.querySelector('pre')).not.toBeNull();
+    expect(view.container.textContent).not.toContain('<details>');
+
+    summary.closest('summary')?.click();
+    await waitFor(() => expect(details?.open).toBe(true));
+  });
+});

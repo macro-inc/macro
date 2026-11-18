@@ -49,7 +49,7 @@ pub async fn backfill(
 #[tracing::instrument(
     name = "email.backfill_outlook_snippets.link",
     skip(pool),
-    fields(pages = 0u64, snippets),
+    fields(pages, snippets),
     err
 )]
 async fn backfill_link(pool: &PgPool, link_id: Uuid, mode: Mode) -> Result<u64, Report> {

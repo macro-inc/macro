@@ -67,14 +67,22 @@
 .email-auto-tag-followup { left: 88%; top: 298px; }
 .email-auto-tag-followup::before { bottom: 34px; height: 98px; }
 .email-auto-tag-followup::after { bottom: 128px; }
-.paper-feature-art[data-compact=true] .email-auto-tag-art { height: 390px; }
-.paper-feature-art[data-compact=true] .email-auto-tag-rows { top: 80px; }
-.paper-feature-art[data-compact=true] .email-auto-tag-row { height: 76px; padding: 10px 22px; gap: 9px; flex-wrap: wrap; }
+/* Phone artboard: the tags wrap under the message, and both callouts hang
+   below the highlighted row, which is the last one, so no line crosses text. */
+.paper-feature-art[data-compact=true] .email-auto-tag-art { height: 300px; }
+.paper-feature-art[data-compact=true] .email-auto-tag-rows { top: 16px; }
+.paper-feature-art[data-compact=true] .email-auto-tag-row { height: 92px; padding: 0 22px; gap: 8px 9px; flex-wrap: wrap; align-content: center; }
+.paper-feature-art[data-compact=true] .email-auto-tag-row:nth-child(n + 3) { display: none; }
 .paper-feature-art[data-compact=true] .email-auto-tag-message { flex-basis: 250px; }
 .paper-feature-art[data-compact=true] .email-auto-tag-art .mail-row-tags { margin-left: 29px; }
-.paper-feature-art[data-compact=true] .email-auto-tag-customer { left: 27%; top: 342px; }
-.paper-feature-art[data-compact=true] .email-auto-tag-customer::before { top: auto; bottom: 34px; height: 100px; }
-.paper-feature-art[data-compact=true] .email-auto-tag-customer::after { top: auto; bottom: 130px; }
-.paper-feature-art[data-compact=true] .email-auto-tag-followup { left: 57%; top: 342px; }
-.paper-feature-art[data-compact=true] .email-auto-tag-followup::before { height: 100px; }
-.paper-feature-art[data-compact=true] .email-auto-tag-followup::after { bottom: 130px; }
+.paper-feature-art[data-compact=true] .email-auto-tag-callout { top: 240px; font-size: 13px; }
+.paper-feature-art[data-compact=true] .email-auto-tag-callout span { padding: 5px 12px; }
+.paper-feature-art[data-compact=true] .email-auto-tag-callout::before { top: auto; bottom: 32px; height: 46px; }
+.paper-feature-art[data-compact=true] .email-auto-tag-callout::after { top: auto; bottom: 74px; }
+/* The tags sit closer than their labels are wide, so each line leans toward its tag. */
+.paper-feature-art[data-compact=true] .email-auto-tag-customer { left: 88px; }
+.paper-feature-art[data-compact=true] .email-auto-tag-customer::before,
+.paper-feature-art[data-compact=true] .email-auto-tag-customer::after { transform: translateX(4px); }
+.paper-feature-art[data-compact=true] .email-auto-tag-followup { left: 182px; }
+.paper-feature-art[data-compact=true] .email-auto-tag-followup::before,
+.paper-feature-art[data-compact=true] .email-auto-tag-followup::after { transform: translateX(-4px); }

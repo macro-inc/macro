@@ -27,11 +27,8 @@ impl<B> SoupRealtimePublisher for KafkaSoupRealtimePublisher<B>
 where
     B: MacroEventBroker,
 {
-    #[tracing::instrument(
-        skip(self, message),
-        fields(user_id = %message.user_id),
-        err
-    )]
+    // No span per message: one event can publish tens of thousands, which would
+    // crowd its own batch spans out of the trace. Failures reach the batch span.
     async fn publish(&self, message: SoupRealtimeMessage) -> Result<(), Report> {
         let event = SoupMacroEvent::from_message(message);
         let publish = self

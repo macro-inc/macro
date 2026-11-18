@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_run SET claimed_until = $3, checked_at = $2\n               WHERE session_id = $1 AND settled_at IS NULL\n                 AND (claimed_until IS NULL OR claimed_until <= $2)\n               RETURNING session_id, suggestion_id, user_id, agent_id, action_id, started_at, state,\n                         state_changed_at, sends",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "suggestion_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "agent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "action_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "state_changed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "sends",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3fdbcbab595290e20f665e36def1e3fb80b1e74eceae1422942e8d0064f9b465"
+}

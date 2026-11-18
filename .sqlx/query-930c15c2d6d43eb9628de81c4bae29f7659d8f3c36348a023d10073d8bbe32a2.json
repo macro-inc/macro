@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d.user_id, array_append(\n            ARRAY(SELECT x.jid FROM whatsapp_identity_alias x WHERE x.chat_id = d.id), d.remote_id) AS \"jids!\"\n        FROM external_chat d WHERE d.id = $1 AND d.state = 'detached'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "jids!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "930c15c2d6d43eb9628de81c4bae29f7659d8f3c36348a023d10073d8bbe32a2"
+}

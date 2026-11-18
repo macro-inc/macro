@@ -9,10 +9,10 @@ import type { RoutineSurface } from '../core/surfaces';
 
 /**
  * The card at the top of a view sidebar: the first few suggestions' icons in
- * an overlapping stack, how many there are and their names, inside a border
- * that blends from violet to blue around the whole card. The whole card
- * opens the suggestions; on hover its close button takes the caret's place,
- * like the other sidebar cards' close buttons.
+ * an overlapping stack, how many there are and their names, framed like the
+ * sidebar's Accounts card. The whole card opens the suggestions; on hover
+ * its close button takes the caret's place, like the other sidebar cards'
+ * close buttons.
  */
 export function RoutineSuggestionsCard(props: {
   count: number;
@@ -35,22 +35,12 @@ export function RoutineSuggestionsCard(props: {
     t('routineSuggestions.hideCard', { surface: props.surfaceLabel });
   return (
     <div
-      class={cn(
-        'group/routine-card relative min-w-0 shrink-0 [--routine-card-accent:45%] [--routine-card-hover:transparent] [--routine-card-violet:75%] not-touch:hover:[--routine-card-accent:55%] not-touch:hover:[--routine-card-hover:var(--color-hover)] not-touch:hover:[--routine-card-violet:90%]',
-        props.class
-      )}
+      class={cn('group/routine-card relative min-w-0 shrink-0', props.class)}
     >
       <button
         type="button"
         aria-haspopup="dialog"
-        class="flex w-full min-w-0 items-center gap-2.5 rounded-xl border border-transparent py-2.5 pr-2.5 pl-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-focus"
-        style={{
-          background: [
-            'linear-gradient(var(--routine-card-hover), var(--routine-card-hover)) padding-box',
-            'linear-gradient(var(--color-control), var(--color-control)) padding-box',
-            'linear-gradient(120deg, color-mix(in oklch, var(--color-violet) var(--routine-card-violet), transparent), color-mix(in oklch, var(--color-accent) var(--routine-card-accent), transparent)) border-box',
-          ].join(', '),
-        }}
+        class="flex w-full min-w-0 items-center gap-2.5 rounded-xl border border-edge-button bg-control py-2.5 pr-2.5 pl-3 text-left outline-none not-touch:elevated not-touch:hover:overlay-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
         onClick={(event) => props.onOpen(event.currentTarget)}
       >
         <span class="isolate flex shrink-0 items-center" aria-hidden="true">

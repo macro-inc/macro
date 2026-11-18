@@ -78,7 +78,7 @@ environment after registering them in Doppler:
 | Service | Switches (all default to `false`) |
 | --- | --- |
 | Authentication | `OUTLOOK_CONNECTIONS_ENABLED` |
-| Email | `OUTLOOK_CONNECTIONS_ENABLED`, `OUTLOOK_SYNC_ENABLED`, `OUTLOOK_WRITES_ENABLED` |
+| Email | `OUTLOOK_CONNECTIONS_ENABLED`, `OUTLOOK_SYNC_ENABLED`, `OUTLOOK_WRITES_ENABLED`, `OUTLOOK_IMPORTS_PAUSED` (stops import claims only; see [the re-import runbook](../runbooks/outlook-folder-reimport.md)) |
 | Calendar | `OUTLOOK_SYNC_ENABLED`, `OUTLOOK_WRITES_ENABLED` |
 
 With the authentication switch on, a new connection also needs the user's
@@ -529,7 +529,7 @@ Current constraints are visible in the
 [Google token source](../../services/email_service/src/outbound/email_api/token_source.rs),
 [mailbox initialization](../../services/email_service/src/api/email/init.rs),
 [sync cursor model](../../crates/email_api_client/src/domain/models/changes.rs), and
-[thread-based backfill](../../services/email_service/src/pubsub/backfill/list_threads.rs).
+[thread-based backfill](../../crates/email/src/domain/backfill_jobs/worker/listing.rs).
 
 ## Domain ownership and provider selection
 

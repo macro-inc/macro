@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM activity_events\n                WHERE subject_id = $1\n                  AND occurred_at >= $2\n                  AND occurred_at < $3\n                  AND action <> ALL($4)\n            ) AS \"touched!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "touched!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "879d2ddeaef3348cf21eddaf5eb96617444d21fb2d144cd1035fd91af24b0d0e"
+}

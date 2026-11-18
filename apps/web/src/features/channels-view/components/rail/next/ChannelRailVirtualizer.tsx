@@ -5,6 +5,7 @@ import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {
   createVirtualizer,
   defaultRangeExtractor,
+  measureElement,
   type Range,
 } from '@tanstack/solid-virtual';
 import {
@@ -84,6 +85,7 @@ function VirtualRows<K extends string>(
       Math.max(0, (viewportHeight() - props.estimateSize) / 2)
     );
 
+  const unmeasured = new Set<string>();
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     get count() {
       return props.keys.length;
@@ -94,6 +96,22 @@ function VirtualRows<K extends string>(
     },
     getScrollElement: () => props.scrollRoot,
     estimateSize: () => props.estimateSize,
+    // A transition updates these keys before it updates the rows on screen,
+    // so a row can be measured at an index that now belongs to another key.
+    // Keep that key's size instead of giving it this row's height, and read
+    // the row from the DOM once it shows its own index again.
+    measureElement: (element, entry, instance) => {
+      const index = instance.indexFromElement(element);
+      const key = instance.options.getItemKey(index);
+      const shown = element.dataset.key;
+      if (shown !== key) {
+        if (shown !== undefined) unmeasured.add(shown);
+        return instance.itemSizeCache.get(key) ?? props.estimateSize;
+      }
+      if (!entry && unmeasured.delete(key)) return element.offsetHeight;
+
+      return measureElement(element, entry, instance);
+    },
     initialOffset: () => props.scrollRoot.scrollTop,
     get scrollMargin() {
       return props.scrollMargin ?? 0;
@@ -177,7 +195,8 @@ function VirtualRows<K extends string>(
     >
       <Key each={virtualRows()} by="key">
         {(row) => {
-          const key = untrack(() => props.keys[row().index]);
+          // The virtualizer's key, which can be ahead of props.keys during a transition.
+          const key = untrack(() => row().key) as K;
           let element: HTMLDivElement | undefined;
 
           createEffect(
@@ -200,6 +219,7 @@ function VirtualRows<K extends string>(
                 element = node;
               }}
               data-index={row().index}
+              data-key={key}
               class="absolute left-0 w-full"
               style={{
                 top: `${row().start - (props.scrollMargin ?? 0)}px`,

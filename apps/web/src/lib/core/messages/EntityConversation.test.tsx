@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   timeline: vi.fn(),
   linkResolved: true,
   capturedParent: undefined as { type: string; id: string } | undefined,
+  bots: undefined as Accessor<{ id: string }[]> | undefined,
   linkError: null as unknown,
   refetchLink: vi.fn(),
   urlTarget: undefined as string | undefined,
@@ -30,8 +31,12 @@ vi.mock('./scroll-to-rendered-target', async (importOriginal) => ({
 }));
 
 vi.mock('@channel/Input', () => ({
-  ChannelInput: (props: { parent?: { type: string; id: string } }) => {
+  ChannelInput: (props: {
+    parent?: { type: string; id: string };
+    bots?: Accessor<{ id: string }[]>;
+  }) => {
     mocks.capturedParent = props.parent;
+    mocks.bots = props.bots;
     return <textarea aria-label="Leave a comment..." />;
   },
 }));
@@ -41,7 +46,9 @@ vi.mock('@channel/Thread/utils/message-actions', () => ({
     `/channel/${channelId}/${messageId}`,
 }));
 vi.mock('@channel/use-channel-bot-mention-users', () => ({
-  useMessageBotMentionUsers: () => [],
+  useMessageBotMentionUsers:
+    (_parent: unknown, load: Accessor<boolean>) => () =>
+      load() ? [{ id: 'agent' }] : [],
 }));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
@@ -290,6 +297,20 @@ describe('EntityConversation placement', () => {
   it('names the document as the composer parent so it resolves the same mentions as a reply', () => {
     discussion([[]], undefined, { canWrite: true });
     expect(mocks.capturedParent).toEqual({ type: 'document', id: 'document' });
+  });
+
+  it('lists the agents for mentions once someone focuses the composer', () => {
+    const view = discussion([[]], undefined, { canWrite: true });
+    expect(mocks.bots?.()).toEqual([]);
+    fireEvent.focusIn(view.getByRole('textbox'));
+    expect(mocks.bots?.()).toEqual([{ id: 'agent' }]);
+  });
+
+  it('lists the agents for mentions once the pointer reaches the composer', () => {
+    const view = discussion([[]], undefined, { canWrite: true });
+    expect(mocks.bots?.()).toEqual([]);
+    fireEvent.pointerEnter(view.getByRole('textbox').parentElement!);
+    expect(mocks.bots?.()).toEqual([{ id: 'agent' }]);
   });
 
   it('shows nothing from the shared latest page while a link is still resolving', () => {

@@ -1,3 +1,4 @@
+import { percentagePointsText } from '@app/features/database/core/column-inference';
 import { match } from 'ts-pattern';
 import type { FormColumn, GateNode, GateRules, GateTest } from './form-model';
 
@@ -45,7 +46,9 @@ function testPhrase(test: GateTest, column: FormColumn | undefined): string {
         .with('lessThan', () => 'is less than')
         .with('lessThanOrEqual', () => 'is at most')
         .exhaustive();
-      return `${verb} ${value}`;
+      return column?.percentage
+        ? `${verb} ${percentagePointsText(value)}%`
+        : `${verb} ${value}`;
     })
     .with({ kind: 'date' }, ({ operator, value }) => {
       const verb = match(operator)

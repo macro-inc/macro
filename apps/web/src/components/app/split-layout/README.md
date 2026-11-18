@@ -26,9 +26,27 @@ A Shift-click that also holds Option (Alt) opens below the split it came from:
 `split-below-intent.ts` remembers the click, as `tab-layout/open-in-tab-intent.ts`
 does for Cmd-click. Moving panes (swap left/right, mobile bring-to-front)
 keeps the tiles and their sizes and changes which split shows where.
+Bring-to-front activates the split at once and leaves the order to the
+router's move. Inside an effect or a `batch`, `splits()` follows the router
+only after the activation returns; while the router commits or runs a URL
+navigation, the move itself waits. Never wait on the new order there
+(`tests/stacked-panes.test.ts`).
+Directional focus (`Shift+H/J/K/L`, `Shift+Arrow`) picks its target from the
+tiles, not the pane order: `split-direction.ts` returns to the previously
+active split when it borders that side, else the one level with the focused
+split's centre, wrapping past the edge. A focused slider, or a control marked
+`data-owns-arrow-keys` (the database grid, the slide stage and rail), keeps
+`Shift+Arrow`: app hotkeys see keys before the focused element does.
+
+Opening or closing a split changes its neighbours' widths, and their text
+rewraps under an unchanged scrollTop. WebKit (Safari, iOS) has no CSS scroll
+anchoring, so a scrolling view that holds a reading position calls
+`keepScrollAnchorOnResize` (`@core/util/scrollAnchor`) on its scroll container,
+as the markdown `Notebook` does.
 
 `browser-test/` is a backend-free Playwright regression over the real router
-and `TiledSplits`:
+and `TiledSplits`, including a document that keeps its reading position as the
+splits beside it close, with browser scroll anchoring off as in WebKit:
 `bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 
 ## Opt-in view restoration
@@ -63,6 +81,10 @@ leave guards, middleware, URL updates, and single-owner content claims.
 
 Resolve restoration keys and initial entry-state slices from the current router
 entry, not the layout mirror: an outlet can mount before the mirror updates.
+`SplitPanel` also resolves collection ownership from that entry's registered
+component metadata. CRM supplies its own collection state, while Calls requires
+the panel's `SoupViewContextProvider`; choosing the provider from the previous
+mount lets the new route render without its required context.
 
 The remaining notes below describe the original split layout.
 
@@ -122,6 +144,17 @@ TODO AFTER:
 - [ ] useBeforeLeave won't work as expected going forward, since we use the split layout as the source of truth.
       Lots of places use `isLeavingCurrentBlock` to run some side effects, we need to abstract this under the split
       Might need something like `useBeforeSplitClose` or `useBeforeBlockClose`
+
+## Panel-owned slots
+
+`withSplitPanelOwner(name, factory)` creates a resource in a root owned by the
+split panel, not by the calling component, so it outlives the component: an
+email opened from a list still pages through that list's data source after the
+list has unmounted. A slot ends when its name is claimed again, when the panel
+closes, or when the split moves to another view (`splitViewId`: the component
+it shows, or the nearest one behind its content in history). The slot's root
+closes over the view that created it, so a slot that outlived its view would
+keep that view's DOM and subscriptions in memory.
 
 ## Priority collapse
 

@@ -1,8 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_GRAPHQL_BACKFILL,
-  enableGraphqlSoup,
-} from '@core/constant/featureFlags';
+import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
@@ -30,8 +26,8 @@ import { useMailAccountsQuery } from '../email/mail-accounts';
 
 // Bump when a default backfill input or completion guarantee changes so
 // persisted cursors cannot retain an older hydration contract.
-// Restart old cursors whose filters did not include CRM contacts.
-const BACKFILL_VERSION = 18;
+// Restart old cursors whose core lane still included channels.
+const BACKFILL_VERSION = 19;
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
@@ -85,9 +81,39 @@ export type SoupBackfillParams = {
   emailRecency?: readonly EmailRecencyWindow[];
 };
 
-/** Backfills the entities used most often by Quick Access and primary views. */
+/**
+ * Every channel the viewer can see, ahead of the mixed core lane, so the cache
+ * holds the whole channel list soon after login rather than once documents and
+ * chats have paged through with it.
+ */
+export const CHANNEL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
+  checkpointId: 'channels',
+  // One request per 100 channels: 2 s spacing takes minutes on a large account.
+  pageDelayMs: 250,
+  input: {
+    limit: PAGE_LIMIT,
+    expand: true,
+    sortMethod: 'VIEWED_UPDATED',
+    emailView: 'ALL',
+    filters: {
+      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
+      chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
+      emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
+      channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
+      callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
+      crmCompanyFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      foreignEntityFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+    },
+  },
+};
+
+/** Backfills documents, chats, and folders for Quick Access and primary views. */
 export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'core-entities',
+  // Quick Access waits on this lane, and every other lane waits behind it.
+  pageDelayMs: 250,
   input: {
     limit: PAGE_LIMIT,
     expand: true,
@@ -96,6 +122,7 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
     filters: {
       calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
+      channelFilter: { literal: { channelId: EXCLUDED_ENTITY_ID } },
       channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
       callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
       crmCompanyFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
@@ -238,6 +265,7 @@ export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 
 /** Independently checkpointed backfills run serially in priority order. */
 export const DEFAULT_SOUP_BACKFILL_LANES = [
+  CHANNEL_SOUP_BACKFILL_LANE,
   CORE_SOUP_BACKFILL_LANE,
   INITIATIVE_SOUP_BACKFILL_LANE,
   SIGNAL_EMAIL_FILTER_BACKFILL_LANE,
@@ -717,18 +745,13 @@ const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
  */
 /** Runs the signed-in user's soup backfills; waits while `userId` is unknown. */
 export function useSoupBackfills(userId: Accessor<string | undefined>): void {
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const isLeader = createTabLeaderSignal(
     `graphql-soup-backfill:v${BACKFILL_VERSION}:coordinator`
   );
   // Sender metadata must be durable before the first composer is opened.
   // This small catalog runs alongside the paged backfill, never behind it.
   useMailAccountsQuery(
-    () =>
-      ENABLE_GRAPHQL_BACKFILL &&
-      graphqlSoupFlag().enabled &&
-      isLeader() &&
-      !!userId()
+    () => ENABLE_GRAPHQL_BACKFILL && isLeader() && !!userId()
   );
   const [cacheHost, setCacheHost] = createSignal<CacheHost>();
   const [cacheGeneration, setCacheGeneration] = createSignal(0);
@@ -736,7 +759,7 @@ export function useSoupBackfills(userId: Accessor<string | undefined>): void {
   useContactContextPublisher(cacheHost, cacheGeneration);
 
   createEffect(() => {
-    if (!ENABLE_GRAPHQL_BACKFILL || !graphqlSoupFlag().enabled || !isLeader()) {
+    if (!ENABLE_GRAPHQL_BACKFILL || !isLeader()) {
       setCacheHost(undefined);
       return;
     }

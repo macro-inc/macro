@@ -32,6 +32,7 @@ import { useMobileSectionActions } from './use-mobile-section-actions';
 export function MobileSectionsView(props: {
   sources: ChannelsSources;
   pinned: readonly ChannelEntity[];
+  openPreview?: (channel: ChannelEntity) => boolean;
 }) {
   const { state, sectionsEnabled, setSectionPreferences, setSectionOrder } =
     useChannelsView();
@@ -66,7 +67,11 @@ export function MobileSectionsView(props: {
     sectionsEnabled
   );
   usePending('channels.section.members', members.isLoading);
-  const sectionChannels = () =>
+  const base = () =>
+    selected() === 'direct_messages'
+      ? props.sources.direct_messages
+      : props.sources.recents;
+  const sectionChannels = createMemo(() =>
     channelsForMobileSection({
       tab: selected(),
       channels: selectedLabel()
@@ -77,11 +82,8 @@ export function MobileSectionsView(props: {
           ])
         : base().items(),
       labels: labels(),
-    });
-  const base = () =>
-    selected() === 'direct_messages'
-      ? props.sources.direct_messages
-      : props.sources.recents;
+    })
+  );
   const source: ChannelsDataSource = {
     items: sectionChannels,
     isLoading: () =>
@@ -105,7 +107,8 @@ export function MobileSectionsView(props: {
   };
   const title = (key: MobileSectionTab) => {
     if (key === 'all') return t('mobile.all');
-    if (key === 'direct_messages') return t('channelSections.direct_messages');
+    if (key === 'direct_messages')
+      return t('channelSections.directMessagesPill');
     return labels().find((label) => `label:${label.id}` === key)?.name ?? '';
   };
   const choose = (value: string) => {
@@ -172,6 +175,7 @@ export function MobileSectionsView(props: {
       <ChannelsMobileView
         source={source}
         pinned={props.pinned}
+        openPreview={props.openPreview}
         searchQuery=""
         onClearSearch={() => {}}
         horizontalPins

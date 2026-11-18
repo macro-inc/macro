@@ -72,18 +72,6 @@ const AnnotationsSvc = new Svc('Annotations Service')
 
 const ProjectsSvc = new Svc('Projects Service')
   .use('fetchErrors', fetchErrorsSvc)
-  .fn('getAll', {
-    description: 'Get all projects',
-    result: { data: z.array(z.any()) }, // Temporary workaround until we have a schema on the clientside
-    throws: withFetchErrors(),
-  })
-  .fn('getPending', {
-    description: 'Get all pending projects',
-    result: {
-      data: schemas.getPendingProjectsHandlerResponse.shape.data,
-    },
-    throws: withFetchErrors(),
-  })
   .fn('create', {
     description: 'Create a new project',
     args: {
@@ -99,21 +87,6 @@ const ProjectsSvc = new Svc('Projects Service')
     description: 'Get a project',
     args: schemas.getProjectHandlerParams.shape,
     result: schemas.getProjectHandlerResponse.shape.data.shape,
-    throws: withFetchErrors(),
-  })
-  .fn('delete', {
-    description: 'Delete a project',
-    args: { id: z.string() },
-    result: { success: z.boolean() },
-    modifies: true,
-    throws: withFetchErrors(),
-  })
-  .fn('edit', {
-    description: 'Edit a project',
-    args: schemas.editProjectV2Body.extend(schemas.editProjectV2Params.shape)
-      .shape,
-    result: { success: z.boolean() },
-    modifies: true,
     throws: withFetchErrors(),
   })
   .fn('getContent', {
@@ -150,22 +123,12 @@ const ProjectsSvc = new Svc('Projects Service')
     result: schemas.uploadExtractFolderHandlerResponse.shape.data.shape,
     throws: withFetchErrors(),
   })
-  .fn('permanentlyDelete', {
-    description: 'Permanently delete a project',
+  .fn('getUploadExtractStatus', {
+    description: 'Get where a folder upload stands',
     args: {
-      id: schemas.permanentlyDeleteProjectParams.shape.id,
+      requestId: schemas.getUploadExtractStatusHandlerParams.shape.request_id,
     },
-    result: schemas.permanentlyDeleteProjectResponse.shape.data.shape,
-    modifies: true,
-    throws: withFetchErrors(),
-  })
-  .fn('revertDelete', {
-    description: 'Revert the deletion of a project',
-    args: {
-      id: schemas.revertDeleteProjectParams.shape.id,
-    },
-    result: schemas.revertDeleteProjectResponse.shape.data.shape,
-    modifies: true,
+    result: schemas.getUploadExtractStatusHandlerResponse.shape.data.shape,
     throws: withFetchErrors(),
   });
 
@@ -203,36 +166,6 @@ const ViewsSvc = new Svc('Views Service')
     args: {
       savedViewId: z.string(),
     },
-    modifies: true,
-    throws: withFetchErrors(),
-  });
-
-const FavoritesSvc = new Svc('Favorites Service')
-  .use('fetchErrors', fetchErrorsSvc)
-  .fn('getFavorites', {
-    description: "Get the user's favorites",
-    result: schemas.listFavoritesResponse.shape,
-    throws: withFetchErrors(),
-  })
-  .fn('addFavorite', {
-    description: "Favorite an entity in the user's collection",
-    args: schemas.addFavoriteBody.shape,
-    modifies: true,
-    result: schemas.addFavoriteResponse.shape,
-    throws: withFetchErrors(),
-  })
-  .fn('removeFavoriteByEntity', {
-    description: 'Remove a favorite by entity',
-    args: {
-      entityType: schemas.removeFavoriteByEntityParams.shape.entity_type,
-      entityId: schemas.removeFavoriteByEntityParams.shape.entity_id,
-    },
-    modifies: true,
-    throws: withFetchErrors(),
-  })
-  .fn('reorderFavorites', {
-    description: "Persist a manual order for the user's favorites",
-    args: schemas.reorderFavoritesBody.shape,
     modifies: true,
     throws: withFetchErrors(),
   });
@@ -684,24 +617,6 @@ export const StorageService = new Svc('Document++ Storage Service API')
     result: schemas.recentlyDeletedResponse.shape.data.shape,
     throws: withFetchErrors(),
   })
-  .fn('permanentlyDeleteDocument', {
-    description: 'Permanently delete a document',
-    args: {
-      documentId: schemas.permanentlyDeleteDocumentParams.shape.document_id,
-    },
-    result: schemas.permanentlyDeleteDocumentResponse.shape.data.shape,
-    modifies: true,
-    throws: withFetchErrors(),
-  })
-  .fn('revertDocumentDelete', {
-    description: 'Revert the deletion of a document',
-    args: {
-      documentId: schemas.revertDeleteDocumentParams.shape.document_id,
-    },
-    result: schemas.revertDeleteDocumentResponse.shape.data.shape,
-    modifies: true,
-    throws: withFetchErrors(),
-  })
   .fn('exportDocument', {
     description: 'Export a document',
     args: {
@@ -710,22 +625,11 @@ export const StorageService = new Svc('Document++ Storage Service API')
     result: schemas.exportDocumentResponse.shape,
     throws: withFetchErrors(),
   })
-  .fn('editThread', {
-    description: schemas.editThreadV2Params.description!,
-    args: {
-      threadId: schemas.editThreadV2Params.shape.thread_id,
-      ...schemas.editThreadV2Body.shape,
-    },
-    result: schemas.editThreadV2Response.shape.data.shape,
-    modifies: true,
-    throws: withFetchErrors(),
-  })
   .use('annotations', AnnotationsSvc)
   .use('projects', ProjectsSvc)
   .use('permissionsTokens', PermissionsTokensSvc)
   .use('collabSurfaces', CollabSurfacesSvc)
-  .use('views', ViewsSvc)
-  .use('favorites', FavoritesSvc);
+  .use('views', ViewsSvc);
 
 export type StorageService = typeof StorageService;
 export type StorageServiceClient = ServiceClient<StorageService>;

@@ -131,29 +131,34 @@ impl<R: MailboxWatchRepository> MailboxWatchNotifications<R> {
             outlook.subscription_attempt = %id,
             mailbox.link_id = tracing::field::Empty,
             outlook.notifications = super::telemetry::span_int(notifications.len()),
-            outlook.notifications_accepted = 0i64,
-            outlook.lifecycle_events = 0i64,
+            outlook.notifications_accepted = tracing::field::Empty,
+            outlook.lifecycle_events = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
-        self.accept(id, notifications)
+        let mut accepted = 0i64;
+        let mut lifecycle_events = 0i64;
+        let result = self
+            .accept(id, notifications, &mut accepted, &mut lifecycle_events)
             .instrument(span.clone())
-            .await
-            .inspect_err(|error| {
-                span.record("otel.status_description", tracing::field::display(error));
-            })
+            .await;
+        span.record("outlook.notifications_accepted", accepted);
+        span.record("outlook.lifecycle_events", lifecycle_events);
+        result.inspect_err(|error| {
+            span.record("otel.status_description", tracing::field::display(error));
+        })
     }
 
     async fn accept(
         &self,
         id: Uuid,
         notifications: Vec<WatchNotification>,
+        accepted: &mut i64,
+        lifecycle_events: &mut i64,
     ) -> Result<(), MailboxError> {
         let span = Span::current();
         let Some(binding) = self.0.notification_binding(id).await? else {
             return Ok(());
         };
-        let mut accepted = 0i64;
-        let mut lifecycle_events = 0i64;
         for notification in notifications {
             let hash = Sha256::digest(notification.client_state.as_bytes());
             if hash[..].ct_eq(&binding.verifier).unwrap_u8() != 1
@@ -176,10 +181,10 @@ impl<R: MailboxWatchRepository> MailboxWatchNotifications<R> {
             else {
                 continue;
             };
-            accepted += 1;
+            *accepted += 1;
             span.record("mailbox.link_id", tracing::field::display(link_id));
             if let Some(event) = notification.hint.lifecycle_event() {
-                lifecycle_events += 1;
+                *lifecycle_events += 1;
                 if matches!(notification.hint, WatchHint::Missed) {
                     tracing::warn!(%link_id, lifecycle_event = event, "outlook subscription lifecycle event");
                 } else {
@@ -187,8 +192,6 @@ impl<R: MailboxWatchRepository> MailboxWatchNotifications<R> {
                 }
             }
         }
-        span.record("outlook.notifications_accepted", accepted);
-        span.record("outlook.lifecycle_events", lifecycle_events);
         Ok(())
     }
 }
@@ -231,17 +234,19 @@ impl<R: MailboxWatchRepository, G: MailboxWatchGateway> MailboxWatchService<R, G
             mailbox.sync_generation = lease.mailbox.sync_generation,
             outlook.subscription_action = tracing::field::Empty,
             outlook.subscription_expires_at = tracing::field::Empty,
-            outlook.subscriptions_removed = 0i64,
+            outlook.subscriptions_removed = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
         async {
-            let result = super::maintain_lease(self.execute(&lease), || {
+            let mut removed = 0i64;
+            let result = super::maintain_lease(self.execute(&lease, &mut removed), || {
                 self.repository.renew_watch_lease(&lease)
             })
             .await;
+            span.record("outlook.subscriptions_removed", removed);
             let delay = match &result {
                 Ok(()) => 12 * 60 * 60,
                 Err(MailboxError::Provider(e)) => super::retry_seconds(e),
@@ -268,10 +273,9 @@ impl<R: MailboxWatchRepository, G: MailboxWatchGateway> MailboxWatchService<R, G
         .await
         .inspect_err(|error| super::telemetry::log_unit_error(link_id, error))
     }
-    async fn execute(&self, lease: &WatchLease) -> Result<(), MailboxError> {
+    async fn execute(&self, lease: &WatchLease, removed: &mut i64) -> Result<(), MailboxError> {
         let span = Span::current();
         let remote = self.gateway.watches(lease.mailbox).await?;
-        let mut removed = 0i64;
         let attempts = self.repository.watch_attempts(lease).await?;
         let mut keep = None;
         for attempt in attempts {
@@ -302,8 +306,7 @@ impl<R: MailboxWatchRepository, G: MailboxWatchGateway> MailboxWatchService<R, G
                     .remove_watch(lease.mailbox, &found.subscription.id)
                     .await?;
                 self.repository.forget_watch(lease, attempt.id).await?;
-                removed += 1;
-                span.record("outlook.subscriptions_removed", removed);
+                *removed += 1;
             }
         }
         let expires = Utc::now() + Duration::days(3);

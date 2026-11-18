@@ -91,15 +91,21 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
   'scheduled-action': {
     generated: 'suggestRoutine',
     checked: 'checkScheduledAction',
-    listed: 'listScheduledActions listScheduledActionHistory',
-    read: 'getScheduledAction getScheduledActionTemplate',
-    created: 'createScheduledAction',
+    listed: 'listScheduledActions listScheduledActionHistory listSuggestions',
+    read: 'getScheduledAction getScheduledActionTemplate reviewSuggestions reviewRoutineSuggestions',
+    created: 'createScheduledAction addSuggestion',
     deleted: 'deleteScheduledAction',
-    edited: 'updateScheduledAction',
+    edited:
+      'updateScheduledAction detachScheduledAction rewriteSuggestion setScheduledActionAppearance',
     enabled: 'setScheduledActionEnabled activateScheduledActionTemplate',
     ran: 'executeScheduledActionNow',
     unshared: 'unshareScheduledActionTemplate',
     shared: 'shareScheduledActionTemplate',
+    archived: 'retireSuggestion retireRoutineSuggestion',
+    linked: 'attachSuggestionDraft',
+    approved: 'acceptSuggestion',
+    rejected: 'dismissSuggestion',
+    restored: 'restoreSuggestion',
   },
   unfurl: { read: 'getUnfurl getUnfurlBulk' },
   auth: {
@@ -109,7 +115,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     sent: 'sendReferralCode',
     invited: 'inviteToTeam',
     deleted: 'deleteTeamInviteHandler',
-    edited: 'putUserName putProfilePictureFile',
+    edited: 'putUserName putProfilePictureFile patchTeam',
     uploaded: 'createProfilePictureUpload',
   },
   calendar: {
@@ -132,7 +138,10 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     cancelled: 'discardCalendarReplacement',
   },
   cognition: {
-    listed: 'listSkills',
+    listed: 'listSkills listImportEntities',
+    added: 'trackImportEntity',
+    rejected: 'declineImportEntity',
+    imported: 'importNotionPage',
     read: `
       getUsageHandler getChatHistoryHandler getChat fetchWebPage
       getChatPermissions getUserActivity readExplicitMemory readMyActivity readSkill
@@ -151,7 +160,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     generated: 'generateImage',
     stopped: 'stopChatStream',
   },
-  contacts: { listed: 'getContacts' },
+  contacts: { searched: 'searchPeople' },
   email: {
     read: `
       getAttachment getAttachmentDocumentId messageOperationStatus resolveMessageOperation
@@ -216,7 +225,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       meetingInvitePermissions getCallRecord previewSmartTag getActivity getChannel
       getMyChannelAccessRequest getChannelAccessRequest getContactByEmail getContact getCompany
       getCrmPipeline getCrmPipelinePermissions getCrmPipelineStageRequirements getCrmPipelineTable
-      getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
+      getCrmEmailPolicy getCrmEmailPrivacy getCrmEmailRulePreview getCrmEmailRuleRevision
+      getCrmMemberAccess getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
       getDatabaseViewPositions getDocumentByTeamSlug getDocumentPermissionsToken
       getBatchPreviewHandler getDocument getDocumentBranchName getDocumentGithubPullRequests
       getDocumentShortId getSkillDescription getDocumentTeamShare getDocumentTextContent
@@ -228,13 +238,15 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getProjectUserAccessLevel getProjectPermissionsV2 getEmailFollowup getDocumentPermissionsV2
       getWebhook whatsappAccount eventIcs getChannelJoinLink getCrmPipelineViewPositions
       exportDocument streamEvents
+      passwordsAgentDisclose passwordsAgentMyRequest passwordsAgentTotpCode
       exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
     `,
     listed: `
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
       listTeamCalendar listTeamOutOfOffice meetingList meetingListActive listChannelLabels
       getChannelAttachments listChannelBots getChannelParticipants getChannels listCrmBlockedDomains
-      listCompanyContacts listCrmPipelines getCrmPipelineRows listDatabases listDatabaseColumnCasts
+      listCrmEmailPolicyHistory listCrmExcludedEmailThreads
+      listCompanyContacts listCrmPipelines listCrmPipelineDetails getCrmPipelineRows listDatabases listDatabaseColumnCasts
       listDatabaseWebhooks getUserDocumentsHandler getSystemSkillsHandler externalChats
       externalChatMessages externalChatMessageAttachments listFavorites listForms
       listAccessibleForms getGithubPullRequestFacets getGithubPullRequestTasks listHarnesses
@@ -244,10 +256,11 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getCallParticipants getLiveCalls listCrmRecordPipelineEntries listHarnessDirectory listHarnessResidents listSavedViewDefinitions pageInitiatives
     `,
     searched: `
-      searchContacts taskSimilaritySearchHandler
+      searchContacts taskSimilaritySearchHandler passwordsAgentSearch
       findCrmPipelineEntries searchCrmPipelineEntries
     `,
     queried: `
+      previewCrmEmailRules validateCrmEmailRules
       queryCrmPipelineRows queryDatabases postItemsSoupAst
       calculateSpreadsheet
     `,
@@ -256,17 +269,19 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       checkActiveCall getCallRingState getTeamAvailability
     `,
     requested:
-      'requestAccountManager requestChannelAccess accessRequestsSubmit',
+      'requestAccountManager requestChannelAccess accessRequestsSubmit passwordsAgentRequestAccess',
     created: `
       getOrCreateDm getOrCreatePrivate createAgent createAnchor createBot createBotToken
       createChannelLabel meetingCreate createChannel createCrmCompany createCrmContact
-      createCrmTeamContact createCrmPipeline createDatabase createDatabaseWebhook createDocument
+      createCrmTeamContact createCrmPipelineWithFields createDatabase createDatabaseWebhook createDocument
       createCanvasHandler createMarkdownHandler createSkillHandler createSnippetHandler
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook
-      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall
+      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall passwordsAgentCreate
     `,
     edited: `
+      passwordsAgentUpdate passwordsAgentSetTotp
+      updateCrmEmailPolicy updateCrmEmailPrivacy
       resetCrmTeamStages updateAgent editAnchor patchBot meetingUpdate editCallRecord
       editCallTranscript patchChannel setChannelPicture setEmailSync setCompanyHidden
       setCrmCompanyName setContactHidden setCrmContactName applyCrmPipelineOps
@@ -277,10 +292,12 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateForm putFormLayout updateFormPermissions editMyFormResponse patchHarness
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
-      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
+      setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
+      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `
+      cancelCrmEmailRulePreview
       deleteAnchor deleteBot revokeBotToken deleteCallRecord deleteChannelLabel deleteEntityMention
       deleteChannel permanentlyDeleteDocument deleteDocument accessRequestsRemoveDirect
       externalChatRemove deleteDatabaseWebhook deleteSelfHarness deleteHarness deleteInitiative
@@ -339,6 +356,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createEntityMention
       setCrmContactCompany
     `,
+    unlinked: 'unlinkCrmContactCompany',
     reordered: `
       reorderFavorites reorderPinsHandler
       reorderSavedViewDefinitions

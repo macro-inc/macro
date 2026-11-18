@@ -144,7 +144,7 @@ function Avatar(props: {
         flex: 'none',
         'font-family': appFont,
         'font-size': `${Math.round(s * 0.38)}px`,
-        'font-weight': '600',
+        'font-weight': '500',
         height: `${s}px`,
         overflow: 'hidden',
         'place-items': 'center',
@@ -662,7 +662,7 @@ export function HeroTaskWindow() {
                       color: 'var(--c2)',
                       'font-family': appFont,
                       'font-size': '12px',
-                      'font-weight': '600',
+                      'font-weight': '500',
                     }}
                   >
                     {STATUS_META[group.status].label}
@@ -913,7 +913,7 @@ function TaskManagementPanel() {
             color: 'var(--c1)',
             'font-family': appFont,
             'font-size': compact() ? '13.5px' : '14px',
-            'font-weight': '600',
+            'font-weight': '500',
             'line-height': 1.25,
             'min-width': 0,
           }}
@@ -987,7 +987,7 @@ function TaskManagementPanel() {
             color: 'var(--c4)',
             'font-family': appFont,
             'font-size': '10.5px',
-            'font-weight': '600',
+            'font-weight': '500',
             'letter-spacing': '0.06em',
             'text-transform': 'uppercase',
           }}
@@ -1202,7 +1202,7 @@ function _CaptureGraphic() {
               display: 'inline-flex',
               'font-family': appFont,
               'font-size': '13px',
-              'font-weight': '600',
+              'font-weight': '500',
               gap: '7px',
               'min-width': 0,
             }}
@@ -1248,7 +1248,7 @@ function _CaptureGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '13.5px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Lena Hartwell
@@ -1313,7 +1313,7 @@ function _CaptureGraphic() {
             color: 'var(--a0)',
             'font-family': 'Inter, body',
             'font-size': '12px',
-            'font-weight': '700',
+            'font-weight': '500',
             'letter-spacing': '0.08em',
             'line-height': 1,
             'text-transform': 'uppercase',
@@ -1399,12 +1399,12 @@ function _CaptureGraphic() {
                 display: 'inline-flex',
                 'font-family': appFont,
                 'font-size': '11.5px',
-                'font-weight': '600',
+                'font-weight': '500',
                 gap: '5px',
                 padding: '4px 8px',
               }}
             >
-              <span style={{ 'font-weight': '700' }}>#</span> linked to
+              <span style={{ 'font-weight': '500' }}>#</span> linked to
               bug-reports
             </span>
           </div>
@@ -1476,7 +1476,7 @@ export function CaptureTaskGraphic() {
               display: 'inline-flex',
               'font-family': appFont,
               'font-size': '13px',
-              'font-weight': '600',
+              'font-weight': '500',
               gap: '7px',
               'min-width': 0,
             }}
@@ -1525,7 +1525,7 @@ export function CaptureTaskGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '13.5px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Lena Hartwell
@@ -1590,7 +1590,7 @@ export function CaptureTaskGraphic() {
             color: 'var(--a0)',
             'font-family': 'Inter, body',
             'font-size': '12px',
-            'font-weight': '700',
+            'font-weight': '500',
             left: 'calc(50% + 15px)',
             'letter-spacing': '0.08em',
             'line-height': 1,
@@ -2748,7 +2748,7 @@ export function AgentGraphic() {
               flex: 'none',
               'font-family': appFont,
               'font-size': '11.5px',
-              'font-weight': '600',
+              'font-weight': '500',
               'justify-content': 'center',
               'margin-left': 'auto',
             }}
@@ -2864,7 +2864,7 @@ function Keycap(props: { label: string; wide?: boolean }) {
         display: 'inline-grid',
         'font-family': 'Inter, body',
         'font-size': mobile() ? '15px' : '14px',
-        'font-weight': '700',
+        'font-weight': '500',
         height: mobile() ? '40px' : '48px',
         'letter-spacing': '0.04em',
         'line-height': 1,
@@ -2924,7 +2924,7 @@ export function KeyboardGraphic(props: { columns?: number } = {}) {
                 color: 'var(--c4)',
                 'font-family': 'Inter, body',
                 'font-size': mobile() ? '12px' : '13px',
-                'font-weight': '700',
+                'font-weight': '500',
                 'letter-spacing': '0.08em',
                 'line-height': 1,
                 'text-align': 'center',
@@ -3088,7 +3088,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
             'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
-            'font-weight': '700',
+            'font-weight': '500',
             'letter-spacing': '0.02em',
             'white-space': 'nowrap',
           }}
@@ -3115,7 +3115,7 @@ function _ComparisonTable() {
     display: 'flex',
     'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
-    'font-weight': '700',
+    'font-weight': '500',
     'justify-content': 'center',
     'letter-spacing': '0.04em',
     'line-height': 1.1,
@@ -3801,7 +3801,7 @@ export function CreateTaskCreator() {
             display: 'inline-flex',
             'font-family': appFont,
             'font-size': '13px',
-            'font-weight': '600',
+            'font-weight': '500',
             gap: '8px',
             padding: '4px 2px',
           }}
@@ -3817,7 +3817,7 @@ export function CreateTaskCreator() {
               display: 'inline-flex',
               'font-family': 'Inter, body',
               'font-size': '12px',
-              'font-weight': '700',
+              'font-weight': '500',
               gap: '3px',
               padding: '3px 6px',
             }}
@@ -4206,7 +4206,7 @@ export function TaskLifecycleGraphic() {
                   color: 'var(--c0)',
                   'font-family': 'body',
                   'font-size': '15px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                   'line-height': 1.5,
                   margin: 0,
                   'text-align': 'center',
@@ -4266,7 +4266,7 @@ export function TaskLifecycleGraphic() {
                         color: active() === i() ? 'var(--c1)' : 'var(--c2)',
                         'font-family': 'body',
                         'font-size': '15px',
-                        'font-weight': '700',
+                        'font-weight': '500',
                         'letter-spacing': '0.07em',
                         'line-height': 1.2,
                         'text-transform': 'uppercase',
@@ -4349,7 +4349,7 @@ export function TaskLifecycleGraphic() {
                     flex: 'none',
                     'font-family': 'body',
                     'font-size': '16px',
-                    'font-weight': '700',
+                    'font-weight': '500',
                     gap: '7px',
                     'letter-spacing': '0.07em',
                     'line-height': 1,
@@ -4502,7 +4502,7 @@ function ChatMessage(props: {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             {props.name}
@@ -4595,7 +4595,7 @@ export function ChatTasksGraphic() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': '13.5px',
-                'font-weight': '600',
+                'font-weight': '500',
               }}
             >
               growth
@@ -4718,7 +4718,7 @@ export function ChatTasksGraphic() {
                   display: 'inline-flex',
                   'font-family': appFont,
                   'font-size': '12px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                   gap: '6px',
                   height: '24px',
                   padding: '0 8px',
@@ -4790,7 +4790,7 @@ export function ChatTasksGraphic() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': compact() ? '13.5px' : '14px',
-                'font-weight': '600',
+                'font-weight': '500',
                 'line-height': 1.25,
                 'min-width': 0,
               }}
@@ -4943,7 +4943,7 @@ export function AgentHandoffGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             growth
@@ -5008,7 +5008,7 @@ export function AgentHandoffGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '13.5px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Macro
@@ -5072,7 +5072,7 @@ export function AgentHandoffGraphic() {
             color: 'var(--a0)',
             'font-family': 'Inter, body',
             'font-size': '12px',
-            'font-weight': '700',
+            'font-weight': '500',
             left: 'calc(50% + 15px)',
             'letter-spacing': '0.08em',
             'line-height': 1,

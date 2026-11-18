@@ -117,6 +117,27 @@ describe('an item card', () => {
     );
   });
 
+  it('opens a database', async () => {
+    setPreview({
+      loading: false,
+      access: 'access',
+      id: 'db-1',
+      type: 'database',
+      name: 'Cow-ender',
+      rawName: 'Cow-ender',
+    });
+    const view = render(() => <ReferenceCard type="database" id="db-1" />);
+    expect(view.getByText(/^Database/)).toBeTruthy();
+    await fireEvent.click(view.getByRole('button', { name: 'Open Cow-ender' }));
+    expect(mocks.open).toHaveBeenCalledWith(
+      'database',
+      'db-1',
+      undefined,
+      undefined,
+      false
+    );
+  });
+
   it('says so when the viewer cannot open it, without what is inside', () => {
     setPreview({ loading: false, access: 'no_access', id: 'thread-1' });
     const view = render(() => (

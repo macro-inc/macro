@@ -1,6 +1,6 @@
 .pricing-savings { --ps-ink: var(--c1); --ps-ink-muted: var(--c4); --ps-ink-faint: color-mix(in srgb, var(--c4) 70%, transparent); --ps-edge: color-mix(in srgb, var(--b4) 70%, transparent); --ps-edge-muted: color-mix(in srgb, var(--b4) 35%, transparent); --ps-surface: var(--b0); --ps-panel: var(--b1); --ps-hover: color-mix(in srgb, var(--c1) 6%, transparent); --ps-active: color-mix(in srgb, var(--c1) 12%, transparent); width: 100%; }
 .pricing-savings-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; max-width: 920px; margin: 0 auto; }
-.pricing-savings-tools { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.pricing-savings-tools { container: savings-tools / inline-size; display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .pricing-savings-tools > li { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 8px 20px 8px 8px; border: 1px solid var(--ps-edge-muted); border-radius: 16px; background: var(--ps-surface); transition: border-color 180ms ease; }
 .pricing-savings-tools > li[data-selected=true] { border-color: color-mix(in srgb, var(--ps-ink) 22%, transparent); }
 .pricing-savings-toggle { display: flex; flex: 1; align-items: center; gap: 14px; min-width: 0; align-self: stretch; padding: 0 12px; border: 0; border-radius: 10px; background: none; color: var(--ps-ink); font: 500 16px/1.4 Inter, body; text-align: left; }
@@ -36,6 +36,21 @@
 @media (max-width: 767px) {
   .pricing-savings-body { grid-template-columns: minmax(0, 1fr); }
   .pricing-savings-summary { position: static; }
+}
+/* Sidebars and the totals card can narrow the list even on a wide screen. */
+@container savings-tools (max-width: 570px) {
+  .pricing-savings-tools > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 8px 4px 12px; }
+  .pricing-savings-toggle { gap: 10px; min-height: 44px; padding: 0 4px; }
+  .pricing-savings-price { grid-area: 1 / 2; min-width: 0; padding-right: 4px; font-size: 15px; }
+  .pricing-savings-plans { grid-area: 2 / 1 / auto / -1; justify-self: start; margin-left: 34px; }
+  .pricing-savings-plans button { padding: 7px 14px; }
+}
+
+@container savings-tools (max-width: 270px) {
+  .pricing-savings-tools > li { grid-template-columns: minmax(0, 1fr); }
+  .pricing-savings-plans { margin-left: 4px; }
+  .pricing-savings-plans button { padding-inline: 10px; }
+  .pricing-savings-price { grid-area: 3 / 1; justify-self: start; margin-left: 34px; }
 }
 
 .pricing-savings-scroll { max-height: 480px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--c1) 30%, transparent) transparent; scrollbar-gutter: stable; border-radius: 10px; }

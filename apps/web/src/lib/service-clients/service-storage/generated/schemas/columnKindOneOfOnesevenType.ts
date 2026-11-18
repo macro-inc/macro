@@ -10,5 +10,5 @@ export type ColumnKindOneOfOnesevenType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ColumnKindOneOfOnesevenType = {
-  tag: 'tag',
+  select_number: 'select_number',
 } as const;

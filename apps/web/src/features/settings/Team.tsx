@@ -1,4 +1,7 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import { enableAgentTeammates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -19,7 +22,7 @@ import {
 } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
-import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
+import { Button, cn, Dialog, Panel, Tabs, Tooltip } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -39,10 +42,13 @@ import {
   TeamInviteLinkSection,
 } from './TeamInviteLinkSection';
 import { isTeamAdminOrOwner } from './teamMemberPermissions';
+import { InviteAgentPanel } from './views/invite-agent-panel';
 
 const emailSchema = z.string().email();
 
 type InviteEntry = { email: string };
+
+type InviteKind = 'people' | 'agent';
 
 const EMPTY_INVITE: InviteEntry = { email: '' };
 
@@ -463,10 +469,18 @@ export function InviteToTeamDialog(props: {
   teamId: string;
   /** Team admins and owners may reset or turn off the invite link. */
   canManageLink: boolean;
+  /** Team admins and owners may invite agent teammates, behind its flag. */
+  canInviteAgents?: boolean;
   open: boolean;
   onClose: () => void;
 }) {
   const inviteToTeamMutation = useInviteToTeamMutation();
+  const agentFlag = useFeatureFlag(enableAgentTeammates);
+  const canInviteAgents = () =>
+    !!props.canInviteAgents && !agentFlag().loading && agentFlag().enabled;
+  const [chosenKind, setChosenKind] = createSignal<InviteKind>('people');
+  // A rollout or role change that revokes agents falls back to people.
+  const kind = (): InviteKind => (canInviteAgents() ? chosenKind() : 'people');
   // The addresses just invited; set once sending succeeds to show the
   // heads-up step.
   const [sent, setSent] = createSignal<string[]>();
@@ -495,6 +509,7 @@ export function InviteToTeamDialog(props: {
     setInvites([EMPTY_INVITE]);
     setInviteErrors([]);
     setSent(undefined);
+    setChosenKind('people');
     submission += 1;
     props.onClose();
   };
@@ -522,6 +537,22 @@ export function InviteToTeamDialog(props: {
     );
   };
 
+  const kindTabs = () => (
+    <Show when={canInviteAgents()}>
+      <Tabs
+        aria-label={t('teamAgents.inviteKind')}
+        touch="segmented"
+        fullWidth
+        options={[
+          { value: 'people', label: t('teamAgents.people') },
+          { value: 'agent', label: t('teamAgents.agent') },
+        ]}
+        value={kind()}
+        onChange={setChosenKind}
+      />
+    </Show>
+  );
+
   return (
     <Dialog open={props.open} onOpenChange={(open) => !open && close()}>
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
@@ -545,9 +576,18 @@ export function InviteToTeamDialog(props: {
             />
           )}
         </Show>
-        <Show when={!sent()}>
+        <Show when={!sent() && kind() === 'agent'}>
+          <InviteAgentPanel
+            teamId={props.teamId}
+            header={kindTabs()}
+            onCancel={close}
+            onInvited={close}
+          />
+        </Show>
+        <Show when={!sent() && kind() === 'people'}>
           <Panel.Body>
             <div class="flex flex-col gap-5 px-5 py-5">
+              {kindTabs()}
               <TeamInviteLinkSection
                 teamId={props.teamId}
                 canManage={props.canManageLink}

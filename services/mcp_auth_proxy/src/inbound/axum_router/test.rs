@@ -166,6 +166,27 @@ fn consent_submission(
         .expect("request should build")
 }
 
+#[tokio::test]
+async fn registration_under_a_reserved_name_is_a_bad_request() {
+    let harness = Harness::new();
+
+    let registration = send(
+        &harness,
+        Request::builder()
+            .method("POST")
+            .uri("/register")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(format!(
+                r#"{{"client_name":"Macro","redirect_uris":["{TRUSTED_REDIRECT_URI}"]}}"#
+            )))
+            .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(registration.status, StatusCode::BAD_REQUEST);
+    assert_eq!(registration.body, "client_name may not be Macro's own name");
+}
+
 async fn register_client(harness: &Harness, redirect_uri: &str) -> String {
     let registration = send(harness, register_request(redirect_uri)).await;
     assert_eq!(registration.status, StatusCode::OK, "{redirect_uri}");
@@ -221,7 +242,7 @@ async fn consent_screen_escapes_the_client_name() {
             .uri("/register")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(format!(
-                r#"{{"client_name":"<script>alert(1)</script>","redirect_uris":["{GATEWAY_REDIRECT_URI}"]}}"#
+                r#"{{"client_name":"<script>alert(1)</script> Tom & Jerry's","redirect_uris":["{GATEWAY_REDIRECT_URI}"]}}"#
             )))
             .expect("request should build"),
     )
@@ -238,7 +259,8 @@ async fn consent_screen_escapes_the_client_name() {
     .await;
 
     assert!(!page.body.contains("<script>"));
-    assert!(page.body.contains("&#60;script&#62;") || page.body.contains("&lt;script&gt;"));
+    assert!(!page.body.contains("Tom & Jerry"));
+    assert!(page.body.contains("Tom &#38; Jerry") || page.body.contains("Tom &amp; Jerry"));
 }
 
 /// Approving on the consent screen, in the browser that was shown it, signs
@@ -1583,6 +1605,7 @@ async fn unprefixed_unknown_path_is_not_rewritten_onto_the_prefix() {
 #[tokio::test]
 async fn mounted_mcp_preserves_process_readiness_and_bearer_protection() {
     let app = super::mounted_mcp_router(
+        None,
         Harness::new().service,
         JwtValidationArgs::new_testing(),
         Router::new().route("/", get(ok)),
@@ -1601,4 +1624,225 @@ async fn mounted_mcp_preserves_process_readiness_and_bearer_protection() {
     ] {
         assert_eq!(get_status(app.clone(), path).await, expected, "{path}");
     }
+}
+
+#[derive(Clone)]
+struct KeyOwners(std::sync::Arc<std::sync::atomic::AtomicBool>);
+impl macro_authorization::UserApiKeyAuthorizationRepo for KeyOwners {
+    type Err = &'static str;
+    async fn find_key_owner(
+        &self,
+        key: &str,
+    ) -> Result<Option<macro_authorization::ResolvedApiKeyUser>, Self::Err> {
+        if !["fixture-user-key", "fixture-manager-key"].contains(&key)
+            || !self.0.load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Ok(None);
+        }
+        Ok(Some(macro_authorization::ResolvedApiKeyUser {
+            macro_user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                "macro|agent@example.com",
+            )
+            .unwrap(),
+            fusion_user_id: "agent-fusion".into(),
+            organization_id: None,
+            account_manager: (key == "fixture-manager-key").then(|| {
+                macro_authorization::AccountManagerCredential {
+                    grant_id: uuid::Uuid::nil(),
+                    manager_user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                        "macro|manager@example.com",
+                    )
+                    .unwrap(),
+                }
+            }),
+        }))
+    }
+    async fn mark_account_manager_grant_used(&self, _: uuid::Uuid) -> Result<(), Self::Err> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn user_key_authenticates_its_owner_rejects_managed_keys_and_honors_revocation() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    let active = Arc::new(AtomicBool::new(true));
+    let app = super::mounted_mcp_router(
+        Some(Arc::new(
+            macro_authorization::UserApiKeyAuthorizerService::new(KeyOwners(active.clone())),
+        )),
+        Harness::new().service,
+        JwtValidationArgs::new_testing(),
+        Router::new().route(
+            "/",
+            get(|request: axum::extract::Request| async move {
+                request
+                    .extensions()
+                    .get::<macro_user_id::user_id::MacroUserIdStr<'static>>()
+                    .unwrap()
+                    .to_string()
+            }),
+        ),
+    );
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/mcp/mcp")
+                .header("x-macro-user-api-key", "fixture-user-key")
+                .header("x-macro-user-id", "macro|another@example.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        axum::body::to_bytes(response.into_body(), BODY_LIMIT)
+            .await
+            .unwrap(),
+        "macro|agent@example.com"
+    );
+    let managed = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/mcp/mcp")
+                .header("x-macro-user-api-key", "fixture-manager-key")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(managed.status(), StatusCode::UNAUTHORIZED);
+    active.store(false, Ordering::SeqCst);
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/mcp/mcp")
+                .header("x-macro-user-api-key", "fixture-user-key")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn jwt_bearer_still_authenticates_its_user_with_api_key_support_enabled() {
+    use std::sync::{Arc, atomic::AtomicBool};
+    let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256);
+    header.kid = Some("fusionauth".into());
+    let token = jsonwebtoken::encode(
+        &header,
+        &serde_json::json!({
+            "aud": "", "iss": "", "exp": 4102444800_u64, "tid": "tenant",
+            "email": "user@example.com", "fusion_user_id": "fusion-user",
+            "macro_user_id": "macro|user@example.com", "macro_organization_id": null,
+            "root_macro_id": null,
+        }),
+        &jsonwebtoken::EncodingKey::from_secret(b""),
+    )
+    .unwrap();
+    let app = super::mounted_mcp_router(
+        Some(Arc::new(
+            macro_authorization::UserApiKeyAuthorizerService::new(KeyOwners(Arc::new(
+                AtomicBool::new(false),
+            ))),
+        )),
+        Harness::new().service,
+        JwtValidationArgs::new_testing(),
+        Router::new().route(
+            "/",
+            get(|request: axum::extract::Request| async move {
+                request
+                    .extensions()
+                    .get::<macro_user_id::user_id::MacroUserIdStr<'static>>()
+                    .unwrap()
+                    .to_string()
+            }),
+        ),
+    );
+    for key in [None, Some("revoked-key")] {
+        let mut request = Request::builder()
+            .uri("/mcp/mcp")
+            .header(header::AUTHORIZATION, format!("Bearer {token}"));
+        if let Some(key) = key {
+            request = request.header("x-macro-user-api-key", key);
+        }
+        let response = app
+            .clone()
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            axum::body::to_bytes(response.into_body(), BODY_LIMIT)
+                .await
+                .unwrap(),
+            "macro|user@example.com"
+        );
+    }
+}
+
+/// A program that drives the email sign-in and reads the code from the
+/// user's inbox ends up holding an MCP grant for the account, so every broker
+/// route refuses a request the code-mode runtime marks as a program's.
+#[tokio::test]
+async fn a_program_cannot_drive_the_sign_in_broker() {
+    let flow = EmailSignIn::start(LOOPBACK_REDIRECT_URI).await;
+    let requests = [
+        get_page(
+            &unchosen_authorize_uri(&flow.client_id, LOOPBACK_REDIRECT_URI, "&sign_in=email"),
+            None,
+        ),
+        get_page(
+            &format!("/email-sign-in?session={}", flow.session),
+            Some(&flow.cookie),
+        ),
+        post_form(
+            "/email-sign-in",
+            &flow.cookie,
+            flow.form(EMAIL_ADDRESS, None),
+        ),
+        post_form(
+            "/email-sign-in",
+            &flow.cookie,
+            flow.form(EMAIL_ADDRESS, Some(EMAIL_CODE)),
+        ),
+        post_form("/authorize", &flow.cookie, "decision=approve".to_owned()),
+        callback_request(&flow.session, Some(&flow.cookie)),
+        register_request(LOOPBACK_REDIRECT_URI),
+        token_request("grant_type=authorization_code&code=x"),
+        Request::post("/revoke")
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(Body::from("token=x"))
+            .unwrap(),
+    ];
+    for mut request in requests {
+        let route = format!("{} {}", request.method(), request.uri().path());
+        request.headers_mut().insert(
+            macro_authorization::CODE_EXECUTION_HEADER,
+            "1".parse().unwrap(),
+        );
+
+        let response = send(&flow.harness, request).await;
+
+        assert_eq!(response.status, StatusCode::FORBIDDEN, "{route}");
+        assert!(
+            response.body.contains("sign in themselves"),
+            "{route}: {}",
+            response.body
+        );
+    }
+
+    let mut health = Request::get("/health").body(Body::empty()).unwrap();
+    health.headers_mut().insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+    assert_eq!(send(&flow.harness, health).await.status, StatusCode::OK);
 }

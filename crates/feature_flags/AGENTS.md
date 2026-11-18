@@ -3,28 +3,37 @@
 ## What it is
 
 Shared infrastructure for cross-feature rollout gating: async flag loading
-for the authenticated Macro user, where one load returns a stable
+for authenticated Macro users or explicit global service contexts; one load returns a stable
 `FlagSnapshot`, read synchronously after.
 
 ## Start here
 
 - `README.md`: the contract (load semantics, PostHog request/response rules,
   error behavior) — read this before `src/`, which is also the crate doc.
-- `src/outbound/posthog.rs`: the real adapter.
+- `src/outbound/posthog.rs`: the remote adapter, one `/flags` request per load.
+- `src/outbound/posthog_local.rs`: evaluates named boolean flags in memory
+  from polled definitions; fails closed on any condition it doesn't support.
 - `src/outbound/fake.rs`: the in-memory adapter for tests.
 
 ## Scope
 
-- Owns: the `FeatureFlags` port, `FlagSnapshot`/`FlagValue`, and the PostHog
+- Owns: the `FeatureFlags` and `ServiceFeatureFlags` ports, `FlagSnapshot`/`FlagValue`, and the PostHog
   and fake adapters.
 - Not here: which flag name gates which feature — that lives at the call site.
 
 ## Boundaries
 
-- Depends on: `macro_user_id`.
-- Used by: `agent_harness_service` (agent modes, routine templates) and
-  `authentication_service` (`enable-outlook`); each composition root wires the
-  PostHog adapter when `POSTHOG_API_KEY` is set.
+- Depends on: `macro_user_id`, `macro_env` (the `environment` person property
+  every load sends), `sha1` (rollout bucketing).
+- Used by: `agent_harness_service` (agent modes, routine templates),
+  `authentication_service` (`enable-outlook`, `enable-agent-teammates`),
+  `document_storage_service` (programmatic calls, search term matching),
+  `hosted_runtimes` (`ComputerRollout`, `enable-macro-computers`; failures and
+  missing flags disable new surfaces), `team_agents`, `agent_credentials` (agent
+  accounts follow their creator's `enable-agent-teammates`), `email_focus_worker` (`enable-email-focus`, evaluated locally), and the `ai_tools`, `agent_harness`,
+  `agent_inmem`, `call`, `memory` (`disable-memory-refresh`; a failed read keeps
+  refresh running), and `scheduled_action` crates. Each composition root
+  wires the PostHog adapter with its config's `environment`.
 
 ## Recipes
 

@@ -7,7 +7,10 @@ import { err, errAsync, ok, ResultAsync } from 'neverthrow';
 import { match } from 'ts-pattern';
 import type { DatabaseApi } from '../../database/core/api';
 import { toCellRange } from '../../database/core/cell-date-range';
-import type { DatabaseCellValue } from '../../database/core/database-view';
+import type {
+  DatabaseCellValue,
+  DatabaseViewColumn,
+} from '../../database/core/database-view';
 import { UNAVAILABLE_OPTION } from '../../database/core/grid-cells';
 import { toViewColumn } from '../../database/queries/column-detail';
 import type { Pipeline } from '../core/pipeline';
@@ -47,6 +50,29 @@ export function pipelineCell(
       )
     )
     .exhaustive(() => null);
+}
+
+/** Shared schema metadata for the editor, Add deal and CSV adapter. */
+export function pipelineViewColumn(
+  column: ColumnDetail,
+  pipeline: Pipeline
+): DatabaseViewColumn {
+  const id = column.column.id;
+  const fields = pipeline.commercialFields;
+  const money = fields?.money ?? [];
+  const outcome = fields?.outcome === id;
+  const currency = money.some((pair) => pair.currency === id);
+  let defaultValue: DatabaseCellValue | undefined;
+  if (outcome) defaultValue = 'Open';
+  if (currency) defaultValue = 'USD';
+  return {
+    ...toViewColumn(column),
+    primary: id === pipeline.primaryColumnId,
+    currencyColumnId: money.find((pair) => pair.amount === id)?.currency,
+    fixedOptions: outcome || currency,
+    nullable: outcome || currency ? false : column.column.nullable,
+    defaultValue,
+  };
 }
 
 /**
@@ -93,10 +119,9 @@ export function createPipelineApi(
             databaseId: detail.table.database_id,
             name: pipeline.name,
             version: detail.table.version,
-            columns: detail.columns.map((column) => ({
-              ...toViewColumn(column),
-              primary: column.column.id === pipeline.primaryColumnId,
-            })),
+            columns: detail.columns.map((column) =>
+              pipelineViewColumn(column, pipeline)
+            ),
           })),
     readRows: (request) =>
       request.tableId !== pipeline.tableId

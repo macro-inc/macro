@@ -132,6 +132,9 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                     DeclaredMacroEvent::UserMacroEvent(event) => {
                         service.ingest_user_event(event.event().clone()).await
                     }
+                    DeclaredMacroEvent::PasswordMacroEvent(event) => {
+                        service.ingest_password_event(event.event().clone()).await
+                    }
                 };
 
                 match &result {

@@ -190,6 +190,7 @@ export function toHistoryRecord(record: {
   start_time?: string | null;
   end_time?: string | null;
   is_success?: boolean | null;
+  created?: { id: string; name: string }[];
 }): HistoryRecord {
   return {
     id: record.id,
@@ -203,5 +204,6 @@ export function toHistoryRecord(record: {
     revision: revisionSchema.safeParse(record.result).data
       ?.configuration_revision,
     error: errorSchema.safeParse(record.result).data?.error,
+    ...(record.created?.length ? { created: record.created } : {}),
   };
 }

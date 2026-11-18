@@ -6,6 +6,7 @@ async fn a_projection_commits_its_layout_and_revision_together(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repository = PgFormsRepo::new(pool);
     let form = Form {
+        appearance: None,
         id: FormId::new(),
         name: "Interview screening".into(),
         description: "".into(),

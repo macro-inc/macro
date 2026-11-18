@@ -16,6 +16,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::models::McpServerRecord;
 use mcp_client::domain::ports::McpServerStore;
 use mcp_client::domain::service::{ServerAccess, server_access};
+use mcp_client::outbound::guarded_http::McpHttp;
 use std::sync::Arc;
 use url::Url;
 
@@ -36,6 +37,7 @@ mod test;
 pub struct WithCustomMcp<Inner, Servers> {
     inner: Inner,
     servers: Arc<Servers>,
+    http: McpHttp,
 }
 
 impl<Inner, Servers> WithCustomMcp<Inner, Servers>
@@ -44,9 +46,13 @@ where
     Servers: McpServerStore,
 {
     /// Wrap `inner`, answering [`McpDestination::Custom`] from the rows in
-    /// `servers`.
-    pub fn new(inner: Inner, servers: Arc<Servers>) -> Self {
-        Self { inner, servers }
+    /// `servers`, refreshing grants through `http`.
+    pub fn new(inner: Inner, servers: Arc<Servers>, http: McpHttp) -> Self {
+        Self {
+            inner,
+            servers,
+            http,
+        }
     }
 
     /// The owner's enabled server whose URL hashes to `key`, if they hold
@@ -115,7 +121,7 @@ where
         // Token freshness is the service's: a live token comes straight off
         // the row, an expiring one is refreshed and the rotated grant written
         // back for whoever reads it next.
-        let access = server_access(&record, Arc::clone(&self.servers))
+        let access = server_access(&record, &self.http, Arc::clone(&self.servers))
             .await
             .map_err(|error| {
                 EgressError::Upstream(rootcause::report!(

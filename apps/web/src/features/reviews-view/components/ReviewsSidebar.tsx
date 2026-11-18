@@ -26,11 +26,11 @@ import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { githubLabelColor } from '@entity/components/GithubLabelPill';
 import type { GithubPullRequestLabel } from '@entity/types/entity';
+import BrowserTabIcon from '@icon/system/regular/arrow-square-out.svg';
 import SplitIcon from '@icon/system/regular/columns.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import StarIcon from '@icon/system/regular/star.svg';
-import BrowserTabIcon from '@icon/system/regular/tabs.svg';
 import UserIcon from '@icon/system/regular/user.svg';
 import UserCircleCheckIcon from '@icon/system/regular/user-circle-check.svg';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
@@ -311,19 +311,7 @@ export function ReviewsSidebar(props: {
 
   return (
     <ViewSidebar.Root aria-label="Reviews navigation">
-      <ViewSidebar.Header
-        searchLabel="Search reviews"
-        search={() => (
-          <SearchBar
-            label="Search reviews"
-            placeholder="Search reviews"
-            autocomplete="off"
-            value={props.search}
-            onValueChange={props.onSearchChange}
-            onEscape={() => props.onSearchChange('')}
-          />
-        )}
-      >
+      <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Reviews</ViewSidebar.Title>

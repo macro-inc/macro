@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ct.id, ct.company_id,\n                      (LOWER(BTRIM(ct.email)) = ce.email) IS TRUE AS \"is_primary!\"\n               FROM crm_contact_emails ce\n               JOIN crm_contacts ct ON ct.id = ce.contact_id\n               WHERE ce.email = $2 AND ct.team_id = $1\n               ORDER BY ct.id\n               LIMIT 20",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_primary!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "8451fe9bb3f375aa4b42e85aa161777645fc513d4a16ab4ed56a18643e21ce0a"
+}

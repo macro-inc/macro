@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Tabs } from '@ui';
 import type { CodeBlockMode } from './CodeContent';
 
@@ -8,6 +9,7 @@ export function CodeModeControl(props: {
   return (
     <Tabs
       aria-label="HTML views"
+      size={isTouchDevice() ? 'md' : 'sm'}
       touch="inset"
       class="shrink-0"
       options={[

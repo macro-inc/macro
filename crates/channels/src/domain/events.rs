@@ -143,6 +143,8 @@ pub enum ChannelEvent {
     AccessRequested {
         /// The new attempt.
         request: ChannelAccessRequest,
+        /// The requester's profile name, if they have one, for the timeline.
+        requester_name: Option<String>,
         /// Active participants, any of whom may answer it.
         participant_user_ids: Vec<MacroUserIdStr<'static>>,
         /// Resolved channel metadata for notification copy.

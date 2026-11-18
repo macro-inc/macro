@@ -149,6 +149,7 @@ async fn deleting_a_table_takes_its_rows_and_columns_but_never_the_last_table(po
                             }],
                             vec![],
                         ],
+                        ids: None,
                     },
                 },
             ]

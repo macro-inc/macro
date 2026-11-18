@@ -3,6 +3,8 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
+/// The viewer's active notification ids by event type.
+mod active_notification_ids;
 /// DataLoader implementations for notification edges.
 mod loaders;
 /// GraphQL notification mutation adapter.
@@ -16,6 +18,9 @@ mod query;
 /// GraphQL realtime notification subscription adapter.
 mod subscriptions;
 
+pub use active_notification_ids::{
+    ActiveNotificationIdsGraphqlContext, resolve_active_notification_ids,
+};
 pub use loaders::{
     EntityNotificationsKey, EntityNotificationsLoader, NoOpSoupNotificationEdgeReader,
     SoupNotificationEdgeReader, entity_notifications_loader,

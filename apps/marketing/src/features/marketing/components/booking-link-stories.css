@@ -1,6 +1,7 @@
 .booking-link-stories .booking-story-card {
+	--illustration-radius: 28px;
 	padding: 28px 30px 76px;
-	border-radius: 28px;
+	border-radius: var(--illustration-radius);
 	background: var(--color-panel);
 	color: var(--color-ink);
 	box-shadow:
@@ -135,7 +136,7 @@
 	.booking-link-stories .booking-story-card {
 		padding: 20px 20px 52px;
 		font-size: 12px;
-		border-radius: 22px;
+		--illustration-radius: 22px;
 	}
 	.booking-story-guest {
 		grid-template-columns: 1fr;

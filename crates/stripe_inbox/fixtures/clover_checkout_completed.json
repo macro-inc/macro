@@ -1,0 +1,18 @@
+{
+  "id": "evt_1CheckoutCompleted",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "created": 1800000040,
+  "livemode": false,
+  "type": "checkout.session.completed",
+  "data": {
+    "object": {
+      "id": "cs_test_Credits",
+      "object": "checkout.session",
+      "customer": null,
+      "payment_status": "paid",
+      "amount_total": 2500,
+      "metadata": {"macro_purpose": "ai_credits", "macro_user_id": "macro|buyer@example.com"}
+    }
+  }
+}

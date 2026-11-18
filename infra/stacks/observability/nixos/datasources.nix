@@ -56,6 +56,9 @@
       url = "http://127.0.0.1:8081/tempo";
       editable = false;
       jsonData = {
+        # Variables and autocomplete read tag values from the stored blocks of the
+        # last 7 days (the retention), not only the last half hour still in memory.
+        timeRangeForTags = 604800;
         serviceMap.datasourceUid = "prometheus";
         nodeGraph.enabled = true;
         tracesToLogsV2 = {

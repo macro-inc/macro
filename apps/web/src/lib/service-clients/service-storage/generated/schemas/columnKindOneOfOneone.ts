@@ -7,7 +7,7 @@
 import type { ColumnKindOneOfOneoneType } from './columnKindOneOfOneoneType';
 
 /**
- * A URL.
+ * A span from one date-time to another.
  */
 export type ColumnKindOneOfOneone = {
   type: ColumnKindOneOfOneoneType;

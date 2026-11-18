@@ -34,7 +34,7 @@ export function AgentPickerIdentity(props: {
         <span class="flex min-w-0 items-center gap-2">
           <span
             class={cn('block min-w-0 truncate text-sm font-medium leading-5', {
-              'text-ink-muted': props.agent.offline,
+              'text-ink-muted': props.agent.offline || props.agent.poweredOff,
             })}
             title={props.agent.name}
           >
@@ -42,6 +42,9 @@ export function AgentPickerIdentity(props: {
           </span>
           <Show when={props.agent.offline}>
             <AgentOfflineBadge />
+          </Show>
+          <Show when={props.agent.poweredOff}>
+            <AgentOfflineBadge label="Powered off" />
           </Show>
         </span>
         <span

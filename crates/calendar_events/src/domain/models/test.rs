@@ -199,6 +199,36 @@ fn maintenance_horizon_is_stable_within_a_month_and_covers_reads() {
 }
 
 #[test]
+fn near_window_is_this_month_and_next_padded_by_a_day_inside_the_horizon() {
+    for (now, starts_at, ends_at) in [
+        (
+            Utc.with_ymd_and_hms(2026, 11, 17, 11, 11, 0).unwrap(),
+            Utc.with_ymd_and_hms(2026, 10, 31, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2027, 1, 2, 0, 0, 0).unwrap(),
+        ),
+        (
+            Utc.with_ymd_and_hms(2026, 12, 31, 23, 59, 0).unwrap(),
+            Utc.with_ymd_and_hms(2026, 11, 30, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2027, 2, 2, 0, 0, 0).unwrap(),
+        ),
+        (
+            Utc.with_ymd_and_hms(2027, 1, 1, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2026, 12, 31, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2027, 3, 2, 0, 0, 0).unwrap(),
+        ),
+    ] {
+        let near = OccurrenceRange::near_window(now);
+        assert_eq!((near.starts_at, near.ends_at), (starts_at, ends_at));
+        assert_eq!(
+            (near.start_date, near.end_date),
+            (starts_at.date_naive(), ends_at.date_naive())
+        );
+        let horizon = OccurrenceRange::maintenance_horizon(now);
+        assert!(horizon.starts_at < near.starts_at && near.ends_at < horizon.ends_at);
+    }
+}
+
+#[test]
 fn event_time_serializes_nested_fields_as_camel_case() {
     let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 12, 0, 0).unwrap();
     let ends_at = Utc.with_ymd_and_hms(2026, 7, 24, 13, 0, 0).unwrap();
@@ -369,4 +399,30 @@ fn a_mentioned_copy_reads_as_a_snapshot_an_invitation_or_an_event() {
             "{facts:?}"
         );
     }
+}
+
+#[test]
+fn a_calendar_listing_without_the_availability_setting_counts_it() {
+    let calendar = VisibleCalendar {
+        id: Uuid::from_u128(1),
+        email_link_id: Uuid::from_u128(2),
+        email_address: "host@example.com".into(),
+        name: "Coworker".into(),
+        color: None,
+        is_primary: false,
+        is_writable: false,
+        is_subscription: false,
+        contributes_to_availability: false,
+        sync_error: None,
+        provider: CalendarProvider::Google,
+        capabilities: CalendarCapabilities::google(),
+        default_reminders: Vec::new(),
+    };
+    let mut listed = serde_json::to_value(&calendar).unwrap();
+    listed
+        .as_object_mut()
+        .unwrap()
+        .remove("contributesToAvailability");
+    let read: VisibleCalendar = serde_json::from_value(listed).unwrap();
+    assert!(read.contributes_to_availability);
 }

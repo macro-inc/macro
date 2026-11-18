@@ -207,4 +207,6 @@ pub enum WebhookEvent {
     AgentSession(agent_session::domain::events::AgentSessionLifecycleEvent),
     /// User profile events from the `macro.users` topic.
     User(user_events::UserTopicEvent),
+    /// Vault facts addressed to one account from the `macro.passwords` topic.
+    Password(password_events::PasswordTopicEvent),
 }

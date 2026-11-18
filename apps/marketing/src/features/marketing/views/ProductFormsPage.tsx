@@ -1,4 +1,3 @@
-import CalendarIcon from '@icon/system/regular/calendar.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import DatabaseIcon from '@icon/system/regular/database.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
@@ -7,10 +6,11 @@ import { For } from 'solid-js';
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import { FeatureDemoBackdrop } from '../components/FeatureDemoBackdrop';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
+import { FormBookingGraphic } from '../components/forms/FormBookingGraphic';
 import { HomepageClosing } from '../components/HomepageClosing';
 import { HomepageConversation } from '../components/HomepageConversation';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
-import './forms-page.css';
+import '../components/forms/form-stories.css';
 
 const questions = ['Name', 'Company', 'Team size'];
 const responses = [
@@ -98,43 +98,11 @@ export default function ProductFormsPage() {
           title="Integrated with Macro Booking Links."
           description="Add a gate to qualify requests, then a booking link as the last step. People who pass the gate can choose a time after their response is saved."
         >
-          <div
-            class="forms-story forms-story-booking"
-            role="img"
-            aria-label="A form gate lets teams of at least five continue. After submitting, respondents can book a 30-minute product demo."
-          >
-            <FeatureDemoBackdrop />
-            <div class="forms-card forms-gate-card">
-              <div class="forms-card-label">
-                <CheckIcon /> Continue when
-              </div>
-              <div class="forms-rule">
-                <span>Team size</span>
-                <span>is at least</span>
-                <strong>5</strong>
-              </div>
-              <p>People who meet this condition continue to booking.</p>
-            </div>
-            <div class="forms-card forms-booking-card">
-              <div class="forms-card-label">
-                <LinkIcon /> Booking · Last step
-              </div>
-              <h3>Product demo</h3>
-              <p>
-                <CalendarIcon /> 30 minutes · Your local time
-              </p>
-              <div class="forms-times">
-                <span>10:00 AM</span>
-                <span>11:30 AM</span>
-                <span>2:00 PM</span>
-              </div>
-              <span class="forms-submit">Choose a time</span>
-            </div>
-          </div>
+          <FormBookingGraphic />
         </FeaturePageSection>
         <FeaturePageSection
           id="forms-agents"
-          title="Create forms with agents."
+          title="Create forms with Macro Agents."
           description="Describe the questions, qualification rules, and booking link you need. Your agent can create the form and edit it as your needs change."
         >
           <div
@@ -186,7 +154,7 @@ export default function ProductFormsPage() {
         <FeaturePageSection
           id="forms-sharing"
           title="Share a form with your own branding."
-          description="Add your logo and accent color. Share with specific people or a channel, or let anyone with the link respond without signing in."
+          description="Add your logo and accent color. Share with specific people or a channel in Macro Chat, or let anyone with the link respond without signing in."
         >
           <div
             class="forms-story forms-story-sharing"

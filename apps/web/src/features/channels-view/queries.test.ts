@@ -1,6 +1,5 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
-import { QueryClient } from '@tanstack/query-core';
 import { createMemo, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -26,7 +25,6 @@ const fetchAllChannels = vi.hoisted(() =>
 );
 vi.mock('@queries/channel/channels', () => ({ fetchAllChannels }));
 
-const graphqlSoup = vi.hoisted(() => ({ enabled: false }));
 const createChannelDetailQuery = vi.hoisted(() =>
   vi.fn((_channelId: () => string | undefined, enabled: () => boolean) => ({
     get isEnabled() {
@@ -43,9 +41,6 @@ const createChannelDetailQuery = vi.hoisted(() =>
 
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery }));
 vi.mock('@queries/channel/detail', () => ({ createChannelDetailQuery }));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => graphqlSoup,
-}));
 vi.mock('@entity', () => ({
   isChannelEntity: (entity: { type: string }) => entity.type === 'channel',
   isChannelThreadEntity: (entity: { type: string }) =>
@@ -54,7 +49,10 @@ vi.mock('@entity', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
-import { useCachedChannelsByIds } from '@queries/channel/by-ids';
+import {
+  useCachedChannelsByIds,
+  useChannelsByIdsQuery,
+} from '@queries/channel/by-ids';
 import {
   fetchChannelGroupIds,
   resolveReferencedChannels,
@@ -144,53 +142,18 @@ describe('built-in section notification membership', () => {
   });
 });
 describe('channel list query selection', () => {
-  it('refreshes a newly cached full edge instead of reusing it for 30 seconds', async () => {
-    useSoupAstItemsQuery.mockClear();
-    const dispose = createRoot((dispose) => {
-      useChannelByIdQuery(
-        () => 'channel-id',
-        () => true
-      );
-      return dispose;
-    });
-    const client = new QueryClient();
-    try {
-      const [, options] = useSoupAstItemsQuery.mock.calls[0];
-      const queryKey = ['selected-channel', 'channel-id'];
-      client.setQueryData(queryKey, ['old-notification']);
-      const queryFn = vi.fn(async () => [
-        'old-notification',
-        'new-notification',
-      ]);
-      const notifications = await client.fetchQuery({
-        queryKey,
-        queryFn,
-        staleTime: options?.().staleTime,
-      });
-      expect(queryFn).toHaveBeenCalledOnce();
-      expect(notifications).toEqual(['old-notification', 'new-notification']);
-    } finally {
-      client.clear();
-      dispose();
-    }
-  });
-  it('bounds every list and the selected conversation notification edge', () => {
+  it('bounds every list', () => {
     useSoupAstItemsQuery.mockClear();
     const dispose = createRoot((dispose) => {
       useChannelsSources(
         () => true,
         () => 'updated_at'
       );
-      useChannelByIdQuery(
-        () => 'channel-id',
-        () => true
-      );
       return dispose;
     });
     try {
-      // Five channel lists, the Threads rail's threads and their channels,
-      // then the selected conversation.
-      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(8);
+      // Five channel lists, then the Threads rail's threads and their channels.
+      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(7);
       for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 5)) {
         expect(options?.().graphqlProjection).toBe('channel-list');
         expect(options?.().staleTime).toBe(30_000);
@@ -201,21 +164,12 @@ describe('channel list query selection', () => {
       // The Threads rail's channels, fetched by id, are rail rows too.
       const [, channelsByIdOptions] = useSoupAstItemsQuery.mock.calls[6];
       expect(channelsByIdOptions?.().graphqlProjection).toBe('channel-list');
-      const [selectionArgs, selectionOptions] =
-        useSoupAstItemsQuery.mock.calls[7];
-      expect(selectionArgs().transport).toBe('rest');
-      expect(selectionOptions?.().graphqlProjection).toBeUndefined();
-      expect(selectionOptions?.().staleTime).toBe(0);
     } finally {
       dispose();
     }
   });
 
-  it.each([
-    [true, 'the unread-only detail query'],
-    [false, 'the REST lookup'],
-  ])('opens a conversation with GraphQL Soup %s through %s', (enabled) => {
-    graphqlSoup.enabled = enabled;
+  it('opens a conversation through the unread-only detail query', () => {
     useSoupAstItemsQuery.mockClear();
     createChannelDetailQuery.mockClear();
     const { dispose, query } = createRoot((dispose) => ({
@@ -226,21 +180,42 @@ describe('channel list query selection', () => {
       ),
     }));
     try {
-      const [channelId, graphqlEnabled] =
-        createChannelDetailQuery.mock.calls[0];
+      const [channelId, enabled] = createChannelDetailQuery.mock.calls[0];
       expect(channelId()).toBe('channel-id');
-      expect(graphqlEnabled()).toBe(enabled);
-      const [, restOptions] = useSoupAstItemsQuery.mock.calls[0];
-      expect(restOptions?.().enabled).toBe(!enabled);
+      expect(enabled()).toBe(true);
+      expect(useSoupAstItemsQuery).not.toHaveBeenCalled();
       expect(query.isEnabled).toBe(true);
     } finally {
       dispose();
-      graphqlSoup.enabled = false;
     }
   });
 });
 
 describe('channels resolved by id', () => {
+  it('compiles each by-ID batch once until its membership changes', () => {
+    useSoupAstItemsQuery.mockClear();
+    const { dispose, setIds, reads } = createRoot((dispose) => {
+      const [ids, setIds] = createSignal(
+        Array.from({ length: 500 }, (_, index) => `channel-${index}`)
+      );
+      const reads = vi.fn(ids);
+      useChannelsByIdsQuery(reads);
+      return { dispose, setIds, reads };
+    });
+    try {
+      const [args] = useSoupAstItemsQuery.mock.calls[0];
+      const initial = args();
+      for (let read = 0; read < 20; read += 1) args();
+      expect(reads).toHaveBeenCalledTimes(1);
+      setIds(['replacement']);
+      expect(args()).not.toBe(initial);
+      expect(args().params.limit).toBe(1);
+      expect(reads).toHaveBeenCalledTimes(2);
+    } finally {
+      dispose();
+    }
+  });
+
   const resolved = [channelEntity('design'), channelEntity('support')];
   const settled = {
     isEnabled: true,
@@ -437,6 +412,53 @@ describe('Threads rail paging', () => {
       return dispose;
     });
     expect(fetchNextPage).toHaveBeenCalled();
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+});
+
+describe('channel list failures', () => {
+  const failedQuery = (entities: ChannelEntity[]) =>
+    ({
+      isEnabled: true,
+      isPending: false,
+      isLoading: false,
+      isFetching: false,
+      // Offline, the live query hides a network error behind its local cache
+      // projection, which is empty when the list was never loaded.
+      error: null,
+      fetchError: new Error('network'),
+      data: { entities },
+    }) as never;
+
+  it('reports a failed fetch when no conversations are listed', () => {
+    useSoupAstItemsQuery.mockImplementation(() => failedQuery([]));
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'direct_messages',
+        () => 'updated_at'
+      );
+      expect(sources.direct_messages.items()).toEqual([]);
+      expect(sources.direct_messages.error()).toBeInstanceOf(Error);
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+
+  it('keeps cached conversations listed through a failed fetch', () => {
+    useSoupAstItemsQuery.mockImplementation(() =>
+      failedQuery([channelEntity('eng')])
+    );
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'team_channels',
+        () => 'updated_at'
+      );
+      expect(sources.team_channels.items().map((c) => c.id)).toEqual(['eng']);
+      expect(sources.team_channels.error()).toBeUndefined();
+      return dispose;
+    });
     dispose();
     useSoupAstItemsQuery.mockReset();
   });

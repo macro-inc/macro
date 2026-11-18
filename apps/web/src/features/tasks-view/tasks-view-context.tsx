@@ -6,6 +6,7 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import type {
   SavedViewSource,
   SavedViewsSource,
@@ -13,10 +14,7 @@ import type {
 import { normalizeFacetSelection } from '@app/features/soup';
 import { createTagFacetContext } from '@app/features/soup/filters/facets/tag-facet';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  enableGantt,
-  enableProjects,
-} from '@app/lib/core/constant/featureFlags';
+import { enableGantt } from '@app/lib/core/constant/featureFlags';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
@@ -141,7 +139,6 @@ export type TasksViewContext = {
   savedViewTeam?: Accessor<{ id: string; name: string } | undefined>;
   facetContext: Accessor<TaskFacetContext>;
   createTask?: TasksViewProviderProps['onCreateTask'];
-  projectsEnabled: Accessor<boolean>;
   showTaskProject: Accessor<boolean>;
   ganttEnabled: Accessor<boolean>;
   setState: SetStoreFunction<TasksViewState>;
@@ -169,6 +166,8 @@ export type TasksViewContext = {
    * "filter by tag" button on entity rows.
    */
   filterByTag: (optionId: string) => void;
+  /** Filters by one assignee the same way, from an assignee's hover card. */
+  filterByAssignee: (userId: string) => void;
   setPrimarySort: (id: TaskSortId) => void;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
@@ -179,6 +178,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   TasksViewProviderProps
 >('TasksView', (props) => {
   const panel = useSplitPanelOrThrow();
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const navigate = useNavigate();
   const routeParams = useParams<{
     taskId?: string;
@@ -197,9 +197,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const tagSetsReady = useTagSetsReady();
   const [newSavedView, setNewSavedView] = createSignal<boolean | string>(false);
   const [savedViewNavigation, setSavedViewNavigation] = createSignal({});
-  const projectsFlag = useFeatureFlag(enableProjects);
-  const projectsEnabled = () => projectsFlag().enabled;
-  const showTaskProject = () => projectsEnabled() && !props.hideTaskProject;
+  const showTaskProject = () => !props.hideTaskProject;
   const ganttFlag = useFeatureFlag(enableGantt);
   const ganttEnabled = () => ganttFlag().enabled;
   const calendar = createDateBucketBoundariesSignal();
@@ -257,9 +255,6 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return persistedState.layout;
     },
     get groupBy() {
-      if (persistedState.groupBy === 'project' && !projectsEnabled()) {
-        return 'status';
-      }
       if (state.layout !== 'board') {
         return persistedState.groupBy;
       }
@@ -267,9 +262,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return toTaskBoardGrouping(persistedState.groupBy);
     },
     get tab(): TasksTab {
-      return isProjectTab(persistedState.tab) && !projectsEnabled()
-        ? 'my-tasks'
-        : persistedState.tab;
+      return persistedState.tab;
     },
   });
 
@@ -527,7 +520,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const opensInline = (options?: EntityDetailNavigationOptions) => {
     const event = options?.event;
     return (
-      !isTouchDevice() &&
+      inlinePreviewLayout() &&
       !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
   };
@@ -632,7 +625,6 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   );
 
   const setTab = (tab: TasksTab) => {
-    if (isProjectTab(tab) && !projectsEnabled()) return;
     const leavingSavedView = state.savedViewActive;
     if (leavingSavedView) leaveSavedView();
     if (persistedState.tab === tab && !leavingSavedView) {
@@ -666,6 +658,14 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     );
   };
 
+  const filterByAssignee = (userId: string) => {
+    closeTask();
+    setState(
+      'facets',
+      reconcile(normalizeFacetSelection({ assignees: [userId] }))
+    );
+  };
+
   const isSidebarSectionOpen = (id: string) =>
     !state.collapsedSidebarSectionIds.includes(id);
 
@@ -692,7 +692,6 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     },
     state,
     calendar,
-    projectsEnabled,
     showTaskProject,
     ganttEnabled,
     setState: setStateWithSearch,
@@ -705,6 +704,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     setTab,
     setFacets,
     filterByTag,
+    filterByAssignee,
     setPrimarySort,
     isSidebarSectionOpen,
     setSidebarSectionOpen,

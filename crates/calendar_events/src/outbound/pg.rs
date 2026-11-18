@@ -10,6 +10,7 @@ mod join_requests;
 mod outlook;
 mod replacement;
 mod source_access;
+mod sync_health;
 
 use change_log::ChangeLogBatch;
 
@@ -35,14 +36,14 @@ use crate::domain::{
         CalendarEventSourceContent, CalendarEventUpsert, CalendarGrantBinding, CalendarGrantIntent,
         CalendarLinkTokenIdentity, CalendarMentionEvent, CalendarMentionPreview,
         CalendarMentionRequestItem, CalendarMentionViewerCopy, CalendarOccurrence,
-        CalendarOccurrenceCursor, CalendarProvider, CalendarReminderFiring, CalendarSyncStatus,
-        CalendarWatchRelease, ConferenceProvider, DisconnectedCalendar, DueCalendarReminder,
-        EventDetails, EventReminderOverride, EventReminders, EventStart, EventStatus, EventTime,
-        EventTransparency, EventType, EventVisibility, GOOGLE_CALENDAR_SCOPES,
-        GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel, GuestPolicy, MeetingCopy,
-        OccurrenceException, OccurrenceListing, OccurrenceRange, OwnedInbox, ProviderCalendar,
-        StoredGoogleCalendar, TeamOutOfOffice, ViewerCapabilities, VisibleCalendar,
-        is_system_calendar,
+        CalendarOccurrenceCursor, CalendarProvider, CalendarReminderFiring, CalendarSyncFailure,
+        CalendarSyncStatus, CalendarWatchRelease, ConferenceProvider, DisconnectedCalendar,
+        DueCalendarReminder, EventDetails, EventReminderOverride, EventReminders, EventStart,
+        EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
+        GuestPolicy, MeetingCopy, OccurrenceException, OccurrenceListing, OccurrenceRange,
+        OwnedInbox, ProviderCalendar, StoredGoogleCalendar, TeamOutOfOffice, ViewerCapabilities,
+        VisibleCalendar, is_system_calendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -1193,6 +1194,9 @@ impl CalendarRepository for PgCalendarRepository {
         let cursor_starts_at = cursor.as_ref().map(|cursor| cursor.starts_at);
         let cursor_event_id = cursor.as_ref().map(|cursor| cursor.event_id);
         let cursor_occurrence_key = cursor.as_ref().map(|cursor| cursor.occurrence_key.as_str());
+
+        // Materialize the owner set so Postgres can use owner_id in each
+        // occurrence index condition alongside the time window.
         let rows = sqlx::query_as!(
             OccurrenceJoinRow,
             r#"
@@ -1247,13 +1251,13 @@ impl CalendarRepository for PgCalendarRepository {
             LEFT JOIN calendar_event_overrides override
                 ON override.event_id = occurrence.event_id
                AND override.recurrence_id = occurrence.recurrence_id
-            WHERE occurrence.owner_id IN (
+            WHERE occurrence.owner_id = ANY(ARRAY(
                     SELECT $1::text
                     UNION
                     SELECT link.child_macro_id
                     FROM macro_user_links link
                     WHERE link.primary_macro_id = $1
-              )
+              ))
               AND event.status <> 'cancelled'
               AND NOT occurrence.is_cancelled
               AND (
@@ -1910,6 +1914,7 @@ impl CalendarRepository for PgCalendarRepository {
                 synced_at = now(),
                 last_sync_error = NULL,
                 last_sync_error_at = NULL,
+                last_sync_error_kind = NULL,
                 consecutive_sync_failures = 0,
                 materialized_starts_at = CASE
                     WHEN $4 THEN $5
@@ -1976,6 +1981,7 @@ impl CalendarRepository for PgCalendarRepository {
         lease_token: Uuid,
         account_id: Uuid,
         calendar_id: Uuid,
+        kind: CalendarSyncFailure,
         message: &str,
     ) -> Result<(), Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
@@ -1985,6 +1991,7 @@ impl CalendarRepository for PgCalendarRepository {
             r#"
             UPDATE calendars
             SET last_sync_error = $3,
+                last_sync_error_kind = $4,
                 last_sync_error_at = now(),
                 consecutive_sync_failures = consecutive_sync_failures + 1,
                 updated_at = now()
@@ -1996,6 +2003,7 @@ impl CalendarRepository for PgCalendarRepository {
             calendar_id,
             account_id,
             message,
+            sync_health::stored_sync_failure(kind),
         )
         .fetch_optional(&mut *tx)
         .await
@@ -2687,8 +2695,7 @@ impl CalendarRepository for PgCalendarRepository {
                 EXISTS(SELECT 1 FROM calendar_outlook_declines d
                     WHERE d.mailbox_key=calendar_outlook_mailbox_key(link.id) AND d.provider_calendar_id=calendar.provider_calendar_id AND d.confirmed_at IS NULL AND d.submitted_at<now()-interval '5 minutes') AS "unconfirmed_reply!",
                 calendar.consecutive_sync_failures,account.provider,calendar.online_meeting_providers,
-                COALESCE(preference.contributes_to_availability,
-                    account.owner_id = $1 AND calendar.is_primary) AS "contributes_to_availability!"
+                COALESCE(preference.contributes_to_availability, true) AS "contributes_to_availability!"
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
@@ -3028,6 +3035,10 @@ async fn upsert_calendar_tx(
     // Snapshot the reminder-relevant state before the upsert: a change to the
     // default reminders or the zone that anchors all-day starts invalidates
     // the firing schedule of every event that follows this calendar.
+    // A source under another role counts only if written since the last
+    // committed sync. A full snapshot keeps a stored copy newer than Google's
+    // and its old role, and reading the calendar again keeps it again, so
+    // counting older sources would rebuild such a calendar on every poll.
     let previous = sqlx::query!(
         r#"
         SELECT
@@ -3036,6 +3047,7 @@ async fn upsert_calendar_tx(
                 SELECT 1 FROM calendar_event_sources source
                 WHERE source.calendar_id = calendars.id
                   AND source.provider_access_role IS DISTINCT FROM calendars.access_role
+                  AND source.last_seen_at >= calendars.synced_at
             )) AS "needs_verification!"
         FROM calendars
         WHERE account_id = $1 AND provider_calendar_id = $2
@@ -3106,6 +3118,10 @@ async fn upsert_calendar_tx(
             last_sync_error_at = CASE
                 WHEN calendars.is_deleted THEN NULL
                 ELSE calendars.last_sync_error_at
+            END,
+            last_sync_error_kind = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error_kind
             END,
             consecutive_sync_failures = CASE
                 WHEN calendars.is_deleted THEN 0

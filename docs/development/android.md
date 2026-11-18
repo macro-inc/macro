@@ -54,7 +54,8 @@ PORT=3004 just android-dev --no-watch --no-dev-server-wait --config '{"build":{"
 
 That address is emulator-only; the host-side server check must be skipped.
 
-Build commands embed the production frontend. Outputs are under
+Build commands embed the production frontend, without its source maps (see
+[building bundles](../../apps/web/tauri/src-tauri/README.md#building-bundles)). Outputs are under
 `tauri/src-tauri/gen/android/app/build/outputs/`. The launcher defaults to ARM64.
 Release builds automatically prepare the signing configuration below and produce
 signed artifacts. Debug builds do not fetch release signing credentials.
@@ -63,6 +64,16 @@ The app's Gradle packaging excludes the duplicate
 `META-INF/versions/9/OSGI-INF/MANIFEST.MF` from JSpecify and OpenTelemetry. This
 OSGi metadata is unused on Android. Keep the exclusion exact: broad `META-INF`
 exclusions can remove service-provider registrations used by OpenTelemetry.
+
+## Performance benchmark
+
+`just android-benchmark --serial <emulator>` (from `apps/web`) times cold start, view
+switches, opening a channel and documents, and going back, on a signed-in benchmark build,
+using the app's own perf spans so lab and Datadog field numbers compare. It navigates and
+reads only. Building the benchmark APK, the emulator settings it was baselined on, the
+private targets file and how to read its noise figures are in
+[`apps/web/scripts/android-benchmark/README.md`](../../apps/web/scripts/android-benchmark/README.md).
+Measure before and after every Android performance change with it.
 
 ## Release signing
 
@@ -133,6 +144,28 @@ The upload certificate identifies locally signed artifacts. When Google creates
 the Play App Signing key, Play-delivered APKs use that separate certificate; add
 its fingerprint to production associations before testing Play-installed links.
 
+### APK for sideloading
+
+Each production release gets a signed ARM64 APK,
+`macro-<tag>-android-arm64.apk`, and its `.sha256` as release assets. The
+`Android APK on Release` workflow builds them on the same `released` event as
+`Deploy Production Release`. It is a separate workflow, so the deploy never
+waits on it, and a failed APK build leaves the release in place.
+
+- It runs the App Bundle build with `--apk`, with the same production `VITE_*`
+  environment, which is defined once in the generated workflow sources. Both
+  builds fail when the PostHog key is empty, because without it every feature
+  flag reads false.
+- It signs with the upload key, so an APK updates an earlier APK install in
+  place. A Play-installed app has the Play App Signing certificate: uninstall it
+  before installing an APK, and the reverse.
+- The version code is the one committed at the tag. The installed app then
+  takes web updates over the air like a Play install.
+- To rebuild a release's APK, re-run its build job, or run the workflow with
+  "Use workflow from" set to the release tag. Only tags that contain the
+  workflow can be picked, so releases cut before it have no APK build. Assets
+  stay with their release; nothing prunes them.
+
 ### Releasing to Google Play from a pull request
 
 Android releases are driven from pull requests, like iOS (see
@@ -188,7 +221,9 @@ To release:
    it is the release decision: nothing else approves it. The
    **`Android Play Release`** workflow (`.github/workflows/android-play-release.yml`)
    first refuses drafts, PRs with failing checks (pending ones are waited on,
-   up to 30 minutes), PRs without a bump, and PRs whose head lacks Android
+   up to 30 minutes; the native checks and either platform's release checks
+   don't count, so a failed or in-flight iOS release never holds this one
+   back), PRs without a bump, and PRs whose head lacks Android
    native code that landed on `main` since they branched (the gate hashes
    the merge result, so such a bundle could never pass it; the refusal lists
    the native files `main` changed; merge `main`, bump, re-add the label).

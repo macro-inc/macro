@@ -81,3 +81,59 @@ async fn a_refused_connection_is_unreachable() {
         Err(PurgeOwnedEntityError::Unreachable)
     );
 }
+
+#[tokio::test]
+async fn vault_lifecycle_requires_acknowledgement_and_preserves_typed_retryable_errors() {
+    use super::VaultLifecycleRequestError;
+    for status in [204, 200, 404, 409, 503] {
+        let server = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .and(path(format!("/internal/passwords/teams/{DOCUMENT}")))
+            .and(header("x-document-storage-service-auth-key", INTERNAL_KEY))
+            .respond_with(ResponseTemplate::new(status))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let result = DocumentStorageServiceClient::new(INTERNAL_KEY.into(), server.uri())
+            .purge_team_vault(DOCUMENT)
+            .await;
+        match status {
+            204 => assert!(result.is_ok()),
+            409 => assert!(matches!(result, Err(VaultLifecycleRequestError::Busy))),
+            503 => assert!(matches!(
+                result,
+                Err(VaultLifecycleRequestError::Unavailable)
+            )),
+            _ => assert!(
+                matches!(result,Err(VaultLifecycleRequestError::Rejected(code)) if code==status)
+            ),
+        }
+    }
+}
+#[tokio::test]
+async fn vault_lifecycle_never_follows_a_redirect_to_an_unrelated_acknowledgement() {
+    use super::VaultLifecycleRequestError;
+    let server = MockServer::start().await;
+    Mock::given(method("DELETE"))
+        .and(path("/unrelated"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(0)
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path(format!("/internal/passwords/teams/{DOCUMENT}")))
+        .respond_with(
+            ResponseTemplate::new(307)
+                .insert_header("location", format!("{}/unrelated", server.uri())),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let result = DocumentStorageServiceClient::new(INTERNAL_KEY.into(), server.uri())
+        .purge_team_vault(DOCUMENT)
+        .await;
+    assert!(matches!(
+        result,
+        Err(VaultLifecycleRequestError::Rejected(307))
+    ));
+}

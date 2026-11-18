@@ -57,12 +57,6 @@ fn android_native_check_is_an_unconditional_required_merge_check() {
         !android.contains("!steps.labels"),
         "never negate a comparison with a leading `!`: {android}"
     );
-    let status = yaml
-        .split("\n  status-check:\n")
-        .nth(1)
-        .expect("status job");
-    assert!(status.contains("- android-native-check"));
-    assert!(status.contains("needs.android-native-check.result }}\" != \"success\""));
 }
 
 fn filters(yaml: &str) -> (&str, &str) {
@@ -85,6 +79,13 @@ fn job<'a>(yaml: &'a str, id: &str, next_id: &str) -> &'a str {
         .unwrap_or_else(|| panic!("{id} job"))
 }
 
+/// The last job's rendered YAML, from its id to the end.
+fn last_job<'a>(yaml: &'a str, id: &str) -> &'a str {
+    yaml.split(&format!("\n  {id}:\n"))
+        .nth(1)
+        .unwrap_or_else(|| panic!("{id} job"))
+}
+
 #[test]
 fn nix_dev_shell_does_not_start_typecheck() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
@@ -99,12 +100,11 @@ fn nix_dev_shell_does_not_start_typecheck() {
     );
 }
 
-/// The iOS merge gate is required through the aggregator, not the ruleset:
-/// the status check must depend on it and fail when it fails.
+/// The iOS merge gate is required through `CI gate`, not the ruleset.
 #[test]
-fn status_check_requires_the_ios_native_check() {
+fn ios_native_check_gates_only_native_changes() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let gate = job(&yaml, "ios-native-check", "status-check");
+    let gate = last_job(&yaml, "ios-native-check");
     assert!(
         gate.contains("name: iOS Native Check"),
         "gate job name is a check name: {gate}"
@@ -130,18 +130,6 @@ fn status_check_requires_the_ios_native_check() {
     assert!(
         gate.contains("steps.labels.outputs.skip != 'true'"),
         "gated steps run when the skip label is absent: {gate}"
-    );
-    let status = yaml
-        .split("\n  status-check:\n")
-        .nth(1)
-        .expect("status-check job");
-    assert!(
-        status.contains("- ios-native-check"),
-        "status-check must need the gate: {status}"
-    );
-    assert!(
-        status.contains("needs.ios-native-check.result }}\" == \"failure\""),
-        "status-check must fail when the gate fails: {status}"
     );
 }
 
@@ -247,6 +235,44 @@ fn generated_code_checks_every_rust_generated_artifact_in_one_job() {
     );
 }
 
+/// The checkout is dated for the kept `target` directory before anything
+/// builds (`cargo_target_reuse.ts`). Any other job on its cache tag would replace the volume with a `target` that never saw
+/// this job's build, so the tag and the mount belong to this job alone.
+#[test]
+fn generated_code_alone_keeps_a_cargo_target() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let generated = job(&yaml, "generated-code", "biome-check");
+    let position = |needle: &str| {
+        generated
+            .find(needle)
+            .unwrap_or_else(|| panic!("`{needle}` in generated-code: {generated}"))
+    };
+    assert!(position("Reuse the kept cargo target") < position("SQLX_OFFLINE=true cargo build"));
+
+    for workflow in crate::workflows::WORKFLOWS {
+        let rendered = (workflow.render_yaml)().expect("workflow renders");
+        let root: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("workflow parses");
+        for (id, job) in root["jobs"].as_mapping().expect("jobs") {
+            let id = id.as_str().unwrap_or_default();
+            let text = serde_yaml::to_string(job).expect("job serializes");
+            let owner = workflow.file_name == "web-app-check-main.yml" && id == "generated-code";
+            assert_eq!(
+                text.contains(vars::WEB_CODEGEN_CACHE_TAG),
+                owner,
+                "{} job {id}: only generated-code runs on its cache tag",
+                workflow.file_name
+            );
+            if workflow.file_name == "web-app-check-main.yml" {
+                assert_eq!(
+                    text.contains(vars::CARGO_TARGET_VOLUME_DIR),
+                    owner,
+                    "web job {id}: only generated-code mounts a cargo target"
+                );
+            }
+        }
+    }
+}
+
 /// Debug info only slows the throwaway generator build. Set at job level so
 /// every cargo call in the job shares the profile and reuses one build.
 #[test]
@@ -305,20 +331,6 @@ fn codegen_filter_covers_every_input_of_the_generated_code_job() {
 }
 
 #[test]
-fn status_check_requires_generated_code() {
-    let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let status = yaml
-        .split("\n  status-check:\n")
-        .nth(1)
-        .expect("status check job");
-    assert!(status.contains("- generated-code"), "{status}");
-    assert!(
-        status.contains("needs.generated-code.result }}\" == \"failure\""),
-        "{status}"
-    );
-}
-
-#[test]
 fn should_run_includes_fold_wasm_inputs() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let filters = yaml
@@ -354,7 +366,7 @@ fn build_job_uses_remote_sccache_and_wasm_cache() {
     let build = yaml
         .split("\n  build:\n")
         .nth(1)
-        .and_then(|rest| rest.split("\n  status-check:").next())
+        .and_then(|rest| rest.split("\n  ios-native-check:").next())
         .expect("build job");
     assert!(
         build.contains("namespace-profile-linux-mid"),
@@ -379,6 +391,13 @@ fn build_job_uses_remote_sccache_and_wasm_cache() {
     assert!(
         build.contains("just build-dev"),
         "build still produces the vite bundle: {build}"
+    );
+    let package_cache = format!("WASM_PKG_CACHE_DIR: {}", vars::WASM_PKG_CACHE_DIR);
+    assert!(build.contains(&package_cache), "{build}");
+    assert_eq!(
+        yaml.matches("WASM_PKG_HTTP_CACHE: '1'").count(),
+        yaml.matches(&package_cache).count(),
+        "every PR step that reuses wasm packages shares them across nodes: {yaml}"
     );
 }
 
@@ -472,14 +491,6 @@ fn browser_suites_build_the_wasm_they_load_first() {
         browser.contains("playwright: 'true'"),
         "the job installs Playwright's Chromium: {browser}"
     );
-}
-
-/// A browser suite that isn't required could fail without blocking a merge.
-#[test]
-fn status_check_requires_the_browser_jobs() {
-    let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    assert!(yaml.contains(r#"[[ "${{ needs.functional.result }}" == "failure" ]]"#));
-    assert!(yaml.contains(r#"[[ "${{ needs.browser.result }}" == "failure" ]]"#));
 }
 
 /// The event details fixture replaces the calendar query modules with preview
@@ -713,7 +724,7 @@ fi
 #[test]
 fn ios_gate_comment_runs_after_failures_and_only_for_same_repo_prs() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let gate = job(&yaml, "ios-native-check", "status-check");
+    let gate = last_job(&yaml, "ios-native-check");
     assert!(gate.contains("pull-requests: write"));
     assert!(gate.contains(
         "!cancelled() && github.event.pull_request.head.repo.full_name == github.repository"
@@ -788,14 +799,6 @@ fn preview_steps_follow_the_build_and_cannot_fail_it() {
     }
 }
 
-/// A job that hits its timeout reports `cancelled`, so the required check must
-/// not pass on a generated code job that never finished.
-#[test]
-fn status_check_rejects_a_cancelled_generated_code_job() {
-    let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    assert!(yaml.contains(r#"[[ "${{ needs.generated-code.result }}" == "cancelled" ]]"#));
-}
-
 /// The checks run at once, and the step still fails, naming the check, when any
 /// one of them fails; every check's output is printed either way.
 #[test]
@@ -867,6 +870,11 @@ fn every_former_typecheck_step_still_runs() {
             "Check Collaboration Package Types",
             "packages/collaboration",
             "bun run type-check",
+        ),
+        (
+            "Check Observability Package",
+            "packages/observability",
+            "bun run type-check && bun run test",
         ),
         (
             "Check Lexical Service Types",
@@ -1091,5 +1099,24 @@ fn schema_detection_reads_blobs_on_demand_and_fails_when_it_cannot() {
     assert!(
         !passed && !log.contains("codegen_changed="),
         "a failed blob fetch must fail the step: {log}"
+    );
+}
+
+#[test]
+fn cargo_target_reuse_scenarios() {
+    let output = std::process::Command::new("node")
+        .args(["--test", "cargo_target_reuse.test.ts"])
+        .current_dir(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/workflows/scripts"
+        ))
+        .env_remove("BASH_ENV")
+        .output()
+        .expect("run the cargo target reuse scenarios with Node");
+    assert!(
+        output.status.success(),
+        "cargo target reuse scenarios failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
 }

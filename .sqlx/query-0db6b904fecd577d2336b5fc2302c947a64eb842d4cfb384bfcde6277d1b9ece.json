@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO suggestion_target (suggestion_id, role, position, entity_type, entity_id)\n           VALUES ($1, 'produced',\n                   (SELECT count(*) FROM suggestion_target WHERE suggestion_id = $1 AND role = 'produced')::smallint,\n                   'scheduled_action', $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0db6b904fecd577d2336b5fc2302c947a64eb842d4cfb384bfcde6277d1b9ece"
+}

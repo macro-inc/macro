@@ -151,6 +151,7 @@ it('preserves initiative identity, properties, and metadata separately from fold
   expect(
     mapGraphqlSoupItem({
       __typename: 'GraphqlSoupInitiative',
+      appearance: null,
       id: 'initiative',
       entityType: 'INITIATIVE',
       displayName: 'Launch',
@@ -290,7 +291,6 @@ it('maps agent sessions without discarding persona, favorites or notifications',
 
 const mocks = vi.hoisted(() => {
   let enabled = true;
-  let graphqlEnabled = true;
   let tauri = false;
   let signedIn = true;
   let releaseApi: (() => void) | undefined;
@@ -341,12 +341,6 @@ const mocks = vi.hoisted(() => {
     set enabled(value: boolean) {
       enabled = value;
     },
-    get graphqlEnabled() {
-      return graphqlEnabled;
-    },
-    set graphqlEnabled(value: boolean) {
-      graphqlEnabled = value;
-    },
     get tauri() {
       return tauri;
     },
@@ -384,6 +378,11 @@ const mocks = vi.hoisted(() => {
     toastFailure,
     telemetryError: vi.fn(),
     telemetryWarn: vi.fn(),
+    spans: [] as Array<{
+      name: string;
+      attrs: Record<string, unknown>;
+      end: ReturnType<typeof vi.fn>;
+    }>,
     traceparent: '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01',
     normalizedCacheExchange: vi.fn(
       (host: unknown, _options?: NormalizedCacheExchangeOptions) => ({
@@ -422,8 +421,6 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_BEARER_TOKEN_AUTH: false,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
 vi.mock('@core/constant/servers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/servers')>()),
@@ -446,7 +443,7 @@ vi.mock('@core/util/platformFetch', () => ({
 }));
 vi.mock('@graphql-cache/rollout', () => ({
   getBrowserTursoCacheRolloutDecision: (): BrowserTursoCacheRolloutDecision => {
-    const enabled = mocks.tauri ? mocks.graphqlEnabled : mocks.enabled;
+    const enabled = mocks.tauri || mocks.enabled;
     return {
       enabled,
       cohort: mocks.tauri ? 'unknown' : enabled ? 'treatment' : 'control',
@@ -454,7 +451,7 @@ vi.mock('@graphql-cache/rollout', () => ({
         ? 'tauri-native-unchanged'
         : enabled
           ? 'graphql-transport-enabled'
-          : 'graphql-transport-disabled',
+          : 'emergency-disabled',
       nativeCacheUnchanged: mocks.tauri,
     };
   },
@@ -478,15 +475,24 @@ vi.mock('@macro-inc/observability', () => ({
     error: mocks.telemetryError,
     warn: mocks.telemetryWarn,
     captureContext: () => ({ run: <T>(work: () => T) => work() }),
-    span: (_name: string, work: (span: unknown) => Promise<unknown>) =>
-      work({
+    span: (name: string, work?: (span: unknown) => Promise<unknown>) => {
+      const attrs: Record<string, unknown> = {};
+      const end = vi.fn();
+      mocks.spans.push({ name, attrs, end });
+      const span = {
         run: <T>(work: () => T) => work(),
         event: vi.fn(),
-        setAttr: vi.fn(),
+        setAttr: (key: string, value: unknown) => {
+          attrs[key] = value;
+        },
+        error: vi.fn(),
+        end,
         injectTraceHeaders: (headers: Record<string, string>) => {
           headers.traceparent = mocks.traceparent;
         },
-      }),
+      };
+      return work ? work(span) : span;
+    },
   },
 }));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
@@ -560,7 +566,7 @@ vi.mock('@urql/core', () => ({
   },
 }));
 
-it('maps the unread alias without pretending it is the full notification edge', async () => {
+it('maps the unread and mention aliases without pretending either is the full notification edge', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   const item = {
     __typename: 'GraphqlSoupChannel',
@@ -586,6 +592,7 @@ it('maps the unread alias without pretending it is the full notification edge', 
     unreadNotifications: [
       { id: 'one', state: 'UNSEEN', createdAt: '2026-01-01' },
     ],
+    unreadMentions: [{ id: 'mention', state: 'UNSEEN' }],
   } satisfies ChannelListItemFieldsFragment;
   expect(mapGraphqlSoupItem(item)).toMatchObject({
     tag: 'channel',
@@ -594,6 +601,7 @@ it('maps the unread alias without pretending it is the full notification edge', 
       unreadNotifications: [
         { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
       ],
+      unreadMentions: [{ id: 'mention', state: 'unseen' }],
     },
   });
 });
@@ -774,6 +782,7 @@ describe('GraphQL Soup document sub types', () => {
       const { mapGraphqlSoupItem } = await import('./graphql-soup');
       const item = {
         __typename: 'GraphqlSoupDocument',
+        appearance: null,
         id: 'doc-sub-type',
         entityType: 'DOCUMENT' as GraphqlSoupEntityType,
         displayName: 'Plan',
@@ -806,7 +815,6 @@ describe('GraphQL Soup browser cache session gate', () => {
     vi.resetModules();
     vi.clearAllMocks();
     mocks.enabled = true;
-    mocks.graphqlEnabled = true;
     mocks.tauri = false;
     mocks.signedIn = true;
     mocks.resetQueue();
@@ -951,6 +959,112 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(response.status).toBe(200);
     expect(mocks.platformFetch).toHaveBeenCalledOnce();
     expect(soup.graphqlSoupProjectionSupported()).toBe(true);
+  });
+
+  it('ends the transport span at the headers once urql has read the body', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: { user: { id: 'user-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    const soup = await import('./graphql-soup');
+    mocks.spans.length = 0;
+    const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'query User { user { id } }' }),
+    });
+    const transport = mocks.spans.find(
+      (span) => span.name === 'graphql.transport'
+    );
+    const returnedBy = performance.now();
+
+    expect(transport?.end).not.toHaveBeenCalled();
+    expect(transport?.attrs['graphql.body_outcome']).toBeUndefined();
+    expect(await response.json()).toEqual({ data: { user: { id: 'user-1' } } });
+    expect(transport?.attrs['graphql.body_outcome']).toBe('complete');
+    expect(transport?.attrs['graphql.body_ms']).toEqual(expect.any(Number));
+    expect(transport?.end).toHaveBeenCalledOnce();
+    expect(transport?.end.mock.calls[0]?.[0]).toBeLessThanOrEqual(returnedBy);
+  });
+
+  it('times a projection response from the read urql makes after the inspection', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ data: { user: { soup: { items: [] } } } }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
+    );
+    const soup = await import('./graphql-soup');
+    mocks.spans.length = 0;
+    const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'query Soup { user { soup { items { cacheProjection } } } }',
+      }),
+    });
+    const transport = mocks.spans.find(
+      (span) => span.name === 'graphql.transport'
+    );
+
+    expect(transport?.attrs['graphql.legacy_retry']).toBe(false);
+    expect(transport?.end).not.toHaveBeenCalled();
+    await response.text();
+    expect(transport?.attrs['graphql.body_outcome']).toBe('complete');
+    expect(transport?.end).toHaveBeenCalledOnce();
+  });
+
+  it('ends the transport span as unread when nothing reads the body within a minute', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response('{}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    const soup = await import('./graphql-soup');
+    mocks.spans.length = 0;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await soup.dssGraphqlFetch('http://dss.test/graphql', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'query User { user { id } }' }),
+      });
+      const transport = mocks.spans.find(
+        (span) => span.name === 'graphql.transport'
+      );
+      expect(transport?.end).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(60_000);
+      expect(transport?.attrs['graphql.body_outcome']).toBe('unread');
+      expect(transport?.end).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never holds the transport span open for a streamed response', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response('event: next\ndata: {}\n\n', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      })
+    );
+    const soup = await import('./graphql-soup');
+    mocks.spans.length = 0;
+    await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'query User { user { id } }' }),
+    });
+    const transport = mocks.spans.find(
+      (span) => span.name === 'graphql.transport'
+    );
+
+    expect(transport?.attrs['graphql.body_outcome']).toBe('stream');
+    expect(transport?.attrs['graphql.body_ms']).toBeUndefined();
+    expect(transport?.end).toHaveBeenCalledOnce();
   });
 
   it('strips client-only directives from GraphQL transport documents', async () => {
@@ -1229,6 +1343,31 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.host.dispose).not.toHaveBeenCalled();
   });
 
+  it('keeps activity pushes out of the cache and other subscriptions in it', async () => {
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+    const subscription = (text: string): Operation => ({
+      kind: 'subscription',
+      key: 43,
+      query: parse(text),
+      variables: {},
+      context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+    });
+    const uncached =
+      mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.isUncachedSubscription;
+
+    expect(
+      uncached?.(
+        subscription('subscription ActivityUpdates { activityUpdates { id } }')
+      )
+    ).toBe(true);
+    expect(
+      uncached?.(
+        subscription('subscription SoupUpdates { soupUpdates { __typename } }')
+      )
+    ).toBe(false);
+  });
+
   it.each(['query', 'mutation', 'subscription'] as const)(
     'reports handled cache-disposed failures for %s without exporting operation payloads',
     async (kind) => {
@@ -1388,6 +1527,48 @@ describe('GraphQL Soup browser cache session gate', () => {
     }
   });
 
+  it('stops restarting the cache once a newer build took it over', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      mocks.failInitialization(
+        Object.assign(
+          new Error('a newer version of the app took over the local cache'),
+          { errorCode: 'cache-superseded' }
+        )
+      );
+      expect(soup.graphqlCacheRecoveryState()).toBe('recovery-required');
+      expect(soup.graphqlCacheEnabled()).toBe(false);
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
+      expect(mocks.telemetryError).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps retrying while another context holds the owner lock', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      mocks.failInitialization(
+        Object.assign(new Error('owner lock is held by another context'), {
+          errorCode: 'owner-lock-unavailable',
+        })
+      );
+      expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('rejects drafts from both retired and uncached transports after recovery', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const soup = await import('./graphql-soup');
@@ -1499,6 +1680,17 @@ describe('GraphQL Soup browser cache session gate', () => {
       'graphql cache async init failed; using uncached client',
       expect.objectContaining({ message: 'injected initialization failure' })
     );
+  });
+
+  it('does not hand out a host that is already unusable', async () => {
+    const soup = await import('./graphql-soup');
+    mocks.createWorkerCacheHost.mockImplementationOnce(() => ({
+      ...mocks.host,
+      disabled: true,
+    }));
+    soup.getGraphqlSoupClient();
+    expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
+    expect(soup.getGraphqlCacheHost()).toBeUndefined();
   });
 
   it('retires a failed host so the replaced client degrades instead of rejecting', async () => {
@@ -1642,10 +1834,9 @@ describe('GraphQL Soup browser cache session gate', () => {
 
     const soup = await import('./graphql-soup');
     const nativeClient = soup.getGraphqlSoupClient();
-    mocks.graphqlEnabled = false;
 
-    expect(soup.graphqlCacheEnabled()).toBe(false);
-    expect(soup.getGraphqlSoupClient()).toBe(mocks.plainClient);
+    expect(soup.graphqlCacheEnabled()).toBe(true);
+    expect(soup.getGraphqlSoupClient()).toBe(nativeClient);
     expect(nativeClient).not.toBe(mocks.plainClient);
     expect(mocks.host.dispose).not.toHaveBeenCalled();
     expect(mocks.createTauriCacheHost).toHaveBeenCalledOnce();

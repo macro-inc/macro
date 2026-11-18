@@ -25,7 +25,7 @@ fn web_runner() -> String {
 
 /// The mid-size (16x32) profile on the web CI cache volume and remote sccache,
 /// for the jobs that scale with cores: the generated-code job compiles the
-/// schema binaries, the app build compiles the browser wasm packages and runs
+/// schema binaries (on its own cache tag), the app build compiles the browser wasm packages and runs
 /// Vite, typechecking runs the TS 7 compiler, and vitest runs about 1.9x faster
 /// on 16 cores than on the small profile's 8.
 fn mid_web_runner() -> String {
@@ -47,17 +47,17 @@ pub fn web_app_check_main() -> Workflow {
         .add_job("cycles", cycles())
         .add_job("build", build())
         .add_job(ios_native_check::JOB_ID, ios_native_check::job())
-        .add_job("status-check", status_check())
 }
 
-/// Always run so the required collector can distinguish a successful native
-/// check from a cancelled or skipped one, including frontend/backend-only PRs.
+/// Always runs, on frontend- and backend-only PRs too, so `CI gate` sees the
+/// native check pass rather than skip.
 fn android_native_check() -> Job {
     android_native_check::job()
 }
 
 fn path_check() -> Job {
     Job::default()
+        .timeout_minutes(10u32)
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
@@ -92,14 +92,24 @@ fn typescript() -> Job {
             "needs.path-check.outputs.should_run == 'true'",
         ))
         .name("Typecheck")
+        .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
-        .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_cache_volume(false))
+        // Entity icon permanence checks compare every committed name list.
+        .add_step(checkout("Checkout Repo", true))
+        .add_step(steps::prepare_blobless_checkout())
+        .add_step(steps::mount_web_check_cache_volume(false))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
         .add_step(
             Step::new("Install SDK Documentation Dependencies")
                 .run("bun install --frozen-lockfile")
+                .working_directory(xtask_paths::repo_dir!("packages/sdk")),
+        )
+        // The agent runtime imports the SDK by its package exports, which
+        // point at `dist/`.
+        .add_step(
+            Step::new("Build SDK")
+                .run("bun run build")
                 .working_directory(xtask_paths::repo_dir!("packages/sdk")),
         )
         .add_step(typecheck_in_parallel())
@@ -108,9 +118,8 @@ fn typescript() -> Job {
 
 /// Typecheck's checks, each `(name, directory, command)`. They read the same
 /// installed tree and write nothing, so they run at once: in sequence they took
-/// about 106 s of a 179 s job. `packages/sdk` isn't a workspace member, so the
-/// SDK documentation's dependencies install first, as they did before.
-const TYPECHECKS: [(&str, &str, &str); 11] = [
+/// about 106 s of a 179 s job. The SDK is built first, for the agent runtime.
+const TYPECHECKS: [(&str, &str, &str); 14] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
@@ -129,6 +138,11 @@ const TYPECHECKS: [(&str, &str, &str); 11] = [
         "Check Collaboration Package Types",
         "packages/collaboration",
         "bun run type-check",
+    ),
+    (
+        "Check Observability Package",
+        "packages/observability",
+        "bun run type-check && bun run test",
     ),
     (
         "Check Lexical Service Types",
@@ -164,6 +178,17 @@ const TYPECHECKS: [(&str, &str, &str); 11] = [
         "Check MCP ChatGPT Worker",
         "services/mcp-chatgpt-worker",
         "bun run type-check && bun run test",
+    ),
+    (
+        "Check Agent Runtime",
+        "packages/muppet",
+        "bun run typecheck && bun run test",
+    ),
+    // The template's own lockfile is what an agent's image installs from.
+    (
+        "Check Starter Agent",
+        "packages/starter-agent",
+        "bun run check && ../../tooling/scripts/starter-agent-lock.sh --check",
     ),
 ];
 
@@ -222,8 +247,10 @@ fn generated_code() -> Job {
             "needs.path-check.outputs.codegen_changed == 'true'",
         ))
         .name("Generated Code Check")
-        .timeout_minutes(45u32)
-        .runs_on(mid_web_runner())
+        .timeout_minutes(25u32)
+        // Its own volume, so the `target` directory it keeps is the one its
+        // last build left: the last job to finish on a tag replaces the volume.
+        .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CODEGEN_CACHE_TAG))
         // The generators run once and are thrown away, so debug info is pure
         // cost: it made the 15 binaries 12.7 GB instead of 466 MB. Job-level,
         // so every cargo call here (the build step, gen-api, the docs and DCS
@@ -235,7 +262,8 @@ fn generated_code() -> Job {
         // the same reason: RUSTFLAGS is part of every unit's fingerprint.
         .add_env(("RUSTFLAGS", "-C link-arg=-fuse-ld=mold"))
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_cache_volume(true))
+        .add_step(steps::mount_web_codegen_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(
             steps::setup_reqs_web("Setup Prereqs", false)
@@ -260,7 +288,9 @@ fn generated_code() -> Job {
 
 fn biome_check() -> Job {
     gated_web_job("Biome Check")
+        .timeout_minutes(20u32)
         .add_step(checkout("Checkout Repo", true))
+        .add_step(steps::prepare_blobless_checkout())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell())
@@ -272,6 +302,7 @@ fn biome_check() -> Job {
 
 fn test() -> Job {
     gated_web_job("Test (${{ matrix.shard }}/6)")
+        .timeout_minutes(20u32)
         .runs_on(mid_web_runner())
         .strategy(
             Strategy::default()
@@ -293,9 +324,10 @@ fn test() -> Job {
 /// job restores or builds them; unchanged packages come from the shared cache.
 fn functional() -> Job {
     gated_web_job("Functional Tests")
+        .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::mount_web_build_check_cache_volume(true))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
@@ -311,6 +343,7 @@ fn functional() -> Job {
 /// neither waits for them.
 fn browser() -> Job {
     gated_web_job("Browser Tests")
+        .timeout_minutes(20u32)
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_test_cache_volume())
@@ -327,6 +360,7 @@ fn browser() -> Job {
 
 fn cycles() -> Job {
     gated_web_job("Cycles Import Check")
+        .timeout_minutes(15u32)
         .add_step(checkout("Checkout", false))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_seed())
@@ -341,6 +375,7 @@ fn cycles() -> Job {
 fn build() -> Job {
     let (preview_credentials, preview_steps) = preview::steps();
     let job = gated_web_job("Build")
+        .timeout_minutes(15u32)
         // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
         .runs_on(mid_web_runner())
         .permissions(
@@ -349,7 +384,7 @@ fn build() -> Job {
                 .pull_requests(Level::Write),
         )
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::mount_web_build_check_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
@@ -363,31 +398,6 @@ fn build() -> Job {
         .add_step(steps::teardown_nix())
 }
 
-/// Always-run collector used as the required status check. Its name must stay
-/// stable because branch protection can reference it. New gates join the
-/// `needs` list (and [`check_job_results`]) rather than the ruleset: the
-/// [`ios_native_check`] job is required this way.
-fn status_check() -> Job {
-    Job::default()
-        .name("Web App Status Check")
-        .cond(Expression::new("always()"))
-        .needs(vec![
-            "path-check".to_string(),
-            android_native_check::JOB_ID.to_string(),
-            "typescript".to_string(),
-            "generated-code".to_string(),
-            "biome-check".to_string(),
-            "test".to_string(),
-            "functional".to_string(),
-            "browser".to_string(),
-            "cycles".to_string(),
-            "build".to_string(),
-            ios_native_check::JOB_ID.to_string(),
-        ])
-        .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_step(check_job_results())
-}
-
 fn gated_web_job(name: &str) -> Job {
     Job::default()
         .needs(vec!["path-check".to_string()])
@@ -398,6 +408,10 @@ fn gated_web_job(name: &str) -> Job {
         .runs_on(web_runner())
 }
 
+/// `full_history` fetches every commit and tree but no blob up front: `biome
+/// --changed` needs the merge base and the icon permanence check a few old
+/// blobs, which git then fetches on demand. Fetching full history with every
+/// blob took Typecheck and Biome Check about 40 s.
 fn checkout(name: &str, full_history: bool) -> Step<Use> {
     Step::new(name)
         .uses(
@@ -405,7 +419,10 @@ fn checkout(name: &str, full_history: bool) -> Step<Use> {
             "checkout",
             "df4cb1c069e1874edd31b4311f1884172cec0e10",
         ) // v6
-        .when(full_history, |step| step.add_with(("fetch-depth", 0)))
+        .when(full_history, |step| {
+            step.add_with(("fetch-depth", 0))
+                .add_with(("filter", "blob:none"))
+        })
 }
 
 /// The filter reads the PR's files from the API and [`detect_schema_changes`]
@@ -480,10 +497,11 @@ fn paths_filter() -> Step<Use> {
     // Typecheck stays off for a shell-only tweak. Workflow YAML drift is `check
     // generated workflows`. `i18n_changed` covers what the interface language
     // browser tests render: translations, the menu primitives, and settings
-    // navigation. `database_grid_changed` covers the database grid's browser
-    // tests. `calendar_details_changed` covers what the event details browser
-    // tests render and the query modules their fixture replaces, whose exports
-    // the fixture must keep matching.
+    // navigation. `database_grid_changed` covers the database browser
+    // tests: the grid, and the timeline with the Gantt it draws.
+    // `calendar_details_changed` covers what the event details browser tests
+    // render and the query modules their fixture replaces, whose exports the
+    // fixture must keep matching.
     Step::new("Filter changed paths")
         .uses(
             "dorny",
@@ -494,7 +512,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
         ))
 }
@@ -591,19 +609,29 @@ fn run_collaboration_biome() -> Step<Run> {
 
 // Keep cold Rust/WASM compilation outside Vitest’s five-minute setup hook.
 fn build_agent_fold_for_tests() -> Step<Run> {
-    Step::new("Build agent-fold WASM for tests")
-        .run("just build-agent-fold-wasm")
-        .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .timeout_minutes(15u32)
+    with_wasm_pkg_cache(
+        Step::new("Build agent-fold WASM for tests")
+            .run("just build-agent-fold-wasm")
+            .working_directory(xtask_paths::repo_dir!("apps/web"))
+            .timeout_minutes(15u32),
+    )
 }
 
 fn build_natural_time_for_tests() -> Step<Run> {
-    Step::new("Build natural-time WASM for tests")
-        .run("just build-natural-time-wasm")
-        .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .timeout_minutes(15u32)
+    with_wasm_pkg_cache(
+        Step::new("Build natural-time WASM for tests")
+            .run("just build-natural-time-wasm")
+            .working_directory(xtask_paths::repo_dir!("apps/web"))
+            .timeout_minutes(15u32),
+    )
+}
+
+/// Reuse unchanged wasm packages from the node's cache volume, then from
+/// Namespace's HTTP cache. Both are writable by every PR job, so only PR jobs
+/// read them; deploys keep their own (`build_web_app`).
+fn with_wasm_pkg_cache(step: Step<Run>) -> Step<Run> {
+    step.add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
+        .add_env(("WASM_PKG_HTTP_CACHE", "1"))
 }
 
 /// `bun run test` enables Vitest's filesystem module cache; the cache volume
@@ -691,8 +719,9 @@ fn collaboration_cycles_import_check() -> Step<Run> {
 
 /// Whole-program LTO costs the fig, psd and ai engines about 40 s each and only
 /// makes them faster to run, which a PR's tests and preview don't need. Deploys
-/// keep it. The wasm package cache doesn't key on these, so only PR jobs, which
-/// all set them, may read it.
+/// keep it. The wasm package key includes them (`wasm-cache-key.ts`), so a PR
+/// build of these three never reuses a deploy's or the reverse; deploys keep
+/// their packages in a cache of their own anyway (`build_web_app`).
 const PR_WASM_ENV: [(&str, &str); 6] = [
     ("CARGO_PROFILE_FIG_ENGINE_WASM_LTO", "off"),
     ("CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS", "16"),
@@ -702,11 +731,8 @@ const PR_WASM_ENV: [(&str, &str); 6] = [
     ("CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS", "16"),
 ];
 
-fn with_pr_wasm_env(step: Step<Run>) -> Step<Run> {
-    PR_WASM_ENV
-        .into_iter()
-        .fold(step, Step::add_env)
-        .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
+pub(crate) fn with_pr_wasm_env(step: Step<Run>) -> Step<Run> {
+    with_wasm_pkg_cache(PR_WASM_ENV.into_iter().fold(step, Step::add_env))
 }
 
 fn run_build() -> Step<Run> {
@@ -718,42 +744,4 @@ fn run_build() -> Step<Run> {
         ),
         Step::add_env,
     )
-}
-
-fn check_job_results() -> Step<Run> {
-    Step::new("Check job results").run(indoc::indoc! {r#"
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "android-native-check: ${{ needs.android-native-check.result }}"
-        echo "typescript: ${{ needs.typescript.result }}"
-        echo "generated-code: ${{ needs.generated-code.result }}"
-        echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "test: ${{ needs.test.result }}"
-        echo "functional: ${{ needs.functional.result }}"
-        echo "browser: ${{ needs.browser.result }}"
-        echo "cycles: ${{ needs.cycles.result }}"
-        echo "build: ${{ needs.build.result }}"
-        echo "ios-native-check: ${{ needs.ios-native-check.result }}"
-
-        # Fail if any job failed (skipped and success are both OK). The iOS
-        # gate is the merge gate, so a cancelled gate is not OK either. The same
-        # goes for generated code: a job that hits its timeout reports cancelled.
-        if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
-           [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.typescript.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "cancelled" ]] || \
-           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.test.result }}" == "failure" ]] || \
-           [[ "${{ needs.functional.result }}" == "failure" ]] || \
-           [[ "${{ needs.browser.result }}" == "failure" ]] || \
-           [[ "${{ needs.cycles.result }}" == "failure" ]] || \
-           [[ "${{ needs.build.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "cancelled" ]]; then
-          echo "One or more jobs failed"
-          exit 1
-        fi
-
-        echo "All jobs passed or were skipped"
-    "#})
 }

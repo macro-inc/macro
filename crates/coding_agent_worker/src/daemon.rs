@@ -7,7 +7,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use tokio::sync::watch;
+use tokio::sync::{Notify, watch};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 
@@ -21,13 +21,18 @@ use crate::runtime::Runtime;
 use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
 use crate::turns::ActiveTurns;
 
+mod position;
 #[cfg(test)]
 mod test;
 
-/// How often the bound-agent set is re-read so a newly bound agent starts
-/// triggering without a restart. Short on purpose: a mention sent before the
-/// stream covers the new agent is dropped for good, so this interval is the
-/// worst-case window where a brand-new agent is deaf.
+use position::StreamPosition;
+
+/// How often the bound-agent set is re-read without being told it changed.
+/// The service says when it binds an agent on connect
+/// (`ToRuntimeMessage::AgentsChanged`); this catches every other binding and
+/// services too old to say. A trigger sent before the stream covers a new
+/// agent is replayed from the cursor once it does, so this bounds how long
+/// such a trigger waits, not whether it arrives.
 const BOUND_AGENT_REFRESH: Duration = Duration::from_secs(10);
 
 /// How often a held runtime connection is compared with what the service says.
@@ -99,6 +104,22 @@ impl Daemon {
         let turns = ActiveTurns::default();
         let adopted = adopt(inherited, &turns);
         let (handoffs, handoff) = Handoffs::channel();
+        let computer = crate::computer::is_macro_computer().then(|| {
+            std::sync::Arc::new(crate::computer::Computer::new(
+                &config.macro_api,
+                &config.workspace.path,
+            ))
+        });
+        // Taken before the runtime dials: connecting can bind an agent and
+        // let someone ask it for a session, and the stream must replay that
+        // request however late it opens. This floor is this machine's clock,
+        // compared with the service's event ids: a clock ahead of the
+        // service's by more than the seconds between starting and the first
+        // request would skip that request, and one behind by as much would
+        // replay events from just before the start that a previous macrod
+        // may have handled. Every later open resumes from a service id, and
+        // `StreamPosition` drops repeats within this process.
+        let mut position = StreamPosition::new(std::time::SystemTime::now());
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
@@ -108,8 +129,10 @@ impl Daemon {
             turns.clone(),
             adopted,
             handoffs,
+            computer,
         );
         let runtime_connected = runtime.connection_state();
+        let agents_changed = runtime.agents_changed();
         let presence_watch = AbortOnDropHandle::new(tokio::spawn(watch_presence(
             EventStreamClient::new(&config.macro_api, &credentials),
             runtime_connected.clone(),
@@ -139,7 +162,15 @@ impl Daemon {
                 if shutdown.is_cancelled() {
                     return Ok(());
                 }
-                match serve_once(&client, &executor, &shutdown).await {
+                match serve_once(
+                    &client,
+                    &executor,
+                    &shutdown,
+                    &agents_changed,
+                    &mut position,
+                )
+                .await
+                {
                     ServeOutcome::Stopped => return Ok(()),
                     ServeOutcome::Idle => {
                         failures = 0;
@@ -315,28 +346,44 @@ enum ServeOutcome {
 }
 
 /// Open the stream (or wait for bound agents) until it ends or is cancelled.
+///
+/// The stream resumes after `position`'s cursor, which advances past every
+/// event it delivers, so reopening it for a changed agent set or after an
+/// error replays what was published in between; `position` drops repeats.
 async fn serve_once<Executor: crate::trigger::WorkExecutor>(
     client: &EventStreamClient,
     executor: &Executor,
     cancel: &CancellationToken,
+    agents_changed: &Notify,
+    position: &mut StreamPosition,
 ) -> ServeOutcome {
-    let bots = match client.bound_bot_ids().await {
-        Ok(bots) => bots,
+    let read_at = std::time::SystemTime::now();
+    let bots = match client.bound_agents().await {
+        Ok(agents) => {
+            position.agents_read(&agents.bot_ids, agents.read_by.unwrap_or(read_at));
+            agents.bot_ids
+        }
         Err(error) => return ServeOutcome::Ended(error),
     };
     if bots.is_empty() {
-        tracing::info!("no agents are bound; waiting before opening the event stream");
+        tracing::info!("no agents are bound; waiting for one before opening the event stream");
         tokio::select! {
             () = cancel.cancelled() => return ServeOutcome::Stopped,
+            () = agents_changed.notified() => return ServeOutcome::Idle,
             () = tokio::time::sleep(BOUND_AGENT_REFRESH) => return ServeOutcome::Idle,
         }
     }
 
     let filters = trigger_filters(bots.iter());
-    let mut stream = match client.connect::<TriggerEvent>(&filters).await {
+    let resume = position.resume_cursor();
+    let mut stream = match client
+        .connect::<TriggerEvent>(&filters, Some(resume.as_str()))
+        .await
+    {
         Ok(stream) => stream,
         Err(error) => return ServeOutcome::Ended(error),
     };
+    position.opened();
     tracing::info!(
         bound_agents = bots.len(),
         "connected to the agent-trigger event stream"
@@ -345,20 +392,25 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
     loop {
         tokio::select! {
             () = cancel.cancelled() => return ServeOutcome::Stopped,
+            () = agents_changed.notified() => {
+                if let Some(outcome) = bound_agents_changed(client, &bots, position).await {
+                    return outcome;
+                }
+            }
             () = tokio::time::sleep(BOUND_AGENT_REFRESH) => {
-                match client.bound_bot_ids().await {
-                    Ok(latest) if latest == bots => {}
-                    Ok(_) => {
-                        tracing::info!("bound-agent set changed; reconnecting the event stream");
-                        return ServeOutcome::Idle;
-                    }
-                    Err(error) => return ServeOutcome::Ended(error),
+                if let Some(outcome) = bound_agents_changed(client, &bots, position).await {
+                    return outcome;
                 }
             }
             next = stream.next_event() => {
+                if let Some(id) = stream.last_event_id() {
+                    position.delivered(id);
+                }
                 match next {
                     Ok(Some(event)) => {
-                        let _ = handle_event(event, executor).await;
+                        if position.admits(&event) {
+                            let _ = handle_event(event, executor).await;
+                        }
                     }
                     Ok(None) => {
                         return ServeOutcome::Ended(rootcause::report!(
@@ -369,5 +421,26 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
                 }
             }
         }
+    }
+}
+
+/// Re-read the bound agents: `Some` ends the stream when they are no longer
+/// `bots` (or cannot be read), `None` keeps it.
+async fn bound_agents_changed(
+    client: &EventStreamClient,
+    bots: &[String],
+    position: &mut StreamPosition,
+) -> Option<ServeOutcome> {
+    let read_at = std::time::SystemTime::now();
+    match client.bound_agents().await {
+        Ok(latest) if latest.bot_ids == bots => {
+            position.agents_read(&latest.bot_ids, latest.read_by.unwrap_or(read_at));
+            None
+        }
+        Ok(_) => {
+            tracing::info!("bound-agent set changed; reconnecting the event stream");
+            Some(ServeOutcome::Idle)
+        }
+        Err(error) => Some(ServeOutcome::Ended(error)),
     }
 }

@@ -1,5 +1,7 @@
 # Tasks
 
+On touch, **Show sidebar** and **Filters** float over the full-height list with a list-local top fade. The initial chrome inset, tutorial, warning rows, and touch column headings scroll with the tasks. Above 720px on touch, the task or project list remains left of an empty or selected detail preview. At every touch width, Show sidebar opens navigation (task views, projects, saved views) in a sheet; there are no view pills.
+
 ## Surface
 
 The main Tasks list (List layout, not project or CRM task lists) starts with the Tasks `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows, so list keyboard focus skips it.
@@ -16,7 +18,7 @@ clicking a row or its checkbox toggles and stays open, Enter adds and closes, an
 Shift/Only selects just one option and stays open. Escape dismisses the menu.
 Assignee uses the team/agent roster and retains selected outsiders. Created by
 loads bounded personal windows only while its submenu or mobile accordion is
-open; search and Next options replace that window without losing selections. Me
+open; search starts a new list and scrolling loads further pages, without losing selections. Me
 is a semantic viewer choice, distinct from the named fixed self option.
 Unavailable selected IDs remain selected, and Only changes its own group without
 clearing other restrictions.
@@ -37,8 +39,8 @@ requests mapping to nothing keep the typed text and show a red error. The box ke
 focus while you type even if the pointer drifts over the rows; ArrowDown moves into
 the rows and hovering a submenu hands focus to it as usual. The mobile drawer has no
 AI box.
-The desktop sidebar's Search icon, immediately left of collapse, opens the
-search field above New. It shares the current Tasks or Projects list query.
+Search the Tasks or Projects list from the header's expandable Search icon; the
+desktop sidebar has no search field.
 The desktop sidebar and toolbar `New` menus offer `Task`, `Subtask`, `Project` (when
 Projects is enabled), and `Tag`. Task and Project open their existing composers;
 Tag opens the tag editor, with personal scope selected and team sharing available
@@ -48,14 +50,16 @@ appears above `Saved views`. It contains `My projects` (assigned to the viewer),
 `All projects` (all accessible projects), and `Created by me` (owned by the viewer).
 These replace the old Projects tab and individual-project shortcut list. The plus
 beside the section opens the project composer even while collapsed.
-On mobile, one `Projects` pill opens a drawer with the same three views; the
-active pill shows the selected view's name. Selecting a task or saved view clears
-the project pill's active state. Project scoping applies before pagination and
+On touch, the same section is in the sidebar sheet. Project scoping applies before pagination and
 cannot be removed by clearing editable filters. Opening a project and returning
 through its breadcrumb retains the selected project view.
 Cached project rows remain available through offline/background refresh failures.
 Cache misses, server/permission errors, and failed continuation requests retain
 failure and retry controls.
+Project list rows, project breadcrumbs, task project chips, and project pickers
+show the saved icon and color. With the normalized cache active, Apply updates
+these surfaces before the save completes, without changing project recency or
+refetching their pages; resetting appearance restores the default project icon.
 Opening a project shows a content-shaped skeleton while its data loads: title,
 wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.
@@ -73,7 +77,7 @@ page shows `Retry` in that row and stops automatic requests for the group.
 ArrowDown waits on a group's last loaded task until the next page arrives; after
 a failure it continues into the next group. Collapsed groups load nothing. A page
 that arrives after you scroll past its group must not move the rows on screen.
-With GraphQL Soup enabled, verify a group with more than one page in both the
+Verify a group with more than one page in both the
 regular Tasks list and a project task list (scroll and ArrowDown). Both must use
 the parent Soup query's continuation owner; reaching
 the last page removes the group's paging row without hiding already loaded tasks.
@@ -83,8 +87,9 @@ brief collapse to the first 10 rows. Verify both background and explicit refresh
 including a changed cursor and a failed later page. Retrying should replace the
 old pages; changing projects or filters must discard the old scope immediately.
 The sidebar has no Tags section: filter by tag from the `Tags` group of the `Filter` menu,
-and switching tabs clears it like any other filter. On mobile, the tabs
-are pills and the leading sliders button opens one drawer containing Sort, Group, and
+and switching tabs clears it like any other filter. On touch, the tabs
+are in the sidebar sheet; its Show sidebar button comes first, then the
+sliders button opens one drawer containing Sort, Group, and
 Filters (including Tags). The mobile bottom dock has **+ Task** and Search,
 with no floating Ask AI input.
 Mobile does not show the separate layout, sort, group, and filter toolbar.
@@ -116,7 +121,13 @@ New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced tas
 The Project column shows the linked project's name when one project is assigned,
 and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
-to read the full value.
+to read the full value. On desktop, an assignee's hover card in a list row or a
+board card offers **Filter by <name>** for each assignee, as a tag chip's card
+does for its tag: it replaces the current filters, the default status filter
+included, with that one assignee and keeps the tab, so on **My tasks** it lists
+the tasks you share with them and on **All tasks** all of theirs, completed ones
+too. A filtered assignee outside the team keeps their
+name in the Assignee filter.
 Editable property controls use ghost-button hover styling. Empty values are
 dimmed, without adding opacity to the already-muted No priority icon. Folder
 and assigned Project hover cards put their heading above the value; empty
@@ -160,7 +171,7 @@ timestamps. At 600px, Updated fades and collapses over
 160ms to leave more room for the title. Hidden Updated and Created by
 columns reserve no width or spacing; visible cells own their 8px leading inset.
 Reduced-motion preferences disable the transition. Visible timestamps stay on one line, and
-Updated remains sortable. Created by is the final column, with a 16px avatar above
+Updated remains sortable except during a main Tasks or project text search. Created by is the final column, with a 16px avatar above
 840px and a 20px avatar at compact widths, plus a 16px gap after Updated. Its header
 keeps a 16px user-plus icon with a “Created by” tooltip on hover or focus. Owner names and the column label
 stay accessible; names remain available on hover. The creator header and avatar
@@ -275,11 +286,20 @@ the optimistic tag. Repeat with an existing assignment and with removal.
 
 ## Due dates
 
-Tasks lists and boards offer **Status**, **Priority**, **Due soonest**, and
-**Due furthest away** sorting alongside Viewed, Updated, and Created. Status
+Tasks lists and boards offer **Title**, **Status**, **Priority**, **Due soonest**,
+and **Due furthest away** sorting alongside Viewed, Updated, and Created. Title
+reads A to Z case-insensitively, punctuation before digits before letters ("1. Intro" before "10. Wrap"); picking it again reverses it, and the list's
+**Task** column header selects and reverses it too. Status
 follows stored option order; Priority puts urgent tasks first. Missing values
-stay last. Property-sort ties use newest update, then descending task ID.
+stay last. Property- and title-sort ties use newest update, then descending task ID.
 Text search retains its existing ordering and flat list results; clear search to sort.
+While searching, the desktop header hides Sort (leaving Group in its island), the
+keyboard shortcut sheet and command menu drop **Sort tasks** (S does nothing), and
+the mobile drawer omits its Sort section. The list's column headers stop sorting:
+Due date shows a plain label, and Updated keeps a static descending arrow whatever
+the stored sort is. Clearing search brings back the stored sort and every control
+unchanged. CRM task lists search by rerunning their own query, so their column
+headers keep sorting during a search.
 Boards group the loaded search results as before, without complete counts or grouped-search requests.
 
 **Filter → Due date** offers Overdue, Today, Tomorrow, Next 7 days, Later,
@@ -327,8 +347,8 @@ remain Unassigned with a warning. When lookup is unavailable, retry or explicitl
 choose an assignee/Unassigned before importing. Manual choices override later
 lookup results, including an explicit Unassigned choice.
 
-The mapping button opens the shared single-user property picker. Search or use
-Next options/PageDown; choosing a person replaces the previous choice and retains
+The mapping button opens the shared single-user property picker. Search, or
+scroll (PageDown on desktop) for later pages; choosing a person replaces the previous choice and retains
 their name/email. Desktop uses inline controls; narrow screens stack them.
 
 Clear or a new upload resets mappings. A late file read cannot replace a newer
@@ -343,13 +363,13 @@ automatically retried.
 Saved views are available on main Tasks, not inside Project or CRM task lists.
 
 - Desktop: use the **Saved views** sidebar section. Its icon-only **+** remains available when the section is empty, populated, collapsed, loading, or in an error state. Enter on the focused **+** starts a draft instead of opening the selected task.
-- Mobile: the **Saved views** pill sits after **Filters** and before the built-in task tabs, using the same mobile pill component. It shows the selected view's name and active styling, and opens a drawer of saved-view rows with selection and management menus, without a duplicate section heading or a header create button. Create views from changed filters, layout, grouping, or sort in the filter drawer.
-- The empty sidebar and mobile picker show **Your go-to views**, the muted description **Save your setup for next time.**, and a secondary **Create view** button with a leading plus icon in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; on mobile, the picker closes first. Configure the draft in Filters, then choose **Save view**.
-- Desktop **+** starts an unsaved view without person restrictions and with explicit open-status filters. It expands the section and adds a selected, italic **New view** row labeled **Draft** in the sidebar and mobile picker. Configure filters, then choose **Save view**; the name defaults to **New view** and can be edited before saving. A confirmed save replaces the draft with the named view; **Cancel** in the desktop toolbar or mobile filter drawer, another selection, or leaving Tasks removes the unsaved row. Canceling only the name dialog keeps the draft for later.
+- Touch: the **Saved views** section is in the sidebar sheet opened by **Show sidebar**. Create views from changed filters, layout, grouping, or sort in the filter drawer.
+- The empty sidebar section shows **Your go-to views**, the muted description **Save your setup for next time.**, and a secondary **Create view** button with a leading plus icon in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; Configure the draft in Filters, then choose **Save view**.
+- Desktop **+** starts an unsaved view without person restrictions and with explicit open-status filters. It expands the section and adds a selected, italic **New view** row labeled **Draft** in the sidebar. Configure filters, then choose **Save view**; the name defaults to **New view** and can be edited before saving. A confirmed save replaces the draft with the named view; **Cancel** in the desktop toolbar or mobile filter drawer, another selection, or leaving Tasks removes the unsaved row. Canceling only the name dialog keeps the draft for later.
 - Desktop **Save view** and draft **Cancel** are separate standalone buttons with a gap, not segments of a button group.
 - When filters, due date, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, relative due-date presets or custom calendar bounds, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
 - Saved views use the normal Assignee and Created by filters, not a separate Scope control. **Me** stays relative; its tooltip says “Matches whoever opens this saved view.” A named person stays fixed. Removing Me removes that restriction.
-- Temporary filter, due-date, layout, grouping, or sort edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all five, including due-date grouping and property sorts. Older definitions without a due-date filter remain unrestricted. Mobile still displays a list without replacing the stored desktop layout. Right-click a sidebar view or use its **…** button for **Edit**, **Duplicate**, **Copy link**, and confirmed **Delete view**. On desktop, the selected view's topbar shows a bookmark icon before its name and an unframed ghost overflow button immediately after it. On mobile, the picker shows the name and contains row menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
+- Temporary filter, due-date, layout, grouping, or sort edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all five, including due-date grouping and property sorts. Older definitions without a due-date filter remain unrestricted. Mobile still displays a list without replacing the stored desktop layout. Right-click a sidebar view or use its **…** button for **Edit**, **Duplicate**, **Copy link**, and confirmed **Delete view**. On desktop, the selected view's topbar shows a bookmark icon before its name and an unframed ghost overflow button immediately after it. On touch, the sidebar sheet's rows carry those menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
 - **Edit** opens the shared create/edit dialog with the saved name and team-sharing checkbox prefilled, without saving temporary filter, layout, grouping, or sort changes. Edit and delete dialog titles identify the saved view by name and wrap long names. Both create and edit modes use a 600px-wide dialog that stays within narrow viewports. **Duplicate** opens a private copy with a prefilled “(copy)” name; duplicating the selected view includes its temporary settings. If the original has unsupported or invalid settings, the dialog warns that the copy omits them and leaves the original unchanged. Sidebar actions on another view do not change the current selection unless a duplicate is saved.
 - The optional **Share with team** checkbox shares only the view definition. Its adjacent info icon shows the explanation on hover; click, tap, or keyboard activation opens it without changing the checkbox. Each teammate still sees only permitted items. Both the owner and viewer must currently belong to that team; leaving disables access and rejoining restores it.
 - Leaving the view or opening task detail discards temporary edits. The return breadcrumb retains the saved-view identity and reloads its saved filters, layout, grouping, and sort.
@@ -362,7 +382,7 @@ Saved views are available on main Tasks, not inside Project or CRM task lists.
 
 Verify creation without early persistence, explicit save/reset, copy versus owner-only editing, desktop/mobile metadata dialogs, and returning from task detail. Repeat with another teammate, a removed/rejoined owner, an unavailable tag, and a stale revision.
 
-Exercise these flows at desktop, phone, and tablet widths. Verify the mobile pill strip reserves its full height without overlapping task content, including after scrolling and returning from a drawer. Check that the mobile creation banner stays above the footer while filters scroll behind it and that the final filter controls can scroll clear of the banner. Verify it appears for changes to filters, layout, grouping, or sort and disappears when all four match the built-in tab defaults. Check keyboard navigation inside the mobile picker and focus after opening and closing Edit, Duplicate, or Delete. These focused dialogs use the shared imperative dialog host and must close when their owning account or view changes; the picker closes before a management dialog opens. Saving from the filter drawer closes it before opening the name dialog; Cancel or Escape reopens the unchanged filter draft, while a confirmed creation selects the new view without reopening the drawer. Delay a save while navigating or editing filters, and delay a deletion while selecting its target: stale saves must not change the new selection, later filter edits must survive, and confirmed deletion must clear its selected target.
+Exercise these flows at desktop, phone, and tablet widths. Verify the touch header controls reserve their full height without overlapping task content, including after scrolling and returning from a drawer. Check that the mobile creation banner stays above the footer while filters scroll behind it and that the final filter controls can scroll clear of the banner. Verify it appears for changes to filters, layout, grouping, or sort and disappears when all four match the built-in tab defaults. Check focus after opening and closing Edit, Duplicate, or Delete. These focused dialogs use the shared imperative dialog host and must close when their owning account or view changes. Saving from the filter drawer closes it before opening the name dialog; Cancel or Escape reopens the unchanged filter draft, while a confirmed creation selects the new view without reopening the drawer. Delay a save while navigating or editing filters, and delay a deletion while selecting its target: stale saves must not change the new selection, later filter edits must survive, and confirmed deletion must clear its selected target.
 Also return a malformed definition from create or from another row's update: the selected view must remain accessible. Advance the selected view's revision while a duplicate saves; completion must not navigate away. Ordinary creation retains current facets even if its confirmed definition differs.
 Verify mixed supported and invalid entries, unsupported fields, conflicting tag bindings, and an unknown version. Supported conditions must immediately filter results while the danger banner stays visible. If none apply, verify unfiltered tasks, including closed tasks. Confirm the saved definition is unchanged on load, reset, and navigation, and permission failures still show an unavailable state without querying tasks.
 Verify banner cleanup on desktop and mobile, including an entirely unsupported definition. Confirm that only owners see the action, temporary filter edits stay unsaved, sharing stays unchanged, and failed or conflicting writes retain the original definition and warning.
@@ -394,7 +414,8 @@ Deadline tints and the Today marker refresh at local midnight and when a tab
 becomes visible or focused again.
 The tint only appears when the actual end is inside the calendar range.
 Bar text stays inside the visible portion of its bar as you scroll, zoom, or
-open the item drawer, and truncates in narrow segments.
+open the item drawer. A bar too short for its name shows the name beside it,
+to its right, in muted text, until zooming in makes room.
 The full-width date header stays visible during vertical scrolling; the pointer's
 date label stays in that header, and the vertical scrollbar begins below it.
 Timeline-edge fades stay within the date header, beneath its floating buttons.
@@ -542,7 +563,8 @@ start a drag. Property pills remain interactive and do not start a drag.
 A new destination column highlights once movement slows
 or pauses for about 100 ms. Fast travel suppresses activation of new columns.
 A valid hover shows **Board sorted by Updated**, **Created**, **Viewed**,
-**Status**, **Priority**, or the active due-date sort label. The drop does not choose a pointer insertion slot:
+**Status**, **Priority**, or the active due-date sort label; during a text search it
+shows **Move here**. The drop does not choose a pointer insertion slot:
 its card takes its place in the current sort (or existing text-search order).
 Same-column moves and column reordering remain disabled.
 Layout, primary sort, sort direction, and grouping are reflected in `tasks.layout`,
@@ -670,7 +692,7 @@ without exposing the previous viewer's data or repeatedly retrying a failed read
 With `enable-tasks-reviews` enabled (on by default in development),
 `Reviews` is available in desktop navigation and the mobile bottom dock's
 `More views` drawer (or directly in the dock after Customize dock), not the mobile Tasks tabs.
-It opens a separate `/app/reviews` shell whose sidebar lists `Pull requests`,
+It opens a separate `/app/reviews` shell. On wide touch its list stays beside the preview and Show sidebar opens navigation in a sheet; its desktop sidebar lists `Pull requests`,
 `Authored by me`, `Assigned to me`, `Involves me`, and `Review requests`;
 `Involves me` is selected by default. The selected tab is stored in the URL and
 survives opening a PR and returning through the breadcrumb.
@@ -683,7 +705,7 @@ review requests.
 `Authored by me`, `Assigned to me`, and `Review requests` match the linked
 GitHub user ID. If the link-status endpoint has no identity, the list explains
 why the tab is unavailable.
-The sidebar offers **Search reviews** above its navigation. On desktop the
+On touch the sidebar offers **Search reviews** above its navigation. On desktop the
 **List**/**Board** icon group lives in the header; List is the default and the
 choice is remembered. The desktop header always offers an expandable Search icon; Command-F expands and
 focuses it. The single row contains the selected scope, status tabs, grouped
@@ -693,8 +715,13 @@ filter icon inside its button. A separate
 status"`) picks the status in the desktop header and above the list on touch
 devices, and the board hides it. The desktop sidebar has no layout or status
 switches. Status tabs size to their labels with even horizontal padding and use
-the shared fully rounded segmented style. Open is the default; Closed includes
-both closed and merged PRs, and All shows every status. The filter dropdown and mobile drawer also
+the shared fully rounded segmented style. When the header's actions would run
+past it, the status tabs show only their icons (named by tooltip), then the
+scope name hides; each comes back once the header has room. Opening the search
+can take the tab labels when the field would not fit beside them. Check a 640px
+window and 860px beside the docked sidebar, with search closed and open. Open
+is the default; Closed includes both closed and merged PRs, and All shows every
+status. The filter dropdown and mobile drawer also
 offer independent Open, Closed, and Merged selections. Custom multi-status
 selections hide the toggle, except the combined Closed preset keeps it visible.
 A partial Closed-only or Merged-only selection leaves every option unhighlighted.
@@ -710,12 +737,12 @@ Sort offers Priority, Recently updated, Least recently updated, Newest, and Olde
 Priority orders the loaded rows most urgent first and keeps recency within a
 priority. Date sorts group rows under the same headings as email (Today,
 Yesterday, Last 7 days, Earlier this month, Last month, Older) by the sorted
-date; Priority sorts and searches list rows flat. When visible PRs
-have GitHub labels, a Labels section below Favorites lists them like email's
-Tags section (a colored dot and the name); choosing a label shows only PRs with
-it, and choosing it again clears it. Above it, an **Agents** section lists the
-tools the loaded PRs were started from (Claude, Codex, Cursor, and so on, with
-their marks); choosing one shows only PRs started from it, using the same
+date; Priority sorts and searches list rows flat. When visible PRs have GitHub
+labels, a **Labels** section below Favorites lists them with a colored dot and
+the name. These are GitHub labels, not Macro tags. Choosing a label shows only
+PRs with it, and choosing it again clears it. Above it, an **Agents** section
+lists the tools the loaded PRs were started from (Claude, Codex, Cursor, and so
+on, with their marks); choosing one shows only PRs started from it, using the same
 **Started from** filter as the filter menu. PR rows use the shared entity layout with selection checkboxes,
 author avatars and names, and a context menu. The current user's Macro display
 name appears when their linked GitHub identity matches the PR author; other
@@ -898,19 +925,17 @@ Without a preset, the standard property row and draft are used. The shared
 composer's only flag gate is the Customer / Contact pill below. Create-menu actions, shortcuts, and pane buttons
 capture the provider during setup and read the preset when invoked.
 
-With PostHog `enable-crm` and `enable-crm-activity` both on, every opening of the
+Every opening of the
 composer, and Universal Input's task mode, shows one **Customer / Contact** pill, a single-choice picker of companies
 and contacts that writes the Companies and Contacts properties. Picking a company
 leaves the contact unset; picking a contact also sets its company, and the pill
 shows the contact with both named on hover. A team with no CRM records sees the
 pill with "No customers or contacts found". Neither property is offered separately
-under **Add property** while the pill shows. With either flag off, there is no pill
-and both stay under **Add property**.
+under **Add property**.
 
-Customers supplies its preset when `enable-crm-activity` is on. Record-level task
+Customers supplies its preset. Record-level task
 creation prefills the company or contact, including the contact's company when
-already loaded. With the CRM flag off or loading, record-level creation uses the
-standard property row while retaining its record-scoped draft and associations. **Add property** opens the same property
+already loaded. **Add property** opens the same property
 editor as the document/task side panel: search by name or type, select a property
 and enter its value, or create a property from an unmatched search. Assignments
 and values stay in the task draft until creation; opening or closing the editor
@@ -972,19 +997,19 @@ Disable the flag and confirm the original task-button behavior remains unchanged
 
 ## Projects
 
-Projects are enabled by default in development. Production rollout is gated by
-PostHog `enable-projects`; `VITE_ENABLE_PROJECTS` overrides either environment.
-When off, Tasks hides the Projects section and mobile picker, project column,
-and assignment actions. A saved project view temporarily shows My tasks without
-overwriting the saved selection.
-
 Choose a view in the `Projects` section in Tasks, or open
 `/app/component/tasks-projects` for All projects. Project view links use the Tasks
 search namespace: `tasks.tab=my-projects`, `projects`, or `created-projects`.
 Desktop project-view titles open the same view switcher as Tasks; individual
 project names remain content titles. Mobile keeps the Projects picker.
 Projects use the same list rows, property cells, selection, group headers, and
-keyboard navigation as Tasks. Search (`Cmd/Ctrl+F`), `Sort projects`,
+keyboard navigation as Tasks. On touch devices, where the list fills a phone or
+a tablet's narrow list pane, there are no column headings and no checkbox
+column, as in the Tasks list on phones: each row is the project's name followed
+by its Status, Priority, Assignees, and Due date icons. On desktop, when the
+list is narrower than 840px, those columns show their values as icons and their
+headings as icons with tooltips, as the Tasks list does, and Tasks and Updated
+leave the grid without an empty column. Search (`Cmd/Ctrl+F`), `Sort projects`,
 `Group projects`, and `Filter projects` sit above the list. Groups default to
 Status; choose None, Priority, or Assignee to change them. Click a group header
 or use the list's disclosure keys to collapse or expand it. Sort by Updated
@@ -1025,6 +1050,18 @@ bottom action drawer, without `Open in new split` and with each Status and
 Priority choice as its own row. Use disposable projects: these actions change
 hosted data.
 
+Project rows in shared lists (Home's Projects filter, Search) use the shared
+row menu: `Open in new split`, `Copy Link`, `Copy ID`, and `Share`, plus
+`Rename` and `Delete` on projects you own. These rows carry no access level,
+so an editor who doesn't own the project gets neither; several owned projects
+offer only `Delete`. The dialogs are the Projects list's own.
+
+While a project page shows its Overview, Cmd+K lists `Copy link` and `Copy ID`
+(the same URL and id as the title menu), plus the tag and notification commands
+its Home row offers. In the Tasks section, Cmd+K and Shift+Cmd+C act on the
+focused task row instead. In Home's project preview the commands live in the
+preview's own hotkey scope, so they apply once the cursor is in the preview.
+
 `New project` and the global Create menu's `Project` action (C, then P) open
 the same native composer host and layout as task creation,
 with a project name, a Markdown description (`Add description...`), and the
@@ -1061,14 +1098,25 @@ and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,
 including `Delete` for its owner. Choose Overview or Tasks using the inset
 tabs in that top bar; below 600px they collapse to icons, with tooltips on
-desktop, and the project name truncates instead. In Tasks, an outlined
+desktop, and the project name truncates instead. On phones the bar keeps its
+room for the name, as phone file headers do: the Tasks breadcrumb becomes a back
+arrow, the project icon is no longer its own button, and Share and Copy link
+leave the bar; Change icon, Share, and Copy Link stay in `Project actions`.
+Tablets and desktop keep the full bar. In Tasks, an outlined
 circular search button expands into a focused `Search in <project name>` field.
 Close or Escape clears the query and restores focus to the button. The task
 toolbar stays the same height and scrolls
 horizontally in narrow splits, keeping list controls, Add existing tasks, and New
-task accessible. Opening an associated task extends the breadcrumb trail; choose
-the project breadcrumb to return, or Projects to restore the collection and its
-filters, groups, and scroll position. Project URLs retain identity and section:
+task accessible. On touch devices New task leaves the toolbar for the floating
+`+ Task` pill above the dock: on both of a project's tabs it creates the task in
+this project, and people who can't edit the project get no pill. The Tasks
+view's own pill, which creates a task with no project, stays off a project's tabs
+while they load. On touch the project's content starts below its floating top
+bar. On phones (touch, under 640px) Add existing tasks shows as an icon button
+named by its label, the same size as search and filters, and the open search
+field narrows, so the row fits from 320px wide without scrolling. Opening an associated task
+extends the breadcrumb trail; choose the project breadcrumb to return, or
+Projects to restore the collection and its filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/tasks/projects/<project-id>/overview` (or `tasks`). Share, and Copy Link
 in the project title and Projects row menus, copy `/app/initiative/<project-id>`,
 which opens the project in Tasks; pasting it, or an older
@@ -1152,12 +1200,14 @@ when URL parameters are absent. Use
 `New task` to create a task in the project: the composer opens with its Project
 set to this project (change or clear it like any property), and the create
 request carries it, so there is no separate assignment step. The new row appears
-once the task is created. Verify this with GraphQL Soup both enabled and
-disabled. The section tabs
+once the task is created. The section tabs
 use the same control as Channels. Editors can choose `Add existing tasks` beside
-`New task`; both actions use bordered buttons with a background. `Add existing
+`New task` (on touch, New task is the floating pill); both actions use bordered
+buttons with a background. `Add existing
 tasks` opens an anchored task-selector dropdown: search, select several, and
-confirm `Add N tasks`. Escape or Cancel dismisses without assigning tasks. Tasks
+confirm `Add N tasks`. On touch it opens a picker sheet instead: search, select
+several, and confirm with `Done`. Scrolling to the end (or PageDown) appends later loaded
+task pages to the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
 already in this project are excluded. Adding a task moves it from its previous
 project. A partial failure keeps only
 failed tasks selected for retry, and a request failure preserves the selection.
@@ -1191,7 +1241,8 @@ its target again.
 ## Bulk delete
 
 Select task rows with their leading checkboxes, choose **Actions → Delete items**,
-then confirm **Delete**. With GraphQL Soup enabled, selected rows disappear while
+then confirm **Delete**. On desktop the dialog opens with Delete focused, so Enter confirms
+and Escape cancels. Selected rows disappear while
 requests are pending, including rows loaded through grouped pagination. The
 confirmation closes when the whole batch succeeds. After a partial failure it
 reports how many items were deleted and keeps only failed items in the dialog for
@@ -1205,11 +1256,10 @@ of the list. If both neighbors disappeared, it falls back near the original list
 position, skipping group headers and load-more rows.
 Failed items return to Soup and search immediately, while successful removals
 remain absent from both.
-Successfully deleted items stay hidden until all enabled GraphQL Soup lists
+Successfully deleted items stay hidden until all mounted GraphQL Soup lists
 revalidate successfully, even if the first refresh fails. Refresh is attempted
 at most three times (one- and two-second retry delays); suppression expires one
-minute after deletion finishes if revalidation remains unavailable. The
-GraphQL-disabled path retains its existing behavior.
+minute after deletion finishes if revalidation remains unavailable.
 
 For verification, use disposable tasks and delay only their DELETE requests:
 rows should disappear before those requests complete. Then fail a Soup refresh:
@@ -1219,7 +1269,7 @@ only the failed items.
 
 ## Other list actions
 
-With GraphQL Soup enabled, **Rename** updates the row title before the request
+**Rename** updates the row title before the request
 finishes, as well as updating previews. **Move to folder**, **Remove from folder**,
 and **Duplicate** refresh mounted GraphQL lists after the server responds; a
 manual page reload is not required. Duplication does not show a placeholder before
@@ -1241,12 +1291,18 @@ GitHub instead.
 
 Assignees lists and searches current team members and available agents, keeping
 each surface's existing search placeholder, styling, and selected-first ordering
-when opening the picker. Rows stay in place while selecting or deselecting.
-Existing selected outsiders remain visible and removable,
-including references absent from contacts. The picker has no contact discovery;
-a removed outsider cannot be added again unless they join the team.
+when opening the picker. Unsearched, it lists you, then team members, then agents
+with Macro first; the Tasks filter keeps the saved-view **Me** above you, and the
+other Assignee filters put **Unassigned** right after you. A search ranks names
+as the @ menu does, lists an agent only when its name or handle holds the typed
+words (not just their letters scattered), and never above a person whose name
+matches as well. Team-member limits on the list never hide agents. The rule lives
+in `@core/user/people-before-agents`. Rows stay in place while selecting or deselecting.
+Initially selected outsiders remain visible and removable, including references
+absent from contacts. They stay searchable for re-adding while the record stays
+mounted, even after the picker closes. Unrelated non-team contacts stay excluded.
 
-The same scope applies to task/project creation and editing, bulk Set assignee,
+The same roster scope applies to task/project creation and editing, bulk Set assignee,
 and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices
 keep their semantics; Created by and custom people fields keep their contact lists.
 Check that a teammate absent from contacts appears and can be selected, that
@@ -1329,8 +1385,8 @@ message.
 
 ### Nested sidebar tags
 
-In the Email and Calls sidebar Tags sections, tag names containing `/` render with
-one child level (for example, `Work/Urgent`).
+The shared sidebar tag tree renders tag names containing `/` with one child
+level (for example, `Work/Urgent`).
 Deeper paths remain in the child label: `Work/Customers/Acme` appears as
 `Customers/Acme` under `Work`, alongside any actual `Customers` tag.
 Use the caret to expand or collapse a branch. A folder-only parent expands without

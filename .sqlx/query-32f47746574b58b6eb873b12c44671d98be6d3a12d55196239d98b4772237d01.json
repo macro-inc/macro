@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE harness_account_logins\n            SET notice_stage = $2, notice_expires_at = $3\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "account_notice_stage",
+            "kind": {
+              "Enum": [
+                "expires_soon",
+                "expires_today",
+                "expired"
+              ]
+            }
+          }
+        },
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "32f47746574b58b6eb873b12c44671d98be6d3a12d55196239d98b4772237d01"
+}

@@ -4,7 +4,7 @@
 
 import { Model } from '@core/component/AI/constant/model';
 import { useAgentModelsQueries } from '@queries/agents/models';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
 import type { LoadAgentModelsResponse } from '@service-agent-harness/generated/schemas';
 import type { Harness } from '@service-storage/client';
 import {
@@ -23,7 +23,11 @@ import { Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
-import { agentSettingsRequest, requestAgentDetail } from './agentSettingsState';
+import {
+  agentSettingsRequest,
+  requestAgentDetail,
+  requestCreateAgent,
+} from './agentSettingsState';
 import {
   chooseModelOption,
   chooseSelectOption,
@@ -38,6 +42,17 @@ const agentsPageProps = {
 };
 
 // The real Lexical surface has its own Markdown round-trip suite.
+vi.mock('./computers/views/agent-computer-entry', () => ({
+  RunOnComputerRow: () => null,
+  ComputerWhereItRuns: (props: { harnessId: string; checked: boolean }) => (
+    <div
+      data-testid="computer-where-it-runs"
+      data-harness-id={props.harnessId}
+      data-checked={String(props.checked)}
+    />
+  ),
+}));
+
 vi.mock('./components/instructions-editor', () => ({
   AgentInstructionsEditor: (props: {
     markdown: string;
@@ -155,7 +170,7 @@ function modelTargetKey(target: {
 }
 
 function successfulModels(
-  models: { id: string; name: string }[],
+  models: { id: string; name: string; description?: string }[],
   currentModel = models[0]?.id
 ) {
   return {
@@ -200,7 +215,7 @@ const harnessMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@queries/harnesses/harnesses', () => ({
-  useHarnessesQuery: vi.fn(() => harnessMocks.query),
+  useRunnableHarnessesQuery: vi.fn(() => harnessMocks.query),
 }));
 
 vi.mock('@queries/agents/agents', () => ({
@@ -253,7 +268,6 @@ vi.mock('@core/context/channels', () => ({
 }));
 
 const pipedreamMocks = vi.hoisted(() => ({
-  enabled: true,
   connected: [] as string[],
   connect: vi.fn(),
   catalog: [
@@ -270,10 +284,6 @@ const pipedreamMocks = vi.hoisted(() => ({
       icon_url: null,
     },
   ],
-}));
-
-vi.mock('@core/pipedream/flag', () => ({
-  usePipedreamMcpFlag: () => () => pipedreamMocks.enabled,
 }));
 
 vi.mock('@queries/pipedream-connectors', () => ({
@@ -337,7 +347,6 @@ beforeEach(() => {
   agentMocks.isTeamOwner = false;
   agentMocks.isTeamAdmin = false;
   harnessMocks.query.data = [];
-  pipedreamMocks.enabled = true;
   pipedreamMocks.connected = [];
   pipedreamMocks.connect.mockReset();
   pipedreamMocks.connect.mockImplementation(
@@ -400,6 +409,8 @@ describe('Agents', () => {
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
+      // The agent list asks first, for no runtimes: no agent is on `default`.
+      vi.mocked(useAgentModelsQueries).mockImplementationOnce(() => []);
       vi.mocked(useAgentModelsQueries).mockImplementationOnce((targets) =>
         targets().map((target) =>
           useQuery(() => ({
@@ -680,6 +691,41 @@ describe('Agents', () => {
     ).toBeTruthy();
     expect(
       within(list).getByText('Disconnected machine · codex · All channels')
+    ).toBeTruthy();
+  });
+
+  it("names the model a machine's default choice runs", () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels([
+      { id: 'default', name: 'Default (recommended)', description: 'Opus 4.8' },
+      { id: 'sonnet', name: 'Sonnet', description: 'Sonnet 4.6' },
+    ]);
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-default',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Default helper',
+          handle: 'default-helper',
+          has_agent: true,
+        },
+        instructions: '',
+        harness: 'macrod',
+        harness_id: MACROD_HARNESS.id,
+        default_model: 'default',
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+
+    render(() => <Agents {...agentsPageProps} />);
+    const list = screen.getByRole('region', { name: 'Your agents' });
+
+    expect(
+      within(list).getByText(
+        'On your machine · Dev box · Opus 4.8 (default) · All channels'
+      )
     ).toBeTruthy();
   });
 
@@ -1242,9 +1288,11 @@ describe('Agents', () => {
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     const teamOption = within(dialog).getByLabelText('Team');
     expect(teamOption).toHaveProperty('disabled', true);
-    const teamCardClasses = teamOption.closest('label')?.classList;
-    expect(teamCardClasses?.contains('cursor-not-allowed')).toBe(true);
-    expect(teamCardClasses?.contains('opacity-50')).toBe(true);
+    expect(
+      teamOption.closest('label')?.classList.contains('cursor-not-allowed')
+    ).toBe(true);
+    // The choice's text and radio dim; trailing actions stay legible.
+    expect(teamOption.classList.contains('opacity-50')).toBe(true);
     expect(
       within(dialog).getByText(
         'Team agents need a team owner. Create or join a team in Team settings to enable this option.'
@@ -1468,6 +1516,28 @@ describe('Agents', () => {
     );
   });
 
+  it('opens the create form on a requested Macro computer', () => {
+    const computer = {
+      ...MACROD_HARNESS,
+      id: 'computer-harness',
+      name: 'Agent Box',
+      computer_id: 'computer-1',
+    };
+    harnessMocks.query.data = [MACROD_HARNESS, computer];
+    requestCreateAgent('computer-harness');
+
+    render(() => <Agents {...agentsPageProps} />);
+
+    const dialog = screen.getByRole('region', { name: 'New agent' });
+    const where = within(dialog).getByTestId('computer-where-it-runs');
+    expect(where.dataset.harnessId).toBe('computer-harness');
+    expect(where.dataset.checked).toBe('true');
+    expect(
+      within(dialog).getByRole('radio', { name: 'In Macro' })
+    ).toHaveProperty('checked', false);
+    expect(agentSettingsRequest()).toBeUndefined();
+  });
+
   it('offers registered macrod harnesses in the harness picker', () => {
     harnessMocks.query.data = [MACROD_HARNESS];
 
@@ -1506,7 +1576,7 @@ describe('Agents', () => {
     const fetchHarnesses = vi.fn(
       async (): Promise<Harness[]> => [{ ...MACROD_HARNESS }]
     );
-    vi.mocked(useHarnessesQuery).mockImplementationOnce(() =>
+    vi.mocked(useRunnableHarnessesQuery).mockImplementationOnce(() =>
       useQuery(() => ({
         queryKey,
         queryFn: fetchHarnesses,
@@ -1887,31 +1957,6 @@ describe('Agents', () => {
       ],
     },
   };
-
-  it('hides the Connections section when the Pipedream stack is off but keeps the selection', async () => {
-    pipedreamMocks.enabled = false;
-    agentMocks.query.data = [linearAgent];
-    render(() => <Agents {...agentsPageProps} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Triage bot' }));
-
-    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
-    expect(
-      within(dialog).getByRole('group', { name: 'Channels' })
-    ).toBeTruthy();
-    expect(within(dialog).queryByText('Connections')).toBeNull();
-    fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Save changes' })
-    );
-
-    await waitFor(() => {
-      expect(agentMocks.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          mcp: { scope: 'selected', servers: linearAgent.mcp.servers },
-        })
-      );
-    });
-  });
 
   it('defaults new agents to the owner connections policy', () => {
     render(() => <Agents {...agentsPageProps} />);

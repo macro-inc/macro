@@ -21,7 +21,7 @@ export function MiniCalendar(props: { workspace: DummyWorkspace }) {
     );
   return (
     <div class="sample-mini-calendar">
-      <div class="flex items-center justify-between pb-3 text-xs font-semibold">
+      <div class="flex items-center justify-between pb-3 text-xs font-medium">
         <span>{monthLabel(w.calendarDate())}</span>
         <Button
           size="icon-sm"

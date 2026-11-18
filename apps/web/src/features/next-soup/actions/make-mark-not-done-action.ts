@@ -5,16 +5,10 @@ import {
 } from '@app/features/next-soup/utils';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import type { EmailArchiveDisposition } from '@queries/email/integration';
-import { threadCanBeMarkedNotDone } from '@queries/email/thread';
 import { fetchDoneNotificationIdsByEventItemIds } from '@queries/notification/user-notifications';
-import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
 import { canMarkNotDone } from './can-mark-not-done';
 import type { EntityActionListState } from './entity-action-context';
 
@@ -22,49 +16,7 @@ type MakeMarkNotDoneOptions = {
   notificationSource: () => NotificationSource;
 };
 
-/** Preserve the legacy REST batch, notification ordering and reconciliation. */
-async function unarchiveRestTargets(
-  targets: EntityData[],
-  source: NotificationSource
-) {
-  const { emailIds, notificationIds } = resolveMarkEntitiesDoneVariables({
-    entities: targets,
-    notificationSource: source,
-  });
-  const optimistic = applyEntitiesNotDoneOptimistic({
-    emailIds,
-    notificationIds,
-  });
-  try {
-    const serverNotificationIds =
-      await fetchDoneNotificationIdsByEventItemIds(emailIds);
-    const disposition = await executeMarkEntitiesUndone({
-      emailIds,
-      notificationIds: [
-        ...new Set([...notificationIds, ...serverNotificationIds]),
-      ],
-    });
-    toast.success(
-      targets.length > 1
-        ? t('entityActions.toastMarkedNotDoneCount', { count: targets.length })
-        : t('entityActions.toastMarkedNotDone'),
-      { duration: 3_000, stack: true, hideOnMobile: true }
-    );
-    if (disposition !== 'queued') {
-      await Promise.all(
-        emailIds.map((id) => refetchSoupEntity(id, 'emailThread'))
-      );
-      invalidateAllSoup();
-    }
-    return disposition;
-  } catch (err) {
-    optimistic.rollback();
-    toast.failure(t('entityActions.toastMarkNotDoneFailed'));
-    throw err;
-  }
-}
-
-/** Each GraphQL email owns its optimistic state; rejected siblings cannot undo it. */
+/** Each email owns its optimistic state; rejected siblings cannot undo it. */
 async function unarchiveTargets(targets: EntityData[]) {
   const attempts = new Map(
     targets.map((entity) => [
@@ -139,45 +91,24 @@ async function restoreEmailNotifications(
 
 /**
  * Reverses a mark-done: unarchives email threads and restores their
- * notifications. GraphQL validates unarchive
- * eligibility on the server. Each thread settles independently, including
- * queued writes; only a completely failed email selection rejects the action.
+ * notifications. The server validates unarchive eligibility (received-mail
+ * history), and the per-thread transactions below isolate its rejections. Each
+ * thread settles independently, including queued writes; only a completely
+ * failed email selection rejects the action.
  */
 export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
   const execute = async (entities: EntityData[]) => {
-    const graphql = isFeatureEnabled(enableGraphqlSoup);
-    const doneEmails = entities.filter(canMarkNotDone);
-    // GraphQL owns per-thread transactions: snapshot identities before awaiting
-    // and deduplicate group occurrences. Keep REST's existing input flow intact.
-    const candidates = graphql
-      ? [
-          ...new Map(
-            doneEmails.map((entity) => [entity.id, { ...entity }] as const)
-          ).values(),
-        ]
-      : doneEmails;
-    if (candidates.length === 0) return;
-
-    // REST rows lack received-mail facts, so REST looks the thread up. GraphQL
-    // rows read true until their thread is recomputed, so the server still has
-    // the final say; the per-thread transactions below isolate its rejections.
-    const eligibility = await Promise.all(
-      candidates.map((entity) => threadCanBeMarkedNotDone(entity.id))
-    );
-    const targets = candidates.filter((_, i) => eligibility[i]);
-
-    if (targets.length === 0) {
-      toast.alert(
-        candidates.length > 1
-          ? t('entityActions.toastThreadsStayDone')
-          : t('entityActions.toastThreadStaysDone'),
-        { duration: 4_000 }
-      );
-      return;
-    }
+    // Snapshot identities before awaiting and deduplicate group occurrences.
+    const targets = [
+      ...new Map(
+        entities
+          .filter(canMarkNotDone)
+          .map((entity) => [entity.id, { ...entity }] as const)
+      ).values(),
+    ];
+    if (targets.length === 0) return;
 
     const source = options.notificationSource();
-    if (!graphql) return unarchiveRestTargets(targets, source);
     const { accepted, disposition, error } = await unarchiveTargets(targets);
     if (accepted.length === 0) {
       toast.failure(t('entityActions.toastMarkNotDoneFailed'));
@@ -194,9 +125,6 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
     if (!(await restoreEmailNotifications(accepted, source))) {
       warnings.push(t('entityActions.toastNotificationsNotRestored'));
     }
-    // The GraphQL mutation/queue owns revalidation. A follow-up REST Soup read
-    // can return replica-stale archive state after accepted rows have settled,
-    // including when a sibling failed. Do not feed it over those accepted rows.
     const message =
       failedCount > 0
         ? t('entityActions.toastMarkedNotDonePartial', {

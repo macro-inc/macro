@@ -162,7 +162,7 @@ function Avatar(props: {
         flex: 'none',
         'font-family': appFont,
         'font-size': `${Math.round(s * (props.fontScale ?? 0.38))}px`,
-        'font-weight': '600',
+        'font-weight': '500',
         height: `${s}px`,
         'place-items': 'center',
         width: `${s}px`,
@@ -522,7 +522,7 @@ export function HeroAppWindow() {
               color: 'color-mix(in srgb, var(--c1) 55%, var(--c2))',
               display: 'inline-flex',
               'font-family': appFont,
-              'font-weight': '550',
+              'font-weight': '500',
               gap: '6px',
             }}
           >
@@ -620,7 +620,7 @@ export function HeroAppWindow() {
                   style={{
                     color: 'var(--c1)',
                     'font-size': '15px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                   }}
                 >
                   Inbox zero
@@ -816,7 +816,7 @@ export function MultiInboxCard() {
             color: 'var(--c1)',
             'font-family': appFont,
             'font-size': '13.5px',
-            'font-weight': '600',
+            'font-weight': '500',
           }}
         >
           All inboxes
@@ -1042,7 +1042,7 @@ function ComposeInlinePill(props: {
             flex: 'none',
             'font-family': appFont,
             'font-size': '8px',
-            'font-weight': '600',
+            'font-weight': '500',
             height: '22px',
             overflow: 'hidden',
             'place-items': 'center',
@@ -1762,7 +1762,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
             'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
-            'font-weight': '700',
+            'font-weight': '500',
             'letter-spacing': '0.02em',
             'white-space': 'nowrap',
           }}
@@ -1791,7 +1791,7 @@ function _ComparisonTable() {
     display: 'flex',
     'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
-    'font-weight': '700',
+    'font-weight': '500',
     'justify-content': 'center',
     'letter-spacing': '0.06em',
     'line-height': 1.1,
@@ -1855,7 +1855,7 @@ function _ComparisonTable() {
                     display: 'flex',
                     'font-family': 'body',
                     'font-size': mobile() ? '13px' : '16px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                     'line-height': 1.3,
                     padding: mobile() ? '14px 12px 14px 16px' : '16px 22px',
                     position: mobile() ? 'sticky' : 'static',
@@ -1923,7 +1923,7 @@ function _PrimaryCta(props: { buttonName: string; label?: string }) {
         display: 'inline-flex',
         'font-family': 'body',
         'font-size': mobile() ? '16px' : '14px',
-        'font-weight': '700',
+        'font-weight': '500',
         gap: '8px',
         height: mobile() ? '46px' : '48px',
         'justify-content': 'center',
@@ -2118,7 +2118,7 @@ function _EmailIntro() {
                   color: 'color-mix(in srgb, var(--c4) 60%, transparent)',
                   'font-family': 'Inter, body',
                   'font-size': compact() ? '11px' : '12px',
-                  'font-weight': '700',
+                  'font-weight': '500',
                   'letter-spacing': '0.14em',
                   'text-transform': 'uppercase',
                 }}
@@ -2142,7 +2142,7 @@ function _EmailIntro() {
                     color: 'var(--c2)',
                     'font-family': 'body',
                     'font-size': compact() ? '14px' : '15px',
-                    'font-weight': '700',
+                    'font-weight': '500',
                     'letter-spacing': '0.07em',
                     'line-height': 1.2,
                     margin: '0',
@@ -2156,7 +2156,7 @@ function _EmailIntro() {
                     color: 'var(--c4)',
                     'font-family': 'body',
                     'font-size': compact() ? '15px' : '16px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                     'line-height': 1.5,
                     margin: '0',
                     'max-width': '360px',
@@ -2588,7 +2588,7 @@ function _InboxRowContent(props: { row: InboxRowData }) {
             flex: 1,
             'font-family': appFont,
             'font-size': '14px',
-            'font-weight': r.unread ? '600' : '500',
+            'font-weight': '500',
             gap: '7px',
             'min-width': 0,
           }}
@@ -2618,7 +2618,7 @@ function _InboxRowContent(props: { row: InboxRowData }) {
           flex: 'none',
           'font-family': appFont,
           'font-size': '14px',
-          'font-weight': r.unread ? '600' : '500',
+          'font-weight': '500',
           'max-width': mobile() ? '110px' : '168px',
           overflow: 'hidden',
           'text-overflow': 'ellipsis',
@@ -2665,7 +2665,7 @@ function _InboxRowMeta(props: { row: InboxRowData }) {
     >
       <Show when={r.kind === 'pr'}>
         <span style={inboxPill()}>
-          <span style={{ color: SUCCESS, 'font-weight': '600' }}>
+          <span style={{ color: SUCCESS, 'font-weight': '500' }}>
             +{r.prAdds}
           </span>
           <span style={{ color: FAILURE }}>
@@ -3294,7 +3294,7 @@ function UnifiedInboxWindow() {
                         flex: 'none',
                         'font-family': appFont,
                         'font-size': '11.5px',
-                        'font-weight': 600,
+                        'font-weight': 500,
                         'padding-left': '6px',
                         'white-space': 'nowrap',
                       }}
@@ -3347,7 +3347,7 @@ function UnifiedInboxWindow() {
                         style={{
                           'font-family': appFont,
                           'font-size': '11.5px',
-                          'font-weight': 600,
+                          'font-weight': 500,
                           'white-space': 'nowrap',
                         }}
                       >
@@ -3372,7 +3372,7 @@ function UnifiedInboxWindow() {
                         color: '#8b8b8b',
                         'font-family': appFont,
                         'font-size': '11.5px',
-                        'font-weight': 600,
+                        'font-weight': 500,
                         'white-space': 'nowrap',
                       }}
                     >
@@ -3384,7 +3384,7 @@ function UnifiedInboxWindow() {
                         color: UNIFIED_META.calendar.color,
                         'font-family': appFont,
                         'font-size': '11.5px',
-                        'font-weight': 600,
+                        'font-weight': 500,
                         'white-space': 'nowrap',
                       }}
                     >
@@ -3552,7 +3552,7 @@ function BigKey(props: {
         display: 'inline-grid',
         'font-family': 'Inter, body',
         'font-size': mobile() ? '16px' : '15px',
-        'font-weight': '700',
+        'font-weight': '500',
         height: mobile() ? '42px' : '48px',
         'line-height': 1,
         'min-width': mobile() ? '42px' : '48px',
@@ -3695,7 +3695,7 @@ function _KeyboardSpeedGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': compact() ? '14px' : '15px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Signal
@@ -3734,7 +3734,7 @@ function _KeyboardSpeedGraphic() {
                         color: 'var(--c1)',
                         'font-family': appFont,
                         'font-size': '15px',
-                        'font-weight': '600',
+                        'font-weight': '500',
                       }}
                     >
                       Inbox zero
@@ -3751,7 +3751,7 @@ function _KeyboardSpeedGraphic() {
                         cursor: 'pointer',
                         'font-family': 'Inter, body',
                         'font-size': '12px',
-                        'font-weight': '700',
+                        'font-weight': '500',
                         'letter-spacing': '0.06em',
                         padding: '7px 15px',
                         'text-transform': 'uppercase',
@@ -3812,7 +3812,7 @@ function _KeyboardSpeedGraphic() {
                             color: 'var(--c1)',
                             'font-family': appFont,
                             'font-size': compact() ? '13px' : '14px',
-                            'font-weight': entry.row.unread ? '700' : '500',
+                            'font-weight': '500',
                           }}
                         >
                           {entry.row.who}
@@ -3879,7 +3879,7 @@ function _KeyboardSpeedGraphic() {
                         color: 'var(--c4)',
                         'font-family': 'Inter, body',
                         'font-size': '12px',
-                        'font-weight': '700',
+                        'font-weight': '500',
                         'letter-spacing': '0.08em',
                         'margin-left': '4px',
                         'text-transform': 'uppercase',
@@ -3899,7 +3899,7 @@ function _KeyboardSpeedGraphic() {
           color: 'color-mix(in srgb, var(--c4) 70%, transparent)',
           'font-family': 'body',
           'font-size': '13px',
-          'font-weight': '600',
+          'font-weight': '500',
           'margin-top': compact() ? '20px' : '26px',
           'text-align': 'center',
         }}

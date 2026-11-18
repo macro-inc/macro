@@ -24,7 +24,8 @@ Outlook (Microsoft Graph) outbound adapters.
   `outlook.graph_admission` child for the per-mailbox gate wait).
 - `src/outbound/microsoft_gate.rs`: the Redis admission every Graph request
   passes (window, concurrency, cooldown), which also counts admitted requests
-  per sync generation.
+  per sync generation. Each gate is built with a `RequestBudget`: `Live` for
+  calendar, commands and live sync, `Import` for an Outlook import's reads.
 
 ## Scope
 
@@ -36,7 +37,8 @@ Outlook (Microsoft Graph) outbound adapters.
 ## Boundaries
 
 - Depends on: `email_utils`, `models_email`, `gmail_client` (feature
-  `outbound-gmail`), `calendar_events` (feature `outbound-outlook`).
+  `outbound-gmail`), `calendar_events` and `macro_service_urls` (feature
+  `outbound-outlook`).
 - Used by: `crates/email` (ports only), `services/email_service`,
   `services/calendar_service`.
 
@@ -57,6 +59,15 @@ Outlook (Microsoft Graph) outbound adapters.
 
 ## Gotchas
 
+- The Microsoft gate's `Import` budget stops below the shared limits (two of
+  the three slots, 7,500 of the 9,000 window), so an import never takes the
+  last slot or the window's tail from calendar and live sync. A refused import
+  request waits in the gate for room (two waiters per mailbox, up to 20 s)
+  before it defers. It defers at once when both waiters' places are taken or
+  its refusal lasts longer than the wait (a full window, a cooldown); `Live`
+  requests never wait. A full window is reported before busy slots. A mailbox
+  with every slot busy asks for a retry in a second: the 90-second permit
+  lease only frees a crashed caller's slot and is never a retry delay.
 - Undated provider drafts use creation time for All Mail eligibility; spam/junk
   and trash remain excluded. Keep ingestion, recomputation, and cached projections aligned.
 
@@ -104,6 +115,18 @@ Outlook (Microsoft Graph) outbound adapters.
   and its `url.template` comes from `outlook/route.rs`, which keeps only
   known Graph path words so ids and user-chosen names never reach it. Record
   numeric fields as `i64`; unsigned values reach the collector as strings.
+- Graph reads `$top` on a delta request as a cap on the whole round, not a
+  page size: it stops at that many items and returns the deltaLink, so the
+  rest of the folder is never listed and later rounds never return it. Never
+  put `$top` on a delta request; size its pages with
+  `Prefer: odata.maxpagesize` instead. The mail-folder delta reads through
+  `transport::get_delta_page`, which sends it as its own `Prefer` line on
+  every page, since the nextLink does not carry it.
+- Raise `FolderChangeReader::READER_REVISION` with a change that lets a fresh
+  folder delta round list mail an older round missed. Each page carries the
+  revision that read it, the folder stream records the revision its round
+  started at, and `reimport_outlook_folders` restarts streams whose round
+  started at an older one ([runbook](../../docs/runbooks/outlook-folder-reimport.md)).
 - `domain::request_count::counted` counts the Graph requests one unit of work
   sends (the transport calls `record_sent`); Outlook token failures surface
   as `EmailApiError::CredentialsUnavailable`, apart from Graph failures.
@@ -130,9 +153,15 @@ Outlook (Microsoft Graph) outbound adapters.
   account. `zones.rs` is CLDR's `windowsZones.xml` (territory `001`, in file
   order) with its `LICENSE` beside it; regenerate both from a new CLDR
   release when Windows adds zones. Keep out a zone whose IANA rules the
-  bundled chrono-tz lacks: Outlook writes send local times computed with
-  them, so stale rules move an event. British Columbia, Alberta and Manitoba
-  Standard Time are held out that way until current tz data ships.
+  vendored tz data (`vendor/chrono-tz`) lacks: Outlook writes send local
+  times computed with them, so stale rules move an event; update the tz
+  data first.
+- The Graph root is `macro_service_urls::MicrosoftGraphUrl`, so
+  `OVERRIDE_MICROSOFT_GRAPH_URL` points every Outlook client in a process at
+  `crates/outlook_emulator`; tests in other crates use
+  `OutlookApiClientRepository::for_graph_url`. Continuation links and upload
+  URLs are only followed on the root's origin (or Microsoft's upload hosts),
+  so an emulator must serve them itself.
 - Decode Graph JSON bodies with `transport::read_json`. `invalid_response`
   takes the field or shape that failed (`read_json` gives the JSON path and a
   missing field's name) and must never quote the response, which can carry

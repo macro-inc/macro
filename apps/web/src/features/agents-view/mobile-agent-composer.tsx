@@ -38,7 +38,12 @@ function Composer() {
 export function MobileAgentComposer() {
   return (
     <Suspense
-      fallback={<div class="h-12" aria-label="Loading agent composer" />}
+      fallback={
+        <div
+          class="h-(--mobile-chrome-button-size)"
+          aria-label="Loading agent composer"
+        />
+      }
     >
       <Composer />
     </Suspense>

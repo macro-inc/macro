@@ -336,6 +336,9 @@ services:
       # sandboxes are siblings of this container rather than children. Harmless
       # under the Daytona provider, which never opens it.
       - /var/run/docker.sock:/var/run/docker.sock
+      # Agent workspace git remotes under /agent-git: bare repositories at
+      # REPO_STORAGE_ROOT, the same path as the deployed EFS volume.
+      - agent_git_repos:/data/agent-git
     depends_on:
       - postgres
       - redis
@@ -498,8 +501,8 @@ services:
       # This worker exports OTLP/JSON over HTTP, so it needs the
       # HTTP intake (:4318) — NOT the gRPC :4317 endpoint the
       # shared env (env_layer) injects for the .with_tonic() Rust services.
-      # Pinning it here overrides the shared env_file value for this service.
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      # xtask sets this only for runs with tracing; direct Compose defaults off.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT:-}
     networks:
       services:
         aliases:
@@ -624,6 +627,11 @@ services:
       GF_AUTH_BASIC_ENABLED: "false"
       GF_AUTH_DISABLE_SIGNOUT_MENU: "true"
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # Empty: nothing leaves the machine. `just run_local` sets it to the
+      # grafana-forwarder below while the local telemetry settings say
+      # `services = true`; the collector then copies everything it receives
+      # there. Changing it recreates the container (run_local does that).
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${MACRO_LGTM_FORWARD_ENDPOINT:-}
     ports:
       - "3001:3000"
       - "4317:4317"
@@ -643,6 +651,43 @@ services:
       services:
         aliases:
           - otel-collector
+
+  # ============================================================================
+  # grafana-forwarder — profile: grafana-forwarder
+  # Sends the lgtm collector's copy of every local stack's telemetry to the
+  # hosted Grafana: Grafana Alloy running docker/grafana-forwarder/config.alloy,
+  # which samples traces and tags everything with the machine's name. Started,
+  # updated and removed by `just run_local` from the local telemetry settings
+  # (`services = true`; docs/development/running-locally.md), which copies the
+  # config and the token into a private directory outside every worktree.
+  # Don't start it by hand: without that directory it has no token.
+  # ============================================================================
+  grafana-forwarder:
+    profiles:
+      - grafana-forwarder
+    # The image dev's ECS telemetry sidecar runs.
+    image: grafana/alloy:v1.16.0@sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/macro-forwarder/config.alloy
+    environment:
+      MACRO_MACHINE_NAME: ${MACRO_MACHINE_NAME:-}
+      MACRO_FORWARD_ENDPOINT: ${MACRO_FORWARD_ENDPOINT:-}
+    labels:
+      # A hash of the config, so a changed config recreates the container.
+      macro.forwarder.revision: ${MACRO_GRAFANA_FORWARDER_REVISION:-}
+    volumes:
+      - ${MACRO_GRAFANA_FORWARDER_DIR:-./docker/grafana-forwarder}:/etc/macro-forwarder:ro,Z
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    networks:
+      - services
 
   # ============================================================================
   # headless-chrome (CDP port 9222, noVNC 6080) — profile: chrome
@@ -738,6 +783,8 @@ services:
 
 volumes:
   sync_state:
+  # agent_harness_service's agent git bare repositories.
+  agent_git_repos:
   # Backing store for the `lgtm` collector (profile-gated, global project).
   lgtm_data:
 

@@ -51,6 +51,8 @@ export async function composeStep(opts: {
   routine: RoutineSoFar;
   context: ComposerContext;
   kind?: StepKind;
+  /** Aborts once nobody waits for the step. */
+  left?: AbortSignal;
 }): Promise<AddedStep | string> {
   const drafted = await requestDraft(
     {
@@ -60,7 +62,8 @@ export async function composeStep(opts: {
       ...(opts.kind ? { kind: opts.kind } : {}),
     },
     opts.context,
-    FAILED
+    FAILED,
+    opts.left
   );
   if (typeof drafted === 'string') return drafted;
   if (drafted.outcome !== 'step') return FAILED;
@@ -78,6 +81,8 @@ export async function reviseStep(opts: {
   instruction: string;
   routine: RoutineSoFar;
   context: ComposerContext;
+  /** Aborts once nobody waits for the step. */
+  left?: AbortSignal;
 }): Promise<CodeStepDraft | string> {
   const failed = 'Couldn’t change that step. Please try again.';
   const index = opts.routine.steps.findIndex(
@@ -92,7 +97,8 @@ export async function reviseStep(opts: {
       index,
     },
     opts.context,
-    failed
+    failed,
+    opts.left
   );
   if (typeof drafted === 'string') return drafted;
   if (drafted.outcome !== 'step') return failed;

@@ -714,6 +714,9 @@ pub struct CreateChannelScopedBotResponse {
 pub struct ChannelWebhookRequest {
     /// Message body.
     pub content: String,
+    /// Who hears about the message; `Silent` notifies no one.
+    #[serde(default)]
+    pub notification_policy: messages::domain::models::PostMessageNotificationPolicy,
 }
 
 /// Response returned after posting a channel webhook message.
@@ -728,4 +731,6 @@ pub struct ChannelWebhookResponse {
 pub struct HarnessFacts {
     /// Whether the harness operator permits unattended tool approvals.
     pub allow_permission_bypass: bool,
+    /// Whether the harness runs on a Macro computer.
+    pub on_computer: bool,
 }

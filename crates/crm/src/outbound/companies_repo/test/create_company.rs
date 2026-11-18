@@ -198,7 +198,7 @@ async fn populate_reuses_manually_created_company(pool: PgPool) -> anyhow::Resul
 
     // The manual name override survives the populate.
     let record = repo
-        .get_company_for_team(&team_id, &created.company.id, false)
+        .get_company_for_team(&team_id, &created.company.id, false, true)
         .await?
         .expect("company should be returned");
     assert_eq!(record.name.as_deref(), Some("Acme"));
@@ -275,7 +275,7 @@ async fn name_only_company_accepts_personal_email_without_inference(
         )
         .await?;
     let loaded = repo
-        .get_company_for_team(&team_id, &company.company.id, false)
+        .get_company_for_team(&team_id, &company.company.id, false, true)
         .await?
         .unwrap();
     assert_eq!(loaded.contacts[0].id, contact.id);

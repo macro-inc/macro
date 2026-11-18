@@ -7,7 +7,7 @@ use crate::{
         model::{Highlight, SearchGotoChat, SearchGotoContent, SearchHit, parse_highlight_hit},
         properties::build_tag_filter,
         query::Keys,
-        utils::should_wildcard_field_query_builder,
+        utils::{should_wildcard_field_query_builder, split_inner_hits_budget},
     },
 };
 
@@ -28,10 +28,10 @@ const CHILD_RELATION: &str = "message";
 /// `max_clause_count` on expansion.
 const MIN_PREFIX_LEN: usize = 3;
 
-/// Cap on messages returned per `has_child` clause inside `inner_hits`.
-/// OpenSearch's default is 3 which would silently drop matches on chats
-/// with many hits.
-const INNER_HITS_PER_TERM: u32 = 100;
+/// The message `_source` fields a `SearchHit` carries. Inner hits do not
+/// inherit the request-level `_source` filter, so without this every message
+/// comes back with its full `content`, which only the highlight needs.
+const MESSAGE_SOURCE_FIELDS: [&str; 2] = ["chat_message_id", "role"];
 
 /// Cap on terms a `match_phrase_prefix` may expand the last word to.
 const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
@@ -132,9 +132,11 @@ impl ChatQueryBuilder {
             bool_query.filter(nested);
         }
 
-        // One has_child clause per term, ANDed via bool.must. Each
-        // carries its own inner_hits so highlights + message-nav data
-        // come back alongside the parent. Shared `highlight_query`
+        // One has_child clause per term, ANDed via bool.must. The clauses
+        // split `INNER_HITS_PER_RESULT` between their inner_hits, which
+        // bring highlights + message-nav data back alongside the parent,
+        // so a chat returns at most that many messages however many
+        // terms the query has. Shared `highlight_query`
         // tags every search term on a returned message regardless of
         // which has_child clause produced it.
         //
@@ -146,6 +148,8 @@ impl ChatQueryBuilder {
         // necessarily the message matching the term.
         let highlight_query =
             build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
+        let budget = split_inner_hits_budget(self.inner.terms.len());
+
         for (idx, term) in self.inner.terms.iter().enumerate() {
             let term_query = build_child_content_query(term, &self.inner.match_type);
             let inner_query = if self.role.is_empty() {
@@ -156,12 +160,18 @@ impl ChatQueryBuilder {
                 combined.must(should_wildcard_field_query_builder("role", &self.role));
                 combined.build().into()
             };
+            let has_child = HasChildQuery::new(CHILD_RELATION, inner_query);
+            let Some(size) = budget.size_for_clause(idx) else {
+                bool_query.must(has_child.into());
+                continue;
+            };
+
             let inner_hits = InnerHits::new()
                 .name(format!("term_{idx}"))
-                .size(INNER_HITS_PER_TERM)
+                .size(size)
+                .source_fields(MESSAGE_SOURCE_FIELDS)
                 .highlight(inner_hits_content_highlight(&highlight_query));
-            let has_child = HasChildQuery::new(CHILD_RELATION, inner_query).inner_hits(inner_hits);
-            bool_query.must(has_child.into());
+            bool_query.must(has_child.inner_hits(inner_hits).into());
         }
 
         Ok(bool_query)

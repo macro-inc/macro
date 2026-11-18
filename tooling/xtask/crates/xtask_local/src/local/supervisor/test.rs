@@ -193,7 +193,10 @@ fn concurrent_steps_never_leave_a_half_written_record() {
             let job = Arc::clone(&job);
             std::thread::spawn(move || {
                 for step in 0..200 {
-                    job.step_started(&format!("lane {lane} step {step}"));
+                    job.step_started(
+                        &format!("lane {lane} step {step}"),
+                        super::super::telemetry::MAIN_LANE,
+                    );
                 }
             })
         })

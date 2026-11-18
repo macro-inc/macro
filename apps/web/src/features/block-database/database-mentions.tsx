@@ -1,4 +1,5 @@
 import { CellMentionEditor } from '@app/components/cell-text-editor/CellMentionEditor';
+import { LinkWithPreview } from '@core/component/LexicalMarkdown/component/core/LinkWithPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
 import { getBlockNameFromEntity } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/utils/entityUtils';
@@ -6,9 +7,11 @@ import {
   createMenuOperations,
   type MenuOperations,
 } from '@core/component/LexicalMarkdown/shared/inlineMenu';
+import { theme } from '@core/component/LexicalMarkdown/theme';
 import type { MentionItem } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
+import { normalizeLinkUrl } from '@macro-inc/lexical-core/utils/auto-link';
 import { encodeCellMention } from '@macro-inc/spreadsheet/cell-mentions';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { ErrorBoundary, Show, Suspense } from 'solid-js';
@@ -130,20 +133,82 @@ export function DatabaseTextEditor(props: DatabaseTextEditorProps) {
   );
 }
 
-export function DatabaseTextValue(props: { value: string }) {
+/**
+ * A text cell's Markdown on one line, as a grid shows it. One-line Markdown
+ * keeps only the first line, so a multi-line value shows its lines joined by
+ * spaces, as plain text would. A `fit` is for a property list: `line` lets a
+ * cut value end in an ellipsis, and `clamp` and `full` show every paragraph,
+ * cut to two lines or in full.
+ */
+export function DatabaseTextValue(props: {
+  value: string;
+  fit?: 'line' | 'clamp' | 'full';
+}) {
   return (
-    <span
-      class="[&_.markdown]:inline [&_p]:inline [&_p]:m-0 [&_p]:leading-normal"
-      onPointerDown={(event) => {
-        if (
-          event.target instanceof Element &&
-          event.target.closest('a,[data-mention]')
-        )
-          event.stopPropagation();
-      }}
+    <Show
+      when={props.fit === 'clamp' || props.fit === 'full'}
+      fallback={
+        <span
+          class="[&_.markdown]:inline [&_p]:inline [&_p]:m-0 [&_p]:leading-normal"
+          classList={{ '[&_.markdown-content]:inline': props.fit === 'line' }}
+          onPointerDown={stopLinkPointerDown}
+        >
+          <StaticMarkdown
+            markdown={props.value.replace(/\s*\n\s*/g, ' ')}
+            singleLine
+            target="internal"
+          />
+        </span>
+      }
     >
-      <StaticMarkdown markdown={props.value} singleLine target="internal" />
-    </span>
+      <span
+        class="[&_p]:my-0! [&_p+p]:mt-2!"
+        classList={{ 'line-clamp-2': props.fit === 'clamp' }}
+        onPointerDown={stopLinkPointerDown}
+      >
+        <StaticMarkdown markdown={props.value} target="internal" />
+      </span>
+    </Show>
+  );
+}
+
+/** Keeps a press on a link inside a cell from reaching the grid's bubbling handlers (row menus, card drags). */
+function stopLinkPointerDown(event: PointerEvent) {
+  if (
+    event.target instanceof Element &&
+    event.target.closest('a,[data-mention]')
+  )
+    event.stopPropagation();
+}
+
+/**
+ * A web address or email address, as a link. A bare word such as `TBD` would
+ * otherwise become `https://tbd`, a link that goes nowhere.
+ */
+function linkHref(value: string): string | null {
+  const href = normalizeLinkUrl(value);
+  if (!href) return null;
+  // normalizeLinkUrl returns only addresses the URL parser accepted.
+  const url = new URL(href);
+  if (url.protocol === 'mailto:') return href;
+  return url.hostname.includes('.') || url.hostname === 'localhost'
+    ? href
+    : null;
+}
+
+/** A URL cell's value as the link it names, opened as links open in documents. */
+export function DatabaseLinkValue(props: { url: string }) {
+  const href = () => linkHref(props.url);
+  return (
+    <Show when={href()} fallback={props.url}>
+      {(href) => (
+        <span onPointerDown={stopLinkPointerDown}>
+          <LinkWithPreview url={href()} class={theme.link} title={href()}>
+            {props.url}
+          </LinkWithPreview>
+        </span>
+      )}
+    </Show>
   );
 }
 

@@ -183,7 +183,7 @@ pub async fn list_property_definitions(
 
 /// Gets property definitions with options based on team and optional user access.
 /// Set `include_system` to true to also include system properties.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool, user_id))]
 pub async fn list_property_definitions_with_options(
     pool: &Pool<Postgres>,
     team_id: Option<Uuid>,

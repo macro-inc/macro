@@ -12,6 +12,8 @@ export type NotificationSoundId =
   | 'ping'
   | 'bloom';
 
+export type CallSoundId = 'call-join' | 'call-leave';
+
 export type NotificationTone = {
   /** Start frequency in Hz. */
   frequency: number;
@@ -21,14 +23,20 @@ export type NotificationTone = {
   start: number;
   /** Time until the tone has decayed to silence, in seconds. */
   duration: number;
+  /** Time to hold the attack peak before decay, in seconds. */
+  hold?: number;
   /** Relative loudness, 0 to 1, before the volume setting applies. */
   gain: number;
   wave: OscillatorType;
 };
 
 export type NotificationSound = {
-  id: NotificationSoundId;
+  id: NotificationSoundId | CallSoundId;
   label: string;
+  /** Full-volume master gain; omitted sounds keep the notification level. */
+  gain?: number;
+  /** Final tone gain relative to its peak; omitted sounds decay to 0.0001. */
+  decayRatio?: number;
   tones: readonly NotificationTone[];
 };
 
@@ -117,14 +125,119 @@ export const NOTIFICATION_SOUNDS: readonly NotificationSound[] = [
   },
 ];
 
+/**
+ * Clear two-note chimes: rising on arrival and falling on departure.
+ * The shared gain matches the audition pair's normalized -5.3 dBFS peak.
+ */
+export const CALL_SOUNDS: readonly NotificationSound[] = [
+  {
+    id: 'call-join',
+    label: 'Call join',
+    gain: 0.4966653521918195,
+    decayRatio: 0.001,
+    tones: [
+      {
+        frequency: 659.255,
+        start: 0,
+        duration: 0.24,
+        hold: 0.018,
+        gain: 0.85,
+        wave: 'sine',
+      },
+      {
+        frequency: 1318.51,
+        start: 0,
+        duration: 0.14,
+        hold: 0.005,
+        gain: 0.22,
+        wave: 'sine',
+      },
+      {
+        frequency: 1819.5438,
+        start: 0,
+        duration: 0.085,
+        gain: 0.08,
+        wave: 'sine',
+      },
+      {
+        frequency: 987.767,
+        start: 0.12,
+        duration: 0.3,
+        hold: 0.018,
+        gain: 1,
+        wave: 'sine',
+      },
+      {
+        frequency: 1975.534,
+        start: 0.12,
+        duration: 0.17,
+        hold: 0.005,
+        gain: 0.19,
+        wave: 'sine',
+      },
+    ],
+  },
+  {
+    id: 'call-leave',
+    label: 'Call leave',
+    gain: 0.4966653521918195,
+    decayRatio: 0.001,
+    tones: [
+      {
+        frequency: 659.255,
+        start: 0,
+        duration: 0.24,
+        hold: 0.018,
+        gain: 0.85,
+        wave: 'sine',
+      },
+      {
+        frequency: 1318.51,
+        start: 0,
+        duration: 0.14,
+        hold: 0.005,
+        gain: 0.22,
+        wave: 'sine',
+      },
+      {
+        frequency: 1819.5438,
+        start: 0,
+        duration: 0.085,
+        gain: 0.08,
+        wave: 'sine',
+      },
+      {
+        frequency: 493.883,
+        start: 0.12,
+        duration: 0.3,
+        hold: 0.018,
+        gain: 1,
+        wave: 'sine',
+      },
+      {
+        frequency: 987.766,
+        start: 0.12,
+        duration: 0.17,
+        hold: 0.005,
+        gain: 0.19,
+        wave: 'sine',
+      },
+    ],
+  },
+];
+
 export function isNotificationSoundId(
   value: unknown
 ): value is NotificationSoundId {
   return NOTIFICATION_SOUNDS.some((sound) => sound.id === value);
 }
 
-export function notificationSound(id: NotificationSoundId): NotificationSound {
-  const sound = NOTIFICATION_SOUNDS.find((candidate) => candidate.id === id);
+export function notificationSound(
+  id: NotificationSoundId | CallSoundId
+): NotificationSound {
+  const sound =
+    NOTIFICATION_SOUNDS.find((candidate) => candidate.id === id) ??
+    CALL_SOUNDS.find((candidate) => candidate.id === id);
   if (!sound) throw new Error(`Unknown notification sound: ${id}`);
   return sound;
 }

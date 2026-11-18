@@ -50,6 +50,10 @@ export default {
   sortLastViewed: 'Last viewed',
   sortLastUpdated: 'Last updated',
   sortDateCreated: 'Date created',
+  sortTitle: 'Title',
+  sortName: 'Name',
+  sortAToZ: 'A to Z',
+  sortZToA: 'Z to A',
 
   // Group options
   groupNone: 'None',
@@ -81,7 +85,6 @@ export default {
   filterList: 'Filter list',
   clearFilters: 'Clear filters',
   showHiddenRoutineRuns: 'Show hidden routine runs',
-  nextOptions: 'Next options',
   retryOptions: 'Retry options',
 
   // Filter menu

@@ -1,5 +1,6 @@
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useUserId } from '@core/context/user';
+import { useMessageViewerOverride } from '@core/messages/message-transport';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { thrownResultErrorHasCode } from '@core/util/result';
@@ -41,7 +42,8 @@ import {
 
 export function ChannelThread(props: ThreadProps) {
   const [messageElement, setMessageElement] = createSignal<HTMLDivElement>();
-  const userId = useUserId();
+  const accountUserId = useUserId();
+  const userId = useMessageViewerOverride() ?? accountUserId;
   const replyUserId = () => userId() ?? props.data().sender_id;
   const macroId = () => tryMacroId(replyUserId());
   const displayName = () => getDisplayName(macroId());
@@ -72,7 +74,7 @@ export function ChannelThread(props: ThreadProps) {
   const repliesQuery = useThreadRepliesQuery(
     props.parent,
     () => props.data().id,
-    fetchRepliesEnabled
+    () => !props.replies && fetchRepliesEnabled()
   );
   // A project's cached root must not outlive an explicit denial from its
   // thread read while the surrounding project is revalidating access.
@@ -83,6 +85,7 @@ export function ChannelThread(props: ThreadProps) {
     );
 
   const queryReplies = (): Array<EntityMessage> | undefined => {
+    if (props.replies) return props.replies();
     if (projectUnavailable()) return [];
     return queryReadyGate(repliesQuery) ? repliesQuery.data : undefined;
   };

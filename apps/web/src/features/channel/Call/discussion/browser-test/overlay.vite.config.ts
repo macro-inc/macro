@@ -35,7 +35,8 @@ export default defineConfig(async (env) => {
             return mock;
           if (
             importer.endsWith('/agent-work/views/call-work.tsx') &&
-            (id === '@app/lib/analytics/posthog' || id === './use-work-client')
+            (id === '@app/lib/analytics/posthog' ||
+              id === '@service-storage/graphql-soup')
           )
             return mock;
         },
@@ -54,6 +55,9 @@ export default defineConfig(async (env) => {
                 `origin/main:apps/web/src/features/channel/Call/${path}`,
               ],
               { encoding: 'utf8' }
+            ).replace(
+              '} = createCallStage({',
+              '} = createCallStage({ pin: callCtx.pin,'
             );
         },
       },

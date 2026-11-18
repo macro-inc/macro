@@ -1,6 +1,6 @@
 import { useUserId } from '@core/context/user';
 import { useAgentsQuery } from '@queries/agents/agents';
-import { useHarnessDirectoryQuery } from '@queries/harnesses/harnesses';
+import { useRunnableHarnessDirectoryQuery } from '@queries/harnesses/harnesses';
 import { type Accessor, createMemo } from 'solid-js';
 
 /** A resident that cannot run because its owner lost access to its runtime. */
@@ -19,7 +19,7 @@ export function useAgentStop(
   botId: Accessor<string | undefined>
 ): Accessor<AgentStop | undefined> {
   const agents = useAgentsQuery();
-  const directory = useHarnessDirectoryQuery();
+  const directory = useRunnableHarnessDirectoryQuery();
   const userId = useUserId();
   return createMemo(() => {
     const id = botId();

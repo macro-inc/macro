@@ -1,6 +1,23 @@
 use super::*;
 use crate::domain::models::{AgentMcpServer, AgentMcpServers};
 use crate::domain::ports::{BotError, McpAppCatalog};
+use harnesses::domain::ports::HarnessError;
+
+/// The harnesses that are agent teammates' computers, all run by Ada.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct TeamAgentHarnesses(pub(crate) Vec<HarnessId>);
+
+impl HarnessTeamAgents for TeamAgentHarnesses {
+    async fn harness_team_agent(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Option<MacroUserIdStr<'static>>, HarnessError> {
+        Ok(self
+            .0
+            .contains(&harness_id)
+            .then(|| MacroUserIdStr::try_from("macro|agent@example.com".to_owned()).unwrap()))
+    }
+}
 
 struct KnownApps(&'static [&'static str]);
 

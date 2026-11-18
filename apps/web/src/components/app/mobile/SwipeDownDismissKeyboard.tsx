@@ -14,6 +14,17 @@ const ZONE_HEIGHT = 20; // px above keyboard that activates blur
 // swipes.
 const INTERACTIVE_SELECTOR = 'button, [role="button"], a[href], select';
 
+// A composer's text box scrolls its own overflowing text (`textarea`, or an
+// element marked `data-composer-scroll`). A drag that starts inside one
+// belongs to that scroll until the text reaches its top; only a drag that
+// keeps going down after that dismisses the keyboard.
+const COMPOSER_SCROLL_SELECTOR = 'textarea, [data-composer-scroll]';
+
+function composerScrollOf(target: EventTarget | null): Element | null {
+  if (!(target instanceof Element)) return null;
+  return target.closest(COMPOSER_SCROLL_SELECTOR);
+}
+
 function isInteractiveTarget(target: EventTarget | null): boolean {
   return (
     target instanceof Element && target.closest(INTERACTIVE_SELECTOR) !== null
@@ -43,13 +54,15 @@ export function SwipeDownDismissKeyboard() {
 
   let startY = 0;
   let startedOnInteractive = false;
+  let composerScroll: Element | null = null;
+  let scrollingComposer = false;
 
   function handleTouchStart(e: TouchEvent) {
-    if (!virtualKeyboardVisible()) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    startY = touch.clientY;
     startedOnInteractive = isInteractiveTarget(e.target);
+    composerScroll = composerScrollOf(e.target);
+    scrollingComposer = false;
+    const touch = e.touches[0];
+    if (touch) startY = touch.clientY;
   }
 
   function handleTouchMove(e: TouchEvent) {
@@ -57,6 +70,23 @@ export function SwipeDownDismissKeyboard() {
     if (startedOnInteractive) return;
     const touch = e.touches[0];
     if (!touch) return;
+
+    // While the composer's text can still scroll up, the drag is scrolling
+    // it. Measure the dismiss swipe from where the text reached its top, so
+    // reading a long draft never closes the keyboard on the way.
+    if (composerScroll && composerScroll.scrollTop > 0) {
+      scrollingComposer = true;
+      startY = touch.clientY;
+      return;
+    }
+    // The text reached its top during this move, so part of the move scrolled
+    // it; the dismiss swipe starts from here.
+    if (scrollingComposer) {
+      scrollingComposer = false;
+      startY = touch.clientY;
+      return;
+    }
+
     const keyboardTop = window.innerHeight - virtualKeyboardHeight();
     const inZone =
       touch.clientY >= keyboardTop - ZONE_HEIGHT &&

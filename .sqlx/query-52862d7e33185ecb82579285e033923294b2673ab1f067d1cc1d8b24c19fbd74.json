@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO provider_accounts (id, provider, external_account_id)\n                VALUES ($1, $2, $3)\n                ON CONFLICT (provider, external_account_id) DO UPDATE\n                SET last_seen_at = now()\n                RETURNING id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "agent_provider",
+            "kind": {
+              "Enum": [
+                "claude"
+              ]
+            }
+          }
+        },
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "52862d7e33185ecb82579285e033923294b2673ab1f067d1cc1d8b24c19fbd74"
+}

@@ -15,7 +15,7 @@ fn free_access_is_exact_and_paid_access_preserves_routed_models() {
     assert!(!ModelAccess::Free.allows("unknown/model"));
 }
 
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 use roles_and_permissions::domain::model::{
     ProductTier, RoleId, SubscriptionStatus, UserRolesAndPermissionsError,
 };
@@ -43,7 +43,7 @@ impl UserRolesAndPermissionsService for Permissions {
     }
     async fn update_user_roles_and_permissions_for_subscription(
         &self,
-        _: Email<Lowercase<'_>>,
+        _: &MacroUserIdStr<'_>,
         _: SubscriptionStatus,
         _: ProductTier,
     ) -> Result<(), UserRolesAndPermissionsError> {

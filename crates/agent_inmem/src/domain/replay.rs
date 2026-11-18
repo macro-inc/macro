@@ -180,7 +180,7 @@ pub fn replay_speed(frames: &[Message]) -> agent::ModelSpeed {
         options
             .iter()
             .find_map(|option| {
-                if option.id.to_string() != "speed" {
+                if option.id.to_string() != crate::domain::model_options::SPEED_CONFIG_ID {
                     return None;
                 }
                 let SessionConfigKind::Select(select) = &option.kind else {
@@ -355,6 +355,9 @@ fn apply_update(
                 parts.push(AssistantMessagePart::Text { text: text.text });
             }
         }
+        // A card the session presented on the turn's behalf (a code-mode
+        // view) went to the reader, never to the agent.
+        SessionUpdate::ToolCall(call) if agent_session::domain::model::is_presented(&call) => {}
         SessionUpdate::ToolCall(call) => {
             parts.push(tool_call_part(
                 logged_tool_name(call.meta.as_ref(), &call.title),

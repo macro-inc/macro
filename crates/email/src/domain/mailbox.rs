@@ -14,17 +14,25 @@ use telemetry::{
 use tracing::{Instrument, Span};
 use uuid::Uuid;
 
+pub mod calendar_disconnect;
 pub mod catalog;
 pub mod commands;
+pub mod connection;
 pub mod contacts;
 pub mod credentials;
 pub mod drafts;
 pub mod gmail_history;
+pub mod gmail_push;
 pub mod health;
+/// Per-delivery Gmail inbox admission and reconciliation.
+pub mod inbox_sync;
 pub mod initialization;
 pub mod lifecycle;
+/// Link-maintenance queue decisions and reconnect notification selection.
+pub mod link_manager;
 pub mod progress;
 pub mod projection;
+pub mod reimport;
 pub mod settings;
 pub mod telemetry;
 #[cfg(test)]
@@ -240,6 +248,15 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         lease: &StreamLease,
         retry_after_seconds: u32,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    /// Puts the stream back for `retry_after_seconds`, unread, while its
+    /// mailbox has at least `queued` import messages due. Returns whether it
+    /// did.
+    fn pace_import(
+        &self,
+        lease: &StreamLease,
+        queued: u32,
+        retry_after_seconds: u32,
+    ) -> impl Future<Output = Result<bool, MailboxError>> + Send;
     fn claim_message(
         &self,
         lease_id: Uuid,
@@ -265,7 +282,8 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageRetry {
     /// Claim it again after `seconds`. A mailbox-wide refusal (throttling, no
-    /// token) is not `counted`, so it gives the claim back to `attempts`.
+    /// token), or a provider failure once its backoff is at the longest, is not
+    /// `counted`, so it gives the claim back to `attempts`.
     After { seconds: u32, counted: bool },
     /// Stop claiming the leased revision. It stays queued and is counted as
     /// abandoned until a provider change, a resync or a reconnect queues the
@@ -311,17 +329,31 @@ pub trait MailboxIngest: Send + Sync + 'static {
 pub struct MailboxSyncService<R, P, I> {
     repo: R,
     provider: P,
+    /// Reads an import: a folder's first delta round and the messages it
+    /// queues. The host gives it a provider that leaves room under the
+    /// mailbox's provider limits for the live work `provider` reads, and that
+    /// waits briefly for that room instead of parking the work.
+    import_provider: P,
     ingest: I,
     imports: ImportTally,
 }
 
 impl<R, P, I> MailboxSyncService<R, P, I> {
-    pub fn new(repo: R, provider: P, ingest: I) -> Self {
+    pub fn new(repo: R, provider: P, import_provider: P, ingest: I) -> Self {
         Self {
             repo,
             provider,
+            import_provider,
             ingest,
             imports: ImportTally::default(),
+        }
+    }
+
+    fn provider_for(&self, is_import: bool) -> &P {
+        if is_import {
+            &self.import_provider
+        } else {
+            &self.provider
         }
     }
 
@@ -347,6 +379,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             mailbox.sync_generation = lease.mailbox.sync_generation,
             outlook.stream_kind = "folder_catalog",
             outlook.folders = tracing::field::Empty,
+            outlook.provider_item_count = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
@@ -365,6 +398,16 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let result = match outcome {
             Ok(folders) => {
                 span.record("outlook.folders", span_int(folders.len()));
+                span.record(
+                    "outlook.provider_item_count",
+                    span_int(
+                        folders
+                            .iter()
+                            .filter_map(|folder| folder.total_items)
+                            .map(u64::from)
+                            .sum::<u64>(),
+                    ),
+                );
                 self.repo.commit_catalog(lease, &folders).await
             }
             Err(MailboxError::Provider(error)) => {
@@ -412,11 +455,12 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             mailbox.link_id = %lease.mailbox.link_id,
             mailbox.sync_generation = lease.mailbox.sync_generation,
             outlook.stream_kind = "mail_folder",
+            outlook.stream_id = %lease.id,
             outlook.page_items = tracing::field::Empty,
             outlook.rows_queued = tracing::field::Empty,
-            outlook.delta_advanced = false,
-            outlook.folder_initial_complete = lease.initial_complete,
-            outlook.cursor_reset = false,
+            outlook.delta_advanced = tracing::field::Empty,
+            outlook.folder_initial_complete = tracing::field::Empty,
+            outlook.cursor_reset = tracing::field::Empty,
             outlook.notification_wait_ms = lease
                 .notification
                 .as_ref()
@@ -432,16 +476,37 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
 
     async fn enumerate(&self, lease: &StreamLease) -> Result<bool, MailboxError> {
         let span = Span::current();
+        if !lease.initial_complete {
+            match self
+                .repo
+                .pace_import(lease, IMPORT_QUEUED_AHEAD, IMPORT_PACE_SECONDS)
+                .await
+            {
+                Ok(false) => {}
+                Ok(true) => {
+                    record_stream(&span, false, false, false);
+                    record_done(&span, "paced");
+                    return Ok(false);
+                }
+                Err(error) => {
+                    record_failed(&span, lease.mailbox.link_id, &error);
+                    return Err(error);
+                }
+            }
+        }
         let outcome = maintain_lease(
             async {
                 Ok(self
-                    .provider
+                    .provider_for(!lease.initial_complete)
                     .changes(lease.mailbox, &lease.folder, lease.position.as_ref())
                     .await?)
             },
             || self.repo.renew(SyncLease::Stream(lease)),
         )
         .await;
+        let mut delta_advanced = false;
+        let mut folder_initial_complete = lease.initial_complete;
+        let mut cursor_reset = false;
         let result = match outcome {
             Ok(page) => {
                 span.record(
@@ -451,21 +516,19 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 let checkpoint = matches!(page.position, StreamPosition::Checkpoint(_));
                 self.repo.commit_page(lease, &page).await.map(|committed| {
                     span.record("outlook.rows_queued", span_int(committed.queued));
-                    span.record("outlook.delta_advanced", true);
-                    span.record(
-                        "outlook.folder_initial_complete",
-                        lease.initial_complete || checkpoint,
-                    );
+                    delta_advanced = true;
+                    folder_initial_complete |= checkpoint;
                     committed.import_completed
                 })
             }
             Err(MailboxError::Provider(EmailApiError::OutdatedCursor)) => {
-                span.record("outlook.cursor_reset", true);
+                cursor_reset = true;
                 self.repo.reset_stream(lease).await.map(|()| None)
             }
             Err(MailboxError::Provider(error)) => {
                 let delay = retry_seconds(&error);
                 let error = MailboxError::from(error);
+                record_stream(&span, delta_advanced, folder_initial_complete, cursor_reset);
                 self.repo
                     .release_stream(lease, delay)
                     .await
@@ -477,6 +540,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             }
             Err(error) => Err(error),
         };
+        record_stream(&span, delta_advanced, folder_initial_complete, cursor_reset);
         match result {
             Ok(import_completed) => {
                 record_done(&span, "imported");
@@ -526,8 +590,11 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let operation = async {
             let folders = self.repo.folders(lease.mailbox).await?;
             let (snapshot, graph_calls) = email_api_client::domain::request_count::counted(
-                self.provider
-                    .message(lease.mailbox, &lease.provider_id, &folders),
+                self.provider_for(lease.is_import).message(
+                    lease.mailbox,
+                    &lease.provider_id,
+                    &folders,
+                ),
             )
             .await;
             span.record("outlook.graph_calls", i64::from(graph_calls));
@@ -636,6 +703,17 @@ where
     }
 }
 
+/// Due import messages a mailbox may have before its folders' import rounds
+/// stop reading pages: two pages. Gmail's backfill lists its next page
+/// behind the threads it queued; this keeps an Outlook walk about as far
+/// ahead of its import, so another mailbox's import, and a message that waited
+/// for room, queue behind a couple of pages rather than the whole import.
+const IMPORT_QUEUED_AHEAD: u32 = 200;
+
+/// How long such a folder waits before it checks again. A mailbox imports at
+/// most about 12 messages a second, so its two pages outlast the wait.
+const IMPORT_PACE_SECONDS: u32 = 10;
+
 /// Claims after which a message the provider keeps refusing outright
 /// (malformed, forbidden) is abandoned: 3 tries, 10 minutes apart.
 const PERMANENT_FAILURE_ATTEMPTS: i32 = 3;
@@ -655,6 +733,10 @@ const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
 /// How a failed reconciliation is retried. `attempts` counts this claim.
 /// Throttling and credential failures belong to the mailbox, not the message,
 /// so they keep their own delays and never move it closer to abandonment.
+/// A transient provider failure (Graph 5xx or 408, a request Graph never
+/// answered) says nothing about the message either: during an outage every
+/// message gets one. It backs off like any failure but is never abandoned, and
+/// stops counting once the backoff is at its longest.
 fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
     match error {
         MailboxError::Provider(
@@ -675,17 +757,28 @@ fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
                 }
             }
         }
+        MailboxError::Provider(EmailApiError::Transient { .. }) => {
+            let seconds = backoff_seconds(attempts);
+            MessageRetry::After {
+                seconds,
+                counted: seconds < MAX_BACKOFF_SECONDS,
+            }
+        }
         MailboxError::Stale => MessageRetry::After {
             seconds: 30,
             counted: true,
         },
         _ if attempts >= MESSAGE_FAILURE_ATTEMPTS => MessageRetry::Abandon,
-        // 30 s doubling to 30 minutes: 30, 60, 120, ... 960, then 1800.
         _ => MessageRetry::After {
-            seconds: (30_u32 << attempts.clamp(1, 7).saturating_sub(1)).min(MAX_BACKOFF_SECONDS),
+            seconds: backoff_seconds(attempts),
             counted: true,
         },
     }
+}
+
+/// 30 s doubling to 30 minutes: 30, 60, 120, ... 960, then 1800.
+fn backoff_seconds(attempts: i32) -> u32 {
+    (30_u32 << attempts.clamp(1, 7).saturating_sub(1)).min(MAX_BACKOFF_SECONDS)
 }
 
 fn retry_seconds(error: &EmailApiError) -> u32 {
@@ -698,4 +791,16 @@ fn retry_seconds(error: &EmailApiError) -> u32 {
         EmailApiError::Permanent { .. } => 600,
         _ => 30,
     }
+}
+
+/// What one enumerated page did to its folder's stream, recorded once.
+fn record_stream(
+    span: &Span,
+    delta_advanced: bool,
+    folder_initial_complete: bool,
+    cursor_reset: bool,
+) {
+    span.record("outlook.delta_advanced", delta_advanced);
+    span.record("outlook.folder_initial_complete", folder_initial_complete);
+    span.record("outlook.cursor_reset", cursor_reset);
 }

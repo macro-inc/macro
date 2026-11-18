@@ -69,12 +69,14 @@ impl GraphqlNotification {
         &self.as_ref().notification_event_type
     }
 
-    /// The Soup type of the associated entity.
+    /// The Soup type of the associated entity, or `OUTSIDE_SOUP` for entities
+    /// outside Soup such as routines.
     #[graphql(
         deprecation = "Use targetEntityType, which also covers entities outside Soup. Remove after 2026-12-01."
     )]
     async fn entity_type(&self) -> GraphqlSoupEntityType {
-        GraphqlSoupEntityType::new(self.as_ref().entity.entity_type)
+        GraphqlSoupEntityType::try_new(self.as_ref().entity.entity_type)
+            .unwrap_or(GraphqlSoupEntityType::OutsideSoup)
     }
 
     /// The type of the associated entity, including entities outside Soup.

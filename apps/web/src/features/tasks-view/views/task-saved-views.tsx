@@ -27,7 +27,6 @@ import {
   SavedViewListRow,
 } from '../../saved-views/components/saved-view-list';
 import { SavedViewMenuItems } from '../../saved-views/components/saved-view-menu';
-import { SavedViewPicker } from '../../saved-views/components/saved-view-picker';
 import type { SavedView } from '../../saved-views/core/saved-view';
 import {
   savedViewErrorMessage,
@@ -50,11 +49,19 @@ import {
   withTaskTabFilters,
 } from '../filters/task-saved-view';
 import { useTaskFilters } from '../filters/use-task-filters';
-import { taskSavedViewTitle } from '../primitives/create-task-saved-view-draft';
 import { tasksTabSearch, tasksTabSearchCodec } from '../tasks-tab-search';
 import { useTasksView } from '../tasks-view-context';
 
 const LAYOUT_LABELS = { list: 'List', board: 'Board', gantt: 'Gantt' };
+
+function sortDirectionLabel(sort: TaskSavedViewConfig['sort'][number]) {
+  if (sort.id.startsWith('due_date_')) return 'missing last';
+  if (sort.id === 'status' || sort.id === 'priority')
+    return sort.reversed ? 'reverse order' : 'option order';
+  if (sort.id === 'title')
+    return sort.reversed ? t('viewMenus.sortZToA') : t('viewMenus.sortAToZ');
+  return sort.reversed ? 'oldest first' : 'newest first';
+}
 
 function TaskSavedViewSummary(props: {
   config: TaskSavedViewConfig;
@@ -125,7 +132,7 @@ function TaskSavedViewSummary(props: {
         {props.config.sort
           .map(
             (sort) =>
-              `${TASK_SORT_OPTIONS.find((option) => option.id === sort.id)?.label} (${sort.id.startsWith('due_date_') ? 'missing last' : sort.id === 'status' || sort.id === 'priority' ? (sort.reversed ? 'reverse order' : 'option order') : sort.reversed ? 'oldest first' : 'newest first'})`
+              `${TASK_SORT_OPTIONS.find((option) => option.id === sort.id)?.label} (${sortDirectionLabel(sort)})`
           )
           .join(', ') || 'Default'}
       </p>
@@ -315,9 +322,7 @@ function TaskSavedViewMenuItems(props: {
         const record = props.record;
         props.defer(() => create(record));
       }}
-      onCopyLink={() =>
-        fireAndForget(copySavedViewLink(props.record.id), 'saved-views')
-      }
+      onCopyLink={() => copySavedViewLink(props.record.id)}
     />
   );
 }
@@ -475,32 +480,6 @@ function TaskSavedViewRows(props: {
   );
 }
 
-export function TaskSavedViewsPicker() {
-  const { savedViews, state } = useTasksView();
-  const viewerId = useUserId();
-  // The drawer closes before its action opens a dialog; retain the outer owner.
-  const owner = getOwner();
-  return (
-    <Show when={savedViews}>
-      {(views) => (
-        <SavedViewPicker
-          active={state.savedViewActive ?? false}
-          scopeKey={viewerId()}
-          label={
-            views().view().kind === 'default'
-              ? t('viewMenus.savedViews')
-              : taskSavedViewTitle(views().view())
-          }
-        >
-          {(onAction) => (
-            <TaskSavedViewRows onAction={onAction} dialogOwner={owner} />
-          )}
-        </SavedViewPicker>
-      )}
-    </Show>
-  );
-}
-
 async function copySavedViewLink(id: string) {
   const params = tasksTabSearchCodec.serialize({
     ...tasksTabSearch.defaults,
@@ -511,9 +490,9 @@ async function copySavedViewLink(id: string) {
   replacePaneSearchParams(url.searchParams, [
     { [tasksTabSearch.namespace]: params },
   ]);
-  if (await writeClipboardData({ 'text/plain': url.toString() }))
-    toast.success('Link copied');
-  else toast.failure('Could not copy link');
+  const copied = await writeClipboardData({ 'text/plain': url.toString() });
+  if (!copied) toast.failure('Could not copy link');
+  return copied;
 }
 
 export function TaskSaveViewButton() {
@@ -703,7 +682,7 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
         <Show
           when={savedViews?.view().kind === 'new'}
           fallback={
-            <HeaderActionGroup label="Saved view actions">
+            <HeaderActionGroup label="Saved view actions" size="md">
               <Show when={selected()?.record.ownerId === viewerId()}>
                 <ButtonGroup.Button
                   variant="primary"
@@ -740,7 +719,7 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
       </Show>
       <Show when={failure()}>
         {(error) => (
-          <HeaderActionGroup label="Saved view save error">
+          <HeaderActionGroup label="Saved view save error" size="md">
             <span
               role="alert"
               class="max-w-48 truncate text-xs text-failure-ink"

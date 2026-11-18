@@ -438,6 +438,7 @@ fn test_from_soup_item_resolves_tags_via_caller_map() {
     };
 
     let doc = SoupDocument {
+        appearance: None,
         id: Uuid::new_v4(),
         document_version_id: 1,
         owner_id: Owner::try_from("macro|user1@test.com".to_string()).unwrap(),

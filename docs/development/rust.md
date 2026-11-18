@@ -51,6 +51,17 @@ tables as debug info, and link with mold on Linux, which makes rebuilds after an
 edit much faster. To use a debugger, run `export CARGO_PROFILE_DEV_DEBUG=full`
 first. CI sets `CI` and keeps none of these.
 
+Local shells also cache compiled crates with [kache](https://github.com/kunobi-ninja/kache)
+(`RUSTC_WRAPPER`, store in kache's default cache directory, local only). Its
+cache is shared by every worktree on the machine, so a new worktree or a build
+after `target/` was deleted reuses what others compiled. A workspace crate
+rebuilt in a `target/` that already built it keeps incremental state instead,
+so the edit loop stays incremental. `kache stats` shows hit rates and
+`kache clean --cache` empties the cache (a bare `kache clean` offers to delete
+idle `target/` directories instead). kache also deletes the `target/` of a
+worktree that no longer exists. To build without it, `export RUSTC_WRAPPER=`
+(or point it at `sccache`, which CI uses) after entering the shell.
+
 For deployable Lambda artifacts, use `just build_lambdas` or the relevant
 service's build recipe, e.g. `just services/document_text_extractor/build`.
 Use `just --show <recipe>` to check prerequisites; do not assume all Lambdas
@@ -58,6 +69,16 @@ have the same build requirements.
 
 Command definitions live in [rust.just](../../tooling/just/rust.just) and
 [check.just](../../tooling/just/check.just).
+
+## Time zone data
+
+Rust code resolves IANA zones with `chrono-tz`, which the workspace patches to
+[`vendor/chrono-tz`](../../vendor/chrono-tz/README-MACRO.md) so it bundles a
+recent IANA tzdata release. When IANA changes the rules for zones Macro's users
+are in, move to the new release with `vendor/chrono-tz/update-tzdata.sh`.
+SQL `AT TIME ZONE` uses the database server's own tz data instead: on RDS it
+changes only with a Postgres minor version upgrade, and in local and CI
+containers with the image's `tzdata` package.
 
 ## Test the affected packages
 

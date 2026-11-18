@@ -1,31 +1,11 @@
-import { createSignal, onMount } from 'solid-js';
 import IconGithub from '../../../assets/icons/icon-github.svg';
 import IconInstagram from '../../../assets/icons/icon-instagram.svg';
 import IconLinkedin from '../../../assets/icons/icon-linkedin.svg';
 import IconTwitter from '../../../assets/icons/icon-twitter.svg';
-import {
-  DESKTOP_RELEASE_API_URL,
-  FALLBACK_DOWNLOAD_URLS,
-  releaseDownloadUrls,
-} from '../core/desktopDownloads';
 import './homepage-resources.css';
 
 /** Homepage companion to the feature pages' section outline. */
 export function HomepageResources() {
-  const [macDownload, setMacDownload] = createSignal(
-    FALLBACK_DOWNLOAD_URLS.macos
-  );
-  onMount(() => {
-    fetch(DESKTOP_RELEASE_API_URL)
-      .then((response) => {
-        if (!response.ok) throw new Error('Release lookup failed');
-        return response.json();
-      })
-      .then((releases) => setMacDownload(releaseDownloadUrls(releases).macos))
-      .catch(() => {
-        // Keep the direct installer usable when GitHub is unavailable.
-      });
-  });
   return (
     <aside class="page-outline homepage-resources" aria-label="Resources">
       <p>Downloads</p>
@@ -37,7 +17,6 @@ export function HomepageResources() {
         >
           Download for iOS
         </a>
-        <a href={macDownload()}>Download for Mac</a>
         <a
           href="https://play.google.com/store/apps/details?id=com.macro.workspace.mobile"
           target="_blank"

@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { peopleBeforeAgents } from '@core/user/people-before-agents';
 import type { ListNavActions } from '@core/util/useListKeyBindings';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import { usePinnedContactUsers } from '@queries/contacts/use-directory';
@@ -21,6 +22,7 @@ import {
   Switch,
 } from 'solid-js';
 import { SYSTEM_PROPERTY_IDS } from '../constants';
+import { useMaybePropertiesContext } from '../context/PropertiesContext';
 import {
   type CombinedEntity,
   getEntityName,
@@ -66,6 +68,7 @@ export function EntityPropertyEditor(props: {
   setPlaceholder: Setter<string>;
   selectedEntityCount: number;
 }) {
+  const propertiesContext = useMaybePropertiesContext();
   const definitionId = () => {
     const property = props.property;
     if (!property) return '';
@@ -150,12 +153,26 @@ export function EntityPropertyEditor(props: {
   const localSelectedIds = createMemo(() =>
     localSelectedRefs().map((ref) => ref.entity_id)
   );
-  const people = usePinnedContactUsers(localSelectedIds, isAssignees);
+  createEffect(() => {
+    if (!isAssignees()) return;
+    propertiesContext?.retainAssignees(localSelectedIds());
+  });
+  const people = usePinnedContactUsers(
+    propertiesContext?.retainedAssigneeIds ?? (() => []),
+    isAssignees
+  );
   const users = createMemo(() => {
     if (!isCompanyOwner() && !isAssignees()) return undefined;
-    const pool = [...agents(), ...team.users()];
+    const pool = [...team.users(), ...agents()];
     if (!isAssignees()) return pool;
-    return scopedUserOptions(pool, people(), localSelectedIds());
+    return peopleBeforeAgents(
+      scopedUserOptions(
+        pool,
+        people(),
+        propertiesContext?.retainedAssigneeIds() ?? []
+      ),
+      (user) => user.id
+    );
   });
   const { entities } = useEntitiesForProperty(
     () => props.property,

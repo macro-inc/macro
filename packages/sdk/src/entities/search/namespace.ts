@@ -4,7 +4,7 @@ import type {
   UnifiedSearchRequest,
   UnifiedSearchResponseItem,
 } from '../../../generated/search/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
 import { CalendarEvent } from '../calendar/event';
@@ -19,6 +19,7 @@ import { Project } from '../projects/project';
 import { visibleTags } from '../workspace/items';
 import { WorkspaceQuery } from '../workspace/query';
 import type { WorkspaceTag } from '../workspace/types';
+import { exclusions } from './exclusions';
 import type {
   SearchOptions,
   SearchPage,
@@ -27,33 +28,7 @@ import type {
   SearchType,
 } from './types';
 
-const nil = '00000000-0000-0000-0000-000000000000';
-
 const DEFAULT_PAGE_SIZE = 50;
-
-/** How each kind is left out of a search: a nil id in its primary filter. */
-const exclusions: Record<
-  Exclude<SearchType, 'company'>,
-  (filters: EntityFilters) => EntityFilters
-> = {
-  agent_session: (f) => ({
-    ...f,
-    agent_session_filters: { ...f.agent_session_filters, ids: [nil] },
-  }),
-  document: (f) => ({ ...f, document_filters: { document_ids: [nil] } }),
-  chat: (f) => ({ ...f, chat_filters: { chat_ids: [nil] } }),
-  email: (f) => ({
-    ...f,
-    email_filters: { ...f.email_filters, email_thread_ids: [nil] },
-  }),
-  channel: (f) => ({ ...f, channel_filters: { channel_ids: [nil] } }),
-  project: (f) => ({ ...f, project_filters: { project_ids: [nil] } }),
-  call: (f) => ({ ...f, call_filters: { channel_ids: [nil] } }),
-  calendar_event: (f) => ({
-    ...f,
-    calendar_event_filters: { calendar_event_ids: [nil] },
-  }),
-};
 
 const searchTypes: readonly SearchType[] = [
   ...(Object.keys(exclusions) as SearchType[]),
@@ -130,14 +105,37 @@ export class SearchNamespace {
   }
 
   /**
-   * Every match across every kind of item, most relevant first, auto-paginated.
+   * Every match across every kind of item, most relevant first, auto-paginated; `maxItems` caps the total.
    * Break a `for await` loop to stop; no further page is fetched.
    *
    * @readonly
    */
-  async *all(
+  all(
     query: string,
-    options: SearchOptions = {},
+    options: SearchOptions & IterationOptions = {},
+  ): AsyncGenerator<SearchResult> {
+    const { maxItems: _maxItems, ...search } = options;
+    return iterate(
+      'search.all',
+      options,
+      {
+        types: true,
+        searchOn: true,
+        matchType: true,
+        tags: true,
+        tagsMatch: true,
+        inbox: true,
+        agentSessions: true,
+        calendarScope: true,
+        pageSize: true,
+      },
+      () => this.allPages(query, search),
+    );
+  }
+
+  private async *allPages(
+    query: string,
+    options: SearchOptions,
   ): AsyncGenerator<SearchResult> {
     const scope = new WorkspaceQuery(this.client);
     const body = await this.request(scope, query, options);

@@ -66,15 +66,16 @@ const policies = {
   MarkNotificationInboxRowsDone:
     'custom: inbox rows stay hidden until the server removes them',
   ClearNotificationInbox:
-    'custom: cleared rows stay hidden until the server removes them',
+    'custom: rows the stored clear covers stay hidden while the server works through it',
+  UndoNotificationInboxClear:
+    'custom: cleared rows show again at once; the server restores each state',
   MarkNotificationInboxNotificationDone:
     'custom: the notification stays hidden until the server returns its row',
   UndoNotificationInboxRowsDone:
     'authoritative: the server returns the restored inbox entries',
   MarkNotificationInboxRowsSeen:
     'custom: inbox rows read as seen until the server returns their entries',
-  MoveEntities:
-    'authoritative: destination authorization and membership refresh',
+  MoveEntities: 'resolver',
   UpdateEntitySharePolicies:
     'authoritative: permission changes require server confirmation',
   TrashEntities:

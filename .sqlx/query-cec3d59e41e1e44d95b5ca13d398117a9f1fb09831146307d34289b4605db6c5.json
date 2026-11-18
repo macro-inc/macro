@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT g.id AS \"id!\", p.static_file_id AS \"static_file_id!\"\n            FROM external_chat g\n            JOIN whatsapp_linked_account o ON o.user_id = g.user_id\n            JOIN whatsapp_profile_picture p ON p.account_id = o.id AND p.jid = g.remote_id\n            WHERE g.id = ANY($1) AND g.provider = 'whatsapp' AND p.static_file_id IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "static_file_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "cec3d59e41e1e44d95b5ca13d398117a9f1fb09831146307d34289b4605db6c5"
+}

@@ -86,6 +86,8 @@ PR_TITLE="fix(x): ..." just pr-privacy body.md    # plus the PR title and body y
 
 To fix a hit, edit the PR title or body, or reword the commit on your branch.
 
+Run commit hooks in an isolated candidate checkout, or freeze all writers first, when sharing a worktree; prek parks and restores unstaged changes.
+
 ## Before pushing
 
 Run what applies to the files you changed, and fix failures before pushing:
@@ -155,7 +157,9 @@ finding left open.
 No test plan or testing section in PR descriptions or commit messages: CI shows
 the checks, and what you ran goes in your report to the user. Attach screenshots
 or recordings to the PR for user-visible changes (see the `record-proof` skill
-when available). Do not commit verification captures unless explicitly requested.
+when available). Keep private addresses and tailnet-only links out of public PRs;
+when captures stay local, describe the verification in words. Do not commit
+verification captures unless explicitly requested.
 
 ## Handing off a PR
 

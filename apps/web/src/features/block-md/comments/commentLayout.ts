@@ -11,6 +11,7 @@ import {
   registerEditorWidthObserver,
   registerInternalLayoutShiftListener,
 } from '@core/component/LexicalMarkdown/plugins';
+import { visibleAnchor } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
@@ -115,8 +116,9 @@ export function createCommentLayout() {
         const markEls = Object.values(mark.markNodes).filter((el) => !!el);
         if (markEls.length === 0) continue;
 
-        // attach the comment layout to the top element of the mark
-        const topEl = markEls.sort(markElementSort)[0];
+        // attach the comment layout to the top element of the mark; a mark
+        // in a folded section sits beside the heading that folds it
+        const topEl = markEls.map(visibleAnchor).sort(markElementSort)[0];
         const top = topEl.getBoundingClientRect().top - marginTop;
         setMarkLocationTops(markId, top);
       }

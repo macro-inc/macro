@@ -305,6 +305,86 @@ async fn an_agents_follow_up_is_inferred_for_macro_and_labelled_by_its_name() {
     assert!(!judged.from_agent);
 }
 
+/// A comment an agent posted through an MCP client, sent as Macro AI's bot.
+fn client_comment(id: u128, thread: Option<Uuid>) -> Message {
+    let mut comment = message(id, thread, "Verified on dev.");
+    comment.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+    comment.triggered_by = Some(user().to_string());
+    comment.triggered_via = Some("Claude Code".to_owned());
+    comment.bot_profile = Some(messages::domain::models::BotSenderProfile {
+        name: bot_id::MACRO_AI_NAME.to_owned(),
+        avatar_url: None,
+    });
+    comment
+}
+
+#[tokio::test]
+async fn a_reply_to_a_clients_comment_never_pulls_macro_in() {
+    let root = client_comment(1, None);
+    let trigger = message(2, Some(root.id), "Did you remove every exclusion?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, thread(root, vec![trigger.clone()]));
+    let classifier = classifier(Ok(true));
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(api),
+        Arc::new(Access::default()),
+        classifier.clone(),
+    );
+
+    assert!(detector.detect(&event(&trigger)).await.is_empty());
+    assert!(classifier.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_clients_comment_is_labelled_by_the_client_once_macro_has_answered() {
+    let root = client_comment(1, None);
+    let mut answer = message(2, Some(root.id), "previous answer");
+    answer.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+    let trigger = message(3, Some(root.id), "and the backend?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        thread(root, vec![answer, trigger.clone()]),
+    );
+    let classifier = classifier(Ok(false));
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(api),
+        Arc::new(Access::default()),
+        classifier.clone(),
+    );
+
+    assert!(detector.detect(&event(&trigger)).await.is_empty());
+    let calls = classifier.calls.lock().unwrap();
+    let transcript = &calls[0];
+    assert_eq!(transcript[0].sender, "Claude Code");
+    assert!(!transcript[0].from_agent);
+    assert!(transcript[1].from_agent);
+}
+
+#[tokio::test]
+async fn an_explicit_mention_still_reaches_macro_under_a_clients_comment() {
+    let root = client_comment(1, None);
+    let mut trigger = message(2, Some(root.id), "@macro help");
+    trigger.mentions = vec![SimpleMention {
+        entity_type: "user".into(),
+        entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
+    }];
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(MockMessageServiceApi::new()),
+        Arc::new(Access::default()),
+        classifier(Ok(false)),
+    );
+
+    assert_eq!(
+        detector.detect(&event(&trigger)).await,
+        vec![BotInvocation {
+            bot_id: bot_id::MACRO_AI_BOT_ID,
+            trigger: BotTrigger::Mention,
+        }]
+    );
+}
+
 #[tokio::test]
 async fn macro_never_infers_a_reply_to_its_own_message() {
     let root = message(1, None, "question");

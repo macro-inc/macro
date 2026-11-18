@@ -1,9 +1,9 @@
-use sqlx::PgPool;
-use static_file_service_client::StaticFileServiceClient;
+use crate::outbound::sfs_deletion::{PgSfsDeletion, SfsDeletionClient};
+use email::domain::attachment_cleanup::sfs_deletion::SfsDeletionService;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct SFSDeleteContext {
-    pub db: PgPool,
-    pub sfs_client: StaticFileServiceClient,
+    pub service: Arc<SfsDeletionService<PgSfsDeletion, SfsDeletionClient>>,
     pub sqs_worker: sqs_worker::SQSWorker,
 }

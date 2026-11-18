@@ -19,15 +19,17 @@ use super::{
     models::{
         ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
-        CalendarEventUpsert, CalendarGrantIntent, CalendarOccurrenceCursor,
-        GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
+        CalendarEventUpsert, CalendarGrantIntent, CalendarOccurrenceCursor, CalendarSyncFailure,
+        CalendarSyncHealth, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet,
+        OccurrenceRange,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventForwardSource,
         CalendarEventLabelReader, CalendarEventWrite, CalendarEventWriteOutcome,
         CalendarOccurrenceService, CalendarProviderError, CalendarProviderErrorKind,
-        CalendarReauthNotifier, CalendarRepository, GoogleCalendarProvider,
-        GoogleCalendarSyncRepository, GoogleEventSyncContext, RetiredCalendarEvent,
+        CalendarReauthNotifier, CalendarRepository, CalendarSyncHealthReader,
+        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
+        RetiredCalendarEvent,
     },
 };
 
@@ -460,6 +462,16 @@ where
     }
 }
 
+impl<R> CalendarSyncHealthReader for CalendarService<R>
+where
+    R: CalendarSyncHealthReader,
+{
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn calendar_sync_health(&self, requester_id: &str) -> Result<CalendarSyncHealth, Report> {
+        self.repository.calendar_sync_health(requester_id).await
+    }
+}
+
 /// Orchestrates a Google account backfill while keeping HTTP and SQL behind ports.
 pub struct GoogleCalendarBackfillService<R, G, B> {
     repository: R,
@@ -703,7 +715,8 @@ where
                     ) => CalendarBackfillFailureDisposition::Permanent,
                     Some(
                         CalendarProviderErrorKind::Transient
-                        | CalendarProviderErrorKind::SyncTokenExpired,
+                        | CalendarProviderErrorKind::SyncTokenExpired
+                        | CalendarProviderErrorKind::Deferred,
                     )
                     | None => CalendarBackfillFailureDisposition::Retry,
                 };
@@ -919,7 +932,7 @@ where
         // failing the account. The run fails only when no calendar is healthy,
         // so the coordinator can still classify a wholesale outage.
         let mut any_calendar_healthy = false;
-        let mut isolated_failures: Vec<(Uuid, String)> = Vec::new();
+        let mut isolated_failures: Vec<(Uuid, CalendarSyncFailure, String)> = Vec::new();
         let mut last_isolated_error: Option<CalendarProviderError> = None;
 
         for provider_calendar in calendars {
@@ -1002,7 +1015,11 @@ where
                         calendar_id=%calendar_id,
                         "isolating a failed Google Calendar and continuing the account sync"
                     );
-                    isolated_failures.push((calendar_id, error.message().to_owned()));
+                    isolated_failures.push((
+                        calendar_id,
+                        error.kind().into(),
+                        error.message().to_owned(),
+                    ));
                     report.team_ooo_changed = true;
                     // A retryable failure outranks a permanent one so a total
                     // failure still surfaces as retryable.
@@ -1032,6 +1049,9 @@ where
                     .await?;
                 self.publish_write_outcome(&outcome);
                 report.team_ooo_changed |= outcome.team_ooo_changed;
+                if outcome.change != CalendarEventChange::Unchanged {
+                    report.events_changed += 1;
+                }
                 report.aligned_copies.extend(outcome.aligned_copies);
                 calendar_count += 1;
             }
@@ -1080,6 +1100,7 @@ where
                     .watch_calendar(
                         access_token,
                         key.email_link_id,
+                        calendar_id,
                         &watch_provider_calendar_id,
                         channel_id,
                         watch,
@@ -1135,21 +1156,38 @@ where
 
         // No calendar is healthy: a wholesale outage the coordinator classifies
         // for retry. The account-level failure carries it, so no calendar is
-        // badged for it.
+        // badged for it, except one that failed for good: its calendar records
+        // that, since the account's retry would read as transient.
         if !any_calendar_healthy && let Some(error) = last_isolated_error {
+            for (calendar_id, kind, message) in isolated_failures {
+                if kind == CalendarSyncFailure::Transient {
+                    continue;
+                }
+                self.repository
+                    .record_google_calendar_sync_error(
+                        key,
+                        lease_token,
+                        account_id,
+                        calendar_id,
+                        kind,
+                        &message,
+                    )
+                    .await?;
+            }
             return Err(rootcause::report!(error).into());
         }
 
         // Record each isolated failure for the settings badge, leaving the
         // calendar's sync state untouched so the next poll retries it. This
         // write must succeed before the account can report healthy coverage.
-        for (calendar_id, message) in isolated_failures {
+        for (calendar_id, kind, message) in isolated_failures {
             self.repository
                 .record_google_calendar_sync_error(
                     key,
                     lease_token,
                     account_id,
                     calendar_id,
+                    kind,
                     &message,
                 )
                 .await?;

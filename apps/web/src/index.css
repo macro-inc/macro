@@ -316,6 +316,8 @@ body.tauri-ios {
   --color-write:       var(--color-blue);
   --color-code:        var(--color-lime);
   --color-chat:        var(--color-cyan);
+  /* Brand marks of partner agents. */
+  --color-brand-claude: #D97757;
   --color-html:        var(--color-orange);
   --color-note:        var(--color-violet);
   --color-task:        var(--color-green);
@@ -330,10 +332,12 @@ body.tauri-ios {
 
 /* Scope the panel semantic itself so nested bg-panel consumers share the same
    inactive split chrome instead of only tinting the outer panel element.
-   Lower lightness directly: mixing with ink reverses the effect in dark themes. */
+   Lower lightness directly: mixing with ink reverses the effect in dark themes.
+   Work in OKLab, which has no hue: Chrome drops the hue of a near-neutral sRGB
+   color converted to OKLCH, and `h` then paints it at 0deg (pink). */
 .split-panel-inactive {
-  --color-panel: oklch(
-    from var(--theme-panel, var(--color-surface-1)) calc(l - 0.025) c h
+  --color-panel: oklab(
+    from var(--theme-panel, var(--color-surface-1)) calc(l - 0.025) a b
   );
 }
 
@@ -394,11 +398,15 @@ body.tauri-ios {
   --color-link-visited: var(--color-accent);
   --color-page: var(--color-surface-0);
   --color-panel: var(--theme-panel, var(--color-surface-1));
-  --color-control: var(--color-surface-2);
+  /* Mail's list fill and row divider under names no surface overrides, so a
+     sample list inside one (Settings → Email) can take them back. */
+  --color-list-control: var(--color-surface-2);
+  --color-list-divider: color-mix(in oklch, var(--color-content-0) 4%, transparent);
+  --color-control: var(--color-list-control);
   --color-control-raised: color-mix(in oklch, var(--color-surface-2) 95%, var(--color-content-0));
   --color-edge-frame: color-mix(in oklch, var(--color-content-0) 8%, transparent);
   --color-edge-button: color-mix(in oklch, var(--color-content-0) 5%, transparent);
-  --color-edge-divider: color-mix(in oklch, var(--color-content-0) 4%, transparent);
+  --color-edge-divider: var(--color-list-divider);
   --color-edge-focus: color-mix(in oklch, var(--color-content-0) 40%, transparent);
   --color-dialog: var(--color-surface-2);
   --color-menu: var(--color-surface-2);
@@ -522,6 +530,8 @@ body.tauri-ios {
   --color-write:       var(--color-blue);
   --color-code:        var(--color-lime);
   --color-chat:        var(--color-cyan);
+  /* Brand marks of partner agents. */
+  --color-brand-claude: #D97757;
   --color-html:        var(--color-orange);
   --color-note:        var(--color-violet);
   --color-task:        var(--color-green);
@@ -879,7 +889,10 @@ html:not([data-touch-device="true"]) [data-invert] {
 }
 
 @custom-variant mobile {
-  &:where(html[data-touch-device="true"] *) {
+  &:where(html[data-touch-device="true"][data-native-horizontal-size-class="compact"] *) {
+    @slot;
+  }
+  &:where(html[data-touch-device="true"]:not([data-native-horizontal-size-class]) *) {
     @media (max-width: 639px) {
       @slot;
     }

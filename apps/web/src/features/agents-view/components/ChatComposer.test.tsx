@@ -301,6 +301,50 @@ describe('Chat session input', () => {
     expect(editor.setMarkdown).not.toHaveBeenCalledWith('Hello agent');
   });
 
+  it('does not pass back a host draft the editor exports differently', () => {
+    const [draft, setDraft] = createSignal('');
+    const [markdown, setMarkdown] = createSignal('');
+    editor.readMarkdown = markdown;
+    // Markdown import drops a code block's trailing blank line.
+    editor.setMarkdown.mockImplementation((value: string) =>
+      setMarkdown(value.replace('\n\n```', '\n```'))
+    );
+    const change = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft={draft()}
+        onDraftChange={change}
+        onSend={vi.fn()}
+        selector={null}
+      />
+    ));
+    setDraft('```\nfoo\n\n```');
+    editor.change?.(markdown());
+    expect(change).not.toHaveBeenCalled();
+
+    type('```\nfoo\n```\nmore');
+    expect(change).toHaveBeenCalledWith('```\nfoo\n```\nmore');
+  });
+
+  it('does not pass back the export it reports while connecting with a draft', () => {
+    // MarkdownShell reports its initial export before calling onConnect.
+    editor.connect = (markdown) =>
+      editor.change?.(markdown.replace('\n\n```', '\n```'));
+    const change = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft={'```\nfoo\n\n```'}
+        onDraftChange={change}
+        onSend={vi.fn()}
+        selector={null}
+      />
+    ));
+    expect(change).not.toHaveBeenCalled();
+
+    type('```\nfoo\n```\nmore');
+    expect(change).toHaveBeenCalledWith('```\nfoo\n```\nmore');
+  });
+
   it('preloads the fold only when focused without sending or changing the draft', () => {
     const send = vi.fn();
     const change = vi.fn();

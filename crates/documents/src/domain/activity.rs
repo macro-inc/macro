@@ -1,7 +1,6 @@
 //! What counts as activity in the documents domain.
 //!
-//! Documents have no entity-exclusive actions yet, so every mapping goes
-//! through [`Activity::common`].
+//! Appearance history is committed synchronously; other events use ingestion.
 
 #[cfg(test)]
 mod test;
@@ -86,6 +85,9 @@ impl ActivitySource for DocumentTopicEvent {
                 metadata.created_at.unwrap_or_else(|| event_time(event_id)),
             ),
             DocumentTopicEvent::Updated(metadata) => {
+                if metadata.appearance_change.is_some() {
+                    return Ingest::Ignore;
+                }
                 match mutation_attribution(
                     &metadata.actor,
                     &metadata.actor_user_id,
@@ -127,6 +129,8 @@ impl ActivitySource for DocumentTopicEvent {
             }
             // Extraction-pipeline noise, not user activity.
             DocumentTopicEvent::ContentUploaded(_) => Ingest::Ignore,
+            // A system release after the mail is gone; nobody acted on these files.
+            DocumentTopicEvent::EmailAttachmentsReleased(_) => Ingest::Ignore,
             DocumentTopicEvent::SyncContentUpdated(metadata) => {
                 let legacy = metadata.actor.clone().map(|actor| DocumentSyncEditor {
                     agent_correlation_id: None,

@@ -22,7 +22,7 @@
 .tasks-native-name > span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .tasks-native-name:focus-visible,.tasks-native-breadcrumb:focus-visible { outline:2px solid var(--color-accent);outline-offset:3px; }
 .tasks-native-updated { text-align:right;color:var(--color-ink-extra-muted);font-size:12px; }
-.tasks-native-group-heading { display:flex;align-items:center;gap:10px;width:calc(100% - 8px);margin:2px 4px;padding:7px 8px;border-radius:8px;background:var(--color-surface-2);color:var(--color-ink-muted);font-size:12px;font-weight:600;text-align:left; }
+.tasks-native-group-heading { display:flex;align-items:center;gap:10px;width:calc(100% - 8px);margin:2px 4px;padding:7px 8px;border-radius:8px;background:var(--color-surface-2);color:var(--color-ink-muted);font-size:12px;font-weight:500;text-align:left; }
 .tasks-native-count { border-radius:12px;padding:0 6px;background:var(--color-hover);color:var(--color-ink-extra-muted); }
 .tasks-native-status,.tasks-native-priority,.tasks-native-assignee,.tasks-native-project { min-width:0;font-size:12px; }
 .tasks-native-list .sample-list-property { max-width:100%; }
@@ -33,7 +33,7 @@
 .tasks-native-date,.tasks-native-pill { display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:999px;font-size:12px;color:var(--color-ink-muted);background:var(--color-surface-2);white-space:nowrap; }
 .tasks-native-overview { padding:48px 24px 32px; }
 .tasks-native-overview > div { max-width:768px;margin:auto; }
-.tasks-native-overview h1 { font:600 24px/1.4 var(--font-sans);outline:none; }
+.tasks-native-overview h1 { font:500 24px/1.4 var(--font-sans);outline:none; }
 .tasks-native-properties { display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 24px;align-items:center; }
 .tasks-native-description { white-space:pre-wrap;font-size:15px;line-height:1.7;outline:none;min-height:120px; }
 .tasks-native-discussion-title { margin:32px 0 16px;font-size:13px;font-weight:500;color:var(--color-ink-muted); }

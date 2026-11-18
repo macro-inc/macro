@@ -66,3 +66,26 @@ pub trait FeatureFlags: Send + Sync {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<FlagSnapshot, Report>> + Send;
 }
+
+/// Explicit service evaluation identity, independent of authenticated users.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ServiceContext(&'static str);
+impl ServiceContext {
+    /// Select a documented, stable service distinct ID for global rollout.
+    pub const fn new(distinct_id: &'static str) -> Self {
+        Self(distinct_id)
+    }
+    /// The exact service distinct ID sent to the evaluator.
+    pub const fn distinct_id(self) -> &'static str {
+        self.0
+    }
+}
+
+/// Load a global service decision through the same strict snapshot contract.
+pub trait ServiceFeatureFlags: Send + Sync {
+    /// Evaluate the explicit service context without fabricating a user identity.
+    fn load_service(
+        &self,
+        context: ServiceContext,
+    ) -> impl Future<Output = Result<FlagSnapshot, Report>> + Send;
+}

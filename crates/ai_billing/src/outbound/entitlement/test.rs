@@ -14,10 +14,7 @@ use teams::outbound::team_repo::TeamRepositoryImpl;
 )]
 async fn only_a_paying_team_bills_its_members_seats(pool: PgPool) {
     let entitlements = RolesTeamsEntitlementSource::new(
-        UserRolesAndPermissionsServiceImpl::new(
-            MacroDB::new(pool.clone()),
-            MacroDB::new(pool.clone()),
-        ),
+        UserRolesAndPermissionsServiceImpl::new(MacroDB::new(pool.clone())),
         TeamRepositoryImpl::new(pool),
     );
 
@@ -46,10 +43,7 @@ async fn only_a_paying_team_bills_its_members_seats(pool: PgPool) {
 )]
 async fn a_canceled_team_does_not_block_a_members_personal_subscription(pool: PgPool) {
     let entitlements = RolesTeamsEntitlementSource::new(
-        UserRolesAndPermissionsServiceImpl::new(
-            MacroDB::new(pool.clone()),
-            MacroDB::new(pool.clone()),
-        ),
+        UserRolesAndPermissionsServiceImpl::new(MacroDB::new(pool.clone())),
         TeamRepositoryImpl::new(pool),
     );
     let at = DateTime::from_timestamp(1_800_000_000, 0).unwrap();

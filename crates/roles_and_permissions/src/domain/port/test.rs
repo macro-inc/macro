@@ -1,26 +1,6 @@
 ///! Tests for the port logic for roles and permissions
 use super::*;
 
-use macro_user_id::email::ReadEmailParts;
-
-#[derive(Debug, Clone, Default)]
-struct MockUserRepository {}
-
-impl UserRepository for MockUserRepository {
-    async fn get_user_id_by_email(
-        &self,
-        email: &Email<Lowercase<'_>>,
-    ) -> Result<MacroUserIdStr<'_>, UserRolesAndPermissionsError> {
-        match email.email_str() {
-            "doesnotexist@doesnotexist.com" => Err(UserRolesAndPermissionsError::UserDoesNotExist),
-            "user@user.com" => Ok(MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap()),
-            _ => Err(UserRolesAndPermissionsError::StorageLayerError(
-                anyhow::anyhow!("unexpected email"),
-            )),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 struct MockUserRolesAndPermissionsRepository {}
 
@@ -65,39 +45,6 @@ async fn test_get_user_permissions() -> anyhow::Result<()> {
         .await?;
 
     assert_eq!(permissions.len(), 0);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_user_respository_get_user_id_by_email() -> anyhow::Result<()> {
-    let user_repository = MockUserRepository::default();
-
-    let email = Email::parse_from_str("UsEr@uSeR.com")?.lowercase();
-
-    let user_id = user_repository.get_user_id_by_email(&email).await?;
-
-    assert_eq!(user_id.as_ref(), "macro|user@user.com");
-
-    match user_repository
-        .get_user_id_by_email(&Email::parse_from_str("doesnotexist@doesnotexist.com")?.lowercase())
-        .await
-        .err()
-        .unwrap()
-    {
-        UserRolesAndPermissionsError::UserDoesNotExist => (),
-        _ => anyhow::bail!("unexpected error"),
-    }
-
-    match user_repository
-        .get_user_id_by_email(&Email::parse_from_str("bad@user.com")?.lowercase())
-        .await
-        .err()
-        .unwrap()
-    {
-        UserRolesAndPermissionsError::StorageLayerError(_) => (),
-        _ => anyhow::bail!("unexpected error"),
-    }
 
     Ok(())
 }

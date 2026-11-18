@@ -15,7 +15,7 @@ import { t } from '@app/lib/i18n';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
-import DatabaseIcon from '@icon/system/regular/database.svg';
+import { EntityIcon } from '@entity/extractors/entity-icon';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
@@ -53,12 +53,14 @@ function DriveDatabases(props: { onNavigate?: () => void }) {
             <ViewSidebar.Item
               title={database.name}
               onClick={(event) => {
-                actions.openEntity(database, event);
+                actions.openShortcut(database, event);
                 props.onNavigate?.();
               }}
             >
               <ViewSidebar.Icon>
-                <DatabaseIcon class="size-4" />
+                <span class="size-4">
+                  <EntityIcon entity={database} />
+                </span>
               </ViewSidebar.Icon>
               <span class="truncate">{database.name}</span>
             </ViewSidebar.Item>
@@ -325,7 +327,6 @@ function DriveTutorials() {
 }
 
 export function DriveSidebar() {
-  const { state } = useDriveView();
   const [content, setContent] = createSignal<HTMLDivElement>();
   // A long folder tree scrolls under a drag held at its edge.
   if (useDragDropContext()) {
@@ -333,17 +334,7 @@ export function DriveSidebar() {
   }
   return (
     <ViewSidebar.Root aria-label="Drive navigation">
-      <ViewSidebar.Header
-        searchLabel="Search files"
-        search={() => (
-          <SearchBar
-            label="Search files"
-            placeholder="Search files"
-            value={state.value().search}
-            onValueChange={state.setSearch}
-          />
-        )}
-      >
+      <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Drive</ViewSidebar.Title>

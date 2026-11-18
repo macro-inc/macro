@@ -59,4 +59,43 @@ describe('RadioGroup', () => {
     const radio = screen.getByRole('radio', { name: 'All events' });
     expect(radio).toBeInstanceOf(HTMLInputElement);
   });
+
+  it('keeps label and description wiring in the cards variant', () => {
+    const onChange = vi.fn();
+    render(() => (
+      <RadioGroup
+        variant="cards"
+        defaultValue="team"
+        onChange={onChange}
+        aria-label="Who can join"
+      >
+        <RadioGroup.Item value="team">
+          <RadioGroup.ItemLabel>Team</RadioGroup.ItemLabel>
+          <RadioGroup.ItemDescription>
+            Anyone on the team can join
+          </RadioGroup.ItemDescription>
+          <RadioGroup.ItemControl />
+        </RadioGroup.Item>
+        <RadioGroup.Item value="invite">
+          <RadioGroup.ItemLabel>Invite only</RadioGroup.ItemLabel>
+          <RadioGroup.ItemDescription>
+            Only invited people can join
+          </RadioGroup.ItemDescription>
+          <RadioGroup.ItemControl />
+        </RadioGroup.Item>
+      </RadioGroup>
+    ));
+
+    fireEvent.click(screen.getByText('Invite only'));
+
+    const invite = screen.getByRole('radio', { name: 'Invite only' });
+    expect(onChange).toHaveBeenCalledWith('invite');
+    expect((invite as HTMLInputElement).checked).toBe(true);
+    const describedBy = invite.getAttribute('aria-describedby') ?? '';
+    const description = describedBy
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent)
+      .join(' ');
+    expect(description).toBe('Only invited people can join');
+  });
 });

@@ -47,6 +47,7 @@ pub enum MailboxOperationState {
 pub struct MailboxActionMessage {
     pub id: Uuid,
     pub provider_id: Option<String>,
+    /// Not yet sent: a draft, or a send still waiting on delivery.
     pub is_draft: bool,
     pub is_sent: bool,
     pub is_read: bool,

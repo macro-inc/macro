@@ -32,8 +32,6 @@ pub enum NotificationTransition {
     Seen,
     /// Completed.
     Done,
-    /// Back from done to seen.
-    Undone,
 }
 
 /// Reads and transitions the viewer's notifications.
@@ -52,6 +50,16 @@ pub trait FeedNotifications: Send + Sync + 'static {
         user: MacroUserIdStr<'static>,
         notification_ids: Vec<Uuid>,
         transition: NotificationTransition,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
+    /// Reopen the viewer's done notifications as they were before: those in
+    /// `unseen` come back unseen, the rest seen. Returns the ids whose state
+    /// changed.
+    fn reopen(
+        &self,
+        user: MacroUserIdStr<'static>,
+        notification_ids: Vec<Uuid>,
+        unseen: Vec<Uuid>,
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 }
 

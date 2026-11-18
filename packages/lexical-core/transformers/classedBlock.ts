@@ -14,6 +14,7 @@ import {
   isAllowedTagName,
 } from '../nodes/ClassedBlockNode';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
+import { createDetailsTransformer } from './details';
 import { I_HTML_RENDER } from './htmlRender';
 import { I_EQUATION_NODE } from './katex';
 import {
@@ -44,8 +45,13 @@ const MACRO_QUOTE_TRANSFORMERS = [
   ...TRANSFORMERS,
 ];
 
+// GitHub quotes can hold `<details>`; the transformer does nothing where the
+// details nodes aren't registered.
+const QUOTED_DETAILS = createDetailsTransformer(htmlBlockquoteTransformers);
+
 function htmlBlockquoteTransformers() {
   return [
+    QUOTED_DETAILS,
     HTML_BLOCKQUOTE,
     I_HTML_RENDER,
     ...CUSTOM_TRANSFORMERS,

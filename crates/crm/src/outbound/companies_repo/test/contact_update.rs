@@ -27,7 +27,11 @@ async fn edits_preserve_contact_identity_history_archive_and_sources(
     let id = insert_contact_with_source(&pool, company, "person@example.com", link).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     repo.set_contact_hidden(&team, &id, true).await?;
+    // A contact added by name alone holds no address.
     sqlx::query!("UPDATE crm_contacts SET email = NULL WHERE id = $1", id)
+        .execute(&pool)
+        .await?;
+    sqlx::query!("DELETE FROM crm_contact_emails WHERE contact_id = $1", id)
         .execute(&pool)
         .await?;
     let before = repo.get_contact_for_team(&team, &id, true).await?.unwrap();
@@ -54,12 +58,19 @@ async fn edits_preserve_contact_identity_history_archive_and_sources(
             .email,
         edited.email
     );
-    assert!(matches!(
-        service
-            .set_contact_email(&access, "changed@example.org")
-            .await,
-        Err(CrmError::InvalidRequest(_))
-    ));
+    // Choosing another primary keeps the previous address on the contact.
+    let changed = service
+        .set_contact_email(&access, "changed@example.net")
+        .await?;
+    assert_eq!(changed.email.as_deref(), Some("changed@example.net"));
+    assert_eq!(
+        changed.emails,
+        [
+            "changed@example.net".to_owned(),
+            edited.email.clone().unwrap()
+        ]
+    );
+    assert_eq!(changed.id, id);
     let row = sqlx::query!(
         "SELECT team_id, manually_created FROM crm_contacts WHERE id = $1",
         id
@@ -330,7 +341,7 @@ async fn company_edits_require_known_personal_providers(pool: PgPool) -> anyhow:
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn concurrent_additions_reject_duplicates_and_stale_replacements(
+async fn concurrent_additions_reject_duplicates_and_apply_each_edit_whole(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let team = Uuid::now_v7();
@@ -366,7 +377,16 @@ async fn concurrent_additions_reject_duplicates_and_stale_replacements(
         repo.update_contact(&team, &loser, &edit_a, true),
         repo.update_contact(&team, &loser, &edit_b, true)
     );
-    assert_ne!(a.is_ok(), b.is_ok());
+    // Each edit is applied whole, one after the other: the contact holds
+    // both addresses and the later edit chose the primary.
+    assert!(a.is_ok() && b.is_ok());
+    let mut held = repo
+        .get_contact_for_team(&team, &loser, true)
+        .await?
+        .unwrap()
+        .emails;
+    held.sort();
+    assert_eq!(held, ["a@example.com", "b@example.com"]);
     let foreign = Uuid::now_v7();
     seed_team(&pool, foreign, "macro|other@example.org").await?;
     enable_crm_for_team(&pool, foreign).await?;

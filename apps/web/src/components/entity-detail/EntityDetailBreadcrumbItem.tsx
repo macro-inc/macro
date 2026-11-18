@@ -1,4 +1,5 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { ChannelTitleIcon } from '@channel/components/ChannelTopIcon';
 import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
 import {
@@ -6,7 +7,7 @@ import {
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { useItemRawName } from '@queries/preview';
+import { useItemIdentity } from '@queries/preview';
 import type { ItemEntity } from '@queries/preview/types';
 import { Show } from 'solid-js';
 import { DocumentTitleHoverCard } from './DocumentTitleHoverCard';
@@ -51,6 +52,7 @@ function BreadcrumbItem(props: {
   order: number;
   name: string;
   setsSplitDisplayName?: boolean;
+  appearance?: EntityAppearance | null;
 }) {
   useSplitDisplayName(() =>
     props.setsSplitDisplayName ? props.name : undefined
@@ -68,6 +70,7 @@ function BreadcrumbItem(props: {
         fallback={
           <EntityIcon
             targetType={breadcrumbIcon(props.entry.data)}
+            appearance={props.appearance}
             size="xs"
             class="shrink-0"
           />
@@ -110,9 +113,9 @@ function LiveBreadcrumbItem(props: {
   previewItem: ItemEntity;
   setsSplitDisplayName?: boolean;
 }) {
-  const currentName = useItemRawName(() => props.previewItem);
+  const accessible = useItemIdentity(() => props.previewItem);
   const name = () => {
-    const current = currentName();
+    const current = accessible()?.rawName;
     if (current?.trim()) return current;
 
     return fallbackBreadcrumbName(props.entry.data);
@@ -123,6 +126,7 @@ function LiveBreadcrumbItem(props: {
       entry={props.entry}
       order={props.order}
       name={name()}
+      appearance={accessible()?.appearance}
       setsSplitDisplayName={props.setsSplitDisplayName ?? false}
     />
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { summarizeColumn } from './column-summary';
+import { summarizeColumn, summarizeMoney } from './column-summary';
 
 describe('column summaries', () => {
   it('counts filled and distinct values without counting empty cells', () => {
@@ -21,4 +21,30 @@ describe('column summaries', () => {
     expect(summarizeColumn([], 'count')).toBe(0);
     expect(summarizeColumn([5], 'none')).toBeNull();
   });
+});
+
+it('keeps monetary sums and averages in their own currencies', () => {
+  const column = {
+    id: 'revenue',
+    name: 'Revenue',
+    dataType: 'NUMBER' as const,
+    isMultiSelect: false,
+    options: [],
+    writable: true,
+    currencyColumnId: 'currency',
+  };
+  const rows = [
+    { cells: { revenue: 100, currency: 'USD' } },
+    { cells: { revenue: 200, currency: 'EUR' } },
+    { cells: { revenue: 50, currency: 'USD' } },
+    { cells: { revenue: null, currency: 'JPY' } },
+  ];
+  expect(summarizeMoney(column, rows, 'sum')).toEqual([
+    { currency: 'EUR', value: 200 },
+    { currency: 'USD', value: 150 },
+  ]);
+  expect(summarizeMoney(column, rows, 'average')).toEqual([
+    { currency: 'EUR', value: 200 },
+    { currency: 'USD', value: 75 },
+  ]);
 });

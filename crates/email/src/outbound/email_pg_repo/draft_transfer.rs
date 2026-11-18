@@ -510,7 +510,7 @@ impl DraftTransferRepository for EmailPgRepo {
         if issue == Some("move_source_sent")
             && let Some(provider_id) = plan.source_provider_id.as_deref()
         {
-            sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,revision,is_import) VALUES($1,$2,$3,1,false) ON CONFLICT(link_id,generation,provider_id) DO UPDATE SET revision=email_message_reconciliation.revision+1,available_at=now()",plan.source_mailbox.link_id,plan.source_mailbox.sync_generation,provider_id).execute(&mut *tx).await.map_err(|_|MailboxError::Persistence)?;
+            sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,revision,is_import) SELECT id,sync_generation,$3,1,false FROM email_links WHERE id=$1 AND sync_generation=$2 ON CONFLICT(link_id,generation,provider_id) DO UPDATE SET revision=email_message_reconciliation.revision+1,available_at=now()",plan.source_mailbox.link_id,plan.source_mailbox.sync_generation,provider_id).execute(&mut *tx).await.map_err(|_|MailboxError::Persistence)?;
         }
         if state == "ready" {
             sqlx::query!("INSERT INTO email_draft_object_cleanup(object_key,available_at) SELECT s3_key,now()+interval '1 day' FROM email_attachments_drafts WHERE draft_id=$1 ON CONFLICT DO NOTHING",plan.request.source_id).execute(&mut *tx).await.map_err(|_|MailboxError::Persistence)?;

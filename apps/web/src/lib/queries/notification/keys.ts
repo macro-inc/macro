@@ -2,9 +2,6 @@ import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const notificationKeys = createQueryKeys('notification', {
   all: null,
-  user: (params: { limit?: number; done?: boolean }) => ({
-    queryKey: ['user', { infinite: true, ...params }],
-  }),
   entity: (params: { eventItemId: string; limit?: number }) => ({
     queryKey: [
       'entity',

@@ -1,6 +1,9 @@
+mod composition;
 mod config;
 mod context;
+mod domain;
 mod handler;
+mod outbound;
 #[cfg(test)]
 mod test;
 
@@ -33,11 +36,7 @@ async fn main() -> Result<(), Error> {
     ))
     .email_link_manager_queue(&link_manager_queue);
 
-    let ctx = context::Context {
-        db,
-        sqs_client: Arc::new(sqs_client),
-        config,
-    };
+    let ctx = composition::context(db, Arc::new(sqs_client), config);
 
     let func = service_fn(move |event: LambdaEvent<EventBridgeEvent>| {
         let ctx = ctx.clone();

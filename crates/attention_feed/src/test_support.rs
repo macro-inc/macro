@@ -402,6 +402,8 @@ where
 
 /// One requested transition: the ids and the state they move to.
 pub type RecordedTransition = (Vec<Uuid>, NotificationTransition);
+/// One reopen: the notifications, and those that came back unseen.
+pub type RecordedReopen = (Vec<Uuid>, Vec<Uuid>);
 
 /// Holds the viewer's notifications in memory, applies transitions to them,
 /// and records loads and transitions.
@@ -413,6 +415,8 @@ pub struct FakeNotifications {
     pub loads: Arc<Mutex<Vec<Vec<Entity<'static>>>>>,
     /// Every transition requested.
     pub transitions: Arc<Mutex<Vec<RecordedTransition>>>,
+    /// Every reopen requested.
+    pub reopens: Arc<Mutex<Vec<RecordedReopen>>>,
 }
 
 impl FakeNotifications {
@@ -494,7 +498,40 @@ impl FeedNotifications for FakeNotifications {
                 }
                 (NotificationTransition::Seen, _) => continue,
                 (NotificationTransition::Done, _) => NotificationState::Done,
-                (NotificationTransition::Undone, _) => NotificationState::Seen,
+            };
+            *notification = with_state(notification, state);
+            changed.push(id);
+        }
+        Ok(changed)
+    }
+
+    async fn reopen(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        notification_ids: Vec<Uuid>,
+        unseen: Vec<Uuid>,
+    ) -> Result<Vec<Uuid>, Report> {
+        self.reopens
+            .lock()
+            .unwrap()
+            .push((notification_ids.clone(), unseen.clone()));
+        let mut by_entity = self.by_entity.lock().unwrap();
+        let mut changed = Vec::new();
+        for id in notification_ids {
+            let Some(notification) = by_entity
+                .values_mut()
+                .flatten()
+                .find(|notification| notification.notification_id == id)
+            else {
+                continue;
+            };
+            if notification.state != NotificationState::Done {
+                continue;
+            }
+            let state = if unseen.contains(&id) {
+                NotificationState::Unseen
+            } else {
+                NotificationState::Seen
             };
             *notification = with_state(notification, state);
             changed.push(id);

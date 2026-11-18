@@ -1,6 +1,6 @@
 import type { Query, QueryKey } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { calendarKeys } from './keys';
+import { AVAILABILITY_CALENDAR_MUTATION_KEY, calendarKeys } from './keys';
 import { calendarTeamKeys, calendarTeamMutationKeys } from './team-keys';
 
 /** A missed poll may retain data briefly, but a hung request cannot retain it. */
@@ -90,10 +90,10 @@ export async function refreshTeamCalendarQueries(options?: {
       : queryClient.invalidateQueries({
           queryKey: calendarTeamKeys.sharing._def,
         }),
-    saving(calendarTeamMutationKeys.availabilityCalendar)
+    saving(AVAILABILITY_CALENDAR_MUTATION_KEY)
       ? undefined
       : queryClient.invalidateQueries({
-          queryKey: calendarTeamKeys.availabilityCalendars._def,
+          queryKey: calendarKeys.availabilityCalendars._def,
         }),
   ]);
 }

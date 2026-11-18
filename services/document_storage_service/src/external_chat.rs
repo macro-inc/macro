@@ -34,7 +34,7 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument as _;
 use uuid::Uuid;
 use whatsapp_linked::{
-    domain::{provider::WhatsAppProvider, service::WhatsAppService},
+    domain::{pictures::PictureImports, provider::WhatsAppProvider, service::WhatsAppService},
     inbound::router::WhatsAppRouterState,
     outbound::pg::PgWhatsAppRepository,
 };
@@ -81,7 +81,9 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         access: access.clone(),
         notifications,
     });
-    let media = MediaService::new(repository.clone(), Arc::new(StaticFiles(static_files)));
+    let files = Arc::new(StaticFiles(static_files));
+    let media = MediaService::new(repository.clone(), files.clone());
+    let pictures = PictureImports::new(whatsapp_repository.clone(), files);
     let whatsapp = Arc::new(WhatsAppService::new(whatsapp_repository.clone()));
     let service = ExternalChatService::new(
         Arc::new(WhatsAppProvider::new(whatsapp_repository)),
@@ -103,7 +105,7 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
     tracker.spawn(publish(
         pool,
         EffectsService::new(repository, publisher),
-        media,
+        Imports { media, pictures },
         whatsapp.clone(),
         cancellation,
     ));
@@ -120,18 +122,28 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
     }
 }
 
-/// Drain group notifications and attachment imports on the session service's `NOTIFY`,
-/// and on a sweep that also retries deferred revisions.
+/// What DSS turns into static files: attachments and profile pictures.
+struct Imports {
+    media: MediaService,
+    pictures: PictureImports,
+}
+
+/// Drain group notifications, attachment and picture imports on the session
+/// service's `NOTIFY`, and on a sweep that also retries deferred revisions.
 async fn publish(
     pool: PgPool,
     effects: EffectsService,
-    media: MediaService,
+    imports: Imports,
     whatsapp: Arc<WhatsAppService>,
     cancellation: CancellationToken,
 ) {
     let Some(mut listener) = listen(
         &pool,
-        &[signals::CHAT_EFFECTS, signals::MEDIA_READY],
+        &[
+            signals::CHAT_EFFECTS,
+            signals::MEDIA_READY,
+            whatsapp_linked::signals::PICTURE_STAGED,
+        ],
         &cancellation,
     )
     .await
@@ -157,7 +169,7 @@ async fn publish(
         };
         let span = tracing::info_span!("external_chat.drain");
         trace_context::adopt(&span, traceparent.as_deref());
-        drain(&effects, &media, &whatsapp).instrument(span).await;
+        drain(&effects, &imports, &whatsapp).instrument(span).await;
     }
 }
 
@@ -188,9 +200,11 @@ async fn listen(
     }
 }
 
-/// Import ready attachments, delete released files, expire unsent uploads,
-/// old receipts and pairings, and publish notifications.
-async fn drain(effects: &EffectsService, media: &MediaService, whatsapp: &WhatsAppService) {
+/// Import ready attachments and staged pictures, delete released files,
+/// expire unsent uploads, old receipts and pairings, and publish
+/// notifications.
+async fn drain(effects: &EffectsService, imports: &Imports, whatsapp: &WhatsAppService) {
+    let media = &imports.media;
     loop {
         match media.import_pending().await {
             Ok(0) => break,
@@ -241,6 +255,14 @@ async fn drain(effects: &EffectsService, media: &MediaService, whatsapp: &WhatsA
                 break;
             }
         }
+    }
+    // Last, and one batch: pictures are cosmetic, so a backlog never holds
+    // up pushes or shutdown. Each staging signals, and the sweep takes the rest.
+    if let Err(error) = imports.pictures.import_staged().await {
+        tracing::warn!(
+            code = error.current_context().code(),
+            "Storing WhatsApp profile pictures will retry"
+        );
     }
 }
 
@@ -453,6 +475,33 @@ impl FileStore for StaticFiles {
         let stored = self
             .0
             .put_named_bytes_for_user(&import.owner, &import.filename, bytes.into(), &import.mime)
+            .await
+            .map_err(|error| unavailable(format!("{error:#}")))?;
+        tracing::Span::current().record("file_id", &stored.id);
+        Uuid::parse_str(&stored.id).map_err(unavailable)
+    }
+
+    #[tracing::instrument(
+        name = "external_chat.store_picture",
+        skip_all,
+        err,
+        fields(size = bytes.len(), file_id)
+    )]
+    async fn store_picture(
+        &self,
+        owner: &str,
+        mime: &str,
+        bytes: Vec<u8>,
+    ) -> ExternalChatResult<Uuid> {
+        let filename = match mime {
+            "image/jpeg" => "profile-picture.jpg",
+            "image/png" => "profile-picture.png",
+            "image/webp" => "profile-picture.webp",
+            _ => "profile-picture",
+        };
+        let stored = self
+            .0
+            .put_named_bytes_for_user(owner, filename, bytes.into(), mime)
             .await
             .map_err(|error| unavailable(format!("{error:#}")))?;
         tracing::Span::current().record("file_id", &stored.id);

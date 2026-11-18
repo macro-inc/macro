@@ -144,4 +144,13 @@ where
                 })
         })
     }
+
+    /// The egress proxy holds remote MCP calls for the owner itself.
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _session: AgentSessionId,
+        _tool: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
+    }
 }

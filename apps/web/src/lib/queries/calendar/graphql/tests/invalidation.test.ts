@@ -122,8 +122,9 @@ describe('invalidateCalendarOccurrences', () => {
     const graphql = calendarKeys.occurrences('user-1', range)._ctx.graphql
       .queryKey;
     expect(graphql.slice(0, rest.length)).toEqual([...rest]);
+    const calendars = calendarKeys.visibleCalendars('user-1');
     expect(
-      calendarKeys.visibleCalendars._ctx.graphql.queryKey.slice(0, 2)
-    ).toEqual([...calendarKeys.visibleCalendars.queryKey]);
+      calendars._ctx.graphql.queryKey.slice(0, calendars.queryKey.length)
+    ).toEqual([...calendars.queryKey]);
   });
 });

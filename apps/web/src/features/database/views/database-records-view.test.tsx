@@ -279,6 +279,40 @@ describe('database table view', () => {
     expect(screen.queryByRole('button', { name: 'Add column' })).toBeNull();
   });
 
+  it('keeps the add-column button mounted while a column is renamed', () => {
+    const fixture = createFakeRowsSource({
+      columns,
+      table: { version: 1, rows: [] },
+      view: allRecords,
+    });
+    const labels: (string | undefined)[] = [];
+    render(() => (
+      <DatabaseRecordsView
+        name="Projects"
+        source={fixture.source}
+        canEdit
+        view={allRecords}
+        stored={false}
+        addColumn={(label) => {
+          labels.push(label);
+          return <button type="button">{label ?? 'Add column'}</button>;
+        }}
+        boardPositions={unplacedCards}
+      />
+    ));
+    const button = screen.getByRole('button', { name: 'Add column' });
+    // Saving a rename on blur updates the columns while the press that
+    // blurred it is still down; a new button there would never be clicked.
+    fixture.setColumns([{ ...columns[0], name: 'Title' }, columns[1]]);
+    expect(screen.getByRole('button', { name: 'Add column' })).toBe(button);
+    expect(labels).toEqual([undefined]);
+    fixture.setColumns([]);
+    expect(
+      screen.getByRole('button', { name: 'Add first column' })
+    ).toBeTruthy();
+    expect(labels).toEqual([undefined, 'Add first column']);
+  });
+
   it('offers refresh and draft recovery after a lost create response without a duplicate Retry', async () => {
     const fixture = createFakeRowsSource({
       columns,

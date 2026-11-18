@@ -18,6 +18,26 @@ fn apply(rewrites: &[HeaderRewrite], header: &str) -> String {
 }
 
 #[test]
+fn local_computers_have_an_http_gateway_without_guest_tls_or_host_dns() {
+    let local = caddyfile(&test_instance(), Mode::Local, false);
+    let (_, computer) = local
+        .split_once("http://:{$COMPUTER_GATEWAY_PORT} {")
+        .expect("computer HTTP listener");
+    assert!(!computer.contains("tls "));
+    for path in [
+        "/auth/*",
+        "/dss/*",
+        "/agent-harness/*",
+        "/scheduled-action/*",
+        "/cognition/*",
+        "/connection-gateway/*",
+    ] {
+        assert!(computer.contains(path), "missing computer route: {path}");
+    }
+    assert!(!caddyfile(&test_instance(), Mode::Dev, false).contains("COMPUTER_GATEWAY_PORT"));
+}
+
+#[test]
 fn vite_routes_cover_every_backend_prefix_and_no_frontend_routes() {
     let prefixes = frontend_path_prefixes();
     for svc in inventory::RUST_SERVICES {
@@ -154,6 +174,8 @@ fn static_file_block_is_mode_specific() {
     assert!(caddyfile(&test_instance(), Mode::Dev, false).contains("handle_path /static-file/*"));
     assert!(!caddyfile(&test_instance(), Mode::Dev, false).contains("/static-file-storage"));
     assert!(local.contains("handle_path /local-storage/*"));
+    // A CDN-signed link reaches LocalStack without the CDN's parameters.
+    assert!(local.contains("uri @cdn_signed query"));
     assert!(
         !caddyfile(&test_instance(), Mode::Dev, false).contains("handle_path /local-storage/*")
     );

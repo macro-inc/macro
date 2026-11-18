@@ -1,0 +1,38 @@
+folder,favorite,type,name,notes,fields,reprompt,archivedDate,login_uri,login_username,login_password,login_totp
+Work,,login,All custom field types,,"Text field: plain text value
+Empty text field: null
+Hidden field: synthetic-hidden-4-3
+Empty hidden field: null
+Boolean true: true
+Boolean false: false
+Linked to username: null
+Linked to password: null
+Duplicate field name: first
+Duplicate field name: second
+: field with empty name
+Multiline value: line one
+line two
+line three
+Emoji 🔑 field: värde ✓ 値",0,,https://all.example.net/login,user4730@example.org,synthetic-password-4,
+A/B,,login,Gym – old 5,,,0,2026-11-16T18:54:06.540Z,"https://gym24.example.net/path/to/page#frag,iosapp://com.example.gym,https://login.gym24.example.net/auth?next=%2Fhome",yuki.synthetica@example.org,synthetic-password-3,
+Slash at end/,,login,Health – work 1,,,0,,"https://192.0.2.10:8443/,^https://(www\.)?health26\.example\.org/.*$,https://192.0.2.10:8443/",sdummyfield,synthetic-password-1,
+Personal,1,note,Markdown note,"# Heading
+
+Some **bold** and _italic_ text, `inline code`, and a [link](https://example.com).
+
+- bullet one
+- bullet two
+  - nested
+
+1. first
+2. second
+
+```bash
+echo ""code block""
+```
+
+| col a | col b |
+|-------|-------|
+| 1     | 2     |
+",,0,,,,,
+A/B,1,login,Photos – test 62,,,1,,"photos42.example.com,https://192.0.2.10:8443/,photos42.example.com",user4267@example.com,synthetic-password-5,

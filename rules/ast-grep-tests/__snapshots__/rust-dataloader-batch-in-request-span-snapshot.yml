@@ -1,0 +1,79 @@
+id: rust-dataloader-batch-in-request-span
+snapshots:
+  ? |
+    fn f() {
+        let l = DataLoader::new(loader, |batch| {
+            tokio::spawn(batch);
+        });
+    }
+  : labels:
+    - source: |-
+        DataLoader::new(loader, |batch| {
+                tokio::spawn(batch);
+            })
+      style: primary
+      start: 21
+      end: 90
+  ? |
+    fn f() { let l = DataLoader::new(loader, ::tokio::spawn); }
+  : labels:
+    - source: DataLoader::new(loader, ::tokio::spawn)
+      style: primary
+      start: 17
+      end: 56
+  ? |
+    fn f() { let l = DataLoader::new(loader, move |f| tokio::task::spawn(f)); }
+  : labels:
+    - source: DataLoader::new(loader, move |f| tokio::task::spawn(f))
+      style: primary
+      start: 17
+      end: 72
+  ? |
+    fn f() { let l = DataLoader::new(loader, tokio::spawn); }
+  : labels:
+    - source: DataLoader::new(loader, tokio::spawn)
+      style: primary
+      start: 17
+      end: 54
+  ? |
+    fn f() { let l = DataLoader::new(loader, tokio::task::spawn); }
+  : labels:
+    - source: DataLoader::new(loader, tokio::task::spawn)
+      style: primary
+      start: 17
+      end: 60
+  ? |
+    fn f() { let l = DataLoader::new(loader, |batch| tokio::spawn(batch)); }
+  : labels:
+    - source: DataLoader::new(loader, |batch| tokio::spawn(batch))
+      style: primary
+      start: 17
+      end: 69
+  ? |
+    fn f() { let l = DataLoader::new(loader, |batch| { tokio::spawn(batch) }); }
+  : labels:
+    - source: DataLoader::new(loader, |batch| { tokio::spawn(batch) })
+      style: primary
+      start: 17
+      end: 73
+  ? |
+    fn f() { let l = DataLoader::new(loader, |batch| { tokio::spawn(batch); }); }
+  : labels:
+    - source: DataLoader::new(loader, |batch| { tokio::spawn(batch); })
+      style: primary
+      start: 17
+      end: 74
+  ? |
+    fn f() { let l = DataLoader::with_cache(loader, tokio::spawn, HashMapCache::default()); }
+  : labels:
+    - source: DataLoader::with_cache(loader, tokio::spawn, HashMapCache::default())
+      style: primary
+      start: 17
+      end: 86
+  ? |
+    fn f() { let l = async_graphql::dataloader::DataLoader::new(loader, tokio::spawn); }
+  : labels:
+    - source: async_graphql::dataloader::DataLoader::new(loader, tokio::spawn)
+      style: primary
+      start: 17
+      end: 81

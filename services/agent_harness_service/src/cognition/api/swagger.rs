@@ -17,10 +17,6 @@ use crate::cognition::model::{
     response::attachments::GetChatsForAttachmentResponse,
     stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
-use ai_projections::domain::model::{Expiry, ProjectionStatus, RefreshCadence, TargetType};
-use ai_projections::inbound::axum_router::upsert_projection::{
-    ProjectionStateResponse, UpsertProjectionRequest,
-};
 use ai_usage::inbound::axum_router::{self as ai_usage_api};
 use image_generation::inbound::axum_router::{self as image_generation_api};
 use import::inbound::axum_router::{self as import_api, RunImportRequest};
@@ -117,13 +113,16 @@ use utoipa::OpenApi;
             import_api::workspace_report_handler,
             import_api::cancel_workspace_handler,
             import_api::cancel_notion_handler,
+            import_api::ledger::list_entities_handler,
+            import_api::ledger::track_entity_handler,
+            import_api::ledger::decline_entity_handler,
+            import_api::ledger::import_notion_page_handler,
             onboarding_api::get_state_handler,
             onboarding_api::complete_handler,
             onboarding_api::dismissed_prompts_handler,
             onboarding_api::dismiss_prompt_handler,
             ai_usage_api::get_usage_handler,
             ai_usage_api::set_pricing_handler,
-            ai_projections::inbound::axum_router::upsert_projection::handler::<crate::cognition::api::context::DcsAiProjectionService>,
             mcp_api::list_servers,
             mcp_api::add_server,
             mcp_api::update_server,
@@ -247,9 +246,9 @@ use utoipa::OpenApi;
                 memory::domain::models::Activity,
                 memory::domain::models::Granularity,
                 // Activity
-                activity::inbound::toolset::ReadActivityResponse,
-                activity::inbound::toolset::ToolActivityEvent,
-                activity::inbound::toolset::ToolActivityAction,
+                activity::domain::activity_range::ReadActivityResponse,
+                activity::domain::activity_range::ToolActivityEvent,
+                activity::domain::activity_range::ToolActivityAction,
                 activity::inbound::axum_router::ActivityErrorBody,
 
                 // Import pipeline
@@ -272,6 +271,14 @@ use utoipa::OpenApi;
                 import::domain::models::SlackParticipant,
                 import::domain::service::RunImportOutcome,
                 RunImportRequest,
+                import_api::ledger::ImportEntitiesResponse,
+                import_api::ledger::TrackImportStatus,
+                import_api::ledger::TrackImportEntityRequest,
+                import_api::ledger::TrackImportOutcome,
+                import_api::ledger::TrackImportEntityResponse,
+                import_api::ledger::ImportNotionPageRequest,
+                import_api::ledger::ImportNotionPageResult,
+                import_api::ledger::ImportNotionPageResponse,
 
                 // Onboarding
                 onboarding::domain::models::OnboardingState,
@@ -291,14 +298,6 @@ use utoipa::OpenApi;
                 ai_usage::inbound::models::Usage,
                 ai_usage::inbound::models::Price,
                 ai_usage::AiFeature,
-
-                // AI projections
-                UpsertProjectionRequest,
-                ProjectionStateResponse,
-                TargetType,
-                RefreshCadence,
-                Expiry,
-                ProjectionStatus,
 
                 // MCP
                 ServerResponse,

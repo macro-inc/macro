@@ -21,6 +21,12 @@ and compares the message's rendered line spacing with the draft's. The composer
 used to flatten its paragraphs, so lines the draft showed together were spaced
 out on send.
 
+The two-tab regression (`draft.html?tabs`) mounts the channel twice at once, as
+two desktop tabs on it do. Text typed in either, and a file attached in one and
+removed in the other, show in both; the draft comes back once after a reload,
+and a send from one clears both. Each composer used to keep its own copy, so
+the one typed in last overwrote the other.
+
 The send regression checks desktop and phone: a pending send clears the editor,
 a rejected send restores its draft, and a rejection preserves a newer draft
 typed while delivery was pending. The fixture controls completion locally.
@@ -46,7 +52,9 @@ browser opens the file picker within the tap. With the iOS app's Tauri bridge
 stubbed and its photo library picker failing, the composer opens no picker by
 itself, since WKWebView ignores a file input click once the native round trip
 has outlived the tap. It shows a toast whose Choose files button opens the
-picker instead.
+picker instead. On desktop, the add menu's Attach files narrows the picker to
+the channel's file types in a browser and leaves it unfiltered in the desktop
+app (Tauri bridge stubbed as macOS), where a filtered picker attached nothing.
 
 The mention-ranking fixture also mounts document discussion composers over a
 bounded virtual 100k contact source. Desktop/phone cases verify lazy activation,

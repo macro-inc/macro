@@ -6,11 +6,12 @@ use crate::domain::{
     models::{
         AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
         ChannelRoleResult, CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+        EntityAudience, EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+        ViewAccessLevel,
     },
     ports::{
         AccessRepository, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
-        EntityAccessService, ScheduledActionGrants,
+        EntityAccessService, EntityAudienceLookup, ScheduledActionGrants,
     },
 };
 use futures::{StreamExt, stream};
@@ -314,7 +315,7 @@ impl<R> AccessibleDatabases for EntityAccessServiceImpl<R>
 where
     R: AccessRepository,
 {
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn accessible_databases(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
@@ -327,7 +328,7 @@ impl<R> AccessibleForms for EntityAccessServiceImpl<R>
 where
     R: AccessRepository,
 {
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn accessible_forms(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
@@ -340,7 +341,15 @@ impl<R> EntityAccessService for EntityAccessServiceImpl<R>
 where
     R: AccessRepository,
 {
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    async fn visible_crm_entities(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        entities: &[(EntityType, String)],
+    ) -> Result<std::collections::HashSet<(EntityType, String)>, AccessError> {
+        self.repo.visible_crm_entities(user, entities).await
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
@@ -365,6 +374,34 @@ where
             entity_permission,
             _marker: PhantomData,
         })
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip_all, fields(document_count = document_ids.len()))]
+    async fn generate_document_view_access_receipts(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        document_ids: &[String],
+    ) -> Result<HashMap<String, EntityAccessReceipt<ViewAccessLevel>>, AccessError> {
+        let levels = self
+            .repo
+            .get_documents_access(document_ids, user_id)
+            .await?;
+        let mut receipts = HashMap::with_capacity(levels.len());
+        for (document_id, access_level) in levels {
+            // The permission check the single-document path makes: a level
+            // below View is a refusal, so the document is left out.
+            if let Ok(receipt) = EntityAccessReceipt::try_new_authenticated_user(
+                MacroUserIdStr(user_id.clone().into_owned()),
+                Entity {
+                    entity_id: document_id.clone(),
+                    entity_type: EntityType::Document,
+                },
+                EntityPermission::AccessLevel { access_level },
+            ) {
+                receipts.insert(document_id, receipt);
+            }
+        }
+        Ok(receipts)
     }
 
     #[tracing::instrument(skip_all, fields(row_count = row_ids.len()))]
@@ -518,7 +555,7 @@ where
         receipts
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, scope))]
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         bot_id: BotId,
@@ -551,7 +588,7 @@ where
         )
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn get_access_level(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -599,7 +636,7 @@ where
         }
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn check_access(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -633,7 +670,7 @@ where
         }
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn get_entity_permission(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -662,7 +699,7 @@ where
                     tracing::warn!(
                         entity_id,
                         entity_type = "agent_session",
-                        viewer = user_id.map_or("anonymous", AsRef::as_ref),
+                        signed_in = user_id.is_some(),
                         session_exists = exists,
                         "agent session access denied"
                     );
@@ -751,7 +788,7 @@ where
         }
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn get_crm_entity_permission_with_team(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -865,7 +902,7 @@ where
         self.repo.get_call_channel_by_channel_id(channel_id).await
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn get_user_team(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
@@ -913,5 +950,116 @@ impl<R: AccessRepository> AccessiblePipelines for EntityAccessServiceImpl<R> {
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
         self.repo.list_pipeline_access(user_id).await
+    }
+
+    async fn pipelines_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, AccessLevel>, AccessError> {
+        self.repo.get_pipelines_access(ids, user_id).await
+    }
+}
+
+/// Kinds whose users, as [`EntityAccessService::get_users_by_entity`] resolves
+/// them, are exactly their `entity_access` grants, so one grouped lookup serves
+/// any number of them. A kind whose audience adds anyone else (email owners, CRM
+/// teams, channel members) must stay off this list; the grouped-audience
+/// equivalence test runs every kind listed here.
+pub(crate) const GRANT_AUDIENCE_KINDS: [EntityType; 9] = [
+    EntityType::Document,
+    EntityType::Chat,
+    EntityType::Project,
+    EntityType::AgentSession,
+    EntityType::Initiative,
+    EntityType::CrmPipeline,
+    EntityType::Database,
+    EntityType::ExternalChat,
+    EntityType::Form,
+];
+
+impl<R: AccessRepository> EntityAudienceLookup for EntityAccessServiceImpl<R> {
+    #[tracing::instrument(
+        err(level = Level::DEBUG),
+        skip(self, entity_ids),
+        fields(entity_count = entity_ids.len())
+    )]
+    async fn get_entity_audiences(
+        &self,
+        entity_type: EntityType,
+        entity_ids: &[&str],
+    ) -> Result<Vec<EntityAudience>, AccessError> {
+        if !GRANT_AUDIENCE_KINDS.contains(&entity_type) {
+            let mut audiences = Vec::with_capacity(entity_ids.len());
+            for entity_id in entity_ids {
+                let users = self.get_users_by_entity(entity_id, entity_type).await?;
+                audiences.push(EntityAudience {
+                    entity_ids: vec![entity_id.to_string()],
+                    users,
+                });
+            }
+            return Ok(audiences);
+        }
+
+        // An id that is not a UUID can hold no `entity_access` grant, so it has
+        // no users: leave it out rather than fail the other ids. The repository
+        // answers with canonical ids, so remember every spelling a caller used.
+        let mut spellings: HashMap<String, Vec<&str>> = HashMap::with_capacity(entity_ids.len());
+        let mut ids = Vec::with_capacity(entity_ids.len());
+        let mut invalid_count = 0_usize;
+        for entity_id in entity_ids {
+            let Ok(id) = Uuid::parse_str(entity_id) else {
+                invalid_count += 1;
+                continue;
+            };
+            let entity_spellings = spellings.entry(id.to_string()).or_insert_with(|| {
+                ids.push(id);
+                Vec::new()
+            });
+            if !entity_spellings.contains(entity_id) {
+                entity_spellings.push(entity_id);
+            }
+        }
+        if invalid_count > 0 {
+            tracing::warn!(
+                %entity_type,
+                invalid_count,
+                "leaving out entity ids that are not UUIDs"
+            );
+        }
+
+        let spelled = |canonical_ids: Vec<String>| -> Vec<String> {
+            canonical_ids
+                .iter()
+                .filter_map(|id| spellings.get(id))
+                .flatten()
+                .map(|spelling| spelling.to_string())
+                .collect()
+        };
+
+        // A single entity keeps its cached per-entity lookup.
+        if let [id] = ids.as_slice() {
+            let canonical_id = id.to_string();
+            let users = self.get_users_by_entity(&canonical_id, entity_type).await?;
+            return Ok(vec![EntityAudience {
+                entity_ids: spelled(vec![canonical_id]),
+                users,
+            }]);
+        }
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let audiences = self
+            .repo
+            .get_entity_grant_audiences(&ids, entity_type)
+            .await?;
+        Ok(audiences
+            .into_iter()
+            .map(|audience| EntityAudience {
+                entity_ids: spelled(audience.entity_ids),
+                users: audience.users,
+            })
+            .collect())
     }
 }

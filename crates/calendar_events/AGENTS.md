@@ -16,6 +16,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `ViewerCapabilities` every read surface exposes as `viewerCan`.
 - `src/domain/team_availability.rs` + `src/domain/team.rs`: team sharing/availability.
 - `src/outbound/google.rs`, `src/outbound/pg.rs`: Google Calendar and Postgres adapters.
+  The Google one takes its base from `GoogleCalendarApiUrl`
+  (`OVERRIDE_GOOGLE_CALENDAR_API_URL`).
 - `src/outbound/pg/outlook.rs`: durable Outlook synchronization; preserve
   provider-specific coverage on discovery.
 - `src/inbound/dispatch_worker.rs` + `src/outbound/sqs_dispatch_queue.rs`: reminder
@@ -50,6 +52,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 ## Checks
 
 - `cargo test -p calendar_events` (`SQLX_OFFLINE` unset).
+- `cargo test -p gmail_emulator calendar` runs the Google adapter against
+  the emulator's Calendar API; extend it when the adapter calls Google in a
+  new way.
 
 ## Gotchas
 
@@ -198,8 +203,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   changes that order. The cancelled row keeps its requests, as it keeps its
   grants, and a cancelled occurrence changes neither.
   An answer that changes the request reaches open clients through
-  `CalendarRefreshNotifier`, after it is stored (an acceptance's invite nudges
-  before that, too early to carry it): `calendar_changed` for the owner and
+  `CalendarRefreshNotifier`, after it is stored (the nudge for an acceptance's
+  invite can go out before that, too early to carry it): `calendar_changed` for the owner and
   delegates of the sharer's inbox, whose `refresh_calendar` refetches open
   request lists, and `join_request_answered` for the requester, who views the
   event through the share, so that signal names the event and never the
@@ -220,6 +225,15 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   delegate, a muted category never sends it, and the notifier only queues.
   `document_storage_service` hosts the ask, so it has its own
   `CalendarRefreshNotifier` (`src/outbound/calendar_refresh.rs`).
+- `update_event_with_macro_call` (`src/domain/meeting_links.rs`) switches an
+  existing event to a Macro call in one provider write, so attendees get one
+  update: it reads the stored content through `CalendarEventDetailsReader`,
+  mints the call, appends the join line and removes the provider conference.
+  Only the calendar service composes it (`macroCall` on `PATCH /events/{id}`);
+  the agent tool forwards through `CalendarMacroCallService`. A retry finds the
+  link already written and mints nothing. Outlook cannot drop a Teams meeting
+  from an event, so that call is refused and the fresh meeting cancelled. The
+  web editor still attaches a call in two writes (`use-event-editor.ts`).
 - Calendar mentions reach the agent as document mentions (`blockName`
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which
   a channel-shared event never grants. The agent reads a mentioned event with
@@ -233,6 +247,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   it does in a snapshot. Search rows apply the same rule, but a row stays on
   the hit instead of resolving to the viewer's copy, so there a snapshot does
   not count as holding the meeting.
+- `ListCalendarEvents` and `ReadCalendarEvent` return `startLocal` and `endLocal`,
+  the times spelled out with their weekdays in the user's primary calendar zone
+  (`local_time_fields`), because models misname the weekday of an ISO date.
 - Google names the calendar an event was made on as its organizer, so an
   event on a secondary calendar has that calendar's id
   (`…@group.calendar.google.com`) as `organizer_email`; Google's
@@ -296,13 +313,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   word, until `inbox` names the addressed copy's inbox. The route cannot tell
   an inbox the user chose from one the agent picked, so the wording is the
   only guard against a guess. UpdateCalendarEvent and DeleteCalendarEvent check
-  every call; the update, invite-guests and delete routes check agent runs and
-  any request naming `inbox` through `CalendarCopyConfirmation`, answering 409
-  `copy_choice_required`. An agent run (`macro_authorization::is_agent_run`)
-  is a token with `agent_id` (in-app code mode) or a request carrying
-  `x-macro-code-execution`, which
-  `code_execution`'s bootstrap sets on every code-mode program's SDK requests,
-  public MCP clients' included. Code-mode agents never see the calendar tools
+  every call; the update, invite-guests and delete routes check every program
+  run (`macro_authorization::is_program_run`: a token signed for an agent or a
+  routine, owner routine steps included, or a request carrying
+  `x-macro-code-execution`, which `code_execution`'s bootstrap sets on every
+  code-mode program's SDK requests) and any request naming `inbox` through
+  `CalendarCopyConfirmation`, answering 409 `copy_choice_required`. The create
+  route refuses only agent runs (`is_agent_run`), so an owner routine step
+  creates events. Code-mode agents never see the calendar tools
   (`agent_code_mode::covered_by_code_sdk`), so the routes and the SDK docs are
   what reach them; the web, which opens one copy, sends no `inbox` and is not
   checked.
@@ -316,9 +334,17 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `owner` to anyone with manage rights, on a colleague's primary calendar too;
   Outlook stores only `canEdit`; `is_primary` is false on a person's own other
   calendars. `VisibleCalendar::contributes_to_availability` is the nearest
-  signal: the user's setting, by default the primaries of inboxes they own.
-  With meetings they attend, it is their own schedule for agents as for
-  `TeamSourceOccurrence::is_personally_busy`. `viewer_can.organize` stays a
+  signal: the user's Busy switch in Settings → Calendar, on for every calendar
+  until they turn it off, since booking links always counted every calendar
+  and one setting must mean the same everywhere. Every SQL reader of
+  `calendar_availability_preferences` defaults it with
+  `COALESCE(preference.contributes_to_availability, true)`; change them
+  together. With meetings they are in, it is their own schedule for agents,
+  for `TeamSourceOccurrence::is_personally_busy` and for booking links'
+  busy time (`calendar_scheduling`'s `MacroCalendars::busy`); the last two
+  decide "in the meeting" with `labels::attends_meeting`, which counts a
+  guest row, or an organizer row on a writable copy with other guests.
+  `viewer_can.organize` stays a
   capability, since writing a calendar lets the user act as its organizer, so
   `EventRole::of` and the SDK's `eventRole` count it only on such a
   calendar, and `ReadCalendarEvent` reports anything else as
@@ -364,7 +390,17 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   Retirements carry it per event (`RetiredCalendarEvent::team_ooo_changed`): only
   removing a source whose typed `event_type` is out of office raises it, since
   every sync of a removed meeting's attendees reaches their teammates' calendars
-  and the hint blanks their overlay.
+  and the hint blanks their overlay. An Outlook event's changes reach viewers
+  through its `calendar_projection_outbox` row, whatever wrote them: the row's
+  trigger raises the hint only when the event's typed `event_type` was or is
+  out of office, a revision still waiting keeps the hint of every change it
+  carries, and `CalendarProjectionRelay` sends it. An edit or deletion of an
+  Outlook event in Macro therefore sends no refresh of its own
+  (`persist_echo_as`, `announce_retirements`); the Google guest copies it aligns still hear it
+  from the mutation, since no relay announces them. Outlook discovery refreshes
+  viewers only when a calendar was added, removed or changed, and raises the
+  hint for the calendar changes Google's calendar list raises it for
+  (`upsert_calendar_tx`).
 - The Outlook sync (`src/domain/outlook.rs`) refreshes a page's events one
   at a time, first pending id first, and retries that id after any error, so
   one error blocks the calendar. An event the adapter cannot normalize is not
@@ -381,8 +417,38 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `skipped`), warning `skipping an Outlook occurrence Macro cannot read` with
   its `occurrence_id`, and the span adds `skipped_occurrences`. A secondary
   calendar has no v1.0 delta, so each of its rounds lists and reads every
-  event again. A delta round lists only changes, so it also reads again the
-  members with no stored copy that an older `READER_REVISION` read (stamped
+  event again. A mailbox's own read-only calendars (holidays, Birthdays:
+  `OutlookCalendar::is_system`, read-only, not shared with the mailbox and
+  owned by it) are marked `calendars.system_calendar` at discovery, and
+  their next round starts a day after one finishes
+  (`SYSTEM_CALENDAR_SYNC_INTERVAL`), as Google's system calendars do. Sync
+  health gives them the same day, so booking does not read them as stale.
+  A read-only calendar someone shared keeps two-minute rounds, and so does
+  one subscribed from the web, which Graph lists as shared with no owner. A first import (a calendar never synced, in a scan from
+  scratch) lists this month and next first (`OccurrenceRange::near_window`,
+  a `calendarView` snapshot on any calendar, with
+  `OutlookCalendarLease::near_window` set), then the whole window in a scan of
+  its own (`calendar_outlook_work.whole_window_scan_id`), so what the user
+  looks at first arrives first, and an event deleted between the two is still
+  retired. The near window reads its events closest to now first
+  (`nearest_first`, from the start and end each `OutlookPageMember` carries
+  from the listing), so this week comes before the rest of the two months;
+  every other page reads in ID order. A near-window page's span records
+  `untimed_members`, which read last. Each listing page is ordered on its
+  own, so a near window longer than a page (the listing asks for 1,000
+  occurrences a page) is ordered page by page. The near
+  window's events are read twice. Nothing marks the
+  calendar synced or materialized, or its account ready, before the whole
+  window finishes, so every coverage reader (sync health and booking, team
+  availability, the syncing banner) still sees a first import in progress.
+  `checkpoint_outlook_calendar` reports both milestones (`OutlookCheckpoint`):
+  the span records `milestone` (`near_window_imported`,
+  `first_sync_finished`), and the log `an Outlook calendar's first import
+  reached a milestone` carries `since_discovery_s`, the only measure of time
+  to the current month, since spans are sampled.
+  Google needs no such order: its first import writes each calendar's whole
+  window from one snapshot within seconds. A delta round lists only changes,
+  so it also reads again the members with no stored copy that an older `READER_REVISION` read (stamped
   in `calendar_outlook_members.reader_revision`, NULL from builds before
   it; a member found with a stored copy is stamped instead): a parser fix brings skipped events back without anyone touching
   them, and a skip costs no read until the event changes or the revision
@@ -400,10 +466,26 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD` failures) appears or is reworded
   (`failure_changes_sync_error_badge`) and when the round that clears it
   commits, never on a routine round (Outlook polls every two minutes).
-  Neither nudges open clients for it, so a tab sees it on its next delta.
+  Outlook also nudges open clients at those same moments
+  (`fail_outlook_calendar` reports a shown or reworded badge,
+  `OutlookCheckpoint::RoundFinished` a cleared one), with the out-of-office
+  hint raised as for any coverage failure. Teammates' rows already move at the
+  first failure, below the threshold, since the overlay leaves out an account
+  or calendar with a stored error; their clients catch that up within the
+  60-second team cache. A repeat of the shown failure stays quiet, so an
+  outage does not refresh every client on every retry. Google nudges after a
+  run in which a calendar failed on its own (`report.team_ooo_changed`), not
+  on the badge itself, and not when the badge clears.
   Outlook logged none before November 2026;
   `20261105002046_log_outlook_calendars_for_their_sync_error.sql` logs every
   visible Outlook calendar once so caches that missed a change refetch it.
+- Every calendar failure writer stores its `CalendarSyncFailure` in
+  `calendars.last_sync_error_kind` beside `last_sync_error`, and each round that
+  clears the error clears it; a failure stored without one reads as permanent.
+  `CalendarSyncHealthReader` (`src/outbound/pg/sync_health.rs`) combines it with
+  the account status, whose meaning differs by provider: Google's `error` is a
+  permanent account failure and `pending` a retry, while Outlook's `error` only
+  echoes one calendar's failure. Booking availability reads it.
 - A sync of a `ready`, already synced account stays `ready`, on Google as on
   Outlook, including after a re-grant that kept calendar access, whose sync tokens
   survive. Any other state is catching up and marks it `syncing`: a first import,
@@ -415,6 +497,30 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `event_type`. Filtering on the payload's `eventType` alone makes Postgres
   unpack every source on every primary calendar in the tenant (about 1.8 s per
   call in production before October 2026).
+- `claim_outlook_calendar` runs its maintenance on every poll, so each statement
+  must cost index probes when nothing needs it. Work of unclaimable accounts and
+  deleted calendars stays due, so find candidates per claimable account through
+  `calendar_outlook_work_account_due`, never by walking the global due order.
+  Find replaced generations and expired windows as ranges of
+  `calendar_outlook_work_account_generation`. An `ON CONFLICT DO UPDATE ... WHERE`
+  locks every conflicting row even when the `WHERE` is false: pre-filter rows
+  it would not change, or concurrent claims serialize on those locks.
+  calendar-service runs eight claim loops (`OUTLOOK_SYNC_LOOPS`), so the
+  maintenance runs at eight loops' claim rate. A claim skips an account
+  that holds a live lease, so each mailbox has at most one item in flight
+  and uses at most one of its three Graph slots, as Google's one job per
+  account does. Two claims racing for an account both pick its first due row,
+  which `SKIP LOCKED` and the re-checked lease give to one of them.
+- A Graph call Macro's own request admission refuses (the per-mailbox gate,
+  shared with mail sync) reaches the calendar as
+  `CalendarProviderErrorKind::Deferred` with the gate's delay. The Outlook sync
+  then releases the lease to retry after that delay
+  (`defer_outlook_calendar`, 5 s when none is named, at most 15 min), and
+  records no failure, attempt or badge, since nothing reached Microsoft. A
+  throttle from Microsoft itself is still a transient failure. Every minute
+  the sync logs `Outlook calendar sync queue depth` with `due_items` and
+  `oldest_due_seconds`, which are the claimable rows waiting and the longest
+  wait.
 
 ## Related
 

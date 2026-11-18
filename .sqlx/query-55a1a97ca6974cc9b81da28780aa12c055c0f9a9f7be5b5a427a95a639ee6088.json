@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1\n            FROM UNNEST($1::uuid[], $2::text[], $3::text[], $4::text[], $5::text[])\n                AS grant_row(entity_id, entity_type, source_id, source_type, access_level)\n            WHERE NOT EXISTS (\n                SELECT 1 FROM entity_access held\n                WHERE held.entity_id = grant_row.entity_id\n                  AND held.entity_type = grant_row.entity_type\n                  AND held.source_id = grant_row.source_id\n                  AND held.source_type = grant_row.source_type::entity_access_source_type\n                  AND held.access_level >= grant_row.access_level::\"AccessLevel\"\n            )\n        ) AS \"adds_access!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "adds_access!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "55a1a97ca6974cc9b81da28780aa12c055c0f9a9f7be5b5a427a95a639ee6088"
+}

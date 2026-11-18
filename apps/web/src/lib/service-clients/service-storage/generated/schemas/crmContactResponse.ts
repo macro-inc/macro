@@ -12,14 +12,24 @@ import type { CrmContactResponseName } from './crmContactResponseName';
  * A CRM contact as returned by `GET /crm/companies/{company_id}/contacts`.
  */
 export interface CrmContactResponse {
+  /** Whether the contact has an address on one of its company's domains.
+Such a contact cannot be unlinked from the company or moved to another.
+Older servers omit this classification; clients must then keep it read-only. */
+  companyDomain?: boolean;
+  /** The addresses on one of the company's domains. The last one cannot be
+removed while the contact is linked to the company. */
+  companyDomainEmails?: string[];
   /** The id of the company the contact belongs to; absent for a
 contact without a company. */
   companyId?: CrmContactResponseCompanyId;
   /** When the contact record was created. */
   createdAt: string;
-  /** The contact's email address; absent for contacts added by name
-alone. */
+  /** The contact's primary email address; absent for contacts added by
+name alone. */
   email?: CrmContactResponseEmail;
+  /** Every address the contact is known by: the primary first, then the
+rest oldest first. Older servers omit it; clients then show `email`. */
+  emails?: string[];
   /** Earliest known interaction with this contact. */
   firstInteraction: string;
   /** Whether the contact is hidden from CRM listings for the
@@ -33,7 +43,8 @@ hidden contacts so they can render the right toggle state. */
   lastInteraction: string;
   /** Display name observed for the contact, if any. */
   name?: CrmContactResponseName;
-  /** Whether the address uses a known personal provider and permits company edits.
+  /** Whether the primary address uses a known personal provider. Linking
+or switching the company needs this and `companyDomain = false`.
 Older servers omit this classification; clients must then keep it read-only. */
   personalEmail?: boolean;
   /** When the contact record was last updated. */

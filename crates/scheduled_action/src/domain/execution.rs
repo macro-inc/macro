@@ -14,7 +14,7 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
 
 use crate::domain::event_runs::{
-    ClaimedEventRun, EventExecutionResult, EventExecutor, EventRunOutcome,
+    ClaimToken, ClaimedEventRun, EventExecutionResult, EventExecutor, EventRunOutcome,
 };
 use crate::domain::models::{
     ActionExecutionRecord, ExecutionResource, ExecutionResult, InProgressExecution,
@@ -30,7 +30,11 @@ use crate::domain::ports::{
 /// partially created remote sessions even when preparation never returns.
 #[derive(Debug)]
 pub struct ExecutionHandle {
-    /// Caller-generated agent session ID, available before preparation starts.
+    /// The run's id, available before preparation starts: the id of the agent
+    /// session its Ask AI step opens and of its history record. A claimed run
+    /// uses its claim's token ([`Self::for_run`]), so a routine created from
+    /// that session or by the run's code can be traced to the run while the
+    /// claim is held.
     pub session_id: Uuid,
     /// Caller-generated initial action ID for prompt delivery and status checks.
     pub action_id: Uuid,
@@ -67,6 +71,16 @@ impl Default for ExecutionHandle {
             firing: None,
             preparation_started: false,
             announced: false,
+        }
+    }
+}
+
+impl ExecutionHandle {
+    /// The handle of the run that holds claim `token`.
+    pub fn for_run(token: ClaimToken) -> Self {
+        Self {
+            session_id: token.as_uuid(),
+            ..Self::default()
         }
     }
 }
@@ -202,6 +216,21 @@ where
         }
     }
 
+    /// The name of the routine a sub-routine follows, for its run's
+    /// notification. A failed read only leaves the name out.
+    async fn parent_name(&self, action: &ScheduledAction) -> Option<String> {
+        let parent = action.parent_id()?;
+        let read = tokio::time::timeout(BOOKKEEPING_TIMEOUT, self.repo.get_action(&parent)).await;
+        match read {
+            Ok(Ok(parent)) => parent.map(|parent| parent.name),
+            Ok(Err(error)) => {
+                tracing::warn!(?error, "could not read a sub-routine's parent");
+                None
+            }
+            Err(_) => None,
+        }
+    }
+
     /// Close a run that was announced or established a transcript.
     async fn stopped(&self, action: &ScheduledAction, handle: &ExecutionHandle, is_success: bool) {
         if !handle.announced && handle.resource.is_none() {
@@ -249,6 +278,7 @@ async fn bounded<T>(
 
 fn finished_run(
     action: &ScheduledAction,
+    parent_name: Option<String>,
     trigger: RunTrigger,
     started_at: DateTime<Utc>,
     result: &Result<()>,
@@ -276,6 +306,7 @@ fn finished_run(
         owner: action.owner_user().ok()?.clone(),
         routine_id: action.id?,
         routine_name: action.name.clone(),
+        parent_name,
         trigger,
         target,
         end,
@@ -292,7 +323,7 @@ fn execution_record(
     let resource = handle.resource.clone();
     let end_time = Utc::now();
     ActionExecutionRecord {
-        id: None,
+        id: Some(handle.session_id),
         action_id: action.id.expect("claimed actions are persisted"),
         resource_id: resource.as_ref().map(|resource| resource.id.clone()),
         start_time: started_at,
@@ -384,7 +415,7 @@ where
             let mut ready_tx = Some(ready_tx);
             let mut handle = ExecutionHandle {
                 firing: Some(firing.cause()),
-                ..ExecutionHandle::default()
+                ..ExecutionHandle::for_run(token)
             };
             let result = bounded(deadline, executor.cancellation.cancelled(), async {
                 let resource = executor.prepare(&action, &mut handle).await?;
@@ -405,7 +436,8 @@ where
                 RoutineRun::Scheduled { .. } => RunTrigger::Scheduled,
                 _ => RunTrigger::Manual,
             };
-            if let Some(run) = finished_run(&action, trigger, start_time, &result) {
+            let parent_name = executor.parent_name(&action).await;
+            if let Some(run) = finished_run(&action, parent_name, trigger, start_time, &result) {
                 executor.observer.run_finished(run);
             }
             let record = execution_record(&action, &handle, start_time, &result);
@@ -479,7 +511,7 @@ where
     ) -> EventExecutionResult {
         let mut handle = ExecutionHandle {
             firing: Some(RoutineRun::Event(&run.run).cause()),
-            ..ExecutionHandle::default()
+            ..ExecutionHandle::for_run(run.token)
         };
         let shutdown = async {
             tokio::select! {
@@ -499,7 +531,10 @@ where
             self.cancel(&run.action, &handle, error).await;
         }
         let trigger = RunTrigger::Event(run.run.pending.event.event_name());
-        if let Some(finished) = finished_run(&run.action, trigger, run.started_at, &result) {
+        let parent_name = self.parent_name(&run.action).await;
+        if let Some(finished) =
+            finished_run(&run.action, parent_name, trigger, run.started_at, &result)
+        {
             self.observer.run_finished(finished);
         }
         let record = execution_record(&run.action, &handle, run.started_at, &result);

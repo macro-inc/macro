@@ -39,27 +39,10 @@ pub struct GoogleTokenResponse {
 
 /// Google's name in error messages users see.
 const GOOGLE: &str = "Google";
-const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 
 /// Refreshes a Google OAuth2 access token using a refresh token.
 /// See https://developers.google.com/identity/protocols/oauth2/web-server#offline
 pub(crate) async fn refresh_google_token(
-    client: &UnauthedClient,
-    client_id: &str,
-    client_secret: &str,
-    refresh_token: &str,
-) -> Result<GoogleTokenResponse> {
-    refresh_google_token_at(
-        client,
-        GOOGLE_TOKEN_URL,
-        client_id,
-        client_secret,
-        refresh_token,
-    )
-    .await
-}
-
-async fn refresh_google_token_at(
     client: &UnauthedClient,
     token_url: &str,
     client_id: &str,
@@ -167,12 +150,11 @@ pub struct GoogleExchangeTokenResponse {
     pub scope: String,
 }
 
-/// Google's token revocation endpoint. Revoking either token of a grant
-/// revokes the whole grant, so the next consent screen lists every scope again.
+/// Revokes the grant behind `token` (an access or refresh token) at Google's
+/// revocation `endpoint`. Revoking either token of a grant revokes the whole
+/// grant, so the next consent screen lists every scope again.
 /// See https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke
-pub(crate) const GOOGLE_REVOKE_URL: &str = "https://oauth2.googleapis.com/revoke";
-
-/// Revokes the grant behind `token` (an access or refresh token) at `endpoint`.
+///
 /// Google answers an unknown or already revoked token with 400 `invalid_token`,
 /// which counts as revoked so the call is safe to repeat.
 pub(crate) async fn revoke_token(
@@ -221,6 +203,7 @@ struct TokenExchangeRequest {
 /// Exchanges a Google authorization code for tokens.
 pub(crate) async fn exchange_code_for_tokens(
     client: &UnauthedClient,
+    token_url: &str,
     client_id: &str,
     client_secret: &str,
     redirect_uri: &str,
@@ -236,7 +219,7 @@ pub(crate) async fn exchange_code_for_tokens(
 
     let response = client
         .client()
-        .post("https://oauth2.googleapis.com/token")
+        .post(token_url)
         .form(&token_request)
         .timeout(Duration::from_secs(30))
         .send()

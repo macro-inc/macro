@@ -6,8 +6,8 @@ use models_properties::service::property_value::PropertyValue;
 use serde::{Deserialize, Serialize};
 
 use super::models::{
-    AppliedOps, CardPosition, ColumnId, DatabaseError, DatabaseId, OpBatch, RowId, TableDetail,
-    TableId, TableVersion, ViewId, Viewer,
+    AppliedOps, CardPosition, ColumnDetail, ColumnId, DatabaseError, DatabaseId, OpBatch, RowId,
+    TableDetail, TableId, TableVersion, ViewId, Viewer,
 };
 
 /// One storage row, with cells keyed by column placement.
@@ -30,6 +30,30 @@ pub struct StorageRows {
     pub next: Option<RowId>,
     /// Table version when the read began.
     pub version: TableVersion,
+}
+
+/// Some rows of one table in an authorized resource, for
+/// [`DatabaseStorageService::storage_tables_rows`].
+#[derive(Debug, Clone)]
+pub struct StorageRowsRead {
+    /// The authorized resource.
+    pub database: DatabaseId,
+    /// A table of that resource.
+    pub table: TableId,
+    /// The rows to read.
+    pub rows: Vec<RowId>,
+}
+
+/// One table's columns and those of the asked-for rows that belong to it.
+#[derive(Debug)]
+pub struct StorageTableRows {
+    /// The table.
+    pub table: TableId,
+    /// Columns in display order, as [`DatabaseStorageService::storage_tables`]
+    /// describes them.
+    pub columns: Vec<ColumnDetail>,
+    /// The rows, in the table's row order.
+    pub rows: Vec<StorageRow>,
 }
 
 /// A query over one authorized storage table.
@@ -76,6 +100,15 @@ pub trait DatabaseStorageService: Send + Sync + 'static {
         table: TableId,
         rows: &[RowId],
     ) -> impl Future<Output = Result<Vec<StorageRow>, DatabaseError>> + Send;
+    /// For each read, its table's columns and the cells of those of its rows
+    /// that belong to the table, with the same few statements however many
+    /// tables are read. A read whose table is not in its resource is left out.
+    /// Two reads of one table each get only their own rows. Only the named
+    /// rows are read, and no views.
+    fn storage_tables_rows(
+        &self,
+        reads: &[StorageRowsRead],
+    ) -> impl Future<Output = Result<Vec<StorageTableRows>, DatabaseError>> + Send;
     /// Validate typed operations with the shared planner, then commit through
     /// `DatabaseStorage`. External property bindings and cross-resource relations
     /// require a host capability and are not accepted by this entry point.

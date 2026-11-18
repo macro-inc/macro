@@ -222,8 +222,10 @@ fn action() -> ScheduledAction {
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     }
 }
 
@@ -652,6 +654,13 @@ async fn all_terminal_failures_and_authorization_errors_fail_without_retry() {
 // Event execution never writes to the cron repository: the worker owns finalization.
 struct UnusedRepo;
 impl ScheduledActionRepo for UnusedRepo {
+    async fn set_appearance(
+        &self,
+        _change: crate::domain::appearance::ChangeAppearance,
+    ) -> Result<Option<model_entity::EntityAppearance>> {
+        anyhow::bail!("appearance writes are not supported by this execution-only adapter")
+    }
+
     async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
         unimplemented!()
     }

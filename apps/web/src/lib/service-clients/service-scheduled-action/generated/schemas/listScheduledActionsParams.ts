@@ -11,4 +11,15 @@ export type ListScheduledActionsParams = {
    * Backend clients must opt in to event actions; defaults to false (cron-only).
    */
   include_events?: boolean | null;
+  /**
+ * Also list active sub-routines, the routines other routines' runs
+created, without finished one-time ones; defaults to false (top-level
+routines only).
+ */
+  include_children?: boolean | null;
+  /**
+ * List only this routine's sub-routines: the active ones and its newest
+200 finished one-time ones.
+ */
+  parent?: string | null;
 };

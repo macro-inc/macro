@@ -11,12 +11,28 @@ use tokio::{process::Command, sync::Semaphore};
 const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
 /// Modules one check takes.
 const MAX_FILES: usize = 40;
+/// The checker's configuration. It skips checking declaration files: the
+/// SDK's are generated from code that is checked where it is built, and
+/// checking them again took about 40% of every check. Whether they still
+/// check under this Deno is a test of their own.
+const CONFIG: &str = r#"{"compilerOptions":{"skipLibCheck":true}}"#;
+/// The host's declarations, written as a module rather than a `.d.ts` so
+/// they are still checked. Not a name a program's file can take.
+const DECLARATIONS: &str = "context.global.ts";
+/// Nothing a check reads comes from outside the files it is given.
+const OFFLINE: [&str; 4] = [
+    "--no-lock",
+    "--no-remote",
+    "--no-npm",
+    "--unstable-sloppy-imports",
+];
 
 /// Checks with the pinned Deno against declarations written once at startup.
 pub struct DenoChecker {
     binary: PathBuf,
     root: PathBuf,
     types: PathBuf,
+    config: PathBuf,
     fingerprint: String,
     slots: Arc<Semaphore>,
     max_source_bytes: usize,
@@ -60,10 +76,13 @@ impl DenoChecker {
             tokio::fs::write(file, text).await?;
         }
         tokio::fs::create_dir_all(root.join("cache")).await?;
+        let config = root.join("check.json");
+        tokio::fs::write(&config, CONFIG).await?;
         Ok(Self {
             binary,
             root,
             types,
+            config,
             fingerprint: sdk.fingerprint,
             slots: Arc::new(Semaphore::new(concurrency.max(1))),
             max_source_bytes,
@@ -85,7 +104,7 @@ impl DenoChecker {
                 .await
                 .map_err(internal)?;
         }
-        tokio::fs::write(check.join("context.d.ts"), declarations)
+        tokio::fs::write(check.join(DECLARATIONS), declarations)
             .await
             .map_err(internal)?;
         let check_url = directory_url(check)?;
@@ -105,6 +124,8 @@ impl DenoChecker {
         tokio::fs::write(check.join("imports.json"), imports.to_string())
             .await
             .map_err(internal)?;
+        let mut config = std::ffi::OsString::from("--config=");
+        config.push(&self.config);
         let output = Command::new(&self.binary)
             .env_clear()
             .env("DENO_DIR", self.root.join("cache"))
@@ -113,18 +134,12 @@ impl DenoChecker {
             .env("DENO_NO_UPDATE_CHECK", "1")
             .env("NO_COLOR", "1")
             .current_dir(check)
-            .args([
-                "check",
-                "--quiet",
-                "--no-config",
-                "--no-lock",
-                "--no-remote",
-                "--no-npm",
-                "--unstable-sloppy-imports",
-                "--import-map=imports.json",
-            ])
+            .args(["check", "--quiet"])
+            .arg(config)
+            .args(OFFLINE)
+            .arg("--import-map=imports.json")
             .args(files.iter().map(|file| file.name.as_str()))
-            .arg("context.d.ts")
+            .arg(DECLARATIONS)
             .stdin(Stdio::null())
             .kill_on_drop(true)
             .output()

@@ -46,8 +46,11 @@ use uuid::Uuid;
 
 use super::*;
 
+mod active_notification_ids;
 mod calendar;
+mod channel;
 mod contacts;
+mod crm_member_access;
 mod crm_record;
 mod database_activity;
 mod database_row;
@@ -131,6 +134,7 @@ fn soup_agent_session(id: Uuid) -> SoupItem<()> {
 
 fn soup_initiative(id: Uuid) -> SoupItem<()> {
     SoupItem::Initiative(SoupInitiative {
+        appearance: None,
         id,
         name: "Launch project".to_string(),
         owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
@@ -173,6 +177,7 @@ fn soup_chat(id: Uuid) -> SoupItem<()> {
 
 fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesField> {
     SoupItem::Document(SoupDocument {
+        appearance: None,
         id,
         document_version_id: 1,
         owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
@@ -401,6 +406,15 @@ impl email::domain::ports::EmailThreadPreviewService for CountingEmailService {
         // Only the email crate constructs previews; this fake observes which
         // receipts reached the read.
         Ok(Vec::new())
+    }
+
+    async fn get_owned_email_thread_preview(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+    ) -> Result<Option<EnrichedEmailThreadPreview>, EmailErr> {
+        // Mutation replies read through `EmailMutationThreadReader` here.
+        Ok(None)
     }
 }
 
@@ -1155,6 +1169,7 @@ struct CountingEntityAccessService {
     team_calls: Arc<AtomicUsize>,
     viewable_email_threads: Arc<Mutex<std::collections::HashSet<Uuid>>>,
     email_thread_checks: Arc<Mutex<Vec<Uuid>>>,
+    viewable_crm_records: Arc<Mutex<std::collections::HashSet<(EntityType, String)>>>,
 }
 
 impl EntityAccessService for CountingEntityAccessService {
@@ -1194,6 +1209,12 @@ impl EntityAccessService for CountingEntityAccessService {
                     .contains(&thread_id)
                     .then_some(AccessLevel::View)
             }
+            (EntityType::CrmCompany | EntityType::CrmContact | EntityType::CrmPipeline, _) => self
+                .viewable_crm_records
+                .lock()
+                .unwrap()
+                .contains(&(entity_type, entity_id.to_owned()))
+                .then_some(AccessLevel::View),
             _ => return Err(AccessError::internal("test access failure")),
         };
         if let Some(access_level) = grant {
@@ -1208,7 +1229,12 @@ impl EntityAccessService for CountingEntityAccessService {
         }
         if matches!(
             entity_type,
-            EntityType::Database | EntityType::Form | EntityType::EmailThread
+            EntityType::Database
+                | EntityType::Form
+                | EntityType::EmailThread
+                | EntityType::CrmCompany
+                | EntityType::CrmContact
+                | EntityType::CrmPipeline
         ) {
             return Err(AccessError::Unauthorized);
         }
@@ -1782,6 +1808,33 @@ async fn soup_entity_is_read_from_the_primary_not_the_list_replica() {
 }
 
 #[tokio::test]
+async fn soup_entity_rejects_outside_soup_without_reading_soup() {
+    let harness = harness();
+    harness
+        .primary_soup_service
+        .set_raw_response(vec![soup_document(Uuid::from_u128(10))]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ soupEntity(input: {{entityType: OUTSIDE_SOUP, entityId: "{}"}}) {{ id }} }} }}"#,
+            Uuid::from_u128(10)
+        ))
+        .await;
+
+    assert_eq!(
+        response.errors[0].message,
+        "OUTSIDE_SOUP is not a Soup entity type"
+    );
+    assert_eq!(
+        harness
+            .primary_soup_service
+            .raw_calls
+            .load(Ordering::SeqCst),
+        0
+    );
+}
+
+#[tokio::test]
 async fn soup_entity_is_null_when_the_viewer_cannot_see_it() {
     let harness = harness();
     harness.primary_soup_service.set_raw_response(Vec::new());
@@ -2054,6 +2107,7 @@ async fn agent_session_activity_appended_routes_only_the_requested_session(pool:
         ))
         .data(MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap())
         .data(loader)
+        .data(SchemaOnlyState)
         .data(subscriptions),
     );
     pin_mut!(responses);
@@ -2170,7 +2224,8 @@ async fn activity_updates_subscribes_as_the_authenticated_user() {
     let request = async_graphql::Request::new(
         "subscription { activityUpdates { __typename ... on GraphqlActivityEvent { id entityType entityId } } }",
     )
-    .data(user_id.clone());
+    .data(user_id.clone())
+    .data(SchemaOnlyState);
     let responses = schema.execute_stream(request);
     pin_mut!(responses);
 

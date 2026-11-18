@@ -176,6 +176,26 @@ export function TaskContextDemo() {
     ),
     { delay: 200, run: () => setTyping(undefined) },
   ]);
+  // End on the point of the story: the customer email opens beside the task.
+  // On a narrow frame it would cover the task, so the walkthrough stops short.
+  actions.push(
+    {
+      delay: 1300,
+      run: () => {
+        if (narrow()) return;
+        setClicking(false);
+        setTarget('[data-context-line="email"] .task-context-mention');
+      },
+    },
+    {
+      delay: 750,
+      run: () => {
+        if (narrow()) return;
+        setClicking(true);
+        setSource('email');
+      },
+    }
+  );
   const playback = createProductWalkthrough({
     root: () =>
       root.querySelector<HTMLElement>('[data-context-line="channel"]') ?? root,

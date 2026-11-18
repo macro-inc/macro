@@ -84,6 +84,9 @@ pub fn run(stage: &Stage, target: Target, only: Option<&[&RustService]>) -> Resu
     cmd.current_dir(&ws)
         .arg("build")
         .args(&args)
+        // Not part of `args`, which key the dependency cache: the timing
+        // report gives local telemetry each unit's compile time.
+        .arg("--timings")
         .env("SQLX_OFFLINE", "true");
     for name in cargo_run_vars(std::env::vars().map(|(name, _)| name)) {
         cmd.env_remove(name);

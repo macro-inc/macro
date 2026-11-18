@@ -83,3 +83,54 @@ async fn favorites_are_scoped_before_pagination_and_cursor_keeps_the_filter() {
         serde_json::to_value(filters).unwrap()
     );
 }
+
+/// Grouped pages without properties still scope a favorites filter to the
+/// viewer's favorites before the candidate query runs.
+#[tokio::test]
+async fn grouped_without_properties_scopes_favorites() {
+    let mut repo = MockSoupRepo::new();
+    repo.expect_expanded_grouped_cursor_soup()
+        .times(1)
+        .returning(|request| {
+            let filter = request.cursor.filter();
+            assert_eq!(filter.favorites_only, None);
+            assert_matches!(filter.document_filter.as_deref().unwrap(),
+                Expr::Literal(item_filters::ast::document::DocumentLiteral::Id(id)) => {
+                    assert_eq!(*id, Uuid::from_u128(1));
+                }
+            );
+            Box::pin(async { Ok(Vec::<ItemGroupingInfo>::new().into_iter()) })
+        });
+    repo.expect_populate_properties().times(0);
+    let mut service = SoupImpl::new(
+        repo,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopPullRequestListing,
+    );
+    service.favorites = Some(Arc::new(ViewerFavorites));
+    let items: Vec<_> = service
+        .get_user_soup_grouped_without_properties(GroupedSortRequest {
+            limit: 20,
+            cursor: Query::Sort(
+                SimpleSortMethod::UpdatedAt.into(),
+                EntityFilterAst {
+                    favorites_only: Some(true),
+                    ..Default::default()
+                },
+            ),
+            user_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            grouping: GroupingConfig {
+                field: GroupByField::EntityType,
+                group_key: None,
+                per_group_limit: None,
+            },
+        })
+        .await
+        .unwrap()
+        .collect();
+    assert!(items.is_empty());
+}

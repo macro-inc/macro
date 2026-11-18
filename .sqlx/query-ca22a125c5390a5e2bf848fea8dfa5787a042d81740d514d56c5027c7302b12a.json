@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE hosted_runtime_effect\n            SET attempts = attempts + 1, last_error = $2, run_after = $3\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ca22a125c5390a5e2bf848fea8dfa5787a042d81740d514d56c5027c7302b12a"
+}

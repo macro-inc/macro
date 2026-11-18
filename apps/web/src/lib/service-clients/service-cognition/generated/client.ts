@@ -42,7 +42,11 @@ import type {
   GetChatsForAttachmentResponse,
   GetUserActivityParams,
   HttpSendChatMessageRequest,
+  ImportEntitiesResponse,
+  ImportNotionPageRequest,
+  ImportNotionPageResponse,
   ImportSource,
+  ListImportEntitiesParams,
   ListSkillsParams,
   McpAuthCallbackParams,
   MemoryErrorBody,
@@ -59,7 +63,6 @@ import type {
   PipedreamRecoverRequest,
   PipedreamTokenResponse,
   PipedreamUpdateRequest,
-  ProjectionStateResponse,
   ReadActivityResponse,
   ReadMyActivityParams,
   RejectToolCallRequest,
@@ -82,11 +85,12 @@ import type {
   StructuredCompletionError,
   StructuredCompletionRequest,
   StructuredCompletionResponse,
+  TrackImportEntityRequest,
+  TrackImportEntityResponse,
   UpdateExplicitMemoryRequest,
   UpdateServerRequest,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
-  UpsertProjectionRequest,
   UsageRequest,
   UsageSummary,
   WebErrorBody,
@@ -289,71 +293,6 @@ export const getUsageHandler = async (
     status: res.status,
     headers: res.headers,
   } as getUsageHandlerResponse;
-};
-
-/**
- * @summary Gets or creates an ai projection and the requesting user's instance,
-triggering (or awaiting) materialization when needed.
- */
-export type upsertAiProjectionResponse200 = {
-  data: ProjectionStateResponse;
-  status: 200;
-};
-
-export type upsertAiProjectionResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type upsertAiProjectionResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type upsertAiProjectionResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type upsertAiProjectionResponseSuccess =
-  upsertAiProjectionResponse200 & {
-    headers: Headers;
-  };
-export type upsertAiProjectionResponseError = (
-  | upsertAiProjectionResponse400
-  | upsertAiProjectionResponse403
-  | upsertAiProjectionResponse500
-) & {
-  headers: Headers;
-};
-
-export type upsertAiProjectionResponse =
-  | upsertAiProjectionResponseSuccess
-  | upsertAiProjectionResponseError;
-
-export const getUpsertAiProjectionUrl = () => {
-  return `/ai-projections`;
-};
-
-export const upsertAiProjection = async (
-  upsertProjectionRequest: UpsertProjectionRequest,
-  options?: RequestInit
-): Promise<upsertAiProjectionResponse> => {
-  const res = await fetch(getUpsertAiProjectionUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(upsertProjectionRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: upsertAiProjectionResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as upsertAiProjectionResponse;
 };
 
 export type getChatsForAttachmentHandlerResponse200 = {
@@ -1720,6 +1659,197 @@ export const generateImage = async (
 };
 
 /**
+ * @summary List the caller's import ledger: staged candidates, running and finished
+imports (with the team's imports), and declined items.
+ */
+export type listImportEntitiesResponse200 = {
+  data: ImportEntitiesResponse;
+  status: 200;
+};
+
+export type listImportEntitiesResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type listImportEntitiesResponseSuccess =
+  listImportEntitiesResponse200 & {
+    headers: Headers;
+  };
+export type listImportEntitiesResponseError = listImportEntitiesResponse500 & {
+  headers: Headers;
+};
+
+export type listImportEntitiesResponse =
+  | listImportEntitiesResponseSuccess
+  | listImportEntitiesResponseError;
+
+export const getListImportEntitiesUrl = (params?: ListImportEntitiesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/import/entities?${stringifiedParams}`
+    : `/import/entities`;
+};
+
+export const listImportEntities = async (
+  params?: ListImportEntitiesParams,
+  options?: RequestInit
+): Promise<listImportEntitiesResponse> => {
+  const res = await fetch(getListImportEntitiesUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listImportEntitiesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listImportEntitiesResponse;
+};
+
+/**
+ * @summary Track an external item in the ledger: stage it as a candidate, or record a
+Macro entity already created from it. Says when the item was already
+imported, so callers do not create a duplicate.
+ */
+export type trackImportEntityResponse200 = {
+  data: TrackImportEntityResponse;
+  status: 200;
+};
+
+export type trackImportEntityResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type trackImportEntityResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type trackImportEntityResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type trackImportEntityResponseSuccess = trackImportEntityResponse200 & {
+  headers: Headers;
+};
+export type trackImportEntityResponseError = (
+  | trackImportEntityResponse400
+  | trackImportEntityResponse422
+  | trackImportEntityResponse500
+) & {
+  headers: Headers;
+};
+
+export type trackImportEntityResponse =
+  | trackImportEntityResponseSuccess
+  | trackImportEntityResponseError;
+
+export const getTrackImportEntityUrl = () => {
+  return `/import/entities`;
+};
+
+export const trackImportEntity = async (
+  trackImportEntityRequest: TrackImportEntityRequest,
+  options?: RequestInit
+): Promise<trackImportEntityResponse> => {
+  const res = await fetch(getTrackImportEntityUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(trackImportEntityRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: trackImportEntityResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as trackImportEntityResponse;
+};
+
+/**
+ * @summary Decline one of the caller's staged candidates; it is remembered as declined
+and not proposed again.
+ */
+export type declineImportEntityResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type declineImportEntityResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type declineImportEntityResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type declineImportEntityResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type declineImportEntityResponseSuccess =
+  declineImportEntityResponse204 & {
+    headers: Headers;
+  };
+export type declineImportEntityResponseError = (
+  | declineImportEntityResponse404
+  | declineImportEntityResponse409
+  | declineImportEntityResponse500
+) & {
+  headers: Headers;
+};
+
+export type declineImportEntityResponse =
+  | declineImportEntityResponseSuccess
+  | declineImportEntityResponseError;
+
+export const getDeclineImportEntityUrl = (id: string) => {
+  return `/import/entities/${id}`;
+};
+
+export const declineImportEntity = async (
+  id: string,
+  options?: RequestInit
+): Promise<declineImportEntityResponse> => {
+  const res = await fetch(getDeclineImportEntityUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: declineImportEntityResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as declineImportEntityResponse;
+};
+
+/**
  * @summary Where the user's Notion workspace import stands.
  */
 export type notionReportHandlerResponse200 = {
@@ -1818,6 +1948,71 @@ export const cancelNotionHandler = async (
     status: res.status,
     headers: res.headers,
   } as cancelNotionHandlerResponse;
+};
+
+/**
+ * @summary Import one Notion page as a Macro document through the caller's Notion
+connection, deduplicated against the ledger. Notion databases are not
+imported; a whole workspace goes through a reviewed import instead.
+ */
+export type importNotionPageResponse200 = {
+  data: ImportNotionPageResponse;
+  status: 200;
+};
+
+export type importNotionPageResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type importNotionPageResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type importNotionPageResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type importNotionPageResponseSuccess = importNotionPageResponse200 & {
+  headers: Headers;
+};
+export type importNotionPageResponseError = (
+  | importNotionPageResponse400
+  | importNotionPageResponse422
+  | importNotionPageResponse500
+) & {
+  headers: Headers;
+};
+
+export type importNotionPageResponse =
+  | importNotionPageResponseSuccess
+  | importNotionPageResponseError;
+
+export const getImportNotionPageUrl = () => {
+  return `/import/notion/pages`;
+};
+
+export const importNotionPage = async (
+  importNotionPageRequest: ImportNotionPageRequest,
+  options?: RequestInit
+): Promise<importNotionPageResponse> => {
+  const res = await fetch(getImportNotionPageUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(importNotionPageRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: importNotionPageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as importNotionPageResponse;
 };
 
 /**
@@ -2674,6 +2869,11 @@ export type editExplicitMemoryResponse500 = {
   status: 500;
 };
 
+export type editExplicitMemoryResponse503 = {
+  data: MemoryErrorBody;
+  status: 503;
+};
+
 export type editExplicitMemoryResponseSuccess =
   editExplicitMemoryResponse200 & {
     headers: Headers;
@@ -2683,6 +2883,7 @@ export type editExplicitMemoryResponseError = (
   | editExplicitMemoryResponse409
   | editExplicitMemoryResponse422
   | editExplicitMemoryResponse500
+  | editExplicitMemoryResponse503
 ) & {
   headers: Headers;
 };

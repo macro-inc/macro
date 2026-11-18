@@ -278,7 +278,7 @@ export function WorkspaceDocuments(props: {
                   role="textbox"
                   aria-label="Document title"
                   contentEditable
-                  class="text-2xl font-semibold outline-none mb-6"
+                  class="text-2xl font-medium outline-none mb-6"
                   onBlur={(e) =>
                     save({
                       title:

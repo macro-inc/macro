@@ -6,9 +6,12 @@ import type { QueryAnswer } from '../core/query';
 /** A `row_id` cell's row, with what the answer calls it. */
 export type AnswerRow = { id: string; table: string | null; label: string };
 
-/** How a cell's mentions, rows and markdown text are drawn. */
+/** How a cell's mentions, rows, links and markdown text are drawn. */
 export type AnswerRenderers = {
+  /** A mention; one that names a document opens it. */
   mention: (id: string, entityType: DatabaseEntityType) => JSX.Element;
+  /** A URL column's value, as a link when it is a web or email address. */
+  link: (url: string) => JSX.Element;
   /** A link that opens the row. */
   row: (row: AnswerRow) => JSX.Element;
   text: (markdown: string) => JSX.Element;

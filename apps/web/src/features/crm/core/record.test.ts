@@ -20,11 +20,19 @@ describe('sameRecordScope', () => {
     const ada = {
       type: 'contact' as const,
       id: 'p1',
-      email: 'ada@acme.com',
+      emails: ['ada@example.com'],
       companyId: 'c1',
     };
     expect(sameRecordScope(ada, { ...ada })).toBe(true);
-    expect(sameRecordScope(ada, { ...ada, email: 'ada@acme.io' })).toBe(false);
+    expect(sameRecordScope(ada, { ...ada, emails: ['ada@example.org'] })).toBe(
+      false
+    );
+    expect(
+      sameRecordScope(ada, {
+        ...ada,
+        emails: ['ada@example.com', 'ada@example.org'],
+      })
+    ).toBe(false);
     expect(sameRecordScope(ada, { ...ada, companyId: 'c2' })).toBe(false);
     expect(sameRecordScope(ada, { ...acme, id: 'p1' })).toBe(false);
   });

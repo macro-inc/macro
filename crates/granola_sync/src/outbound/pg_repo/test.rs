@@ -113,8 +113,8 @@ use crate::domain::{
     service::{Service, SyncService},
 };
 use call::domain::{
-    imports::{CallImportService, ImportedCall, ImportedCallPreview},
-    records::CallEntityRecord,
+    imports::{CallImportService, ImportedCall, ImportedCallPreview, ImportedCallRecord},
+    records::{CallEntityRecord, CallProvider},
 };
 use std::sync::{
     Arc,
@@ -163,6 +163,13 @@ impl CallImportService for Calls {
         panic!("webhook receipt must only enqueue")
     }
     async fn list(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<ImportedCallPreview>> {
+        Ok(vec![])
+    }
+    async fn list_source_records(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: CallProvider,
+    ) -> Result<Vec<ImportedCallRecord>> {
         Ok(vec![])
     }
     async fn read(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<Option<CallEntityRecord>> {

@@ -1,5 +1,14 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createComponent, createEffect, createSignal } from 'solid-js';
+import {
+  createComponent,
+  createEffect,
+  createRenderEffect,
+  createResource,
+  createSignal,
+  Suspense,
+  startTransition,
+} from 'solid-js';
 import { insert } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -306,6 +315,87 @@ describe('channel rail virtualizer', () => {
     expect(long.parentElement?.style.top).toBe('0px');
     expect(short.parentElement?.style.top).toBe('260px');
     expect(view.getByText('last').parentElement?.style.top).toBe('300px');
+  });
+
+  it('keeps row heights measured while a transition still shows the previous rows', async () => {
+    // Solid commits transitions from its scheduler, which fake timers stop.
+    vi.useRealTimers();
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        if (this.hasAttribute('data-viewport')) return 200;
+        return Number(
+          this.firstElementChild?.getAttribute('data-height') ?? 32
+        );
+      }
+    );
+    const viewport = document.createElement('div');
+    viewport.setAttribute('data-viewport', '');
+    Object.defineProperty(viewport, 'clientHeight', { value: 200 });
+    document.body.append(viewport);
+    const [keys, setKeys] = createSignal(['a', 'b', 'c']);
+    const [request, setRequest] = createSignal(0);
+    let release = () => {};
+    const [route] = createResource(request, (value) =>
+      value === 0
+        ? 0
+        : new Promise<number>((resolve) => {
+            release = () => resolve(value);
+          })
+    );
+    const view = render(
+      () =>
+        createComponent(Suspense, {
+          get children() {
+            // Reading the route suspends this boundary while it loads.
+            const routeText = document.createTextNode('');
+            createRenderEffect(() => {
+              routeText.data = String(route() ?? '');
+            });
+            return [
+              routeText,
+              createComponent(ChannelRailVirtualizer<string>, {
+                get keys() {
+                  return keys();
+                },
+                scrollRoot: viewport,
+                estimateSize: 32,
+                children: (key) => {
+                  const row = document.createElement('button');
+                  row.textContent = key;
+                  row.setAttribute('data-height', '32');
+                  return row;
+                },
+              }),
+            ];
+          },
+        }),
+      { container: viewport }
+    );
+    measure(200);
+
+    // A navigation waits on its route while a new conversation reaches the top.
+    fireAndForget(
+      startTransition(() => {
+        setRequest(1);
+        setKeys(['new', 'a', 'b', 'c']);
+      }),
+      'channels-view'
+    );
+    // Solid starts the transition in a microtask.
+    await Promise.resolve();
+    // The rows on screen still show the previous keys when one of them
+    // empties, as a section's status row does once nothing is left to load.
+    expect(view.queryByText('new')).toBeNull();
+    view.getByText('b').setAttribute('data-height', '0');
+    measure(200);
+    release();
+    // A resize observer reports only sizes that changed, so none arrive now.
+    await vi.waitFor(() => expect(view.getByText('new')).toBeTruthy());
+
+    expect(view.getByText('new').parentElement?.style.top).toBe('0px');
+    expect(view.getByText('a').parentElement?.style.top).toBe('32px');
+    expect(view.getByText('b').parentElement?.style.top).toBe('64px');
+    expect(view.getByText('c').parentElement?.style.top).toBe('64px');
   });
 
   it('repositions nested rows when section heights change but total height stays the same', () => {

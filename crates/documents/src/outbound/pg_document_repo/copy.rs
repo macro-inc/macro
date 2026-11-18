@@ -19,8 +19,8 @@ pub async fn copy_docx_document(
     let document = sqlx::query_as!(
         IDWithTimeStamps,
         r#"
-        INSERT INTO "Document" (owner, name, "fileType", "documentFamilyId", "branchedFromId", "branchedFromVersionId", "projectId")
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO "Document" (owner, name, "fileType", "documentFamilyId", "branchedFromId", "branchedFromVersionId", "projectId", appearance)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT appearance FROM "Document" WHERE id = $5))
         RETURNING id, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
         "#,
         owner.principal_id(),
@@ -69,6 +69,7 @@ pub async fn copy_docx_document(
         serde_json::to_value(saved_bom_parts).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
 
     Ok(DocumentMetadata {
+        appearance: original_document.appearance.clone(),
         document_id: document.id.clone(),
         owner: owner.clone(),
         document_name: new_document_name.to_string(),
@@ -108,8 +109,8 @@ pub async fn copy_non_docx_document(
     let document = sqlx::query_as!(
         IDWithTimeStamps,
         r#"
-        INSERT INTO "Document" (owner, name, "fileType", "documentFamilyId", "branchedFromId", "branchedFromVersionId", "projectId")
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO "Document" (owner, name, "fileType", "documentFamilyId", "branchedFromId", "branchedFromVersionId", "projectId", appearance)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT appearance FROM "Document" WHERE id = $5))
         RETURNING id, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
         "#,
         owner.principal_id(),
@@ -181,6 +182,7 @@ pub async fn copy_non_docx_document(
     }
 
     Ok(DocumentMetadata {
+        appearance: original_document.appearance.clone(),
         document_id: document.id.clone(),
         owner: owner.clone(),
         document_name: new_document_name.to_string(),

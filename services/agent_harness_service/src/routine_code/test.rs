@@ -205,6 +205,7 @@ impl RoutineCredentials for RecordedTokens {
         _: &MacroUserIdStr<'static>,
         acts_as: CodeIdentity,
         routine_id: Uuid,
+        _: bool,
     ) -> anyhow::Result<String> {
         self.0.lock().unwrap().push((acts_as, routine_id));
         Ok("fixture-routine-token".into())
@@ -286,6 +287,168 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
     assert_eq!(*programs.0.lock().unwrap(), 1);
 }
 
+const PRIVATE: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.private.pem"
+);
+const PUBLIC: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.public.pem"
+);
+
+/// Signs each token with the claims the real signer signs, under the local
+/// test key.
+struct SignedTokens;
+
+impl RoutineCredentials for SignedTokens {
+    async fn mint(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        acts_as: CodeIdentity,
+        routine_id: Uuid,
+        dry_run: bool,
+    ) -> anyhow::Result<String> {
+        let (agent_id, scope) = routine_claims(acts_as, dry_run);
+        macro_auth::macro_api_token::encode_macro_api_token(
+            macro_auth::macro_api_token::EncodeMacroApiTokenArgs {
+                fusionauth_id: "fixture".into(),
+                macro_user_id: "macro|owner@example.com".into(),
+                organization_id: None,
+                issuer: "fixture".into(),
+                private_key: PRIVATE.into(),
+                expiry_seconds: 60,
+                agent_id,
+                agent_via: None,
+                agent_correlation_id: None,
+                agent_session_id: None,
+                routine_id: Some(routine_id),
+                agent_scope: scope.map(|scope| scope.as_str().to_owned()),
+            },
+        )
+    }
+}
+
+/// Keeps the token each program was run with.
+#[derive(Default)]
+struct RunTokens(std::sync::Mutex<Vec<String>>);
+
+#[async_trait::async_trait]
+impl ProgramExecutor for RunTokens {
+    async fn execute_program(
+        &self,
+        _: code_execution::domain::ExecuteRequest,
+        environment: code_execution::domain::RunEnvironment,
+        _: CancellationToken,
+    ) -> Outcome {
+        self.0.lock().unwrap().push(environment.token);
+        Outcome::Succeeded { value: json!({}) }
+    }
+}
+
+/// A dry run's token can't write, whatever the code does in its process:
+/// a service refuses each write it sends, and still serves its reads. A real
+/// run's token writes as before.
+#[tokio::test]
+async fn a_dry_run_token_is_refused_every_write() {
+    use tower::ServiceExt;
+
+    let tokens = Arc::new(RunTokens::default());
+    let code = SdkRoutineCode::new(
+        Arc::clone(&tokens) as Arc<dyn ProgramExecutor>,
+        Arc::new(NoChecks),
+        SignedTokens,
+        code_execution::domain::SdkEndpoints::default(),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+        None,
+        Arc::new(NoTimeZones),
+    );
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let step = routine_program::CodeStep {
+        id: None,
+        title: "Label invoices".into(),
+        summary: String::new(),
+        source: "export async function main() {}".into(),
+        knobs: Vec::new(),
+        sentence: None,
+    };
+    for (dry_run, acts_as) in [
+        (true, CodeIdentity::Agent),
+        (true, CodeIdentity::Owner),
+        (false, CodeIdentity::Owner),
+    ] {
+        let ran = code
+            .run(
+                &owner,
+                CodeRun {
+                    step: &step,
+                    context: &json!({ "run": {} }),
+                    steps: &json!({}),
+                    dry_run,
+                    acts_as,
+                    routine_id: Uuid::from_u128(7),
+                },
+            )
+            .await;
+        assert_eq!(ran.result, Ok(json!({})));
+    }
+    let api = axum::Router::new()
+        .route(
+            "/email/messages",
+            axum::routing::post(|| async { axum::http::StatusCode::OK }),
+        )
+        .route(
+            "/email/threads/{id}",
+            axum::routing::get(|| async { axum::http::StatusCode::OK })
+                .delete(|| async { axum::http::StatusCode::OK }),
+        )
+        .route(
+            "/search",
+            axum::routing::post(|| async { axum::http::StatusCode::OK }),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            macro_auth::middleware::decode_jwt::JwtValidationArgs::testing_macro_token(
+                "fixture", PUBLIC,
+            ),
+            agent_correlation::inbound::enforce_signed_scope,
+        ));
+    let status = |token: String, method: &'static str, path: &'static str| {
+        let api = api.clone();
+        async move {
+            api.oneshot(
+                axum::http::Request::builder()
+                    .method(method)
+                    .uri(path)
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+            .status()
+        }
+    };
+    let minted = tokens.0.lock().unwrap().clone();
+    let [agent_dry_run, owner_dry_run, real] = minted.try_into().unwrap();
+    for token in [agent_dry_run, owner_dry_run] {
+        for (method, path) in [("POST", "/email/messages"), ("DELETE", "/email/threads/1")] {
+            assert_eq!(
+                status(token.clone(), method, path).await,
+                axum::http::StatusCode::FORBIDDEN,
+                "{method} {path}"
+            );
+        }
+        for (method, path) in [("GET", "/email/threads/1"), ("POST", "/search")] {
+            assert_eq!(
+                status(token.clone(), method, path).await,
+                axum::http::StatusCode::OK,
+                "{method} {path}"
+            );
+        }
+    }
+    assert_eq!(
+        status(real, "POST", "/email/messages").await,
+        axum::http::StatusCode::OK
+    );
+}
+
 /// Owners without calendars: every owner reads UTC.
 struct NoTimeZones;
 
@@ -319,6 +482,7 @@ mod real_deno {
             _: &MacroUserIdStr<'static>,
             _: CodeIdentity,
             _: Uuid,
+            _: bool,
         ) -> anyhow::Result<String> {
             Ok("fixture-routine-token".into())
         }
@@ -807,11 +971,13 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         server.await.unwrap();
     }
 
-    /// Catalog routines are offered as they are, and the CreateRoutine example is
-    /// copied by agents, so both must check against today's SDK.
+    /// Catalog routines are offered as they are, and the CreateRoutine example
+    /// and the Compose Routines skill's example step are copied by agents, so
+    /// all of them must check against today's SDK. The skill's step is checked
+    /// by its source, with the title, knobs and sentence its example gives it.
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
-    async fn every_catalog_routine_and_the_create_routine_example_type_check() {
+    async fn every_catalog_routine_and_example_step_type_checks() {
         let (_root, code) = code("http://127.0.0.1:9").await;
         for routine in routine_program::CATALOG.iter() {
             let Some(step) = &routine.code else { continue };
@@ -824,6 +990,27 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         let steps: serde_json::Value = serde_json::from_str(example.trim()).unwrap();
         let problems = code.check_program(&program(steps)).await.unwrap();
         assert_eq!(problems, Vec::new(), "the CreateRoutine example");
+        // The Compose Routines skill's example step, as code mode carries it
+        // after the routines guide.
+        let routines = agent_code_mode::domain::sdk_documentation()
+            .iter()
+            .find(|doc| doc.name == "routines")
+            .unwrap();
+        let guide = agent_code_mode::domain::with_attached_skill(routines)
+            .guide
+            .unwrap();
+        let (_, rest) = guide.split_once("        source: `").unwrap();
+        let (source, _) = rest.split_once("`,\n").unwrap();
+        let steps = json!([{
+            "type": "code",
+            "title": "Post the bug",
+            "summary": "Posts a message that reports a bug in the triage channel.",
+            "knobs": [{ "type": "text", "name": "channel", "label": "Channel to post bugs in", "value": "bug-triage" }],
+            "sentence": "Post the message in {channel}.",
+            "source": source,
+        }]);
+        let problems = code.check_program(&program(steps)).await.unwrap();
+        assert_eq!(problems, Vec::new(), "the Compose Routines example");
     }
 }
 
@@ -836,6 +1023,7 @@ fn a_draft_reads_the_symbols_it_names_then_the_types_they_name() {
             "TaskNamespace.search".to_owned(),
         ],
         "",
+        DRAFT_REFERENCE_BYTES,
     );
 
     // Their entities' indexes, so the writer sees what `UserNamespace`
@@ -851,20 +1039,113 @@ fn a_draft_reads_the_symbols_it_names_then_the_types_they_name() {
 
     // A property value's union is two types away from the method that
     // returns it.
-    let properties = symbol_references(&["PropertiedEntity.properties".to_owned()], "");
+    let properties = symbol_references(
+        &["PropertiedEntity.properties".to_owned()],
+        "",
+        DRAFT_REFERENCE_BYTES,
+    );
     assert!(properties.contains("## `EntityPropertyWithDefinition`\n"));
     assert!(properties.contains("## `properties.PropertyValue`\n"));
     assert!(reference.ends_with(
         "Macro's SDK has none of these; use what the indexes and references name instead: `UserNamespace.list`\n"
     ));
     assert!(reference.len() <= DRAFT_REFERENCE_BYTES + 256);
-    assert_eq!(symbol_references(&[], ""), "");
+    assert_eq!(symbol_references(&[], "", DRAFT_REFERENCE_BYTES), "");
 }
 
 #[test]
 fn a_draft_is_not_shown_an_index_it_already_has() {
     let users = entity_index("UserNamespace").unwrap();
     let shown = format!("the guide\n{users}\n");
-    let reference = symbol_references(&["UserNamespace.search".to_owned()], &shown);
+    let reference = symbol_references(
+        &["UserNamespace.search".to_owned()],
+        &shown,
+        DRAFT_REFERENCE_BYTES,
+    );
     assert!(reference.starts_with("## `UserNamespace.search`\n"));
+}
+
+#[test]
+fn an_area_reads_its_index_guidance_and_declarations_without_imports() {
+    let reference = area_reference(&["tasks".to_owned()]);
+
+    assert!(reference.starts_with("## tasks\n"));
+    let files: Vec<&str> = reference
+        .lines()
+        .filter_map(|line| line.strip_prefix("// @macro-inc/sdk/"))
+        .collect();
+    assert_eq!(
+        files,
+        [
+            "src/entities/tasks/namespace.d.ts",
+            "src/entities/tasks/task.d.ts"
+        ]
+    );
+    assert!(reference.contains("class TaskNamespace "));
+    assert!(!reference.lines().any(|line| line.starts_with("import ")));
+    assert!(reference.len() <= ONE_AREA_BYTES + IMPORTED_TYPE_BYTES + 256);
+}
+
+#[test]
+fn an_area_brings_the_generated_types_its_declarations_import() {
+    let reference = area_reference(&["ai".to_owned()]);
+
+    assert!(reference.contains("class AiNamespace "));
+    let (_, types) = reference
+        .split_once("The generated types those declarations import:\n\n")
+        .unwrap();
+    assert!(types.contains("## `DecisionRequest`\n"));
+}
+
+#[test]
+fn areas_are_found_by_directory_once_each_and_unknown_ones_skipped() {
+    // `agentSessions` lives in `agent-sessions`, `foreignEntities` in
+    // `foreign`.
+    let sessions = area_reference(&["agentSessions".to_owned()]);
+    assert!(sessions.contains("// @macro-inc/sdk/src/entities/agent-sessions/namespace.d.ts\n"));
+    let foreign = area_reference(&["foreignEntities".to_owned()]);
+    assert!(foreign.contains("// @macro-inc/sdk/src/entities/foreign/namespace.d.ts\n"));
+
+    let twice = area_reference(&[
+        "tasks".to_owned(),
+        " tasks ".to_owned(),
+        "notAnArea".to_owned(),
+    ]);
+    assert_eq!(twice, area_reference(&["tasks".to_owned()]));
+    assert_eq!(area_reference(&["notAnArea".to_owned()]), "");
+
+    let every: Vec<String> = AREAS.keys().map(|name| (*name).to_owned()).collect();
+    assert!(area_reference(&every).len() <= AREA_REFERENCE_BYTES + IMPORTED_TYPE_BYTES + 256);
+}
+
+#[test]
+fn the_area_list_names_each_area_and_when_to_use_it() {
+    let areas = sdk_areas();
+    assert!(areas.lines().any(|line| line.starts_with("- `tasks`: ")));
+    assert!(areas.lines().any(|line| line.starts_with("- `email`: ")));
+    assert_eq!(areas.lines().count(), AREAS.len());
+}
+
+#[test]
+fn an_import_line_gives_the_generated_names_it_takes() {
+    assert_eq!(
+        generated_imports(
+            "import type { DecisionRequest, type Choice as Picked } from '../../../generated/cognition/types.gen';"
+        ),
+        ["DecisionRequest"]
+    );
+    assert_eq!(
+        generated_imports("import { a,\tb, } from \"../generated/x\""),
+        ["a", "b"]
+    );
+    // An aliased name is one the SDK has its own class for.
+    assert!(
+        generated_imports(
+            "import type { CalendarEvent as CalendarEventRecord } from '../../generated/calendar/types.gen';"
+        )
+        .is_empty()
+    );
+    // Only the generated clients' types: the SDK's own come with its areas.
+    assert!(generated_imports("import type { Macro } from '../../macro';").is_empty());
+    assert!(generated_imports("import * as all from '../generated/x';").is_empty());
 }

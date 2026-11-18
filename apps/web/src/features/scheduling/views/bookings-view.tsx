@@ -49,6 +49,7 @@ export function BookingsView(props: {
   const filters = () => (
     <SchedulingFilters
       grouped
+      size="md"
       title="Booking filters"
       activeCount={state.eventId() === 'all' ? 0 : 1}
       onClear={state.clearFilters}
@@ -142,7 +143,7 @@ export function BookingsView(props: {
             </div>
           }
         >
-          <HeaderActionGroup label="Booking filters">
+          <HeaderActionGroup label="Booking filters" size="md">
             {filters()}
           </HeaderActionGroup>
           <ListHeaderSearch

@@ -25,7 +25,8 @@ vi.mock('@core/context/channels', () => ({
 }));
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: queryMock,
-  validateSearchServiceText: (text: string) => text.length >= 3,
+  validateSearchServiceText: (text: string) =>
+    text.replaceAll('"', '').trim().length > 0,
 }));
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery: astQueryMock }));
 vi.mock('@queries/channel/detail', () => ({
@@ -409,7 +410,7 @@ describe('shared channel search source', () => {
     vi.mocked(s.local.isFetching).mockReturnValue(true);
     s.setText('');
     expect(s.source.isLoading()).toBe(true);
-    s.setText('zz');
+    s.setText('"');
     await vi.advanceTimersByTimeAsync(300);
     expect(s.queryEnabled()).toBe(false);
     expect(s.source.isLoading()).toBe(false);
@@ -492,7 +493,7 @@ describe('shared channel search source', () => {
     expect(s.source.hasMore()).toBe(false);
   });
 
-  it('ignores an old service fetch for short queries and refreshes search even when browse fails', async () => {
+  it('ignores an old service fetch for a query with no search term and refreshes search even when browse fails', async () => {
     const s = setup('alpha');
     s.local.refresh = vi.fn(async () => {
       throw new Error('Browse failed');
@@ -500,7 +501,7 @@ describe('shared channel search source', () => {
     await expect(s.source.refresh()).rejects.toThrow('Browse failed');
     expect(s.serverRefresh).toHaveBeenCalledOnce();
     s.setRemote({ isFetching: true, isFetchingNextPage: true });
-    s.setText('zz');
+    s.setText('"');
     await vi.advanceTimersByTimeAsync(300);
     expect(s.source.isFetching()).toBe(false);
     expect(s.source.isLoadingMore()).toBe(false);
@@ -519,56 +520,13 @@ describe('shared channel search source', () => {
     expect(s.source.error()).toBeUndefined();
     s.setRemote('error', searchError);
     expect(s.source.error()).toBe(searchError);
-    s.setText('zz');
+    s.setText('"');
     await vi.advanceTimersByTimeAsync(300);
     expect(s.source.error()).toBeUndefined();
     s.setText('');
     expect(s.source.error()).toBe(listError);
     s.setEnabled(false);
     expect(s.source.error()).toBeUndefined();
-  });
-
-  it('searches discovery pages beyond the initial page for short queries', () => {
-    const [page, setPage] = createStore({
-      entities: [
-        {
-          ...channel('first', 'Research'),
-          channelType: 'team' as const,
-          isParticipant: false,
-        },
-      ],
-      hasNextPage: true,
-    });
-    const nextPage = vi.fn(async () => {
-      setPage('entities', [
-        {
-          ...channel('later', 'Xylophone'),
-          channelType: 'team',
-          isParticipant: false,
-        },
-      ]);
-      setPage('hasNextPage', false);
-    });
-    astQueryMock.mockReturnValue({
-      isEnabled: true,
-      isPending: false,
-      isLoading: false,
-      isFetching: false,
-      isFetchingNextPage: false,
-      error: undefined,
-      fetchError: undefined,
-      get data() {
-        return { entities: page.entities };
-      },
-      get hasNextPage() {
-        return page.hasNextPage;
-      },
-      fetchNextPage: nextPage,
-      refresh: vi.fn(async () => {}),
-    });
-    const { source } = setup('xy', 'search', undefined, true);
-    expect(nextPage).toHaveBeenCalledOnce();
-    expect(ids(source)).toContain('later');
   });
   it('hydrates unknown search membership before grouping a server-only channel', async () => {
     astQueryMock.mockReturnValue({

@@ -42,7 +42,6 @@ html[data-homepage][data-theme-light='true'] .site-nav-demo::after {
   background: linear-gradient(135deg, #ffffffcc 0%, #00000006 45%, #00000018 100%);
 }
 .macro-homepage .site-menu-mark { width: 27px; height: 27px; }
-.macro-homepage .site-header[data-menu-open=true]::before { background: light-dark(#fff, #121214); }
 .macro-homepage a:focus-visible, .macro-homepage button:focus-visible { outline: 3px solid #4384db; outline-offset: 5px; }
 .macro-home-hero { position: relative; overflow-x: clip; display: flex; align-items: center; flex-direction: column; padding: 88px 24px 128px; text-align: center; }
 .macro-home-hero h1 { max-width: 760px; margin: 0; font-family: 'Roboto Slab Variable', serif; font-size: 40px; font-weight: calc(320 + var(--cream-slab-weight-increase, 0)); line-height: 1.06; letter-spacing: -.04em; text-wrap: balance; }

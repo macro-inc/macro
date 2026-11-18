@@ -16,7 +16,7 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 async function startWebsite() {
   // Keep the first paint until the requested page and its styles exist.
   // Do not await this at module scope: a lazy route may import shared code
-  // Rollup placed in this entry, so the entry must finish evaluating first.
+  // the bundler placed in this entry, so the entry must finish evaluating first.
   await preloadProductRoute(window.location.pathname);
 
   // Solid render appends rather than hydrates product pages.

@@ -10,7 +10,6 @@ import {
 } from '@app/features/next-soup/soup-view/views/inbox/inbox-card-layouts';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
-import { TutorialPill } from '@app/features/video-tutorials';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { t } from '@app/lib/i18n';
 import { useCallContextOptional } from '@channel/Call/CallContext';
@@ -47,6 +46,7 @@ import type { ChannelsDataSource } from '../queries';
 import type { ChannelSectionPreferences } from '../types';
 import { ChannelPin, ChannelPinGrid } from './ChannelPins';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
+import { ChannelMentionCount } from './rail/ChannelCountPill';
 import { ChannelLiveCallBadge } from './rail/ChannelLiveCallBadge';
 import { IncomingCallActions } from './rail/ChannelRailItems';
 import { useChannelCalls } from './rail/hooks/useChannelCalls';
@@ -59,10 +59,12 @@ const LOAD_MORE_THRESHOLD = 300;
 
 export function ChannelsMobileView(props: {
   source: ChannelsDataSource;
-  /** Favorited conversations pinned above the list, already capped. */
+  /** Favorited conversations pinned above the list in display order. */
   pinned: readonly ChannelEntity[];
   searchQuery: string;
   onClearSearch: () => void;
+  /** Admit a conversation into the host's inline preview when available. */
+  openPreview?: (channel: ChannelEntity) => boolean;
   horizontalPins?: boolean;
   preferences?: ChannelSectionPreferences;
   scrollKey?: string;
@@ -168,7 +170,11 @@ export function ChannelsMobileView(props: {
     const request = ++opening;
     const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
     try {
+      if (!event.shiftKey && props.openPreview?.(channel)) return;
       await openEntityInSplitFromUnifiedList(channel, {
+        ...(event.shiftKey && props.openPreview
+          ? { openInNewSplit: true }
+          : {}),
         splitHandle: panel.handle,
         referredFrom: 'channels',
         notificationSource,
@@ -199,7 +205,13 @@ export function ChannelsMobileView(props: {
   };
   const content = (
     <Switch>
-      <Match when={!forceEmptyState() && props.source.isLoading()}>
+      <Match
+        when={
+          !forceEmptyState() &&
+          props.source.isLoading() &&
+          visibleChannels().length === 0
+        }
+      >
         <div class="grid min-h-32 place-items-center text-ink-muted">
           <SpinnerIcon
             aria-hidden={false}
@@ -236,13 +248,7 @@ export function ChannelsMobileView(props: {
       >
         <Show
           when={props.searchQuery.trim()}
-          fallback={
-            // Phones have no conversation pane, so its tutorial pill
-            // sits in the empty conversation list instead.
-            <ChannelsEmptyState scope="recents">
-              <TutorialPill tutorial="chat" />
-            </ChannelsEmptyState>
-          }
+          fallback={<ChannelsEmptyState scope="recents" />}
         >
           {(query) => (
             <EmptyStatePanel
@@ -316,6 +322,11 @@ export function ChannelsMobileView(props: {
                         : undefined
                     }
                     trailing={callActions(channel.id)}
+                    badge={
+                      <ChannelMentionCount
+                        count={channelActivity.mentionCount(channel.id)}
+                      />
+                    }
                     item={{
                       ...toInboxCardDisplayItem(channel),
                       unread: isUnread(channel),
@@ -392,10 +403,7 @@ export function ChannelsMobileView(props: {
         class="scrollbar-hidden size-full min-h-0 overflow-y-auto overscroll-none"
       >
         <div ref={setListHeader}>
-          <div
-            aria-hidden="true"
-            class="h-[calc(var(--mobile-content-inset-top,0px)+0.75rem)]"
-          />
+          <div aria-hidden="true" class="h-(--mobile-content-inset-top)" />
           <Show when={pinned().length > 0}>
             <ChannelPinGrid horizontal={props.horizontalPins}>
               <For each={pinned()}>
@@ -422,6 +430,7 @@ export function ChannelsMobileView(props: {
                       <ChannelPin
                         channel={channel}
                         unread={isUnread(channel)}
+                        mentions={channelActivity.mentionCount(channel.id)}
                         onActivate={(event) =>
                           fireAndForget(
                             openChannel(channel, event),

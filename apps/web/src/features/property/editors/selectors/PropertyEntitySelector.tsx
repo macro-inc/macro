@@ -1,12 +1,18 @@
 import { t } from '@app/lib/i18n';
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
+import {
+  capPeople,
+  rankAgentsAfterPeople,
+} from '@core/user/people-before-agents';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch } from '@core/util/freshSort';
 import { preserveOrderedWindow } from '@core/util/ordered-window';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import {
@@ -19,7 +25,10 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
 import { usePinnedContactUsers } from '@queries/contacts/use-directory';
-import { useSearchSoupQuery } from '@queries/soup/search';
+import {
+  useSearchSoupQuery,
+  validateSearchServiceText,
+} from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
@@ -36,6 +45,7 @@ import {
 import {
   type CombinedEntity,
   createEntitySearchConfig,
+  createRosterSearch,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
@@ -120,6 +130,19 @@ function getEntityName(entity: CombinedEntity): string {
 }
 
 const MAX_LIST_HEIGHT = 192;
+const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
+const MAX_SEARCH_RESULTS = 20;
+
+function getMaxLocalResults(
+  hasExplicitUserPool: boolean,
+  hasSearchTerm: boolean,
+  availableResultCount: number
+): number {
+  // Query-backed lists already bound each loaded page. Only explicit user
+  // rosters, which have no pagination, retain the local display caps.
+  if (!hasExplicitUserPool) return availableResultCount;
+  return hasSearchTerm ? MAX_SEARCH_RESULTS : MAX_VISIBLE_ENTITIES_NO_SEARCH;
+}
 
 export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setRawInputValue] = createSignal('');
@@ -167,7 +190,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const quickAccess = useQuickAccessEntities(
     () => props.config.specificEntityType,
     search,
-    () => !(props.config.specificEntityType === 'USER' && props.config.users),
+    () =>
+      props.config.specificEntityType !== 'THREAD' &&
+      !(props.config.specificEntityType === 'USER' && props.config.users),
     () => props.config.excludedIds?.() ?? new Set<string>()
   );
   const quickAccessItems = quickAccess.items;
@@ -183,7 +208,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
   const emails = () => emailsQuery.data ?? [];
 
-  // Server-side email search (query internally disables when < 3 chars)
+  // Server-side email search (query internally disables on blank text)
   const emailSearchQuery = useSearchSoupQuery(
     () => ({
       params: { page_size: 20 },
@@ -208,6 +233,44 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       .filter((entity) => entity.type === 'email')
       .map((entity) => threadMapper(entity as EmailEntity));
   });
+
+  const emailSearchEnabled = () =>
+    needsEmailSearch() && validateSearchServiceText(search().trim());
+  const hasMore = () =>
+    quickAccess.hasMore() ||
+    (needsEmailSearch() &&
+      (emailsQuery.hasNextPage ||
+        (emailSearchEnabled() && emailSearchQuery.hasNextPage)));
+  const isLoadingMore = () =>
+    quickAccess.isLoadingMore() ||
+    (needsEmailSearch() &&
+      (emailsQuery.isFetchingNextPage || emailSearchQuery.isFetchingNextPage));
+  const paginationError = () => {
+    const quickAccessError = quickAccess.error();
+    if (quickAccessError) return quickAccessError;
+    if (!needsEmailSearch()) return undefined;
+    if (emailsQuery.error) return emailsQuery.error;
+    return emailSearchEnabled() ? emailSearchQuery.error : undefined;
+  };
+  const loadNextPages = async () => {
+    const requests: Promise<unknown>[] = [];
+    if (quickAccess.hasMore() && !quickAccess.isLoadingMore()) {
+      requests.push(quickAccess.loadMore());
+    }
+    if (needsEmailSearch()) {
+      if (emailsQuery.hasNextPage && !emailsQuery.isFetchingNextPage) {
+        requests.push(emailsQuery.fetchNextPage());
+      }
+      if (
+        emailSearchEnabled() &&
+        emailSearchQuery.hasNextPage &&
+        !emailSearchQuery.isFetchingNextPage
+      ) {
+        requests.push(emailSearchQuery.fetchNextPage());
+      }
+    }
+    await Promise.all(requests);
+  };
 
   const isLoadingEntities = createMemo(() => {
     if (props.config.users) return false;
@@ -313,6 +376,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return userToEntity({ id: emailToId(email), email, name: email });
   };
 
+  const rosterSearch = createRosterSearch(currentUserDomain, currentUserId);
   const entitySearch = createFreshSearch<CombinedEntity>({
     config: createEntitySearchConfig(currentUserDomain, currentUserId),
     getName: getEntitySearchText,
@@ -328,9 +392,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     );
     const userId = currentUserId();
 
-    // List is unvirtualized — revisit if these caps grow significantly.
-    const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
-    const MAX_SEARCH_RESULTS = 20;
+    // Keep explicit rosters bounded; query-backed pages grow only on request.
+    const maxLocalResults = getMaxLocalResults(
+      props.config.specificEntityType === 'USER' && !!props.config.users,
+      !!term,
+      allEntities.length + serverEmails().length
+    );
 
     // Filter out the current entity when selecting same entity type
     const blockId = selfFilterBlockId();
@@ -381,16 +448,28 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     // Get visible entities based on search
     // Sort self to top BEFORE slicing to ensure self appears even if not in top 50 by default
     let localResults: CombinedEntity[];
-    if (term) {
+    if (term && props.config.users) {
+      localResults = capPeople(
+        rankAgentsAfterPeople(
+          rosterSearch(allEntities.filter(excludeFilter), term),
+          (entity) => entity.id
+        ),
+        (entity) => entity.id,
+        maxLocalResults
+      );
+    } else if (term) {
       localResults = entitySearch(allEntities, term)
-        .slice(0, MAX_SEARCH_RESULTS)
+        .slice(0, maxLocalResults)
         .map((result) => result.item)
         .filter(excludeFilter);
     } else {
-      localResults = sortEntitiesWithSelfFirst(
+      const ordered = sortEntitiesWithSelfFirst(
         allEntities.filter(excludeFilter),
         userId
-      ).slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+      );
+      localResults = props.config.users
+        ? capPeople(ordered, (entity) => entity.id, maxLocalResults)
+        : ordered.slice(0, maxLocalResults);
     }
 
     // For THREAD or generic entity: merge local + server results
@@ -401,7 +480,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         .filter((e) => !localIds.has(e.id))
         .filter(excludeFilter);
       return preserveOrderedWindow(
-        [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS),
+        [...localResults, ...serverResults].slice(0, maxLocalResults),
         personal,
         (entity) => entity.id
       );
@@ -467,11 +546,27 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const resultCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
 
-  createEffect(() => {
-    search();
-    resultCount();
-    setSelectedIndex(0);
+  // Hold the row the user moved to by identity while pages are added around
+  // it; a new search releases it.
+  const highlight = createSelectionAnchor({
+    items: sortedEntities,
+    key: (entity) => entity.id,
+    scope: search,
+    selectedIndex,
+    setSelectedIndex,
   });
+  // A new search moves the highlight and the list to the top; a further page
+  // listed below keeps both where the user put them.
+  createEffect(
+    on(
+      search,
+      () => {
+        setSelectedIndex(0);
+        if (scrollContainerRef) scrollContainerRef.scrollTop = 0;
+      },
+      { defer: true }
+    )
+  );
   let previousWindow: string | undefined;
   createEffect(
     on(quickAccess.windowKey, (key) => {
@@ -483,8 +578,39 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       previousWindow = key;
     })
   );
-  const loadNext = () =>
-    fireAndForget(quickAccess.loadMore(), 'property-picker');
+  const loadNext = () => fireAndForget(loadNextPages(), 'property-picker');
+  // Read each failed source again: a failed later email page is the next one
+  // still to fetch, and a failed first page is read from the start.
+  const retryEmailPages = (query: {
+    data?: unknown[];
+    error: unknown;
+    fetchNextPage: () => Promise<unknown>;
+    refetch: () => Promise<unknown>;
+  }) => {
+    if (!query.error) return undefined;
+    return query.data?.length ? query.fetchNextPage() : query.refetch();
+  };
+  const retryPages = () =>
+    fireAndForget(
+      Promise.all([
+        quickAccess.error() ? quickAccess.retry() : undefined,
+        needsEmailSearch() ? retryEmailPages(emailsQuery) : undefined,
+        emailSearchEnabled() ? retryEmailPages(emailSearchQuery) : undefined,
+      ]),
+      'property-picker'
+    );
+  // Further pages load as the end of the list scrolls into view. With no rows
+  // listed, the sentinel sits below the empty list and keeps reading pages
+  // until one matches or the sources end. A failed page waits for Retry. The
+  // sentinel opts out of scroll anchoring: as the anchor, it would be held in
+  // view while each page lands above it, and every page would load the next.
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => hasMore() && !paginationError(),
+    isFetchingNextPage: isLoadingMore,
+    fetchNextPage: loadNext,
+  });
 
   // Scroll the selected row into view during keyboard navigation
   createEffect(() => {
@@ -504,10 +630,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       (props.onCancel ?? props.onClose)?.();
       return;
     }
-    if (e.key === 'PageDown' && quickAccess.hasMore()) {
+    if (e.key === 'PageDown' && hasMore()) {
       e.preventDefault();
       e.stopPropagation();
-      if (!quickAccess.isLoadingMore()) loadNext();
+      if (!isLoadingMore()) loadNext();
       return;
     }
     const total = resultCount();
@@ -516,11 +642,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
       e.preventDefault();
       setSelectedIndex((prev) => (Math.min(prev, total - 1) + 1) % total);
+      highlight.hold();
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
       setSelectedIndex(
         (prev) => (Math.min(prev, total - 1) - 1 + total) % total
       );
+      highlight.hold();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const idx = Math.min(selectedIndex(), total - 1);
@@ -616,6 +744,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                         onMouseEnter={() => {
                           if (!keyboardMode()) {
                             setSelectedIndex(index());
+                            highlight.hold();
                           }
                         }}
                       >
@@ -698,6 +827,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                   );
                 }}
               </For>
+              <Show when={hasMore()}>
+                <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+              </Show>
             </div>
           </Show>
           <Show when={customEmail()}>
@@ -742,18 +874,18 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         </div>
       </Show>
 
-      <Show when={quickAccess.error()}>
+      <Show when={paginationError()}>
         <div role="status" class="px-2 py-2 text-xs text-ink-muted">
           {t('common.optionsUnavailable')}
         </div>
       </Show>
-      <Show when={resultCount() === 0 && !quickAccess.error()}>
+      <Show when={resultCount() === 0 && !paginationError()}>
         {props.emptyState !== undefined ? (
           props.emptyState
         ) : (
           <div class="text-center py-4 text-ink-muted text-sm">
             <Show
-              when={!isLoadingEntities()}
+              when={!isLoadingEntities() && !hasMore()}
               fallback={<span>Loading...</span>}
             >
               {props.config.emptyMessage ??
@@ -762,15 +894,23 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           </div>
         )}
       </Show>
-      <Show when={quickAccess.hasMore()}>
+      <Show when={sortedEntities().length === 0 && hasMore()}>
+        <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+      </Show>
+      <Show when={isLoadingMore()}>
+        <div role="status" class="px-2 py-2 text-xs text-ink-muted">
+          {t('common.loadingOptions')}
+        </div>
+      </Show>
+      <Show when={paginationError()}>
         <Button
           variant="ghost"
           class="w-full"
-          disabled={quickAccess.isLoadingMore()}
+          disabled={isLoadingMore()}
           onPointerDown={(event) => event.preventDefault()}
-          onClick={loadNext}
+          onClick={retryPages}
         >
-          {t('viewMenus.nextOptions')}
+          {t('viewMenus.retryOptions')}
         </Button>
       </Show>
     </div>

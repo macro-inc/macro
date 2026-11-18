@@ -1,4 +1,4 @@
-# The Macro computer guest as a NixOS module: macrod, Claude Code, herdr,
+# The Macro computer guest as a NixOS module: macrod, harnessd, Claude Code, herdr,
 # Chromium on an Xvnc display, Docker and nix-ld. `_image.nix` adds the Incus
 # VM image on top; `_vm-test.nix` boots this module alone.
 {
@@ -17,6 +17,15 @@ let
   enrolledMarker = "/var/lib/macrod/enrolled";
   # /var/lib/macrod links here when there is a data disk.
   persistentMacrodState = if cfg.dataDisk == null then "/var/lib/macrod" else "/home/.system/macrod";
+  # harnessd's state: the agents' credentials. On the data disk when there
+  # is one, so a sign-in survives image updates.
+  harnessdState = if cfg.dataDisk == null then "/var/lib/harnessd" else "/home/.system/harnessd";
+  harnessdSocket = "/run/harnessd/harnessd.sock";
+  claude = import ./_claude-wrapper.nix {
+    inherit pkgs;
+    inherit (cfg) claudeCode;
+    credential = "${cfg.harnessd.stateDirectory}/claude/credential.json";
+  };
   herdr = pkgs.callPackage "${cfg.herdrSource}/nix/package.nix" { };
   adapterDirectory = "${home}/.macrod/adapters/${cfg.claudeAgentAcp.adapterDirectory}";
   display = ":0";
@@ -83,10 +92,26 @@ let
   };
 in
 {
+  imports = [ ./_agent.nix ];
+
   options.macro.box = {
     macrod = lib.mkOption {
       type = lib.types.package;
       description = "The macrod package.";
+    };
+    harnessd.package = lib.mkOption {
+      type = lib.types.package;
+      description = "The harnessd package: agent sign-ins.";
+    };
+    harnessd.stateDirectory = lib.mkOption {
+      type = lib.types.path;
+      readOnly = true;
+      default = harnessdState;
+      description = ''
+        Where harnessd keeps the agents' credentials (`claude/credential.json`
+        for Claude): `/home/.system/harnessd` on the data disk, else
+        `/var/lib/harnessd`.
+      '';
     };
     claudeCode = lib.mkOption {
       type = lib.types.package;
@@ -111,6 +136,14 @@ in
       type = lib.types.str;
       default = "incus";
       description = "`macrod enroll --from`: `incus` or `file:<path>`.";
+    };
+    agentMode = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Run agents without administrator rights: the macro user loses
+        passwordless sudo and the docker group. False keeps both.
+      '';
     };
     dataDisk = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
@@ -141,13 +174,13 @@ in
       isNormalUser = true;
       uid = 1000;
       group = "macro";
-      extraGroups = [ "docker" ];
+      extraGroups = lib.optionals (!cfg.agentMode) [ "docker" ];
       shell = pkgs.bashInteractive;
       # Starts the display, window manager and browser at boot.
       linger = true;
     };
     users.groups.macro.gid = 1000;
-    security.sudo.extraRules = [
+    security.sudo.extraRules = lib.optionals (!cfg.agentMode) [
       {
         users = [ "macro" ];
         commands = [
@@ -193,6 +226,9 @@ in
 
     systemd.tmpfiles.settings."10-macro-box" = {
       ${persistentMacrodState}.d.mode = "0755";
+      ${cfg.harnessd.stateDirectory}.d = macroOwner // {
+        mode = "0700";
+      };
       ${workspace}.d = macroDirectory;
       "${home}/.config".d = macroDirectory;
       "${home}/.config/chromium".d = macroDirectory;
@@ -215,7 +251,10 @@ in
 
     environment.systemPackages = [
       cfg.macrod
-      cfg.claudeCode
+      cfg.harnessd.package
+      # The pinned Claude Code behind the credential wrapper; harnessd runs
+      # the unwrapped one.
+      claude
       cfg.chromeDevtoolsMcp
       herdr
     ]
@@ -329,11 +368,7 @@ in
       before = [ "macrod.service" ];
       # Runs on every boot: `macrod enroll` re-enrolls for a newer
       # generation and keeps the existing enrollment otherwise.
-      unitConfig = {
-        # A retry that succeeds still starts macrod.
-        OnSuccess = "macrod.service";
-        StartLimitIntervalSec = 0;
-      };
+      unitConfig.StartLimitIntervalSec = 0;
       path = systemPath;
       # Agent discovery records adapter paths usable by the daemon user.
       environment = {
@@ -350,11 +385,17 @@ in
         ExecStartPre = lib.getExe (
           pkgs.writeShellApplication {
             name = "check-enrollment-source";
-            runtimeInputs = [ pkgs.curl ];
+            runtimeInputs = [
+              pkgs.coreutils
+              pkgs.curl
+            ];
             text = builtins.readFile ./files/check-enrollment-source;
           }
         );
         ExecStart = "${lib.getExe' cfg.macrod "macrod"} enroll --from \${MACRO_ENROLL_FROM} --config ${macrodConfig}";
+        # A retry that succeeds after boot gave up on macrod still starts it.
+        # (OnSuccess= never fires: with RemainAfterExit the unit stays active.)
+        ExecStartPost = "${lib.getExe' config.systemd.package "systemctl"} --no-block start macrod.service";
         StandardOutput = "journal+console";
         StandardError = "journal+console";
       };
@@ -363,8 +404,12 @@ in
     systemd.services.macrod = {
       description = "Macro agent daemon";
       wantedBy = [ "multi-user.target" ];
-      wants = [ "network-online.target" ];
-      requires = [ "macrod-enroll.service" ];
+      # Wants, not Requires: a first enroll attempt that fails must not fail
+      # macrod's start for good; the enroll retry starts it once enrolled.
+      wants = [
+        "network-online.target"
+        "macrod-enroll.service"
+      ];
       after = [
         "network-online.target"
         "macrod-enroll.service"
@@ -389,10 +434,29 @@ in
       };
     };
 
+    # Owns each agent's sign-in; the control plane runs `harnessd` (the
+    # client) through the fleet's exec. See crates/harnessd/AGENTS.md.
+    systemd.services.harnessd = {
+      description = "Agent sign-ins on this computer";
+      wantedBy = [ "multi-user.target" ];
+      path = systemPath;
+      environment.HOME = home;
+      unitConfig.StartLimitIntervalSec = 0;
+      serviceConfig = {
+        User = "macro";
+        Group = "macro";
+        RuntimeDirectory = "harnessd";
+        RuntimeDirectoryMode = "0700";
+        ExecStart = "${lib.getExe' cfg.harnessd.package "harnessd"} serve --socket ${harnessdSocket} --state-dir ${cfg.harnessd.stateDirectory} --claude ${lib.getExe' cfg.claudeCode "claude"}";
+        Restart = "always";
+        RestartSec = 1;
+      };
+    };
+
     systemd.user.services.macro-display =
       userService "Macro computer display (Xvnc :0 on 127.0.0.1:5900)"
         {
-          ExecStart = "${pkgs.tigervnc}/bin/Xvnc ${display} -geometry 1920x1080 -depth 24 -rfbport 5900 -interface 127.0.0.1 -localhost -SecurityTypes None -UseBlacklist 0 -AlwaysShared -nolisten tcp";
+          ExecStart = "${pkgs.tigervnc}/bin/Xvnc ${display} -geometry 1920x1080 -depth 24 -rfbport 5900 -interface 127.0.0.1 -localhost -SecurityTypes None -UseBlacklist 0 -AlwaysShared -nolisten tcp -nolisten local";
         };
     systemd.user.services.macro-openbox =
       userService "Openbox window manager on the Macro display" {

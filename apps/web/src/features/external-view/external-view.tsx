@@ -115,8 +115,8 @@ export function ExternalView() {
       >
         {/* Above the chats, so people who haven't linked WhatsApp see it too.
             Its rows are sidebar-style items, so the entry is one, inset to
-            line up with the rows below it (In Macro on touch, chats on desktop). */}
-        <div class="px-2 pt-2 empty:hidden not-touch:px-4">
+            line up with the chats below it. Touch devices show no tutorial. */}
+        <div class="px-4 pt-2 empty:hidden">
           <TutorialSidebarItem tutorial="whatsapp" />
         </div>
         {/* Touch has no sidebar: the chats in Macro lead the page. */}
@@ -141,8 +141,8 @@ export function ExternalView() {
       <SplitPanel.Body>
         <ViewShell.Root
           asidePreferenceKey="external"
-          aside={isTouchDevice() ? false : undefined}
-          resizable={!isTouchDevice()}
+          aside={{ preserveDuringResize: false }}
+          resizable
         >
           <ViewShell.Aside>
             <ViewSidebar.Root aria-label="External navigation">
@@ -190,6 +190,11 @@ export function ExternalView() {
             </ViewSidebar.Root>
           </ViewShell.Aside>
           <ViewShell.Main>
+            <Show when={isTouchDevice()}>
+              <ViewShell.Header class="empty:hidden">
+                <ViewSidebar.Toggle action="expand" presentation="pill" />
+              </ViewShell.Header>
+            </Show>
             <SplitRouter.Outlet fallback={whatsappPage} />
           </ViewShell.Main>
         </ViewShell.Root>

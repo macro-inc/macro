@@ -15,6 +15,36 @@ const PICTURE_MIME_TYPES = [
   'image/gif',
 ];
 
+function isAcceptedPicture(file: File) {
+  if (!PICTURE_MIME_TYPES.includes(file.type) || file.size === 0) {
+    toast.failure('Choose a PNG, JPG, WebP, or GIF image');
+    return false;
+  }
+  if (file.size > 16 * 1000 * 1000) {
+    toast.failure('Choose an image smaller than 16 MB');
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Open the file picker for an image the server accepts as a channel picture,
+ * explaining a rejected one with a toast. Pass the file to
+ * `useChannelPictureEditor().upload` once the channel exists.
+ */
+export function chooseChannelPicture(onChoose: (file: File) => void) {
+  openFilePicker(
+    {
+      acceptedMimeTypes: PICTURE_MIME_TYPES,
+      acceptedFileExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+    },
+    (files) => {
+      const file = files[0];
+      if (file && isAcceptedPicture(file)) onChoose(file);
+    }
+  );
+}
+
 /**
  * Upload and clear channel pictures, for menus that learn their channel when
  * the user acts rather than when the menu is built. Callers own the permission
@@ -23,44 +53,47 @@ const PICTURE_MIME_TYPES = [
 export function useChannelPictureEditor() {
   const mutation = useSetChannelPictureMutation(createStaticFile);
 
-  const save = async (channelId: string, file: File | null) => {
-    if (mutation.isPending) return;
-    if (file && (!PICTURE_MIME_TYPES.includes(file.type) || file.size === 0)) {
-      toast.failure('Choose a PNG, JPG, WebP, or GIF image');
-      return;
-    }
-    if (file && file.size > 16 * 1000 * 1000) {
-      toast.failure('Choose an image smaller than 16 MB');
-      return;
-    }
+  const save = async (
+    channelId: string,
+    file: File | null,
+    failure = 'Could not update channel picture. Please try again.'
+  ) => {
     try {
       await mutation.mutateAsync({ channelId, file });
       toast.success(
         file ? 'Channel picture updated' : 'Channel picture removed'
       );
-    } catch {
-      toast.failure('Could not update channel picture. Please try again.');
+    } catch (cause) {
+      console.error('Failed to save channel picture', cause);
+      toast.failure(failure);
     }
   };
 
-  const pickFile = (channelId: string) => {
+  // Menu actions ignore a second request while one is saving.
+  const saveFromMenu = (channelId: string, file: File | null) => {
     if (mutation.isPending) return;
-    openFilePicker(
-      {
-        acceptedMimeTypes: PICTURE_MIME_TYPES,
-        acceptedFileExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-      },
-      async (files) => {
-        if (files[0]) await save(channelId, files[0]);
-      }
-    );
+    fireAndForget(save(channelId, file), 'channel-picture');
   };
 
   return {
     isPending: () => mutation.isPending,
-    pickFile,
-    remove: (channelId: string) =>
-      fireAndForget(save(channelId, null), 'channel-picture'),
+    pickFile: (channelId: string) => {
+      if (mutation.isPending) return;
+      chooseChannelPicture((file) => saveFromMenu(channelId, file));
+    },
+    remove: (channelId: string) => saveFromMenu(channelId, null),
+    /**
+     * Save a picture chosen with `chooseChannelPicture` before the channel
+     * existed. Each call saves, so channels created in quick succession all
+     * keep their pictures. It runs after the dialog that chose it has closed,
+     * so a failure says where to try again.
+     */
+    upload: (channelId: string, file: File) =>
+      save(
+        channelId,
+        file,
+        'Could not save the new channel’s picture. Set it again from the channel menu.'
+      ),
   };
 }
 

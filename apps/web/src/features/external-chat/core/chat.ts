@@ -29,6 +29,8 @@ export type ChatSummary = {
   backfill?: ChatBackfill;
   /** The provider community the group belongs to. */
   community?: { id: string; name: string; announcements: boolean };
+  /** The group's or person's picture as the owner's account sees it; initials when absent. */
+  pictureUrl?: string;
 };
 /**
  * Importing the chat's earlier messages from the owner's phone after it was
@@ -59,7 +61,10 @@ export type ChatDetail = {
   phone?: string;
   lastReadMessageId?: string;
   unreadCount: number;
-  members: { id: string; name: string; admin: boolean }[];
+  /** The group's or person's picture as the owner's account sees it. */
+  pictureUrl?: string;
+  /** `pictureUrl`: as the owner's account sees it; initials when absent. */
+  members: { id: string; name: string; admin: boolean; pictureUrl?: string }[];
   backfill?: ChatBackfill;
   /** The provider's timer while disappearing messages are on; Macro keeps all. */
   disappearingSeconds?: number;
@@ -77,7 +82,8 @@ export type ChatMessage = {
   id: string;
   /** `system`: a group event (`rich.type === 'system'`), drawn as a line. */
   kind: 'message' | 'system';
-  sender: { name: string; userId?: string };
+  /** `pictureUrl`: their provider picture as the owner's account sees it. */
+  sender: { name: string; userId?: string; pictureUrl?: string };
   body: string;
   /** People `@<token>` in the body stands for. */
   mentions: Mention[];

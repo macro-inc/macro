@@ -6,9 +6,10 @@
  */
 
 /**
- * Add a missing contact email. Existing addresses are read-only.
+ * Choose a contact's primary email.
  */
 export interface SetContactEmailRequest {
-  /** The address to add. An identical retry is accepted. */
+  /** The address to make primary. It is added when the contact does not
+hold it yet. An identical retry is accepted. */
   email: string;
 }

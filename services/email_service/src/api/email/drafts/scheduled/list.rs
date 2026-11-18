@@ -3,15 +3,13 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email::domain::scheduled::drafts::{DEFAULT_SCHEDULED_LIMIT, ScheduledDraftError};
 use model::response::ErrorResponse;
 use models_email::service::link::Link;
 use models_email::service::message::Message;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
-
-const DEFAULT_LIMIT: u32 = 100;
-const MAX_LIMIT: u32 = 1000;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum GetScheduledError {
@@ -49,25 +47,8 @@ pub struct GetScheduledQueryParams {
     pub limit: u32,
 }
 
-impl GetScheduledQueryParams {
-    fn validate(&self) -> Result<(), GetScheduledError> {
-        if self.limit == 0 {
-            return Err(GetScheduledError::Validation(
-                "Limit must be positive".to_string(),
-            ));
-        }
-        if self.limit > MAX_LIMIT {
-            return Err(GetScheduledError::Validation(format!(
-                "Limit must not exceed {}",
-                MAX_LIMIT
-            )));
-        }
-        Ok(())
-    }
-}
-
 fn default_limit() -> u32 {
-    DEFAULT_LIMIT
+    DEFAULT_SCHEDULED_LIMIT
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
@@ -95,15 +76,19 @@ pub async fn handler(
     link: Extension<Link>,
     Query(params): Query<GetScheduledQueryParams>,
 ) -> Result<Json<GetScheduledResponse>, GetScheduledError> {
-    params.validate()?;
-
-    let messages = email_db_client::messages::scheduled::get::get_scheduled_messages_by_link_id(
-        &ctx.db,
-        link.id,
-        params.offset,
-        params.limit,
-    )
-    .await?;
+    let messages = ctx
+        .scheduled_drafts
+        .list(link.id, params.offset, params.limit)
+        .await
+        .map_err(|error| match error {
+            ScheduledDraftError::NonPositiveLimit => {
+                GetScheduledError::Validation("Limit must be positive".to_string())
+            }
+            ScheduledDraftError::ExcessiveLimit(maximum) => {
+                GetScheduledError::Validation(format!("Limit must not exceed {}", maximum))
+            }
+            ScheduledDraftError::Query(error) => GetScheduledError::QueryError(error.into_inner()),
+        })?;
 
     Ok(Json(GetScheduledResponse { messages }))
 }

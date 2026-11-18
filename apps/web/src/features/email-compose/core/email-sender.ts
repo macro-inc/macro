@@ -60,6 +60,32 @@ export function fromInboxOptions(
     });
 }
 
+/**
+ * The inbox a reply to `message` sends from before the user picks another: the
+ * one holding the message, or for a thread shared from someone else's inbox,
+ * the viewer's primary inbox, else their first.
+ */
+export function defaultReplyInbox<T extends SenderInbox>(
+  inboxes: readonly T[],
+  message: EmailMessage | undefined,
+  primaryInboxId: string | undefined
+): T | undefined {
+  return (
+    inboxes.find((inbox) => inbox.id === message?.link_id) ??
+    inboxes.find((inbox) => inbox.id === primaryInboxId) ??
+    inboxes[0]
+  );
+}
+
+/** An inbox's own address and its send-as aliases. */
+export function inboxAddresses(inbox: SenderInbox | undefined): string[] {
+  if (!inbox) return [];
+  return [
+    inbox.email_address,
+    ...(inbox.sendAs ?? []).map((alias) => alias.email_address),
+  ];
+}
+
 /** Match only within the thread's inbox, never an unrelated connected account.
  * An outgoing message preserves its own From address. Otherwise To precedes Cc/Bcc,
  * with aliases preferred over the primary address within each recipient group. */

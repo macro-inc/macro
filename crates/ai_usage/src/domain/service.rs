@@ -99,6 +99,15 @@ where
         span.record("usage.priced", cost.price.is_some());
         if let Some(price) = cost.price {
             span.record("usage.cost_usd", price.total);
+            // Every priced call, unsampled, for the provider spend monitors in
+            // infra/stacks/monitoring/monitors/ai-providers.ts: their log-based
+            // metric sums `cost_usd` by `provider`. Keep the message and fields.
+            tracing::info!(
+                provider = model_provider(&event.model),
+                model,
+                cost_usd = price.total,
+                "ai usage priced"
+            );
         }
 
         let row = CompletionUsage {

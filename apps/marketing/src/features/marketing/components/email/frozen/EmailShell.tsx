@@ -91,9 +91,7 @@ export function EmailSidebar(props: {
     <ViewSidebar.Root aria-label="Email navigation" class="mail-sidebar">
       <header class="flex shrink-0 flex-col">
         <ViewSidebar.Header>
-          <h3 class="text-sm font-semibold tracking-[-0.03em] text-ink">
-            Email
-          </h3>
+          <h3 class="text-sm font-medium tracking-[-0.03em] text-ink">Email</h3>
           <Show when={props.onToggleNavigation}>
             <ViewSidebar.Control
               label="Collapse email navigation"

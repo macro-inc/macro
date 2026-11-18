@@ -54,6 +54,7 @@ async fn transient_create_retries_keep_identity_and_trigger_controls_keep_source
         prompt: None,
         prompt_action_id: None,
         prompt_attachments: Vec::new(),
+        prompt_client_id: None,
         repo_url: None,
         repo_branch: None,
         owner: Some(sender.to_string()),

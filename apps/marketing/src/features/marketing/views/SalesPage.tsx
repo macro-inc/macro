@@ -25,7 +25,7 @@ const SHELL_PALETTE = {
   '--color-accent': 'var(--color-ink)',
 };
 
-/** Section heading in the "Replace 27+ apps" format from `HomepageUnification`. */
+/** Section heading in the shared centered slab format. */
 function TourHeading(props: {
   id: string;
   title: string;

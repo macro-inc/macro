@@ -8,7 +8,11 @@ import {
   initializeMetaPixel,
 } from '@app/lib/analytics/providers';
 import { frontendInstanceId } from '@app/observability/frontend-instance';
-import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
+import {
+  DEV_MODE_ENV,
+  LOCAL_ONLY,
+  PROD_MODE_ENV,
+} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform, isTauri } from '@core/util/platform';
 import {
@@ -50,6 +54,11 @@ const HAS_PAID_ACCESS_AT_EVENT_PROPERTY = 'has_paid_access_at_event' as const;
  * A person property, so a breakdown uses the current language.
  */
 const INTERFACE_LANGUAGE_PROPERTY = 'interface_language' as const;
+/**
+ * Person property every flag evaluation carries, so a flag can target one
+ * deployment: dev and prod share user IDs. Backend loads send the same key.
+ */
+const FLAG_ENVIRONMENT_PROPERTY = 'environment' as const;
 /** PostHog group type for team analytics; server events send the same key. */
 const TEAM_GROUP_TYPE = 'team' as const;
 
@@ -162,6 +171,17 @@ function isPrivateCallPage() {
   return redactPrivatePageTokens(path) !== path;
 }
 
+// `reset()` clears flag person properties, so reapply after it.
+function setFlagEnvironment(
+  instance: Pick<PostHog, 'setPersonPropertiesForFlags'>
+) {
+  instance.setPersonPropertiesForFlags(
+    // Local stack bundles say `local`, as local backends do.
+    { [FLAG_ENVIRONMENT_PROPERTY]: LOCAL_ONLY ? 'local' : getEnvironment() },
+    false
+  );
+}
+
 const initializePosthog = (instance: PostHog) => {
   const key = import.meta.env.VITE_POSTHOG_API_KEY;
   if (!key) return;
@@ -177,6 +197,8 @@ const initializePosthog = (instance: PostHog) => {
     // PostHog captures utm_* and click ids on its own. `signup_flow` is added
     // on the mobile-email desktop link so that path is its own campaign field.
     custom_campaign_params: ['signup_flow'],
+    // Runs before the first `/flags` request.
+    loaded: setFlagEnvironment,
     prepare_external_dependency_script: (script) => {
       const url = new URL(script.src);
 
@@ -513,6 +535,7 @@ const createAnalytics = () => {
       posthog.unregister(HAS_PAID_ACCESS_AT_EVENT_PROPERTY);
       reportedInterfaceLanguage = undefined;
       posthog.reset();
+      setFlagEnvironment(posthog);
     } catch (e) {
       console.error('[Analytics] Failed to reset:', e);
     }

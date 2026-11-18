@@ -1,5 +1,7 @@
+import { createInputAttachmentTracker } from '@channel/Input/attachment-tracker';
+import { holdPersistedDraftText } from '@channel/Input/shared-draft';
+import type { InputAttachmentTracker } from '@channel/Input/types';
 import { createPersistenceKey } from '@queries/persistence';
-import { makePersisted } from '@solid-primitives/storage';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 
 /** Same localStorage projection channel composers use for unsent drafts. */
@@ -32,15 +34,27 @@ export function createPersistedComposerDraft(
 ) {
   const state = createMemo(() => {
     const identity = userId();
-    const raw = createSignal<string | undefined>(undefined);
-    return identity
-      ? makePersisted(raw, {
-          name: `${name}:${encodeURIComponent(identity)}`,
-        })
-      : raw;
+    if (!identity) return createSignal<string | undefined>(undefined);
+
+    return holdPersistedDraftText(`${name}:${encodeURIComponent(identity)}`);
   });
   return {
     draft: () => state()[0]() ?? '',
     setDraft: (value: string) => state()[1](value || undefined),
   };
+}
+
+/**
+ * The files attached to a composer draft. Call it inside the owner that uses
+ * them. Unknown identities never read shared storage.
+ */
+export function createPersistedComposerAttachments(
+  name: string,
+  identity: string | undefined
+): InputAttachmentTracker {
+  if (!identity) return createInputAttachmentTracker();
+
+  return createInputAttachmentTracker({
+    persistenceKey: `${name}:${encodeURIComponent(identity)}`,
+  });
 }
