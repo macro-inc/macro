@@ -22,36 +22,38 @@ pub(super) async fn fence_binding(
 }
 
 impl CalendarProjectionOutbox for PgCalendarRepository {
-    async fn claim_projection(
+    async fn claim_projections(
         &self,
         lease_id: Uuid,
-    ) -> Result<Option<CalendarProjectionLease>, Report> {
-        let row=sqlx::query!(r#"WITH candidate AS(SELECT event_id FROM calendar_projection_outbox WHERE next_run_at<=now() AND(lease_until IS NULL OR lease_until<now())
-            ORDER BY next_run_at LIMIT 1 FOR UPDATE SKIP LOCKED)
+        limit: u16,
+    ) -> Result<Vec<CalendarProjectionLease>, Report> {
+        let rows=sqlx::query!(r#"WITH candidate AS(SELECT event_id FROM calendar_projection_outbox WHERE next_run_at<=now() AND(lease_until IS NULL OR lease_until<now())
+            ORDER BY next_run_at LIMIT $2 FOR UPDATE SKIP LOCKED)
             UPDATE calendar_projection_outbox o SET lease_id=$1,lease_until=now()+interval '2 minutes' FROM candidate c WHERE o.event_id=c.event_id
-            RETURNING o.event_id,o.owner_id,o.link_id,o.change_kind,o.revision,o.team_ooo_changed"#,lease_id).fetch_optional(&self.pool).await.map_err(report)?;
-        row.map(|r| {
-            use crate::domain::events::{CalendarEventMetadata, CalendarTopicEvent};
-            let metadata = CalendarEventMetadata {
-                event_id: r.event_id,
-                owner_id: r.owner_id,
-            };
-            let event = match r.change_kind.as_str() {
-                "created" => CalendarTopicEvent::Created(metadata),
-                "updated" => CalendarTopicEvent::Updated(metadata),
-                "deleted" => CalendarTopicEvent::Deleted(metadata),
-                _ => return Err(rootcause::report!("invalid calendar journal change")),
-            };
-            Ok(CalendarProjectionLease {
-                event_id: r.event_id,
-                revision: r.revision,
-                lease_id,
-                link_id: r.link_id,
-                team_ooo_changed: r.team_ooo_changed,
-                event,
+            RETURNING o.event_id,o.owner_id,o.link_id,o.change_kind,o.revision,o.team_ooo_changed"#,lease_id,i64::from(limit)).fetch_all(&self.pool).await.map_err(report)?;
+        rows.into_iter()
+            .map(|r| {
+                use crate::domain::events::{CalendarEventMetadata, CalendarTopicEvent};
+                let metadata = CalendarEventMetadata {
+                    event_id: r.event_id,
+                    owner_id: r.owner_id,
+                };
+                let event = match r.change_kind.as_str() {
+                    "created" => CalendarTopicEvent::Created(metadata),
+                    "updated" => CalendarTopicEvent::Updated(metadata),
+                    "deleted" => CalendarTopicEvent::Deleted(metadata),
+                    _ => return Err(rootcause::report!("invalid calendar journal change")),
+                };
+                Ok(CalendarProjectionLease {
+                    event_id: r.event_id,
+                    revision: r.revision,
+                    lease_id,
+                    link_id: r.link_id,
+                    team_ooo_changed: r.team_ooo_changed,
+                    event,
+                })
             })
-        })
-        .transpose()
+            .collect()
     }
     async fn complete_projection(&self, lease: &CalendarProjectionLease) -> Result<(), Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;

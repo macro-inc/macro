@@ -659,13 +659,19 @@ pub struct CalendarProjectionLease {
     pub event: super::events::CalendarTopicEvent,
 }
 
+/// The most revisions one relay round publishes. A round that claims fewer
+/// has taken everything due, so the relay waits for its next poll, and the
+/// changes that arrive meanwhile share one refresh per inbox.
+pub const PROJECTION_BATCH: u16 = 100;
+
 /// Transactional projection publication journal.
 pub trait CalendarProjectionOutbox: Send + Sync + 'static {
-    /// Claim one pending change.
-    fn claim_projection(
+    /// Claim up to `limit` pending changes under one lease, earliest due first.
+    fn claim_projections(
         &self,
         lease_id: Uuid,
-    ) -> impl Future<Output = Result<Option<CalendarProjectionLease>, Report>> + Send;
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<CalendarProjectionLease>, Report>> + Send;
     /// Acknowledge exactly the published revision, preserving concurrent updates.
     fn complete_projection(
         &self,
@@ -693,16 +699,81 @@ impl<
             notifier,
         }
     }
-    /// Publish one committed revision; a crash or failure retains it for replay.
-    pub async fn run_once(&self) -> Result<bool, Report> {
-        let Some(lease) = self.repository.claim_projection(Uuid::now_v7()).await? else {
-            return Ok(false);
-        };
-        self.publish(&lease).await?;
-        Ok(true)
-    }
+    /// Publish one batch of committed revisions, then refresh each inbox the
+    /// published ones changed once, however many of its events changed. A
+    /// revision that fails to publish keeps its lease and is claimed again
+    /// once the lease expires, as a crash leaves it; the rest still complete.
+    /// Returns whether the batch was full, so more may be due.
     #[tracing::instrument(
         name = "calendar.projection_relay",
+        skip_all,
+        fields(
+            claimed = tracing::field::Empty,
+            failed = tracing::field::Empty,
+            refreshes = tracing::field::Empty,
+        ),
+        err(level = tracing::Level::DEBUG)
+    )]
+    pub async fn run_once(&self) -> Result<bool, Report> {
+        let leases = self
+            .repository
+            .claim_projections(Uuid::now_v7(), PROJECTION_BATCH)
+            .await?;
+        let span = tracing::Span::current();
+        let claimed = leases.len();
+        span.record("claimed", claimed as i64);
+        if leases.is_empty() {
+            return Ok(false);
+        }
+
+        let outcomes =
+            futures::future::join_all(leases.iter().map(|lease| self.publish(lease))).await;
+        if let Some(error) = outcomes.iter().find_map(|outcome| outcome.as_ref().err()) {
+            tracing::warn!(
+                error = ?error,
+                failed = outcomes.iter().filter(|outcome| outcome.is_err()).count(),
+                "Calendar projection publication will retry"
+            );
+        }
+        let published: Vec<_> = leases
+            .into_iter()
+            .zip(outcomes)
+            .filter_map(|(lease, outcome)| outcome.is_ok().then_some(lease))
+            .collect();
+        span.record("failed", (claimed - published.len()) as i64);
+
+        // An inbox's refresh may change teammates' out-of-office rows when
+        // any of its published revisions may.
+        let mut inboxes = std::collections::BTreeMap::<_, bool>::new();
+        for lease in &published {
+            *inboxes
+                .entry((lease.event.metadata().owner_id.as_str(), lease.link_id))
+                .or_default() |= lease.team_ooo_changed;
+        }
+        span.record("refreshes", inboxes.len() as i64);
+        for ((owner_id, link_id), team_ooo_changed) in inboxes {
+            self.notifier
+                .calendar_changed(owner_id, link_id, team_ooo_changed)
+                .await;
+        }
+        // One revision per transaction: the outbox trigger locks these rows
+        // from writes that change several events, so a batch that locked
+        // many at once could deadlock with them. One that fails stays leased
+        // for its retry; the others are still acknowledged, so they are not
+        // published again.
+        let mut acknowledgement_error = None;
+        for lease in &published {
+            if let Err(error) = self.repository.complete_projection(lease).await {
+                acknowledgement_error.get_or_insert(error);
+            }
+        }
+        match acknowledgement_error {
+            Some(error) => Err(error),
+            None => Ok(claimed == usize::from(PROJECTION_BATCH)),
+        }
+    }
+    #[tracing::instrument(
+        name = "calendar.projection_publish",
         skip_all,
         fields(
             event_id = %lease.event_id,
@@ -720,13 +791,6 @@ impl<
             .await
             .map_err(|e| rootcause::report!(e))?
             .map_err(|e| rootcause::report!(e))?;
-        self.notifier
-            .calendar_changed(
-                &lease.event.metadata().owner_id,
-                lease.link_id,
-                lease.team_ooo_changed,
-            )
-            .await;
-        self.repository.complete_projection(lease).await
+        Ok(())
     }
 }
