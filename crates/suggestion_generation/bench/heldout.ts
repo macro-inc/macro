@@ -148,11 +148,12 @@ const PLAN = obj({
   projects: { type: 'array', items: obj({ key: str, name: str }) },
   channels: { type: 'array', items: obj({ key: str, name: str }) },
   documents: { type: 'array', items: obj({ key: str, owner: str, name: str, project: str, about: str }) },
-  tasks: { type: 'array', items: obj({ key: str, owner: str, name: str, status: { type: 'string', enum: ['not_started', 'in_progress', 'completed'] }, assignees: strs, content: str }) },
+  tasks: { type: 'array', items: obj({ key: str, owner: str, name: str, status: { type: 'string', enum: ['not_started', 'in_progress', 'completed'] }, assignees: strs }) },
   calls: { type: 'array', items: obj({ key: str, channel: str, name: str, ended_minutes_ago: { type: 'integer' }, duration_minutes: { type: 'integer' }, about: str }) },
   opportunities: strs,
   decoys: strs,
 });
+const TASKS = obj({ tasks: { type: 'array', items: obj({ key: str, content: str }) } });
 const DOCUMENTS = obj({ documents: { type: 'array', items: obj({ key: str, content: str }) } });
 const CHAT = obj({ messages: { type: 'array', items: obj({ channel: str, from: str, text: str }) } });
 const TRANSCRIPT = obj({ transcript: { type: 'array', items: obj({ speaker: str, text: str }) } });
@@ -161,7 +162,7 @@ type Plan = {
   projects: { key: string; name: string }[];
   channels: { key: string; name: string }[];
   documents: { key: string; owner: string; name: string; project: string; about: string }[];
-  tasks: { key: string; owner: string; name: string; status: string; assignees: string[]; content: string }[];
+  tasks: { key: string; owner: string; name: string; status: string; assignees: string[] }[];
   calls: { key: string; channel: string; name: string; ended_minutes_ago: number; duration_minutes: number; about: string }[];
   opportunities: string[];
   decoys: string[];
@@ -181,12 +182,44 @@ const ROUTINES_TRUTH = obj({
 
 const anchor = new Date(ANCHOR).toISOString();
 
-/** Write `count` new personas into held-out set `name`. */
+const PERSONA_FILES = ['inbox.json', 'workspace.json', 'feed-truth.json', 'routines-truth.json'];
+
+/**
+ * Write `count` new personas into held-out set `name`. A set whose writing
+ * stopped part way (the model timed out) is finished by running it again:
+ * the people are kept in `people.json` and each is written whole or again.
+ */
 export async function makeHeldout(at: Stack, name: string, count: number) {
   if (!name) throw new Error('heldout make <name> [count]');
   const root = join(HELDOUT_DIR, name);
-  if (existsSync(root)) throw new Error(`held-out set ${name} exists; pick a new name`);
-  mkdirSync(root, { recursive: true });
+  const sketches = join(root, 'people.json');
+  const written = (slug: string) => PERSONA_FILES.every((file) => existsSync(join(root, slug, file)));
+  let people: Sketch[];
+  if (existsSync(sketches)) {
+    people = JSON.parse(readFileSync(sketches, 'utf8'));
+    if (people.every((sketch) => written(sketch.slug))) throw new Error(`held-out set ${name} exists; pick a new name`);
+    console.log(`finishing held-out set ${name}`);
+  } else {
+    if (existsSync(root)) throw new Error(`held-out set ${name} exists; pick a new name`);
+    mkdirSync(root, { recursive: true });
+    people = (await sketch(at, count)).slice(0, count);
+    writeFileSync(sketches, `${JSON.stringify(people, null, 1)}\n`);
+  }
+  const failed: string[] = [];
+  for (const person of people) {
+    if (written(person.slug)) continue;
+    try {
+      await writePersona(at, name, root, person);
+    } catch (error) {
+      failed.push(person.slug);
+      console.error(`${person.slug}: ${String(error).slice(0, 300)}`);
+    }
+  }
+  if (failed.length) throw new Error(`held-out set ${name}: ${failed.join(', ')} not written; run heldout make ${name} again to finish it`);
+  console.log(`held-out set ${name} is ready; run it with --set ${name}. Don't open its files while tuning.`);
+}
+
+async function sketch(at: Stack, count: number): Promise<Sketch[]> {
   const tune = personas('tune').map((persona) => persona.inbox.persona);
   const { people } = await write<{ people: Sketch[] }>(
     at,
@@ -194,7 +227,12 @@ export async function makeHeldout(at: Stack, name: string, count: number) {
 For each: a short slug (lowercase letters), a one-sentence persona, a first and last name, an invented company domain ending in .example, an IANA time zone in the Americas or Europe, the 4 to 6 mail labels they file mail under, 4 colleagues, the recurring streams of mail they get (at least 6, such as weekly reports, invoices, customer requests, tool notifications; say how often each comes), and a situation: what is going on in their work this month.`,
     SKETCH,
   );
-  for (const sketch of people.slice(0, count)) {
+  return people;
+}
+
+/** Write one held-out persona's mailbox, workspace and answer keys. */
+async function writePersona(at: Stack, name: string, root: string, sketch: Sketch) {
+  {
     const dir = join(root, sketch.slug);
     mkdirSync(dir, { recursive: true });
     const owner = { name: `${sketch.owner_first} ${sketch.owner_last}`, email: `${sketch.owner_first.toLowerCase()}@${sketch.domain}` };
@@ -231,7 +269,7 @@ ${messages.length ? `Earlier batches' subjects, so you don't repeat them: ${mess
     const plan = await write<Plan>(
       at,
       `Plan the work app workspace of ${who}
-It is now ${anchor}. Their mail is below. Users are keyed ${keys.join(', ')} (owner is ${owner.name}). Plan 3 projects, 3 or 4 team channels, 8 to 11 documents (plans, trackers, process notes, meeting notes: for each, what it says in two or three sentences), 8 to 12 tasks written out in full (some completed; content is one to three sentences), and 2 calls (for each, who said what in two or three sentences). Keys are short kebab-case; owners and assignees use the user keys; a document's project and a call's channel use those keys.
+It is now ${anchor}. Their mail is below. Users are keyed ${keys.join(', ')} (owner is ${owner.name}). Plan 3 projects, 3 or 4 team channels, 8 to 11 documents (plans, trackers, process notes, meeting notes: for each, what it says in two or three sentences), 8 to 12 tasks (some completed), and 2 calls (for each, who said what in two or three sentences). Keys are short kebab-case; owners and assignees use the user keys; a document's project and a call's channel use those keys.
 Plant 6 to 9 opportunities a sharp assistant would raise by connecting the workspace with the mail (a promise not kept, a deadline nobody owns, conflicting work, money left on the table, a stale tracker), each evidenced in at least two places, and 3 decoys: things that look urgent in one place but another place shows are already handled. List each under opportunities or decoys with where its evidence is (document, task, channel or call keys, mail subjects).
 <mail>
 ${digest}
@@ -252,9 +290,16 @@ Write the markdown content of documents ${part.map((d) => d.key).join(', ')}: re
       );
       for (const d of documents) contents.set(d.key, d.content);
     }
-    // A document the writer dropped would lose the evidence the plan put in it.
-    const unwritten = plan.documents.filter((d) => !contents.has(d.key)).map((d) => d.key);
-    if (unwritten.length) throw new Error(`${sketch.slug}: documents ${unwritten.join(', ')} came back unwritten; run heldout make again with a new name`);
+    const { tasks } = await write<{ tasks: { key: string; content: string }[] }>(
+      at,
+      `${brief}
+Write the content of every task (${plan.tasks.map((t) => t.key).join(', ')}): one to three sentences each, with every detail the plan's opportunities and decoys put in it.`,
+      TASKS,
+    );
+    for (const t of tasks) contents.set(`task:${t.key}`, t.content);
+    // A document or task the writer dropped would lose the evidence the plan put in it.
+    const unwritten = [...plan.documents.map((d) => d.key), ...plan.tasks.map((t) => `task:${t.key}`)].filter((key) => !contents.has(key));
+    if (unwritten.length) throw new Error(`${sketch.slug}: ${unwritten.join(', ')} came back unwritten`);
     const { messages: chat } = await write<{ messages: Record<string, unknown>[] }>(
       at,
       `${brief}
@@ -274,7 +319,7 @@ Write the transcript of call ${c.key} ("${c.name}"): 8 to 16 turns, speakers are
     const ws = {
       projects: plan.projects,
       documents: plan.documents.map((d) => ({ ...d, content: contents.get(d.key)! })),
-      tasks: plan.tasks,
+      tasks: plan.tasks.map((t) => ({ ...t, content: contents.get(`task:${t.key}`)! })),
       channels: plan.channels,
       messages: chat,
       calls: plan.calls.map((c) => ({ ...c, transcript: transcripts.get(c.key) ?? [] })),
@@ -319,5 +364,4 @@ ${catalog}
     writeFileSync(join(dir, 'routines-truth.json'), `${JSON.stringify(routinesTruth, null, 1)}\n`);
     console.log(`wrote held-out persona ${sketch.slug} in ${dir}`);
   }
-  console.log(`held-out set ${name} is ready; run it with --set ${name}. Don't open its files while tuning.`);
 }

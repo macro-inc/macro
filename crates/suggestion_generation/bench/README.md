@@ -139,6 +139,11 @@ bun $B/bench.ts run routines --set h1 --label mine
 bun $B/bench.ts heldout list            # how often each set was read
 ```
 
+Writing a set takes about 15 minutes a person, in many short model calls
+(the stack gives one 90 seconds). If one still times out, `heldout make`
+says which people are missing; run the same command again to write just
+those.
+
 Held-out sets live outside the repository and are reported only in
 aggregate. Don't open their files while tuning. Each run is recorded in the
 set's ledger; after a baseline and one candidate a set is spent and the bench
