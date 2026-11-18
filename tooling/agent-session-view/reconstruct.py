@@ -99,7 +99,8 @@ def production_deploys():
         releases = run_json(["gh", "api", "repos/{owner}/{repo}/releases?per_page=100"])
         return {
             "runs": [run for run in listing["workflow_runs"] if run["name"] == PROD_DEPLOY],
-            "releases": [release for release in releases if not release["draft"] and release["published_at"]],
+            "releases": [release for release in releases # A prerelease never triggers the deploy workflow.
+                         if not release["draft"] and not release["prerelease"] and release["published_at"]],
         }
     except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError) as error:
         return {"unreadable": f"production deploy runs not readable ({type(error).__name__})"}
@@ -125,11 +126,13 @@ def deploy_commit(task, turn_started, env, deploys):
                 "--query", "taskDefinition.registeredAt", "--output", "json",
             ]))
             for run in runs:
-                if iso(run["created_at"]) <= registered <= iso(run["updated_at"]):
+                # A run still going has no end yet.
+                ended = iso(run["updated_at"]) if run["status"] == "completed" else turn_started
+                if iso(run["created_at"]) <= registered <= ended:
                     return {"sha": run["head_sha"], "exact": True,
                             "reason": f"{run['head_branch']}: its deploy registered task {task}{outcome(run)}"}
             reason = f"no production deploy run spans task {task}'s registration"
-        except (OSError, subprocess.CalledProcessError, ValueError) as error:
+        except (OSError, subprocess.CalledProcessError, ValueError, AttributeError, TypeError) as error:
             reason = f"task definition {task} not readable ({type(error).__name__})"
     else:
         reason = "the spans name no ECS task definition"
@@ -137,25 +140,38 @@ def deploy_commit(task, turn_started, env, deploys):
 
 
 def newest_release_before(turn_started, runs, releases, reason):
-    """The newest release deployed before the turn: by its deploy run's end,
-    or, for a release with no run listed, by its publish time."""
-    finished = [run for run in runs if run["status"] == "completed" and run["conclusion"] in ("success", "failure")]
-    candidates = [(iso(run["updated_at"]), run["head_branch"], run) for run in finished]
+    """The newest release deployed before the turn: one whose deploy run
+    finished before it, or, for a release with no run listed, one published
+    before it. A re-run moves the run's end, so a re-run counts from its
+    start. Releases are ordered by when they started deploying."""
+    candidates = []
+    for run in runs:
+        if run["status"] != "completed" or run["conclusion"] not in ("success", "failure", "cancelled", "timed_out"):
+            continue
+        rerun = run.get("run_attempt", 1) > 1
+        deployed = iso(run["created_at"] if rerun else run["updated_at"])
+        when = (f"its deploy run started before the turn ({iso(run['created_at']):%Y-%m-%d %H:%M}Z; re-run since)"
+                if rerun else f"its deploy run finished before the turn ({deployed:%Y-%m-%d %H:%M}Z)")
+        candidates.append((iso(run["created_at"]), deployed, run["head_branch"], run, when))
     with_runs = {run["head_branch"] for run in runs}
-    candidates += [(iso(release["published_at"]), release["tag_name"], None)
-                   for release in releases if release["tag_name"] not in with_runs]
-    before = [candidate for candidate in candidates if candidate[0] <= turn_started]
+    for release in releases:
+        if release["tag_name"] not in with_runs:
+            published = iso(release["published_at"])
+            candidates.append((published, published, release["tag_name"], None,
+                               f"published before the turn ({published:%Y-%m-%d %H:%M}Z; no deploy run listed)"))
+    before = [candidate for candidate in candidates if candidate[1] <= turn_started]
     if not before:
         return closest_main(turn_started, reason + "; no production release before the turn listed")
-    deployed, tag, run = max(before, key=lambda candidate: candidate[0])
+    _, _, tag, run, when = max(before, key=lambda candidate: candidate[0])
     if run:
-        return {"sha": run["head_sha"], "exact": False,
-                "reason": f"{reason}; inferred: {tag}, the newest release whose deploy run finished before the turn"
-                          f" ({deployed:%Y-%m-%d %H:%M}Z){outcome(run)}"}
-    sha = run_json(["gh", "api", f"repos/{{owner}}/{{repo}}/commits/{tag}", "--jq", "{sha: .sha}"])["sha"]
-    return {"sha": sha, "exact": False,
-            "reason": f"{reason}; inferred: {tag}, the newest release published before the turn"
-                      f" ({deployed:%Y-%m-%d %H:%M}Z; no deploy run listed)"}
+        sha, why = run["head_sha"], when + outcome(run)
+    else:
+        try:
+            sha = run_json(["gh", "api", f"repos/{{owner}}/{{repo}}/commits/{tag}", "--jq", "{sha: .sha}"])["sha"]
+        except (ValueError, KeyError, TypeError) as error:
+            raise OSError(f"release {tag}'s commit not readable ({type(error).__name__})") from error
+        why = when
+    return {"sha": sha, "exact": False, "reason": f"{reason}; inferred: {tag}, the newest release {why}"}
 
 
 def closest_main(turn_started, reason):
@@ -272,16 +288,17 @@ def attach(export, contexts, turns, env):
         rows = own_calls(turn, calls) + ([context["documentation"]] if context["documentation"] else [])
         task = next((row.get("task_definition") for row in rows if row.get("task_definition")), None)
         started = datetime.datetime.fromtimestamp(turn.started, datetime.timezone.utc)
-        # Turns served by one task share its lookup; without one, each turn's
-        # own start time decides.
-        key = task or started
-        if key not in commits:
+        # Turns served by one task share an exact match; an inferred commit
+        # depends on each turn's own start time.
+        commit = commits.get(task)
+        if not commit or not commit["exact"]:
             try:
-                commits[key] = deploy_commit(task, started, env, deploys)
+                commit = deploy_commit(task, started, env, deploys)
             except (OSError, subprocess.CalledProcessError) as error:
                 context["literal"] = {"error": f"no commit to rebuild from: {error}"}
                 continue
-        commit = commits[key]
+            if task:
+                commits[task] = commit
         groups.setdefault(commit["sha"], (commit, []))[1].append((context, turn))
 
     candidates = integration_candidates(spans)

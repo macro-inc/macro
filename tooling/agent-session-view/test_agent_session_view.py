@@ -306,7 +306,7 @@ RUNS_2026_11_18 = {"workflow_runs": [
     ]
 ]}
 RELEASES_2026_11_18 = [
-    {"tag_name": tag, "published_at": published, "draft": False}
+    {"tag_name": tag, "published_at": published, "draft": False, "prerelease": False}
     for tag, published in [
         ("v2026.11.18.0", "2026-11-18T18:24:27Z"), ("v2026.11.17.1", "2026-11-18T00:08:43Z"),
         ("v2026.11.17.0", "2026-11-17T21:43:38Z"), ("v2026.11.16.1", "2026-11-16T23:15:23Z"),
@@ -409,6 +409,27 @@ class Reconstruct(unittest.TestCase):
         self.assertEqual(commit["sha"], "cd959802725")
         self.assertFalse(commit["exact"])
         self.assertIn("no production deploy run spans", commit["reason"])
+
+    def test_a_deploy_still_running_registered_a_task_after_its_last_update(self):
+        running = [dict(RUNS_2026_11_18["workflow_runs"][0], status="in_progress", conclusion=None,
+                        updated_at="2026-11-18T18:50:00Z")] + RUNS_2026_11_18["workflow_runs"][1:]
+        commit = lookup("agent-harness-service-8410addf:1", "2026-11-18T19:00:00Z", {"workflow_runs": running},
+                        RELEASES_2026_11_18, registered="2026-11-18T18:55:51.371000+00:00")
+        self.assertEqual(commit["sha"], "7b93e795a5a")
+        self.assertTrue(commit["exact"])
+        self.assertIn("in_progress", commit["reason"])
+
+    def test_a_rerun_older_release_does_not_overtake_a_newer_one(self):
+        runs = [dict(run) for run in RUNS_2026_11_18["workflow_runs"]]
+        runs[1].update(run_attempt=2, updated_at="2026-11-18T19:20:00Z")
+        commit = lookup(None, "2026-11-18T19:30:00Z", {"workflow_runs": runs}, RELEASES_2026_11_18)
+        self.assertEqual(commit["sha"], "7b93e795a5a")
+
+    def test_a_prerelease_is_never_inferred(self):
+        runs = {"workflow_runs": RUNS_2026_11_18["workflow_runs"][1:]}
+        releases = [dict(RELEASES_2026_11_18[0], prerelease=True)] + RELEASES_2026_11_18[1:]
+        commit = lookup(None, "2026-11-18T19:30:00Z", runs, releases)
+        self.assertEqual(commit["sha"], "dce2afa890f")
 
     def test_an_unseen_turn_checks_neither_the_session_preamble_nor_a_macro_prompt(self):
         output = {"preamble": "P", "macro_prompt": "inline", "routed_macro_prompt": "routed",
