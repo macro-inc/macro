@@ -72,7 +72,8 @@ corresponding database timestamp.
 An email attachment's Drive copy goes to the Trash within about a minute once
 its email is gone (the message deleted at the provider, a draft sent or
 discarded, or the inbox disconnected or removed), unless its owner moved it
-into a folder, shared it, edited it or commented on it. It never shows up in
+into a folder, shared it, renamed it, edited it or commented on it. Opening it
+does not keep it. It never shows up in
 **My Files** on its own, and it expires from the Trash like any other file.
 The app has no Trash view, so the document simply leaves **Email
 attachments**. Verify by deleting a test message whose attachment was opened,
