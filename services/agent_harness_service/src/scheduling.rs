@@ -65,6 +65,7 @@ use scheduled_action::outbound::pg_code_upgrades::PgCodeUpgrades;
 use scheduled_action::outbound::pg_draft_hand_backs::PgDraftHandBacks;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
 use scheduled_action::outbound::pg_inbox_delegates::PgInboxDelegates;
+use scheduled_action::outbound::pg_owner_inboxes::PgOwnerInboxes;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
@@ -729,6 +730,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
             &suggestion_repo,
         ))))
+        .with_owner_inboxes(Arc::new(PgOwnerInboxes::new(db.clone())))
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );

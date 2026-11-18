@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id AS \"id!\"\n            FROM email_links\n            WHERE macro_id = $1\n            UNION\n            SELECT link_id\n            FROM macro_user_links\n            WHERE primary_macro_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8944fa0b314f33eeeef2bc27ce18240f40041be7431ac2adcb86f8f8157fc22e"
+}

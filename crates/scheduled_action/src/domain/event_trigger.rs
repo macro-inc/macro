@@ -54,6 +54,7 @@ mod test;
 pub const MAX_FILTERS: usize = 32;
 pub const MAX_EVENTS_PER_FILTER: usize = 15;
 pub const MAX_IDS_PER_FILTER: usize = 100;
+pub const MAX_INBOXES_PER_FILTER: usize = 25;
 
 /// A routine may run on one trigger or any of several schedules and Macro events.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -357,6 +358,10 @@ pub enum FilterValidationError {
     PayloadMatch,
     #[error("a property selector needs task property change events that report its property")]
     PropertyEvents,
+    #[error("an inbox filter is only for email.message_received, alone in its filter")]
+    InboxEvents,
+    #[error("expected at most 25 inboxes per filter")]
+    InboxCount,
     #[error(transparent)]
     PropertyValues(#[from] PropertyValuesError),
     #[error(transparent)]
@@ -390,6 +395,11 @@ pub struct EventFilter {
     /// The task property that must have changed, and the values it must gain.
     #[serde(skip_serializing_if = "Option::is_none")]
     property: Option<PropertySelector>,
+    /// The inboxes (email link ids) whose new mail starts the routine. Absent:
+    /// every inbox the owner reads, their own and those delegated to them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Vec<String>>)]
+    inboxes: Option<Vec<Uuid>>,
     /// Yes/no question about the triggering content, e.g. "Is this email an
     /// invoice?". The routine runs only when the answer is yes.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -410,6 +420,8 @@ struct FilterInput {
     #[serde(default)]
     property: Option<PropertySelector>,
     #[serde(default)]
+    inboxes: Option<Vec<Uuid>>,
+    #[serde(default)]
     condition: Option<YesNoQuestion>,
 }
 
@@ -420,6 +432,7 @@ impl TryFrom<FilterInput> for EventFilter {
         Self::new(input.events, input.ids)?
             .with_condition(input.condition)
             .with_property(input.property)?
+            .with_inboxes(input.inboxes)?
             .with_external(input.github, input.payload)
     }
 }
@@ -453,6 +466,7 @@ impl EventFilter {
             github: None,
             payload: None,
             property: None,
+            inboxes: None,
             condition: None,
         })
     }
@@ -480,6 +494,28 @@ impl EventFilter {
             return Err(FilterValidationError::PropertyEvents);
         }
         self.property = Some(property.canonicalized()?);
+        Ok(self)
+    }
+
+    /// Narrow new mail to some of the owner's inboxes. None or empty is every
+    /// inbox. Which inboxes are the owner's is checked when the routine is saved.
+    pub fn with_inboxes(
+        mut self,
+        inboxes: Option<Vec<Uuid>>,
+    ) -> Result<Self, FilterValidationError> {
+        let Some(mut inboxes) = inboxes.filter(|inboxes| !inboxes.is_empty()) else {
+            self.inboxes = None;
+            return Ok(self);
+        };
+        if self.events != [EventName::EmailMessageReceived] {
+            return Err(FilterValidationError::InboxEvents);
+        }
+        if inboxes.len() > MAX_INBOXES_PER_FILTER {
+            return Err(FilterValidationError::InboxCount);
+        }
+        inboxes.sort_unstable();
+        inboxes.dedup();
+        self.inboxes = Some(inboxes);
         Ok(self)
     }
 
@@ -522,6 +558,11 @@ impl EventFilter {
         self.property.as_ref()
     }
 
+    /// `None` watches every inbox the owner reads.
+    pub fn inboxes(&self) -> Option<&[Uuid]> {
+        self.inboxes.as_deref()
+    }
+
     pub fn condition(&self) -> Option<&YesNoQuestion> {
         self.condition.as_ref()
     }
@@ -537,9 +578,13 @@ impl EventFilter {
                 EventSource::Entity {
                     entity_id,
                     property_change,
+                    inbox,
                     ..
                 } => {
                     self.ids.as_ref().is_none_or(|ids| ids.contains(entity_id))
+                        && self.inboxes.as_ref().is_none_or(|inboxes| {
+                            inbox.is_some_and(|inbox| inboxes.contains(&inbox))
+                        })
                         && self
                             .property
                             .as_ref()
@@ -601,18 +646,22 @@ impl EventFilters {
     }
 
     /// What a run of this routine keeps of `event`: only routines that test
-    /// property changes keep them.
+    /// property changes keep them, and only routines that pick inboxes keep
+    /// the inbox, so older replicas can still read every other run.
     pub fn run_event(&self, event: &EventReference) -> EventReference {
         let mut kept = event.clone();
-        let tests_properties = self.0.iter().any(|filter| filter.property.is_some());
-        if let (
-            false,
-            EventSource::Entity {
-                property_change, ..
-            },
-        ) = (tests_properties, &mut kept.source)
+        if let EventSource::Entity {
+            property_change,
+            inbox,
+            ..
+        } = &mut kept.source
         {
-            *property_change = None;
+            if !self.0.iter().any(|filter| filter.property.is_some()) {
+                *property_change = None;
+            }
+            if !self.0.iter().any(|filter| filter.inboxes.is_some()) {
+                *inbox = None;
+            }
         }
         kept
     }
@@ -713,6 +762,8 @@ pub enum EventSource {
         message_id: Option<Uuid>,
         change_source: Option<PropertyChangeSource>,
         property_change: Option<PropertyChange>,
+        /// The inbox (email link) received mail arrived in.
+        inbox: Option<Uuid>,
     },
     /// A delivery from Macro's GitHub App. Boxed: it carries its payload.
     Github(Box<GithubWebhookReceived>),
@@ -734,6 +785,8 @@ struct EventReferenceInput {
     change_source: Option<PropertyChangeSource>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     property_change: Option<PropertyChange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    inbox: Option<Uuid>,
 }
 
 fn skip_message_id(message_id: &Option<Option<Uuid>>) -> bool {
@@ -748,7 +801,9 @@ impl TryFrom<EventReferenceInput> for EventReference {
         let source = match (input.entity_id, input.github) {
             (Some(entity_id), None) if !name.is_external() => {
                 let message_id = input.message_id.flatten();
-                if name.has_message() != message_id.is_some() {
+                if name.has_message() != message_id.is_some()
+                    || (input.inbox.is_some() && name != EventName::EmailMessageReceived)
+                {
                     return Err(EventRejection::InvalidContext);
                 }
                 EventSource::Entity {
@@ -756,12 +811,14 @@ impl TryFrom<EventReferenceInput> for EventReference {
                     message_id,
                     change_source: input.change_source,
                     property_change: input.property_change,
+                    inbox: input.inbox,
                 }
             }
             (None, Some(delivery))
                 if name == EventName::Github
                     && input.change_source.is_none()
-                    && input.property_change.is_none() =>
+                    && input.property_change.is_none()
+                    && input.inbox.is_none() =>
             {
                 EventSource::Github(delivery)
             }
@@ -785,6 +842,7 @@ impl From<EventReference> for EventReferenceInput {
             github: None,
             change_source: None,
             property_change: None,
+            inbox: None,
         };
         match event.source {
             EventSource::Entity {
@@ -792,11 +850,13 @@ impl From<EventReference> for EventReferenceInput {
                 message_id,
                 change_source,
                 property_change,
+                inbox,
             } => {
                 input.entity_id = Some(entity_id);
                 input.message_id = Some(message_id);
                 input.change_source = change_source;
                 input.property_change = property_change;
+                input.inbox = inbox;
             }
             EventSource::Github(delivery) => input.github = Some(delivery),
         }
@@ -971,6 +1031,7 @@ impl IncomingEvent {
         let event_id = EventId::try_from(self.event_id)?;
         let mut change_source = None;
         let mut property_change = None;
+        let mut inbox = None;
         let (event_name, entity_id, message_id) = match &self.payload {
             EventPayload::Document(event) => {
                 let (name, id) = match event {
@@ -1073,6 +1134,7 @@ impl IncomingEvent {
                 if data.is_spam_or_trash {
                     return Err(EventRejection::UnsupportedEvent);
                 }
+                inbox = Some(data.link_id);
                 (
                     EventName::EmailMessageReceived,
                     data.thread_id,
@@ -1114,6 +1176,7 @@ impl IncomingEvent {
                 message_id,
                 change_source,
                 property_change,
+                inbox,
             },
         })
     }

@@ -387,6 +387,14 @@ pub struct SuggestionOrigin {
     pub surface: Option<&'static str>,
 }
 
+/// The inboxes (email link ids) an owner receives mail in: their own and those
+/// delegated to them. Object-safe, so the scheduled action service need not
+/// know the email store's type.
+#[async_trait::async_trait]
+pub trait OwnerInboxes: Send + Sync + 'static {
+    async fn inboxes(&self, owner: &MacroUserIdStr<'_>) -> Result<Vec<Uuid>>;
+}
+
 /// Finds what a suggestion was. Object-safe, so the scheduled action service
 /// need not know the suggestion store's type.
 #[async_trait::async_trait]
