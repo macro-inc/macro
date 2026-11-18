@@ -69,13 +69,20 @@ const probe = extract((state): ProbeReport => {
     };
     page.__channelProbe = report;
 
+    // Any input explains a height change for a while (typing grows the
+    // composer). Only input that scrolls explains motion: a click that does
+    // not scroll keeps the reading position under check.
     let lastInputAt = 0;
+    let lastScrollInputAt = 0;
     let lastScrollAt = 0;
     let lastResizeAt = 0;
     let scrollInputPending = false;
     const onInput = (event: Event) => {
       lastInputAt = performance.now();
       if (event.type !== 'beforeinput') scrollInputPending = true;
+      if (event.type !== 'beforeinput' && event.type !== 'pointerdown') {
+        lastScrollInputAt = lastInputAt;
+      }
     };
     for (const type of [
       'wheel',
@@ -98,7 +105,7 @@ const probe = extract((state): ProbeReport => {
           scrollInputPending && now - lastInputAt < INPUT_SCROLL_DELAY_MS;
         if (
           answersInput ||
-          now - Math.max(lastInputAt, lastScrollAt) < MOTION_GRACE_MS
+          now - Math.max(lastScrollInputAt, lastScrollAt) < MOTION_GRACE_MS
         ) {
           lastScrollAt = now;
         }
@@ -138,9 +145,12 @@ const probe = extract((state): ProbeReport => {
       const rect = scroller.getBoundingClientRect();
       const fromBottom =
         scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+      // The first message in view, even one taller than the viewport.
       const anchorElement = [
         ...scroller.querySelectorAll<HTMLElement>('[data-message-id]'),
-      ].find((message) => message.getBoundingClientRect().top >= rect.top - 1);
+      ].find(
+        (message) => message.getBoundingClientRect().bottom > rect.top + 1
+      );
       return {
         scroller,
         url: location.pathname + location.search,
@@ -222,7 +232,7 @@ const probe = extract((state): ProbeReport => {
 
       const now = performance.now();
       const motionExplained =
-        now - Math.max(lastInputAt, lastScrollAt) < MOTION_GRACE_MS ||
+        now - Math.max(lastScrollInputAt, lastScrollAt) < MOTION_GRACE_MS ||
         now - lastResizeAt < LAYOUT_GRACE_MS;
       const heightExplained =
         now - Math.max(lastInputAt, lastResizeAt) < LAYOUT_GRACE_MS;
@@ -380,7 +390,10 @@ const peerRequest = async (
     },
     body: JSON.stringify({ ...body, nonce: window.crypto.randomUUID() }),
   });
-  return response.ok ? response.json() : null;
+  if (!response.ok) {
+    throw new Error(`peer ${method} ${path} failed: ${response.status}`);
+  }
+  return response.json();
 };
 
 type PeerWindow = Window & { __peerMessages?: string[] };
@@ -497,7 +510,9 @@ const MID_HISTORY_MESSAGES = [
 const peerActions = actions(() => {
   const channel = currentChannel.current;
   const current = timeline.current;
-  if (!channel || !current) return [];
+  // The peer belongs only to the seeded channels; a request elsewhere is
+  // rejected, and a rejected request fails the run.
+  if (!channel || !current || !channels.includes(channel)) return [];
   const nearby = [...current.aboveIds, ...current.visibleIds];
   return [
     ...PEER_MESSAGES.map((text) => peerPost(channel, text)),

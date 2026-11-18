@@ -58,7 +58,7 @@ bunx vite preview -c vite.config.ts --outDir dist --base /app --port <port>
 #    wrapper that adds --ignore-certificate-errors.
 BACKEND_ORIGIN=https://localhost:<proxy-port> PEER_TOKEN=$PEER_TOKEN CHROME=... \
   tests/bombadil/run.sh http://localhost:<port> --time-limit 10m
-bunx @antithesishq/bombadil@0.7.10 browser inspect ../../test-results/bombadil/channel-stability
+bunx @antithesishq/bombadil@0.7.10 browser inspect test-results/bombadil/channel-stability
 ```
 
 Each run of the run script writes `local.json` (gitignored) for the spec.
