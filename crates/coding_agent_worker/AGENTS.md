@@ -47,10 +47,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   (`src/harness.rs`) prefixes to each new session's first prompt — macrod
   version, workspace, forwarded MCP servers, permission bypass, listing only
   what the session has. General Macro guidance stays in the `SelfKnowledge` tool.
-- `src/enroll.rs`: `macrod enroll --from incus|file:<path> --config <path>`,
+- `src/enroll.rs`: `macrod enroll --from file:<path> --config <path>`,
   run as root by the box image's `macrod-enroll.service` on a Macro computer.
-  Reads the `hosted_runtimes` `Enrollment` (Incus guest API
-  `/dev/incus/sock`, key `user.macro.enrollment`, or a file), writes
+  Reads the `hosted_runtimes` `Enrollment` from a file, writes
   `macrod.toml` with the enrollment's typed deployment (API, storage, app and
   computer-reachable egress URLs; macrod.toml stays the one URL source at runtime).
   It claims the pre-approved pairing, chowns the config to its directory's owner,

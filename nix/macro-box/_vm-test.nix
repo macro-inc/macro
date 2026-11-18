@@ -1,6 +1,6 @@
 # Boots the guest module in a NixOS test VM and checks the macrod contract,
-# the agent tools, nix-ld, and the agent teammate's units and computer use. Incus enrollment cannot
-# run here, so macrod-enroll must fail with its readable reason. Then a
+# the agent tools, nix-ld, and the agent teammate's units and computer use. No enrollment file
+# is written, so macrod-enroll must fail with its readable reason. Then a
 # second image boots from the same data disk, as an image update does.
 {
   pkgs,
@@ -19,8 +19,6 @@ let
   # declared again here.
   dataDisk = {
     macro.box.dataDisk = "/dev/disk/by-id/virtio-data";
-    # No Incus here; do not wait the full minute for its socket.
-    systemd.services.macrod-enroll.environment.MACRO_INCUS_SOCKET_WAIT = "3";
     virtualisation.fileSystems."/home" = {
       device = "/dev/disk/by-id/virtio-data";
       fsType = "ext4";
@@ -131,9 +129,9 @@ pkgs.testers.runNixOSTest {
 
       machine.wait_for_unit("multi-user.target")
 
-      with subtest("enrollment fails with a reason when Incus is missing"):
+      with subtest("enrollment fails with a reason when the enrollment is missing"):
           machine.wait_until_fails("systemctl is-active --quiet macrod-enroll.service")
-          machine.succeed("journalctl -u macrod-enroll.service | grep -F '/dev/incus/sock is missing'")
+          machine.succeed("journalctl -u macrod-enroll.service | grep -F 'enrollment file /run/macro/enrollment.json is missing'")
 
       with subtest("macrod runs as macro after enrollment"):
           after = machine.succeed("systemctl show macrod.service --property=After --value")

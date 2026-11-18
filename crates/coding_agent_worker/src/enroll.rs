@@ -1,10 +1,10 @@
 //! `macrod enroll`: join a Macro computer (hosted VM) to Macro at first boot.
 //!
 //! The control plane hands the computer one
-//! [`Enrollment`](hosted_runtimes::domain::enrollment::Enrollment): through the
-//! Incus guest API on VMs, or a file in Docker. Enrolling writes `macrod.toml`
-//! for the deployment it names and claims the pre-approved harness pairing.
-//! Every step is safe to re-run until the enrolled marker exists.
+//! [`Enrollment`](hosted_runtimes::domain::enrollment::Enrollment) in a file.
+//! Enrolling writes `macrod.toml` for the deployment it names and claims the
+//! pre-approved harness pairing. Every step is safe to re-run until the
+//! enrolled marker exists.
 //!
 //! The marker records the computer and its enrollment generation, and lives
 //! on the data disk. A guest recreated on that disk is handed a newer
@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use hosted_runtimes::domain::enrollment::{Enrollment, EnrollmentGeneration, INCUS_ENROLLMENT_KEY};
+use hosted_runtimes::domain::enrollment::{Enrollment, EnrollmentGeneration};
 use rootcause::prelude::ResultExt as _;
 
 use crate::computer::ENROLLED_MARKER;
@@ -30,39 +30,32 @@ use crate::tui::config_form::ConfigForm;
 #[cfg(test)]
 mod test;
 
-/// The Incus guest API socket inside a VM.
-const INCUS_SOCKET: &str = "/dev/incus/sock";
 /// How long the claim keeps retrying a network that is not up yet.
 const CLAIM_DEADLINE: Duration = Duration::from_secs(300);
 /// The pairing is pre-approved, so a claim only waits for the network or
 /// service to come up: retry quickly.
 const CLAIM_RETRY: Duration = Duration::from_millis(250);
-const INCUS_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Where the enrollment JSON comes from.
+/// Where the enrollment JSON comes from. Firecracker computers add their
+/// metadata service as a second source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnrollmentSource {
-    /// The `user.macro.enrollment` instance config key, via `/dev/incus/sock`.
-    Incus,
     /// A file holding the JSON, for Docker computers.
     File(PathBuf),
 }
 
 /// An `--from` value that names no enrollment source.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
-#[error("expected `incus` or `file:<path>`, not `{0}`")]
+#[error("expected `file:<path>`, not `{0}`")]
 pub struct UnknownEnrollmentSource(String);
 
 impl FromStr for EnrollmentSource {
     type Err = UnknownEnrollmentSource;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "incus" => Ok(Self::Incus),
-            other => match other.strip_prefix("file:") {
-                Some(path) if !path.is_empty() => Ok(Self::File(PathBuf::from(path))),
-                _ => Err(UnknownEnrollmentSource(other.to_owned())),
-            },
+        match value.strip_prefix("file:") {
+            Some(path) if !path.is_empty() => Ok(Self::File(PathBuf::from(path))),
+            _ => Err(UnknownEnrollmentSource(value.to_owned())),
         }
     }
 }
@@ -77,7 +70,7 @@ pub struct EnrollOptions {
     pub workspace: PathBuf,
     /// Agent preset id for a newly created config.
     pub agent: String,
-    /// Prefix for every system path (`/dev/incus`, `/etc`, `/var/lib`).
+    /// Prefix for every system path (`/etc`, `/var/lib`).
     pub root: PathBuf,
 }
 
@@ -129,7 +122,7 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
     };
     let marker = paths.at(ENROLLED_MARKER);
     let enrolled = read_marker(&marker)?;
-    let enrollment = match (read_enrollment(&options.from, &paths).await?, enrolled) {
+    let enrollment = match (read_enrollment(&options.from)?, enrolled) {
         (None, Some(_)) => {
             tracing::info!(marker = %marker.display(), "already enrolled");
             return Ok(());
@@ -142,8 +135,6 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
         (None, None) => rootcause::bail!(
             "missing enrollment: {}",
             match &options.from {
-                EnrollmentSource::Incus =>
-                    format!("set the {INCUS_ENROLLMENT_KEY} Incus instance config key"),
                 EnrollmentSource::File(path) =>
                     format!("write the Enrollment JSON to {}", path.display()),
             }
@@ -225,10 +216,7 @@ fn read_marker(marker: &Path) -> rootcause::Result<Option<EnrollmentGeneration>>
 }
 
 /// The enrollment, or `None` when its source holds none.
-async fn read_enrollment(
-    source: &EnrollmentSource,
-    paths: &SystemPaths,
-) -> rootcause::Result<Option<Enrollment>> {
+fn read_enrollment(source: &EnrollmentSource) -> rootcause::Result<Option<Enrollment>> {
     let raw = match source {
         EnrollmentSource::File(path) => match std::fs::read_to_string(path) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -238,50 +226,10 @@ async fn read_enrollment(
                 path.display()
             ))?),
         },
-        EnrollmentSource::Incus => match read_incus_enrollment(&paths.at(INCUS_SOCKET)).await? {
-            Some(raw) => raw,
-            None => return Ok(None),
-        },
     };
     Ok(Some(
         serde_json::from_str(&raw).context("the enrollment is not valid Enrollment JSON")?,
     ))
-}
-
-/// `GET /1.0/config/<key>` on the guest API answers the raw value, or 404
-/// once the control plane has removed it.
-async fn read_incus_enrollment(
-    socket: &Path,
-) -> rootcause::Result<Option<zeroize::Zeroizing<String>>> {
-    let http = reqwest::Client::builder()
-        .unix_socket(socket)
-        .timeout(INCUS_TIMEOUT)
-        .build()
-        .context("could not build the Incus guest API client")?;
-    let response = http
-        .get(format!(
-            "http://custom.socket/1.0/config/{INCUS_ENROLLMENT_KEY}"
-        ))
-        .send()
-        .await
-        .context(format!(
-            "could not reach the Incus guest API at {}",
-            socket.display()
-        ))?;
-    let status = response.status();
-    if status == reqwest::StatusCode::NOT_FOUND {
-        return Ok(None);
-    }
-    let body = zeroize::Zeroizing::new(
-        response
-            .text()
-            .await
-            .context("could not read the Incus guest API answer")?,
-    );
-    if !status.is_success() {
-        rootcause::bail!("the Incus guest API answered {status} for {INCUS_ENROLLMENT_KEY}");
-    }
-    Ok(Some(body))
 }
 
 /// The deployment URLs `macrod.toml` stores, from the enrollment's typed

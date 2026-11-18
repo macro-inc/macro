@@ -1,6 +1,6 @@
 # The Macro computer guest as a NixOS module: macrod, harnessd, Claude Code, herdr,
-# Chromium on an Xvnc display, Docker and nix-ld. `_image.nix` adds the Incus
-# VM image on top; `_vm-test.nix` boots this module alone.
+# Chromium on an Xvnc display, Docker and nix-ld. `_container.nix` adds the
+# Docker image on top; `_vm-test.nix` boots this module alone.
 {
   config,
   lib,
@@ -134,8 +134,7 @@ in
     };
     enrollFrom = lib.mkOption {
       type = lib.types.str;
-      default = "incus";
-      description = "`macrod enroll --from`: `incus` or `file:<path>`.";
+      description = "`macrod enroll --from`: `file:<path>`.";
     };
     agentMode = lib.mkOption {
       type = lib.types.bool;
@@ -147,8 +146,7 @@ in
     };
     dataDisk = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
-      # The Incus disk device named `data`.
-      default = "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_incus_data";
+      default = null;
       description = ''
         Block device mounted at /home, formatted on first boot. It keeps
         homes and macrod's state across image updates; null keeps them on
@@ -361,10 +359,7 @@ in
       description = "Join this computer to Macro";
       wantedBy = [ "multi-user.target" ];
       wants = [ "network-online.target" ];
-      after = [
-        "network-online.target"
-        "incus-agent.service"
-      ];
+      after = [ "network-online.target" ];
       before = [ "macrod.service" ];
       # Runs on every boot: `macrod enroll` re-enrolls for a newer
       # generation and keeps the existing enrollment otherwise.
@@ -385,10 +380,7 @@ in
         ExecStartPre = lib.getExe (
           pkgs.writeShellApplication {
             name = "check-enrollment-source";
-            runtimeInputs = [
-              pkgs.coreutils
-              pkgs.curl
-            ];
+            runtimeInputs = [ pkgs.coreutils ];
             text = builtins.readFile ./files/check-enrollment-source;
           }
         );

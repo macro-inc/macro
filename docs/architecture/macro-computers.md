@@ -431,11 +431,6 @@ runtime lists read `useRunnableHarnessesQuery` /
   CPU pinning; dev-only Docker guests still see host totals in `/proc` and
   `nproc`. Do not add lxcfs; Incus VMs see their real CPU and memory limits.
 
-- The dev control plane reaches `runtime-dev-1`'s Incus API over WireGuard
-  through a gateway in the dev VPC; admin access is IAP SSH and serial console
-  is break-glass. See `nix/hosts/README.md` for the tunnel, the root-only key
-  file transfer, and rebuild commands.
-
 - Lifecycle state stores the phase tag at `state.phase.phase` and the billing
   tag at `state.billing.billing`; SQL selectors must read those nested tags.
   Size, effect worker, timer kind, notice stage and provider are Postgres

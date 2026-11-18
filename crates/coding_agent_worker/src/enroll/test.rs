@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 
-use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use uuid::Uuid;
 
 use super::*;
@@ -42,7 +41,6 @@ impl Host for FakeHost {
 
 #[test]
 fn enrollment_sources_parse() {
-    assert_eq!("incus".parse(), Ok(EnrollmentSource::Incus));
     assert_eq!(
         "file:/run/macro/enrollment.json".parse(),
         Ok(EnrollmentSource::File(PathBuf::from(
@@ -50,7 +48,11 @@ fn enrollment_sources_parse() {
         )))
     );
     assert!("file:".parse::<EnrollmentSource>().is_err());
-    assert!("/dev/incus".parse::<EnrollmentSource>().is_err());
+    assert!(
+        "/run/macro/enrollment.json"
+            .parse::<EnrollmentSource>()
+            .is_err()
+    );
 }
 
 #[test]
@@ -73,49 +75,18 @@ fn deployment_urls_come_from_the_typed_deployment() {
     );
 }
 
-#[tokio::test]
-async fn enrollment_reads_from_a_file_and_the_incus_guest_api() {
+#[test]
+fn enrollment_reads_from_a_file() {
     let directory = tempfile::tempdir().expect("temp dir");
     let file = directory.path().join("enrollment.json");
+    assert_eq!(
+        read_enrollment(&EnrollmentSource::File(file.clone())).unwrap(),
+        None
+    );
     std::fs::write(&file, ENROLLMENT_JSON).unwrap();
-    let paths = SystemPaths {
-        root: directory.path().to_owned(),
-    };
     assert_eq!(
-        read_enrollment(&EnrollmentSource::File(file), &paths)
-            .await
-            .unwrap(),
+        read_enrollment(&EnrollmentSource::File(file)).unwrap(),
         Some(enrollment())
-    );
-
-    let socket = paths.at(INCUS_SOCKET);
-    std::fs::create_dir_all(socket.parent().unwrap()).unwrap();
-    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
-    let server = tokio::spawn(async move {
-        let (mut stream, _) = listener.accept().await.unwrap();
-        let mut request = Vec::new();
-        let mut buffer = [0u8; 1024];
-        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
-            let read = stream.read(&mut buffer).await.unwrap();
-            request.extend_from_slice(&buffer[..read]);
-        }
-        let response = format!(
-            "HTTP/1.1 200 OK\r\ncontent-type: application/octet-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{ENROLLMENT_JSON}",
-            ENROLLMENT_JSON.len()
-        );
-        stream.write_all(response.as_bytes()).await.unwrap();
-        String::from_utf8(request).unwrap()
-    });
-    assert_eq!(
-        read_enrollment(&EnrollmentSource::Incus, &paths)
-            .await
-            .unwrap(),
-        Some(enrollment())
-    );
-    let request = server.await.unwrap();
-    assert!(
-        request.starts_with("GET /1.0/config/user.macro.enrollment HTTP/1.1\r\n"),
-        "{request}"
     );
 }
 
@@ -147,7 +118,7 @@ pairing_id = "00000000-0000-0000-0000-00000000000a"
     )
     .unwrap();
     let options = EnrollOptions {
-        from: EnrollmentSource::Incus,
+        from: EnrollmentSource::File(directory.path().join("enrollment.json")),
         config: config.clone(),
         workspace: workspace.clone(),
         agent: "claude-code".to_owned(),

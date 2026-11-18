@@ -40,14 +40,12 @@ let
     imports = [ image ];
     macro.box.agentMode = true;
   };
-  machine = guest ./_image.nix;
   container = guest ./_container.nix;
-  agentMachine = guest (agentMode ./_image.nix);
   agentContainer = guest (agentMode ./_container.nix);
-  box = machine.config.macro.box;
+  box = container.config.macro.box;
 in
 {
-  flake.nixosConfigurations.macro-box = machine;
+  flake.nixosConfigurations.macro-box = container;
 
   perSystem =
     {
@@ -58,14 +56,6 @@ in
       ...
     }:
     let
-      # What `incus image import` takes.
-      incusImage =
-        name: nixos:
-        pkgs.runCommand name { } ''
-          mkdir $out
-          ln -s ${nixos.config.system.build.metadata}/tarball/*.tar.xz $out/metadata.tar.xz
-          ln -s ${nixos.config.system.build.qemuImage}/nixos.qcow2 $out/disk.qcow2
-        '';
       # `docker load < result` → <name>:latest; run as DockerFleet does
       # (AGENTS.md).
       dockerImage =
@@ -91,9 +81,7 @@ in
         macro-box-claude-agent-acp = box.claudeAgentAcp;
         macro-agent-runtime = box.agent.runtime;
         macro-box-computer-use-linux = box.agent.computerUse.package;
-        macro-box-incus = incusImage "macro-box-incus" machine;
         macro-box-docker = dockerImage "macro-box" container;
-        macro-box-agent = incusImage "macro-box-agent" agentMachine;
         macro-box-agent-docker = dockerImage "macro-box-agent" agentContainer;
       };
       checks = lib.optionalAttrs (system == "x86_64-linux") {
@@ -131,6 +119,8 @@ in
               ./_guest.nix
               herdr
             ];
+            # Never written, so enrollment fails with its reason.
+            macro.box.enrollFrom = "file:/run/macro/enrollment.json";
           };
           inherit (self'.packages) macrod harnessd;
         };
