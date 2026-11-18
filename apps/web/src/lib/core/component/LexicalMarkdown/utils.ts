@@ -897,9 +897,12 @@ export function loroSyncState(
       },
     ]
   );
-  if (ENABLE_MARKDOWN_SEARCH_TEXT) {
-    addSearchText(state, serializedState, options);
-  }
+  addDerivedFields(
+    state,
+    serializedState,
+    options,
+    ENABLE_MARKDOWN_SEARCH_TEXT
+  );
   return serializedState;
 }
 
@@ -907,64 +910,87 @@ export function loroSyncState(
 export function recordChangedBlocks(
   state: EditorState,
   dirtyElements: ReadonlyMap<NodeKey, unknown>,
+  dirtyLeaves: ReadonlySet<NodeKey>,
   changed: Set<NodeKey>
 ) {
+  const record = (key: NodeKey) => {
+    const parent = $getNodeByKey(key)?.getParent();
+    if (parent && $isRootNode(parent)) changed.add(key);
+  };
   state.read(() => {
-    for (const key of dirtyElements.keys()) {
-      const parent = $getNodeByKey(key)?.getParent();
-      if (parent && $isRootNode(parent)) changed.add(key);
-    }
+    for (const key of dirtyElements.keys()) record(key);
+    for (const key of dirtyLeaves) record(key);
   });
 }
 
-// searchText is derived from a block's content, so it is written only with a
-// change to that block. A block whose content matches its stored copy keeps the
-// stored value, including none: documents created through the API store none,
-// and writing one would count as an edit by whoever had the document open.
-function addSearchText(
+// searchText and the document's version stamp are derived, so each is written
+// only with a real change: searchText with a change to its block, the stamp
+// with any change to the document. Otherwise the stored value stays, including
+// none: documents created through the API store neither, and writing one would
+// count as an edit by whoever had the document open.
+function addDerivedFields(
   state: EditorState,
   serialized: SerializedEditorState,
-  { stored, changedBlocks }: LoroSyncOptions
+  { stored, changedBlocks }: LoroSyncOptions,
+  withSearchText: boolean
 ) {
+  const storedChildren = (stored?.root?.children ?? []) as SerializedBlock[];
   const storedBlocks = new Map<string, SerializedBlock>();
-  for (const block of (stored?.root?.children ?? []) as SerializedBlock[]) {
+  for (const block of storedChildren) {
     const id = block.$?.id;
     if (typeof id === 'string') storedBlocks.set(id, block);
   }
 
+  const compared = new Set<string>();
   const texts = new Map<string, string>();
   state.read(() => {
     for (const child of $getRoot().getChildren()) {
-      if (!$isElementNode(child)) continue;
       const id = $getId(child);
       if (!id) continue;
       const unchanged =
         changedBlocks !== undefined &&
         !changedBlocks.has(child.getKey()) &&
         storedBlocks.has(id);
-      if (!unchanged) texts.set(id, child.getTextContent());
+      if (unchanged) continue;
+      compared.add(id);
+      if (withSearchText && $isElementNode(child)) {
+        texts.set(id, child.getTextContent());
+      }
     }
   });
 
-  for (const block of serialized.root.children as SerializedBlock[]) {
+  const blocks = serialized.root.children as SerializedBlock[];
+  let changed = blocks.length !== storedChildren.length;
+  blocks.forEach((block, index) => {
     const meta = block.$;
     const id = meta?.id;
-    if (!meta || typeof id !== 'string') continue;
+    if (!meta || typeof id !== 'string') {
+      changed = true;
+      return;
+    }
     const prior = storedBlocks.get(id);
-    const text = texts.get(id);
+    const blockChanged =
+      !prior || (compared.has(id) && !sameExceptSearchText(prior, block));
+    if (blockChanged || storedChildren[index]?.$?.id !== id) changed = true;
+    if (!withSearchText) return;
     const { searchText: _derived, ...rest } = meta;
-    if (
-      text !== undefined &&
-      (!prior ||
-        (prior.$?.searchText !== text && !sameExceptSearchText(prior, block)))
-    ) {
+    const text = texts.get(id);
+    if (blockChanged && text !== undefined) {
       block.$ = { ...rest, searchText: text };
-      continue;
+      return;
     }
     const storedText = prior?.$?.searchText;
     block.$ =
       storedText === undefined ? rest : { ...rest, searchText: storedText };
-  }
+  });
+
+  if (!stored || changed || !sameRootExceptVersion(stored, serialized)) return;
+  const { documentMetadata: _stamp, ...rest } = serialized.root.$ ?? {};
+  const storedMetadata = stored.root.$?.documentMetadata;
+  serialized.root.$ =
+    storedMetadata === undefined
+      ? rest
+      : { ...rest, documentMetadata: storedMetadata };
 }
 
 function sameExceptSearchText(a: SerializedBlock, b: SerializedBlock) {
@@ -975,13 +1001,38 @@ function sameExceptSearchText(a: SerializedBlock, b: SerializedBlock) {
   return deepEqual(aRest, bRest) && deepEqual(aContent, bContent);
 }
 
+function sameRootExceptVersion(
+  a: SerializedEditorState,
+  b: SerializedEditorState
+) {
+  const { children: _a, $: aMeta, ...aRoot } = a.root;
+  const { children: _b, $: bMeta, ...bRoot } = b.root;
+  return (
+    deepEqual(aRoot, bRoot) &&
+    deepEqual(withoutVersion(aMeta), withoutVersion(bMeta))
+  );
+}
+
+// The editor reads missing metadata fields as null, so null and missing match.
+function withoutVersion(meta: Record<string, unknown> | undefined) {
+  const { documentMetadata, ...rest } = meta ?? {};
+  if (!documentMetadata || typeof documentMetadata !== 'object') return rest;
+  const metadata = Object.fromEntries(
+    Object.entries(documentMetadata).filter(
+      ([key, value]) => key !== 'version' && value !== null
+    )
+  );
+  if (Object.keys(metadata).length === 0) return rest;
+  return { ...rest, documentMetadata: metadata };
+}
+
 /**
  * Get a serialized editor state to save to DSS with capabilities for
  * better plain text search.
  */
 export function getSaveState(state: EditorState): SerializedEditorState {
   const serializedState = state.toJSON();
-  addSearchText(state, serializedState, {});
+  addDerivedFields(state, serializedState, {}, true);
   return cleanState(serializedState);
 }
 

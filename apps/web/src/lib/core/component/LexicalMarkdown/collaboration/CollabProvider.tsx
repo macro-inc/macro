@@ -169,7 +169,7 @@ export function CollabProvider(props: CollabProviderProps) {
   // listener; writes compare only these with the stored state.
   let changedBlocks = new Set<NodeKey>();
 
-  /** Writes `state`, keeping the stored searchText of every block it leaves unchanged. */
+  /** Writes `state`, keeping the stored derived fields of the content it leaves unchanged. */
   const writeEditorState = (
     state: EditorState,
     changed?: ReadonlySet<NodeKey>
@@ -483,8 +483,13 @@ export function CollabProvider(props: CollabProviderProps) {
   function lexicalStateSyncPlugin() {
     return mergeRegister(
       props.editor.registerUpdateListener(
-        ({ editorState, tags, mutatedNodes, dirtyElements }) => {
-          recordChangedBlocks(editorState, dirtyElements, changedBlocks);
+        ({ editorState, tags, mutatedNodes, dirtyElements, dirtyLeaves }) => {
+          recordChangedBlocks(
+            editorState,
+            dirtyElements,
+            dirtyLeaves,
+            changedBlocks
+          );
           syncLexicalToLoro(editorState, mutatedNodes, tags).catch(
             reportSyncError
           );

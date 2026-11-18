@@ -14,7 +14,9 @@ import {
   TextNode,
 } from 'lexical';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { documentMetadataPlugin } from './plugins/document-metadata/documentMetadataPlugin';
 import { loroSyncState, recordChangedBlocks } from './utils';
+import { MARKDOWN_VERSION_COUNTER } from './version';
 
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -35,6 +37,7 @@ vi.mock('@service-connection/websocket', () => ({
 }));
 
 type StoredBlock = { $?: { id?: string; searchText?: string } };
+type StoredRoot = { $?: { documentMetadata?: { version?: number } } };
 type LoroOp = { content: { key?: unknown; value?: unknown } };
 
 let cleanups: Array<() => void> = [];
@@ -57,12 +60,13 @@ function newEditor() {
   cleanups.push(
     nodeIdPlugin({ nodes: [ParagraphNode, TextNode], mappings: newMappings() })(
       editor
-    )
+    ),
+    documentMetadataPlugin({})(editor)
   );
   return editor;
 }
 
-/** A body as the API stores it: node ids on every node, no searchText. */
+/** A body as the API stores it: node ids, and no searchText or version. */
 function apiBody(paragraphs: string[]): SerializedEditorState {
   const source = createEditor({
     onError: (error) => {
@@ -103,8 +107,9 @@ async function openStored(body: SerializedEditorState) {
 
   let changed = new Set<NodeKey>();
   cleanups.push(
-    editor.registerUpdateListener(({ editorState, dirtyElements }) =>
-      recordChangedBlocks(editorState, dirtyElements, changed)
+    editor.registerUpdateListener(
+      ({ editorState, dirtyElements, dirtyLeaves }) =>
+        recordChangedBlocks(editorState, dirtyElements, dirtyLeaves, changed)
     )
   );
 
@@ -128,6 +133,10 @@ async function openStored(body: SerializedEditorState) {
       const blocks = (stored()?.root.children ?? []) as StoredBlock[];
       return blocks.map((block) => block.$?.searchText);
     },
+    version() {
+      return (stored()?.root as StoredRoot | undefined)?.$?.documentMetadata
+        ?.version;
+    },
   };
 }
 
@@ -137,7 +146,7 @@ function searchTextWrites(ops: LoroOp[]) {
     .map((op) => op.content.value);
 }
 
-describe('loroSyncState searchText', () => {
+describe('loroSyncState derived fields', () => {
   it('writes nothing for an API body the editor only marked dirty', async () => {
     const doc = await openStored(apiBody(['First', 'Second', 'Third']));
 
@@ -148,6 +157,7 @@ describe('loroSyncState searchText', () => {
     expect(await doc.write()).toEqual([]);
     expect(await doc.write({ compareAll: true })).toEqual([]);
     expect(doc.searchTexts()).toEqual([undefined, undefined, undefined]);
+    expect(doc.version()).toBeUndefined();
   });
 
   it('writes searchText only for the block an edit changed', async () => {
@@ -163,6 +173,7 @@ describe('loroSyncState searchText', () => {
 
     expect(searchTextWrites(await doc.write())).toEqual(['Second edit']);
     expect(doc.searchTexts()).toEqual([undefined, 'Second edit', undefined]);
+    expect(doc.version()).toBe(MARKDOWN_VERSION_COUNTER);
   });
 
   it('writes searchText for a new or pasted block', async () => {
