@@ -413,7 +413,12 @@ export function VaultSidebarContent(props: {
           )}
         </For>
       </ViewSidebar.Nav>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
+      <CollapsibleSection.Root
+        sectionId="folders"
+        sectionLabel={t('passwords.folders')}
+        open={open()}
+        onOpenChange={setOpen}
+      >
         <CollapsibleSection.Header>
           <CollapsibleSection.Trigger class="flex-1">
             <span class="min-w-0 truncate">{t('passwords.folders')}</span>
@@ -513,7 +518,10 @@ export function VaultSidebar(
   }
 ) {
   return (
-    <ViewSidebar.Root aria-label={t('passwords.navigation')}>
+    <ViewSidebar.Root
+      reorderId="passwords"
+      aria-label={t('passwords.navigation')}
+    >
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />

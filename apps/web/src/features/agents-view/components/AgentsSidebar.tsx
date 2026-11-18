@@ -396,7 +396,11 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      <ViewSidebar.Root ref={sidebar} aria-label="Agents navigation">
+      <ViewSidebar.Root
+        reorderId="agents"
+        ref={sidebar}
+        aria-label="Agents navigation"
+      >
         <ViewSidebar.Header
           searchLabel="Search conversations"
           searchOpen={searchOpen() || props.search.trim().length > 0}
@@ -471,6 +475,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           </Show>
           <Show when={agentUpdates().enabled && openPullRequests().length > 0}>
             <CollapsibleSection.Root
+              sectionId="open-pull-requests"
+              sectionLabel="Open PRs"
               open={openPullRequestsOpen()}
               onOpenChange={setOpenPullRequestsOpen}
               class={cn(
@@ -498,6 +504,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             </CollapsibleSection.Root>
           </Show>
           <CollapsibleSection.Root
+            sectionId="conversations"
+            sectionLabel="Conversations"
             open={conversationsOpen()}
             onOpenChange={setConversationsOpen}
             class={cn(
@@ -599,6 +607,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           </CollapsibleSection.Root>
           <Show when={archived().length}>
             <CollapsibleSection.Root
+              sectionId="archived"
+              sectionLabel="Archived"
               open={archivedOpen()}
               onOpenChange={setArchivedOpen}
               as="section"

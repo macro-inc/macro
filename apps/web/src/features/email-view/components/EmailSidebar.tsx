@@ -148,10 +148,16 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
           {(id) => <Tab id={id} onNavigate={props.onNavigate} />}
         </For>
       </ViewSidebar.Nav>
-      <section aria-label={t('viewMenus.library')} class="shrink-0">
-        <h2 class="flex h-(--sidebar-row-height) items-center px-(--sidebar-item-inset) text-xs font-medium text-ink-muted">
-          {t('viewMenus.library')}
-        </h2>
+      <ViewSidebar.Section
+        id="library"
+        label={t('viewMenus.library')}
+        aria-label={t('viewMenus.library')}
+      >
+        <ViewSidebar.SectionHeader>
+          <h2 class="flex h-(--sidebar-row-height) items-center px-(--sidebar-item-inset) text-xs font-medium text-ink-muted">
+            {t('viewMenus.library')}
+          </h2>
+        </ViewSidebar.SectionHeader>
         <ViewSidebar.Nav
           aria-label="Email library"
           class="pt-(--sidebar-section-content-gap)"
@@ -166,7 +172,7 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
             )}
           </For>
         </ViewSidebar.Nav>
-      </section>
+      </ViewSidebar.Section>
     </Show>
   );
 }
@@ -194,7 +200,7 @@ export function EmailSidebar() {
   });
 
   return (
-    <ViewSidebar.Root aria-label="Email navigation">
+    <ViewSidebar.Root reorderId="email" aria-label="Email navigation">
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton class="shrink-0" />

@@ -20,6 +20,8 @@ function Root(props: {
 }) {
   return (
     <CollapsibleSection.Root
+      sectionId="saved-views"
+      sectionLabel={t('viewMenus.savedViews')}
       open={props.open}
       onOpenChange={props.onOpenChange}
     >

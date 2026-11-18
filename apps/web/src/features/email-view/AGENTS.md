@@ -45,9 +45,10 @@ the Soup-backed thread list, and saved email views.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
 - `views/email-saved-views.tsx`: sidebar section, menus, the builder dialog,
-  header actions, unavailable and skipped-setting states. The section uses
+  header actions, unavailable and skipped-setting states. Saved-view rows use
   the shell's sidebar layout to choose drag or, in the navigation sheet,
-  Move up and Move down.
+  Move up and Move down. Accounts, Library, and Saved views section headers use
+  the shared `ViewSidebar` section reorder with per-account local preferences.
 
 ## Gotchas
 

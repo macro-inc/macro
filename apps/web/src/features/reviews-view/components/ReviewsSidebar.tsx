@@ -159,11 +159,18 @@ function ReviewFavorites(props: {
 
   return (
     <Show when={pullRequests().length > 0}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Favorites</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
+      <CollapsibleSection.Root
+        sectionId="favorites"
+        sectionLabel="Favorites"
+        open={open()}
+        onOpenChange={setOpen}
+      >
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Favorites</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <ViewSidebar.Nav aria-label="Favorite pull requests">
             <For each={pullRequests()}>
@@ -199,11 +206,18 @@ function ReviewLabels(props: {
 
   return (
     <Show when={props.labels.length > 0}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Labels</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
+      <CollapsibleSection.Root
+        sectionId="labels"
+        sectionLabel="Labels"
+        open={open()}
+        onOpenChange={setOpen}
+      >
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Labels</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <ViewSidebar.Nav aria-label="Pull request labels">
             <For each={props.labels}>
@@ -246,11 +260,18 @@ function ReviewAgents(props: {
 
   return (
     <Show when={props.tools.length > 0}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Agents</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
+      <CollapsibleSection.Root
+        sectionId="agents"
+        sectionLabel="Agents"
+        open={open()}
+        onOpenChange={setOpen}
+      >
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Agents</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <ViewSidebar.Nav aria-label="Pull request agents">
             <For each={props.tools}>
@@ -310,7 +331,7 @@ export function ReviewsSidebar(props: {
   });
 
   return (
-    <ViewSidebar.Root aria-label="Reviews navigation">
+    <ViewSidebar.Root reorderId="reviews" aria-label="Reviews navigation">
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />

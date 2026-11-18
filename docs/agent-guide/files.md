@@ -104,11 +104,14 @@ with a folder search field — rather than a date-sorted list of every folder.
 Tap a folder name to open its contents; the expand control reveals child
 folders without leaving the overview. Inside a folder, a path under the header
 controls lists Folders and each ancestor; choosing one opens it. A docked sidebar keeps
-the date-sorted folder list beside the tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+the date-sorted folder list beside the tree. By default the sidebar contains `New file or folder`, `My Files`, `Recent`,
 `Shared with me`, collapsible Favorites, a collapsible Databases section
 listing every database the viewer owns or has been shared, by name (past ten,
 it scrolls within its own height; hidden when there are none or databases are
 disabled), and a searchable folder hierarchy.
+Drag the Favorites, Databases, or Folders heading to change their local order;
+reload to verify it persists independently of other workspaces. The plain
+navigation rows and import controls remain fixed.
 The Drive sidebar's import card (**Import files**, see
 [setup cards](setup-cards.md#import-from-connected-apps)) lists Notion; its
 **Import** (or a successful **Connect**) opens a new agent chat beside Drive
