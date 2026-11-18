@@ -600,6 +600,14 @@ a cached channel without typing `@`. Then open mentions, search, close, and reop
 results must reflect current people and entities, and scrolling or keyboard
 navigation must still load more results. Check both mobile and desktop.
 
+In a task, project, or document Discussion the `@` menu's people come from the
+contact directory. Until they arrive, People shows Macro and loading rows where
+the people and other agents will go, and a phone lists nothing below Macro yet.
+On a fresh load and on reopening, at desktop and phone width, no agent may show
+in a row a person then takes, and the menu must not change height as they land.
+When the people read fails (a busy cache times it out), the menu reads it again
+once by itself and shows "Couldn't load people" with Retry only if that fails too.
+
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or
 persona). These inline chips show the shared
