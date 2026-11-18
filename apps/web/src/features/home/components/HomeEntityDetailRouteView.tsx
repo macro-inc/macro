@@ -168,9 +168,11 @@ function HomeMarkdownBreadcrumb(props: {
     return Permissions.CAN_VIEW;
   };
 
+  const { closePreview } = useHomeView();
   useBlockEntityCommands({
     id: documentId(),
     scopeId: props.hotkeyScope,
+    onDeleted: closePreview,
     resolveEntity: () =>
       buildEntityData({
         id: documentId(),
