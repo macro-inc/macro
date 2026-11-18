@@ -155,9 +155,9 @@ export function ShowPermissionsCard(props: {
                 aria-label={t('agentPermissionsChat.allPermissions')}
                 onClick={openAll}
               >
-                <Show when={!isTouchDevice()}>
+                <span class="touch:hidden">
                   {t('agentPermissionsChat.allPermissions')}
-                </Show>
+                </span>
                 <ArrowSquareOutIcon
                   aria-hidden="true"
                   class="size-3.5 touch:size-4 shrink-0 pointer-events-none"
