@@ -3,9 +3,13 @@ import { timezoneOptions } from '@app/components/timezone-select/timezone-option
 import { formatLocale, t } from '@app/lib/i18n';
 import { createMemo, Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
+import { useComposerWhenOptional } from '../../../context/composer-when-context';
 
-export function ComposerTimeZone(props: { fullWidth?: boolean } = {}) {
+export function ComposerTimeZone(
+  props: { fullWidth?: boolean; ghost?: boolean } = {}
+) {
   const model = useCalendarComposer();
+  const when = useComposerWhenOptional();
   const options = timezoneOptions();
   const selectionLabel = createMemo(
     () =>
@@ -17,7 +21,7 @@ export function ComposerTimeZone(props: { fullWidth?: boolean } = {}) {
         .find((part) => part.type === 'timeZoneName')?.value ?? model.timeZone()
   );
   return (
-    <Show when={!model.state().allDay || model.isOutOfOffice()}>
+    <Show when={!model.state().allDay}>
       <TimezoneSelect
         value={model.timeZone()}
         onChange={model.setTimeZone}
@@ -25,7 +29,13 @@ export function ComposerTimeZone(props: { fullWidth?: boolean } = {}) {
         disabled={model.timeZoneIsDisabled()}
         label={t('calendar.timeZone')}
         selectionLabel={selectionLabel()}
-        appearance="value"
+        appearance={props.ghost ? 'ghost' : 'value'}
+        open={when ? when.state.active === 'time-zone' : undefined}
+        onOpenChange={(open) => {
+          if (!when) return;
+          if (open) when.open('time-zone');
+          else when.close('time-zone');
+        }}
         fullWidth={props.fullWidth}
         portalScope="local"
       />

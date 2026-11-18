@@ -7,7 +7,7 @@ import type { JSX } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 
-export type ToggleSwitchSize = 'xs' | 'sm' | 'md' | 'lg';
+export type ToggleSwitchSize = 'compact' | 'xs' | 'sm' | 'md' | 'lg';
 export type ToggleSwitchProps = Omit<
   PolymorphicProps<'div', SwitchRootProps<'div'>>,
   'children'
@@ -20,6 +20,11 @@ export type ToggleSwitchProps = Omit<
 };
 
 const SWITCH_SIZES = {
+  compact: {
+    control: 'h-4 w-7',
+    thumb: 'left-px top-px size-3 data-checked:translate-x-3',
+    pressed: '',
+  },
   xs: {
     control: 'h-3.5 w-7',
     thumb: '-left-0.5 -top-px size-3.5 data-checked:translate-x-4',

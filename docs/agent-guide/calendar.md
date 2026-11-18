@@ -64,18 +64,23 @@ Pinning keeps options expanded. Visibility offers **Calendar default**, **Public
 and **Private**. A synced confidential event displays Private, but an untouched
 save preserves confidential. Single-occurrence visibility remains unavailable
 because reads do not expose its override.
-**All day** is a switch, not a duration menu; enabling it hides the clock fields.
-Date pills are left-aligned. Selecting a date moves the range without inventing
-an end date; only real overnight, multi-day, or all-day spans show both dates.
-Use **Choose date range** inside the date picker for an explicit two-date span.
-Start changes always preserve the current length, including after an end edit.
-End changes never move the start. Clock pills keep their width, text position,
-and trailing meridiem while typing; focusing selects the value. The list opens
-4px below, centres the current choice, and uses a trailing selected check.
-Typing `6`, `630`, `6:30p`, or `18:30` highlights the best match; arrows step
-15 minutes, Enter commits, Escape reverts, and invalid blur reverts.
-The end list also shows each length. Phone T1 uses the same behavior.
-Time-zone pills show the Intl short name; menus show full and short names.
+Desktop **When** is one summary pill plus a ghost time-zone control, followed by
+its own Repeat row. Open the summary for a six-week date grid, start/end clock
+fields, and All day. Date picks keep the popup open; All day uses range selection.
+The summary includes the end date only across days. Phone When shows All day,
+stacked start and end date/time rows, then Repeat. Both date pills remain visible,
+including same-day events. Date/time pickers expand below their own row; only one
+stays open. The current Repeat menu remains until its replacement is designed;
+there is no stacked Repeat sheet.
+Start changes keep duration until an end is explicitly chosen. A later valid
+start keeps that chosen end; crossing it preserves the last duration instead.
+Locked ends cannot move, and loaded-detail resets clear chosen-end intent.
+Clock fields retain width and meridiem while typing. Type `6`, `630`, `6:30p`, or
+`18:30`; arrows step 15 minutes, Enter/Tab commits, and invalid blur or Escape
+reverts. Escape closes a time list before the desktop When popup. Phone's first
+time tap opens a keyboard-free inline list; its second tap starts typing.
+End lists show lengths and valid choices on the selected date. All day hides
+clock and time-zone fields. Time-zone menus retain full and short names.
 Custom repeat opens the shared desktop Dialog or phone drawer. Edits are staged:
 Done applies and Cancel leaves the original rule unchanged. Reminder pills keep
 their remove control inside the frame. Empty labels and placeholders use tertiary
@@ -103,9 +108,9 @@ or choosing a time zone updates the draft's grid instants; switching calendars
 updates its color. The Day-slot sheet has no scrim, leaves the grid interactive,
 and dismisses on outside taps except during the draft gesture. Other sheets
 remain modal. Closing removes the draft; saving creates one persisted event.
-New opens at full sheet height. Desktop and phone date/time pills share fixed
-110px widths and keep the meridiem at the right edge. Every option stays in the
-one scroller, and the sheet surface is opaque.
+New opens at full sheet height. Phone date/time pills share fixed 110px widths
+and keep the meridiem at the right edge. Inline options use the same scroll body;
+the sheet surface stays opaque.
 
 Phone agent review cards use the same grouped fields and clock picker as the
 standalone sheet. Adding Location inserts and focuses it after the call row.

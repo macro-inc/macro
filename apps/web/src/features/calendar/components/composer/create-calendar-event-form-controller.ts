@@ -175,6 +175,8 @@ export function createCalendarEventFormController(
     cloneValue(options.initialValue)
   );
   const [state, setState] = createSignal(cloneValue(options.initialValue));
+  // Invalidate per-edit picker intent when loaded details replace the draft.
+  const [detailsRevision, setDetailsRevision] = createSignal(0);
 
   const [initialGuests, setInitialGuests] = createSignal(
     initialGuestOptions(options.initialValue.guests, options.guestOptions())
@@ -629,6 +631,7 @@ export function createCalendarEventFormController(
   const resetDetails = () => {
     const initial = initialValue();
     batch(() => {
+      setDetailsRevision((revision) => revision + 1);
       setState({
         ...state(),
         title: initial.title,
@@ -651,6 +654,7 @@ export function createCalendarEventFormController(
     const cloned = cloneValue(next);
     const guests = initialGuestOptions(next.guests, options.guestOptions());
     batch(() => {
+      setDetailsRevision((revision) => revision + 1);
       setInitialValue(cloned);
       setState(cloned);
       setInitialGuests(guests);
@@ -663,6 +667,7 @@ export function createCalendarEventFormController(
   return {
     state,
     initialValue,
+    detailsRevision,
     value,
     calendarOptions: availableCalendarOptions,
     guestOptions: options.guestOptions,

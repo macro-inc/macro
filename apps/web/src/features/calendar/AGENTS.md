@@ -63,17 +63,17 @@ host lives in `../block-calendar/`.
   adapters in `queries/`, and host composition in `views/`.
 - Keep presentation components independent of production services; use the
   [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
-- Extend `../../components/date-time-range/` for shared date/time fields and
-  arithmetic; single-date picks preserve the range, and only real multi-day
-  spans show an end date. Share typed and picked clock state through
-  `primitives/create-time-input.ts` in both layouts.
-  Its `mobile-time-input/MobileTimeInput.tsx` is the new list-first T1 presentation;
-  `MobileStartTime` and `MobileEndTime` share the same range and rollover behavior.
-  Date/time pills share fixed widths, and clock/time-zone menus use the shared
-  Dropdown frames without replacing their listbox semantics. Reminder pills
-  share `components/composer/reminders/ComposerReminderPill.tsx` across layouts.
-  `views/composer/mobile/MobileComposer.tsx` composes the 2J sheet around those fields;
-  `MobileComposerHost.tsx` uses the popover's footer, header, and sole scroll viewport.
+- Share date/time arithmetic and typed-clock parsing through `../../components/date-time-range/`.
+  Active composer When layouts are `DesktopWhen` (D1) and `PhoneWhen` (P4), under
+  `ComposerWhenRoot`. The shared `create-composer-when.ts` owns picker exclusion,
+  selected-end intent, range validation, and day-specific end options; detail
+  resets invalidate intent through the controller's `detailsRevision`.
+  `WhenMonth` keeps six-week Corvu keyboard semantics at two sizes. Phone dates
+  always include the end; desktop summaries include it only across days. Phone
+  pickers expand inline and reveal within the host scroller. Keep current Repeat
+  options until its replacement is designed; do not add a stacked Repeat sheet.
+  Old `ComposerWhen` and `MobileComposerWhen` stay unwired for reference.
+  `MobileComposerHost` owns the sheet's footer, header, and sole scroll viewport.
   New-menu sheets use 92% height; timed phone Day slot taps request a low 42%
   non-modal sheet with no scrim and a separate unsaved FullCalendar draft.
   Its native start/end resize handles bind only to the mounted composer's range;

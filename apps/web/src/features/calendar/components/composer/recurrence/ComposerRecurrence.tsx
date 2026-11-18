@@ -4,11 +4,13 @@ import { createWritableMemo } from '@solid-primitives/memo';
 import { Dropdown, Tooltip } from '@ui';
 import { batch, For, on, Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
+import { useComposerWhenOptional } from '../../../context/composer-when-context';
 import { recurrencePresetsFor } from '../../../utils/recurrence';
 import { CustomRecurrenceDialog } from './CustomRecurrenceDialog';
 
 export function ComposerRecurrence(props: { fullWidth?: boolean } = {}) {
   const model = useCalendarComposer();
+  const when = useComposerWhenOptional();
   const reason = model.recurrenceScopeReason;
   const disabled = () =>
     model.fieldIsDisabled('recurrence') || Boolean(reason());
@@ -22,7 +24,15 @@ export function ComposerRecurrence(props: { fullWidth?: boolean } = {}) {
     )?.config ?? model.controller.customConfig();
   return (
     <>
-      <Dropdown placement="bottom-start">
+      <Dropdown
+        placement="bottom-start"
+        open={when ? when.state.active === 'repeat' : undefined}
+        onOpenChange={(open) => {
+          if (!when) return;
+          if (open) when.open('repeat');
+          else when.close('repeat');
+        }}
+      >
         <Tooltip
           label={reason() ?? ''}
           disabled={!reason()}

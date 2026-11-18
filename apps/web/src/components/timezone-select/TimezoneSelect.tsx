@@ -21,13 +21,20 @@ export function TimezoneSelect(props: {
   disabled?: boolean;
   label?: string;
   selectionLabel?: string;
-  appearance?: 'default' | 'value';
+  appearance?: 'default' | 'value' | 'ghost';
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   fullWidth?: boolean;
 }) {
   let triggerRef: HTMLButtonElement | undefined;
   let searchRef: HTMLInputElement | undefined;
   let restoreTriggerFocus = true;
-  const [open, setOpen] = createSignal(false);
+  const [localOpen, setLocalOpen] = createSignal(false);
+  const open = () => props.open ?? localOpen();
+  const setOpen = (value: boolean) => {
+    setLocalOpen(value);
+    props.onOpenChange?.(value);
+  };
   const [search, setSearch] = createSignal('');
   // Losing edit permission closes the popup; enabling the field must not reopen it.
   createEffect(
@@ -107,9 +114,14 @@ export function TimezoneSelect(props: {
             queueMicrotask(() => searchRef?.focus());
           }}
           class={
-            props.appearance === 'value'
+            props.appearance === 'value' || props.appearance === 'ghost'
               ? buttonClasses({
-                  variant: props.fullWidth ? 'row' : 'value',
+                  variant:
+                    props.appearance === 'ghost'
+                      ? 'ghost'
+                      : props.fullWidth
+                        ? 'row'
+                        : 'value',
                   size: props.fullWidth ? 'sheet-row' : 'sm',
                   fullWidth: props.fullWidth,
                   class: `min-w-0 ${props.fullWidth ? 'justify-between' : ''} ${props.class ?? ''}`,
@@ -120,7 +132,9 @@ export function TimezoneSelect(props: {
           }
         >
           <span class="truncate">{triggerLabel()}</span>
-          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+          <Show when={props.appearance !== 'ghost'}>
+            <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+          </Show>
         </Combobox.Trigger>
       </Combobox.Control>
 

@@ -1,9 +1,9 @@
 /** Scroll only the menu viewport; scrollIntoView can also move the composer and its anchor. */
 export function revealTimeOption(
   list: HTMLElement | undefined,
-  center: boolean
+  center: boolean,
+  viewport: HTMLElement | undefined = list?.parentElement ?? undefined
 ) {
-  const viewport = list?.parentElement;
   const option = list?.querySelector<HTMLElement>('[data-highlighted]');
   if (!viewport || !option) return;
   const bounds = viewport.getBoundingClientRect();

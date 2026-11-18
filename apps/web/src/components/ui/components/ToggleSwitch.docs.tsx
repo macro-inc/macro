@@ -26,7 +26,7 @@ function BasicDemo() {
 function SizesDemo() {
   return (
     <div class="flex flex-wrap items-center gap-6">
-      <For each={['xs', 'sm', 'md', 'lg'] as const}>
+      <For each={['compact', 'xs', 'sm', 'md', 'lg'] as const}>
         {(size) => (
           <div class="flex flex-col items-start gap-1.5">
             <span class="font-mono text-xs text-ink-subtle">{size}</span>

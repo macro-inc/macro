@@ -29,6 +29,7 @@ import { ComposerDeclineMessage } from '../../../components/composer/out-of-offi
 import { ComposerScope } from '../../../components/composer/scope/ComposerScope';
 import { ComposerTimeZone } from '../../../components/composer/time-zone/ComposerTimeZone';
 import { ComposerVisibility } from '../../../components/composer/visibility/ComposerVisibility';
+import { ComposerWhenRoot } from '../../../components/composer/when/ComposerWhenRoot';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import {
   type ComposerOptionalField,
@@ -41,7 +42,7 @@ import { MobileComposerGuestPermissions } from './MobileComposerGuestPermissions
 import { MobileComposerGuests } from './MobileComposerGuests';
 import { MobileComposerReminders } from './MobileComposerReminders';
 import { MobileComposerTitle } from './MobileComposerTitle';
-import { MobileComposerWhen } from './MobileComposerWhen';
+import { PhoneWhen } from './PhoneWhen';
 
 export interface MobileComposerProps {
   headerMount?: HTMLElement;
@@ -91,7 +92,7 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
     </SheetFooter>
   );
   return (
-    <>
+    <ComposerWhenRoot>
       <Show when={props.headerMount}>
         {(mount) => (
           <Portal mount={mount()}>
@@ -104,7 +105,7 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
           inputRef={setTitle}
           agentDraft={props.agentDraft}
         />
-        <MobileComposerWhen />
+        <PhoneWhen scrollElement={props.scrollElement} />
         <Show when={!model.isOutOfOffice()}>
           <Show when={fields.visible('description')}>
             <SheetGroup>
@@ -192,7 +193,7 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
             </Show>
           </SheetGroup>
         </Show>
-        <Show when={!model.state().allDay || model.isOutOfOffice()}>
+        <Show when={!model.state().allDay}>
           <SheetGroup>
             <SheetRow icon={<GlobeIcon class="size-4" />}>
               <ComposerTimeZone fullWidth />
@@ -220,6 +221,6 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
       <Show when={props.footerMount} fallback={footer()}>
         {(mount) => <Portal mount={mount()}>{footer()}</Portal>}
       </Show>
-    </>
+    </ComposerWhenRoot>
   );
 }

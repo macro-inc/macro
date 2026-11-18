@@ -1,0 +1,250 @@
+import { createTimeInput } from '@app/components/date-time-range/primitives/create-time-input';
+import { editableClockValue } from '@app/components/date-time-range/primitives/mobile-clock-value';
+import { revealTimeOption } from '@app/components/date-time-range/primitives/reveal-time-option';
+import {
+  dayOffsetBetween,
+  selectedTimeOptionId,
+  splitLocalDateTime,
+  type TimeOption,
+} from '@app/components/date-time-range/time-options';
+import { formatLocale } from '@app/lib/i18n';
+import { ScopedPortal } from '@core/component/ScopedPortal';
+import { Popover } from '@kobalte/core/popover';
+import { Button, cn, Input } from '@ui';
+import { createEffect, createUniqueId, on, onCleanup, Show } from 'solid-js';
+import { Portal } from 'solid-js/web';
+import { useCalendarComposer } from '../../../context/calendar-composer-context';
+import { useComposerWhen } from '../../../context/composer-when-context';
+import { WhenTimeOptions } from './WhenTimeOptions';
+
+export function WhenTime(props: {
+  endpoint: 'start' | 'end';
+  inline?: boolean;
+  listMount?: HTMLElement;
+  onReveal?: () => void;
+}) {
+  const composer = useCalendarComposer(),
+    when = useComposerWhen();
+  const key = () => (props.endpoint === 'start' ? 'start-time' : 'end-time');
+  const id = createUniqueId();
+  let anchor: HTMLDivElement | undefined,
+    input: HTMLInputElement | undefined,
+    button: HTMLButtonElement | undefined;
+  let list: HTMLDivElement | undefined, frame: number | undefined;
+  const value = () => splitLocalDateTime(composer.state()[props.endpoint]).time;
+  const selectedId = () =>
+    selectedTimeOptionId(
+      value(),
+      props.endpoint === 'end'
+        ? dayOffsetBetween(composer.state().start, composer.state().end)
+        : 0
+    );
+  const options = () => when.timeOptions(props.endpoint, props.inline ?? false);
+  const disabled = () => composer.fieldIsDisabled(props.endpoint);
+  const model = createTimeInput({
+    options,
+    selectedId,
+    disabled,
+    onChange: (option) => when.chooseTime(props.endpoint, option),
+  });
+  const open = () => when.state.active === key() && model.isOpen();
+  const display = () =>
+    editableClockValue(
+      value(),
+      model.state.shown,
+      model.state.typed !== undefined || model.state.navigated
+        ? model.highlighted()?.value
+        : undefined,
+      composer.range.timeFormat,
+      formatLocale()
+    );
+  const typing = () => !props.inline || model.state.mode === 'typing';
+  const reveal = () => {
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      frame = undefined;
+      revealTimeOption(list, true, list);
+      props.onReveal?.();
+    });
+  };
+  onCleanup(() => {
+    if (frame !== undefined) cancelAnimationFrame(frame);
+  });
+  const activate = (type: boolean) => {
+    when.open(key(), model.reset);
+    if (type) model.beginTyping();
+    else model.openList();
+    reveal();
+  };
+  const closeTime = () => {
+    if (when.state.active !== key()) return;
+    if (props.inline) when.close(key());
+    else when.open('when');
+  };
+  const commit = () => {
+    model.commit();
+    closeTime();
+  };
+  const choose = (option: TimeOption) => {
+    model.choose(option);
+    closeTime();
+    if (props.inline) button?.focus({ preventScroll: true });
+    else input?.focus({ preventScroll: true });
+  };
+  const keyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && open()) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeTime();
+      button?.focus({ preventScroll: true });
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!open()) activate(!props.inline);
+      else model.moveHighlight(event.key === 'ArrowDown' ? 1 : -1);
+      reveal();
+    } else if (event.key === 'Enter' && open()) {
+      event.preventDefault();
+      event.stopPropagation();
+      commit();
+    }
+  };
+  createEffect(
+    on(disabled, (locked) => {
+      if (locked) {
+        when.close(key());
+        input?.blur();
+      }
+    })
+  );
+  const optionsView = () => (
+    <WhenTimeOptions
+      id={id}
+      label={`event ${props.endpoint} time`}
+      date={composer.state().start}
+      options={options()}
+      selectedId={selectedId()}
+      highlightedId={model.state.highlightedId}
+      inline={props.inline ?? false}
+      onChoose={choose}
+      ref={(element) => {
+        list = element;
+        reveal();
+      }}
+    />
+  );
+  return (
+    <Popover
+      open={!props.inline && open()}
+      onOpenChange={(next) => {
+        if (!next) commit();
+      }}
+      anchorRef={() => anchor}
+      placement="bottom-start"
+      gutter={4}
+      flip={false}
+      slide
+    >
+      <div
+        ref={anchor}
+        class={cn(
+          'relative shrink-0 bg-ink/6',
+          props.inline
+            ? 'h-9 w-[110px] rounded-full text-[15px]'
+            : 'h-[30px] min-w-0 flex-1 rounded-lg text-sm',
+          open() && 'ring-[1.5px] ring-inset ring-accent'
+        )}
+      >
+        <Show when={props.inline && !typing()}>
+          <Button
+            ref={button}
+            variant="value"
+            size="field"
+            fullWidth
+            role="combobox"
+            aria-label={`event ${props.endpoint} time`}
+            aria-expanded={open()}
+            aria-controls={id}
+            disabled={disabled()}
+            onKeyDown={keyDown}
+            onClick={() => {
+              if (open()) {
+                model.beginTyping();
+                input?.focus({ preventScroll: true });
+                input?.select();
+              } else activate(false);
+            }}
+          >
+            <span class="flex w-full justify-between font-normal">
+              <span>{display().time}</span>
+              <span class="text-ink-muted">{display().meridiem}</span>
+            </span>
+          </Button>
+        </Show>
+        <span
+          hidden={props.inline && !typing()}
+          class="relative block size-full"
+        >
+          <Input
+            ref={input}
+            variant="bare"
+            size="field"
+            class="h-full w-full rounded-[inherit] pr-9 text-[inherit]"
+            role="combobox"
+            aria-label={`event ${props.endpoint} time`}
+            aria-expanded={open()}
+            aria-controls={id}
+            aria-autocomplete="both"
+            disabled={disabled()}
+            value={display().time}
+            onFocus={() => {
+              if (!open()) activate(true);
+              input?.select();
+            }}
+            onMouseDown={() => {
+              if (!open() && document.activeElement === input) activate(true);
+            }}
+            onInput={(event) => {
+              model.input(
+                event.currentTarget.value,
+                event.inputType.startsWith('insert')
+              );
+              event.currentTarget.value = display().time;
+              reveal();
+            }}
+            onBlur={commit}
+            on:keydown={keyDown}
+          />
+          <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-ink-muted">
+            {display().meridiem}
+          </span>
+        </span>
+      </div>
+      <Show when={open()}>
+        <Show
+          when={props.inline && props.listMount}
+          fallback={
+            <Show when={!props.inline}>
+              <ScopedPortal scope="local">
+                <Popover.Content
+                  class="menu-surface z-action-menu min-w-48 p-1 outline-none"
+                  onOpenAutoFocus={(event) => event.preventDefault()}
+                  onCloseAutoFocus={(event) => event.preventDefault()}
+                  onEscapeKeyDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    closeTime();
+                  }}
+                >
+                  {optionsView()}
+                </Popover.Content>
+              </ScopedPortal>
+            </Show>
+          }
+        >
+          {(mount) => <Portal mount={mount()}>{optionsView()}</Portal>}
+        </Show>
+      </Show>
+    </Popover>
+  );
+}

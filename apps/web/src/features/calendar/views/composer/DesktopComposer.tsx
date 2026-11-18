@@ -5,6 +5,7 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import VisibilityIcon from '@icon/system/regular/eye.svg';
 import LocationIcon from '@icon/system/regular/map-pin.svg';
+import RepeatIcon from '@icon/system/regular/repeat.svg';
 import ShieldIcon from '@icon/system/regular/shield-check.svg';
 import AgentMark from '@icon/system/regular/sparkle.svg';
 import DescriptionIcon from '@icon/system/regular/text-align-left.svg';
@@ -41,10 +42,10 @@ import { ComposerRecurrence } from '../../components/composer/recurrence/Compose
 
 import { ComposerReminders } from '../../components/composer/reminders/ComposerReminders';
 import { ComposerScope } from '../../components/composer/scope/ComposerScope';
-import { ComposerTimeZone } from '../../components/composer/time-zone/ComposerTimeZone';
 import { ComposerTitle } from '../../components/composer/title/ComposerTitle';
 import { ComposerVisibility } from '../../components/composer/visibility/ComposerVisibility';
-import { ComposerWhen } from '../../components/composer/when/ComposerWhen';
+import { ComposerWhenRoot } from '../../components/composer/when/ComposerWhenRoot';
+import { DesktopWhen } from '../../components/composer/when/DesktopWhen';
 import { useCalendarComposer } from '../../context/calendar-composer-context';
 import { DEFAULT_CALENDAR_SOURCE } from '../../types';
 
@@ -71,7 +72,7 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
     !model.isEdit() || Boolean(controller.initialValue().description);
 
   return (
-    <>
+    <ComposerWhenRoot>
       <ComposerHeader onPointerDown={props.onHeaderPointerDown}>
         <div class="flex-1" />
         <Show when={props.onTogglePin}>
@@ -112,31 +113,13 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
               <ComposerKind />
             </div>
           </Show>
-          <Show when={model.isEdit()}>
-            <div class="mt-1">
-              <ComposerWhen />
-            </div>
-          </Show>
         </ComposerFieldRow>
-        <Switch>
-          <Match when={!model.isEdit()}>
-            <ComposerFieldRow icon={<ClockIcon class="size-4" />}>
-              <ComposerWhen />
-              <div class="mt-1 flex flex-wrap gap-1">
-                <ComposerRecurrence />
-                <ComposerTimeZone />
-              </div>
-            </ComposerFieldRow>
-          </Match>
-          <Match when={model.isEdit()}>
-            <ComposerFieldRow>
-              <div class="flex flex-wrap gap-1">
-                <ComposerRecurrence />
-                <ComposerTimeZone />
-              </div>
-            </ComposerFieldRow>
-          </Match>
-        </Switch>
+        <ComposerFieldRow icon={<ClockIcon class="size-4" />}>
+          <DesktopWhen />
+        </ComposerFieldRow>
+        <ComposerFieldRow icon={<RepeatIcon class="size-4" />}>
+          <ComposerRecurrence />
+        </ComposerFieldRow>
         <Show when={model.recurrenceScopeReason()}>
           {(reason) => (
             <p
@@ -244,6 +227,6 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
         <ComposerCancel onCancel={props.onCancel} />
         <ComposerSubmit />
       </div>
-    </>
+    </ComposerWhenRoot>
   );
 }
