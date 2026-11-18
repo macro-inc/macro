@@ -17,7 +17,9 @@ import {
   responseAuthorityGeneration,
 } from '@graphql-cache/response-authority';
 import { emailKeys } from '@queries/email/keys';
-import { onlineManager } from '@tanstack/solid-query';
+import { setupQueryPersistence } from '@queries/persistence';
+import { QueryObserver } from '@tanstack/query-core';
+import { onlineManager, QueryClient } from '@tanstack/solid-query';
 import { createClient, gql } from '@urql/core';
 import type { Client as GraphqlWsClient } from 'graphql-ws';
 import { err, ok } from 'neverthrow';
@@ -132,6 +134,63 @@ afterEach(() => {
 });
 
 describe('CRM HTTP response admission', () => {
+  it.each([false, true])(
+    'restarts mounted independent mailbox metadata after sign-in without proof, after logout=%s',
+    async (logout) => {
+      vi.useFakeTimers();
+      await verifiedViewer();
+      await vi.runOnlyPendingTimersAsync();
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+      });
+      const persistence = setupQueryPersistence({ queryClient, scopes: [] });
+      mocks.retire.mockImplementation(persistence.retire);
+      mocks.refetch.mockImplementation((options) =>
+        queryClient.refetchQueries(options)
+      );
+      const fetchInbox = vi.fn(async () => 'current-inbox');
+      const fetchCrm = vi.fn(async () => 'protected-data');
+      const inbox = new QueryObserver(queryClient, {
+        queryKey: emailKeys.messageInbox('message').queryKey,
+        queryFn: fetchInbox,
+        initialData: 'previous-inbox',
+        staleTime: Infinity,
+      });
+      const crm = new QueryObserver(queryClient, {
+        queryKey: ['crm', 'companies'],
+        queryFn: fetchCrm,
+        initialData: 'previous-protected-data',
+        staleTime: Infinity,
+      });
+      const stopInbox = inbox.subscribe(() => {});
+      const stopCrm = crm.subscribe(() => {});
+      try {
+        mocks.proof.mockClear();
+        if (logout) {
+          crmAccessAuthority.setSession(undefined);
+          await vi.runOnlyPendingTimersAsync();
+          expect(inbox.getCurrentResult().data).toBeUndefined();
+          expect(fetchInbox).not.toHaveBeenCalled();
+        }
+        crmAccessAuthority.setSession('viewer', 1);
+        await vi.runOnlyPendingTimersAsync();
+        expect(inbox.getCurrentResult().data).toBe('current-inbox');
+        expect(fetchInbox).toHaveBeenCalledOnce();
+        expect(crm.getCurrentResult().data).toBeUndefined();
+        expect(fetchCrm).not.toHaveBeenCalled();
+        expect(mocks.proof).not.toHaveBeenCalled();
+      } finally {
+        stopInbox();
+        stopCrm();
+        persistence.dispose();
+        queryClient.clear();
+        mocks.retire.mockResolvedValue(undefined);
+        mocks.refetch.mockResolvedValue(undefined);
+        vi.useRealTimers();
+      }
+    }
+  );
+
   it('keeps mailbox metadata on denial but retires it when the login is replaced', async () => {
     const mailKeys = [
       emailKeys.threadOperations('thread').queryKey,

@@ -734,7 +734,8 @@ function harness(
 
 function controlledQueryHarness(
   host: CacheHost,
-  options: NormalizedCacheExchangeOptions = {}
+  options: NormalizedCacheExchangeOptions = {},
+  onResult?: (result: OperationResult) => void
 ) {
   const ops = makeSubject<Operation>();
   const network = makeSubject<OperationResult>();
@@ -759,7 +760,10 @@ function controlledQueryHarness(
       client,
       dispatchDebug: () => undefined,
     })(ops.source),
-    subscribe((result) => results.push(result))
+    subscribe((result) => {
+      results.push(result);
+      onResult?.(result);
+    })
   );
   return { ops, network, forwarded, results, client };
 }
@@ -1595,16 +1599,55 @@ describe('normalizedCacheExchange', () => {
     }
   );
 
-  it.each([false, true])(
-    'does not recover an independent cached read across account replacement, returning to prior account=%s',
-    async (returning) => {
+  it.each([
+    ['cache-only', false],
+    ['cache-only', true],
+    ['cache-first', false],
+    ['cache-first', true],
+  ] as const)(
+    'settles an independent %s read when owner recovery discovers account replacement, recovery throws=%s',
+    async (policy, rejects) => {
+      const { authority, change } = installAuthority(host, {
+        account: 'test-viewer',
+      });
+      vi.spyOn(authority, 'current').mockImplementation(async () => {
+        change(false, { account: 'replacement' });
+        if (rejects) throw new Error('Owner replaced');
+        return authority.snapshot();
+      });
+      const read = vi
+        .spyOn(host, 'readQuery')
+        .mockRejectedValue(new StaleCacheAuthorityError());
+      const settled = deferred<OperationResult>();
+      const { ops, forwarded } = controlledQueryHarness(
+        host,
+        {},
+        settled.resolve
+      );
+      ops.next(personalMailOp(47, policy));
+      const result = await settled.promise;
+      expect(result.data).toBeUndefined();
+      expect(read).toHaveBeenCalledOnce();
+      expect(authority.current).toHaveBeenCalledOnce();
+      expect(forwarded).toHaveLength(0);
+    }
+  );
+
+  it.each([
+    ['cache-only', false],
+    ['cache-only', true],
+    ['cache-first', false],
+    ['cache-first', true],
+  ] as const)(
+    'does not recover an independent %s read across account replacement, returning to prior account=%s',
+    async (policy, returning) => {
       const { change } = installAuthority(host, { account: 'test-viewer' });
       const old = deferred<ReadResult>();
       const read = vi
         .spyOn(host, 'readQuery')
         .mockImplementationOnce(() => old.promise);
       const { ops, results, forwarded } = controlledQueryHarness(host);
-      ops.next(personalMailOp(47, 'cache-only'));
+      ops.next(personalMailOp(47, policy));
       await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
       change(false, { account: 'replacement' });
       if (returning) change(false, { account: 'test-viewer' });

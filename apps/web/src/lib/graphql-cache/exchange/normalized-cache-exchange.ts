@@ -1193,6 +1193,17 @@ export function normalizedCacheExchange(
             error instanceof StaleCacheAuthorityError &&
             readVersion.canRetryAuthority(op);
           if (
+            error instanceof StaleCacheAuthorityError &&
+            !authorityReadRejected &&
+            readVersion.isLatest() &&
+            !queryNeedsCrmProof(
+              queryText(op),
+              op.variables as Record<string, unknown>,
+              operationName(op)
+            )
+          )
+            return cacheResult(op, undefined, false);
+          if (
             isOwnerEpochLostError(error) &&
             queryStates.get(op.key) === readState &&
             (readVersion.isCurrent() || readState.networkBoundQueries > 0)
@@ -1220,14 +1231,20 @@ export function normalizedCacheExchange(
                     await host.authority?.current();
                   } catch (error) {
                     reportReadError(error, op);
-                    if (!readVersion.canRetryAuthority(op)) return undefined;
+                    if (!readVersion.canRetryAuthority(op))
+                      return readVersion.isLatest()
+                        ? cacheResult(op, undefined, false)
+                        : undefined;
                     if (policy === 'cache-only')
                       return cacheResult(op, undefined, false);
                     if (!networkForwarded && !registrationOnly)
                       enqueueQueryForward(op);
                     return undefined;
                   }
-                  if (!readVersion.canRetryAuthority(op)) return undefined;
+                  if (!readVersion.canRetryAuthority(op))
+                    return readVersion.isLatest()
+                      ? cacheResult(op, undefined, false)
+                      : undefined;
                   retryOperation = makeOperation('query', op, {
                     ...op.context,
                     cacheAuthorityGeneration:

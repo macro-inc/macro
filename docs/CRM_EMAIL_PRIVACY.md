@@ -91,10 +91,14 @@ Successful queued responses remain decodable for identity settlement, but a
 replaced login supplies an explicitly rejected content generation before cache
 commit or publication. Independent mailbox query metadata is retired on login
 replacement, including same-account sign-in, rather than on CRM proof changes.
+After that cleanup and sign-in, active independent mailbox observers restart
+without waiting for CRM proof; protected observers still require verification.
 Folder moves are independent for supported non-CRM entity kinds: their effects
 contain only the moved entity and its folders, and the email domain requires
 Owner access before moving a thread or returning its updated snapshot.
 Arbitrary thread, attachment and EML reads can use CRM grants and retain proof checks.
+A current read whose recovery discovers an account replacement settles without
+data or a network fallback; obsolete attempts remain discarded.
 An independent cached read rejected across an authority change gets one fresh
 local read after confirming the current owner. Account replacement fences that
 recovery; cache-only reads never reach the network, and repeated rejection does

@@ -61,6 +61,25 @@ async function fetchProof(timeoutMs: number): Promise<string> {
 }
 
 let resumeVisibleSnapshots: (() => void) | undefined;
+let independentEmailRetirement: Promise<void> | undefined;
+
+async function refetchIndependentEmailSnapshots() {
+  const retirement = independentEmailRetirement;
+  if (!retirement || !crmAccessAuthority.account()) return;
+  await retirement;
+  if (
+    retirement !== independentEmailRetirement ||
+    !crmAccessAuthority.account()
+  )
+    return;
+  independentEmailRetirement = undefined;
+  await queryClient.refetchQueries({
+    type: 'active',
+    predicate: (query) =>
+      query.queryKey[0] === 'email' && !crmProtectedQueryKey(query.queryKey),
+  });
+}
+
 async function retireVisibleSnapshots(scope: CrmRetirementScope) {
   resumeVisibleSnapshots = beginQueryAuthorizationReset();
   if (host)
@@ -71,10 +90,19 @@ async function retireVisibleSnapshots(scope: CrmRetirementScope) {
       'GraphqlSoupEmailThread',
       'GraphqlCrmPipeline',
     ]);
-  await queryPersistence.retire(
+  const retirement = queryPersistence.retire(
     (key) =>
       (scope === 'session' && key[0] === 'email') || crmProtectedQueryKey(key)
   );
+  if (scope === 'session') independentEmailRetirement = retirement;
+  await retirement;
+  // Persistence rebinds observers without fetching. Personal mailbox readers
+  // resume after session cleanup, even if CRM proof is still unavailable.
+  if (scope === 'session')
+    fireAndForget(
+      refetchIndependentEmailSnapshots(),
+      'crm.access.mail_refetch'
+    );
 }
 
 function verifiedVisibleSnapshots() {
@@ -138,6 +166,12 @@ function install() {
           throw error;
       }
     },
+  });
+  crmAccessAuthority.onSessionChanged(() => {
+    fireAndForget(
+      refetchIndependentEmailSnapshots(),
+      'crm.access.mail_refetch'
+    );
   });
   onlineManager.subscribe((online) => {
     if (
