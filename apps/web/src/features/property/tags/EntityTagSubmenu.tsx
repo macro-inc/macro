@@ -5,11 +5,13 @@ import type { EntityData } from '@entity/types/entity';
 import TagIcon from '@icon/system/regular/tag-simple.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import { Dropdown } from '@ui/components/Dropdown';
 import {
   type ManagedDialogProps,
   openDialog,
 } from '@ui/components/ImperativeDialog';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { tagEntityType } from './entityTagging';
 import { TagEditorDialog, type TagEditorDialogMode } from './TagEditorDialog';
 import { TagPickerList } from './TagPicker';
@@ -20,6 +22,8 @@ import { useDocTags } from './useDocTags';
 export function EntityTagSubmenu(props: {
   entity: EntityData;
   onActionComplete?: () => void;
+  /** Render the trigger and submenu in a Dropdown host instead of a context menu. */
+  menu?: 'dropdown';
 }) {
   const [open, setOpen] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
@@ -37,10 +41,15 @@ export function EntityTagSubmenu(props: {
   };
 
   return (
-    <ContextMenu.Sub open={open()} onOpenChange={handleOpenChange}>
+    <Dynamic
+      component={props.menu === 'dropdown' ? Dropdown.Sub : ContextMenu.Sub}
+      open={open()}
+      onOpenChange={handleOpenChange}
+    >
       <SubTrigger
         text={t('entityActions.addTag')}
         icon={TagIcon}
+        menu={props.menu}
         // Keep the open trigger focusable until the picker returns focus.
         disabled={(!open() && saving()) || !tagEntityType(props.entity)}
         ref={(element) => (trigger = element)}
@@ -48,6 +57,7 @@ export function EntityTagSubmenu(props: {
       <Show when={open() || saving()}>
         <EntityTagSubmenuOwner
           entity={props.entity}
+          menu={props.menu}
           open={open}
           setSaving={setSaving}
           registerSave={(handler) => (saveAndClose = handler)}
@@ -56,12 +66,13 @@ export function EntityTagSubmenu(props: {
           onActionComplete={props.onActionComplete}
         />
       </Show>
-    </ContextMenu.Sub>
+    </Dynamic>
   );
 }
 
 function EntityTagSubmenuOwner(props: {
   entity: EntityData;
+  menu?: 'dropdown';
   open: () => boolean;
   setSaving: (saving: boolean) => void;
   registerSave: (handler: (() => Promise<void>) | undefined) => void;
@@ -114,10 +125,25 @@ function EntityTagSubmenuOwner(props: {
   });
 
   return (
-    <ContextMenuContent
-      submenu
-      class="w-96 max-w-[min(24rem,calc(100vw-1.5rem))] p-0"
+    <Show
+      when={props.menu === 'dropdown'}
+      fallback={
+        <ContextMenuContent
+          submenu
+          class="w-96 max-w-[min(24rem,calc(100vw-1.5rem))] p-0"
+        >
+          {picker()}
+        </ContextMenuContent>
+      }
     >
+      <Dropdown.SubContent class="w-96 max-w-[min(24rem,calc(100vw-1.5rem))] p-0">
+        {picker()}
+      </Dropdown.SubContent>
+    </Show>
+  );
+
+  function picker() {
+    return (
       <Show when={props.open()}>
         <div
           ref={content}
@@ -136,8 +162,8 @@ function EntityTagSubmenuOwner(props: {
           <TagPickerList session={session} />
         </div>
       </Show>
-    </ContextMenuContent>
-  );
+    );
+  }
 }
 
 function ManagedTagEditorDialog(

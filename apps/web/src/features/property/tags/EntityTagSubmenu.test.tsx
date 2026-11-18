@@ -1,4 +1,10 @@
 /** @vitest-environment jsdom */
+
+import {
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from '@core/component/ContextMenu';
+import { ContextMenu } from '@kobalte/core/context-menu';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import {
   cleanup,
@@ -157,6 +163,7 @@ function setup() {
                 fileType: 'md',
               }}
               onActionComplete={complete}
+              menu="dropdown"
             />
             <Dropdown.Item onSelect={otherAction}>Another action</Dropdown.Item>
           </Dropdown.Content>
@@ -179,6 +186,35 @@ async function openTags() {
   search.focus();
   return search;
 }
+
+it('opens and saves a tag selection from a context menu trigger', async () => {
+  render(() => (
+    <ContextMenu>
+      <ContextMenuTrigger>Document</ContextMenuTrigger>
+      <ContextMenuContent>
+        <EntityTagSubmenu
+          entity={{
+            type: 'document',
+            id: 'document-1',
+            name: 'Document',
+            ownerId: 'owner',
+            fileType: 'md',
+          }}
+        />
+      </ContextMenuContent>
+    </ContextMenu>
+  ));
+  fireEvent.contextMenu(screen.getByText('Document'));
+  const trigger = await screen.findByRole('menuitem', { name: 'Add tag' });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'ArrowRight' });
+  const search = await screen.findByPlaceholderText('Change or add tags');
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Urgent' }));
+  fireEvent.keyDown(search, { key: 'Escape' });
+  await waitFor(() =>
+    expect(mocks.save).toHaveBeenCalledWith(new Set(['urgent']))
+  );
+});
 
 it('handles selection keys in the submenu and saves staged tags when its parent unmounts', async () => {
   const { closeParent } = setup();

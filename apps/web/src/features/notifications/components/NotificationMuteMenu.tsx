@@ -12,7 +12,9 @@ import BellIcon from '@icon/system/regular/bell-simple.svg';
 import BellSlashIcon from '@icon/system/regular/bell-slash.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { Dropdown } from '@ui/components/Dropdown';
 import { For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { formatSnoozeDeadline, snoozePresets } from '../core/snooze';
 
@@ -29,6 +31,8 @@ export type NotificationMuteMenuProps = {
    */
   mentionsOnly?: { active: boolean; onChange: (active: boolean) => void };
   onActionComplete?: () => void;
+  /** Render the trigger and submenu in a Dropdown host instead of a context menu. */
+  menu?: 'dropdown';
 };
 
 type MuteOptionsProps = Pick<
@@ -110,58 +114,95 @@ function muteOptions(props: MuteOptionsProps) {
 
 /** Shared entity and section submenu; callers own targets and mutations. */
 export function NotificationMuteMenu(props: NotificationMuteMenuProps) {
+  const options = () => (
+    <For each={muteOptions(props)}>
+      {(option) => (
+        <>
+          <Show when={option.separatorBefore}>
+            <Show when={props.menu === 'dropdown'} fallback={<MenuSeparator />}>
+              <Dropdown.Separator class="my-1.5 -mx-1.5 w-[calc(100%+0.75rem)] border-t border-edge-divider" />
+            </Show>
+          </Show>
+          <Dynamic
+            component={
+              props.menu === 'dropdown' ? Dropdown.Item : ContextMenu.Item
+            }
+            class={props.menu === 'dropdown' ? undefined : MENU_ITEM_CLASS}
+            disabled={props.disabled}
+            data-mute-option={option.id}
+            aria-checked={option.checked}
+            onSelect={option.select}
+          >
+            <span class="min-w-0 flex-1 truncate">{option.label}</span>
+            <Show when={option.checked}>
+              <CheckIcon class="ml-auto size-4 shrink-0" />
+            </Show>
+            <Show when={option.deadline}>
+              {(deadline) => (
+                <span class="ml-auto shrink-0 text-right text-xs whitespace-nowrap text-ink-extra-muted">
+                  {deadline()}
+                </span>
+              )}
+            </Show>
+          </Dynamic>
+        </>
+      )}
+    </For>
+  );
+
   return (
     <Show
       when={!props.muted}
       fallback={
-        <MenuItem
-          text={props.unmuteLabel}
-          icon={BellIcon}
-          disabled={props.disabled}
-          onClick={() => {
-            props.onMute(false);
-            props.onActionComplete?.();
-          }}
-        />
+        <Show
+          when={props.menu === 'dropdown'}
+          fallback={
+            <MenuItem
+              text={props.unmuteLabel}
+              icon={BellIcon}
+              disabled={props.disabled}
+              onClick={() => {
+                props.onMute(false);
+                props.onActionComplete?.();
+              }}
+            />
+          }
+        >
+          <Dropdown.Item
+            disabled={props.disabled}
+            onSelect={() => {
+              props.onMute(false);
+              props.onActionComplete?.();
+            }}
+          >
+            <BellIcon class="size-4 shrink-0" />
+            <span class="min-w-0 flex-1 truncate">{props.unmuteLabel}</span>
+          </Dropdown.Item>
+        </Show>
       }
     >
-      <ContextMenu.Sub>
+      <Dynamic
+        component={props.menu === 'dropdown' ? Dropdown.Sub : ContextMenu.Sub}
+      >
         <SubTrigger
           text={props.label}
           icon={BellSlashIcon}
           disabled={props.disabled}
+          menu={props.menu}
         />
-        <ContextMenuContent submenu class="min-w-64">
-          <For each={muteOptions(props)}>
-            {(option) => (
-              <>
-                <Show when={option.separatorBefore}>
-                  <MenuSeparator />
-                </Show>
-                <ContextMenu.Item
-                  class={MENU_ITEM_CLASS}
-                  disabled={props.disabled}
-                  data-mute-option={option.id}
-                  aria-checked={option.checked}
-                  onSelect={option.select}
-                >
-                  <span class="min-w-0 flex-1 truncate">{option.label}</span>
-                  <Show when={option.checked}>
-                    <CheckIcon class="ml-auto size-4 shrink-0" />
-                  </Show>
-                  <Show when={option.deadline}>
-                    {(deadline) => (
-                      <span class="ml-auto shrink-0 text-right text-xs whitespace-nowrap text-ink-extra-muted">
-                        {deadline()}
-                      </span>
-                    )}
-                  </Show>
-                </ContextMenu.Item>
-              </>
-            )}
-          </For>
-        </ContextMenuContent>
-      </ContextMenu.Sub>
+        <Show
+          when={props.menu === 'dropdown'}
+          fallback={
+            <ContextMenuContent submenu class="min-w-64">
+              {options()}
+            </ContextMenuContent>
+          }
+        >
+          <Dropdown.SubContent class="min-w-64">
+            <Dropdown.Group>{options()}</Dropdown.Group>
+          </Dropdown.SubContent>
+        </Show>
+      </Dynamic>
     </Show>
   );
 }

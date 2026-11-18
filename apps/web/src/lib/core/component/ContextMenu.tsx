@@ -11,6 +11,7 @@ import {
   Layer,
 } from '@ui';
 import { CopyFeedback } from '@ui/components/CopyButton';
+import { Dropdown } from '@ui/components/Dropdown';
 import { Hotkey } from '@ui/components/Hotkey';
 import { createCopyState } from '@ui/utils/create-copy-state';
 import {
@@ -267,13 +268,22 @@ export function SubTrigger(props: {
   iconClass?: string;
   disabled?: boolean;
   ref?: (element: HTMLDivElement) => void;
+  /** Use the host menu's row and keyboard semantics. */
+  menu?: 'dropdown';
 }) {
   return (
-    <ContextMenu.SubTrigger
-      class={cn(
-        MENU_ITEM_CLASS,
-        props.disabled && 'opacity-50 cursor-not-allowed'
-      )}
+    <Dynamic
+      component={
+        props.menu === 'dropdown' ? Dropdown.SubTrigger : ContextMenu.SubTrigger
+      }
+      class={
+        props.menu === 'dropdown'
+          ? undefined
+          : cn(
+              MENU_ITEM_CLASS,
+              props.disabled && 'opacity-50 cursor-not-allowed'
+            )
+      }
       disabled={props.disabled}
       ref={props.ref}
     >
@@ -296,7 +306,7 @@ export function SubTrigger(props: {
       </Show>
       <div class="flex-1 truncate">{props.text}</div>
       <CaretRight class="size-4 shrink-0" />
-    </ContextMenu.SubTrigger>
+    </Dynamic>
   );
 }
 
@@ -341,9 +351,14 @@ export function ContextMenuTrigger(
   );
 }
 
-export function MenuSeparator() {
+export function MenuSeparator(props: { class?: string } = {}) {
   return (
-    <ContextMenu.Separator class="my-1.5 -mx-1.5 w-[calc(100%+0.75rem)] border-t border-edge-divider" />
+    <ContextMenu.Separator
+      class={cn(
+        'my-1.5 -mx-1.5 w-[calc(100%+0.75rem)] border-t border-edge-divider',
+        props.class
+      )}
+    />
   );
 }
 
