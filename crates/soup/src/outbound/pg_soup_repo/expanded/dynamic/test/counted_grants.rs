@@ -251,7 +251,14 @@ async fn page(
         );
         (builder.sql().to_owned(), entity_type)
     } else {
-        let builder = build_query(filter, false, sort, grants(counted), &mut document_ids, None);
+        let builder = build_query(
+            filter,
+            false,
+            sort,
+            grants(counted),
+            &mut document_ids,
+            None,
+        );
         (builder.sql().to_owned(), None)
     };
     #[expect(clippy::disallowed_methods, reason = "runs SQL generated from the AST")]
@@ -421,7 +428,14 @@ async fn plan(pool: &PgPool, viewer: &str, grants: Gate) -> anyhow::Result<Strin
     let filter = everything();
     let counted = DocumentGrants::count(&mut transaction, &filter, &source_ids).await?;
     let mut document_ids = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
-    let builder = build_query(&filter, false, sort, grants(counted), &mut document_ids, None);
+    let builder = build_query(
+        &filter,
+        false,
+        sort,
+        grants(counted),
+        &mut document_ids,
+        None,
+    );
     #[expect(
         clippy::disallowed_methods,
         reason = "explains SQL generated from the AST"

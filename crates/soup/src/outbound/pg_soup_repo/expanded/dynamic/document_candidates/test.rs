@@ -1,6 +1,7 @@
 use super::super::{
-    DocumentArmAccess, DocumentGrants, DocumentIdArrays, EACH_CANDIDATE_LIMIT, begin_dynamic_query, build_query,
-    document_candidate_arm, fetch_user_source_ids, first_document_id_slot, push_not_inward,
+    DocumentArmAccess, DocumentGrants, DocumentIdArrays, EACH_CANDIDATE_LIMIT, begin_dynamic_query,
+    build_query, document_candidate_arm, fetch_user_source_ids, first_document_id_slot,
+    push_not_inward,
 };
 use super::{CandidateArm, DocumentCandidates};
 use crate::domain::models::DynamicSort;

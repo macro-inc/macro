@@ -199,7 +199,9 @@ fn arrays_follow_each_querys_fixed_binds() {
                 false,
                 sort,
                 DocumentGrants::Estimated,
-                &mut flat_ids, None)
+                &mut flat_ids,
+                None,
+            )
             .sql()
             .to_owned();
             let grouping = GroupingConfig {
