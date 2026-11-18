@@ -251,6 +251,9 @@ export type EmailSendProgress =
   | { state: 'unconfirmed' }
   | { state: 'untracked' };
 
+/** A send the outbox holds, keyed as the server knows its attempt. */
+export type QueuedSend = { sendAttemptId: string; inboxId: string };
+
 export interface EmailDelivery {
   /** Whether sends can be persisted and replayed without connectivity. */
   queueActive?: (inboxId?: string) => boolean;
@@ -262,6 +265,11 @@ export interface EmailDelivery {
   watchSend?(
     sendAttemptId: string,
     changed: (progress: EmailSendProgress) => void
+  ): () => void;
+  /** Reports the server's id for the send's thread once the server accepts it. */
+  watchSentThread?(
+    send: QueuedSend,
+    found: (threadId: string) => void
   ): () => void;
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
   unschedule(input: {

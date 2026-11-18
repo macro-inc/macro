@@ -1183,7 +1183,13 @@ focus belongs to the sent message card in the same thread pane, even while
 the thread refresh is still pending. Replying again requires clicking Reply
 or using a reply shortcut.
 Sending a new email opens its thread with the message already shown as sent; it
-must not show the draft or **Loading draft…** first.
+must not show the draft or **Loading draft…** first. The thread opens by the
+server's id: a new email sent before its draft's first save is confirmed (paste
+the body and press `Cmd+Enter` at once, from **New**, `Create` → `Email` or
+`Cmd+K`) stays in the locked composer until the server accepts the send, then
+opens the thread, never the not-found page. An Undo that restores the draft, or
+leaving the composer, cancels that navigation; an Undo too late to stop the send
+does not.
 
 After a send is queued, its notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;

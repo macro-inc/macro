@@ -18,6 +18,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import type { MessageOperationSourceFactory } from '../../email-message/context/message-operation-source';
@@ -43,6 +44,7 @@ import type {
   EmailDraftStorage,
   EmailEditorFiles,
   PersistedEmailIdentity,
+  QueuedSend,
 } from '../context/compose-capabilities';
 import { draftEditorHtml } from '../core/draft-editor-html';
 import type { EmailRecipient } from '../core/email-recipient';
@@ -834,28 +836,79 @@ export function createEmailComposer(props: EmailComposerOptions) {
     props.host?.showDraft?.(draftId);
   };
 
+  let stopWatchingSend: (() => void) | undefined;
+  let disposed = false;
+  const stopFollowingSend = () => {
+    stopWatchingSend?.();
+    stopWatchingSend = undefined;
+  };
+  onCleanup(() => {
+    disposed = true;
+    stopFollowingSend();
+  });
+  // A send that settles after its composer closed leaves the user where they went.
+  const showSentThread = (threadId: string) => {
+    if (disposed) return;
+    try {
+      props.host?.showThread?.(threadId);
+    } catch (error) {
+      props.notices.reportError(error);
+    }
+  };
+  // A thread minted with a new draft has no server row to open until the
+  // server accepts the send and names it.
+  const followSentThread = (send: QueuedSend) => {
+    stopFollowingSend();
+    if (disposed) return;
+    stopWatchingSend = props.delivery.watchSentThread?.(send, (threadId) => {
+      stopWatchingSend = undefined;
+      showSentThread(threadId);
+    });
+  };
+
   // Undo retains the inbox used by the send even after navigation.
-  const undoSend = (
+  const undoSend = async (
     draftId: string,
     threadId: string | undefined,
     inboxId: string | undefined,
-    sendAttemptId?: string
-  ) =>
-    props.delivery.undoSend({
-      sendAttemptId,
-      threadId,
-      draftId,
-      inboxId,
-      onUndone: (result) =>
-        restoreAfterUndoSend(draftId, threadId, inboxId, result?.draftRestored),
-    });
+    send?: QueuedSend
+  ) => {
+    // The thread waits while Undo runs; a send Undo could not stop still opens it.
+    const following = stopWatchingSend !== undefined;
+    stopFollowingSend();
+    let undone = false;
+    try {
+      await props.delivery.undoSend({
+        sendAttemptId: send?.sendAttemptId,
+        threadId,
+        draftId,
+        inboxId,
+        onUndone: (result) => {
+          undone = true;
+          return restoreAfterUndoSend(
+            draftId,
+            threadId,
+            inboxId,
+            result?.draftRestored
+          );
+        },
+      });
+    } finally {
+      if (following && !undone && send) followSentThread(send);
+    }
+  };
 
   const afterSend = (
     identity: PersistedEmailIdentity,
-    inboxId: string | undefined
+    inboxId: string | undefined,
+    /** The thread handle the server had not confirmed when Send was pressed. */
+    unconfirmedThreadId: string | undefined
   ) => {
     const draftId = identity.draftId;
     const threadId = identity.threadId;
+    const send = identity.sendAttemptId
+      ? { sendAttemptId: identity.sendAttemptId, inboxId: identity.inboxId }
+      : undefined;
     // The outbox delivers an online send right away; offline it waits on this device.
     const offline = props.connectivity.looksOffline();
     if (draftId) endUndoSend(draftId);
@@ -866,22 +919,25 @@ export function createEmailComposer(props: EmailComposerOptions) {
       queuedOffline: offline,
       undo: draftId
         ? () => {
-            void undoSend(
-              draftId,
-              threadId ?? undefined,
-              inboxId,
-              identity.sendAttemptId
-            ).catch(props.notices.reportError);
+            void undoSend(draftId, threadId ?? undefined, inboxId, send).catch(
+              props.notices.reportError
+            );
           }
         : undefined,
     });
-    try {
-      // The server has no thread to show until an offline send goes out.
-      if (offline) props.host?.goBack?.();
-      else if (threadId) props.host?.showThread?.(threadId);
-    } catch (error) {
-      props.notices.reportError(error);
-    }
+    // The server has no thread to show until an offline send goes out.
+    if (offline) {
+      try {
+        props.host?.goBack?.();
+      } catch (error) {
+        props.notices.reportError(error);
+      }
+    } else if (
+      threadId &&
+      (identity.persistence !== 'queued' || threadId !== unconfirmedThreadId)
+    )
+      showSentThread(threadId);
+    else if (send) followSentThread(send);
   };
 
   const onSubmit = async () => {
@@ -1092,7 +1148,11 @@ export function createEmailComposer(props: EmailComposerOptions) {
         setCompleted(true);
         session.dispatch({ type: 'reset' });
         setDraftGeneration(0);
-        afterSend(result, currentLink.id);
+        afterSend(
+          result,
+          currentLink.id,
+          identity.kind === 'handle' ? identity.threadId : undefined
+        );
         sent = true;
         sendUi.afterPaint();
       } finally {
