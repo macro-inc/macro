@@ -292,7 +292,7 @@ opened from the notification or the row, never as a step of the invite. One
 screen, two steps: **Open claude.ai** (a button with "Preparing the sign-in
 link…" until the computer has made the link, then the link; **Open again**
 once used), then the code field with **Complete sign-in**, which is primary
-only once a code is typed and says "Checking with Claude…" while it runs.
+only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
 A failure shows one inline alert with its way out: **Get a new link** (link
 expired, code rejected, timed out), **Try again** (couldn't get a link), or
 paste again (malformed code, computer busy). The footer's one action is
@@ -301,7 +301,8 @@ confirmation, then sign-out) when the agent is on its plan; closing while a
 code is checked lets it finish, with a toast either way. Owners and admins
 see the agent's Claude under its job description: **Claude: Macro credits ·
 Connect Claude plan** (offered only while the computer is connected),
-**Claude: your plan · Use Macro credits** (a confirmation, then sign-out), or
+**Claude: your plan · Switch to Macro credits** (a confirmation, then
+sign-out), or
 **Claude sign-in expired · Reconnect Claude plan**. The sign-in spans carry
 `claude.sign_in.entry` (`team_agent_row`, `notification`).
 
@@ -1128,15 +1129,11 @@ the same, also on a cold start; the link is
 shown when it was closed while waiting for the sign-in link, is the same
 notice, so the two never stack.
 
-**Sign in with Claude** is a dialog. It starts the sign-in when it opens, so
-**Open claude.ai** is a plain new-tab link (the desktop app hands it to the
-system browser). Sign in there, copy the code, come back, paste it into the
-focused field (under the note that the code goes straight into the harness
-running the real Claude Code on the computer), and press **Complete
-sign-in**; **Use Macro credits instead**
-switches to credits. A rejected code shows "That code didn't work. Try again to
-get a new one." with **Try again**; an expired sign-in shows **Start over**.
-Success closes the dialog with "Signed in with Claude", and the row reads
+**Sign in with Claude** is a dialog with the same two steps, failure states
+and footer as an agent's **Connect Claude plan** (see Agent teammates above),
+titled **Sign in with Claude** and with the computer's own small print
+("Everyone using this computer can use this sign-in…"). Success closes the
+dialog with "Signed in with Claude", and the row reads
 **Signed in with Claude**: the computer holds a one-year Claude credential
 (no email or plan to show). Everyone on the team uses it on the computer.
 

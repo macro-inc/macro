@@ -97,7 +97,6 @@ export default {
   claudeCredits: 'Claude: Macro credits',
   claudeSignedInState: 'Claude: your plan',
   claudeExpired: 'Claude sign-in expired',
-  useCredits: 'Use Macro credits',
   useCreditsTitle: 'Switch {{name}} to Macro credits?',
   useCreditsBody:
     "{{name}} signs out of Claude and runs on your team's Macro credits.",

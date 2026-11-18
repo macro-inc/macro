@@ -45,9 +45,12 @@ export default {
   claudeUnreachable:
     "Can't reach the computer right now. Try again in a moment.",
   claudeBusy: 'The computer is busy. Try again in a moment.',
-  claudeTimedOut: "Claude didn't answer in time. Get a new link to try again.",
+  claudeTimedOut:
+    "The computer didn't answer in time. Get a new link to try again.",
   claudeFailed: 'Something went wrong signing in.',
   claudeStepDone: 'done',
+  claudeFailedAfterClose:
+    "The Claude sign-in didn't finish. Open it again to try once more.",
   claudeLinkFailed: "Couldn't get a sign-in link from the computer.",
   claudeChecking: 'Checking with Claude. This can take a minute.',
   claudePreparingLink: 'Preparing the sign-in link…',

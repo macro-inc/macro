@@ -75,8 +75,9 @@ export function ClaudeSignInDialog(props: {
                     fireAndForget(switchToCredits(), 'computer-claude'),
                 }
           }
-          onSignedIn={() => {
-            props.onClose();
+          onSignedIn={(closed) => {
+            // Closed already: a dialog opened since is another sign-in.
+            if (!closed) props.onClose();
             if (props.onSignedIn) props.onSignedIn();
             else toast.success(t('computers.claudeSignedIn'));
           }}

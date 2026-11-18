@@ -1764,9 +1764,12 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 Computer rows show the Claude mode (`Signed in with Claude` on the computer's
 own account, never its email) from `claude-mode` for managers, and the harness list's derived
 `claude_mode` for other members. Sign-in is a dialog
-(`claude-sign-in-flow.tsx`) that starts the sign-in on open, so its Open
-claude.ai control stays a plain `target="_blank"` link; never open it after an
-await. The backend also requires management rights for Claude account changes.
+(`claude-sign-in-flow.tsx`) that starts the sign-in on open. Once the link
+has arrived, Open claude.ai is a plain `target="_blank"` link; never open it
+after an await. Until then it is a button: a browser opens a blank tab within
+the click (`reserveOauthPopup`) and points it at claude.ai when the link
+arrives, while the desktop and phone apps, where that tab would land blank in
+the system browser, open the link once it arrives. The backend also requires management rights for Claude account changes.
 Focused tests: `bun run test src/features/settings/computers`.
 
 Guided purchase (the Buy computer → Configure agent → Bring your AI → Create

@@ -37,7 +37,7 @@ export function TeamAgentClaudeStatus(props: {
         onClick: props.onSignIn,
       }))
       .with('signed_in', () => ({
-        label: t('teamAgents.useCredits'),
+        label: t('computers.claudeSwitchToCredits'),
         onClick: props.onUseCredits,
       }))
       .exhaustive();

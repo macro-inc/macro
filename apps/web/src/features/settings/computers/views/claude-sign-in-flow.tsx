@@ -1,7 +1,9 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { assignOauthUrl, reserveOauthPopup } from '@core/pipedream/oauth-popup';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isTauri } from '@core/util/platform';
 import { openExternalUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -112,7 +114,8 @@ export function ClaudeSignInFlow(props: {
   harnessId: string;
   /** Recorded on the sign-in's spans. */
   entry: ClaudeSignInEntry;
-  onSignedIn: () => void;
+  /** `closed`: the dialog closed while the computer checked the code. */
+  onSignedIn: (closed: boolean) => void;
   title?: string;
   /** One line under the title; defaults to the computer's. */
   description?: string;
@@ -165,19 +168,14 @@ export function ClaudeSignInFlow(props: {
       if (current !== linkGeneration) return;
       if (!isHttpsUrl(result.url)) throw new Error('untrusted sign-in link');
       setUrl(result.url);
-      if (waitingTab) {
-        // The Claude page gets no handle back to Macro.
-        waitingTab.opener = null;
-        waitingTab.location.href = result.url;
-      } else if (openWhenReady) {
-        openExternalUrl(result.url);
-      }
+      if (waitingTab) assignOauthUrl(waitingTab, result.url);
+      else if (openWhenReady) openExternalUrl(result.url);
       waitingTab = undefined;
       openWhenReady = false;
     } catch (failure) {
       if (current !== linkGeneration) return;
       forgetWaitingTab();
-      setOpened(false);
+      resetOpened();
       const kind = claudeSignInFailure(failure);
       showProblem({
         phase: 'start',
@@ -216,12 +214,17 @@ export function ClaudeSignInFlow(props: {
     });
   };
 
+  /** Step one undone: the tab no longer waits for a code. */
+  function resetOpened() {
+    setOpened(false);
+    markTab(false);
+  }
+
   /** A new sign-in: a new link, and the code from it. */
   const startOver = () => {
     setProblem(undefined);
     setCode('');
-    setOpened(false);
-    markTab(false);
+    resetOpened();
     fireAndForget(begin(), 'computer-claude');
   };
 
@@ -247,15 +250,17 @@ export function ClaudeSignInFlow(props: {
     openExternalUrl(href);
   };
 
-  // Clicked before the link arrived.
+  // Clicked before the link arrived. A browser opens the tab now, within
+  // the click, and points it at claude.ai later; the apps, where a blank tab
+  // would land in the system browser, open the link once it arrives.
   const openBeforeLink = () => {
-    if (isNativeMobilePlatform()) {
+    if (isNativeMobilePlatform() || isTauri()) {
       openWhenReady = true;
       afterOpening();
       return;
     }
     // A blocked popup opens nothing, so the step stays undone.
-    waitingTab = window.open('about:blank', '_blank') ?? undefined;
+    waitingTab = reserveOauthPopup() ?? undefined;
     if (waitingTab) afterOpening();
   };
 
@@ -273,19 +278,19 @@ export function ClaudeSignInFlow(props: {
       });
       if (current !== codeGeneration) return;
       if (!disposed) markTab(false);
-      props.onSignedIn();
+      props.onSignedIn(disposed);
     } catch (failure) {
       if (current !== codeGeneration) return;
       const kind = claudeSignInFailure(failure);
       // Closed while the computer checked: the dialog can't say it failed.
       if (disposed) {
-        toast.failure(failureMessage('complete', kind));
+        toast.failure(t('computers.claudeFailedAfterClose'));
         return;
       }
       const recovery = claudeSignInRecovery('complete', kind);
       if (recovery === 'new_link') {
         setCode('');
-        setOpened(false);
+        resetOpened();
       }
       showProblem({ phase: 'complete', failure: kind, recovery });
     }

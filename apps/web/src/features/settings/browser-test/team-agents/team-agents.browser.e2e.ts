@@ -649,7 +649,7 @@ test("an admin signs the agent's computer in to Claude from its row", async ({
   await expect(claude).toContainText('Claude: your plan');
   await screenshot(page, testInfo, 'row-signed-in');
 
-  await claude.getByRole('button', { name: 'Use Macro credits' }).click();
+  await claude.getByRole('button', { name: 'Switch to Macro credits' }).click();
   const confirm = page.getByRole('dialog');
   await expect(confirm).toContainText('Switch Ada to Macro credits?');
   await confirm
@@ -762,6 +762,8 @@ test('a code Claude rejects asks for a new link; a malformed one keeps the field
   });
   const dialog = await openConnectClaude(page);
   await pasteCode(page, 'half-a-code');
+  // Back from claude.ai, the tab title asks for the code.
+  await expect(page).toHaveTitle(/Paste your Claude code/);
   const alert = dialog.getByRole('alert');
   await expect(alert).toContainText("doesn't look like the whole code");
   const field = dialog.getByRole('textbox', {
@@ -781,7 +783,53 @@ test('a code Claude rejects asks for a new link; a malformed one keeps the field
   await expect(
     alert.getByRole('button', { name: 'Get a new link' })
   ).toBeVisible();
+  // That sign-in is over, so the tab no longer asks for its code.
+  await expect(page).not.toHaveTitle(/Paste your Claude code/);
   await screenshot(page, testInfo, 'connect-claude-rejected');
+});
+
+test('a code that finishes after the dialog closed toasts, and leaves a reopened dialog open', async ({
+  page,
+}) => {
+  const backend = await scriptAuthService(page, 0, {
+    agents: [ada('running')],
+    computerConnected: true,
+  });
+  // The computer answers the code only when the test says so.
+  let answer: () => void = () => {};
+  const answered = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  await page.route(
+    '**/harnesses/harness-ada/claude-sign-in/complete',
+    async (route) => {
+      await answered;
+      return route.fallback();
+    }
+  );
+  const dialog = await openConnectClaude(page);
+  await pasteCode(page, 'slow#code');
+  await expect(
+    dialog.getByRole('button', { name: 'Complete sign-in' })
+  ).toHaveAttribute('aria-busy', 'true');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  // Opened again while the first code is still being checked.
+  await page
+    .locator('[data-agent-claude]')
+    .getByRole('button', { name: 'Connect Claude plan' })
+    .click();
+  const reopened = page.getByRole('dialog');
+  await expect(
+    reopened.getByRole('heading', { name: 'Connect Ada to your Claude plan' })
+  ).toBeVisible();
+
+  answer();
+  await expect(page.getByText('Ada now uses your Claude plan')).toBeVisible();
+  expect(backend.claudeCodes).toEqual(['slow#code']);
+  // The late answer belongs to the closed dialog; the reopened one stays.
+  await expect(reopened).toBeVisible();
 });
 
 test('an unreachable computer says so, and Try again starts the sign-in', async ({
