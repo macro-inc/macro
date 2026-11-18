@@ -961,7 +961,8 @@ stopping.
 
 The row's one action is **Retry setup** on a `failed` computer (team owner
 and admins; it sets it up again, billing untouched), else **Finish setup**
-while guided setup is incomplete (only for the team's owner and admins), else
+while guided setup is incomplete (only for the team's owner and admins; an
+agent teammate's computer counts as set up once its agent first comes online), else
 **Sign in with Claude** when the computer is on its own Claude account but
 signed out, else none. A failed row's line reads `Setup failed: <reason>`
 with the API's `failureReason`, else `Failed`. A row with no action keeps its

@@ -415,8 +415,10 @@ impl<
     }
 
     /// The agent teammate the computer runs reported itself online, which
-    /// ends its first start. Not gated on an attached fleet: it changes only
-    /// the computer's record. Telling it again changes nothing.
+    /// ends its first start and its setup: the teammate flow set it up, so
+    /// it never offers the person's guided setup. Not gated on an attached
+    /// fleet: it changes only the computer's record. Telling it again
+    /// changes nothing.
     #[tracing::instrument(skip(self), err)]
     pub async fn agent_online(
         &self,
@@ -425,6 +427,11 @@ impl<
     ) -> Result<(), ComputerError> {
         self.team_computer(team_id, computer_id).await?;
         self.apply(computer_id, Event::AgentOnline).await?;
+        self.repo
+            .complete_setup(computer_id, self.clock.now())
+            .await
+            .map_err(internal)?
+            .ok_or(ComputerError::NotFound)?;
         Ok(())
     }
 

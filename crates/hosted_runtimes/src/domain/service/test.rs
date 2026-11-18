@@ -1590,3 +1590,27 @@ mod capacity;
 mod waiting;
 
 pub(crate) mod availability;
+
+#[tokio::test]
+async fn an_agent_coming_online_completes_its_computers_setup_once() {
+    let computer_id = ComputerId::new_from_uuid(Uuid::from_u128(1));
+    let repo = FakeRepo::default();
+    let mut starting = computer(
+        computer_id,
+        Phase::Running,
+        BillingState::Active {
+            subscription_item: item("si_1"),
+        },
+    );
+    starting.state.awaiting_agent = true;
+    repo.computers.lock().unwrap().insert(computer_id, starting);
+    let service = service_with(repo, FakeBilling::default());
+
+    service.agent_online(TEAM, computer_id).await.unwrap();
+    service.agent_online(TEAM, computer_id).await.unwrap();
+
+    let computers = service.repo.computers.lock().unwrap();
+    let online = &computers[&computer_id];
+    assert!(!online.state.awaiting_agent);
+    assert_eq!(online.setup_completed_at, Some(now()));
+}
