@@ -15472,7 +15472,7 @@ export interface SearchToolsResponse {
   already_available?: string[];
 }
 /**
- * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
+ * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at macro.com/docs; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
  */
 export type SelfKnowledge = {};
 /**
@@ -15480,7 +15480,7 @@ export type SelfKnowledge = {};
  */
 export interface SelfKnowledgeResponse {
   /**
-   * An overview of Macro and a routing map into the docs at docs.macro.com.
+   * An overview of Macro and a routing map into the docs at macro.com/docs.
    */
   about: string;
 }
@@ -15504,6 +15504,10 @@ export interface SendChannelMessage {
    * Optional images, videos, or documents to attach, at most 10. Upload media before sending; a media attachment whose upload has not finished shows as broken.
    */
   attachments?: ChannelMessageAttachmentInput[];
+  /**
+   * Send without notifying anyone, mentioned people included: no push, email or inbox entry. The message still appears in the channel. Use it for routine updates nobody needs to be alerted to.
+   */
+  silent?: boolean;
 }
 /**
  * An attachment to send with a channel message.

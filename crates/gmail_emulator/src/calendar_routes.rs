@@ -15,7 +15,7 @@ use crate::calendar::{
     WriteOptions, not_found,
 };
 use crate::error::ApiError;
-use crate::fault::Route;
+use crate::fault::{Fault, Route};
 use crate::gate::{Params, mailbox_request};
 use crate::state::State;
 
@@ -207,10 +207,17 @@ async fn list_events(
         |state, email| {
             authorize(state, email, &EVENT_SCOPES)?;
             let query = list_query(&params)?;
-            state
-                .calendar(email, &calendar_id)?
-                .list(email, &query)
-                .map(Json)
+            let calendar = state.calendar(email, &calendar_id)?;
+            let broken = calendar.failing.and_then(|error| {
+                State::fault_error(&Fault {
+                    error: Some(error),
+                    ..Fault::default()
+                })
+            });
+            match broken {
+                Some(error) => Err(error),
+                None => calendar.list(email, &query).map(Json),
+            }
         },
     )
     .await

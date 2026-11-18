@@ -407,6 +407,7 @@ function Fixture() {
                   groups={settingsGroups}
                   results={settingsResults()}
                   selectedResultId={selectedResult()?.id}
+                  searchable
                   searchQuery={settingsSearch()}
                   onSearchQueryChange={setSettingsSearch}
                   isItemActive={(tab) => settingsTab() === tab}

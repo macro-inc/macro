@@ -1,5 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableDatabases } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
@@ -56,15 +54,11 @@ function starterDatabaseQueryOptions(
 /** Mounted inside authenticated app chrome. Provisioning never suspends the app. */
 export function useStarterDatabase() {
   const userId = useUserId();
-  const flag = useFeatureFlag(enableDatabases);
   const databases = useDatabasesQuery();
   return useQuery(() =>
     starterDatabaseQueryOptions(
       userId(),
-      !flag().loading &&
-        flag().enabled &&
-        databases.isSuccess &&
-        databases.data?.length === 0
+      databases.isSuccess && databases.data?.length === 0
     )
   );
 }

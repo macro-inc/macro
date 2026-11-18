@@ -498,7 +498,7 @@ function NoTeamState() {
   );
 }
 
-function CrmContent() {
+function CrmContent(props: { onOpenThread?: () => void }) {
   const teamQuery = useCurrentTeamQuery();
 
   return (
@@ -507,7 +507,7 @@ function CrmContent() {
         title="CRM"
         description="Manage email sharing and shape your team’s deal pipeline."
       >
-        <CrmEmailPrivacySettings />
+        <CrmEmailPrivacySettings onOpenThread={props.onOpenThread} />
         <StagesSection />
         <EmailSyncSection />
       </SettingsPage>
@@ -515,10 +515,10 @@ function CrmContent() {
   );
 }
 
-export function Crm() {
+export function Crm(props: { onOpenThread?: () => void }) {
   return (
     <Suspense fallback={<ListSkeleton.Bar class="m-6 h-4 w-32" />}>
-      <CrmContent />
+      <CrmContent onOpenThread={props.onOpenThread} />
     </Suspense>
   );
 }

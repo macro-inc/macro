@@ -237,6 +237,8 @@ const SearchableMultiSelectItem = (itemProps: {
 };
 
 const VirtualizedListbox = (props: {
+  /** A query-driven source pages in as the end of the list comes into view. */
+  source?: SearchableOptionSource;
   resetScrollRef?: (reset: (() => void) | undefined) => void;
   class?: string;
   onOnly?: (id: string) => void;
@@ -274,9 +276,23 @@ const VirtualizedListbox = (props: {
     );
     if (idx !== -1) handle.scrollToIndex(idx, { align: 'nearest' });
   };
+  // Read the next page when the end of the list is in view: on scroll, when
+  // the list is measured, and whenever a page lands still short of the end,
+  // an empty one included. One page is in flight at a time, and a failed page
+  // waits for Retry.
+  const loadNearEnd = () => {
+    const source = props.source;
+    if (!active || !source) return;
+    if (source.loading() || source.error() || !source.hasNext()) return;
+    const remaining = handle
+      ? handle.scrollSize - handle.scrollOffset - handle.viewportSize
+      : 0;
+    if (remaining <= ITEM_HEIGHT * 3) source.next();
+  };
   const { observe } = makeResizeObserver(() => {
     // Let the virtualizer's own observer publish its viewport measurement.
     queueMicrotask(() => {
+      loadNearEnd();
       if (!active || !pendingFocus) return;
       const key = combobox.listState().selectionManager().focusedKey();
       if (key) scrollToItem(key);
@@ -291,6 +307,16 @@ const VirtualizedListbox = (props: {
       {(items) => {
         visibleItems = items;
         const rows = createMemo(() => [...items()]);
+        createEffect(
+          on(
+            [
+              () => rows().length,
+              () => props.source?.loading(),
+              () => props.source?.hasNext(),
+            ],
+            loadNearEnd
+          )
+        );
         return (
           <Virtualizer
             ref={(h) => {
@@ -298,6 +324,7 @@ const VirtualizedListbox = (props: {
             }}
             data={rows()}
             itemSize={ITEM_HEIGHT}
+            onScroll={loadNearEnd}
           >
             {(item) => (
               <SearchableMultiSelectItem
@@ -359,7 +386,8 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   const visibleIds = createMemo(
     () => new Set(props.source?.visibleIds() ?? [])
   );
-  const sourceAction = () => props.source?.error() || props.source?.hasNext();
+  // A query-driven source pages on scroll; only a failed page needs a row.
+  const sourceAction = () => props.source?.error();
   let resetScroll: (() => void) | undefined;
   let previousWindow: string | undefined;
   createEffect(
@@ -396,9 +424,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
         ...sortedOptions(),
         {
           id: ACTION_ID,
-          label: props.source?.error()
-            ? t('viewMenus.retryOptions')
-            : t('viewMenus.nextOptions'),
+          label: t('viewMenus.retryOptions'),
           disabled: props.source?.loading(),
         },
       ];
@@ -416,7 +442,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   const localMatches = useHasMatches(displayOptions, searchQuery);
   const hasMatches = () =>
     props.source
-      ? visibleIds().size > 0 || sourceAction()
+      ? visibleIds().size > 0 || sourceAction() || props.source.hasNext()
       : !!props.action || localMatches();
 
   const onSourceInput: JSX.EventHandler<HTMLInputElement, InputEvent> = (
@@ -437,9 +463,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
 
   const handleChange = (selected: SearchableOption[]) => {
     if (props.source && selected.some((o) => o.id === ACTION_ID)) {
-      if (props.source.error())
-        fireAndForget(props.source.retry(), 'filter-options');
-      else props.source.next();
+      fireAndForget(props.source.retry(), 'filter-options');
       return;
     }
     const action = props.action;
@@ -563,6 +587,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
                 }
               >
                 <VirtualizedListbox
+                  source={props.source}
                   class={props.listboxClass}
                   resetScrollRef={(reset) => {
                     resetScroll = reset;
@@ -581,7 +606,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   );
 };
 
-/** Shared status for bounded menu and drawer windows; an empty page may continue. */
+/** Shared status for growing menu and drawer lists; an empty page continues. */
 export function SearchableSourceStatus(props: {
   source: SearchableOptionSource;
 }) {
@@ -606,11 +631,12 @@ export function SearchableSourceStatus(props: {
         when={
           !props.source.loading() &&
           !props.source.error() &&
+          !props.source.hasNext() &&
           props.source.visibleIds().length === 0
         }
       >
         <div role="status" class="py-2">
-          {t('common.noOptionsInWindow')}
+          {t('common.noMatchingOptions')}
         </div>
       </Show>
     </div>
@@ -662,10 +688,16 @@ export const SearchableMultiSelectInline = (
   const visibleIds = createMemo(
     () => new Set(props.source?.visibleIds() ?? [])
   );
-  const hasAction = () => props.source?.hasNext() || props.source?.error();
+  // A query-driven source pages on scroll; only a failed page needs a row.
+  const hasAction = () => props.source?.error();
   const onInputChange = (value: string) => {
     setSearchQuery(value);
     props.source?.setSearch(value);
+  };
+  const onSourceInput: JSX.EventHandler<HTMLInputElement, InputEvent> = (
+    event
+  ) => {
+    if (props.source) onInputChange(event.currentTarget.value);
   };
   // Inline variant is freshly mounted each time the parent submenu opens,
   // so we don't need an explicit "menu opened" trigger — the memo's first
@@ -696,9 +728,7 @@ export const SearchableMultiSelectInline = (
           ...options,
           {
             id: ACTION_ID,
-            label: props.source?.error()
-              ? t('viewMenus.retryOptions')
-              : t('viewMenus.nextOptions'),
+            label: t('viewMenus.retryOptions'),
             disabled: props.source?.loading(),
           },
         ]
@@ -707,13 +737,13 @@ export const SearchableMultiSelectInline = (
   let listbox: HTMLDivElement | undefined;
   const localHasMatches = useHasMatches(displayOptions, searchQuery);
   const hasMatches = () =>
-    props.source ? visibleIds().size > 0 || hasAction() : localHasMatches();
+    props.source
+      ? visibleIds().size > 0 || hasAction() || props.source.hasNext()
+      : localHasMatches();
 
   const handleChange = (selected: SearchableOption[]) => {
     if (props.source && selected.some((option) => option.id === ACTION_ID)) {
-      if (props.source.error())
-        fireAndForget(props.source.retry(), 'filter-options');
-      else props.source.next();
+      fireAndForget(props.source.retry(), 'filter-options');
       return;
     }
     const id =
@@ -789,7 +819,11 @@ export const SearchableMultiSelectInline = (
       }
       value={activeOptions()}
       onChange={handleChange}
-      onInputChange={onInputChange}
+      onInputChange={(value) => {
+        // Kobalte also clears its input when selected option objects refresh.
+        // Only native edits change a query-driven source.
+        if (!props.source) onInputChange(value);
+      }}
       optionValue="id"
       optionTextValue="label"
       optionLabel="label"
@@ -804,6 +838,8 @@ export const SearchableMultiSelectInline = (
       >
         <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
         <PickerSearchInput
+          value={props.source?.search()}
+          onInput={onSourceInput}
           onReady={(element) => {
             props.inputRef?.(element);
           }}
@@ -832,6 +868,7 @@ export const SearchableMultiSelectInline = (
           }
         >
           <VirtualizedListbox
+            source={props.source}
             resetScrollRef={(reset) => {
               resetScroll = reset;
             }}

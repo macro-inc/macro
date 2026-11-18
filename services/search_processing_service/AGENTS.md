@@ -45,6 +45,18 @@ OpenSearch, and exposes backfill HTTP routes for each.
   there is a crash-loss window; recovery is the backfill routes, not replay.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those.
+- Run `POST /internal/backfill/email-attachment-status` on an environment only
+  after the `is_email_attachment` mapping is applied there, and check
+  `_cat/allocation` disk headroom first. It is throttled (`docs_per_second`,
+  default 100), stops on a 429 or cluster block with status `stopped`, and
+  resumes with `after_document_id` set to the job's `cursor`. Each update
+  reindexes the parent, so it also repairs documents written before the
+  mapping existed (README "Email attachment status").
+- `is_email_attachment` is written on every full parent index, from
+  `document_email`, and turned off by `document.email_attachments_released`
+  (one bulk update for the batch's trashed and kept documents). A full index
+  that read the link just before the release and lands after it leaves the
+  parent true until its next full index.
 
 ## Related
 

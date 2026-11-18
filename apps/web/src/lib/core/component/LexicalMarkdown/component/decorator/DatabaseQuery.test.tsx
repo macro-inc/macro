@@ -17,7 +17,7 @@ import {
   ParagraphNode,
   TextNode,
 } from 'lexical';
-import { createSignal, type JSX, onCleanup } from 'solid-js';
+import { type JSX, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -37,9 +37,7 @@ const control = vi.hoisted(() => ({
   clicks: 0,
   deferSaved: false,
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableDatabases: { key: 'enable-databases' },
-}));
+vi.mock('@core/constant/featureFlags', () => ({}));
 vi.mock('../../context/LexicalWrapperContext', async () => ({
   LexicalWrapperContext: (await import('solid-js')).createContext(),
 }));
@@ -146,34 +144,6 @@ describe('database answer rollout', () => {
     } finally {
       control.deferSaved = false;
     }
-  });
-
-  it('keeps the saved title without mounting live query wiring when disabled', async () => {
-    const [enabled, setEnabled] = createSignal(false);
-    control.enabled = enabled;
-    control.mounts = 0;
-    control.cleanups = 0;
-    const rendered = render(() => (
-      <DatabaseQuery
-        key="query"
-        theme={{}}
-        queryId="saved-query"
-        prompt="How many?"
-        title="Open tickets"
-        displayMode="scalar"
-      />
-    ));
-    expect(rendered.getByText('Open tickets')).toBeTruthy();
-    expect(control.mounts).toBe(0);
-    setEnabled(true);
-    await waitFor(() =>
-      expect(rendered.getByText('Interactive answer')).toBeTruthy()
-    );
-    expect(control.mounts).toBe(1);
-    setEnabled(false);
-    expect(rendered.getByText('Open tickets')).toBeTruthy();
-    expect(control.cleanups).toBe(1);
-    rendered.unmount();
   });
 });
 

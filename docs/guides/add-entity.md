@@ -239,8 +239,8 @@ Required for anything people act on; Recent is built from activity.
 Choose one shape.
 
 **Soup kind** (initiatives, agent sessions, database rows). GraphQL Soup is the
-target, but REST Soup still serves users behind `enable-graphql-soup`, so the
-kind must work on both; a kind that only worked on one path showed empty lists
+target, but REST Soup still serves queries GraphQL cannot translate (such as
+`notified_at` sorting), so the kind must work on both; a kind that only worked on one path showed empty lists
 on the other.
 
 - **Model:** `crates/models_soup/src/<kind>.rs` and a `SoupItem` variant in

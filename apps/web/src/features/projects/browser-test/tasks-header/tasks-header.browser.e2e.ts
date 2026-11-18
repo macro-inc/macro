@@ -2,15 +2,22 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const GUTTER = 16;
 
-async function open(page: Page) {
+async function open(page: Page, path = '/') {
   await page.route('**/*', (route) => {
     if (new URL(route.request().url()).hostname === '127.0.0.1')
       return route.continue();
     return route.abort();
   });
   await page.routeWebSocket('**/*', (socket) => socket.close());
-  await page.goto('/');
+  await page.goto(path);
   await expect(page.getByTestId('creates')).toBeAttached();
+}
+
+/** Desktop keeps New task in the header; touch floats it above the dock. */
+function headerCreate(page: Page, project: string) {
+  return project === 'desktop'
+    ? [page.getByRole('button', { name: 'New task' })]
+    : [];
 }
 
 function filters(page: Page, project: string) {
@@ -40,13 +47,13 @@ test('keeps every header control on screen, with search closed and open', async 
 }, info) => {
   await open(page);
   const add = page.getByRole('button', { name: 'Add existing tasks' });
-  const create = page.getByRole('button', { name: 'New task' });
+  const create = headerCreate(page, info.project.name);
   const searchButton = page.getByRole('button', { name: 'Search in Launch' });
   await expectOnScreen(page, [
     searchButton,
     filters(page, info.project.name),
     add,
-    create,
+    ...create,
   ]);
 
   await searchButton.click();
@@ -58,15 +65,18 @@ test('keeps every header control on screen, with search closed and open', async 
     page.getByRole('button', { name: 'Close search' }),
     filters(page, info.project.name),
     add,
-    create,
+    ...create,
   ]);
 });
 
 test('keeps action labels where they fit', async ({ page }, info) => {
   test.skip(info.project.name.startsWith('phone'), 'Phones show icons');
   await open(page);
-  for (const name of ['Add existing tasks', 'New task']) {
-    const box = await page.getByRole('button', { name }).boundingBox();
+  for (const action of [
+    page.getByRole('button', { name: 'Add existing tasks' }),
+    ...headerCreate(page, info.project.name),
+  ]) {
+    const box = await action.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThan((box?.height ?? 0) * 2);
   }
 });
@@ -83,8 +93,21 @@ test('Add existing tasks opens its picker and cancels without adding', async ({
   await expect(page.getByTestId('assignments')).toHaveText('0');
 });
 
-test('New task starts a task', async ({ page }) => {
+test('the one New task control creates the task in the project', async ({
+  page,
+}) => {
   await open(page);
   await page.getByRole('button', { name: 'New task' }).click();
   await expect(page.getByTestId('creates')).toHaveText('1');
+  await expect(page.getByTestId('outside-creates')).toHaveText('0');
+});
+
+test('without edit access, nothing creates a task outside the project', async ({
+  page,
+}) => {
+  await open(page, '/?readOnly');
+  await expect(
+    page.getByRole('button', { name: 'Search in Launch' })
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New task' })).toHaveCount(0);
 });

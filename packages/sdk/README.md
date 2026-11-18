@@ -63,8 +63,8 @@ An API key always acts as the user who minted it. `requestedAs` is bot-only.
 #### Agent accounts
 
 An agent has its own account and seat. Invite one with
-`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or sign
-up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
+`(await macro.teams.current()).invite('agent@example.com', { agent: true })` from your own
+key (an agent's program is refused), or sign up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
 web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
@@ -88,7 +88,9 @@ const grant = await macro.accountManagers.askToManage(person);
 const token = await grant.claimToken();
 ```
 
-A person can ask instead, with `macro.accountManagers.askToBeManagedBy(agent)`. Only the
+An agent's program (ExecuteCode, a routine) can't ask, approve or claim: those return 403,
+so an agent account uses its own API key. A person can ask instead, with
+`macro.accountManagers.askToBeManagedBy(agent)`. Only the
 manager can claim, so the agent approves and claims with its own client, using the grant id
 from the card in the DM: `macro.accountManagers.byId(id)`.
 
@@ -466,6 +468,10 @@ await macro.channels
   .send(msg`Deploy ${sha} finished. ${here}`);
 ```
 
+Pass `{ silent: true }` to `send` or `reply` for a routine update that should
+notify nobody, mentioned people included; the message still appears in the
+channel. It works with every credential.
+
 ### Routines
 
 Create scheduled or event-triggered routines through `macro.routines`. A
@@ -841,8 +847,10 @@ takes typed source/target references and returns a deletable mention handle.
 `macro.unfurls.get(url)` and `bulk(urls)` read URL preview metadata.
 
 `macro.apiKeys.create(name)` returns `{ key, secret }`. Save the secret immediately;
-the handle only retains metadata. `list()` and `key.delete()` manage keys.
-`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization.
+the handle only retains metadata. It and `bot.createToken()` are refused to an
+agent's program (ExecuteCode, a routine), whose results reach the model. `list()` and `key.delete()` manage keys.
+`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization;
+an agent's program is refused.
 
 `chat.send({ content, model, attachments, toolset })` starts a generation and returns
 its chat, response message and cancellable stream handle. Use
