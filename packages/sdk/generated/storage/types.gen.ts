@@ -25767,9 +25767,9 @@ export type GetTeamAvailabilityData = {
 
 export type GetTeamAvailabilityErrors = {
     /**
-     * Invalid window or more than 100 teammates
+     * Invalid window or more than 100 teammates (code invalid_request)
      */
-    400: unknown;
+    400: TeamCalendarApiError;
     /**
      * Team calendar sharing is disabled (code team_sharing_disabled)
      */

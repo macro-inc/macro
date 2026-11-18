@@ -1994,7 +1994,14 @@
             }
           },
           "400": {
-            "description": "Invalid window or more than 100 teammates"
+            "description": "Invalid window or more than 100 teammates (code invalid_request)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamCalendarApiError"
+                }
+              }
+            }
           },
           "404": {
             "description": "Team calendar sharing is disabled (code team_sharing_disabled)",
