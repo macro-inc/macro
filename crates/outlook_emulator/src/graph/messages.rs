@@ -37,6 +37,15 @@ fn matches(message: &Message, filter: &Filter) -> Result<bool, GraphError> {
             }
             _ => Err(unsupported(name)),
         },
+        Filter::Since {
+            name,
+            at,
+            inclusive,
+        } => match name.as_str() {
+            "receivedDateTime" if *inclusive => Ok(message.received >= *at),
+            "receivedDateTime" => Ok(message.received > *at),
+            _ => Err(unsupported(name)),
+        },
     }
 }
 

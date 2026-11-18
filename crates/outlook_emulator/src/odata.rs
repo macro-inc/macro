@@ -3,6 +3,7 @@
 //! as Graph does for an option it does not support, so a new query never
 //! silently reads unfiltered data.
 
+use chrono::{DateTime, Utc};
 use nom::branch::alt;
 use nom::bytes::complete::{tag, tag_no_case, take_while1};
 use nom::character::complete::{char, multispace0, multispace1};
@@ -32,6 +33,13 @@ pub(crate) enum Filter {
     Property { id: String, value: String },
     /// `field eq literal`
     Field { name: String, value: Literal },
+    /// `field ge time` or `field gt time`, a time as Graph writes one
+    /// (`2026-11-18T10:00:00Z`, unquoted).
+    Since {
+        name: String,
+        at: DateTime<Utc>,
+        inclusive: bool,
+    },
 }
 
 /// The query options of one request.
@@ -151,6 +159,23 @@ fn comparison(input: &str) -> IResult<&str, Comparison<'_>> {
     separated_pair(separated_list1(char('/'), identifier), equals, literal).parse(input)
 }
 
+/// `name ge time` or `name gt time`: the name, the time as written and
+/// whether the bound is inclusive.
+fn since(input: &str) -> IResult<&str, (&str, bool, &str)> {
+    let operator = alt((
+        value(true, tag_no_case("ge")),
+        value(false, tag_no_case("gt")),
+    ));
+    let time =
+        take_while1(|c: char| c.is_ascii_alphanumeric() || matches!(c, ':' | '.' | '-' | '+'));
+    (
+        terminated(identifier, multispace1),
+        terminated(operator, multispace1),
+        time,
+    )
+        .parse(input)
+}
+
 /// `collection/any(variable: comparison and comparison …)`
 fn any(input: &str) -> IResult<&str, (&str, &str, Vec<Comparison<'_>>)> {
     let (rest, collection) = terminated(identifier, char('/')).parse(input)?;
@@ -200,6 +225,15 @@ fn filter(input: &str) -> Result<Filter, GraphError> {
             }),
             _ => Err(invalid_filter()),
         };
+    }
+
+    if let Ok((_, (name, inclusive, time))) = all_consuming(since).parse(input) {
+        let at = DateTime::parse_from_rfc3339(time).map_err(|_| invalid_filter())?;
+        return Ok(Filter::Since {
+            name: name.to_string(),
+            at: at.with_timezone(&Utc),
+            inclusive,
+        });
     }
 
     match all_consuming(comparison).parse(input) {

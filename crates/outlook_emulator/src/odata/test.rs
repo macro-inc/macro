@@ -30,6 +30,25 @@ fn the_filters_the_client_sends_parse() {
             value: Literal::Bool(false),
         })
     );
+
+    let since = parse("$filter", "receivedDateTime ge 2026-11-18T10:00:00Z").unwrap();
+    assert_eq!(
+        since.filter,
+        Some(Filter::Since {
+            name: "receivedDateTime".into(),
+            at: "2026-11-18T10:00:00Z".parse().unwrap(),
+            inclusive: true,
+        })
+    );
+    let after = parse("$filter", "receivedDateTime gt 2026-11-18T12:00:00.5+02:00").unwrap();
+    assert_eq!(
+        after.filter,
+        Some(Filter::Since {
+            name: "receivedDateTime".into(),
+            at: "2026-11-18T10:00:00.5Z".parse().unwrap(),
+            inclusive: false,
+        })
+    );
 }
 
 #[test]
@@ -46,6 +65,8 @@ fn an_expand_names_the_extended_properties_to_return() {
 fn what_the_emulator_cannot_evaluate_is_refused() {
     assert!(parse("$filter", "contains(subject,'x')").is_err());
     assert!(parse("$filter", "categories/any(c:d eq 'x')").is_err());
+    assert!(parse("$filter", "receivedDateTime ge yesterday").is_err());
+    assert!(parse("$filter", "receivedDateTime le 2026-11-18T10:00:00Z").is_err());
     assert!(parse("$expand", "attachments").is_err());
     assert!(parse("$search", "\"x\"").is_err());
     assert!(parse("$top", "many").is_err());

@@ -286,8 +286,8 @@ impl FaultError {
     }
 }
 
-/// A failure to inject. A request matches when both `mailbox` and `route`
-/// match; the first matching fault applies.
+/// A failure to inject. A request matches when `mailbox`, `route` and
+/// `folder` all match; the first matching fault applies.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Fault {
@@ -297,6 +297,11 @@ pub struct Fault {
     /// Only this route. All routes when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route: Option<Route>,
+    /// Only requests for this folder's messages (`…/mailFolders/{id}/messages`
+    /// and its delta), by id or by a well-known name such as `inbox`.
+    /// Requests for any folder, and those naming none, when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     /// The error to answer. Without one the request succeeds, after `delay_ms`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<FaultError>,
