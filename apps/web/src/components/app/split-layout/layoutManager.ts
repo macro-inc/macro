@@ -53,6 +53,7 @@ import {
 } from './contentInstanceRegistry';
 import { adjacentPane, type SplitDirection } from './split-direction';
 import { fitsNewColumn, fitsSplit, type TileArea } from './split-geometry';
+import { paneOf, splitOf } from './split-ids';
 import { createViewState, type ViewState } from './view-state';
 
 /** Checked on every route change in a pane, so entry state is captured before the pane moves. */
@@ -615,9 +616,7 @@ function contentIdentity(content: SplitContent) {
     : content;
 }
 
-/** A split is its router pane; the ids are the same string. */
-export const paneOf = (id: SplitId) => id as string as PaneId;
-export const splitOf = (pane: PaneId) => pane as string as SplitId;
+export { paneOf, splitOf };
 
 export function createSplitLayout(
   orchestrator: BlockOrchestrator,

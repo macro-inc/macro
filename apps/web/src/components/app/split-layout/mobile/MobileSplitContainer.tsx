@@ -12,13 +12,8 @@ import {
 } from 'solid-js';
 import { runSplitBack } from '../back-interceptor';
 import { SplitPanel } from '../components/SplitPanel';
-import {
-  paneOf,
-  type SplitHandle,
-  type SplitId,
-  type SplitManager,
-  splitOf,
-} from '../layoutManager';
+import type { SplitHandle, SplitId, SplitManager } from '../layoutManager';
+import { paneOf, splitOf } from '../split-ids';
 import type { MobilePaneStack } from './createMobilePaneStack';
 import { createMobileSplitMotion } from './createMobileSplitMotion';
 
