@@ -50,9 +50,14 @@ export function claudeSignInRecovery(
   failure: ClaudeSignInFailure
 ): ClaudeSignInRecovery {
   if (phase === 'start') return 'retry';
-  return match(failure)
-    .returnType<ClaudeSignInRecovery>()
-    .with('malformed_code', 'busy', 'unreachable', () => 'repaste')
-    .with('expired', 'invalid_code', 'timeout', 'failed', () => 'new_link')
-    .exhaustive();
+  return (
+    match(failure)
+      .returnType<ClaudeSignInRecovery>()
+      // A timeout here is the control plane giving up while the computer may
+      // still be storing the credential: sending the code again either signs
+      // in or finds the sign-in over, which then asks for a new link.
+      .with('malformed_code', 'busy', 'unreachable', 'timeout', () => 'repaste')
+      .with('expired', 'invalid_code', 'failed', () => 'new_link')
+      .exhaustive()
+  );
 }
