@@ -14,8 +14,9 @@ const copyOf = (value: string) => value.split('').join('');
 /** Remembers a pure string function's answers. Ranking thousands of rows
  * reads the same names on every keystroke; the bounds only cap memory. A
  * query is read once for every row ranked against it, so a query's function
- * also keeps the latest texts too long to remember with the others while
- * the task that ranks against them runs. */
+ * also keeps the latest texts too long to remember with the others, until a
+ * timer queued when the first is kept runs: about as long as the keystroke
+ * that ranks against them, though other tasks can run first. */
 function rememberText<R>(
   compute: (value: string) => R,
   of: 'names' | 'queries'
@@ -31,8 +32,8 @@ function rememberText<R>(
       if (of === 'names') return compute(value);
       const kept = pastes.find((paste) => paste.text === value);
       if (kept) return kept.result;
-      // Kept as given: forgotten with the task, it needs no copy.
-      const paste = { text: value, result: compute(value) };
+      const text = copyOf(value);
+      const paste = { text, result: compute(text) };
       if (!pastes.length) setTimeout(forgetPastes, 0);
       pastes = [paste, ...pastes].slice(0, KEPT_PASTES);
       return paste.result;
