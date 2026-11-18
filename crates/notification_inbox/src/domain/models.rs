@@ -173,8 +173,9 @@ pub struct InboxRow {
     pub row_type: InboxRowType,
     /// Other kinds a scope lists the row under, because what the row shows
     /// is that too: a thread whose reply mentions the viewer is also a
-    /// mention, a mention's thread with replies also a thread, and comments
-    /// that mention the viewer are still comments.
+    /// mention, a mention's thread with replies also a thread, comments that
+    /// mention the viewer are still comments, and a pull request or agent
+    /// session that mentions the viewer is also a discussion mention.
     pub also_listed_as: Vec<InboxRowType>,
     /// For a thread row, the channel root message or discussion root comment.
     pub thread_id: Option<String>,

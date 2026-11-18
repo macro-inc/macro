@@ -876,7 +876,10 @@ fn a_pull_request_that_mentions_you_is_listed_under_mentions_too() {
         listed[0].also_listed_as,
         vec![InboxRowType::DiscussionMention]
     );
-    assert_eq!(listed_in(&listed, &[MENTIONS, PULL_REQUESTS]), vec![1, 1]);
+    assert_eq!(
+        listed_in(&listed, &[MENTIONS, PULL_REQUESTS, COMMENTS]),
+        vec![1, 1, 0]
+    );
 
     let without_mention = rows_of(&pull_request, &[requested]);
     assert!(without_mention[0].also_listed_as.is_empty());
@@ -893,7 +896,10 @@ fn an_agent_session_that_mentions_you_is_listed_under_mentions_too() {
         listed[0].also_listed_as,
         vec![InboxRowType::DiscussionMention]
     );
-    assert_eq!(listed_in(&listed, &[MENTIONS, AGENTS]), vec![1, 1]);
+    assert_eq!(
+        listed_in(&listed, &[MENTIONS, AGENTS, COMMENTS]),
+        vec![1, 1, 0]
+    );
 
     let without_mention = rows_of(&session, &[settled(1, 1), waiting(2, 2)]);
     assert!(without_mention[0].also_listed_as.is_empty());

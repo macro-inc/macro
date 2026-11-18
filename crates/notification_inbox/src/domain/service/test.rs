@@ -744,27 +744,30 @@ async fn a_clear_of_mentions_takes_pull_requests_and_agent_sessions_that_mention
     const MENTIONED_PR: u128 = 0xF1;
     const OTHER_PR: u128 = 0xF2;
     const SESSION: u128 = 0x5E;
-    let pull_request = |id: u128, pr: u128, tag: &str, minute: u32| {
+    let pull_request = |id: u128, pr: u128, tag: &str, extra: serde_json::Value, minute: u32| {
+        let mut content = json!({
+            "foreignEntityId": uuid(pr),
+            "githubKey": "macro-inc/macro#1",
+            "owner": "macro-inc",
+            "repo": "macro",
+            "number": 1,
+            "url": "https://github.com/macro-inc/macro/pull/1",
+            "displayName": "macro-inc/macro#1",
+            "title": "Fix the inbox",
+        });
+        for (key, value) in extra.as_object().unwrap() {
+            content[key] = value.clone();
+        }
         notification(
             id,
             entity(EntityType::ForeignEntity, pr),
             tag,
-            json!({
-                "foreignEntityId": uuid(pr),
-                "githubKey": "macro-inc/macro#1",
-                "owner": "macro-inc",
-                "repo": "macro",
-                "number": 1,
-                "url": "https://github.com/macro-inc/macro/pull/1",
-                "displayName": "macro-inc/macro#1",
-                "title": "Fix the inbox",
-                "location": "comment",
-                "textSnippet": "can you take a look?",
-            }),
+            content,
             minute,
             NotificationState::Unseen,
         )
     };
+    let mention = json!({ "location": "comment", "textSnippet": "can you take a look?" });
     let session_mention = notification(
         3,
         entity(EntityType::AgentSession, SESSION),
@@ -802,10 +805,10 @@ async fn a_clear_of_mentions_takes_pull_requests_and_agent_sessions_that_mention
             ),
         ],
         vec![
-            pull_request(1, MENTIONED_PR, "github_pr_mention", 9),
-            pull_request(2, MENTIONED_PR, "github_review_requested", 8),
+            pull_request(1, MENTIONED_PR, "github_pr_mention", mention, 9),
+            pull_request(2, MENTIONED_PR, "github_review_requested", json!({}), 8),
             session_mention,
-            pull_request(4, OTHER_PR, "github_review_requested", 5),
+            pull_request(4, OTHER_PR, "github_review_requested", json!({}), 5),
         ],
     );
 
