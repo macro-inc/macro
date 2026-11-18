@@ -163,6 +163,11 @@ enforced by the ordinary backend APIs.
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
+- A fix to the generated client's runtime (`generated/*/core/`) is a patch of
+  `@hey-api/openapi-ts`'s template in `apps/web/patches/` (root
+  `patchedDependencies`; the Nix node_modules build reads patches only there),
+  then `bun run generate`. `hey-api-openapi-ts-0.99.0.patch` makes stopping an
+  SSE stream quiet; carry it forward on a generator upgrade.
 - Keep the human-session-only Passwords vault endpoints, including batch import
   and name matching and the human review of agent access requests, in coverage
   exclusions; normal human-session authorization and secret disclosure are

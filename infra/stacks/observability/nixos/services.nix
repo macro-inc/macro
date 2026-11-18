@@ -22,6 +22,7 @@ in
     ./database-dashboard.nix
     ./database-queries-dashboard.nix
     ./prod-alerts-dashboard.nix
+    ./email-focus-dashboard.nix
     ./alerting.nix
     ./goalert.nix
   ];

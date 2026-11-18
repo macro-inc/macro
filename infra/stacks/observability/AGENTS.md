@@ -25,6 +25,8 @@ us-east-1. `README.md` is the full operations guide.
   Its series come from Alloy on each Firecracker host
   (`nix/hosts/_nixos/firecracker-host.alloy`); rename a label there and here
   together.
+- Change an Email Focus rollout check: edit `nixos/email-focus.nix`; its rules
+  and the `Email Focus rollout` dashboard both read it. No Datadog copy.
 - Change a CI percentile, queue or CI hours query: edit `nixos/ci-report.json`;
   the `Macro CI` dashboard's Loki panels and `scripts/ci-report.ts` both read it.
 - Change a run_local query: edit `nixos/local-report.json`, read by the

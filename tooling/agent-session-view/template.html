@@ -625,7 +625,7 @@ function renderLiteral(literal) {
   const card = el('div', { class: 'card literal' });
   const commit = literal.commit;
   const where = commit
-    ? `reconstructed from source at <code>${esc(commit.sha.slice(0, 11))}</code> · ${commit.exact ? 'exact' : '<b class="warn-text">closest</b>'}: ${esc(commit.reason)}`
+    ? `reconstructed from source at <code>${esc(commit.sha.slice(0, 11))}</code> · ${commit.exact ? 'exact' : '<b class="warn-text">inferred</b>'}: ${esc(commit.reason)}`
     : '';
   card.innerHTML = `<h5>Literal prompt parts</h5><div class="muted">${where}</div>`;
   if (literal.error) {

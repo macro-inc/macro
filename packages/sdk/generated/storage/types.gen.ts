@@ -3613,6 +3613,12 @@ export type ChannelDeletedMetadata = {
      * The id of the deleted channel.
      */
     channel_id: string;
+    /**
+     * Active participants just before the delete. The channel and its
+     * memberships are gone by the time this is consumed, so consumers that
+     * tell members about the delete cannot look them up.
+     */
+    participant_user_ids?: Array<MacroUserIdStr>;
 };
 
 /**
