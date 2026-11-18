@@ -210,13 +210,13 @@ The suggestions, in the order they were made:
 ${suggestions}
 
 Mark every suggestion, S1 to S${generation.routines.length}, in order.`;
-  // A suggestion the judge left unmarked can't be scored: ask again, then give up.
+  // A suggestion the judge left unmarked, or marked twice, can't be scored: ask again, then give up.
   for (let attempt = 0; ; attempt++) {
     const result = await complete<{ marks: RoutineMark[] }>(at, prompt, ROUTINES_RUBRIC, ROUTINES_SCHEMA);
-    const marks = generation.routines.map((_, i) => result.marks.find((mark) => mark.suggestion.replace(/^S/, '') === String(i + 1)));
-    const missing = marks.flatMap((mark, i) => (mark ? [] : [`S${i + 1}`]));
-    if (!missing.length) return marks as RoutineMark[];
-    if (attempt === 1) throw new Error(`the judge left ${missing.join(', ')} unmarked`);
+    const marks = generation.routines.map((_, i) => result.marks.filter((mark) => mark.suggestion.replace(/^S/, '') === String(i + 1)));
+    const missing = marks.flatMap((found, i) => (found.length === 1 ? [] : [`S${i + 1}`]));
+    if (!missing.length) return marks.map(([mark]) => mark);
+    if (attempt === 1) throw new Error(`the judge didn't mark ${missing.join(', ')} exactly once`);
   }
 }
 
@@ -344,12 +344,12 @@ The feed, most important first:
 ${cards.map((card, i) => `C${i + 1}. ${describeCard(card, names)}`).join('\n\n')}
 
 Mark every card, C1 to C${cards.length}, in order.`;
-  // A card the judge left unmarked can't be scored: ask again, then give up.
+  // A card the judge left unmarked, or marked twice, can't be scored: ask again, then give up.
   for (let attempt = 0; ; attempt++) {
     const result = await complete<FeedMarks>(at, prompt, FEED_RUBRIC, FEED_SCHEMA);
-    const marks = cards.map((_, i) => result.cards.find((mark) => mark.card.replace(/^C/, '') === String(i + 1)));
-    const missing = marks.flatMap((mark, i) => (mark ? [] : [`C${i + 1}`]));
-    if (!missing.length) return { feed_rating: result.feed_rating, cards: marks as CardMark[] };
-    if (attempt === 1) throw new Error(`the judge left ${missing.join(', ')} unmarked`);
+    const marks = cards.map((_, i) => result.cards.filter((mark) => mark.card.replace(/^C/, '') === String(i + 1)));
+    const missing = marks.flatMap((found, i) => (found.length === 1 ? [] : [`C${i + 1}`]));
+    if (!missing.length) return { feed_rating: result.feed_rating, cards: marks.map(([mark]) => mark) };
+    if (attempt === 1) throw new Error(`the judge didn't mark ${missing.join(', ')} exactly once`);
   }
 }

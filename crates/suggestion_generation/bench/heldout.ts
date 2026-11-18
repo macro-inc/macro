@@ -203,14 +203,17 @@ export async function makeHeldout(at: Stack, name: string, count: number) {
     if (people.every((sketch) => written(sketch.slug))) throw new Error(`held-out set ${name} exists; pick a new name`);
     console.log(`finishing held-out set ${name}: ${people.length} people, as first written`);
   } else {
-    if (existsSync(root)) throw new Error(`held-out set ${name} exists; pick a new name`);
+    // A folder left before its people were saved has nothing else in it: reuse it.
+    if (existsSync(root) && readdirSync(root).some((entry) => entry !== 'people.json.partial')) throw new Error(`held-out set ${name} exists; pick a new name`);
     people = (await sketch(at, count)).slice(0, count);
     const slugs = people.map((person) => person.slug);
     if (slugs.some((slug) => !/^[a-z]+$/.test(slug)) || new Set(slugs).size !== slugs.length) {
       throw new Error(`the people came back with unusable slugs (${slugs.join(', ')}); run heldout make again`);
     }
     mkdirSync(root, { recursive: true });
-    writeFileSync(sketches, `${JSON.stringify(people, null, 1)}\n`);
+    // Written whole or not at all, so a rerun never reads half a list.
+    writeFileSync(`${sketches}.partial`, `${JSON.stringify(people, null, 1)}\n`);
+    renameSync(`${sketches}.partial`, sketches);
   }
   const failed: string[] = [];
   for (const person of people) {
