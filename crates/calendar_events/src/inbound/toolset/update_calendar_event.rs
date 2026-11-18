@@ -356,7 +356,7 @@ where
                 }
             })?,
         };
-        let mutations = service_context.mutations_for(&request_context);
+        let mutations = service_context.mutations_for(&request_context, self.inbox.as_deref());
         let scope = match (self.scope, self.recurrence_id.clone()) {
             (UpdateScopeInput::All, None) => CalendarUpdateScope::All,
             (UpdateScopeInput::ThisEvent, Some(recurrence_id)) => {

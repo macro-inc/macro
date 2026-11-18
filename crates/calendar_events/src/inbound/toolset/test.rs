@@ -172,16 +172,20 @@ struct MockMutations {
     calendars: Mutex<Vec<VisibleCalendar>>,
     copied: Mutex<Vec<(Uuid, Option<Uuid>)>>,
     copy_error: Mutex<Option<CalendarMutationError>>,
-    /// The program each write was asked to carry.
-    forwarded: Mutex<Vec<macro_authorization::ForwardedProgram>>,
+    /// The program each write was asked to carry, and the inbox it named.
+    forwarded: Mutex<Vec<(macro_authorization::ForwardedProgram, Option<String>)>>,
 }
 
 impl ProgramForwarding for MockMutations {
     fn for_program(
         self: &std::sync::Arc<Self>,
         program: &macro_authorization::ForwardedProgram,
+        inbox: Option<&str>,
     ) -> std::sync::Arc<Self> {
-        self.forwarded.lock().unwrap().push(program.clone());
+        self.forwarded
+            .lock()
+            .unwrap()
+            .push((program.clone(), inbox.map(str::to_owned)));
         std::sync::Arc::clone(self)
     }
 }
@@ -549,7 +553,10 @@ async fn a_reviewed_create_carries_the_agents_program_and_the_review() {
     assert_eq!(mutations.created.lock().unwrap().len(), 1);
     assert_eq!(
         *mutations.forwarded.lock().unwrap(),
-        vec![agent().approved(macro_authorization::ProgramApproval::Reviewed)]
+        vec![(
+            agent().approved(macro_authorization::ProgramApproval::Reviewed),
+            None
+        )]
     );
 }
 
@@ -572,7 +579,10 @@ async fn a_confirmed_create_carries_the_quoted_reply() {
         .unwrap();
     assert_eq!(
         *mutations.forwarded.lock().unwrap(),
-        vec![agent().approved(macro_authorization::ProgramApproval::Quoted)]
+        vec![(
+            agent().approved(macro_authorization::ProgramApproval::Quoted),
+            None
+        )]
     );
 }
 
@@ -592,7 +602,7 @@ async fn an_agents_unapproved_create_carries_no_approval() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(*mutations.forwarded.lock().unwrap(), vec![agent()]);
+    assert_eq!(*mutations.forwarded.lock().unwrap(), vec![(agent(), None)]);
 }
 
 /// A person's tools forward no program, so their creates are unchanged.
@@ -611,7 +621,26 @@ async fn a_persons_create_forwards_no_program() {
         .unwrap();
     let forwarded = mutations.forwarded.lock().unwrap();
     assert_eq!(forwarded.len(), 1);
-    assert!(forwarded[0].headers().is_empty());
+    assert!(forwarded[0].0.headers().is_empty());
+}
+
+/// An agent's delete names the copy it confirmed, so calendar_service's copy
+/// check, which reruns for the agent's program, sees that copy too.
+#[tokio::test]
+async fn an_agents_delete_names_the_copy_it_addresses() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let context = ServiceContext(context.0.with_program(agent()));
+    let tool: DeleteCalendarEvent = serde_json::from_value(serde_json::json!({
+        "eventId": Uuid::from_u128(11),
+        "scope": "all",
+        "inbox": "work@example.com",
+    }))
+    .unwrap();
+    tool.call(context, request_context()).await.unwrap();
+    assert_eq!(
+        *mutations.forwarded.lock().unwrap(),
+        vec![(agent(), Some("work@example.com".to_owned()))]
+    );
 }
 
 #[tokio::test]
@@ -1139,7 +1168,10 @@ async fn an_agents_invite_carries_the_quoted_reply() {
     assert_eq!(mutations.updated.lock().unwrap().len(), 1);
     assert_eq!(
         *mutations.forwarded.lock().unwrap(),
-        vec![agent().approved(macro_authorization::ProgramApproval::Quoted)]
+        vec![(
+            agent().approved(macro_authorization::ProgramApproval::Quoted),
+            None
+        )]
     );
 }
 
@@ -1153,7 +1185,7 @@ async fn an_agents_unquoted_invite_carries_no_approval() {
         .call(context, request_context())
         .await
         .unwrap();
-    assert_eq!(*mutations.forwarded.lock().unwrap(), vec![agent()]);
+    assert_eq!(*mutations.forwarded.lock().unwrap(), vec![(agent(), None)]);
 }
 
 /// A blank quote is the model going through the motions: refused before

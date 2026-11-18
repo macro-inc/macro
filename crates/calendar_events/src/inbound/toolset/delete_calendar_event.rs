@@ -135,7 +135,7 @@ where
         );
 
         let requester_id = request_context.user_id.to_string();
-        let mutations = service_context.mutations_for(&request_context);
+        let mutations = service_context.mutations_for(&request_context, self.inbox.as_deref());
         let scoped_occurrence = |kind: &'static str| {
             self.recurrence_id.clone().ok_or_else(|| ToolCallError {
                 description: format!(
