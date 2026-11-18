@@ -598,7 +598,14 @@ groups, Macro users and DMs lead CRM contacts whatever their match; no person
 moves past another result or into a better group to do it. Personal contact
 rows keep the native window order among people in the same group, matching
 equally well and equally close to the viewer, so a recent weaker match never
-takes a better match's slot.
+takes a better match's slot. People outside the viewer's team (a person, CRM
+contact or one-to-one DM whose person is not on the team's roster) follow every
+row from the team, typed or not (before typing, `listOutsidePeopleLast` puts
+them after the recent rows, ahead of the command catalog), in the same groups
+among themselves; group DMs stay with the team's rows. A query that
+is exactly such a person's email address or full name of two or more words keeps
+them among the team's rows, still after every row a stranger follows. While the
+roster loads, nobody is outside.
 A row whose letters merely appear in order ranks below every row containing the
 typed words.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when

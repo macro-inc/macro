@@ -1,3 +1,4 @@
+import { emailToMacroId } from '@core/user/macroId';
 import { deepEqual } from '@core/util/compareUtils';
 import {
   createFreshSearch,
@@ -7,8 +8,10 @@ import {
 import { ANY_SCRIPT_FUZZY_OPTIONS } from '@core/util/fuzzy';
 import { normalizeNameText, startsWordsOf } from '@core/util/name-match-score';
 import { preservePersonOrder } from '@core/util/ordered-window';
+import { crmContactEmailKey } from '@entity/types/entity';
 import uFuzzy from '@leeoniya/ufuzzy';
 import { match } from 'ts-pattern';
+import { directMessageRecipient } from './contact-items';
 import type { CommandMenuItem } from './useCommandItems';
 
 // Command keyword eligibility is not a database-person lookup. Keep its existing
@@ -99,6 +102,78 @@ function isMacroPerson(item: CommandMenuItem) {
   return item.bucket === 'dm' || item.bucket === 'person';
 }
 
+/** The viewer's team, which decides who is outside it. */
+type TeamScope = {
+  /** Members of the viewer's team. While the roster loads, or when the
+   * viewer has no team, it is empty and nobody is outside the team. */
+  teammateIds?: ReadonlySet<string>;
+  viewerId?: string;
+};
+
+/** A row that stands for one person: a person, a CRM contact, or a
+ * one-to-one DM. Group DMs are conversations, like channels. */
+function isPersonRow(item: CommandMenuItem, viewerId: string | undefined) {
+  return (
+    item.kind === 'user' ||
+    item.bucket === 'crm_contact' ||
+    directMessageRecipient(item, viewerId) !== undefined
+  );
+}
+
+/** The Macro user a person row stands for: the person, the user a CRM
+ * contact's email names, or the other person in a one-to-one DM. */
+function rowPersonId(item: CommandMenuItem, viewerId: string | undefined) {
+  if (item.kind === 'user') return item.id;
+  if (item.kind === 'entity' && item.data.type === 'crm_contact') {
+    const email = item.data.email;
+    return email ? emailToMacroId(crmContactEmailKey(email)) : undefined;
+  }
+  return directMessageRecipient(item, viewerId);
+}
+
+function isTeammateRow(item: CommandMenuItem, team: TeamScope) {
+  const person = rowPersonId(item, team.viewerId);
+  return person !== undefined && !!team.teammateIds?.has(person);
+}
+
+/** A person row for someone outside the viewer's team: an email contact, a
+ * CRM contact, a Macro user from elsewhere, or a one-to-one DM with them. */
+function isOutsidePerson(item: CommandMenuItem, team: TeamScope) {
+  if (!team.teammateIds?.size) return false;
+  return isPersonRow(item, team.viewerId) && !isTeammateRow(item, team);
+}
+
+/**
+ * Whether the query is exactly one of the names or the email address a row
+ * is known by. It counts only for an email address or a name of two or more
+ * words: a single word is usually a first name, which many people share.
+ */
+function isNamedExactly(item: CommandMenuItem, term: string) {
+  if (!term.includes('@') && !term.includes(' ')) return false;
+  return item.searchText
+    .split('|')
+    .some((name) => normalizeNameText(name) === term);
+}
+
+/** With no query, rows keep their order, except that people outside the
+ * viewer's team follow all of the team's rows. The commands listed after
+ * every recent row stay last, so these people are not buried under the
+ * whole command catalog. */
+export function listOutsidePeopleLast<T extends CommandMenuItem>(
+  items: T[],
+  team: TeamScope
+): T[] {
+  const outside = (item: T) => isOutsidePerson(item, team);
+  const teamRows = items.filter((item) => !outside(item));
+  const trailingCommands =
+    teamRows.findLastIndex((item) => item.kind !== 'command') + 1;
+  return [
+    ...teamRows.slice(0, trailingCommands),
+    ...items.filter(outside),
+    ...teamRows.slice(trailingCommands),
+  ];
+}
+
 /** Whether the viewer has a direct message with this person, as the people
  * window decides it: a DM row, or a person with an interaction time, which
  * comes only from DMs. CRM contacts are email correspondents and never count. */
@@ -140,7 +215,8 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
      * fuzzy matcher would not match them. */
     preservedIds?: ReadonlySet<string>;
     /** Members of the viewer's team. Their people rows and one-to-one
-     * conversations lead other rows that match equally well. */
+     * conversations lead other rows that match equally well, and people
+     * outside the team follow every row from it. */
     teammateIds?: ReadonlySet<string>;
     viewerId?: string;
   }
@@ -177,34 +253,35 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const eligible = items.filter(
     (item) => item.kind !== 'command' || commandMatches.has(item.id)
   );
-  const withTeammate = (item: CommandMenuItem) => {
-    const team = options.teammateIds;
-    if (!team?.size) return false;
-    if (item.kind === 'user') return team.has(item.id);
-    if (item.kind !== 'entity' || item.data.type !== 'channel') return false;
-    if (item.data.channelType !== 'direct_message') return false;
-    const others = (item.data.participantIds ?? []).filter(
-      (id) => id !== options.viewerId
-    );
-    return others.length === 1 && team.has(others[0]);
+  const team: TeamScope = {
+    teammateIds: options.teammateIds,
+    viewerId: options.viewerId,
   };
+  const withTeammate = (item: CommandMenuItem) => isTeammateRow(item, team);
+  // Someone outside the team whose email address or full name the query
+  // spells out is the person the viewer is looking for: they keep their place
+  // among the team's results, after every row a stranger follows there.
+  const outside = (item: CommandMenuItem) =>
+    isOutsidePerson(item, team) && !isNamedExactly(item, term);
   // People the viewer never talked to: no teammate and no direct message.
   const isStranger = (item: CommandMenuItem) =>
     isPeopleItem(item) && !withTeammate(item) && !hasDirectMessage(item);
   // Among names with a word starting with each typed term, the viewer's own
   // results and people they know come first, then strangers, however exactly
   // a stranger's name matches. Names that only contain the query follow,
-  // strangers last in each tier.
+  // strangers last in each tier. People outside the team follow all of that,
+  // in the same groups among themselves.
   const relationshipGroup = (
     item: CommandMenuItem,
     nameMatchRank: number,
     stranger: boolean
   ) => {
+    const teamOffset = outside(item) ? 0 : 3;
     const startsWords =
       nameMatchRank >= NAME_STARTS_WITH_QUERY_RANK ||
       startsWordsOf(displayName(item), term);
-    if (!startsWords) return 0;
-    return stranger ? 1 : 2;
+    if (!startsWords) return teamOffset;
+    return teamOffset + (stranger ? 1 : 2);
   };
   // Match quality decides next. Among equally good matches, teammates and
   // conversations with them lead, then other Macro users and DMs, then
@@ -243,7 +320,9 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     scored.map(({ item, nameMatchRank }) => [item.id, nameMatchRank])
   );
   const groups = new Map(scored.map(({ item, group }) => [item.id, group]));
-  const groupOf = (item: T) => groups.get(item.id);
+  // Rows only a server search matched have no group; people outside the team
+  // among them still never share one with the team's.
+  const groupOf = (item: T) => groups.get(item.id) ?? (outside(item) ? -1 : -2);
   // Window order holds among people in the same group who match equally well
   // and are equally close to the viewer, so a teammate or someone the viewer
   // messages keeps the lead the sort gave them.
@@ -254,9 +333,10 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const tiers = new Map<string, number>();
   const nameRank = (item: T) => {
     const rank = nameRanks.get(item.id);
-    if (rank === undefined) return -Infinity;
-
-    const key = `${groupOf(item)}:${rank}:${closeness(item)}`;
+    const key =
+      rank === undefined
+        ? `unranked:${groupOf(item)}`
+        : `${groupOf(item)}:${rank}:${closeness(item)}`;
     const tier = tiers.get(key) ?? tiers.size;
     tiers.set(key, tier);
     return tier;
@@ -264,21 +344,25 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const preserved = (item: CommandMenuItem) =>
     options.preservedIds?.has(item.id) ||
     (options.preserveAdditionalEntityMatches && item.kind === 'entity');
-  if (!options.preserveAdditionalEntityMatches && !options.preservedIds?.size)
-    return preservePersonOrder(
-      prioritizeInternalPeople(ranked, groupOf),
-      items,
-      nameRank
-    );
-
   // Cache search accepts broader subsequences than the menu's fuzzy matcher.
-  // Keep these additional matches reachable after the regular ranked results.
+  // Keep these additional matches reachable after the regular ranked results,
+  // and people outside the team after the team's additional matches too.
   const matchedIds = new Set(ranked.map((item) => item.id));
-  const additional = items
-    .filter((item) => preserved(item) && !matchedIds.has(item.id))
-    .sort(compareRecency);
+  const additional =
+    options.preserveAdditionalEntityMatches || options.preservedIds?.size
+      ? items
+          .filter((item) => preserved(item) && !matchedIds.has(item.id))
+          .sort(compareRecency)
+      : [];
+  const listed = [...ranked, ...additional];
   return preservePersonOrder(
-    prioritizeInternalPeople([...ranked, ...additional], groupOf),
+    prioritizeInternalPeople(
+      [
+        ...listed.filter((item) => !outside(item)),
+        ...listed.filter((item) => outside(item)),
+      ],
+      groupOf
+    ),
     items,
     nameRank
   );
