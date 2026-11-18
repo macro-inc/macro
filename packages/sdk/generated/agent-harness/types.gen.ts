@@ -5058,6 +5058,7 @@ export type StartClaudeSignInErrors = {
     403: unknown;
     404: unknown;
     409: unknown;
+    410: unknown;
     422: unknown;
     503: unknown;
     504: unknown;
@@ -5086,6 +5087,7 @@ export type CompleteClaudeSignInErrors = {
     403: unknown;
     404: unknown;
     409: unknown;
+    410: unknown;
     422: unknown;
     503: unknown;
     504: unknown;

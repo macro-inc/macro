@@ -757,3 +757,10 @@ pub trait EditingActivityStore: Send + Sync {
         idle: std::time::Duration,
     ) -> impl Future<Output = Result<Vec<bool>, rootcause::Report>> + Send;
 }
+
+/// Physical lifecycle facts for trusted backend hosts; grants no content access.
+pub trait DocumentLifecycleReads: Send + Sync + 'static {
+    /// True only for an existing document outside trash, independent of a viewer.
+    fn document_is_live(&self, id: uuid::Uuid)
+    -> impl Future<Output = anyhow::Result<bool>> + Send;
+}

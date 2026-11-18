@@ -34,6 +34,8 @@ export function prodMonitor(
     alertDetail?: string;
     warningDetail?: string;
     recoveryDetail?: string;
+    /** Heartbeats only: alert if a previously reporting group stops reporting. */
+    noDataTimeframe?: number;
   }
 ): datadog.Monitor {
   return new datadog.Monitor(
@@ -60,6 +62,9 @@ export function prodMonitor(
       onMissingData: 'default',
       includeTags: true,
       notifyAudit: false,
+      ...(args.noDataTimeframe === undefined
+        ? {}
+        : { notifyNoData: true, noDataTimeframe: args.noDataTimeframe }),
       ...(args.enableLogsSample === undefined
         ? {}
         : { enableLogsSample: args.enableLogsSample }),

@@ -318,7 +318,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             },
         ),
         message_labels: Arc::new(email::domain::message_labels::MessageLabelService {
-            repository: crate::outbound::message_labels::PgMessageLabels(db.clone()),
+            repository: crate::outbound::message_labels::PgMessageLabels(
+                db.clone(),
+                EmailPgRepo::new(db.clone()),
+            ),
             enqueuer: sqs_client.as_ref().clone(),
             broker: macro_event_broker.clone(),
         }),
