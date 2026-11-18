@@ -1,8 +1,8 @@
 use agent_permission_registry::Action;
 use bot_id::{BotId, MACRO_NEW_BOT_ID};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use sqlx::PgPool;
 use macro_uuid::Uuid;
+use sqlx::PgPool;
 
 use super::*;
 use crate::domain::model::PermissionState;
@@ -66,14 +66,23 @@ async fn an_agents_rules_upsert_delete_and_reset(pool: PgPool) {
         .await
         .unwrap();
     store
-        .apply(&owner, &[group_action(Some(PermissionState::Ask))], &user(OWNER), true)
+        .apply(
+            &owner,
+            &[group_action(Some(PermissionState::Ask))],
+            &user(OWNER),
+            true,
+        )
         .await
         .unwrap();
     assert_eq!(
         states(&store.rules(&owner).await.unwrap()),
         vec![
             ("email:send".to_owned(), PermissionState::Ask, true),
-            ("static-files.delete_file".to_owned(), PermissionState::Always, false),
+            (
+                "static-files.delete_file".to_owned(),
+                PermissionState::Always,
+                false
+            ),
         ]
     );
 
@@ -103,7 +112,12 @@ async fn a_personas_rules_are_each_persons_own(pool: PgPool) {
     };
 
     store
-        .apply(&mine, &[tool(Some(PermissionState::Never))], &user(OWNER), false)
+        .apply(
+            &mine,
+            &[tool(Some(PermissionState::Never))],
+            &user(OWNER),
+            false,
+        )
         .await
         .unwrap();
     assert_eq!(store.rules(&mine).await.unwrap().len(), 1);
@@ -131,7 +145,11 @@ async fn a_sessions_overlay_upserts_and_deletes(pool: PgPool) {
         .unwrap();
     assert_eq!(
         states(&store.session_rules(session).await.unwrap()),
-        vec![("static-files.delete_file".to_owned(), PermissionState::Never, true)]
+        vec![(
+            "static-files.delete_file".to_owned(),
+            PermissionState::Never,
+            true
+        )]
     );
 
     store
@@ -196,9 +214,18 @@ async fn rows_go_with_their_agent_person_and_session(pool: PgPool) {
     };
     let session = AgentSessionId::new_from_uuid(SESSION);
     let never = [tool(Some(PermissionState::Never))];
-    store.apply(&agent, &never, &user(OTHER), false).await.unwrap();
-    store.apply(&persona, &never, &user(OTHER), false).await.unwrap();
-    store.apply_session(session, &never, &user(OTHER)).await.unwrap();
+    store
+        .apply(&agent, &never, &user(OTHER), false)
+        .await
+        .unwrap();
+    store
+        .apply(&persona, &never, &user(OTHER), false)
+        .await
+        .unwrap();
+    store
+        .apply_session(session, &never, &user(OTHER))
+        .await
+        .unwrap();
 
     // Deleting the person who set the agent's rule keeps it, without them.
     sqlx::query(r#"DELETE FROM "User" WHERE id = $1"#)

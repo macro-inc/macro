@@ -86,7 +86,11 @@ fn action_state(
 
 /// The effective state of `entry` under `saved` and `overlay`, and where it
 /// comes from.
-pub fn effective(saved: &Layer, overlay: &Layer, entry: &CatalogEntry) -> (PermissionState, Origin) {
+pub fn effective(
+    saved: &Layer,
+    overlay: &Layer,
+    entry: &CatalogEntry,
+) -> (PermissionState, Origin) {
     let (base, origin) = match saved.tool(entry) {
         Some(state) => (state, Origin::Tool),
         None => match saved.group_action(&entry.group, entry.action) {

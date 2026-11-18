@@ -106,7 +106,15 @@ impl PermissionStore for PgPermissionStore {
             .fetch_all(&self.pool)
             .await?
             .into_iter()
-            .map(|row| rule(&row.kind, &row.target, &row.state, row.via_agent, row.updated_at))
+            .map(|row| {
+                rule(
+                    &row.kind,
+                    &row.target,
+                    &row.state,
+                    row.via_agent,
+                    row.updated_at,
+                )
+            })
             .collect(),
             PolicyOwner::Persona { persona, user } => sqlx::query!(
                 r#"
@@ -120,7 +128,15 @@ impl PermissionStore for PgPermissionStore {
             .fetch_all(&self.pool)
             .await?
             .into_iter()
-            .map(|row| rule(&row.kind, &row.target, &row.state, row.via_agent, row.updated_at))
+            .map(|row| {
+                rule(
+                    &row.kind,
+                    &row.target,
+                    &row.state,
+                    row.via_agent,
+                    row.updated_at,
+                )
+            })
             .collect(),
         }
     }

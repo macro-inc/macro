@@ -246,7 +246,10 @@ async fn only_a_persons_own_session_may_set_or_reset() {
 
     for caller in [&api_key, &agent] {
         assert!(matches!(
-            fixture.service.set(caller, BotId::TEST_A, never_send()).await,
+            fixture
+                .service
+                .set(caller, BotId::TEST_A, never_send())
+                .await,
             Err(PermissionError::NeedsPerson)
         ));
         assert!(matches!(
@@ -275,11 +278,17 @@ async fn someone_who_may_not_edit_the_agent_is_refused() {
         Err(PermissionError::Forbidden)
     ));
     assert!(matches!(
-        fixture.service.view_agent(&person(TEAMMATE), BotId::TEST_A).await,
+        fixture
+            .service
+            .view_agent(&person(TEAMMATE), BotId::TEST_A)
+            .await,
         Err(PermissionError::Forbidden)
     ));
     assert!(matches!(
-        fixture.service.view_agent(&person(OWNER), BotId::TEST_B).await,
+        fixture
+            .service
+            .view_agent(&person(OWNER), BotId::TEST_B)
+            .await,
         Err(PermissionError::NotFound)
     ));
 }
@@ -361,7 +370,10 @@ async fn an_agent_may_not_tighten_another_or_without_a_session_or_an_editor() {
     // Another agent's id.
     let other = agent_caller(OWNER, BotId::TEST_B, Some(AgentSessionId::TEST_A));
     assert!(matches!(
-        fixture.service.tighten(&other, BotId::TEST_A, never_send()).await,
+        fixture
+            .service
+            .tighten(&other, BotId::TEST_A, never_send())
+            .await,
         Err(PermissionError::Forbidden)
     ));
 
@@ -462,7 +474,10 @@ async fn with_the_rollout_off_everything_is_disabled() {
         Err(PermissionError::Disabled)
     ));
     assert!(matches!(
-        fixture.service.set(&caller, BotId::TEST_A, never_send()).await,
+        fixture
+            .service
+            .set(&caller, BotId::TEST_A, never_send())
+            .await,
         Err(PermissionError::Disabled)
     ));
     assert!(matches!(

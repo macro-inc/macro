@@ -49,15 +49,28 @@ pub fn toolset_with_ocaml() -> AsyncToolCollection<CodeModeToolContext> {
         .add_tool::<ReadCodeDocs, CodeModeToolContext>()
 }
 
-/// The session's code-mode tools: with OCaml when the session may run it.
+/// [`toolset_with_ocaml`] for a session whose OCaml programs the agent's
+/// permissions gate ([`SessionCodeMode::permissions_enabled`]): its
+/// description says how.
+pub fn toolset_with_ocaml_permissions() -> AsyncToolCollection<CodeModeToolContext> {
+    AsyncToolCollection::new()
+        .add_tool::<ExecuteCodeWithOcamlPermissions, CodeModeToolContext>()
+        .add_tool::<DescribeCodeTools, CodeModeToolContext>()
+        .add_tool::<ReadCodeDocs, CodeModeToolContext>()
+}
+
+/// The session's code-mode tools: with OCaml when the session may run it,
+/// and the permissions paragraph when they gate it.
 pub async fn session_toolset(
     service: &dyn SessionCodeMode,
     session: &AgentSession,
 ) -> AsyncToolCollection<CodeModeToolContext> {
-    if service.ocaml_enabled(session).await {
-        toolset_with_ocaml()
-    } else {
+    if !service.ocaml_enabled(session).await {
         toolset()
+    } else if service.permissions_enabled(session).await {
+        toolset_with_ocaml_permissions()
+    } else {
+        toolset_with_ocaml()
     }
 }
 
@@ -260,6 +273,41 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCodeWithOcaml {
             },
         )
         .await
+    }
+}
+
+/// [`ExecuteCodeWithOcaml`] for a session whose OCaml programs the agent's
+/// permissions gate: the same tool, with the permissions paragraph.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(
+    title = "ExecuteCode",
+    description = format!(
+        "{}\n{}\n{}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}\n{}",
+        include_str!("toolset/session/execute_code.md"),
+        include_str!("toolset/shared/program.md"),
+        include_str!("toolset/shared/runtime.md"),
+        dynamic_ui::present_view_schema(),
+        include_str!("toolset/session/ocaml.md"),
+        include_str!("toolset/session/ocaml_permissions.md"),
+    )
+)]
+pub struct ExecuteCodeWithOcamlPermissions(ExecuteCodeWithOcaml);
+
+impl ToolAnnotated for ExecuteCodeWithOcamlPermissions {
+    const ANNOTATIONS: ToolAnnotations = ExecuteCode::ANNOTATIONS;
+}
+
+#[async_trait]
+impl AsyncTool<CodeModeToolContext> for ExecuteCodeWithOcamlPermissions {
+    type Output = ExecutionReceipt;
+
+    async fn call(
+        &self,
+        context: ServiceContext<CodeModeToolContext>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        self.0.call(context, request).await
     }
 }
 

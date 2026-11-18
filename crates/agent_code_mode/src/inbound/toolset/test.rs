@@ -285,9 +285,29 @@ fn ocaml_execute_code_extends_the_javascript_tool_without_changing_it() {
     assert_eq!(parsed.language, ProgramLanguage::Javascript);
 }
 
+#[test]
+fn the_permissions_tool_is_the_ocaml_tool_plus_its_paragraph() {
+    let ocaml = &toolset_with_ocaml().tools["ExecuteCode"];
+    let gated = &toolset_with_ocaml_permissions().tools["ExecuteCode"];
+    assert_eq!(
+        gated.description,
+        format!(
+            "{}\n{}",
+            ocaml.description,
+            include_str!("session/ocaml_permissions.md")
+        )
+    );
+    assert_eq!(
+        serde_json::to_value(&gated.input_schema).unwrap()["properties"],
+        serde_json::to_value(&ocaml.input_schema).unwrap()["properties"]
+    );
+    assert!(!ocaml.description.contains("ShowPermissions"));
+}
+
 /// Session code mode that records the language each call asked for.
 struct Languages {
     ocaml: bool,
+    permissions: bool,
     seen: std::sync::Mutex<Vec<Language>>,
 }
 
@@ -309,6 +329,7 @@ impl SessionCodeMode for Languages {
             activity: Vec::new(),
             result: None,
             error: None,
+            permission: None,
         })
     }
     async fn read(
@@ -322,6 +343,9 @@ impl SessionCodeMode for Languages {
     }
     async fn ocaml_enabled(&self, _: &AgentSession) -> bool {
         self.ocaml
+    }
+    async fn permissions_enabled(&self, _: &AgentSession) -> bool {
+        self.permissions
     }
 }
 
@@ -337,14 +361,21 @@ async fn sessions_see_and_call_ocaml_only_with_the_rollout() {
         "source": "let () = Code_mode.run (fun _ -> `Null)",
         "language": "ocaml",
     });
-    for ocaml in [false, true] {
+    for (ocaml, permissions) in [(false, false), (false, true), (true, false), (true, true)] {
         let service = Arc::new(Languages {
             ocaml,
+            permissions,
             seen: Default::default(),
         });
         let tools = session_toolset(service.as_ref(), &session).await;
         let schema = serde_json::to_value(&tools.tools["ExecuteCode"].input_schema).unwrap();
         assert_eq!(schema["properties"].get("language").is_some(), ocaml);
+        assert_eq!(
+            tools.tools["ExecuteCode"]
+                .description
+                .contains("ShowPermissions"),
+            ocaml && permissions
+        );
         let result = tools
             .try_tool_call(
                 CodeModeToolContext {

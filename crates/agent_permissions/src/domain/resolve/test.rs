@@ -59,7 +59,12 @@ fn tool_rule(service: &str, operation: &str, state: PermissionState) -> Rule {
     }
 }
 
-fn state_of(saved: &[Rule], overlay: &[Rule], service: &str, operation: &str) -> (PermissionState, Origin) {
+fn state_of(
+    saved: &[Rule],
+    overlay: &[Rule],
+    service: &str,
+    operation: &str,
+) -> (PermissionState, Origin) {
     let catalog = catalog();
     let entry = catalog.entry(service, operation).unwrap();
     effective(&Layer::new(saved), &Layer::new(overlay), entry)
@@ -203,7 +208,10 @@ fn tightening_passes_and_every_way_of_loosening_is_refused() {
     assert!(
         tighten(
             &[group_rule("documents", Action::Destroy, Ask)],
-            vec![change(group_action("documents", Action::Destroy), Some(Always))],
+            vec![change(
+                group_action("documents", Action::Destroy),
+                Some(Always)
+            )],
         )
         .is_err()
     );
@@ -234,7 +242,10 @@ fn a_session_overlay_can_tighten_but_never_loosen() {
     assert!(tighten_only(&catalog, (&[], &overlay), (&[], &after)).is_err());
 
     // An overlay holds no `always`: it becomes a removal.
-    let to_always = normalize(vec![change(tool("email", "send_email"), Some(Always))], true);
+    let to_always = normalize(
+        vec![change(tool("email", "send_email"), Some(Always))],
+        true,
+    );
     assert_eq!(to_always, removal);
 }
 
