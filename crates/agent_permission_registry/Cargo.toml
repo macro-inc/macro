@@ -1,0 +1,11 @@
+[package]
+name = "agent_permission_registry"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Every SDK operation's permission group, action and label: the checked-in registry agent permissions resolve against."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

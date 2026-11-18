@@ -1,0 +1,22 @@
+; A program naming every operation in the analyzer's table, generated from
+; it; test_coverage checks the analyzer finds each one.
+
+(executable
+ (name gen_all)
+ (modules gen_all)
+ (libraries macro_sdk_analyzer))
+
+(rule
+ (target all_operations.ml)
+ (action
+  (with-stdout-to
+   %{target}
+   (run %{exe:gen_all.exe}))))
+
+(library
+ (name all_operations)
+ (modules all_operations)
+ (wrapped false)
+ (libraries macro_sdk)
+ (flags
+  (:standard -w -a)))

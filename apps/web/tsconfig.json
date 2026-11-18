@@ -2,7 +2,8 @@
   "include": [
     "./src/**/*",
     "./src/lib/core/component/Emoji/cldr-tags.json",
-    "../../crates/agent_harness/sandbox_sizes.json"
+    "../../crates/agent_harness/sandbox_sizes.json",
+    "../../crates/agent_permission_registry/registry.json"
   ],
   "exclude": [
     "./tests/**/*",
@@ -46,6 +47,9 @@
     "paths": {
       "@sandbox-sizes": [
         "../../crates/agent_harness/sandbox_sizes.json"
+      ],
+      "@agent-permission-registry": [
+        "../../crates/agent_permission_registry/registry.json"
       ],
       "@graphql-cache/*": [
         "./src/lib/graphql-cache/*"

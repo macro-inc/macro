@@ -1,0 +1,5 @@
+; Builds lib/operation_table.ml from the generated SDK sources.
+
+(executable
+ (name index)
+ (libraries compiler-libs.common))

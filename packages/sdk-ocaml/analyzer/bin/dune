@@ -1,0 +1,3 @@
+(executable
+ (name macro_sdk_calls)
+ (libraries macro_sdk_analyzer yojson))

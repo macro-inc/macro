@@ -17,12 +17,14 @@ mod test;
 /// `main`. The specs and the TypeScript host table are inputs of the OCaml
 /// SDK's tests, and the Wasm transport's tests compare operation names with
 /// the TypeScript SDK's generated methods; `flake.lock` pins its toolchain;
-/// `nix/cloud-storage.nix` defines code mode's OCaml bundle.
+/// `nix/cloud-storage.nix` defines code mode's OCaml bundle; the agent
+/// permission registry must classify every operation the SDK has.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("packages/sdk-ocaml/**"),
     xtask_paths::repo_glob!("packages/sdk/specs/**"),
     xtask_paths::repo_glob!("packages/sdk/src/config.ts"),
     xtask_paths::repo_glob!("packages/sdk/generated/*/sdk.gen.ts"),
+    xtask_paths::repo_glob!("crates/agent_permission_registry/registry.json"),
     xtask_paths::repo_glob!("flake.lock"),
     xtask_paths::repo_glob!("nix/cloud-storage.nix"),
     xtask_paths::repo_glob!(".github/workflows/sdk-ocaml-check.yml"),
