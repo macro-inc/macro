@@ -18,7 +18,6 @@ import {
   Suspense,
 } from 'solid-js';
 import { SpreadsheetSkeleton } from '../../block-spreadsheet/components/SpreadsheetSkeleton';
-import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
 import { saveCodeDocument } from '../queries/code-document';
 import { isHtmlFileType } from '../util/fileMode';
 import { CodeHeader } from '../views/code-header';
@@ -38,9 +37,7 @@ export default function BlockCode() {
   const blockText = blockTextSignal.get;
   const setBlockText = blockTextSignal.set;
   const blockUserAccess = blockUserAccessSignal.get;
-  const spreadsheetEnabled = useSpreadsheetAccess();
-  const spreadsheet = () =>
-    spreadsheetEnabled() && blockMetadata()?.fileType?.toLowerCase() === 'csv';
+  const spreadsheet = () => blockMetadata()?.fileType?.toLowerCase() === 'csv';
   const isHtmlFile = createMemo(() =>
     isHtmlFileType(blockMetadata()?.fileType)
   );

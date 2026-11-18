@@ -17,6 +17,7 @@ use super::instance::Port;
 use super::inventory::services_for_mode;
 use super::local_env::Tunnels;
 use super::microsoft_emulator;
+use super::model_emulator;
 use super::{Mode, arch, env_layer, gen_compose, instance::Instance, proxy, workspace_root};
 
 /// Required non-Rust services that must be present in the rendered local
@@ -154,6 +155,17 @@ fn local_compose_flavor(
             Some(_) => {}
         }
     }
+    if sidecars.model_emulator {
+        match services.get(model_emulator::SERVICE) {
+            None => failures.push(
+                "model_emulator sidecar is absent although no real Gemini key is configured".into(),
+            ),
+            Some(node) if !has_app_out_mount(node) => {
+                failures.push("model_emulator is missing the /app/out bind mount".into());
+            }
+            Some(_) => {}
+        }
+    }
     if sidecars.gmail_forwarder {
         match services.get("gmail_forwarder") {
             None => failures.push(
@@ -182,6 +194,7 @@ fn local_compose_flavor(
         [
             (sidecars.gmail_emulator, " + gmail_emulator"),
             (sidecars.outlook_emulator, " + outlook_emulator"),
+            (sidecars.model_emulator, " + model_emulator"),
             (sidecars.gmail_forwarder, " + gmail_forwarder"),
         ]
         .iter()

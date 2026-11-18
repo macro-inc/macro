@@ -217,6 +217,7 @@ where
                 .await;
             if let Some(prompt) = request.prompt {
                 let client = prompt.client;
+                let prompter = prompt.prompter;
                 let (id, action) = prompt.into_action();
                 self.execute(
                     session_id,
@@ -227,6 +228,7 @@ where
                         announce: None,
                         context: None,
                         client,
+                        prompter,
                     }),
                 )
                 .await
@@ -396,6 +398,7 @@ where
         // prompt against any control prompt racing the session's birth.
         if let Some(prompt) = request.prompt {
             let client = prompt.client;
+            let prompter = prompt.prompter;
             let (id, action) = prompt.into_action();
             self.execute_here(
                 session.id,
@@ -406,6 +409,7 @@ where
                     announce: None,
                     context: None,
                     client,
+                    prompter,
                 }),
             )
             .await

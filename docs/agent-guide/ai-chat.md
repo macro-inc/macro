@@ -231,8 +231,7 @@ agree to the request, grant it as the owner, then ask the agent to retry.
 
 ## Agents opening items for you
 
-With `enable-agent-navigation` (PostHog on the web and the harness; on in dev
-builds), an agent's program can open an item in the tab you typed the prompt
+An agent's program can open an item in the tab you typed the prompt
 in (`macro.ui.open`). It arrives in a new pane beside the agent's
 conversation (a new pane at the end when no pane shows it) and slides in from
 that side while the other panes glide aside; with reduced motion it only fades
@@ -268,7 +267,10 @@ channel message link and a settings page (refused; linked instead).
 **Agents** opens the new conversation list on phones,
 including GitHub PR state and links. Tap a row to open a full-screen conversation;
 the header back button returns to the previous screen, or Agents for a direct link.
-Portrait and landscape touch layouts have no conversation side panel. **Changes** opens a full-width,
+Narrow touch layouts have no docked conversation side panel. Above 720px,
+including unfolded Duo, selecting a session or legacy chat opens it in the
+right preview instead of a standalone split. The Agents sidebar stays left and can
+be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
 The mobile conversation list omits the desktop **Agents** and **Connections** controls. Use the Agents composer or global create menu to start
@@ -945,10 +947,7 @@ email, channel or task event adds **Open item**. Each code step has
 Runs recorded before this change have neither, and runs recorded with the
 removed tool or decision steps show their outcome without per-step detail.
 
-**Draft it** on a new routine writes code and Ask AI steps. Code steps are
-behind `enable-routine-code-steps` (PostHog, on in development builds): with it
-off, Draft it, the add-step box and the built-in templates write Ask AI steps
-only, and code steps a routine already has still show, run and change. The
+**Draft it** on a new routine writes code and Ask AI steps. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
 while the button shows **Drafting…**, at most two minutes): the request carries
 only the description and settings (time zone, model, decisions, code steps).
@@ -1053,8 +1052,7 @@ their full history, including tool cards, but nothing can be sent to them. The
 composer is replaced by a notice headed **Macro Chats are now Agents.**, the
 text **This chat is read-only. Continue it in Agents to keep going.**, and a
 **Continue in Agents** button that opens
-the new-conversation composer (or, without `enable-chat-v3-agents`, a new
-agent session) with the unsent draft **Continue this chat:** followed by a
+the new-conversation composer with the unsent draft **Continue this chat:** followed by a
 mention of the chat; no history is copied into it. A response that was
 already streaming when the chat opened shows **Stop** beside it; Ctrl+C also
 stops it. Pending email drafts render read-only with **Email not sent**, and
@@ -1183,13 +1181,10 @@ than treating it as approval or repeatedly sending the prompt.
 
 Automatic chat naming is admitted independently. If naming is denied or validation
 is unavailable, the successful chat continues with its existing/default title.
-Settings → Usage is visible for every plan. In production,
-`enable-ai-usage-billing` activates its controls and the AI usage-limit dialog;
-until then Usage shows the October 8, 2026 announcement and disabled controls.
-Dev and local remain active regardless of the flag.
+Settings → Usage is visible for every plan, with its controls and the AI
+usage-limit dialog active.
 Usage displays the current period as a **Monthly limit** percentage; its info
 button explains that AI agent chat and AI document editing count toward the limit.
-Plan allowance copy and comparisons still follow `enable-ai-usage-billing`.
 Model pickers have no usage multipliers. Normal paid-model access rules still
 apply. Backend enforcement and credit collection remain independent policies.
 
@@ -1465,7 +1460,8 @@ account the review uses answers yes, it submits the review with
 request”. The HTTP review decision endpoint requires direct user authentication;
 agent runs receive 403 for edits, submissions, and dismissals before their
 request body is decoded. The separate **DecideReview** chat tool keeps its
-existing user-prompted-turn checks. SDK operation
+existing user-prompted-turn checks, and refuses in a turn a program or a
+routine started. SDK operation
 activity reports request outcomes, without storing request arguments or response
 bodies. The execution journal retains source, status and final JSON/error;
 completed API writes are not rolled back after failure or cancellation.
@@ -1752,12 +1748,10 @@ supported edits and retry behavior.
 
 ## In channels
 
-Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
-the classic in-channel reply; with it, the same mention opens an **agent session** — a
+Mention `@Macro` in any channel message to open an **agent session** — a
 dedicated transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
 `@cursor` opens a session. Macro Coding Agent (`@coder`) is unavailable in mention
-suggestions. There is only ever one Macro entry in the mention menu; which of the
-two answers is the rollout's decision, not a second choice in the menu.
+suggestions. There is only ever one Macro entry in the mention menu.
 
 ## Agent sessions
 

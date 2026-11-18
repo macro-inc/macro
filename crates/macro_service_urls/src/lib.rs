@@ -782,9 +782,9 @@ service_url! {
 
 service_url! {
     /// TypeSafe API base, which serves the Jev decision models. TypeSafe's
-    /// host in every environment; override it to run against a stand-in.
-    /// Only `email_focus_worker` reads it so far: the other services still
-    /// use `jev`'s own constant.
+    /// host in every environment; override it to run against the model
+    /// stand-in of `crates/email_e2e`. Only `email_focus_worker` reads it
+    /// so far: the other services still use `jev`'s own constant.
     pub struct TypesafeApiUrl {
         local: "https://api.typesafe.ai",
         dev: "https://api.typesafe.ai",
@@ -820,7 +820,7 @@ service_url! {
 service_url! {
     /// Gemini API host, where the agent's model router sends GenerateContent
     /// requests. Google's host in every environment; override it to run
-    /// against a stand-in.
+    /// against `crates/model_emulator`.
     pub struct GoogleGenerativeAiApiUrl {
         local: "https://generativelanguage.googleapis.com",
         dev: "https://generativelanguage.googleapis.com",

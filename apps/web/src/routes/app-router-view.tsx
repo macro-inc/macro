@@ -30,6 +30,7 @@ import {
   splitContentFromLocation,
   upgradeLegacyPath,
 } from '@components/app/split-layout/split-router/legacy-route';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazy } from '@core/util/lazy';
@@ -518,7 +519,7 @@ export function AppRouterView() {
         }),
         stacked: isNativeMobilePlatform,
       })}
-      middleware={createAppSplitRouterMiddleware({ isTouchDevice })}
+      middleware={createAppSplitRouterMiddleware({ isTouchDevice, isMobile })}
       globalSearch={['referral_code']}
       defaultRoute={() => ({ matches: [{ id: baseRoute.id, params: {} }] })}
     >

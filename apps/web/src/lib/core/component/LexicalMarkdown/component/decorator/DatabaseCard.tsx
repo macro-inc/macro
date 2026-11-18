@@ -1,6 +1,4 @@
 import { DatabaseCardSkeleton } from '@app/features/block-database/component/DatabaseCardSkeleton';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableDatabases } from '@core/constant/featureFlags';
 import { lazy } from '@core/util/lazy';
 import {
   $convertCardToMention,
@@ -19,7 +17,6 @@ const DocumentDatabase = lazy(async () => ({
 
 /** Database cards use their own metadata and editor, never document previews. */
 export function DatabaseCard(props: DocumentCardDecoratorProps) {
-  const enabled = useFeatureFlag(enableDatabases);
   const wrapper = useContext(LexicalWrapperContext);
   const [collapsed, setCollapsed] = createSignal(false);
   const [params, setParams] = createSignal(props.blockParams ?? {});
@@ -65,10 +62,7 @@ export function DatabaseCard(props: DocumentCardDecoratorProps) {
     </div>
   );
   return (
-    <Show
-      when={enabled().enabled && !wrapper?.skipPreviewFetch}
-      fallback={placeholder()}
-    >
+    <Show when={!wrapper?.skipPreviewFetch} fallback={placeholder()}>
       <Suspense
         fallback={
           <DatabaseCardSkeleton name={props.documentName || 'Database'} />

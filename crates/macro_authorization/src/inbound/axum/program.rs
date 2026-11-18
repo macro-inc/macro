@@ -13,11 +13,19 @@ mod test;
 pub const CODE_EXECUTION_HEADER: &str = "x-macro-code-execution";
 
 /// Whether a request comes from an agent's program rather than a person in
-/// the app: a code-mode run, or a credential signed for an agent. A routine
-/// step running as its owner is not one, so routes that only ask a program
-/// to confirm (sending email, creating events) keep serving owner routines.
+/// the app: a credential signed for an agent, or a code-mode request whose
+/// credential signs no program at all. A routine step running as its owner
+/// (`dangerously_operate_as_user`, signed `routine_id` with no agent) is not
+/// one, even from a code step: the runtime marks every code step's request,
+/// so the signed claim decides, never the header alone. Routes that only ask
+/// a program to confirm (sending or scheduling email, creating events) keep
+/// serving owner routines.
 pub fn is_agent_run(attribution: CredentialAttribution, headers: &HeaderMap) -> bool {
-    attribution == CredentialAttribution::Agent || headers.contains_key(CODE_EXECUTION_HEADER)
+    match attribution {
+        CredentialAttribution::Agent => true,
+        CredentialAttribution::Routine => false,
+        CredentialAttribution::Person => headers.contains_key(CODE_EXECUTION_HEADER),
+    }
 }
 
 /// Whether any program sent the request: everything [`is_agent_run`] counts,

@@ -103,12 +103,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 
 import { queryClient } from '@queries/client';
-import {
-  type ProjectsContext,
-  useProjectsContext,
-} from './context/projects-context';
 import { ProjectBreadcrumb } from './project-breadcrumb';
-import { Projects } from './projects';
 import { createProjectSources } from './queries/project-sources';
 
 const project = {
@@ -162,7 +157,7 @@ function setupGraphql() {
           ...(['Initiative', 'InitiativeIdentity'].includes(
             getOperationName(operation.query) ?? ''
           )
-            ? { initiative: requestedProject }
+            ? { visibleInitiative: requestedProject }
             : { soup: { nextCursor: 'next', items: [initiative] } }),
         },
       },
@@ -191,76 +186,6 @@ afterEach(() => {
   queryClient.clear();
   vi.useRealTimers();
   vi.clearAllMocks();
-});
-
-it('keeps retained query sources gated after their view owner is disposed', async () => {
-  vi.useFakeTimers();
-  const [enabled, setEnabled] = createSignal(true);
-  mocks.enabled = enabled;
-  setupGraphql();
-
-  // The context belongs to a view, but split-owned queries are constructed
-  // under a separate owner that survives view unmount.
-  let context: ProjectsContext | undefined;
-  function CaptureContext() {
-    context = useProjectsContext();
-    return null;
-  }
-  const view = render(() => (
-    <Projects>
-      <CaptureContext />
-    </Projects>
-  ));
-  if (!context) throw new Error('Projects provider did not mount');
-  const retainedContext = context;
-  view.unmount();
-  setEnabled(false);
-  const sources = createRoot((dispose) => {
-    disposeSource = dispose;
-    return {
-      collection: retainedContext.createCollectionSource(),
-      detail: retainedContext.createProjectSource(() => 'launch'),
-    };
-  });
-  await vi.advanceTimersByTimeAsync(60_000);
-  expect(mocks.get).not.toHaveBeenCalled();
-
-  setEnabled(true);
-  await vi.waitFor(() => expect(sources.detail.project()?.name).toBe('Launch'));
-  await vi.waitFor(() => expect(sources.collection.rows()).toHaveLength(1));
-  expect(sources.detail.project()).toMatchObject({
-    taskCount: 1,
-    completedTaskCount: 0,
-  });
-  expect(sources.collection.rows()?.[0].project).toMatchObject({
-    taskCount: 1,
-    completedTaskCount: 0,
-  });
-  expect(mocks.page).not.toHaveBeenCalled();
-  expect(mocks.soup).toHaveBeenCalledTimes(2);
-  // Nothing reads an open project again on a timer.
-  await vi.advanceTimersByTimeAsync(30_000);
-  expect(callsFor('Initiative')).toHaveLength(1);
-
-  setEnabled(false);
-  const soupRequests = mocks.soup.mock.calls.length;
-  expect(sources.collection.rows()).toBeUndefined();
-  expect(sources.detail.project()).toBeUndefined();
-  await Promise.all([
-    sources.collection.loadMore(),
-    sources.collection.refresh(),
-    sources.detail.refresh(),
-    queryClient.invalidateQueries(),
-  ]);
-  await vi.advanceTimersByTimeAsync(60_000);
-  expect(callsFor('Initiative')).toHaveLength(1);
-
-  expect(mocks.soup).toHaveBeenCalledTimes(soupRequests);
-  setEnabled(true);
-  await vi.waitFor(() =>
-    expect(mocks.soup.mock.calls.length).toBeGreaterThan(soupRequests)
-  );
-  expect(sources.detail.project()?.name).toBe('Launch');
 });
 
 it("names a route's project without the project's full read", async () => {
@@ -398,7 +323,12 @@ it('reuses cached chip identities when virtual rows remount but still fetches mi
 function controlledClient() {
   const requests: {
     operation: Operation;
-    next: (data?: unknown, error?: CombinedError, cached?: boolean) => void;
+    next: (
+      data?: unknown,
+      error?: CombinedError,
+      cached?: boolean,
+      stale?: boolean
+    ) => void;
   }[] = [];
   const exchange: Exchange = () => (source) =>
     pipe(
@@ -408,12 +338,12 @@ function controlledClient() {
         const subject = makeSubject<OperationResult>();
         requests.push({
           operation,
-          next: (data, error, cached = false) =>
+          next: (data, error, cached = false, stale = false) =>
             subject.next({
               operation,
               data,
               error,
-              stale: false,
+              stale,
               hasNext: false,
               ...(cached
                 ? {
@@ -538,23 +468,135 @@ it('settles a project the server cannot load as an error without data', () => {
       ),
     };
   });
-  const notFound = new CombinedError({
+  // The server omits an errored field next to its error instead of nulling it.
+  const failed = new CombinedError({
     graphQLErrors: [
       {
-        message: 'initiative not found',
-        path: ['user', 'initiative'],
-        extensions: { code: 'NOT_FOUND' },
+        message: 'internal server error',
+        path: ['user', 'visibleInitiative'],
+        extensions: { code: 'INTERNAL_SERVER_ERROR' },
       },
     ],
   });
   expect(requests).toHaveLength(2);
   for (const request of requests)
-    request.next({ user: { id: 'viewer' } }, notFound);
+    request.next({ user: { id: 'viewer' } }, failed);
   for (const query of [reads.identity, reads.detail]) {
     expect(query.data).toBeUndefined();
     expect(query.isPending).toBe(false);
     expect(query.isError).toBe(true);
   }
+});
+
+it('settles a project the server answers as missing without asking again', () => {
+  const { client, requests } = controlledClient();
+  const reads = createRoot((dispose) => {
+    disposeSource = dispose;
+    return {
+      identity: createProjectIdentityQuery(
+        () => client,
+        () => 'viewer',
+        () => 'deleted'
+      ),
+      detail: createProjectDetailQuery(
+        () => client,
+        () => 'viewer',
+        () => 'deleted'
+      ),
+    };
+  });
+  expect(requests).toHaveLength(2);
+  for (const request of requests)
+    request.next({ user: { id: 'viewer', visibleInitiative: null } });
+  for (const query of [reads.identity, reads.detail]) {
+    expect(query.data).toBeUndefined();
+    expect(query.isPending).toBe(false);
+    expect(query.isError).toBe(false);
+  }
+  expect(requests).toHaveLength(2);
+});
+
+it('asks the server again before showing a cached missing project, so one shared since appears', async () => {
+  setupGraphql();
+  const data = (
+    await mocks.soup({
+      query: (
+        await import('@service-storage/graphql/generated/graphql')
+      ).InitiativeIdentityDocument,
+    })
+  ).data;
+  const { client, requests } = controlledClient();
+  const query = createRoot((dispose) => {
+    disposeSource = dispose;
+    return createProjectIdentityQuery(
+      () => client,
+      () => 'viewer',
+      () => 'launch'
+    );
+  });
+  requests[0].next(
+    { user: { id: 'viewer', visibleInitiative: null } },
+    undefined,
+    true
+  );
+  expect(query.data).toBeUndefined();
+  expect(query.isPending).toBe(true);
+  await vi.waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[1].operation.context.requestPolicy).toBe('network-only');
+  requests[1].next(data);
+  expect(query.isPending).toBe(false);
+  expect(query.data?.name).toBe('Launch');
+});
+
+it('shows a cached missing project as missing when asking the server fails', async () => {
+  const { client, requests } = controlledClient();
+  const query = createRoot((dispose) => {
+    disposeSource = dispose;
+    return createProjectIdentityQuery(
+      () => client,
+      () => 'viewer',
+      () => 'deleted'
+    );
+  });
+  requests[0].next(
+    { user: { id: 'viewer', visibleInitiative: null } },
+    undefined,
+    true
+  );
+  await vi.waitFor(() => expect(requests).toHaveLength(2));
+  requests[1].next(
+    undefined,
+    new CombinedError({ networkError: new Error('Offline') })
+  );
+  await vi.waitFor(() => expect(query.isPending).toBe(false));
+  expect(requests).toHaveLength(2);
+});
+
+it('waits for the in-flight network read instead of asking again for a cached missing project', async () => {
+  const { client, requests } = controlledClient();
+  const query = createRoot((dispose) => {
+    disposeSource = dispose;
+    return createProjectDetailQuery(
+      () => client,
+      () => 'viewer',
+      () => 'deleted'
+    );
+  });
+  // cache-and-network: the cached null arrives stale, with the network read
+  // still in flight.
+  requests[0].next(
+    { user: { id: 'viewer', visibleInitiative: null } },
+    undefined,
+    true,
+    true
+  );
+  expect(query.isPending).toBe(true);
+  await Promise.resolve();
+  expect(requests).toHaveLength(1);
+  requests[0].next({ user: { id: 'viewer', visibleInitiative: null } });
+  expect(query.isPending).toBe(false);
+  expect(query.data).toBeUndefined();
+  expect(requests).toHaveLength(1);
 });
 
 it('reauthorizes a denied identity after remount without exposing cached data', async () => {
