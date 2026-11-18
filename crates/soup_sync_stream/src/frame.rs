@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::request::LaneId;
+use crate::lane::{LaneId, LaneKind, Paging};
 use bytes::Bytes;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -16,6 +16,26 @@ use serde_json::{Map, Value};
     rename_all_fields = "camelCase"
 )]
 pub enum Frame {
+    /// A lane the stream runs, sent before anything else of the lane: how the
+    /// cache reads and writes its pages.
+    Lane {
+        /// The lane; also the key of its saved state in the cache.
+        lane: LaneId,
+        /// The query every page of the lane runs.
+        query: String,
+        /// The query's operation.
+        operation_name: String,
+        /// Where the pages keep their items.
+        paging: Paging,
+        /// What the cache does with the pages.
+        kind: LaneKind,
+        /// When the lane's pass started; the cache stores it as the lane's
+        /// watermark once the lane completes.
+        pass_started_at: String,
+        /// Stored by the cache once the lane completes.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        coverage: Option<Value>,
+    },
     /// One executed page.
     Page {
         /// The lane the page belongs to.
@@ -29,9 +49,11 @@ pub enum Frame {
         response: Value,
         /// How many items the page holds.
         items: u32,
-        /// What the lane runs next; `None` (`null`) when no page follows in
-        /// this lane: it completed, reached `maxItems`, or failed.
-        next_variables: Option<Map<String, Value>>,
+        /// What the client sends back to continue the lane after this page;
+        /// `None` (`null`) when the lane does not resume across streams or no
+        /// page follows in this lane: it completed, reached `maxItems`, or
+        /// failed.
+        resume: Option<Value>,
     },
     /// A lane finished.
     LaneDone {
@@ -83,7 +105,7 @@ pub enum EndReason {
     /// The stream sent its `maxPages`.
     MaxPages,
     /// The stream ran for its longest allowed time; lanes resume from their
-    /// last page's `nextVariables`.
+    /// last page's `resume`.
     Deadline,
     /// The stream itself failed (a frame could not be encoded).
     Error,

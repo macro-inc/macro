@@ -30,13 +30,14 @@ threads, pins, recents, notifications, folders, activity.
   `ANY_WRITE` to that mount) GraphQL API — the frontend's main read path for Home/Recent/
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
 - `src/api/graphql_soup/stream.rs`: `POST /soup/graphql/stream` (streamed
-  cache sync): runs paged Soup and calendar queries with the `/soup/graphql`
-  request context and writes NDJSON; 426 for a body whose sync protocol it
-  does not speak; one open stream per user per task (409)
+  cache sync): plans a pass's lanes from the client's saved lane state, runs
+  their paged Soup and calendar queries with the `/soup/graphql` request
+  context and writes NDJSON; 426 for a body whose sync protocol it does not
+  speak; one open stream per user per task (409)
   and at most `MAX_STREAMS_PER_TASK` open per task (503 with `Retry-After`).
   Open streams take turns on `PAGE_SLOTS` pages at once, so the number of
-  streams does not change what they ask of the database. Lane loop, turns
-  and wire format: `crates/soup_sync_stream`.
+  streams does not change what they ask of the database. Lanes, planning,
+  lane loop, turns and wire format: `crates/soup_sync_stream`.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.

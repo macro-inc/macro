@@ -1,217 +1,108 @@
 use super::*;
 use serde_json::json;
 
-const TASKS_QUERY: &str = "query SoupBackfillSyncTasks($input: SoupInput!) { user { id soup(input: $input) { items { __typename id } nextCursor } } }";
+fn now() -> DateTime<Utc> {
+    "2026-11-02T12:00:00Z".parse().unwrap()
+}
+
+fn parse(body: Value) -> Result<SyncPlan, RequestError> {
+    SyncPlan::from_json(body.to_string().as_bytes(), now())
+}
 
 #[test]
-fn accepts_soup_and_calendar_lanes() {
-    let body = json!({
-        "protocol": 1, "lanes": [
-            {
-                "id": "tasks",
-                "query": TASKS_QUERY,
-                "operationName": "SoupBackfillSyncTasks",
-                "variables": { "input": { "initial": { "limit": 500, "expand": false, "emailView": "ALL" } } },
-                "paging": "soup",
-                "maxItems": 1000
-            },
-            {
-                "id": "calendar-0",
-                "query": "query { user { id calendarOccurrences(input: $input) { nodes { id } hasNextPage endCursor } } }",
-                "variables": { "input": { "start": "2026-09-01T00:00:00Z", "end": "2026-11-01T00:00:00Z", "first": 500 } },
-                "paging": "calendar"
-            }
+fn accepts_a_pass_with_saved_lanes_and_calendar_coverage() {
+    let plan = parse(json!({
+        "protocol": 1,
+        "pass": "first",
+        "lanes": [
+            { "id": "tasks", "resume": { "cursor": "c1", "items": 500, "passStartedAt": "2026-11-02T11:00:00.000Z" } },
+            { "id": "calendar-near-0", "completedAt": "2026-11-01T00:00:00.000Z", "watermark": "2026-11-01T00:00:00.000Z" },
+            { "id": "a-lane-this-server-no-longer-runs" },
         ],
-        "maxPages": 20
-    });
-    let plan = SyncPlan::from_json(body.to_string().as_bytes()).unwrap();
-    assert_eq!(plan.lane_count(), 2);
+        "calendar": {
+            "timeZone": "Europe/Berlin",
+            "coverage": [{ "kind": "timed", "start": 0, "end": 1 }, { "kind": "allDay", "start": 0, "end": 1 }],
+        },
+        "completedSince": "2026-11-02T11:00:00.000Z",
+        "skipLanes": ["email-recent"],
+        "maxPages": 20,
+    }))
+    .unwrap();
+    assert_eq!(plan.pass, Pass::First);
+    assert_eq!(plan.saved_lanes, 3);
     assert_eq!(plan.max_pages, Some(20));
-    assert_eq!(plan.lanes[0].max_items, Some(1000));
-    let LanePaging::Soup { carried } = &plan.lanes[0].paging else {
-        panic!("tasks lane should page as soup");
-    };
-    assert_eq!(
-        Value::Object(carried.clone()),
-        json!({ "expand": false, "emailView": "ALL" })
-    );
-    assert!(matches!(plan.lanes[1].paging, LanePaging::Calendar { .. }));
-}
-
-#[test]
-fn soup_continuation_input_carries_only_present_fields() {
-    let body = json!({
-        "protocol": 1, "lanes": [{
-            "id": "email-recent",
-            "query": TASKS_QUERY,
-            "variables": { "input": { "continuation": { "cursor": "abc", "emailView": "ALL" } } },
-            "paging": "soup"
-        }]
-    });
-    let plan = SyncPlan::from_json(body.to_string().as_bytes()).unwrap();
-    let LanePaging::Soup { carried } = &plan.lanes[0].paging else {
-        panic!("lane should page as soup");
-    };
-    assert_eq!(
-        Value::Object(carried.clone()),
-        json!({ "emailView": "ALL" })
-    );
-}
-
-#[test]
-fn rejects_lane_ids_outside_the_pattern() {
-    for id in ["", "Tasks", "tasks_all", "tasks all", &"a".repeat(65)] {
-        let body = json!({
-            "protocol": 1, "lanes": [{ "id": id, "query": TASKS_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
-        });
-        let error = SyncPlan::from_json(body.to_string().as_bytes()).unwrap_err();
-        assert!(matches!(error, RequestError::Body(_)), "{id:?}: {error}");
-    }
-    let body = json!({
-        "protocol": 1, "lanes": [{ "id": "a".repeat(64), "query": TASKS_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
-    });
-    assert!(SyncPlan::from_json(body.to_string().as_bytes()).is_ok());
-}
-
-#[test]
-fn rejects_duplicate_lane_ids() {
-    let body = json!({
-        "protocol": 1, "lanes": [
-            { "id": "tasks", "query": TASKS_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" },
-            { "id": "tasks", "query": TASKS_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }
-        ]
-    });
-    let error = SyncPlan::from_json(body.to_string().as_bytes()).unwrap_err();
-    assert!(matches!(error, RequestError::DuplicateLane(lane) if lane.as_str() == "tasks"));
-}
-
-#[test]
-fn rejects_more_than_thirty_two_lanes() {
-    let lanes: Vec<Value> = (0..33)
-        .map(|index| {
-            json!({ "id": format!("lane-{index}"), "query": TASKS_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" })
-        })
-        .collect();
-    let error = SyncPlan::from_json(
-        json!({ "protocol": 1, "lanes": lanes })
-            .to_string()
-            .as_bytes(),
-    )
-    .unwrap_err();
-    assert!(matches!(error, RequestError::TooManyLanes(33)));
-}
-
-#[test]
-fn rejects_mutations_and_subscriptions() {
-    for (query, expected) in [
-        (
-            "mutation M($input: SoupInput!) { touch(input: $input) }",
-            OperationType::Mutation,
-        ),
-        (
-            "subscription S($input: SoupInput!) { soupUpdates(input: $input) { id } }",
-            OperationType::Subscription,
-        ),
-    ] {
-        let body = json!({
-            "protocol": 1, "lanes": [{ "id": "tasks", "query": query, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
-        });
-        let error = SyncPlan::from_json(body.to_string().as_bytes()).unwrap_err();
-        assert!(
-            matches!(error, RequestError::NotQuery { kind, .. } if kind == expected),
-            "{query}: {error}"
-        );
-    }
-}
-
-#[test]
-fn rejects_a_query_hidden_behind_another_operation_name() {
-    let query = "query Q { user { id } } mutation M { touch }";
-    let body = json!({
-        "protocol": 1, "lanes": [{ "id": "tasks", "query": query, "operationName": "M", "variables": { "input": { "initial": {} } }, "paging": "soup" }]
-    });
-    let error = SyncPlan::from_json(body.to_string().as_bytes()).unwrap_err();
-    assert!(matches!(
-        error,
-        RequestError::NotQuery {
-            kind: OperationType::Mutation,
-            ..
-        }
-    ));
-}
-
-#[test]
-fn rejects_unselected_operations() {
-    for (query, operation_name) in [
-        ("query Q { user { id } } query R { user { id } }", None),
-        (TASKS_QUERY, Some("Other")),
-        ("{ user { id } }", Some("Anonymous")),
-    ] {
-        let body = json!({
-            "protocol": 1, "lanes": [{ "id": "tasks", "query": query, "operationName": operation_name, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
-        });
-        let error = SyncPlan::from_json(body.to_string().as_bytes()).unwrap_err();
-        assert!(
-            matches!(error, RequestError::OperationNotSelected(_)),
-            "{query}: {error}"
-        );
-    }
-}
-
-#[test]
-fn rejects_unparsable_queries() {
-    let body = json!({
-        "protocol": 1, "lanes": [{ "id": "tasks", "query": "query { user { id }", "variables": { "input": { "initial": {} } }, "paging": "soup" }]
-    });
-    let error = SyncPlan::from_json(body.to_string().as_bytes()).unwrap_err();
-    assert!(matches!(error, RequestError::QueryParse { .. }));
-}
-
-#[test]
-fn rejects_lanes_without_a_pageable_input() {
-    for (variables, paging) in [
-        (json!({}), "soup"),
-        (json!({ "input": "initial" }), "soup"),
-        (json!({ "input": null }), "calendar"),
-    ] {
-        let body = json!({
-            "protocol": 1, "lanes": [{ "id": "tasks", "query": TASKS_QUERY, "variables": variables, "paging": paging }]
-        });
-        let error = SyncPlan::from_json(body.to_string().as_bytes()).unwrap_err();
-        assert!(matches!(error, RequestError::MissingInput(_)), "{error}");
-    }
-    for input in [
-        json!({}),
-        json!({ "initial": {}, "continuation": { "cursor": "abc" } }),
-        json!({ "first": 20 }),
-        json!({ "initial": 20 }),
-    ] {
-        let body = json!({
-            "protocol": 1, "lanes": [{ "id": "tasks", "query": TASKS_QUERY, "variables": { "input": input }, "paging": "soup" }]
-        });
-        let error = SyncPlan::from_json(body.to_string().as_bytes()).unwrap_err();
-        assert!(
-            matches!(error, RequestError::InvalidSoupInput(_)),
-            "{error}"
-        );
-    }
+    assert!(plan.lane_count() > 0);
 }
 
 #[test]
 fn rejects_malformed_bodies() {
     for body in [
-        "not json".to_owned(),
-        json!({ "protocol": 1 }).to_string(),
-        json!({ "protocol": "1", "lanes": [] }).to_string(),
-        json!({ "protocol": 1, "lanes": [{ "id": "tasks", "query": TASKS_QUERY, "variables": [], "paging": "soup" }] })
-            .to_string(),
-        json!({ "protocol": 1, "lanes": [{ "id": "tasks", "query": TASKS_QUERY, "variables": { "input": { "initial": {} } }, "paging": "grouped" }] })
-            .to_string(),
-        json!({ "protocol": 1, "lanes": [], "maxPages": -1 }).to_string(),
+        json!({ "protocol": 1 }),
+        json!({ "protocol": 1, "pass": "third" }),
+        json!({ "protocol": 1, "pass": "first", "lanes": [{ "id": "Tasks" }] }),
+        json!({ "protocol": 1, "pass": "first", "lanes": [{ "id": "tasks", "watermark": "yesterday" }] }),
+        json!({ "protocol": 1, "pass": "first", "lanes": [{ "id": "tasks", "completedAt": 5 }] }),
+        json!({ "protocol": 1, "pass": "first", "calendar": { "coverage": [] } }),
+        json!({ "protocol": 1, "pass": "first", "calendar": { "timeZone": "UTC", "coverage": [{ "kind": "weekly", "start": 0, "end": 1 }] } }),
+        json!({ "protocol": 1, "pass": "first", "completedSince": "soon" }),
+        json!({ "protocol": 1, "pass": "first", "skipLanes": ["Tasks"] }),
+        json!({ "protocol": 1, "pass": "first", "maxPages": -1 }),
     ] {
-        let error = SyncPlan::from_json(body.as_bytes()).unwrap_err();
+        let error = parse(body.clone()).unwrap_err();
         assert!(matches!(error, RequestError::Body(_)), "{body}: {error}");
     }
+    let error = SyncPlan::from_json(b"not json", now()).unwrap_err();
+    assert!(matches!(error, RequestError::Body(_)));
+}
+
+#[test]
+fn an_unknown_time_zone_plans_no_calendar_windows_and_the_rest_runs() {
+    let plan = parse(json!({
+        "protocol": 1, "pass": "first", "calendar": { "timeZone": "Mars/Olympus_Mons", "coverage": [] },
+    }))
+    .unwrap();
+    assert!(plan.lanes.iter().any(|lane| lane.id.as_str() == "tasks"));
+    assert!(
+        !plan
+            .lanes
+            .iter()
+            .any(|lane| lane.id.as_str().starts_with("calendar"))
+    );
+}
+
+#[test]
+fn rejects_duplicate_saved_lanes() {
+    let error = parse(json!({
+        "protocol": 1, "pass": "first", "lanes": [{ "id": "tasks" }, { "id": "tasks" }],
+    }))
+    .unwrap_err();
+    assert!(matches!(error, RequestError::DuplicateLane(lane) if lane.as_str() == "tasks"));
+}
+
+#[test]
+fn bounds_what_a_request_carries() {
+    let lanes = (0..=MAX_SAVED_LANES)
+        .map(|index| json!({ "id": format!("lane-{index}") }))
+        .collect::<Vec<_>>();
+    let error = parse(json!({ "protocol": 1, "pass": "first", "lanes": lanes })).unwrap_err();
+    assert!(
+        matches!(error, RequestError::TooManySavedLanes(count) if count == MAX_SAVED_LANES + 1)
+    );
+
+    let skipped = (0..=MAX_SAVED_LANES)
+        .map(|index| format!("lane-{index}"))
+        .collect::<Vec<_>>();
+    let error = parse(json!({ "protocol": 1, "pass": "first", "skipLanes": skipped })).unwrap_err();
+    assert!(matches!(error, RequestError::TooManySkippedLanes(_)));
+
+    let coverage = (0..=MAX_COVERAGE_SPANS)
+        .map(|index| json!({ "kind": "timed", "start": index, "end": index + 1 }))
+        .collect::<Vec<_>>();
+    let error = parse(json!({
+        "protocol": 1, "pass": "first", "calendar": { "timeZone": "UTC", "coverage": coverage },
+    }))
+    .unwrap_err();
+    assert!(matches!(error, RequestError::TooManyCoverageSpans(_)));
 }
 
 #[test]
@@ -221,24 +112,24 @@ fn refuses_a_body_without_a_protocol_or_outside_the_versions() {
         (Some(json!(0)), Some(0)),
         (Some(json!(2)), Some(2)),
     ] {
-        let mut body = json!({
-            "lanes": [{ "id": "tasks", "query": TASKS_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
-        });
+        let mut body = json!({ "pass": "first" });
         if let Some(protocol) = protocol {
             body["protocol"] = protocol;
         }
-        let error = SyncPlan::from_json(body.to_string().as_bytes()).unwrap_err();
+        let error = parse(body.clone()).unwrap_err();
         assert!(
             matches!(error, RequestError::UnsupportedProtocol(requested) if requested == expected),
             "{body}: {error}"
         );
     }
+    let error = parse(json!({ "protocol": "1", "pass": "first" })).unwrap_err();
+    assert!(matches!(error, RequestError::Body(_)));
 }
 
 #[test]
 fn checks_the_protocol_before_the_rest_of_the_body() {
-    let body = json!({ "protocol": 2, "lanes": "a shape this server does not know" });
-    let error = SyncPlan::from_json(body.to_string().as_bytes()).unwrap_err();
+    let error =
+        parse(json!({ "protocol": 2, "lanes": "a shape this server does not know" })).unwrap_err();
     assert!(matches!(error, RequestError::UnsupportedProtocol(Some(2))));
     assert_eq!(
         error.to_string(),
@@ -248,7 +139,7 @@ fn checks_the_protocol_before_the_rest_of_the_body() {
 
 #[test]
 fn keeps_the_protocol_it_accepted() {
-    let body = json!({ "protocol": 1, "lanes": [] });
-    let plan = SyncPlan::from_json(body.to_string().as_bytes()).unwrap();
+    let plan = parse(json!({ "protocol": 1, "pass": "second" })).unwrap();
     assert_eq!(plan.protocol, 1);
+    assert_eq!(plan.pass, Pass::Second);
 }

@@ -1,0 +1,12 @@
+query SyncContacts($input: ContactsInput!) {
+  user {
+    id
+    soup: contacts(input: $input) {
+      items {
+        __typename
+        id
+      }
+      nextCursor
+    }
+  }
+}

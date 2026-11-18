@@ -4,7 +4,9 @@
 mod test;
 
 use crate::frame::{EndReason, Frame, LaneDoneReason};
-use crate::request::{INPUT_VARIABLE, LaneId, LanePaging, LanePlan, SyncPlan};
+use crate::lane::{INPUT_VARIABLE, LaneId, LanePaging, LanePlan};
+use crate::plan::resume_checkpoint;
+use crate::request::SyncPlan;
 use async_graphql::{Request, Variables};
 use bytes::Bytes;
 use futures::{Stream, StreamExt as _, stream};
@@ -212,6 +214,10 @@ impl<E: PageExecutor> Runner<E> {
     }
 
     async fn run_page(&mut self, mut lane: LaneRun, waited: Duration) {
+        if !lane.declared {
+            lane.declared = true;
+            self.pending.push_back(lane.declaration());
+        }
         let span = tracing::info_span!(
             parent: &self.telemetry.span,
             "soup.sync_stream.page",
@@ -257,23 +263,25 @@ impl<E: PageExecutor> Runner<E> {
                     variables,
                     response,
                     items,
-                    next_variables: None,
+                    resume: None,
                 });
                 return self.fail(&span, lane.plan.id, failure);
             }
         };
         span.record("sync.items", i64::from(items));
         lane.items = lane.items.saturating_add(items);
-        let next = match cursor {
-            None => PageNext::Done(LaneDoneReason::Complete),
-            Some(_) if lane.plan.max_items.is_some_and(|max| lane.items >= max) => {
-                PageNext::Done(LaneDoneReason::MaxItems)
+        let pass_items = lane.plan.items_before.saturating_add(lane.items);
+        let (next, resume) = match cursor {
+            None => (PageNext::Done(LaneDoneReason::Complete), None),
+            Some(_) if lane.plan.max_items.is_some_and(|max| pass_items >= max) => {
+                (PageNext::Done(LaneDoneReason::MaxItems), None)
             }
-            Some(cursor) => PageNext::Continue(lane.next_variables(cursor)),
-        };
-        let next_variables = match &next {
-            PageNext::Continue(variables) => Some(variables.clone()),
-            PageNext::Done(_) => None,
+            Some(cursor) => {
+                let resume = (lane.plan.resumable
+                    && matches!(lane.plan.paging, LanePaging::Soup { .. }))
+                .then(|| resume_checkpoint(&cursor, pass_items, &lane.plan.pass_started_at));
+                (PageNext::Continue(lane.next_variables(cursor)), resume)
+            }
         };
         self.pending.push_back(Frame::Page {
             lane: lane.plan.id.clone(),
@@ -281,7 +289,7 @@ impl<E: PageExecutor> Runner<E> {
             variables,
             response,
             items,
-            next_variables,
+            resume,
         });
         match next {
             PageNext::Continue(variables) => {
@@ -323,6 +331,8 @@ enum PageNext {
 /// A lane in progress.
 struct LaneRun {
     plan: LanePlan,
+    /// Its `lane` line was sent.
+    declared: bool,
     /// What the lane's next page runs.
     variables: Map<String, Value>,
     pages: u32,
@@ -342,18 +352,30 @@ impl LaneRun {
         Self {
             variables: plan.variables.clone(),
             plan,
+            declared: false,
             pages: 0,
             items: 0,
             seen_cursors,
         }
     }
 
-    fn request(&self) -> Request {
-        let mut request = Request::new(self.plan.query.clone())
-            .variables(Variables::from_json(Value::Object(self.variables.clone())));
-        if let Some(name) = &self.plan.operation_name {
-            request = request.operation_name(name.clone());
+    /// The lane's `lane` line.
+    fn declaration(&self) -> Frame {
+        Frame::Lane {
+            lane: self.plan.id.clone(),
+            query: self.plan.query.to_owned(),
+            operation_name: self.plan.operation_name.to_owned(),
+            paging: self.plan.paging.wire(),
+            kind: self.plan.kind.clone(),
+            pass_started_at: self.plan.pass_started_at.clone(),
+            coverage: self.plan.coverage.clone(),
         }
+    }
+
+    fn request(&self) -> Request {
+        let mut request = Request::new(self.plan.query)
+            .variables(Variables::from_json(Value::Object(self.variables.clone())))
+            .operation_name(self.plan.operation_name);
         request.set_parsed_query(self.plan.document.clone());
         request
     }
@@ -471,6 +493,8 @@ impl StreamTelemetry {
         let span = tracing::info_span!(
             "soup.sync_stream",
             "sync.protocol" = i64::from(plan.protocol),
+            "sync.pass" = <&'static str>::from(plan.pass),
+            "sync.saved_lanes" = span_number(plan.saved_lanes),
             "sync.lane_count" = span_number(plan.lanes.len()),
             "sync.max_pages" = plan.max_pages.map(i64::from),
             "sync.pages" = Empty,
@@ -500,7 +524,7 @@ impl StreamTelemetry {
                 self.pages = self.pages.saturating_add(1);
                 self.items = self.items.saturating_add(u64::from(*items));
             }
-            Frame::LaneDone { .. } | Frame::Waiting => {}
+            Frame::Lane { .. } | Frame::LaneDone { .. } | Frame::Waiting => {}
             Frame::LaneError { lane, message } => {
                 self.failed_lanes = self.failed_lanes.saturating_add(1);
                 self.span.record("sync.last_failed_lane", lane.as_str());

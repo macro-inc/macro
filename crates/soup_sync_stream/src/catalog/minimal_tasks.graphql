@@ -1,0 +1,77 @@
+query SoupBackfillSyncTasks($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        cacheProjection
+        ... on GraphqlSoupDocument {
+          name
+          ownerId
+          fileType
+          projectId
+          createdAt
+          updatedAt
+          viewedAt
+          deletedAt
+          isFavorited
+          subType {
+            __typename
+            ... on GraphqlTaskSubType {
+              isCompleted
+            }
+          }
+          properties {
+            id
+            propertyDefinitionId
+            value {
+              ...SoupPropertyValueFields
+            }
+          }
+          notifications {
+            __typename
+            id
+            entityId
+            entityType
+            state
+          }
+        }
+      }
+      nextCursor
+    }
+  }
+}
+
+fragment SoupPropertyValueFields on GraphqlPropertyValue {
+  __typename
+  ... on GraphqlBooleanPropertyValue {
+    boolValue: value
+  }
+  ... on GraphqlNumberPropertyValue {
+    numberValue: value
+  }
+  ... on GraphqlStringPropertyValue {
+    stringValue: value
+  }
+  ... on GraphqlDatePropertyValue {
+    dateValue: value
+  }
+  ... on GraphqlDateRangePropertyValue {
+    rangeStart: start
+    rangeEnd: end
+  }
+  ... on GraphqlSelectOptionPropertyValue {
+    optionIds
+  }
+  ... on GraphqlEntityReferencePropertyValue {
+    references {
+      entityId
+      entityType
+      specificMessageId
+    }
+  }
+  ... on GraphqlLinkPropertyValue {
+    urls
+  }
+}

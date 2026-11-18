@@ -1,0 +1,28 @@
+query CrmContacts($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        ...GraphqlCrmContactFields
+      }
+      nextCursor
+    }
+  }
+}
+
+fragment GraphqlCrmContactFields on GraphqlSoupCrmContact {
+  __typename
+  id
+  contactTeamId: teamId
+  contactCompanyId: parentCompanyId
+  contactCompanyName: parentCompanyName
+  contactEmail: emailAddress
+  crmContactName: name
+  hidden
+  firstInteraction
+  lastInteraction
+  createdAt
+  updatedAt
+  viewedAt
+}

@@ -1,6 +1,7 @@
-//! `POST /soup/graphql/stream`: the streamed cache sync. The lane loop and
-//! wire format live in `crates/soup_sync_stream`; this adapter authenticates,
-//! answers a body of a protocol it does not speak with 426,
+//! `POST /soup/graphql/stream`: the streamed cache sync. Lane planning, the
+//! lane loop and the wire format live in `crates/soup_sync_stream`; this
+//! adapter authenticates, answers a body of a protocol it does not speak with
+//! 426,
 //! limits each user to one open stream and each task to
 //! [`MAX_STREAMS_PER_TASK`] open streams that take turns on [`PAGE_SLOTS`]
 //! pages at once, and runs every page through the Soup schema with the same
@@ -75,12 +76,20 @@ pub(super) async fn sync_stream_handler(
             .into_response();
     };
     // The message echoes only the caller's own request; it is not logged.
-    let plan = match SyncPlan::from_json(&body) {
+    let plan = match SyncPlan::from_json(&body, chrono::Utc::now()) {
         Ok(plan) => plan,
         // The client's cache engine speaks another protocol: it cannot sync
         // through this server and pages instead.
         Err(error @ RequestError::UnsupportedProtocol(_)) => {
             return (StatusCode::UPGRADE_REQUIRED, error.to_string()).into_response();
+        }
+        Err(error @ RequestError::Catalog { .. }) => {
+            tracing::error!(error = %error, "soup sync stream lane catalog is invalid");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "the server could not plan the Soup sync stream",
+            )
+                .into_response();
         }
         Err(error) => return (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
     };

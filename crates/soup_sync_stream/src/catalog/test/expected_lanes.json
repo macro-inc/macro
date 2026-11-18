@@ -1,0 +1,3568 @@
+{
+ "first": [
+  {
+   "id": "contacts",
+   "operationName": "SyncContacts",
+   "input": {
+    "limit": 500
+   },
+   "updatedSince": {
+    "limit": 500,
+    "filters": {
+     "documentFilter": {
+      "literal": {
+       "updatedAt": {
+        "gte": "2026-10-01T00:00:00.000Z"
+       }
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "updatedAt": {
+        "gte": "2026-10-01T00:00:00.000Z"
+       }
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "updatedAt": {
+        "gte": "2026-10-01T00:00:00.000Z"
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "or": {
+        "left": {
+         "literal": {
+          "updatedAt": {
+           "gte": "2026-10-01T00:00:00.000Z"
+          }
+         }
+        },
+        "right": {
+         "literal": {
+          "viewedAt": {
+           "gte": "2026-10-01T00:00:00.000Z"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": null,
+   "coverage": {
+    "entity": "contact",
+    "scope": "all"
+   },
+   "restartOnRun": true
+  },
+  {
+   "id": "channels",
+   "operationName": "SoupBackfillSyncChannels",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "id": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": null,
+   "coverage": {
+    "entity": "channel",
+    "scope": "all"
+   },
+   "restartOnRun": true
+  },
+  {
+   "id": "tasks",
+   "operationName": "SoupBackfillSyncTasks",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "subType": "TASK"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "subType": "TASK"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": null,
+   "coverage": {
+    "entity": "task",
+    "scope": "all"
+   },
+   "restartOnRun": false
+  },
+  {
+   "id": "task-projects",
+   "operationName": "SoupBackfill",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "VIEWED_UPDATED",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "initiativeFilter": {
+      "literal": {
+       "include": true
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "VIEWED_UPDATED",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "id": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "initiativeFilter": {
+      "literal": {
+       "include": true
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": null,
+   "coverage": {
+    "entity": "initiative",
+    "scope": "all"
+   },
+   "restartOnRun": false
+  },
+  {
+   "id": "email-recent",
+   "operationName": "SoupMailBackfill",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "updatedAt": {
+         "gte": "2026-09-03T12:00:00.000Z"
+        }
+       }
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "id": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "updatedAt": {
+           "gte": "2026-09-03T12:00:00.000Z"
+          }
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "id": "email-shared",
+   "operationName": "SoupMailBackfill",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "shared": "ONLY"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "and": {
+            "left": {
+             "literal": {
+              "importance": true
+             }
+            },
+            "right": {
+             "literal": {
+              "updatedAt": {
+               "gte": "2026-08-04T12:00:00.000Z"
+              }
+             }
+            }
+           }
+          },
+          "right": {
+           "and": {
+            "left": {
+             "literal": {
+              "importance": false
+             }
+            },
+            "right": {
+             "literal": {
+              "updatedAt": {
+               "gte": "2026-10-03T12:00:00.000Z"
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "id": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "and": {
+          "left": {
+           "literal": {
+            "shared": "ONLY"
+           }
+          },
+          "right": {
+           "or": {
+            "left": {
+             "and": {
+              "left": {
+               "literal": {
+                "importance": true
+               }
+              },
+              "right": {
+               "literal": {
+                "updatedAt": {
+                 "gte": "2026-08-04T12:00:00.000Z"
+                }
+               }
+              }
+             }
+            },
+            "right": {
+             "and": {
+              "left": {
+               "literal": {
+                "importance": false
+               }
+              },
+              "right": {
+               "literal": {
+                "updatedAt": {
+                 "gte": "2026-10-03T12:00:00.000Z"
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": true
+  },
+  {
+   "id": "documents-recent",
+   "operationName": "SoupBackfillSyncDocuments",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "VIEWED_UPDATED",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "not": {
+       "literal": {
+        "subType": "TASK"
+       }
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "VIEWED_UPDATED",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "not": {
+         "literal": {
+          "subType": "TASK"
+         }
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": 1000,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "calendar": "calendar-near",
+   "months": 2
+  },
+  {
+   "id": "tasks-ids",
+   "operationName": "SoupSyncTaskIds",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "subType": "TASK"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "subType": "TASK"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "membership",
+    "scopes": [
+     "tasks"
+    ]
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "id": "task-projects-ids",
+   "operationName": "SoupSyncTaskProjectIds",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "initiativeFilter": {
+      "literal": {
+       "include": true
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "id": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "initiativeFilter": {
+      "literal": {
+       "include": true
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "membership",
+    "scopes": [
+     "task-projects"
+    ]
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "id": "contacts-ids",
+   "operationName": "SyncContactIds",
+   "input": {
+    "limit": 500
+   },
+   "updatedSince": {
+    "limit": 500,
+    "filters": {
+     "documentFilter": {
+      "literal": {
+       "updatedAt": {
+        "gte": "2026-10-01T00:00:00.000Z"
+       }
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "updatedAt": {
+        "gte": "2026-10-01T00:00:00.000Z"
+       }
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "updatedAt": {
+        "gte": "2026-10-01T00:00:00.000Z"
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "or": {
+        "left": {
+         "literal": {
+          "updatedAt": {
+           "gte": "2026-10-01T00:00:00.000Z"
+          }
+         }
+        },
+        "right": {
+         "literal": {
+          "viewedAt": {
+           "gte": "2026-10-01T00:00:00.000Z"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "membership",
+    "scopes": [
+     "contacts"
+    ]
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "id": "channels-ids",
+   "operationName": "SoupSyncChannelIds",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "id": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "membership",
+    "scopes": [
+     "channels"
+    ]
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "id": "documents-ids",
+   "operationName": "SoupSyncDocumentIds",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "not": {
+       "literal": {
+        "subType": "TASK"
+       }
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "not": {
+         "literal": {
+          "subType": "TASK"
+         }
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "membership",
+    "scopes": [
+     "documents-recent",
+     "documents-rest"
+    ]
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "id": "email-shared-ids",
+   "operationName": "SoupSyncSharedEmailIds",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "shared": "ONLY"
+       }
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "CREATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "id": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "shared": "ONLY"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "membership",
+    "scopes": [
+     "email-shared"
+    ]
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": false
+  }
+ ],
+ "second": [
+  {
+   "id": "crm-contacts",
+   "operationName": "CrmContacts",
+   "input": {
+    "limit": 500,
+    "sortMethod": "UPDATED_AT",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmContactFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "hidden": false
+        }
+       },
+       "right": {
+        "literal": {
+         "include": true
+        }
+       }
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "sortMethod": "UPDATED_AT",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "id": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmContactFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "hidden": false
+        }
+       },
+       "right": {
+        "literal": {
+         "include": true
+        }
+       }
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "id": "core-rest",
+   "operationName": "SoupBackfill",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "VIEWED_UPDATED",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "VIEWED_UPDATED",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "id": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "updatedAt": {
+        "gte": "2026-10-01T00:00:00.000Z"
+       }
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "updatedAt": {
+        "gte": "2026-10-01T00:00:00.000Z"
+       }
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "id": "documents-rest",
+   "operationName": "SoupBackfillSyncDocuments",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "VIEWED_UPDATED",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "not": {
+       "literal": {
+        "subType": "TASK"
+       }
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "VIEWED_UPDATED",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "not": {
+         "literal": {
+          "subType": "TASK"
+         }
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": null,
+   "coverage": {
+    "entity": "document",
+    "scope": "all"
+   },
+   "restartOnRun": false
+  },
+  {
+   "calendar": "calendar-far",
+   "months": 12
+  },
+  {
+   "id": "email-older",
+   "operationName": "SoupMailBackfill",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "updatedAt": {
+         "gte": "2025-11-02T12:00:00.000Z"
+        }
+       }
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "id": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "updatedAt": {
+           "gte": "2025-11-02T12:00:00.000Z"
+          }
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": 10000,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "id": "tasks-details",
+   "operationName": "SoupBackfill",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "subType": "TASK"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "subType": "TASK"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "id": "documents-details",
+   "operationName": "SoupBackfill",
+   "input": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "VIEWED_UPDATED",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "not": {
+       "literal": {
+        "subType": "TASK"
+       }
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "threadId": "00000000-0000-0000-0000-000000000000"
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 500,
+    "expand": true,
+    "sortMethod": "VIEWED_UPDATED",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "not": {
+         "literal": {
+          "subType": "TASK"
+         }
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "threadId": "00000000-0000-0000-0000-000000000000"
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": 1000,
+   "coverage": null,
+   "restartOnRun": false
+  },
+  {
+   "id": "email-content",
+   "operationName": "SoupBackfill",
+   "input": {
+    "limit": 200,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "projectFilter": {
+      "literal": {
+       "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "chatFilter": {
+      "literal": {
+       "chatId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "literal": {
+        "updatedAt": {
+         "gte": "2026-10-03T12:00:00.000Z"
+        }
+       }
+      }
+     }
+    }
+   },
+   "updatedSince": {
+    "limit": 200,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "emailView": "ALL",
+    "filters": {
+     "calendarEventFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "documentFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "id": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "projectFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "projectIdSelf": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "chatFilter": {
+      "and": {
+       "left": {
+        "literal": {
+         "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+       },
+       "right": {
+        "literal": {
+         "updatedAt": {
+          "gte": "2026-10-01T00:00:00.000Z"
+         }
+        }
+       }
+      }
+     },
+     "channelFilter": {
+      "literal": {
+       "channelId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "channelThreadFilter": {
+      "literal": {
+       "threadId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "callFilter": {
+      "literal": {
+       "callId": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "crmCompanyFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "foreignEntityFilter": {
+      "literal": {
+       "id": "00000000-0000-0000-0000-000000000000"
+      }
+     },
+     "emailFilter": {
+      "tree": {
+       "and": {
+        "left": {
+         "literal": {
+          "updatedAt": {
+           "gte": "2026-10-03T12:00:00.000Z"
+          }
+         }
+        },
+        "right": {
+         "or": {
+          "left": {
+           "literal": {
+            "updatedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          },
+          "right": {
+           "literal": {
+            "viewedAt": {
+             "gte": "2026-10-01T00:00:00.000Z"
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "kind": {
+    "kind": "hydrate"
+   },
+   "maxItems": null,
+   "coverage": null,
+   "restartOnRun": false
+  }
+ ]
+}

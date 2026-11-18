@@ -1,4 +1,5 @@
 use super::*;
+use crate::calendar::{CalendarSpan, SpanKind};
 use serde_json::json;
 
 #[test]
@@ -7,19 +8,23 @@ fn encodes_each_frame_as_one_ndjson_line() {
     let Value::Object(variables) = json!({ "input": { "initial": { "limit": 2 } } }) else {
         panic!("variables literal is an object");
     };
-    let Value::Object(next_variables) =
-        json!({ "input": { "continuation": { "cursor": "c1\nc2" } } })
-    else {
-        panic!("next variables literal is an object");
-    };
     let frames = [
+        Frame::Lane {
+            lane: lane.clone(),
+            query: "query Tasks {\n  user { id }\n}".to_owned(),
+            operation_name: "Tasks".to_owned(),
+            paging: Paging::Soup,
+            kind: LaneKind::Hydrate,
+            pass_started_at: "2026-11-02T12:00:00.000Z".to_owned(),
+            coverage: Some(json!({ "entity": "task", "scope": "all" })),
+        },
         Frame::Page {
             lane: lane.clone(),
             page: 0,
             variables,
             response: json!({ "data": { "user": { "soup": { "nextCursor": "c1\nc2" } } } }),
             items: 2,
-            next_variables: Some(next_variables),
+            resume: Some(json!({ "cursor": "c1\nc2", "items": 2 })),
         },
         Frame::LaneDone {
             lane: lane.clone(),
@@ -42,7 +47,8 @@ fn encodes_each_frame_as_one_ndjson_line() {
     assert_eq!(
         lines,
         [
-            "{\"type\":\"page\",\"lane\":\"tasks\",\"page\":0,\"variables\":{\"input\":{\"initial\":{\"limit\":2}}},\"response\":{\"data\":{\"user\":{\"soup\":{\"nextCursor\":\"c1\\nc2\"}}}},\"items\":2,\"nextVariables\":{\"input\":{\"continuation\":{\"cursor\":\"c1\\nc2\"}}}}\n",
+            "{\"type\":\"lane\",\"lane\":\"tasks\",\"query\":\"query Tasks {\\n  user { id }\\n}\",\"operationName\":\"Tasks\",\"paging\":\"soup\",\"kind\":{\"kind\":\"hydrate\"},\"passStartedAt\":\"2026-11-02T12:00:00.000Z\",\"coverage\":{\"entity\":\"task\",\"scope\":\"all\"}}\n",
+            "{\"type\":\"page\",\"lane\":\"tasks\",\"page\":0,\"variables\":{\"input\":{\"initial\":{\"limit\":2}}},\"response\":{\"data\":{\"user\":{\"soup\":{\"nextCursor\":\"c1\\nc2\"}}}},\"items\":2,\"resume\":{\"cursor\":\"c1\\nc2\",\"items\":2}}\n",
             "{\"type\":\"laneDone\",\"lane\":\"tasks\",\"pages\":12,\"items\":5800,\"reason\":\"maxItems\"}\n",
             "{\"type\":\"laneError\",\"lane\":\"tasks\",\"message\":\"page response has GraphQL errors\"}\n",
             "{\"type\":\"end\",\"reason\":\"maxPages\"}\n",
@@ -51,17 +57,40 @@ fn encodes_each_frame_as_one_ndjson_line() {
 }
 
 #[test]
-fn a_finished_lane_page_sends_null_next_variables() {
+fn a_calendar_lane_declares_its_coverage_and_no_lane_coverage() {
+    let frame = Frame::Lane {
+        lane: LaneId::try_from("calendar-near-0".to_owned()).unwrap(),
+        query: "query CalendarOccurrences { user { id } }".to_owned(),
+        operation_name: "CalendarOccurrences".to_owned(),
+        paging: Paging::Calendar,
+        kind: LaneKind::Calendar {
+            coverage: vec![CalendarSpan {
+                kind: SpanKind::Timed,
+                start: 0,
+                end: 86_400_000,
+            }],
+        },
+        pass_started_at: "2026-11-02T12:00:00.000Z".to_owned(),
+        coverage: None,
+    };
+    assert_eq!(
+        frame.to_line().unwrap().as_ref(),
+        b"{\"type\":\"lane\",\"lane\":\"calendar-near-0\",\"query\":\"query CalendarOccurrences { user { id } }\",\"operationName\":\"CalendarOccurrences\",\"paging\":\"calendar\",\"kind\":{\"kind\":\"calendar\",\"coverage\":[{\"kind\":\"timed\",\"start\":0,\"end\":86400000}]},\"passStartedAt\":\"2026-11-02T12:00:00.000Z\"}\n"
+    );
+}
+
+#[test]
+fn a_page_with_nothing_to_resume_sends_null() {
     let frame = Frame::Page {
         lane: LaneId::try_from("tasks".to_owned()).unwrap(),
         page: 3,
         variables: Map::new(),
         response: json!({ "data": null }),
         items: 0,
-        next_variables: None,
+        resume: None,
     };
     assert_eq!(
         frame.to_line().unwrap().as_ref(),
-        b"{\"type\":\"page\",\"lane\":\"tasks\",\"page\":3,\"variables\":{},\"response\":{\"data\":null},\"items\":0,\"nextVariables\":null}\n"
+        b"{\"type\":\"page\",\"lane\":\"tasks\",\"page\":3,\"variables\":{},\"response\":{\"data\":null},\"items\":0,\"resume\":null}\n"
     );
 }
