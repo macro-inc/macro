@@ -345,6 +345,8 @@ fn searchable_text_leaves_out_what_cards_and_lines_keep_behind_a_disclosure() {
         notice: None,
     });
 
+    // The view reported an error beside its decoded content, so the transcript
+    // shows only a failed card.
     assert_eq!(
         message.searchable_text(),
         [
@@ -352,7 +354,6 @@ fn searchable_text_leaves_out_what_cards_and_lines_keep_behind_a_disclosure() {
             "Launch notes",
             "GitHub",
             "test-model",
-            "Rollout is on track",
         ]
         .join("\n")
     );

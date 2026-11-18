@@ -12,7 +12,7 @@ use serde_json::Value;
 use super::{
     AnsweredField, AnsweredValue, Control, ControlOutcome, ElicitationOutcome,
     ElicitationPropertySchema, ElicitationRequest, ElicitationSchema, FoldedMessage, MessagePart,
-    PermissionOutcome, StopReason, SubagentResult, ToolDetail, UserToolOutcome,
+    PermissionOutcome, StopReason, SubagentResult, ToolDetail, ToolStatus, UserToolOutcome,
 };
 
 #[cfg(test)]
@@ -118,12 +118,17 @@ impl SearchText {
             // The file's name is what a person would recognize and search
             // for; its static file URL is opaque and would only add noise.
             MessagePart::Attachment { name, .. } => self.push(name),
-            MessagePart::ToolUse { name, detail, .. } => match self.scope {
+            MessagePart::ToolUse {
+                name,
+                detail,
+                status,
+                ..
+            } => match self.scope {
                 TextScope::Readable => {
                     self.push(name.display());
                     self.tool(detail);
                 }
-                TextScope::Shown => self.shown_tool(detail),
+                TextScope::Shown => self.shown_tool(detail, *status),
             },
             // The resolved row words the outcome from the option's kind, never
             // its name, so the name is not shown.
@@ -208,7 +213,7 @@ impl SearchText {
     /// The text a collapsed transcript shows for a tool call. Calls grouped
     /// under "Used N tools" show none; the ungrouped kinds show their title,
     /// subject, or view.
-    fn shown_tool(&mut self, detail: &ToolDetail) {
+    fn shown_tool(&mut self, detail: &ToolDetail, status: ToolStatus) {
         match detail {
             ToolDetail::Subagent {
                 title, agent_type, ..
@@ -219,9 +224,13 @@ impl SearchText {
                 }
             }
             ToolDetail::UserTool { input, .. } => self.draft_heading(input),
-            // A failed view shows only that it failed.
-            ToolDetail::View { view, .. } => {
-                if let Some(view) = view {
+            // A failed view, by status or by an error beside a decoded view,
+            // shows only that it failed.
+            ToolDetail::View { view, error } => {
+                if let Some(view) = view
+                    && error.is_none()
+                    && status != ToolStatus::Failed
+                {
                     self.view(view);
                 }
             }
