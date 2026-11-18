@@ -13,6 +13,10 @@ vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
 vi.mock('@service-storage/crm-contacts', () => ({
   invalidateCachedCrmContacts: vi.fn(async () => undefined),
 }));
+const refreshGraphqlLists = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('@queries/soup/graphql/active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: refreshGraphqlLists,
+}));
 
 import {
   useCreateCompanyMutation,
@@ -30,6 +34,7 @@ let client: QueryClient;
 
 beforeEach(() => {
   track.mockReset();
+  refreshGraphqlLists.mockClear();
   storage.createCompany.mockReset();
   storage.createContact.mockReset();
   storage.setCompanyName.mockReset();
@@ -81,6 +86,24 @@ it('reports a created company and contact with their ids', async () => {
     ['crm_company_created', { companyId: 'company-1' }],
     ['crm_contact_created', { companyId: 'company-1', contactId: 'contact-1' }],
   ]);
+});
+
+it('reads GraphQL lists that can show companies again after a create', async () => {
+  storage.createCompany.mockResolvedValue(ok({ id: 'company-1' }));
+  const mutations = mount();
+
+  await mutations.company.mutateAsync({ name: 'Acme' });
+
+  // The create returns no Soup row, so Quick Access and the mention menus
+  // learn of the company only by reading again.
+  expect(refreshGraphqlLists).toHaveBeenCalledOnce();
+  const [{ where }] = refreshGraphqlLists.mock.calls[0] as unknown as [
+    { where: (body: unknown) => boolean },
+  ];
+  expect(where({ ccf: { l: { id: 'other' } } })).toBe(true);
+  expect(
+    where({ ccf: { l: { id: '00000000-0000-0000-0000-000000000000' } } })
+  ).toBe(false);
 });
 
 it('reports nothing when creation fails', async () => {

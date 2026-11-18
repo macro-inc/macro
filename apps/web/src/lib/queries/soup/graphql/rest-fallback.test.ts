@@ -1,13 +1,14 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 
+const fallbackSpan = vi.hoisted(() => ({ error: vi.fn(), setAttr: vi.fn() }));
 const telemetry = vi.hoisted(() => ({
   warn: vi.fn(),
   span: vi.fn(
     async (
       _name: string,
       _options: unknown,
-      operation: (span: { error: (error: unknown) => void }) => Promise<unknown>
-    ) => await operation({ error: vi.fn() })
+      operation: (span: typeof fallbackSpan) => Promise<unknown>
+    ) => await operation(fallbackSpan)
   ),
 }));
 vi.mock('@macro-inc/observability', () => ({ Telemetry: telemetry }));
@@ -67,4 +68,34 @@ it('spans every fallback read and logs each shape once', async () => {
     'soup.rest_fallback',
     expect.objectContaining({ 'soup.fallback.kind': 'flat' })
   );
+});
+
+it('marks a cancelled fallback read as cancelled, not failed', async () => {
+  const fallback = { reason: 'sort_method frecency', shape: 'sort=frecency' };
+  const controller = new AbortController();
+  controller.abort();
+  const cancelled = new Error('request cancelled');
+  await expect(
+    traceSoupRestFallback(
+      fallback,
+      'flat',
+      async () => {
+        throw cancelled;
+      },
+      controller.signal
+    )
+  ).rejects.toBe(cancelled);
+  expect(fallbackSpan.setAttr).toHaveBeenCalledWith(
+    'soup.fallback.cancelled',
+    true
+  );
+  expect(fallbackSpan.error).not.toHaveBeenCalled();
+
+  const failure = new Error('server error');
+  await expect(
+    traceSoupRestFallback(fallback, 'flat', async () => {
+      throw failure;
+    })
+  ).rejects.toBe(failure);
+  expect(fallbackSpan.error).toHaveBeenCalledWith(failure);
 });
