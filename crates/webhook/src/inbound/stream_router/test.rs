@@ -136,3 +136,13 @@ async fn only_a_client_that_asks_to_resume_gets_a_cursor() {
         (StatusCode::OK, Some(cursor))
     );
 }
+
+/// A `resume` this service cannot read is no request to resume: the
+/// stream opens live rather than refusing the client.
+#[tokio::test]
+async fn an_unreadable_resume_opens_the_stream_live() {
+    let id = uuid::Uuid::now_v7().to_string();
+
+    assert_eq!(open(&id, "&resume=1").await, (StatusCode::OK, None));
+    assert_eq!(open(&id, "&resume=yes").await, (StatusCode::OK, None));
+}

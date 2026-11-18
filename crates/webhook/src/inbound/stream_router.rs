@@ -98,9 +98,11 @@ pub struct StreamEventsQuery {
 /// a browser `EventSource` or SDK listener reconnecting never replays.
 #[derive(Debug, serde::Deserialize)]
 pub struct ResumeQuery {
-    /// Replay the retained events after `Last-Event-ID` first.
+    /// `true` replays the retained events after `Last-Event-ID` first. Kept
+    /// as text so any other value means no, rather than refusing the
+    /// client.
     #[serde(default)]
-    pub resume: bool,
+    pub resume: Option<String>,
 }
 
 /// Parse the query's filters into the typed filter model.
@@ -159,7 +161,9 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
     WebhookStreamHandlerError,
 > {
     let filters = parse_filters(query.filters)?;
-    let after = resume.resume.then(|| resume_cursor(&headers)).flatten();
+    let after = (resume.resume.as_deref() == Some("true"))
+        .then(|| resume_cursor(&headers))
+        .flatten();
 
     let events = state
         .stream_service
