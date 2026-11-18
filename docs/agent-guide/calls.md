@@ -290,6 +290,21 @@ participant avatars.
 Ringing conversations keep their existing Answer and Decline actions; these
 use the real incoming-call signal rather than treating every active call as ringing.
 
+### Incoming call banners
+
+A ringing channel or DM call also appears as a rounded banner centered at the top
+of the window on every app route, so it can be answered without opening Chat. It
+shows the caller's profile picture (initials when there is none) and name, where
+they are calling (`Calling you` for a DM, `Calling in #channel` for a channel, the
+people for an unnamed group chat), a 30-second countdown, and `Decline` and
+`Join`. These run the same actions as the Chat sidebar row: `Join` opens the
+channel and joins that call ID, and `Decline` stops the ring on the user's other
+tabs and devices. Meeting invitations share the same stack; several ringing calls
+stack newest first. Banners sit below the macOS title bar and the top safe area,
+take no focus, and span the width minus 16px gutters on phones, with the buttons
+below the caller. Ring one locally with `window.macroDebugIncomingCall({ channelId,
+createdBy })` in a dev build (`macroClearDebugIncomingCalls()` clears them).
+
 Only the current call's desktop Chat sidebar row, channel-header duration pill
 and app-rail item use live waveforms; all other call and phone surfaces use the
 original static icon. Live waveforms animate only while someone in the joined

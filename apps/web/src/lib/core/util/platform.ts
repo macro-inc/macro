@@ -38,6 +38,11 @@ export function isDesktopPlatform(): boolean {
   return isPlatform('desktop');
 }
 
+/** Whether the macOS desktop app draws its 40px title bar over the page. */
+export function hasOverlayTitleBar(): boolean {
+  return isPlatform('desktop') && osType() === 'macos';
+}
+
 export function getNativeMobilePlatform() {
   const platform = getPlatform();
   return isMobilePlatform(platform) ? platform : undefined;

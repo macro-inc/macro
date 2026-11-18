@@ -12,12 +12,17 @@ import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
 import { invalidateActiveMeetings } from '@queries/call/meetings';
 import { useNavigate } from '@solidjs/router';
 import { onCleanup, type ParentProps } from 'solid-js';
+import { IncomingChannelCallsContext } from './context/incoming-channel-calls';
 import { IncomingMeetingInvitationsContext } from './context/incoming-meeting-invitations';
 import { meetingInvitationRingKey } from './core/meeting-invitations';
+import { createIncomingChannelCalls } from './incoming-channel-calls';
 import { createIncomingMeetingInvitations } from './primitives/incoming-meeting-invitations';
 import { IncomingCallNotifications } from './views/incoming-call-notifications';
 
-/** App-wide receiver, mounted under the router so Answer opens meeting setup. */
+/**
+ * App-wide receiver for incoming calls (meeting invitations and ringing channel
+ * calls), mounted under the router so Answer opens meeting setup.
+ */
 export function IncomingMeetingInvitationsProvider(props: ParentProps) {
   return (
     <>
@@ -79,7 +84,11 @@ function IncomingMeetingInvitationsReceiver() {
   });
   return (
     <IncomingMeetingInvitationsContext.Provider value={incoming}>
-      <IncomingCallNotifications />
+      <IncomingChannelCallsContext.Provider
+        value={createIncomingChannelCalls()}
+      >
+        <IncomingCallNotifications />
+      </IncomingChannelCallsContext.Provider>
     </IncomingMeetingInvitationsContext.Provider>
   );
 }
