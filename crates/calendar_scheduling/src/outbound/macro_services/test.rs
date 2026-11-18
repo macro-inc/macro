@@ -24,6 +24,32 @@ const COWORKER: Uuid = Uuid::from_u128(0x2);
 const LINK: Uuid = Uuid::from_u128(0x3);
 
 #[test]
+fn a_calendar_refusal_ends_recovery_and_an_outage_does_not() {
+    for refusal in [
+        CalendarMutationError::NoWritableCalendar,
+        CalendarMutationError::ReadOnly,
+        CalendarMutationError::NotFound,
+    ] {
+        assert!(
+            matches!(calendar_failure(&refusal), Error::CalendarRejected),
+            "{refusal:?}"
+        );
+    }
+    for outage in [
+        CalendarMutationError::Retryable("timeout".into()),
+        CalendarMutationError::PersistFailed("pool".into()),
+        CalendarMutationError::ReauthRequired("token".into()),
+        // Also reported when the write landed and only its read-back failed.
+        CalendarMutationError::ProviderRejected("readback".into()),
+    ] {
+        assert!(
+            matches!(calendar_failure(&outage), Error::CalendarUnavailable),
+            "{outage:?}"
+        );
+    }
+}
+
+#[test]
 fn an_idempotent_replay_keeps_the_link_already_on_the_event() {
     let description = format!(r#"<p>Join Macro call: <a href="{URL}">{URL}</a></p>"#);
     assert!(carries_url(None, Some(&description), URL));
