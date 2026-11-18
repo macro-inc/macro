@@ -3,7 +3,7 @@
 // Block sender, sender to Noise and to Signal. Each is another way into a
 // function the list or a menu also reaches. For a Gmail and an Outlook inbox.
 
-import { loadAppSteadily } from './harness/drafts';
+import { graphqlOperation, loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { trashFolder } from './harness/journeys';
 import { followup } from './harness/organise';
@@ -194,14 +194,37 @@ test.describe('a reload just after a thread was opened, in an Outlook inbox', ()
   // When this fails, the reload cut off the mark read of the thread just
   // opened, and its claim on the mutation queue outlived the page: Mark done
   // takes the row out of Macro's list, but waits behind that claim, so the
-  // provider keeps the thread in the inbox. Outlook's slower mark read is
-  // still on its way at the reload in most runs; when it lands first, the
-  // test passes without reaching the case.
+  // provider keeps the thread in the inbox. Without the release of a departed
+  // page's claim it still passes in about a quarter of runs, where the new
+  // page finds the head free at once: the page that reloaded put its claim
+  // back before it went.
   test('Mark done after a reload reaches the provider', async ({
     page,
     mailbox,
   }) => {
     const ids = await deliverEach(mailbox, ['Later', 'Done', 'Stays']);
+    // The first mark read reaches the service, and its answer is held until
+    // the page that sent it has been reloaded away, as a slow one is.
+    let reloaded = () => {};
+    const reload = new Promise<void>((resolve) => {
+      reloaded = resolve;
+    });
+    let cutOff = 0;
+    await page.route(/\/graphql$/, async (route) => {
+      if (
+        cutOff > 0 ||
+        graphqlOperation(route.request()) !== 'MarkEmailThreadSeen'
+      )
+        return route.fallback();
+      cutOff += 1;
+      await route.fetch();
+      await reload;
+      try {
+        await route.abort();
+      } catch {
+        // The reload already cancelled the request.
+      }
+    });
     await mailbox.open();
     await openFromList(page, ids.Later, 'About Later.');
     await page.keyboard.press('h');
@@ -214,7 +237,9 @@ test.describe('a reload just after a thread was opened, in an Outlook inbox', ()
     await expect
       .poll(() => followup(mailbox, ids.Later))
       .toMatchObject({ state: 'pending' });
+    await expect.poll(() => cutOff).toBe(1);
     await mailbox.open();
+    reloaded();
 
     await openFromList(page, ids.Done, 'About Done.');
     await page
