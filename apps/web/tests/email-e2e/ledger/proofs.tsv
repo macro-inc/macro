@@ -218,7 +218,7 @@ AL-082	the row menu's Remind me opens no reminder form
 AL-083	The tag submenu (EntityTagSubmenu.tsx) refuses to open when the row menu opens it (createSoupEntityActions.ts passes this row's id as its break name), so the row menu's Add tag shows no tag picker. AL-615 goes through the same open handler, switched on by the title menu's id.
 AL-084	The row menu's "Copy Link" item in createSoupEntityActions.ts no longer calls the copy-link action and reports nothing copied, so choosing it copies nothing and shows no check.
 AL-085	the row menu's Share opens no Share dialog
-AL-086	The row menu's "Sender → Signal" item in createSoupEntityActions.ts no longer calls the mark-sender-signal action, so choosing it does nothing.
+AL-086	The row menu's "Sender → Signal" item in createSoupEntityActions.ts no longer calls the mark-sender-signal action, or the sender filter write in thread.ts does not refresh GraphQL Soup membership and the thread stays in the open Noise list.
 AL-087	The row menu's "Sender → Noise" item in createSoupEntityActions.ts no longer calls the mark-sender-noise action, so choosing it does nothing.
 AL-088	The row menu's "Block Sender" item in createSoupEntityActions.ts no longer calls the block-sender action, so choosing it does nothing.
 AL-089	the row menu's Delete does not move the thread to Trash
