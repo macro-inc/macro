@@ -31,6 +31,7 @@ import type { QueryRevalidation } from '../../graphql-cache/exchange/optimistic'
 import { queryClient } from '../client';
 import { registerActiveGraphqlSoupQuery } from './graphql/active-queries';
 import type { PredicateQueryStatus } from './graphql/create-predicate-query';
+import type { SoupProjection } from './graphql/create-soup-live-query';
 import type { SoupEntityRef } from './graphql/entity-input';
 import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
@@ -69,7 +70,7 @@ interface SoupItemsQueryOptions {
   enabled?: boolean;
   staleTime?: StaleTime;
   /** Channel navigation reads bounded unread evidence, not notification history. */
-  graphqlProjection?: 'channel-list';
+  graphqlProjection?: SoupProjection;
   /** Known entity identities for cache-first lookups. */
   graphqlCacheFirstEntities?: readonly SoupEntityRef[];
   /** Seed mixed lists from indexed non-email members; keep the full server query. */
@@ -370,6 +371,15 @@ export type SoupAstItemsQuery = {
  * translation. Unsupported requests retain the REST behavior. An explicit
  * `rest` transport forces REST.
  */
+/** Lists that show no unread state read their rows without notifications. */
+function graphqlProjection(
+  options: SoupItemsQueryOptions | undefined
+): SoupProjection | undefined {
+  if (options?.graphqlProjection) return options.graphqlProjection;
+  if (options?.ignoresNotifications) return 'preview';
+  return undefined;
+}
+
 export function useSoupAstItemsQuery(
   args: Accessor<SoupAstItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
@@ -384,7 +394,7 @@ export function useSoupAstItemsQuery(
         graphqlRequested() && queryEnabled() && args().groupBy === undefined,
       networkPaused: options?.().networkPaused,
       keepPreviousData: options?.().keepPreviousData,
-      projection: options?.().graphqlProjection,
+      projection: graphqlProjection(options?.()),
       cacheFirstEntities: options?.().graphqlCacheFirstEntities,
       localReconciliation: options?.().graphqlLocalReconciliation,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,

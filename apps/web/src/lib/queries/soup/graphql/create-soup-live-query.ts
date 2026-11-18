@@ -17,6 +17,7 @@ import {
   runWithOwner,
   untrack,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { NIL as NIL_UUID } from 'uuid';
 import { arrayEquals } from '../../../core/util/compareUtils';
 import { createBrowserOfflineSignal } from '../../../core/util/connectivity';
@@ -38,6 +39,9 @@ import {
   SoupDocument,
   type SoupInitialInput,
   SoupItemFieldsFragmentDoc,
+  SoupItemPreviewFieldsFragmentDoc,
+  SoupPreviewPageDocument,
+  type SoupPreviewPageQuery,
   type SoupQuery,
   type SoupQueryVariables,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
@@ -77,14 +81,19 @@ import {
 /** A Soup query declaration. The source owns page cursors and cache baselines. */
 export type SoupLiveQueryInput = Omit<SoupInitialInput, 'expand'>;
 
+export type SoupProjection = 'channel-list' | 'preview';
+
 export type SoupLiveQueryOptions = {
   enabled?: boolean;
   networkPaused?: boolean;
   keepPreviousData?: boolean;
   /** Reuse local Mail evaluation beneath a grouped server query. */
   localOnly?: boolean;
-  /** Select bounded unread evidence for channel navigation. */
-  projection?: 'channel-list';
+  /**
+   * `channel-list` selects bounded unread evidence for channel navigation;
+   * `preview` selects rows without notifications, for lists that show none.
+   */
+  projection?: SoupProjection;
   /** Select known entities locally, then fetch only missing records. */
   cacheFirstEntities?: readonly SoupEntityRef[];
   /** Include indexed non-email rows while server pages supply email. */
@@ -94,8 +103,16 @@ export type SoupLiveQueryOptions = {
 // A page result can carry the viewer without its `soup` field. Selection runs
 // over every loaded page, so such a page reads as unloaded instead of failing
 // the whole list.
-const hasSoupPage = (page: SoupQuery | ChannelListSoupQuery): boolean =>
-  page.user?.soup != null;
+const soupDocumentFor = (projection: SoupProjection | undefined) =>
+  match(projection)
+    .with('channel-list', () => ChannelListSoupDocument)
+    .with('preview', () => SoupPreviewPageDocument)
+    .with(undefined, () => SoupDocument)
+    .exhaustive();
+
+const hasSoupPage = (
+  page: SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery
+): boolean => page.user?.soup != null;
 
 /** Owns network pages, live cache records, Mail cursors, and fallback selection.
  * Data is a non-suspending accessor of reactive GraphQL records, before UI mapping.
@@ -206,14 +223,12 @@ export function createSoupLiveQuery(
   const localProjection = () =>
     maintainedProjection?.() ?? legacyLocalProjection();
   const [localEvaluationTrigger, setLocalEvaluationTrigger] = createSignal(0);
-  const queryDocument = () =>
-    options().projection === 'channel-list'
-      ? ChannelListSoupDocument
-      : SoupDocument;
+  const queryDocument = () => soupDocumentFor(options().projection);
   const soupItemSelection = selectRecords(SoupItemFieldsFragmentDoc);
   const channelListItemSelection = selectRecords(
     ChannelListItemFieldsFragmentDoc
   );
+  const previewItemSelection = selectRecords(SoupItemPreviewFieldsFragmentDoc);
   const mailItemSelection = selectRecords(MailItemFieldsFragmentDoc);
   let localRequest = 0;
   let localEvaluationRunning = false;
@@ -368,7 +383,7 @@ export function createSoupLiveQuery(
     pages,
     pageParams,
   }: UrqlInfiniteData<
-    SoupQuery | ChannelListSoupQuery,
+    SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery,
     string | null
   >): ServerProjection => {
     const soupPages = pages.filter(hasSoupPage);
@@ -386,7 +401,7 @@ export function createSoupLiveQuery(
   };
 
   const query = createUrqlInfiniteQuery<
-    SoupQuery | ChannelListSoupQuery,
+    SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery,
     SoupQueryVariables,
     string | null,
     ServerProjection
@@ -583,10 +598,11 @@ export function createSoupLiveQuery(
       records,
       withoutEmail,
       mailView,
-      select:
-        queryOptions.projection === 'channel-list'
-          ? channelListItemSelection
-          : soupItemSelection,
+      select: match(queryOptions.projection)
+        .with('channel-list', () => channelListItemSelection)
+        .with('preview', () => previewItemSelection)
+        .with(undefined, () => soupItemSelection)
+        .exhaustive(),
       source: {
         filters: withoutEmail
           ? {

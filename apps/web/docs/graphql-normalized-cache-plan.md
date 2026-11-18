@@ -804,7 +804,9 @@ Without the cache, writes read mounted Soup lists again
 (`refreshActiveGraphqlSoupQueries`). A list that never shows, filters or sorts
 by unread state (the Quick Access and menu feeds) passes
 `ignoresNotifications: true`, and notification and email read-state writes
-refresh with `notificationsOnly: true`, which skips it.
+refresh with `notificationsOnly: true`, which skips it. Such a list also reads
+its rows with `SoupPreviewPage` (the `preview` projection), so the server does
+not look up notifications for rows it never shows.
 
 `createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
 document and variables are arguments, other options pass through, and the result
