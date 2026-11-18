@@ -85,7 +85,19 @@ gateway `/calendar` prefix.
 - Forward `team_ooo_changed` to both inbox and teammate refresh notifications;
   sharing changes and uncertain sync results require `true`. An inbox refresh
   already refreshes its viewers' team views, so its teammate fan-out skips
-  them; a sharing change also refreshes the sharer (`notify_sharers`).
+  them; a sharing change also refreshes the sharer (`sharing_changed`).
+- One inbox refresh is one gateway request (`refresh_calendars`, a
+  `batch_send_unique`): the inbox's viewers get `synced` and their teammates
+  `team_sharing_changed`, so a write by a member of a large team costs one
+  request, not one per teammate. A viewer whose sharing setting is `none`
+  shows teammates nothing, so their inbox's changes refresh none of that
+  viewer's teammates; a sharing change reaches every teammate whatever the
+  new setting is.
+- A Google sync nudges viewers only when it changed something
+  (`GoogleBackfillRunReport::changed`): an upsert that created or rewrote a
+  row, a source retired, or a possible out-of-office change. The sync that
+  reads back a write made through Macro finds the row as the write left it
+  and stays quiet, since the write already told everyone.
 
 ## Related
 
