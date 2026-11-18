@@ -456,6 +456,9 @@ const bounded = (
         reject(new Error(abandonedError));
       });
     });
+    // An abandoned attempt's own steps (a late model answer, a DM that opens
+    // late) may still end after this span and its parent have: they then
+    // throw at their next live() check, and act on nothing.
     // A deadline that is cancelled never settles: nothing waits on it then.
     deadline.catch(() => undefined);
     try {
@@ -488,8 +491,11 @@ const bounded = (
  */
 export const greet = async (greeter: Greeter): Promise<Greeted> => {
   const { store } = greeter;
-  if (await store.greeted()) return { kind: 'already' };
   return greeter.trace('agent.greeting', async (span) => {
+    if (await store.greeted()) {
+      span.set('agent.greeting.outcome', 'already');
+      return { kind: 'already' };
+    }
     const failures = await store.failures();
     span.set('agent.greeting.earlier_paid_failures', failures.paid);
     span.set('agent.greeting.earlier_unpaid_failures', failures.unpaid);

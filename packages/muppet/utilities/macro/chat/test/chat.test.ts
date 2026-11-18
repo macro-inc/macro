@@ -314,3 +314,52 @@ test("chat()'s typing and its typingIndicators are one count per channel", async
   await greeting();
   expect(sent).toEqual(['typing c1 start', 'typing c1 stop']);
 });
+
+test('a slow typing send never builds a backlog: a tick while one is out is skipped', async () => {
+  const sent: string[] = [];
+  const ticks: (() => void)[] = [];
+  let release: () => void = () => {};
+  let holding = true;
+  const indicators = typingIndicators({
+    send: async (channelId, action) => {
+      sent.push(`${action} ${channelId}`);
+      if (holding)
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+    },
+    timers: {
+      every: (_, run) => {
+        ticks.push(run);
+        return () => {};
+      },
+      after: () => () => {},
+    },
+  });
+  const stop = indicators.start('c1');
+  // The first start is still out: three ticks add nothing behind it.
+  for (const tick of [ticks[0], ticks[0], ticks[0]]) tick?.();
+  expect(sent).toEqual(['start c1']);
+  holding = false;
+  const stopping = stop();
+  release();
+  await stopping;
+  // The stop waited for the one send out, and nothing else.
+  expect(sent).toEqual(['start c1', 'stop c1']);
+});
+
+test('typing() is typingOn over indicators of its own', async () => {
+  const sent: string[] = [];
+  const replies = typing({
+    send: async (channelId, action) => {
+      sent.push(`${action} ${channelId}`);
+    },
+    every: 60_000,
+    most: 60_000,
+  });
+  replies.start('c1');
+  replies.start('c1');
+  await replies.stop('c1');
+  // Replacing the indicator in the channel never sends a stop in between.
+  expect(sent).toEqual(['start c1', 'stop c1']);
+});

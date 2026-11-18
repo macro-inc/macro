@@ -321,45 +321,37 @@ export type Typing = {
 const resendEvery = 4_000;
 const longest = 10 * 60_000;
 
-export const typing = ({
-  send,
-  every = resendEvery,
-  most = longest,
-}: {
+/**
+ * Typing on indicators of its own: `typingOn(typingIndicators(options))`.
+ * Everything that types in one process should share one `typingIndicators`
+ * (chat() makes it) instead, so overlapping indicators are counted together.
+ */
+export const typing = (options: {
   readonly send: Chat['typing'];
   readonly every?: number;
   readonly most?: number;
-}): Typing => {
-  const stops = new Map<string, () => Promise<void>>();
-  const stop = (channelId: string) =>
-    stops.get(channelId)?.() ?? Promise.resolve();
-  return {
-    stop,
-    start: (channelId, root) => {
-      void stop(channelId);
-      const quiet = (action: 'start' | 'stop') =>
-        send(channelId, action, root).catch(() => undefined);
-      const tick = setInterval(() => void quiet('start'), every);
-      let stopped: Promise<void> | undefined;
-      const end = () => {
-        stopped ??= (async () => {
-          clearInterval(tick);
-          clearTimeout(cap);
-          if (stops.get(channelId) === end) stops.delete(channelId);
-          await quiet('stop');
-        })();
-        return stopped;
-      };
-      const cap = setTimeout(() => void end(), most);
-      stops.set(channelId, end);
-      void quiet('start');
-    },
-  };
-};
+}): Typing => typingOn(typingIndicators(options));
 
 /** Shows the agent typing, and returns a stop for this indicator only. */
 export type TypingIndicators = {
   readonly start: (channelId: string, root?: string) => () => Promise<void>;
+};
+
+/** Timers, as typing indicators use them: each returns its cancel. */
+export type TypingTimers = {
+  readonly every: (ms: number, run: () => void) => () => void;
+  readonly after: (ms: number, run: () => void) => () => void;
+};
+
+const realTimers: TypingTimers = {
+  every: (ms, run) => {
+    const timer = setInterval(run, ms);
+    return () => clearInterval(timer);
+  },
+  after: (ms, run) => {
+    const timer = setTimeout(run, ms);
+    return () => clearTimeout(timer);
+  },
 };
 
 /** A thread's root, or the channel itself. */
@@ -386,15 +378,19 @@ export const typingIndicators = ({
   send,
   every = resendEvery,
   most = longest,
+  timers = realTimers,
 }: {
   readonly send: Chat['typing'];
   readonly every?: number;
   readonly most?: number;
+  /** The clock it resends and gives up by; a test's fires by hand. */
+  readonly timers?: TypingTimers;
 }): TypingIndicators => {
   type Showing = {
     /** Live indicators by thread root (`channelLevel` for the channel). */
     readonly roots: Map<string, number>;
-    readonly tick: ReturnType<typeof setInterval>;
+    /** Stops the resends. */
+    readonly stopTicking: () => void;
   };
   const showing = new Map<string, Showing>();
   /** Each channel's sends, chained, so they reach Macro in order. */
@@ -417,7 +413,10 @@ export const typingIndicators = ({
     });
     return sent;
   };
+  // A resend while a send is still out is skipped: a slow endpoint never
+  // builds a backlog, so a stop waits behind one send at most.
   const resend = (channelId: string): void => {
+    if (queues.has(channelId)) return;
     for (const root of showing.get(channelId)?.roots.keys() ?? [])
       void enqueue(channelId, 'start', root);
   };
@@ -428,7 +427,7 @@ export const typingIndicators = ({
       if (shown === undefined) {
         shown = {
           roots: new Map(),
-          tick: setInterval(() => resend(channelId), every),
+          stopTicking: timers.every(every, () => resend(channelId)),
         };
         showing.set(channelId, shown);
       }
@@ -438,7 +437,7 @@ export const typingIndicators = ({
       let stopped: Promise<void> | undefined;
       const stop = (): Promise<void> => {
         stopped ??= (async () => {
-          clearTimeout(cap);
+          cancelCap();
           const now = showing.get(channelId);
           const count = now?.roots.get(root) ?? 0;
           if (now === undefined || count === 0) return;
@@ -450,13 +449,13 @@ export const typingIndicators = ({
             await queues.get(channelId);
             return;
           }
-          clearInterval(now.tick);
+          now.stopTicking();
           showing.delete(channelId);
           await enqueue(channelId, 'stop', root);
         })();
         return stopped;
       };
-      const cap = setTimeout(() => void stop(), most);
+      const cancelCap = timers.after(most, () => void stop());
       return stop;
     },
   };
@@ -476,8 +475,11 @@ export const typingOn = (indicators: TypingIndicators): Typing => {
   return {
     stop,
     start: (channelId, root) => {
-      void stop(channelId);
+      // The new indicator starts before the old one stops, so the channel
+      // never sees a stop in between.
+      const previous = stops.get(channelId);
       stops.set(channelId, indicators.start(channelId, root));
+      void previous?.();
     },
   };
 };
