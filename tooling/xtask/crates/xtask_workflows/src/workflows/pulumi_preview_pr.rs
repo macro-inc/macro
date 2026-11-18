@@ -14,7 +14,9 @@ use gh_workflow::{
 
 use xtask_paths::RepoGlob;
 
-use crate::workflows::actions::{ActionsCheckout, TjActionsChangedFiles};
+use crate::workflows::actions::{
+    ActionsCheckout, CallReusablePreviewService, TjActionsChangedFiles,
+};
 use crate::workflows::runners;
 
 #[cfg(test)]
@@ -119,7 +121,10 @@ fn detect_changes() -> Job {
 }
 
 fn preview_services() -> CallJob {
-    CallJob::new("./.github/workflows/reusable_preview_service.yml")
+    CallReusablePreviewService::new("dev", matrix::<Str>("service"))
+        .github_token(github().token())
+        .inherit_secrets()
+        .job()
         .name(format!("Preview {}", matrix::<Str>("service")))
         .needs(vec![DETECT_CHANGES.to_string()])
         .cond(DETECT_CHANGES.outputs.has_changes.read().is_set())
@@ -132,10 +137,6 @@ fn preview_services() -> CallJob {
             })),
             max_parallel: None,
         })
-        .add_with("environment", "dev")
-        .add_with("service-name", matrix::<Str>("service"))
-        .add_with("github-token", github().token())
-        .inherit_secrets()
 }
 
 fn preview_status() -> Job {

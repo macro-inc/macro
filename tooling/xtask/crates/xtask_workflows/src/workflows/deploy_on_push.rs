@@ -36,6 +36,10 @@
 use gh_workflow::expr::typed::{JobHandle, github};
 use gh_workflow::{CallJob, Concurrency, Event, Push, Workflow};
 
+use crate::workflows::actions::{
+    CallBuildWebApp, CallDeployAllServices, CallDeployMcpChatgptWorker, CallDeploySyncService,
+    CallDeployWebApp,
+};
 use crate::workflows::vars;
 
 #[cfg(test)]
@@ -91,67 +95,67 @@ pub fn deploy_on_push() -> Workflow {
 }
 
 fn deploy_cloud_storage() -> CallJob {
-    CallJob::new("./.github/workflows/deploy_all_services.yml")
+    CallDeployAllServices::new("dev")
+        .secret_aws_access_key(vars::AWS_ACCESS_KEY)
+        .secret_aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .secret_pulumi_access_token(vars::PULUMI_ACCESS_TOKEN)
+        .secret_dd_app_key(vars::DD_APP_KEY)
+        .secret_dd_api_key(vars::DD_API_KEY)
+        .secret_nix_cache_signing_key(vars::NIX_CACHE_SIGNING_KEY)
+        .job()
         .name("Deploy Cloud Storage Services")
-        .add_with("environment", "dev")
-        .add_secret("AWS_ACCESS_KEY", vars::AWS_ACCESS_KEY)
-        .add_secret("AWS_SECRET_ACCESS_KEY", vars::AWS_SECRET_ACCESS_KEY)
-        .add_secret("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN)
-        .add_secret("DD_APP_KEY", vars::DD_APP_KEY)
-        .add_secret("DD_API_KEY", vars::DD_API_KEY)
-        .add_secret("NIX_CACHE_SIGNING_KEY", vars::NIX_CACHE_SIGNING_KEY)
 }
 
 /// The worker calls DSS/SPS, so don't ship it ahead of them — same ordering as
 /// the production release. The implicit `success()` on `needs` is what holds it
 /// back when the backend deploy fails.
 fn deploy_sync_service() -> CallJob {
-    CallJob::new("./.github/workflows/deploy_sync_service.yml")
+    CallDeploySyncService::new("dev")
+        .secret_cloudflare_api_token(vars::CLOUDFLARE_API_TOKEN)
+        .job()
         .name("Deploy Sync Service")
         .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
-        .add_with("environment", "dev")
-        .add_secret("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN)
 }
 
 /// The ChatGPT MCP server calls the backend through the SDK and takes its tokens
 /// from the MCP auth broker, so it ships behind them, like the sync worker.
 /// Nothing waits on it: the web app doesn't talk to it.
 fn deploy_mcp_chatgpt_worker() -> CallJob {
-    CallJob::new("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
+    CallDeployMcpChatgptWorker::new("dev")
+        .secret_cloudflare_api_token(vars::CLOUDFLARE_API_TOKEN)
+        .job()
         .name("Deploy MCP ChatGPT Worker")
         .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
-        .add_with("environment", "dev")
-        .add_secret("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN)
 }
 
 /// No `needs`: the build only reads the commit, so it overlaps the backend's
 /// ~15 minutes instead of adding ~4 after them.
 fn build_web_app() -> CallJob {
-    CallJob::new("./.github/workflows/build_web_app.yml")
+    CallBuildWebApp::new("dev")
+        .secret_segment_write_key(vars::SEGMENT_WRITE_KEY_PRODUCTION)
+        .secret_posthog_api_key(vars::POSTHOG_API_KEY)
+        .job()
         .name("Build Web App")
-        .add_with("environment", "dev")
-        .add_secret("SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY_PRODUCTION)
-        .add_secret("POSTHOG_API_KEY", vars::POSTHOG_API_KEY)
 }
 
 /// Publish only after the worker supports the frontend's sync protocol. The
 /// build remains parallel, but a failed worker deploy must block new clients.
 fn deploy_web_app() -> CallJob {
-    CallJob::new("./.github/workflows/deploy_web_app.yml")
+    CallDeployWebApp::new("dev")
+        .notify(false)
+        .prebuilt(true)
+        .secret_aws_access_key(vars::AWS_ACCESS_KEY)
+        .secret_aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .secret_pulumi_access_token(vars::PULUMI_ACCESS_TOKEN)
+        .secret_dd_app_key(vars::DD_APP_KEY)
+        .secret_dd_api_key(vars::DD_API_KEY)
+        .secret_segment_write_key(vars::SEGMENT_WRITE_KEY_PRODUCTION)
+        .secret_posthog_api_key(vars::POSTHOG_API_KEY)
+        .job()
         .name("Deploy Web App")
         .needs(vec![
             DEPLOY_CLOUD_STORAGE.to_string(),
             DEPLOY_SYNC_SERVICE.to_string(),
             BUILD_WEB_APP.to_string(),
         ])
-        .add_with("notify", false)
-        .add_with("environment", "dev")
-        .add_with("prebuilt", true)
-        .add_secret("AWS_ACCESS_KEY", vars::AWS_ACCESS_KEY)
-        .add_secret("AWS_SECRET_ACCESS_KEY", vars::AWS_SECRET_ACCESS_KEY)
-        .add_secret("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN)
-        .add_secret("DD_APP_KEY", vars::DD_APP_KEY)
-        .add_secret("DD_API_KEY", vars::DD_API_KEY)
-        .add_secret("SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY_PRODUCTION)
-        .add_secret("POSTHOG_API_KEY", vars::POSTHOG_API_KEY)
 }

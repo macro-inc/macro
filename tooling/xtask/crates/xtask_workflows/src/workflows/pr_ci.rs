@@ -31,7 +31,12 @@ use gh_workflow::{
 };
 use xtask_paths::RepoGlob;
 
-use crate::workflows::actions::DornyPathsFilter;
+use crate::workflows::actions::{
+    CallCargoDeny, CallCargoWorkspaceDependencyCheck, CallCheckGenerated, CallCheckNodeModulesNix,
+    CallCheckTauriLockfiles, CallCodeCheckCloudStorage, CallCodeCheckConventions,
+    CallCodeCheckInfra, CallObservabilityImage, CallSdkCheck, CallTestMacrodUpdate,
+    CallWebAppCheckMain, DornyPathsFilter,
+};
 use crate::workflows::{
     cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
     check_tauri_lockfiles, observability_image, runners, sdk_check, steps, test_macrod_update,
@@ -73,7 +78,8 @@ struct Call {
     id: &'static str,
     /// Prefixes the called jobs' check names: `Web App / Typecheck`.
     name: &'static str,
-    file: &'static str,
+    /// A job calling the workflow; [`call_job`] names it and passes secrets.
+    workflow: fn() -> CallJob,
     /// Files that make it run; `None` runs it on every request.
     paths: Option<&'static [RepoGlob<'static>]>,
 }
@@ -82,73 +88,73 @@ const CALLS: &[Call] = &[
     Call {
         id: "cloud-storage",
         name: "Cloud Storage",
-        file: "code_check_cloud_storage.yml",
+        workflow: || CallCodeCheckCloudStorage::new().job(),
         paths: None,
     },
     Call {
         id: "web-app",
         name: "Web App",
-        file: "web-app-check-main.yml",
+        workflow: || CallWebAppCheckMain::new().job(),
         paths: None,
     },
     Call {
         id: "infra",
         name: "Infra",
-        file: "code_check_infra.yml",
+        workflow: || CallCodeCheckInfra::new().job(),
         paths: None,
     },
     Call {
         id: "conventions",
         name: "Conventions",
-        file: "code_check_conventions.yml",
+        workflow: || CallCodeCheckConventions::new().job(),
         paths: None,
     },
     Call {
         id: "cargo-deny",
         name: "cargo deny",
-        file: "cargo_deny.yml",
+        workflow: || CallCargoDeny::new().job(),
         paths: Some(cargo_deny::PATHS),
     },
     Call {
         id: "workspace-dependencies",
         name: "Workspace dependencies",
-        file: "cargo_workspace_dependency_check.yml",
+        workflow: || CallCargoWorkspaceDependencyCheck::new().job(),
         paths: Some(cargo_workspace_dependency_check::PATHS),
     },
     Call {
         id: "generated-workflows",
         name: "Generated workflows",
-        file: "check_generated.yml",
+        workflow: || CallCheckGenerated::new().job(),
         paths: Some(check_generated::PATHS),
     },
     Call {
         id: "node-modules-nix",
         name: "node_modules nix",
-        file: "check_node_modules_nix.yml",
+        workflow: || CallCheckNodeModulesNix::new().job(),
         paths: Some(check_node_modules_nix::PATHS),
     },
     Call {
         id: "tauri-lockfiles",
         name: "Tauri lockfiles",
-        file: "check_tauri_lockfiles.yml",
+        workflow: || CallCheckTauriLockfiles::new().job(),
         paths: Some(check_tauri_lockfiles::PATHS),
     },
     Call {
         id: "sdk",
         name: "SDK",
-        file: "sdk-check.yml",
+        workflow: || CallSdkCheck::new().job(),
         paths: Some(sdk_check::PATHS),
     },
     Call {
         id: "observability-image",
         name: "Observability image",
-        file: "observability_image.yml",
+        workflow: || CallObservabilityImage::new().job(),
         paths: Some(observability_image::PATHS),
     },
     Call {
         id: "macrod-update",
         name: "macrod update",
-        file: "test_macrod_update.yml",
+        workflow: || CallTestMacrodUpdate::new().job(),
         paths: Some(test_macrod_update::PATHS),
     },
 ];
@@ -267,7 +273,7 @@ fn paths_filter() -> Step<Use> {
 }
 
 fn call_job(call: &Call) -> CallJob {
-    let job = CallJob::new(format!("./.github/workflows/{}", call.file))
+    let job = (call.workflow)()
         .name(call.name)
         .add_needs(START)
         .inherit_secrets();

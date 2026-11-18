@@ -5,13 +5,14 @@ fn rendered() -> serde_yaml::Value {
     serde_yaml::from_str(&yaml).expect("PR CI should parse")
 }
 
+/// The path of the workflow a call runs, as its `uses` names it.
+fn uses(call: &Call) -> String {
+    (call.workflow)().uses
+}
+
 /// The committed YAML of a workflow PR CI calls.
 fn called(call: &Call) -> serde_yaml::Value {
-    let path = format!(
-        "{}/../../../../.github/workflows/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        call.file
-    );
+    let path = format!("{}/../../../../{}", env!("CARGO_MANIFEST_DIR"), uses(call));
     serde_yaml::from_str(&std::fs::read_to_string(&path).expect("called workflow exists"))
         .expect("called workflow parses")
 }
@@ -44,7 +45,7 @@ fn every_called_workflow_can_be_called() {
         assert!(
             triggers.get("workflow_call").is_some(),
             "{} has no workflow_call trigger",
-            call.file
+            uses(call)
         );
     }
 }
@@ -53,8 +54,8 @@ fn every_called_workflow_can_be_called() {
 /// A job limit at or just above a step limit inside it would cut that step short.
 #[test]
 fn every_job_the_gate_waits_for_has_a_timeout() {
-    let workflows = std::iter::once(("pr-ci.yml", rendered()))
-        .chain(CALLS.iter().map(|call| (call.file, called(call))));
+    let workflows = std::iter::once(("pr-ci.yml".to_string(), rendered()))
+        .chain(CALLS.iter().map(|call| (uses(call), called(call))));
 
     for (file, workflow) in workflows {
         let jobs = workflow["jobs"].as_mapping().expect("jobs");

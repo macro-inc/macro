@@ -5,6 +5,8 @@
 use gh_workflow::expr::typed::{Str, input};
 use gh_workflow::{CallJob, Concurrency, Event, Workflow, WorkflowDispatch, WorkflowInput};
 
+use crate::workflows::actions::CallReusableDeployService;
+
 /// Build the workflow.
 pub fn deploy_fusionauth_instance() -> Workflow {
     Workflow::new("Deploy FusionAuth Instance")
@@ -28,11 +30,10 @@ pub fn deploy_fusionauth_instance() -> Workflow {
 }
 
 fn deploy() -> CallJob {
-    CallJob::new("./.github/workflows/reusable_deploy_service.yml")
-        .name("Deploy fusionauth-instance")
-        .add_with("environment", input::<Str>("environment"))
-        .add_with("service-name", "fusionauth-instance")
-        .add_with("pulumi-stack-name", "fusionauth-instance")
-        .add_with("use-docker", false)
+    CallReusableDeployService::new(input::<Str>("environment"), "fusionauth-instance")
+        .pulumi_stack_name("fusionauth-instance")
+        .use_docker(false)
         .inherit_secrets()
+        .job()
+        .name("Deploy fusionauth-instance")
 }

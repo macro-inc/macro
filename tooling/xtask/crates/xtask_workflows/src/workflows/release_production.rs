@@ -12,7 +12,10 @@ use gh_workflow::{
     Workflow,
 };
 
-use crate::workflows::actions::SoftpropsActionGhRelease;
+use crate::workflows::actions::{
+    CallBuildWebApp, CallDeployAiEditingWorker, CallDeployAllServices, CallDeployMcpChatgptWorker,
+    CallDeploySyncService, CallDeployWebsite, CallIosAppStorePublish, SoftpropsActionGhRelease,
+};
 use crate::workflows::{build_web_app, deploy_web_app, runners, steps, vars};
 
 #[cfg(test)]
@@ -56,60 +59,60 @@ pub fn release_production() -> Workflow {
 }
 
 fn deploy_cloud_storage() -> CallJob {
-    CallJob::new("./.github/workflows/deploy_all_services.yml")
+    CallDeployAllServices::new(ENVIRONMENT)
+        .secret_aws_access_key(vars::AWS_ACCESS_KEY)
+        .secret_aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .secret_pulumi_access_token(vars::PULUMI_ACCESS_TOKEN)
+        .secret_dd_app_key(vars::DD_APP_KEY)
+        .secret_dd_api_key(vars::DD_API_KEY)
+        .secret_nix_cache_signing_key(vars::NIX_CACHE_SIGNING_KEY)
+        .job()
         .name("Deploy Cloud Storage Services")
         .cond(on_release())
-        .add_with("environment", ENVIRONMENT)
-        .add_secret("AWS_ACCESS_KEY", vars::AWS_ACCESS_KEY)
-        .add_secret("AWS_SECRET_ACCESS_KEY", vars::AWS_SECRET_ACCESS_KEY)
-        .add_secret("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN)
-        .add_secret("DD_APP_KEY", vars::DD_APP_KEY)
-        .add_secret("DD_API_KEY", vars::DD_API_KEY)
-        .add_secret("NIX_CACHE_SIGNING_KEY", vars::NIX_CACHE_SIGNING_KEY)
 }
 
 /// The worker calls DSS/SPS at prod URLs, so don't ship it ahead of them.
 fn deploy_sync_service() -> CallJob {
-    CallJob::new("./.github/workflows/deploy_sync_service.yml")
+    CallDeploySyncService::new(ENVIRONMENT)
+        .inherit_secrets()
+        .job()
         .name("Deploy Sync Service")
         .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
-        .add_with("environment", ENVIRONMENT)
-        .inherit_secrets()
 }
 
 /// Calls DSS/search/auth at prod URLs and opens doc sessions against the prod
 /// sync-service, so it ships behind both. It must also move in lockstep with
 /// cloud-storage's EditDocument tool, which picks the worker's model chains.
 fn deploy_ai_editing_worker() -> CallJob {
-    CallJob::new("./.github/workflows/deploy_ai_editing_worker.yml")
+    CallDeployAiEditingWorker::new(ENVIRONMENT)
+        .inherit_secrets()
+        .job()
         .name("Deploy AI Editing Worker")
         .needs(vec![
             DEPLOY_CLOUD_STORAGE.to_string(),
             DEPLOY_SYNC_SERVICE.to_string(),
         ])
-        .add_with("environment", ENVIRONMENT)
-        .inherit_secrets()
 }
 
 /// Calls the backend at prod URLs through the SDK and takes its tokens from
 /// the MCP auth broker, so it ships behind cloud storage. Nothing waits on it.
 fn deploy_mcp_chatgpt_worker() -> CallJob {
-    CallJob::new("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
+    CallDeployMcpChatgptWorker::new(ENVIRONMENT)
+        .inherit_secrets()
+        .job()
         .name("Deploy MCP ChatGPT Worker")
         .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
-        .add_with("environment", ENVIRONMENT)
-        .inherit_secrets()
 }
 
 /// Also owns the macro.com CloudFront distribution in front of the web app.
 fn deploy_website() -> CallJob {
-    CallJob::new("./.github/workflows/deploy_website.yml")
+    CallDeployWebsite::new(ENVIRONMENT)
+        .secret_aws_access_key(vars::AWS_ACCESS_KEY)
+        .secret_aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .secret_pulumi_access_token(vars::PULUMI_ACCESS_TOKEN)
+        .job()
         .name("Deploy Website")
         .cond(on_release())
-        .add_with("environment", ENVIRONMENT)
-        .add_secret("AWS_ACCESS_KEY", vars::AWS_ACCESS_KEY)
-        .add_secret("AWS_SECRET_ACCESS_KEY", vars::AWS_SECRET_ACCESS_KEY)
-        .add_secret("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN)
 }
 
 /// Releases the iOS version Apple approved for the native changes in this
@@ -118,11 +121,12 @@ fn deploy_website() -> CallJob {
 /// release request cannot be cancelled). Nothing depends on it: an App Store
 /// Connect failure must not hold back the prod deploy.
 fn publish_ios() -> CallJob {
-    CallJob::new("./.github/workflows/ios-app-store-publish.yml")
+    CallIosAppStorePublish::new()
+        .secret_ios_release_doppler_token(vars::IOS_RELEASE_DOPPLER_TOKEN)
+        .job()
         .name("Publish iOS App Store Version")
         .needs(vec![DEPLOY.to_string()])
         .permissions(Permissions::default().contents(Level::Read))
-        .add_secret("IOS_RELEASE_DOPPLER_TOKEN", vars::IOS_RELEASE_DOPPLER_TOKEN)
 }
 
 /// The same build as dev deploys and manual web deploys. It reuses unchanged
@@ -131,12 +135,12 @@ fn publish_ios() -> CallJob {
 /// cache volume, as the release's own build job did, and uses no shared
 /// sccache. No `needs`, so it overlaps the backend deploy.
 fn build() -> CallJob {
-    CallJob::new("./.github/workflows/build_web_app.yml")
+    CallBuildWebApp::new(ENVIRONMENT)
+        .secret_segment_write_key(vars::SEGMENT_WRITE_KEY_PRODUCTION)
+        .secret_posthog_api_key(vars::POSTHOG_API_KEY)
+        .job()
         .name("Build Web App")
         .cond(on_release())
-        .add_with("environment", ENVIRONMENT)
-        .add_secret("SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY_PRODUCTION)
-        .add_secret("POSTHOG_API_KEY", vars::POSTHOG_API_KEY)
 }
 
 /// New clients require the worker's sync protocol support before publication,

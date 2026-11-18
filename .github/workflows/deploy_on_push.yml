@@ -73,8 +73,8 @@ jobs:
     name: Deploy Web App
     uses: ./.github/workflows/deploy_web_app.yml
     with:
-      notify: false
       environment: dev
+      notify: false
       prebuilt: true
     secrets:
       AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}

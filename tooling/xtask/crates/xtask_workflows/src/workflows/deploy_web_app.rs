@@ -16,7 +16,7 @@ use gh_workflow::{
 
 use crate::workflows::actions::{
     ActionsDownloadArtifact, ActionsUploadArtifact, AwsActionsConfigureAwsCredentials,
-    PulumiActions,
+    CallBuildWebApp, PulumiActions,
 };
 use crate::workflows::build_web_app::environment;
 use crate::workflows::{build_web_app, runners, steps, vars};
@@ -100,12 +100,12 @@ pub fn deploy_web_app() -> Workflow {
 
 /// `inputs.prebuilt` is unset under workflow_dispatch, so dispatches build.
 fn build() -> CallJob {
-    CallJob::new("./.github/workflows/build_web_app.yml")
+    CallBuildWebApp::new(environment())
+        .secret_segment_write_key(vars::SEGMENT_WRITE_KEY)
+        .secret_posthog_api_key(vars::POSTHOG_API_KEY)
+        .job()
         .name("Build")
         .cond(!input::<Bool>("prebuilt"))
-        .add_with("environment", environment())
-        .add_secret("SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY)
-        .add_secret("POSTHOG_API_KEY", vars::POSTHOG_API_KEY)
 }
 
 /// Runs after either this run's build or the caller's: a skipped build means
