@@ -124,6 +124,11 @@ scheduling runtime.
 
 - `cargo test -p suggestion_generation` (live DB, `SQLX_OFFLINE` unset). The
   DB tests check each SQL guard against its table, over every pair.
+- `bench/` is the suggestions bench: it runs real generations for synthetic
+  personas on a local stack and scores them against answer keys, one section
+  per kind (`routines` at onboarding, `feed` on request); `compare` says
+  win, loss or noise (see its README). Run the section a change touches
+  before and after changing a brief, a prompt or a session's tools.
 
 ## Gotchas
 
