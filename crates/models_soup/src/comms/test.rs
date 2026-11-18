@@ -17,7 +17,7 @@ fn sample_channel(is_participant: bool) -> SoupChannel {
                 owner_id: MacroUserIdStr::try_from("macro|owner@example.com".to_string()).unwrap(),
             },
             participants: Vec::new(),
-            bot_participants: Vec::new(),
+            bot_participants: Box::default(),
             is_participant,
         },
         latest_message: LatestMessage::default(),
