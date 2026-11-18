@@ -299,7 +299,10 @@ tools/HTTP/GraphQL surfaces over them.
   it. A mailbox source is recorded per contact and mailbox, not per address:
   `depopulate_contact` keeps it while that mailbox still has mail with another
   of the contact's addresses (`other_address_mail.sql`), checked before the
-  domain lock like population's mailbox scan.
+  domain lock like population's mailbox scan. Mail the provider no longer has
+  (`provider_missing`, an Outlook deletion) counts nowhere: not there, not in
+  the email service's cleanup gate, not in `interactions.sql`; keep the three
+  in step, as a Gmail deletion removes the row.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.
