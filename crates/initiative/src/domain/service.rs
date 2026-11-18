@@ -12,6 +12,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
+mod lifecycle;
 mod reads;
 
 use entity_access::domain::models::{
