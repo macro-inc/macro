@@ -10,6 +10,9 @@ import { cpuProbe, throttleInForce } from './throttle';
  */
 const OTLP_PATH = '/__benchmark/otlp/v1/traces';
 
+/** Where to tap, in screen pixels, and whether the page scrolled to get there. */
+export type Located = { x: number; y: number; moved: boolean };
+
 /** One request the page started, seen through DevTools. */
 export type PageRequest = {
   /** Epoch milliseconds, device clock. */
@@ -200,13 +203,17 @@ export class Session {
 
   /**
    * Evaluates an expression that returns candidate elements (one, an array, a
-   * NodeList, or none) and returns the centre, in screen pixels, of the first
-   * one a touch would actually reach: retained hidden views keep copies of
-   * rows in the DOM. The WebView fills the screen edge to edge.
+   * NodeList, a promise of one of those, or none) and returns the centre, in
+   * screen pixels, of the first one a touch would actually reach: retained
+   * hidden views keep copies of rows in the DOM. The WebView fills the screen
+   * edge to edge. `moved` says the page scrolled to reach it, so it may not
+   * have come to rest yet.
    */
-  async locate(expression: string): Promise<{ x: number; y: number } | undefined> {
-    return this.cdp.evaluate<{ x: number; y: number } | undefined>(`(async () => {
-      const found = (${expression});
+  async locate(expression: string): Promise<Located | undefined> {
+    return this.cdp.evaluate<Located | undefined>(`(async () => {
+      window.__macroBenchmarkMoved = false;
+      const found = await (${expression});
+      let moved = window.__macroBenchmarkMoved === true;
       const candidates = found instanceof Element ? [found] : [...(found ?? [])];
       const frame = () => new Promise((done) => requestAnimationFrame(done));
       const reachable = (element) => {
@@ -223,22 +230,20 @@ export class Session {
         // Keep the target clear of the header and the dock before tapping it.
         if (rect.top < 120 || rect.bottom > innerHeight - 160) {
           element.scrollIntoView({ block: 'center', behavior: 'instant' });
+          moved = true;
           await frame();
           await frame();
         }
         const point = reachable(element);
         if (point)
-          return { x: point.x * devicePixelRatio, y: point.y * devicePixelRatio };
+          return { x: point.x * devicePixelRatio, y: point.y * devicePixelRatio, moved };
       }
       return undefined;
     })()`);
   }
 
   /** Waits for an element and returns its centre in screen pixels. */
-  async waitFor(
-    expression: string,
-    timeoutMs = 15_000
-  ): Promise<{ x: number; y: number }> {
+  async waitFor(expression: string, timeoutMs = 15_000): Promise<Located> {
     const deadline = Date.now() + timeoutMs;
     let failure = 'no reachable element';
     while (Date.now() < deadline) {
@@ -250,6 +255,73 @@ export class Session {
       await sleep(100);
     }
     throw new Error(`Nothing to tap (${failure}): ${expression.slice(0, 120)}`);
+  }
+
+  /**
+   * From the next touch on, watches for the first element matching
+   * `selector` that a touch would reach, and records when the frame after
+   * it was painted: the same paint opportunity the app's spans end at.
+   * Checks run in animation frames after DOM changes, so an idle page does
+   * no work for them. Read the time with {@link contentPainted}.
+   */
+  async watchContent(selector: string): Promise<void> {
+    await this.cdp.evaluate(`(() => {
+      window.__macroBenchmarkContent?.stop();
+      const state = (window.__macroBenchmarkContent = { painted: undefined });
+      const selector = ${JSON.stringify(selector)};
+      let scheduled = false;
+      let observer;
+      let interval;
+      const visible = () => [...document.querySelectorAll(selector)].slice(0, 20).some((element) => {
+        const rect = element.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return false;
+        const y = rect.top + rect.height / 2;
+        if (y < 0 || y > innerHeight) return false;
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, y);
+        return hit && element.contains(hit);
+      });
+      const check = () => {
+        scheduled = false;
+        if (!observer || !visible()) return;
+        state.stop();
+        requestAnimationFrame(() => {
+          state.painted = performance.timeOrigin + performance.now();
+        });
+      };
+      const schedule = () => {
+        if (scheduled || !observer) return;
+        scheduled = true;
+        requestAnimationFrame(check);
+      };
+      const arm = () => {
+        observer = new MutationObserver(schedule);
+        observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+        // Layout can reveal a row without a DOM change.
+        interval = setInterval(schedule, 200);
+        schedule();
+      };
+      state.stop = () => {
+        removeEventListener('pointerdown', arm, true);
+        observer?.disconnect();
+        observer = undefined;
+        clearInterval(interval);
+      };
+      addEventListener('pointerdown', arm, { capture: true, once: true, passive: true });
+    })()`);
+  }
+
+  /** When the watched content was painted, waiting up to `timeoutMs`. */
+  async contentPainted(timeoutMs = 40_000): Promise<number | undefined> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const painted = await this.cdp.evaluate<number | undefined>(
+        'window.__macroBenchmarkContent?.painted'
+      );
+      if (painted !== undefined) return painted;
+      await sleep(100);
+    }
+    await this.cdp.evaluate('window.__macroBenchmarkContent?.stop()');
+    return undefined;
   }
 
   /**
