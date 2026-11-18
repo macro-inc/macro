@@ -80,8 +80,9 @@ width, retaining its name, tooltip, and active state. Breadcrumbs keep their exi
 The full-height file tree has a fixed header with its file count on the left and
 **Hide file tree** on the right. Borderless diff controls float above the diff stack
 rather than spanning the pane in a second toolbar. Unified/Split sits on the left
-with its text labels, with diff collapse/expand and refresh on the right; a pane
-720px or narrower (and every phone) shows the unified diff without that toggle. Hiding the tree moves its count
+with its text labels, with diff collapse/expand and refresh on the right; a diff
+column 600px or narrower (and every phone) shows the unified diff without that
+toggle, and the chosen style returns when the column widens (hide the tree). Hiding the tree moves its count
 and **Show file tree** above the diffs, as described in
 [AI Chat](ai-chat.md#reviewing-a-linked-github-pull-request).
 Spotlighting changes hides the left pane and its top bar; **Back to the split**

@@ -42,6 +42,7 @@ import {
   describeFileCount,
   describeRange,
 } from '../core/changeset';
+import { SIDE_BY_SIDE_MIN_WIDTH } from '../core/layout';
 import { createChangesNarrow } from '../primitives/create-changes-narrow';
 import {
   MAX_TREE_WIDTH,
@@ -121,7 +122,11 @@ function ChangesTreeToggle(props: {
 }
 
 /** Borderless diff controls above the stack, scoped to the diff column's width. */
-function ChangesControls(props: { narrow: boolean; drawerOpen: boolean }) {
+function ChangesControls(props: {
+  narrow: boolean;
+  drawerOpen: boolean;
+  styleToggle: boolean;
+}) {
   const { model, layout, diffStyle, setDiffStyle } = useChanges();
   const refreshing = () =>
     model.refreshing() || model.state().kind === 'capturing';
@@ -147,7 +152,7 @@ function ChangesControls(props: { narrow: boolean; drawerOpen: boolean }) {
           {describeFileCount(model.files().length)}
         </span>
       </Show>
-      <Show when={!props.narrow}>
+      <Show when={props.styleToggle}>
         <DiffView.StyleToggle
           value={diffStyle()}
           onChange={setDiffStyle}
@@ -197,17 +202,25 @@ function ChangesTreeHeader(props: { narrow: boolean; onClose: () => void }) {
 }
 
 /** The tree beside the diff stack, both over the changeset's files. */
-function ChangesBody(props: { narrow: Accessor<boolean> }) {
+function ChangesBody(props: {
+  diffColumn: (element: HTMLDivElement) => void;
+  unifiedOnly: Accessor<boolean>;
+}) {
+  const [body, setBody] = createSignal<HTMLDivElement>();
+  const narrow = createChangesNarrow(body);
   const [drawerOpen, setDrawerOpen] = createSignal(false);
   const closeDrawer = () => setDrawerOpen(false);
   return (
     <Dialog.Root
-      open={props.narrow() && drawerOpen()}
+      open={narrow() && drawerOpen()}
       onOpenChange={setDrawerOpen}
       modal={false}
     >
       <ChangesBodyContent
-        narrow={props.narrow}
+        body={setBody}
+        diffColumn={props.diffColumn}
+        unifiedOnly={props.unifiedOnly}
+        narrow={narrow}
         drawerOpen={drawerOpen}
         closeDrawer={closeDrawer}
       />
@@ -216,6 +229,9 @@ function ChangesBody(props: { narrow: Accessor<boolean> }) {
 }
 
 function ChangesBodyContent(props: {
+  body: (element: HTMLDivElement) => void;
+  diffColumn: (element: HTMLDivElement) => void;
+  unifiedOnly: Accessor<boolean>;
   narrow: Accessor<boolean>;
   drawerOpen: Accessor<boolean>;
   closeDrawer: () => void;
@@ -304,7 +320,10 @@ function ChangesBodyContent(props: {
   );
   return (
     <Panel.Body class="relative flex flex-col">
-      <div class="relative flex size-full min-h-0 min-w-0 flex-col">
+      <div
+        ref={props.body}
+        class="relative flex size-full min-h-0 min-w-0 flex-col"
+      >
         <CaptureBanners />
         <Show when={model.changeset()?.truncated}>
           <CaptureBanner
@@ -362,12 +381,16 @@ function ChangesBodyContent(props: {
             </Resize.Panel>
             <Resize.Panel id="changes-diff" index={1} minSize={240}>
               <div
-                ref={diffBody}
+                ref={(element) => {
+                  diffBody = element;
+                  props.diffColumn(element);
+                }}
                 class="flex size-full min-w-0 flex-col overflow-hidden @container/changes-diff"
               >
                 <ChangesControls
                   narrow={props.narrow()}
                   drawerOpen={props.drawerOpen()}
+                  styleToggle={!props.unifiedOnly()}
                 />
                 <Switch>
                   <Match when={model.patchStatus() === 'error'}>
@@ -524,19 +547,21 @@ export function ChangesPane(props: { fullWidth?: boolean }) {
   };
   const showsFiles = () =>
     model.changeset() !== undefined && model.files().length > 0;
-  const [pane, setPane] = createSignal<HTMLDivElement>();
-  const narrow = createChangesNarrow(pane);
+  const [diffColumn, setDiffColumn] = createSignal<HTMLDivElement>();
+  const unifiedOnly = createChangesNarrow(
+    diffColumn,
+    () => SIDE_BY_SIDE_MIN_WIDTH
+  );
 
   return (
     <DiffView.Root
       files={model.files()}
       patch={model.patch() ?? ''}
-      diffStyle={narrow() ? 'unified' : diffStyle()}
+      diffStyle={unifiedOnly() ? 'unified' : diffStyle()}
       collapse={collapse}
       active={review.active()}
     >
       <Panel
-        ref={setPane}
         hideBorder
         class="rounded-none @container/changes-pane"
         role="region"
@@ -565,7 +590,7 @@ export function ChangesPane(props: { fullWidth?: boolean }) {
           </div>
         </Panel.Header>
         <Show when={showsFiles()} fallback={<ChangesNotices />}>
-          <ChangesBody narrow={narrow} />
+          <ChangesBody diffColumn={setDiffColumn} unifiedOnly={unifiedOnly} />
         </Show>
       </Panel>
     </DiffView.Root>

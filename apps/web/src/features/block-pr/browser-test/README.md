@@ -19,7 +19,8 @@ images in tables read as their alt text.
 
 `changes-split.browser.e2e.ts` mounts the real `ChangesSplit` and Changes pane
 with the PR's minimum width over an in-memory changeset: an 800px PR opens
-Changes over itself, a 1100px PR keeps 560px beside a unified diff with no
+Changes over itself with a unified diff beside the file tree and side by side once
+the tree hides, a 1100px PR keeps 560px beside a unified diff with no
 Unified/Split toggle, a 1600px PR keeps the side-by-side diff beside it, and a
 phone covers the PR with the unified diff. `PR_COMMENTS_SCREENSHOT_DIR` saves
 its screenshots too.

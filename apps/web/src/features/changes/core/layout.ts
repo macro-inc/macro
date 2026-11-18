@@ -26,6 +26,9 @@ export const CHANGES_PANE_MIN_WIDTH = 400;
 export const CHANGES_NARROW_WIDTH =
   DEFAULT_HOST_MIN_WIDTH + CHANGES_PANE_MIN_WIDTH;
 
+/** A diff column this narrow or narrower shows unified: side-by-side columns would not fit. */
+export const SIDE_BY_SIDE_MIN_WIDTH = 600;
+
 /**
  * At this width or narrower, Changes opens over its host instead of beside it:
  * the host and the pane would not both get their minimum width.

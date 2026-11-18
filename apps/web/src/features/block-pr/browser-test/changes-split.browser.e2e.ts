@@ -41,10 +41,15 @@ test.describe('desktop', () => {
     await expect
       .poll(async () => (await view.changes.boundingBox())?.width)
       .toBeGreaterThan(780);
-    // The pane itself is wide enough for the side-by-side diff it was asked for.
+    // Beside the file tree the diff column is too narrow for side by side.
+    await expect(view.layoutToggle).toBeHidden();
+    await expect(view.unified.first()).toBeVisible();
+    await capture(page, 'changes-800');
+    // Without the tree it has room, so the chosen side-by-side diff returns.
+    await page.getByRole('button', { name: 'Hide file tree' }).click();
     await expect(view.layoutToggle).toBeVisible();
     await expect(view.sideBySide.first()).toBeVisible();
-    await capture(page, 'changes-800');
+    await capture(page, 'changes-800-no-tree');
   });
 
   test('beside the PR, a narrow pane shows the unified diff', async ({

@@ -41,9 +41,11 @@ reduced-motion support. The divider stays visible but inert through exit, releas
 its layout space with the tree only when the animation finishes. Hiding retains
 directory state and the diff stack. Starting a drag or keyboard resize, or resizing
 the outer split or viewport, settles the visibility animation synchronously first.
-In a pane 720px or narrower, and on touch devices, the tree starts closed and opens over
-the diff stack as a pane-local drawer, without reserving space or a divider, and
-the diff shows unified, without the Unified/Split toggle.
+At 720px or narrower, and on touch devices, the tree starts closed and opens over
+the diff stack as a pane-local drawer, without reserving space or a divider.
+A diff column 600px or narrower (`SIDE_BY_SIDE_MIN_WIDTH`), and every touch
+device, shows the unified diff without the Unified/Split toggle; the chosen
+style returns when the column widens, for example when the tree hides.
 **Show file tree** stays in the diff controls; file selection, Escape, the backdrop,
 and the close toggle dismiss the drawer and restore focus to its opener.
 Closing retains only an inert visual frame; dialog listeners release immediately.
