@@ -1,0 +1,31 @@
+apps/web/src/features/meetings/caller-name.test.ts
+  s_d68827eef00d3d::t_8e38320132dfc9 1-38
+apps/web/src/features/meetings/caller-name.ts
+  s_887b60ee8d76bb::t_437d56e6412079 1-13
+apps/web/src/features/meetings/incoming-meeting-invitations.tsx
+  s_887b60ee8d76bb::t_dbf2668403d393 15,52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "761b820bb43917d4829fe23a898a6f84a2e52685",
+  "prompts": {},
+  "sessions": {
+    "s_887b60ee8d76bb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9e9b51ec-ecaa-4647-8472-ade106583950",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_d68827eef00d3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7845e4f-e917-4189-85b6-0d6704e36200",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
