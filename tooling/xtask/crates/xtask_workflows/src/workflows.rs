@@ -649,6 +649,90 @@ mod handoff_tests {
 }
 
 #[cfg(test)]
+mod cargo_target_tests {
+    use std::collections::BTreeMap;
+
+    const REUSE: &str = "Reuse the kept cargo target";
+    const SEAL: &str = "Seal the kept cargo target";
+
+    /// Whether a step mounts a cargo `target` directory on a cache volume.
+    fn mounts_target(step: &serde_yaml::Value) -> bool {
+        step["uses"]
+            .as_str()
+            .is_some_and(|uses| uses.starts_with("namespacelabs/nscloud-cache-action@"))
+            && step["with"]["path"].as_str().is_some_and(|paths| {
+                paths
+                    .lines()
+                    .any(|path| path == "./target" || path == super::vars::CARGO_TARGET_VOLUME_DIR)
+            })
+    }
+
+    /// `steps::reuse_cargo_target` keeps, next to `target`, the times its
+    /// sources' contents first appeared, and cargo trusts units newer than
+    /// them. A job that builds into a `target` without updating those times
+    /// leaves units that look fresh for other contents, so on one cache tag
+    /// either every job that mounts a `target` dates its checkout right after
+    /// mounting it, or none does.
+    #[test]
+    fn every_job_sharing_a_reused_target_dates_its_checkout() {
+        // Cache tag (or the runner's default volume) -> (job, reuses it) for
+        // every job that mounts a `target`.
+        let mut by_volume: BTreeMap<String, Vec<(String, bool)>> = BTreeMap::new();
+        for workflow in super::WORKFLOWS {
+            let yaml = (workflow.render_yaml)().expect("workflow renders");
+            let root: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("workflow parses");
+            for (id, job) in root["jobs"].as_mapping().expect("jobs") {
+                let place = format!(
+                    "{} job {}",
+                    workflow.file_name,
+                    id.as_str().unwrap_or_default()
+                );
+                let steps: Vec<&serde_yaml::Value> =
+                    job["steps"].as_sequence().into_iter().flatten().collect();
+                let Some(mount) = steps.iter().position(|step| mounts_target(step)) else {
+                    assert!(
+                        !steps
+                            .iter()
+                            .any(|step| step["name"].as_str() == Some(REUSE)),
+                        "{place} reuses a target it doesn't mount"
+                    );
+                    continue;
+                };
+                let reuses = steps
+                    .iter()
+                    .any(|step| step["name"].as_str() == Some(REUSE));
+                if reuses {
+                    assert_eq!(
+                        steps.get(mount + 1).and_then(|step| step["name"].as_str()),
+                        Some(REUSE),
+                        "{place} dates its checkout right after mounting its target"
+                    );
+                    assert_eq!(
+                        steps.last().and_then(|step| step["name"].as_str()),
+                        Some(SEAL),
+                        "{place} seals its target last"
+                    );
+                }
+                let runs_on = serde_yaml::to_string(&job["runs-on"]).expect("runs-on serializes");
+                let volume = runs_on
+                    .split_once("cache-tag=")
+                    .map(|(_, tag)| tag.trim().to_owned())
+                    .unwrap_or_else(|| format!("default volume of {}", runs_on.trim()));
+                by_volume.entry(volume).or_default().push((place, reuses));
+            }
+        }
+
+        for (volume, jobs) in by_volume {
+            let reusing: Vec<_> = jobs.iter().filter(|(_, reuses)| *reuses).collect();
+            assert!(
+                reusing.is_empty() || reusing.len() == jobs.len(),
+                "on {volume}, these jobs reuse the kept target: {reusing:?}; all of {jobs:?} must"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod checkout_tests {
     /// A stalled fetch otherwise holds a job until its timeout; see
     /// [`super::steps::abort_stalled_fetch`].

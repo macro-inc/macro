@@ -13,9 +13,7 @@
 //! blocked by it. Its last job tells the Macro Alerts channel when the sweep
 //! turns red, and when it passes again ([`email_e2e_alert`]).
 
-use gh_workflow::{
-    Concurrency, Event, Expression, Job, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
-};
+use gh_workflow::{Event, Expression, Job, Run, Schedule, Step, Use, Workflow, WorkflowDispatch};
 
 use crate::workflows::{
     code_check_cloud_storage, email_e2e, email_e2e_alert, runners,
@@ -51,21 +49,13 @@ pub fn email_e2e_full_stack() -> Workflow {
         .on(Event::default()
             .add_schedule(Schedule::new(email_e2e::SWEEP))
             .workflow_dispatch(WorkflowDispatch::default()))
-        .concurrency(concurrency())
+        .concurrency(email_e2e::concurrency("email-e2e-full-stack"))
         .map(vars::with_global_env)
         .add_job(TIER_JOB, tier())
         .add_job(
             email_e2e_alert::JOB,
             email_e2e_alert::job(&[TIER_JOB], COVERAGE_REPORT),
         )
-}
-
-/// Every commit keeps its own result, per event.
-fn concurrency() -> Concurrency {
-    Concurrency::new(Expression::new(
-        "email-e2e-full-stack-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}",
-    ))
-    .cancel_in_progress(true)
 }
 
 /// Build the services and the web bundle, start the stack, run the tier.
@@ -81,6 +71,7 @@ fn tier() -> Job {
         .add_env(("EMAIL_E2E_BROWSER_WORKERS", "4"))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -100,6 +91,7 @@ fn tier() -> Job {
         .add_step(upload("email-e2e-full-stack-traces", TRACES))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// Start the stack and run the tests tagged for it.

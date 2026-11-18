@@ -12,7 +12,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_harness::domain::ports::{HarnessPresence, RuntimeConnectionId};
+use agent_harness::domain::ports::{ConnectionRecorded, HarnessPresence, RuntimeConnectionId};
 use anyhow::Context;
 use harness_id::HarnessId;
 use harnesses::domain::models::CreateHostedPairing;
@@ -21,6 +21,7 @@ use harnesses::domain::service::HarnessServiceImpl;
 use hosted_runtimes::domain::enrollment::{Deployment, DeploymentSource, DeploymentUnavailable};
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
 use hosted_runtimes::domain::operator::ComputerOperator;
+use hosted_runtimes::domain::operator::MacrodConnected;
 use hosted_runtimes::domain::ports::{DefaultAgent, Harnesses, HostedPairing};
 use hosted_runtimes::domain::service::SystemClock;
 use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
@@ -575,30 +576,31 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
         self: Arc<Self>,
         harness: HarnessId,
         connection: RuntimeConnectionId,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>> {
         Box::pin(async move {
             let mut guard = match PresenceGuard::lock(&self.presence_pool, harness).await {
                 Ok(guard) => guard,
                 Err(error) => {
                     tracing::error!(%harness, error = ?error, "failed to serialize computer connect");
-                    return;
+                    return ConnectionRecorded::AgentsUnchanged;
                 }
             };
-            Arc::clone(&self.inner).connected(harness, connection).await;
+            let mut recorded = Arc::clone(&self.inner).connected(harness, connection).await;
             match guard.is_connected().await {
                 Ok(true) => {}
-                Ok(false) => return,
+                Ok(false) => return recorded,
                 Err(error) => {
                     tracing::error!(%harness, error = ?error, "failed to observe computer connection");
-                    return;
+                    return recorded;
                 }
             }
-            if let Some(operator) = &self.operator {
-                operator
+            if let Some(operator) = &self.operator
+                && let Ok(MacrodConnected::AgentBound) = operator
                     .macrod_connected(harness)
                     .await
                     .inspect_err(|error| tracing::error!(%harness, error = ?error, "computer connect event failed"))
-                    .ok();
+            {
+                recorded = ConnectionRecorded::AgentBound;
             }
             drop(guard);
             // After the presence lock: the command execs harnessd on the computer.
@@ -607,6 +609,7 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
                 self.tasks
                     .spawn(async move { ahead.on_connected(harness).await });
             }
+            recorded
         })
     }
 

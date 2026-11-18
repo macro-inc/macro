@@ -6,9 +6,11 @@
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { trashFolder } from './harness/journeys';
+import { focusRow, rowIds, watchRowIds } from './harness/list';
 import { followup } from './harness/organise';
 import { anInbox, PROVIDERS } from './harness/providers';
 import { notice } from './harness/send';
+import { holdOperation } from './harness/states-thread';
 import {
   allRead,
   blocked,
@@ -20,7 +22,7 @@ import {
   senderFilters,
 } from './harness/ways-thread';
 import { keyboardInThread } from './harness/ways-thread-more';
-import { did } from './ledger/record';
+import { did, saw } from './ledger/record';
 
 for (const provider of PROVIDERS) {
   test.describe(`the keys of an open thread in ${anInbox(provider)}`, () => {
@@ -63,10 +65,16 @@ for (const provider of PROVIDERS) {
       await expect
         .poll(async () => (await held(mailbox, 'Bin'))?.labels)
         .toContain(trashFolder(provider));
-      // The thread is gone, so the list is back. The list is not asked to
-      // drop its row: a mark read that settles after the Trash can put it
-      // back (handoff thread-trash-undone-by-late-mark-seen).
+      // The thread is gone, so the list is back, without its row.
       await expect(page).toHaveURL(/\/app\/mail$/);
+      await expect
+        .poll(async () =>
+          (await rowIds(page)).filter(
+            (id) => id === ids.Bin || id === ids.Stays
+          )
+        )
+        .toEqual([ids.Stays]);
+      saw('STL-990');
 
       // A thread marked done in its header, opened again from Archived.
       await openFromList(page, ids.Done, 'About Done.');
@@ -104,6 +112,46 @@ for (const provider of PROVIDERS) {
       await expect
         .poll(() => followup(mailbox, ids.Later))
         .toMatchObject({ state: 'pending', condition: 'if_no_reply' });
+    });
+
+    // When this fails, a thread trashed while its mark read is still on its
+    // way stays in the list, read and with no time: the list's refresh after
+    // the Trash leaves it out, and the cache keeps it for the mark read.
+    test('# right after opening a thread takes it out of the list before its mark read lands', async ({
+      page,
+      mailbox,
+    }) => {
+      const ids = await deliverEach(mailbox, ['Bin', 'Stays']);
+      await mailbox.open();
+      const marks = await holdOperation(page, 'MarkEmailThreadSeen', (body) =>
+        body.includes(ids.Bin)
+      );
+
+      await openFromList(page, ids.Bin, 'About Bin.');
+      await expect.poll(marks.held).toBeGreaterThan(0);
+      await page.keyboard.press('Shift+Digit3');
+      did('AL-145');
+      await expect
+        .poll(async () => (await held(mailbox, 'Bin'))?.labels)
+        .toContain(trashFolder(provider));
+      await expect(page).toHaveURL(/\/app\/mail$/);
+      await expect.poll(() => rowIds(page)).toEqual([ids.Stays]);
+      saw('STL-990');
+
+      // The mark read landing late does not bring it back. The star of the
+      // other row waits in the queue behind the mark reads: once it reaches
+      // the service, the cache has settled them.
+      const shown = await watchRowIds(page);
+      await marks.release();
+      await allRead(mailbox, ids.Bin);
+      await focusRow(page, ids.Stays);
+      await page.keyboard.press('s');
+      did('AL-061', 'F-073');
+      await expect.poll(() => favorites(mailbox)).toEqual([ids.Stays]);
+      expect((await shown()).filter((rows) => rows.includes(ids.Bin))).toEqual(
+        []
+      );
+      expect(await rowIds(page)).toEqual([ids.Stays]);
     });
 
     // When this fails, u in an open thread is not the thread's own mark

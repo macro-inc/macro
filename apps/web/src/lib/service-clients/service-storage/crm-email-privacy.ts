@@ -1,4 +1,5 @@
 import { dssFetch } from './client';
+import { crmValidationError } from './crm-errors';
 import type { EmailContributionConsent } from './generated/schemas/emailContributionConsent';
 import type { EmailPrivacyChange } from './generated/schemas/emailPrivacyChange';
 import type { EmailPrivacySettings } from './generated/schemas/emailPrivacySettings';
@@ -26,5 +27,6 @@ export const crmEmailPrivacyClient = {
     dssFetch<CrmEmailPrivacyResponse>('/crm/email-privacy', {
       method: 'PUT',
       body: JSON.stringify(body),
+      errorResponseHandler: crmValidationError,
     }),
 };

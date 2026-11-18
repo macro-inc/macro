@@ -117,7 +117,12 @@ nothing.
 checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
 Calendar, Access requests, and Agents. Unchecking a type hides its rows (Mentions
 covers both channel and comment mentions, Replies both channel and comment
-threads). The trigger counts hidden types, and **Reset filters** shows them all
+threads). A row that is two kinds shows while either is checked, once: a thread
+whose reply mentions you is under Mentions and Replies, a top-level message that
+mentions you and has replies likewise, an entity's comments that mention you
+under Mentions and Comments, and a pull request or agent session that mentions
+you under Mentions and Pull requests or Agents. Clearing either kind takes such
+a row whole. The trigger counts hidden types, and **Reset filters** shows them all
 again without changing All or Unread. Choices persist per user across reloads.
 Hiding every type shows **Every kind of notification is hidden** with Reset
 filters; types that hide every row show **No notifications match these filters**. The gear beside

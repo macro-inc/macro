@@ -194,6 +194,7 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(ChannelMetadata {
             channel_type: ChannelType::Private,
             channel_name: "Project".to_string(),
+            named: true,
         })
     }
 

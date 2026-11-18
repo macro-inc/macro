@@ -62,6 +62,9 @@ stacks. Process isolation belongs to
   (`OwnerApprovals::hold_in_process`), like a direct MCP call. `discover`
   and `servers` serve `DiscoverConnectors` and `ConnectMcpServer` through
   the native tool gate, so both tools are in `covered_by_code_sdk`.
+  `CodeModeError::ConnectedAppRateLimited` (HTTP 429 with `Retry-After`) is
+  a call egress's budget (`agent_egress::outbound::budgeted_mcp`) could not
+  get through; it did not run.
 - `src/domain/ui_commands.rs`: a running execution's `macro.ui.open`.
   `POST /agent-sessions/{id}/ui-commands` admits the same way connected apps
   do, then sends only for a turn a person prompted from an app tab

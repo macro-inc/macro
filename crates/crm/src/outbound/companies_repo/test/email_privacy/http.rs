@@ -1,4 +1,5 @@
 //! Real HTTP extraction, domain policy and migrated persistence in an owned fixture.
+mod mailbox_domains;
 use super::*;
 use crate::{
     domain::service::CrmServiceImpl,

@@ -105,6 +105,8 @@ test.describe('a scheduled reply the provider refuses', () => {
     page,
     mailbox,
   }) => {
+    // The wait for the failure below takes up to a minute of its own.
+    test.setTimeout(180_000);
     await scheduleReply(page, mailbox);
     const [held] = await scheduled(mailbox);
     await injectFault(mailbox, { route: 'messages.send', error: 'forbidden' });
@@ -116,11 +118,13 @@ test.describe('a scheduled reply the provider refuses', () => {
     expect(due).toHaveLength(1);
     await mailbox.stack.runScheduledSweep();
 
+    // The open reply hears of the failure from its schedule's next read,
+    // every 30 seconds while the send time it knows is far off.
     await expect(
       page
         .getByRole('status')
         .filter({ hasText: 'Send failed before delivery' })
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible({ timeout: 60_000 });
     saw('STC-057');
     await (await barButton(page, 'Restore failed scheduled draft')).click();
     did('AC-099', 'F-147');
