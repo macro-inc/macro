@@ -1,0 +1,21 @@
+apps/web/src/features/settings/Agents.test.tsx
+  s_01c92fad8dad5e::t_e610a0d51d2b86 1083-1085,1102-1104,1114-1116
+apps/web/src/features/agent-permissions/views/blocked-permissions-notice.test.tsx
+  s_01c92fad8dad5e::t_e610a0d51d2b86 77-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "940a3cc003c28657f9dd21aa2391044e05a1154b",
+  "prompts": {},
+  "sessions": {
+    "s_01c92fad8dad5e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f1ab4ca1-06fd-4c74-a973-8ad5a950bca6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
