@@ -193,6 +193,7 @@ function asDraft(item: Case, routine: SavedRoutine, base?: { steps: unknown[] })
       name: routine.name,
       trigger: routine.trigger,
       steps,
+      subRoutines: routine.task.sub_routines as DraftResult['subRoutines'],
       task: steps ? undefined : routine.task,
       problems: [],
     };

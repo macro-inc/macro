@@ -10,7 +10,7 @@ It runs on a local stack against the live model, one draft at a time.
 | File | What it holds |
 | --- | --- |
 | `workspace.ts` | The person's workspace, generated the same way every time: 12 people, 32 channels, 7 direct messages, 7 projects, 14 documents, 3 databases and about 250 tasks, in near-duplicate name families (`engineering`, `engineering-archive`, `eng`). Two people are called Jordan; nothing is called marketing. |
-| `cases.ts` | 20 requests close to what people type, what a good draft of each does, and for most how to run the drafted routine once and what that run must do. |
+| `cases.ts` | 22 requests close to what people type, what a good draft of each does, and for most how to run the drafted routine once and what that run must do. |
 | `arms.ts` | The two ways to get a draft: `draft`, the editor's Draft it as a blocking request (`POST /scheduled-actions/drafts`; background drafts run the same drafter as a job), and `bare`, an ordinary agent chat asked to create the routine. |
 | `runcheck.ts` | Putting the workspace back between drafts, and the run check. |
 | `judge.ts` | The blind model judge and its rubric. |
@@ -50,8 +50,9 @@ draft on a busy machine can be told apart.
 
 - *Mechanical checks* on the draft: the trigger (days, time and the person's
   time zone, or the event), the items it uses by id or by a knob naming them,
-  none of their look-alikes (by id, knob or name), the step kind, nothing
-  created that it doesn't use, and leaving out a name with no match or two
+  none of their look-alikes (by id, knob or name), the step kind, later
+  work defined once as a sub-routine and scheduled from a code step
+  (`macro.routines.schedule`), nothing created that it doesn't use, and leaving out a name with no match or two
   matches, without guessing it: no channel made for it, no knob or code
   string naming it. In the `bare`
   arm asking the person instead is right for those two cases, if the question
@@ -62,7 +63,12 @@ draft on a busy machine can be told apart.
   workspace only: the message it posted in a channel they're in (a mentioned
   document or task read with its name, as the person sees it), the task it
   made for them with its body, its own notifications, what its run
-  returned. Mail it sent and rows it added to a database aren't read, so
+  returned, and the copies of its sub-routines its run scheduled, read
+  before the routine is deleted, which deletes them: each one's
+  sub-routine, the names of its inputs, its key, trigger, whether it was
+  made switched off, and its definition's step kinds (not what they say).
+  The routine is saved with the sub-routines it defines, so the stack's
+  owner needs the `enable-sub-routines` flag too. Mail it sent and rows it added to a database aren't read, so
   the two database cases pass on a run without error. A run whose condition wasn't met did
   nothing. A fired event the trigger doesn't match is never admitted, so the
   check stops after 90 s with none; any other run gets four minutes. A draft
@@ -152,7 +158,10 @@ against the first:
   answered, or the eval itself failed on either side, are left out.
 - **quality**: the share passing every check may not fall by more than
   the arm's `QUALITY_MARGIN` (`report.ts`), what main against main moves by
-  at this size; a bigger fall is a loss whatever the time.
+  at this size; a bigger fall is a loss whatever the time. It was measured
+  on the first 20 cases, so a comparison held to it runs those (`--cases`);
+  the two sub-routine cases (`due-soon-reminders`, `review-check-later`)
+  came later.
 
 ### Main's baseline and noise
 

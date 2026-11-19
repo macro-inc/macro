@@ -4,7 +4,7 @@
 
 import { SQL } from 'bun';
 
-import type { Case, Context, DraftResult, Effects, Fire } from './cases';
+import type { Case, Context, CopyMade, DraftResult, Effects, Fire } from './cases';
 import { restoreStatuses, seedId, setTaskStatus, taskStatus } from './setup';
 import { type Stack, call, sdk } from './stack';
 import { OWNER, PERSON_KEYS, SCENARIO_NAME, userId } from './workspace';
@@ -23,7 +23,33 @@ export type SavedRoutine = {
   created_at: string;
   updated_at: string;
   configuration_revision?: number;
+  sub_routine?: { key?: string | null; paused_by_parent?: boolean } | null;
 };
+
+/** A sub-routine a routine defines, as its task holds it. */
+type Definition = { name?: unknown; steps?: unknown[] };
+
+/**
+ * The copies `parent`'s runs scheduled of its sub-routines, read before it is
+ * deleted, which deletes them too. A copy holds only which sub-routine it
+ * runs and its inputs; its step kinds are its definition's in `parent`.
+ */
+async function copiesOf(at: Stack, token: string, parent: SavedRoutine): Promise<CopyMade[]> {
+  const children = await call<SavedRoutine[]>(`${routines(at)}?parent=${parent.id}`, { token });
+  const definitions = (parent.task.sub_routines ?? []) as Definition[];
+  return children.map((child) => {
+    const { sub_routine: subRoutine, inputs } = child.task as { sub_routine?: unknown; inputs?: unknown };
+    const definition = definitions.find((each) => each.name === subRoutine);
+    return {
+      subRoutine: typeof subRoutine === 'string' ? subRoutine : null,
+      inputs: inputs && typeof inputs === 'object' ? Object.keys(inputs) : [],
+      trigger: child.trigger,
+      steps: (definition?.steps ?? []).map((step) => String((step as { type?: unknown }).type)),
+      key: child.sub_routine?.key ?? null,
+      switchedOff: !child.enabled && !child.sub_routine?.paused_by_parent,
+    };
+  });
+}
 
 const routines = (at: Stack) => `${at.harness}/scheduled-action/scheduled-actions`;
 
@@ -131,7 +157,7 @@ export async function save(at: Stack, token: string, draft: DraftResult, enabled
       kind: 'Agent',
       enabled,
       trigger: draft.trigger,
-      task: { steps: draft.steps },
+      task: { steps: draft.steps, ...(draft.subRoutines?.length ? { sub_routines: draft.subRoutines } : {}) },
     }),
   });
 }
@@ -284,6 +310,7 @@ export async function runCheck(
     if (runs.length) await Bun.sleep(SETTLE_MS);
     effects = await read(db, context, t0, firedMessage, (id) => sdk(at, owner).tasks.byId(id).content());
     effects.runs = runs.length ? await withReplies(db, await runsSince(at, owner, routine.id, t0)) : runs;
+    effects.copies = await copiesOf(at, owner, routine);
   } finally {
     // Deleted first, so putting the task back doesn't fire it again.
     await call(`${routines(at)}/${routine.id}`, { method: 'DELETE', token: owner }).catch(() => undefined);
