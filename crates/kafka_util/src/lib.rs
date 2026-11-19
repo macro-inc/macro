@@ -413,19 +413,27 @@ impl KafkaEventProducer {
     }
 
     /// Sends a keyed payload to `topic` and waits for delivery confirmation.
+    /// `event_type`, the payload's event type, is recorded on the publish span.
     #[tracing::instrument(
         name = "kafka.publish",
         err,
-        skip(self, payload),
+        skip(self, event_type, payload),
         fields(
             otel.kind = "producer",
             messaging.system = "kafka",
             messaging.operation.name = "publish",
             messaging.operation.type = "send",
             messaging.destination.name = topic,
+            macro.event.type = event_type,
         )
     )]
-    pub async fn send(&self, topic: &str, key: &str, payload: &[u8]) -> KafkaResult<()> {
+    pub async fn send(
+        &self,
+        topic: &str,
+        key: &str,
+        event_type: Option<&str>,
+        payload: &[u8],
+    ) -> KafkaResult<()> {
         let record = FutureRecord::to(topic)
             .key(key)
             .payload(payload)
@@ -453,6 +461,44 @@ impl<T> KafkaEventConsumer<T> {
         let mut partitions = TopicPartitionList::new();
         partitions.add_partition(message.topic(), message.partition());
         either::for_both!(&self.consumer.0, consumer => consumer.pause(&partitions))
+    }
+
+    /// The application's position on each assigned partition: one past the
+    /// last record [`Self::recv`] returned there, or [`Offset::Invalid`] before
+    /// the first. Read from the client's own state without a broker request, so
+    /// it answers while the application has stopped receiving.
+    pub fn position(&self) -> KafkaResult<TopicPartitionList> {
+        either::for_both!(&self.consumer.0, consumer => consumer.position())
+    }
+
+    /// The low and high watermarks of `partition` as of the client's last fetch
+    /// from it, without a broker request: librdkafka's fetcher updates them in
+    /// the background, so they answer while the application has stopped
+    /// receiving, unlike statistics callbacks. A watermark not fetched yet is
+    /// negative ([`Offset::Invalid`]'s raw value).
+    pub fn cached_watermarks(&self, topic: &str, partition: i32) -> KafkaResult<(i64, i64)> {
+        let topic = std::ffi::CString::new(topic).map_err(|_| {
+            KafkaError::MetadataFetch(rdkafka::types::RDKafkaErrorCode::InvalidArgument)
+        })?;
+        let client =
+            either::for_both!(&self.consumer.0, consumer => consumer.client().native_ptr());
+        let (mut low, mut high) = (-1, -1);
+        // SAFETY: `client` stays valid while `self` owns the consumer, `topic`
+        // is a NUL-terminated string that outlives the call, and librdkafka only
+        // writes the two offsets, which outlive the call too.
+        let error = unsafe {
+            rdkafka::bindings::rd_kafka_get_watermark_offsets(
+                client,
+                topic.as_ptr(),
+                partition,
+                &raw mut low,
+                &raw mut high,
+            )
+        };
+        match rdkafka::types::RDKafkaErrorCode::from(error) {
+            rdkafka::types::RDKafkaErrorCode::NoError => Ok((low, high)),
+            code => Err(KafkaError::MetadataFetch(code)),
+        }
     }
 }
 
