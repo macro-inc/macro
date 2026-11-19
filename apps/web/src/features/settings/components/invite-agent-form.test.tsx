@@ -66,3 +66,60 @@ it('does not invite an agent after its picture finishes uploading to a disposed 
   await upload.promise;
   expect(onSubmit).not.toHaveBeenCalled();
 });
+
+it('says every size is sold out when Add is pressed with none for sale', () => {
+  const scrolled = vi.fn();
+  Element.prototype.scrollIntoView = scrolled;
+  const onSubmit = vi.fn();
+  const prepareAvatar = vi.fn();
+  const noop = () => {};
+  render(() => (
+    <InviteAgentForm
+      offers={[
+        {
+          size: 'standard',
+          vcpus: 4,
+          memoryGb: 8,
+          diskGb: 100,
+          soldOut: true,
+          quote: {
+            size: 'standard',
+            amount: 4000,
+            currency: 'usd',
+            interval: 'month',
+            priceId: 'price_standard',
+          },
+        },
+      ]}
+      offersFailed={false}
+      onRetryOffers={noop}
+      state={{ kind: 'editing' }}
+      purchaseKey="example"
+      onCancel={noop}
+      onSubmit={onSubmit}
+      onRetryStart={noop}
+      onEdit={noop}
+      onBilling={noop}
+      prepareAvatar={prepareAvatar}
+    />
+  ));
+  fireEvent.input(
+    screen.getByRole('textbox', { name: 'Name your agent teammate' }),
+    { target: { value: 'Ada' } }
+  );
+  expect(
+    screen.queryByText(
+      'Every computer size is sold out right now. Try again later.'
+    )
+  ).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Add Ada' }));
+  expect(
+    screen.getByText(
+      'Every computer size is sold out right now. Try again later.'
+    )
+  ).toBeTruthy();
+  expect(scrolled).toHaveBeenCalled();
+  expect(onSubmit).not.toHaveBeenCalled();
+  expect(prepareAvatar).not.toHaveBeenCalled();
+  Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+});

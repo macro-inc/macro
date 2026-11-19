@@ -36,6 +36,7 @@ export default {
   declined:
     'Your card was declined. Nothing was charged and nothing was set up. Update the card, or try again if your bank has cleared it.',
   updateCard: 'Update card',
+  noSizeForSale: 'Every computer size is sold out right now. Try again later.',
   noRoom:
     'No room for a {{size}} computer right now. Nothing was charged. Pick another size.',
   notStarted:

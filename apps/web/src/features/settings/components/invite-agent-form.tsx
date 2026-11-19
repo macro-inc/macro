@@ -72,6 +72,8 @@ export function InviteAgentForm(props: {
   const [chosenSize, setChosenSize] = createSignal<ComputerSize>();
   // Add was pressed with no name: the field says it needs one.
   const [asked, setAsked] = createSignal(false);
+  // Add was pressed with every size sold out.
+  const [sizeAsked, setSizeAsked] = createSignal(false);
   // The picture is being prepared, before the request goes out.
   const [preparing, setPreparing] = createSignal(false);
   let disposed = false;
@@ -164,6 +166,14 @@ export function InviteAgentForm(props: {
     if (addBlocker(draft()) === 'name' || tooLong()) {
       setAsked(true);
       nameInput?.focus();
+      return;
+    }
+    if (addBlocker(draft()) === 'size') {
+      // Sizes still loading or failed to load say so already.
+      if (offers()) {
+        setSizeAsked(true);
+        notice?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
       return;
     }
     const request = teamAgentRequest(draft());
@@ -311,6 +321,9 @@ export function InviteAgentForm(props: {
               <FailureNotice>
                 {t('teamAgents.refunded', { name: trimmedName() })}
               </FailureNotice>
+            </Match>
+            <Match when={sizeAsked() && offers() && !offer()}>
+              <FailureNotice>{t('teamAgents.noSizeForSale')}</FailureNotice>
             </Match>
             <Match when={props.state.kind === 'refused' && props.state.reason}>
               {(reason) => (

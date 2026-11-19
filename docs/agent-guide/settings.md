@@ -282,7 +282,8 @@ over this derived face. Faces render through `UserIcon` across the app, while
 other clients use the uploaded PNG.
 
 Sizes come from the same catalog and prices as Buy a computer
-(sold-out sizes are disabled and marked **Sold out**). The agent's seat is
+(sold-out sizes are disabled and marked **Sold out**; Add with every size sold
+out says so under the sizes and sends nothing). The agent's seat is
 included, so the button reads **Add <name> · $X/month** (or **Add agent ·
 $X/month** before a name). Add is always enabled: with no name (or one too
 long) it marks the name field invalid and moves the caret there, and sends
