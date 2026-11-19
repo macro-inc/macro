@@ -516,6 +516,19 @@ pub fn code_mode_assets() -> Step<Run> {
     Step::new("Build code-mode assets").run(include_str!("scripts/code_mode_assets.sh"))
 }
 
+/// OpenSearch at `http://127.0.0.1:9200`. Not a service container: the image
+/// is built from the local stack's Dockerfile, which adds a plugin. Start it
+/// before the build, so it is up when [`create_search_indices`] runs.
+pub fn start_opensearch() -> Step<Run> {
+    Step::new("start opensearch").run(include_str!("scripts/start_opensearch.sh"))
+}
+
+/// Wait for [`start_opensearch`]'s cluster and create the search indices and
+/// aliases in it with `create_indices.ts`. Needs the dev shell's bun.
+pub fn create_search_indices() -> Step<Run> {
+    Step::new("create the search indices").run(include_str!("scripts/create_search_indices.sh"))
+}
+
 /// Start the server before parallel compiler invocations can race to launch it.
 /// Keep this in a separate step after remote configuration so `GITHUB_ENV`
 /// has supplied the selected backend's credentials to the process.
