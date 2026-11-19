@@ -2,6 +2,8 @@ mod change_message_visibility;
 mod delete_message;
 mod receive_messages;
 
+pub use receive_messages::receive_count;
+
 #[derive(Clone, Debug)]
 pub struct SQSWorker {
     inner: aws_sdk_sqs::Client,

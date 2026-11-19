@@ -38,6 +38,12 @@ pub enum Runner {
     MacOsArm,
     /// Larger Apple Silicon machine for desktop release builds.
     MacOsArmLarge,
+    /// Apple Silicon on Namespace's macOS Tahoe "slim" image, for iOS builds:
+    /// it installs Xcode 27.1 and the iOS 27.1 SDK beside newer Xcodes, which
+    /// the Sequoia image lacks. Pair it with
+    /// [`crate::workflows::steps::select_ios_xcode`], since the image's
+    /// default Xcode moves with each release.
+    MacOsTahoeArm,
     /// Windows Server on x86_64, for jobs that need the MSVC toolchain. A
     /// machine label like [`Runner::MacOsArm`].
     Windows,
@@ -53,6 +59,7 @@ impl fmt::Display for Runner {
             Runner::Large => "namespace-profile-linux-large-build",
             Runner::MacOsArm => "nscloud-macos-sequoia-arm64-6x14",
             Runner::MacOsArmLarge => "nscloud-macos-sequoia-arm64-12x28",
+            Runner::MacOsTahoeArm => "nscloud-macos-tahoe-slim-arm64-6x14",
             Runner::Windows => "nscloud-windows-2022-amd64-8x16",
         })
     }

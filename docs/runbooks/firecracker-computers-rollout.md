@@ -50,7 +50,10 @@ dev and production have dropped that value and their `COMPUTERS_INCUS_*` keys
    `pulumi preview` of `infra/stacks/firecracker-host`, then, with approval,
    `pulumi up`. Install NixOS with nixos-anywhere. The NixOS module pins
    OpenZFS ≥ 2.4.1, creates `tank/firecracker`, and runs the agent with the
-   host's own TLS keys.
+   host's own TLS keys. The agent itself refuses to start on OpenZFS < 2.4.1
+   or with `zfs_bclone_enabled` or `zfs_bclone_wait_dirty` not 1: creates
+   are dataset clones, but hibernation and golden builds still use block
+   cloning ([host agent](../architecture/firecracker-computers.md), **Storage**).
 2. **Connect the control plane**: pin the agent's certificate in the harness
    config, then register the host row with `admitting = false` (the column
    defaults to true). The overcommit settings are per host and change without
@@ -59,8 +62,10 @@ dev and production have dropped that value and their `COMPUTERS_INCUS_*` keys
    memory watermarks 70 / 80 / 90 % (relieve, stop admitting and hibernate the
    idlest, never admit past), at most 8 concurrent restores per host.
 3. **Publish a golden**: the agent builds one golden per (image, size) on the
-   host. It boots the image, settles, checks it, snapshots it, and scans memory,
-   rootfs and the `/home` template for secrets. It refuses to publish on a hit.
+   host. It boots the image, settles, checks it, snapshots it, and scans memory
+   and rootfs for secrets. It refuses to publish on a hit. Its snapshot holds an
+   empty `/home` of every size in the host limits; a size added later goes
+   into every golden as a new snapshot within one upkeep pass.
 4. **Verify before admitting**, on the dev host with the flag on for the test
    team only:
    - Buy → restore → macrod connected → first agent reply.
@@ -95,9 +100,22 @@ Same steps as dev, with production approval for each:
 - **Launch**: turn `enable-macro-computers` on in widening steps. Watch restore
   latency, create failures and host memory against the high watermark.
 
+**Upgrading the host agent** (a NixOS rebuild of the host) restarts only the
+agent; VMs keep running and it adopts them. The first start of an agent whose
+goldens' snapshots lack an empty `/home` of a sold size (any agent upgraded
+from one that cloned `/home` templates) adds them to every golden as a new
+snapshot and then destroys and rebuilds every spare disk set, since a spare
+names the snapshot it came from. Until the spares are back, creates
+`zfs clone` the new snapshot directly (tens of ms slower, no other effect).
+The agent also refuses to start on OpenZFS < 2.4.1 or with block cloning off
+or unsafe; check `journalctl -u firecracker-host` before admitting again.
+
 Hosts move later (for example to dedicated servers) with `zfs send` over
 WireGuard: pre-copy while the computer runs, then a short cutover and one cold
 boot on the new host ([host agent](../architecture/firecracker-computers.md), **Hosts**).
+A hibernated computer's send also carries a full copy of the memory its
+hibernation was cloned from (~350 MiB for an 8 GiB golden): block clones are
+not shared across `zfs send`.
 
 ## 4. Images: publishing and rollback
 

@@ -15,6 +15,7 @@ async fn frames_survive_a_stream_and_end_cleanly() {
             gid: 0,
             env: BTreeMap::from([("PATH".to_owned(), "/run/current-system/sw/bin".to_owned())]),
             cwd: "/".to_owned(),
+            trace_id: None,
         }),
         Frame::Stdin(b"input".to_vec()),
         Frame::CloseStdin,

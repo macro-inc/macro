@@ -1870,11 +1870,7 @@ pub fn runtime_image_only(force: bool) -> Result<()> {
 /// `cargo x gen-compose`.
 pub fn gen_compose_only(args: &cli::ComposeArgs) -> Result<()> {
     let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
-    let computers = computers::Computers::new(
-        Mode::Local,
-        args.computers.fleet(computers::Fleet::Docker),
-        &instance,
-    );
+    let computers = computers::Computers::new(Mode::Local, args.computers.fleet(), &instance);
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
     // No env is resolved here, so the sidecars are those of a stack without

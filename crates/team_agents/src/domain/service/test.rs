@@ -750,6 +750,13 @@ async fn only_the_first_online_report_tells_the_inviter() {
         .filter(|entry| *entry == "agent.mark_online")
         .count();
     assert_eq!(marks, 1);
+    // Each report tells the computer, so one that missed the first catches up.
+    let told = journal
+        .entries()
+        .iter()
+        .filter(|entry| *entry == "computer.agent_online")
+        .count();
+    assert_eq!(told, 2);
 }
 
 /// The computer's first start ends with the agent's report, before the

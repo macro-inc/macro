@@ -1,5 +1,6 @@
 use email_api_client::domain::models::{
-    EmailApiError, FolderRole, MailboxChangePage, ProviderId, StreamPosition, StreamToken,
+    EmailApiError, FolderRole, MailboxChangePage, ProviderId, RoundStart, StreamPosition,
+    StreamToken,
 };
 use email_api_client::domain::ports::{FolderChangeReader, MailboxContentReader};
 use uuid::Uuid;
@@ -27,7 +28,7 @@ async fn round(
     let mut pages = Vec::new();
     loop {
         let page = api
-            .folder_changes(token, folder, position.as_ref())
+            .folder_changes(token, folder, position.as_ref(), RoundStart::Unordered)
             .await
             .unwrap();
         let next = page.position.clone();
@@ -184,7 +185,7 @@ async fn an_expired_delta_token_is_an_outdated_cursor() {
     emulator.expire_delta_tokens(ADA).unwrap();
 
     let error = api
-        .folder_changes(&token, &inbox, Some(&checkpoint))
+        .folder_changes(&token, &inbox, Some(&checkpoint), RoundStart::Unordered)
         .await
         .unwrap_err();
     assert!(matches!(error, EmailApiError::OutdatedCursor));
@@ -207,7 +208,7 @@ async fn a_delta_token_outlives_its_lifetime_only_until_the_clock_passes_it() {
 
     let token = super::token(&emulator, ADA);
     let error = api
-        .folder_changes(&token, &inbox, Some(&checkpoint))
+        .folder_changes(&token, &inbox, Some(&checkpoint), RoundStart::Unordered)
         .await
         .unwrap_err();
     assert!(matches!(error, EmailApiError::OutdatedCursor));

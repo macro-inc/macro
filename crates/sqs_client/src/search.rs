@@ -8,6 +8,7 @@ use crate::{
         document::SearchExtractorMessage,
         email::EmailThreadBatchMessage,
         project::UpsertProject,
+        replay::ReplayBrokerEvent,
     },
 };
 use anyhow::Context;
@@ -22,6 +23,7 @@ pub mod chat;
 pub mod document;
 pub mod email;
 pub mod project;
+pub mod replay;
 
 use crate::{MAX_BATCH_SIZE, PrimaryId};
 
@@ -40,6 +42,33 @@ impl SQS {
         } else {
             Err(anyhow::anyhow!("search_event_queue is not configured"))
         }
+    }
+
+    /// Send `message` to the search event queue, invisible to workers until
+    /// `delay` has passed. SQS caps the delay at 15 minutes.
+    pub async fn send_message_to_search_event_queue_after(
+        &self,
+        message: SearchQueueMessage,
+        delay: std::time::Duration,
+    ) -> anyhow::Result<String> {
+        let Some(search_event_queue) = &self.search_event_queue else {
+            anyhow::bail!("search_event_queue is not configured");
+        };
+        let delay_seconds = i32::try_from(delay.as_secs())
+            .unwrap_or(i32::MAX)
+            .min(MAX_DELAY_SECONDS);
+        let result = self
+            .inner
+            .send_message()
+            .queue_url(search_event_queue)
+            .message_body(serde_json::to_string(&message)?)
+            .delay_seconds(delay_seconds)
+            .send()
+            .await?;
+        Ok(result
+            .message_id
+            .context("expected a message id")?
+            .to_string())
     }
 
     pub async fn bulk_send_message_to_search_event_queue(
@@ -90,6 +119,9 @@ pub enum SearchQueueMessage {
 
     // User
     RemoveUserProfile(String),
+
+    // Broker events whose indexing failed
+    ReplayBrokerEvent(ReplayBrokerEvent),
 }
 
 impl PrimaryId for SearchQueueMessage {
@@ -113,6 +145,7 @@ impl PrimaryId for SearchQueueMessage {
             SearchQueueMessage::UpsertCalendarEvent(message) => message.event_id.clone(),
 
             SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
+            SearchQueueMessage::ReplayBrokerEvent(message) => message.event_id.clone(),
         }
     }
 }
@@ -138,6 +171,7 @@ impl SearchQueueMessage {
             SearchQueueMessage::UpsertCalendarEvent(_) => Operation::UpdateMetadata,
             // Users
             SearchQueueMessage::RemoveUserProfile(_) => Operation::Remove,
+            SearchQueueMessage::ReplayBrokerEvent(_) => Operation::ExtractText,
         }
     }
 }
@@ -164,6 +198,8 @@ pub async fn enqueue_search_text_extractor(
 }
 
 const MAX_CONCURRENT_BATCHES: usize = 20;
+/// The longest `DelaySeconds` SQS accepts.
+const MAX_DELAY_SECONDS: i32 = 900;
 
 /// Bulk enqueues items to the search text extractor queue
 #[tracing::instrument(skip(sqs_client, items))]

@@ -33,7 +33,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { openExternalUrl } from '@core/util/url';
 import { Telemetry } from '@macro-inc/observability';
-import { cachedUserId } from '@queries/auth/cached-user-id';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import type { PushNotificationNavigation } from '@service-notification/generated/schemas/pushNotificationNavigation';
 import { errAsync, ResultAsync } from 'neverthrow';
@@ -755,11 +754,11 @@ function getSupportedHandler(
               });
               return;
             }
-            // Loaded on demand: the DM lookup pulls in the channel list.
-            const { openDirectMessage } = await import(
-              '@core/util/open-direct-message'
+            // Loaded on demand, with the channel queries it needs.
+            const { openTeamAgentDirectMessage } = await import(
+              '@core/util/open-team-agent-direct-message'
             );
-            await openDirectMessage(cachedUserId(), agent.userId, (content) =>
+            await openTeamAgentDirectMessage(agent.userId, (content) =>
               openContent(lm, content, { newSplit, sourceHandle, onApplied })
             );
           };

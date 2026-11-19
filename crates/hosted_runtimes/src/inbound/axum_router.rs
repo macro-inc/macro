@@ -25,8 +25,8 @@ use uuid::Uuid;
 
 use crate::domain::ids::ComputerId;
 use crate::domain::models::{
-    ComputerStatus, Purchase, PurchaseBilling, PurchaseKey, PurchaseRefusalCode, PurchaseRequest,
-    SizeOffer,
+    ComputerStatus, Purchase, PurchaseBilling, PurchaseKey, PurchaseOffers, PurchaseRefusalCode,
+    PurchaseRequest, SizeOffer,
 };
 use crate::domain::ports::{
     Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
@@ -101,6 +101,10 @@ where
         .route(
             "/team/computers/offers",
             get(offers::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
+        )
+        .route(
+            "/team/computers/purchase-offers",
+            get(purchase_offers::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/rollout",
@@ -209,6 +213,46 @@ pub async fn offers<
         state
             .service
             .offers(team_id(receipt)?, user_id(receipt)?)
+            .await?,
+    ))
+}
+
+/// Every size with its price and availability, what buying it charges
+/// today, the renewal date and the card charged: what the buy dialog shows.
+/// For the team's owner and admins, who may buy: it names the team's card.
+#[utoipa::path(
+    get,
+    path = "/team/computers/purchase-offers",
+    operation_id = "list_team_computer_purchase_offers",
+    responses(
+        (status = 200, body = PurchaseOffers),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 422, body = ErrorResponse),
+        (status = 502, body = ErrorResponse),
+        (status = 503, body = ErrorResponse),
+    ),
+)]
+#[tracing::instrument(skip_all, err)]
+pub async fn purchase_offers<
+    Repo: ComputerRepo,
+    Bill: Billing,
+    Time: Clock,
+    EntityAccess: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
+) -> Result<Json<PurchaseOffers>, ComputersHttpError> {
+    let receipt = &access.entity_access_receipt;
+    Ok(Json(
+        state
+            .service
+            .purchase_offers(team_id(receipt)?, user_id(receipt)?)
             .await?,
     ))
 }

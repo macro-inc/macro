@@ -1,6 +1,4 @@
-import { isPlatform } from '@core/util/platform';
 import { Layer } from '@ui';
-import { Show } from 'solid-js';
 
 /**
  * Edge scrims for full-frame mobile: content dissolves into the page surface
@@ -15,21 +13,19 @@ const BOTTOM_FALLOFF = '32px';
 
 export function MobileTopEdgeFade() {
   return (
-    <Show when={isPlatform('ios')}>
-      <Layer depth={0}>
-        <div
-          data-mobile-top-edge-fade
-          class="pointer-events-none absolute inset-x-0 top-0 z-1"
-          style={{
-            // No top chrome or safe area means nothing to dissolve under:
-            // the falloff shrinks to 0 with the inset.
-            height: `calc(var(--mobile-content-inset-top, 0px) + min(var(--mobile-content-inset-top, 0px) * 100, ${TOP_FALLOFF}))`,
-            background:
-              'linear-gradient(to bottom, var(--color-surface) 10%, 70%, transparent)',
-          }}
-        />
-      </Layer>
-    </Show>
+    <Layer depth={0}>
+      <div
+        data-mobile-top-edge-fade
+        class="pointer-events-none absolute inset-x-0 top-0 z-1"
+        style={{
+          // No top chrome or safe area means nothing to dissolve under:
+          // the falloff shrinks to 0 with the inset.
+          height: `calc(var(--mobile-content-inset-top, 0px) + min(var(--mobile-content-inset-top, 0px) * 100, ${TOP_FALLOFF}))`,
+          background:
+            'linear-gradient(to bottom, var(--color-surface) 10%, 70%, transparent)',
+        }}
+      />
+    </Layer>
   );
 }
 

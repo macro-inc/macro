@@ -1,6 +1,7 @@
 //! Document service implementation.
 
 mod content_events;
+mod lifecycle;
 
 #[cfg(test)]
 mod tests;

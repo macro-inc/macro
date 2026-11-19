@@ -1423,6 +1423,21 @@ impl CustomerRepository for MockCustomerRepository {
         unimplemented!("not exercised by team service tests")
     }
 
+    async fn payment_terms(
+        &self,
+        _: &stripe::SubscriptionId,
+    ) -> Result<crate::domain::model::PaymentTerms, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn preview_prorations(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: &[stripe::PriceId],
+    ) -> Result<Vec<crate::domain::model::ProratedCharge>, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
     async fn price(
         &self,
         _: &stripe::PriceId,

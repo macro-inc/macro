@@ -80,7 +80,10 @@ access, webhook reconciliation and billing workers remain independent of attachm
   plans. Replay durable item-change receipts before applying changes;
   `settle_computer_add` ends an unknown outcome for good (fencing a charge
   never sent); `charge_status` reads a key's receipt. Removing an item already
-  gone, or from a deleted team, succeeds.
+  gone, or from a deleted team, succeeds. `purchase_terms` (buy dialog
+  only) makes one `team_payment_terms` read and one `preview_item_prorations`
+  call for every size; it refuses a trialing Stripe-billed team and previews
+  nothing for a comped one (`due_today` 0).
 - With no computer prices, purchase returns 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
 - The Stripe inbox's `computers` consumer reports each team subscription
   snapshot, in order, as a `SubscriptionObserved` (status, items with their
