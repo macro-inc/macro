@@ -34,6 +34,10 @@ info level with bounded rotation. For long comparisons, `--trace=off` avoids
 recording every asset for every page; rerun failures with tracing enabled.
 Point `TMPDIR` through a short symlink when its on-disk path is long; Chromium's
 profile sockets must fit the Unix socket path limit.
+The isolated network helper keeps a stable dummy interface without an external
+route: Chromium otherwise reports a loopback-only namespace as offline even
+while the forwarded services answer. Browser offline emulation still controls
+the app's disconnected paths.
 
 ## How it works
 
