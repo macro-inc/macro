@@ -40,9 +40,10 @@ Treat CRM access changes as rare session transitions. Detect them from response
 hints, CRM 403s and one `/crm/member-access` read on boot, focus and reconnect;
 ordinary HTTP requests, subscriptions and local cache reads never wait for proof.
 A hint that keeps differing from the recorded policy backs off: the wait doubles,
-up to five minutes, after each check that fails or does not converge, and resets
-when the server sends a hint that agrees or the session changes. A response
-without a hint agrees with nothing and resets nothing.
+up to five minutes, after each check that fails or does not converge, counted
+from the end of that check, and resets when the server sends a hint that agrees
+or the session changes. A response without a hint agrees with nothing and resets
+nothing.
 On web startup without a mirror or owner snapshot, an extra short proof can open
 CRM UI before storage is ready; only the post-baseline proof may commit policy.
 Fence this early evidence by login, host and every owner observation, including

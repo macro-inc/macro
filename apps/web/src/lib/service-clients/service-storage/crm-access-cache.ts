@@ -129,8 +129,11 @@ function refreshHint(hint: string) {
         failure = error;
       }
     }
-    if (session === hintSession)
+    if (session === hintSession) {
       hintFailures = !failure && converged() ? 0 : hintFailures + 1;
+      // A slow failure must not use up its own wait: count it from the end.
+      lastHintAttempt = Date.now();
+    }
     if (failure) throw failure;
   })().finally(() => {
     if (hintRefresh === work) hintRefresh = undefined;

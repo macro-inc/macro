@@ -95,6 +95,16 @@ afterEach(async () => {
   onlineManager.setOnline(true);
   await cacheSessionGeneration.transition(async () => {});
 });
+/** Whether a response makes the glue start a proof: it does so synchronously. */
+function startsProof(respond: () => void): boolean {
+  const dispatched = vi.spyOn(crmAccessAuthority, 'refresh');
+  try {
+    respond();
+    return dispatched.mock.calls.length > 0;
+  } finally {
+    dispatched.mockRestore();
+  }
+}
 async function boot(policy: string | null = null) {
   const host = owner(policy);
   mocks.proof.mockResolvedValue(allowed());
@@ -381,10 +391,7 @@ it('backs off hint-triggered proofs while they keep failing and resets once the 
     expect(mocks.proof).toHaveBeenCalledTimes(2);
     // The second failure doubled the wait, so the next second stays quiet.
     now += 1_100;
-    hint(`${TEAM}:denied`);
-    // A dispatched proof would reach the endpoint within a few microtasks.
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(mocks.proof).toHaveBeenCalledTimes(2);
+    expect(startsProof(() => hint(`${TEAM}:denied`))).toBe(false);
     now += 1_000;
     await failing();
     expect(mocks.proof).toHaveBeenCalledTimes(3);
@@ -393,6 +400,35 @@ it('backs off hint-triggered proofs while they keep failing and resets once the 
     now += 1_100;
     await failing();
     expect(mocks.proof).toHaveBeenCalledTimes(4);
+  } finally {
+    vi.mocked(Date.now).mockRestore();
+  }
+});
+
+it('counts the wait from the end of a slow check, not from its start', async () => {
+  await boot();
+  let now = Date.now();
+  vi.spyOn(Date, 'now').mockImplementation(() => now);
+  const hint = () =>
+    prepareResponseObservers('http://localhost/dss/crm/companies')(
+      new Response(null, {
+        headers: { 'x-macro-crm-access': `${TEAM}:denied` },
+      })
+    );
+  try {
+    const failed = Promise.withResolvers<void>();
+    mocks.proof.mockImplementationOnce(async () => {
+      // The endpoint takes fifteen seconds to fail.
+      now += 15_000;
+      failed.resolve();
+      return err([{ code: 'SERVER_ERROR' }]);
+    });
+    hint();
+    await failed.promise;
+    // Await only the proof the hint dispatched, never initiate one.
+    await expect(crmAccessAuthority.refresh()).rejects.toThrow();
+    now += 500;
+    expect(startsProof(hint)).toBe(false);
   } finally {
     vi.mocked(Date.now).mockRestore();
   }
@@ -427,10 +463,7 @@ it('keeps backing off while no policy was ever recorded and other responses carr
     respond('http://localhost/email/threads');
     respond('http://localhost/dss/documents');
     now += 100;
-    hinted();
-    // A dispatched proof would reach the endpoint within a few microtasks.
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(mocks.proof).toHaveBeenCalledOnce();
+    expect(startsProof(hinted)).toBe(false);
   } finally {
     vi.mocked(Date.now).mockRestore();
   }
