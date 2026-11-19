@@ -1,6 +1,7 @@
 # External Secrets Operator copies keys of the Secrets Manager secret into
 # Kubernetes Secrets. Its role (Pod Identity, service account
-# `external-secrets/external-secrets`) reads only that secret.
+# `external-secrets/external-secrets`) reads only that secret and Grafana's
+# RDS-managed database secret.
 #
 # An app reads a key with an ExternalSecret in its own namespace:
 #

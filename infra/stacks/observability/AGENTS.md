@@ -11,8 +11,8 @@ us-east-1. `README.md` is the full operations guide.
 - `nixos/host.nix`: boot order, retained volume, stable uids, service hardening.
 - `nixos/services.nix`, `nixos/goalert.nix`: the systemd services and credentials.
 - `nixos/grafana-provisioning/`: every dashboard, alert rule, contact point and
-  datasource as plain Nix data (`default.nix`), imported by the host and, once
-  it exists, the cluster Grafana in `infra/k8s/observability/cluster/`.
+  datasource as plain Nix data (`default.nix`), imported by the host and
+  the cluster Grafana (`infra/k8s/observability/cluster/modules/grafana.nix`).
 - `index.ts`: VPC, ALB, certificate, DNS, alarms and EC2 user data.
 - `deploy/`: the Deploy Observability workflow's steps (`release.ts`), the image
   source key, AMI publishing, the smoke boot and the plan check. README
@@ -104,3 +104,8 @@ then Biome on changed `.ts`.
 - Grafana provisioning expands `$VAR` in contact point settings, but not in rule
   queries or annotations, so `$B` and `$values` work there and secrets must come
   in through the Grafana unit's environment.
+- The cluster renders from `nixos/grafana.nix`, `nixos/grafana-provisioning/`
+  and `nixos/ingest.alloy`: after changing them, run `nix run .#render` in
+  `infra/k8s/observability/cluster` and commit its manifests, or its CI fails.
+  `nixos/proxy.nix`'s edge and query rules are copied by hand into the
+  cluster's `modules/edge.nix`; change both.

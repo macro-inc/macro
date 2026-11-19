@@ -558,6 +558,9 @@ jobs:
           observability_cluster:
             - 'infra/k8s/observability/cluster/**'
             - 'infra/stacks/observability/nixos/backend-config.nix'
+            - 'infra/stacks/observability/nixos/grafana.nix'
+            - 'infra/stacks/observability/nixos/grafana-provisioning/**'
+            - 'infra/stacks/observability/nixos/ingest.alloy'
             - '.github/workflows/observability_cluster.yml'
           macrod_update:
             - 'crates/coding_agent_worker/**'

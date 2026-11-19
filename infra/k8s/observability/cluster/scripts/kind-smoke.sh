@@ -1,6 +1,6 @@
 # Bootstrap Argo CD on a throwaway kind cluster from this branch (pushed: Argo
 # CD reads it from GitHub) and wait until every application is synced and all
-# but the ones that need AWS are healthy.
+# but those that need AWS are healthy.
 #
 #   nix run .#kind-smoke [-- --revision <branch>] [--delete]
 name=observability-smoke
@@ -39,15 +39,19 @@ done
 
 # Every application must sync this commit. Without AWS some can't become
 # healthy: the load balancer controller can't look up its VPC, the
-# ClusterSecretStore can't authenticate, and Loki, Tempo and Mimir wait for
-# gp3 volumes (EBS CSI) and S3.
-expected_unhealthy="aws-load-balancer-controller external-secrets loki tempo mimir"
+# ClusterSecretStore can't authenticate, the applications whose pods need a
+# secret from it wait for it, and Loki, Tempo and Mimir wait for gp3 volumes
+# (EBS CSI) and S3. The edge can't even sync: the controller's webhook, which
+# admits TargetGroupBindings, isn't running.
+expected_unhealthy="aws-load-balancer-controller external-secrets loki tempo mimir grafana edge alloy-ingest"
+expected_unsynced="edge"
 deadline=$((SECONDS + 1200))
 while :; do
   table=$(kubectl --context "$context" -n argocd get applications \
     -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status} {.status.sync.revision}{"\n"}{end}')
-  pending=$(awk -v skip=" $expected_unhealthy " -v rev="$remote" \
-    '$2 != "Synced" || $4 != rev || (index(skip, " " $1 " ") == 0 && $3 != "Healthy")' <<<"$table")
+  pending=$(awk -v skip=" $expected_unhealthy " -v unsynced=" $expected_unsynced " -v rev="$remote" '
+    index(unsynced, " " $1 " ") == 0 && ($2 != "Synced" || $4 != rev) { print; next }
+    index(skip, " " $1 " ") == 0 && $3 != "Healthy" { print }' <<<"$table")
   if [ -z "$pending" ]; then break; fi
   if [ $SECONDS -ge $deadline ]; then
     echo "Timed out; not Synced at $remote and Healthy:" >&2

@@ -14,6 +14,9 @@ The [README](README.md) has the application list, bootstrap and contract with
 - `modules/platform/observability-namespace.nix`: the default-deny pattern new components follow.
 - `env/prod.nix`: the Git target and prod values.
 - `modules/backends/endpoints.nix`: how other modules reach Loki, Tempo and Mimir.
+- `modules/grafana.nix`, `modules/edge.nix`, `modules/ingest.nix`: Grafana, the
+  two nginx front doors and Alloy ingest, built from the host stack's files
+  (README, "Grafana, the edge and ingest").
 
 ## Scope
 
@@ -35,6 +38,12 @@ The [README](README.md) has the application list, bootstrap and contract with
 - Reach a backend from a new component: import `modules/backends/endpoints.nix` and
   label the pods with its `clientLabels` (`write` or `read`); the backends' policies
   admit nothing else.
+- Let the cluster Grafana notify (the switch only, README "The switch"): `macro.grafana.notify = true`
+  in `env/prod.nix`. Until then only the watchdog heartbeat sends.
+- Start Grafana: set `macro.grafana.database` in `env/prod.nix` from the
+  `../aws/` outputs; it runs 0 replicas until then.
+- Change an edge or query-gateway rule: `modules/edge.nix`, and the same rule
+  in the host's `nixos/proxy.nix` while the host runs.
 
 ## Checks
 
@@ -67,6 +76,9 @@ The [README](README.md) has the application list, bootstrap and contract with
   again, rather than doubling up in another zone (its gp3 volume is zonal anyway).
 - Mimir is hand-written (`modules/backends/mimir.nix`), not a chart: bump its image
   there, and its push path is `/api/v1/push`, not Prometheus' `/api/v1/write`.
+- A change to the host's `nixos/grafana.nix`, `nixos/grafana-provisioning/` or
+  `nixos/ingest.alloy` changes this render; re-render with it.
+- Grafana's contact point **Test** button sends even while `notify` is false.
 - Argo CD syncs with server-side apply; ignore a field (`ignoreDifferences`) only
   after seeing it drift on a cluster.
 

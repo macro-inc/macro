@@ -6,8 +6,10 @@
     ./cluster.nix
     ./platform
     ./backends
-    # Later: ./grafana.nix, ./ingest.nix, ./edge.nix. Each is its own
-    # application in the `observability` namespace and brings its own
-    # NetworkPolicies (see platform/observability-namespace.nix).
+    # Each is its own application in the `observability` namespace and brings
+    # its own NetworkPolicies (see platform/observability-namespace.nix).
+    ./grafana.nix
+    ./ingest.nix
+    ./edge.nix
   ];
 }
